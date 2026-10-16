@@ -519,17 +519,17 @@ TEST(PivotTableWriter, ShowDataAsRoundTrips) {
   table.mutable_fields().push_back(std::move(placeholder));
 
   pivot::PivotDataField df;
-  df.name = "PoP";
+  df.name = "PoB";
   df.field_index = 0U;
   df.aggregation = pivot::Aggregation::Sum;
-  df.show_as = pivot::ShowValuesAs::PercentOfParentCol;
+  df.show_as = pivot::ShowValuesAs::PercentOf;
   df.show_as_base_field = 2U;
   df.show_as_base_item = pivot::kShowAsBasePrev;
   table.mutable_data_fields().push_back(std::move(df));
 
   const std::string xml = write_pivot_table_definition(table);
   // Sanity: emitted attributes appear in the written bytes.
-  EXPECT_NE(xml.find("showDataAs=\"percentOfParentCol\""), std::string::npos) << "xml=" << xml;
+  EXPECT_NE(xml.find("showDataAs=\"percent\""), std::string::npos) << "xml=" << xml;
   EXPECT_NE(xml.find("baseField=\"2\""), std::string::npos);
   EXPECT_NE(xml.find("baseItem=\"1048828\""), std::string::npos);
 
@@ -538,11 +538,62 @@ TEST(PivotTableWriter, ShowDataAsRoundTrips) {
   const pivot::PivotTable& parsed = parsed_or.value();
   ASSERT_EQ(parsed.data_fields().size(), 1U);
   const pivot::PivotDataField& got = parsed.data_fields()[0];
-  EXPECT_EQ(got.show_as, pivot::ShowValuesAs::PercentOfParentCol);
+  EXPECT_EQ(got.show_as, pivot::ShowValuesAs::PercentOf);
   ASSERT_TRUE(got.show_as_base_field.has_value());
   EXPECT_EQ(*got.show_as_base_field, 2U);
   ASSERT_TRUE(got.show_as_base_item.has_value());
   EXPECT_EQ(*got.show_as_base_item, pivot::kShowAsBasePrev);
+}
+
+// Parent, running-total-percent and rank modes have no `showDataAs` spelling:
+// Excel stores them in the `<x14:dataField pivotShowAs>` extension of the
+// `<dataField>`, next to `baseField` / `baseItem`.
+TEST(PivotTableWriter, X14ShowAsModesRoundTripThroughTheDataFieldExtension) {
+  struct Case {
+    pivot::ShowValuesAs mode;
+    const char* name;
+  };
+  const Case cases[] = {
+      {pivot::ShowValuesAs::PercentOfParentRow, "percentOfParentRow"},
+      {pivot::ShowValuesAs::PercentOfParentCol, "percentOfParentCol"},
+      {pivot::ShowValuesAs::PercentOfParent, "percentOfParent"},
+      {pivot::ShowValuesAs::PercentOfRunningTotal, "percentOfRunningTotal"},
+      {pivot::ShowValuesAs::RankAscending, "rankAscending"},
+      {pivot::ShowValuesAs::RankDescending, "rankDescending"},
+  };
+  for (const Case& c : cases) {
+    pivot::PivotTable table;
+    table.set_name("T");
+    table.set_anchor(0U, 0U, 1U, 1U);
+    pivot::PivotField placeholder;
+    placeholder.axis = pivot::PivotAxis::Value;
+    placeholder.custom_name = "X";
+    table.mutable_fields().push_back(std::move(placeholder));
+    pivot::PivotDataField df;
+    df.name = "V";
+    df.field_index = 0U;
+    df.show_as = c.mode;
+    df.show_as_base_field = 0U;
+    df.show_as_base_item = 0U;
+    table.mutable_data_fields().push_back(std::move(df));
+
+    const std::string xml = write_pivot_table_definition(table);
+    EXPECT_EQ(xml.find("showDataAs="), std::string::npos) << c.name << " xml=" << xml;
+    EXPECT_NE(xml.find("<extLst><ext uri=\"{E15A36E0-9728-4e99-A89B-3F7291B0FE68}\" "
+                       "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+                       "<x14:dataField pivotShowAs=\"" +
+                       std::string(c.name) + "\"/></ext></extLst></dataField>"),
+              std::string::npos)
+        << c.name << " xml=" << xml;
+
+    auto parsed_or = read_pivot_table_definition(Bytes(xml));
+    ASSERT_TRUE(static_cast<bool>(parsed_or)) << c.name << ": " << parsed_or.error().message;
+    ASSERT_EQ(parsed_or.value().data_fields().size(), 1U);
+    const pivot::PivotDataField& got = parsed_or.value().data_fields()[0];
+    EXPECT_EQ(got.show_as, c.mode) << c.name;
+    EXPECT_EQ(got.show_as_base_field, std::optional<std::uint32_t>(0U));
+    EXPECT_EQ(got.show_as_base_item, std::optional<std::uint32_t>(0U));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -633,6 +684,23 @@ TEST(PivotTableWriter, GrandTotalsDefaultTrueOmitsAttributes) {
   EXPECT_NE(written.find("firstHeaderRow=\"0\""), std::string::npos) << "xml=" << written;
   EXPECT_NE(written.find("firstDataRow=\"1\""), std::string::npos) << "xml=" << written;
   EXPECT_NE(written.find("firstDataCol=\"0\""), std::string::npos) << "xml=" << written;
+}
+
+TEST(PivotTableWriter, SubtotalHiddenItemsSurvivesRoundTripOnce) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\" subtotalHiddenItems=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  EXPECT_TRUE(parsed_or.value().subtotal_hidden_items());
+
+  const std::string written = write_pivot_table_definition(parsed_or.value());
+  const std::size_t first = written.find("subtotalHiddenItems=\"1\"");
+  ASSERT_NE(first, std::string::npos) << "xml=" << written;
+  EXPECT_EQ(written.find("subtotalHiddenItems", first + 1), std::string::npos) << "xml=" << written;
 }
 
 // ---------------------------------------------------------------------------

@@ -83,6 +83,14 @@ enum class FilterType : std::uint8_t {
   LabelContains = 3,
   LabelBeginsWith = 4,
   LabelDate = 5,
+  // Authored value comparisons (`<filter type="valueEqual">` and siblings);
+  // not part of the public active-filter vocabulary.
+  ValueEqual = 6,
+  ValueNotEqual = 7,
+  ValueGreaterThanOrEqual = 8,
+  ValueLessThan = 9,
+  ValueLessThanOrEqual = 10,
+  ValueNotBetween = 11,
 };
 
 /// Granularity at which a date column is grouped.
@@ -284,8 +292,11 @@ enum class TopNBasis : std::uint8_t {
 ///     from the nested `<top10 val="N">`.
 ///   * `ValueGreaterThan` — `<filter type="valueGreaterThan">`, `value`
 ///     is the exclusive threshold.
-///   * `ValueBetween` — `<filter type="valueBetween">`, inclusive bounds
-///     in `value` / `value_high`.
+///   * `ValueBetween` / `ValueNotBetween` — `<filter type="valueBetween">`
+///     and `"valueNotBetween"`, inclusive bounds in `value` / `value_high`.
+///   * `ValueEqual`, `ValueNotEqual`, `ValueGreaterThanOrEqual`,
+///     `ValueLessThan`, `ValueLessThanOrEqual` — the single-threshold
+///     comparisons, `value` is the threshold.
 ///   * `LabelDate` — `<filter type="dateBetween">`, inclusive date
 ///     serials in `value` / `value_high`.
 ///
@@ -425,6 +436,11 @@ inline constexpr std::int32_t kValuesFieldPosition = -2;
 ///     divide each cell by the subtotal of its parent group within the
 ///     row hierarchy, the column hierarchy, or whichever axis hosts the
 ///     `show_as_base_field` (PercentOfParent only).
+///   * `PercentOf` — each cell as a fraction of the base item's cell.
+///   * `PercentOfRunningTotal` — running total along the base field over
+///     the total across that field.
+///   * `RankAscending` / `RankDescending` — dense rank among the base
+///     field's siblings.
 ///
 /// When the show-as mode requires the grand total (`PercentOfTotal`,
 /// `Index`) but the table has both `grand_totals_rows == false` and
@@ -443,6 +459,10 @@ enum class ShowValuesAs : std::uint8_t {
   PercentOfParentRow = 9,
   PercentOfParentCol = 10,
   PercentOfParent = 11,
+  PercentOf = 12,
+  PercentOfRunningTotal = 13,
+  RankAscending = 14,
+  RankDescending = 15,
 };
 
 /// Sentinel `baseItem` value meaning "the previous item along the base
@@ -481,7 +501,7 @@ struct PivotDataField {
   /// base field is the reference. Two reserved sentinels:
   ///   * `kShowAsBasePrev` (1048828) — "(previous)"
   ///   * `kShowAsBaseNext` (1048829) — "(next)"
-  /// Any other value is an index into the base field's `items[]`.
+  /// Any other value is a position in the base field's `items[]` list.
   std::optional<std::uint32_t> show_as_base_item;
 };
 

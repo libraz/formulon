@@ -243,8 +243,7 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
   const RecordBuckets& buckets = state.buckets;
   PivotResult& result = state.result;
   const std::size_t data_field_count = table.data_fields().size();
-  if (f.type != FilterType::ValueTop10 && f.type != FilterType::ValueGreaterThan &&
-      f.type != FilterType::ValueBetween) {
+  if (!is_value_filter_type(f.type)) {
     return;  // Label/Date filters handled pre-aggregation.
   }
   if (data_field_count == 0) {

@@ -48,6 +48,12 @@ std::string data_field_format(const PivotTable& table, std::size_t index) {
   return table.data_fields()[index].number_format;
 }
 
+// A show-as data field states its total cells itself; a blank one stays blank instead of
+// being re-summed from the raw cells.
+bool total_is_derived(const PivotTable& table, std::size_t index) {
+  return index < table.data_fields().size() && table.data_fields()[index].show_as != ShowValuesAs::Normal;
+}
+
 Value text_value(PivotCells& cells, std::string text) {
   cells.text_storage.push_back(std::move(text));
   return Value::text(cells.text_storage.back());
@@ -526,8 +532,9 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   const std::size_t total_strip_rows = emit_grand_totals_cols_strip ? (values_on_rows ? data_field_count : 1) : 0;
   // Page (report filter) fields are drawn above the report proper: one row
   // per field, then a blank row separating the block from the row/column
-  // headers. Excel counts both inside the pivot's own `ref`, so they take
-  // the top of the projected grid and the report body starts below them.
+  // headers. Excel keeps both outside the pivot's `ref`: the report body
+  // starts at the anchor and the block sits above it (pushing the body down
+  // only when the anchor leaves no room).
   // The block is at least `kPageHeaderCols` wide even over a report
   // narrower than that, because the selection cell has to land somewhere.
   const std::size_t page_rows = result.page_selections.empty() ? 0 : result.page_selections.size() + 1;
@@ -546,14 +553,15 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   }
 
   PivotCells cells;
-  cells.top = table.anchor_row();
+  const std::uint32_t body_top = std::max(table.anchor_row(), static_cast<std::uint32_t>(page_rows));
+  cells.top = body_top - static_cast<std::uint32_t>(page_rows);
   cells.left = table.anchor_col();
   cells.rows = static_cast<std::uint32_t>(total_rows);
   cells.cols = static_cast<std::uint32_t>(total_cols);
   cells.cells.reserve(cell_count_or.value());
 
   const std::uint32_t left = cells.left;
-  const std::uint32_t top = cells.top + static_cast<std::uint32_t>(page_rows);
+  const std::uint32_t top = body_top;
   const std::uint32_t data_top = top + static_cast<std::uint32_t>(header_rows);
   const std::uint32_t data_left = left + static_cast<std::uint32_t>(row_header_cols);
   const std::uint32_t total_left = data_left + static_cast<std::uint32_t>(data_cols);
@@ -914,6 +922,11 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
                       0, data_field_name(table, df), data_field_format(table, df));
           continue;
         }
+        if (total_is_derived(table, df)) {
+          append_cell(cells, row, col, Value::blank(), PivotCellKind::GrandTotal, 0, data_field_name(table, df),
+                      data_field_format(table, df));
+          continue;
+        }
         // Every row of this strip states a total: a source error wins, an
         // all-numeric row sums, and an aggregate that cannot be summed
         // reports blank rather than leaving a hole in the total column.
@@ -986,6 +999,24 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         continue;
       }
       const PivotCellKind kind = col_subtotal ? PivotCellKind::ColSubtotal : PivotCellKind::GrandTotal;
+      if (total_is_derived(table, df)) {
+        const ColSubtotal* subtotal = col_subtotal ? &result.col_subtotals[col_entry.subtotal_index] : nullptr;
+        const Value total = subtotal != nullptr && df < subtotal->total.size() ? reify_value(cells, subtotal->total[df])
+                                                                               : Value::blank();
+        append_cell(cells, total_row, col, total, kind, 0, data_field_name(table, df), data_field_format(table, df));
+        continue;
+      }
+      // Grand-total row x subtotal column: non-Sum takes the evaluator's 2-D combination.
+      if (col_subtotal && df < table.data_fields().size()) {
+        const ColSubtotal& subtotal = result.col_subtotals[col_entry.subtotal_index];
+        const Aggregation aggregation =
+            subtotal.aggregation.has_value() ? *subtotal.aggregation : table.data_fields()[df].aggregation;
+        if (aggregation != Aggregation::Sum && df < subtotal.total.size() && !subtotal.total[df].is_blank()) {
+          append_cell(cells, total_row, col, reify_value(cells, subtotal.total[df]), kind, 0,
+                      data_field_name(table, df), data_field_format(table, df));
+          continue;
+        }
+      }
       double sum = 0.0;
       bool numeric = true;
       bool any_number = false;
@@ -1027,7 +1058,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         v = reify_value(cells, result.grand_totals[df]);
       } else if (df == 0 && !result.grand_total.is_blank()) {
         v = reify_value(cells, result.grand_total);
-      } else {
+      } else if (!total_is_derived(table, df)) {
         double sum = 0.0;
         bool numeric = true;
         bool any_number = false;

@@ -241,7 +241,8 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
       // string form, but we do not enforce that here).
       append_xml_attr(out, "numFmtId", df.number_format);
     }
-    if (df.show_as != pivot::ShowValuesAs::Normal) {
+    const std::string_view x14_show_as = enum_name(kPivotShowAsX14Names, df.show_as);
+    if (df.show_as != pivot::ShowValuesAs::Normal && x14_show_as.empty()) {
       out.append(" showDataAs=\"");
       // OOXML has only `runTotal`; the direction is carried by `baseField`.
       const pivot::ShowValuesAs show_as =
@@ -255,7 +256,16 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
     if (df.show_as_base_item.has_value()) {
       append_xml_attr_uint(out, "baseItem", *df.show_as_base_item);
     }
-    out.append("/>");
+    if (x14_show_as.empty()) {
+      out.append("/>");
+    } else {
+      out.append("><extLst><ext uri=\"");
+      out.append(kPivotDataFieldExtUri);
+      out.append("\" xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">");
+      out.append("<x14:dataField pivotShowAs=\"");
+      out.append(x14_show_as);
+      out.append("\"/></ext></extLst></dataField>");
+    }
   }
   out.append("</dataFields>");
 }
@@ -320,6 +330,9 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
   }
   if (!table.grand_totals_cols()) {
     out.append(" colGrandTotals=\"0\"");
+  }
+  if (table.subtotal_hidden_items()) {
+    out.append(" subtotalHiddenItems=\"1\"");
   }
   // Report layout as Excel writes it at table level, where it is the form
   // new fields take (`compact` defaults to true, `outline` to false).

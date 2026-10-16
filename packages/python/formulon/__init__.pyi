@@ -483,6 +483,10 @@ class PivotShowValuesAs(IntEnum):
     PERCENT_OF_PARENT_ROW = 9
     PERCENT_OF_PARENT_COL = 10
     PERCENT_OF_PARENT = 11
+    PERCENT_OF = 12
+    PERCENT_OF_RUNNING_TOTAL = 13
+    RANK_ASCENDING = 14
+    RANK_DESCENDING = 15
 
 class PivotFilterType(IntEnum):
     VALUE_TOP_10 = 0

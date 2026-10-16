@@ -43,19 +43,19 @@ TEST(PivotLayout, PageFieldHeaderPrecedesTheReport) {
   ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
   const PivotCells& cells = cells_or.value();
 
-  // Anchor is D3 and the page block takes the first two rows, so everything
-  // the projection would otherwise put at the top moves down by two. The
-  // default (English) vocabulary uses the legacy two-row header.
-  EXPECT_EQ(cells.top, 2U);
+  // Anchor is D3: the report body starts there and the two-row page block
+  // sits above it. The default (English) vocabulary uses the legacy two-row
+  // header.
+  EXPECT_EQ(cells.top, 0U);
   EXPECT_EQ(cells.rows, 7U);  // page field + separator + 2 header rows + 2 data rows + grand total.
 
-  const PivotCell* field_name = find_cell(cells, 2, 3);
+  const PivotCell* field_name = find_cell(cells, 0, 3);
   ASSERT_NE(field_name, nullptr);
   EXPECT_EQ(field_name->kind, PivotCellKind::Header);
   ASSERT_TRUE(field_name->value.is_text());
   EXPECT_EQ(field_name->value.as_text(), "Region");
 
-  const PivotCell* selection = find_cell(cells, 2, 4);
+  const PivotCell* selection = find_cell(cells, 0, 4);
   ASSERT_NE(selection, nullptr);
   EXPECT_EQ(selection->kind, PivotCellKind::Header);
   ASSERT_TRUE(selection->value.is_text());
@@ -64,12 +64,12 @@ TEST(PivotLayout, PageFieldHeaderPrecedesTheReport) {
   // selection back to its dropdown.
   EXPECT_EQ(selection->field_name, "Region");
 
-  const PivotCell* separator = find_cell(cells, 3, 3);
+  const PivotCell* separator = find_cell(cells, 1, 3);
   ASSERT_NE(separator, nullptr);
   EXPECT_EQ(separator->kind, PivotCellKind::Blank);
   EXPECT_TRUE(separator->value.is_blank());
 
-  const PivotCell* row_header = find_cell(cells, 5, 3);
+  const PivotCell* row_header = find_cell(cells, 3, 3);
   ASSERT_NE(row_header, nullptr);
   EXPECT_EQ(row_header->kind, PivotCellKind::Header);
   ASSERT_TRUE(row_header->value.is_text());
@@ -96,17 +96,17 @@ TEST(PivotLayout, PageFieldsStackInReportOrder) {
   ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
   const PivotCells& cells = cells_or.value();
 
-  const PivotCell* first = find_cell(cells, 2, 3);
+  const PivotCell* first = find_cell(cells, 0, 3);
   ASSERT_NE(first, nullptr);
   ASSERT_TRUE(first->value.is_text());
   EXPECT_EQ(first->value.as_text(), "Quarter");
 
-  const PivotCell* second = find_cell(cells, 3, 3);
+  const PivotCell* second = find_cell(cells, 1, 3);
   ASSERT_NE(second, nullptr);
   ASSERT_TRUE(second->value.is_text());
   EXPECT_EQ(second->value.as_text(), "Year");
 
-  const PivotCell* separator = find_cell(cells, 4, 3);
+  const PivotCell* separator = find_cell(cells, 2, 3);
   ASSERT_NE(separator, nullptr);
   EXPECT_EQ(separator->kind, PivotCellKind::Blank);
 }
@@ -132,9 +132,9 @@ TEST(PivotLayout, PageBlockSpansTheFullReportWidth) {
 
   ASSERT_GT(cells.cols, 2U);
   for (std::uint32_t col = 0; col < cells.cols; ++col) {
-    const PivotCell* page_cell = find_cell(cells, 2, 3 + col);
+    const PivotCell* page_cell = find_cell(cells, 0, 3 + col);
     ASSERT_NE(page_cell, nullptr) << "page row missing column " << col;
-    const PivotCell* separator = find_cell(cells, 3, 3 + col);
+    const PivotCell* separator = find_cell(cells, 1, 3 + col);
     ASSERT_NE(separator, nullptr) << "separator row missing column " << col;
     EXPECT_EQ(separator->kind, PivotCellKind::Blank);
   }

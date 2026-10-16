@@ -1,38 +1,14 @@
 //
 // "Show values as" transforms applied after the raw aggregation has
-// finished. Each data field with `show_as != Normal` triggers a walk
-// of `result.values` that replaces every cell with the derived value.
+// finished. Every cell of the report for a data field with
+// `show_as != Normal` -- leaves, subtotals, margin totals and the grand
+// total -- is recomputed from a snapshot of the untransformed grid, so a
+// transformed cell never feeds another cell's reference.
 //
-// Modes implemented:
-//
-//   * PercentOfRow / PercentOfCol: cell / row-or-col sum (Div0 when 0).
-//   * PercentOfTotal: cell / table grand total.
-//   * RunningTotalInRow / RunningTotalInCol: cumulative sum along the
-//     axis; a non-numeric cell (blank, text, error) is left as is and
-//     does not reset or stop the sum for later cells.
-//   * Index: (cell * total) / (row_sum * col_sum); Div0 if either
-//     partial is 0.
-//   * DifferenceFrom / PercentDifferenceFrom: per the base-field axis
-//     selection.
-//   * PercentOfParent / PercentOfParentRow / PercentOfParentCol: per
-//     the parent subtotal at the selected hierarchy depth.
-//
-// Subtotal / grand-total propagation policy (partial):
-//   * The three Percent* ratio modes (PercentOfRow / PercentOfCol /
-//     PercentOfTotal) propagate the transform to `row_subtotals`,
-//     `col_subtotals`, and `grand_totals` so the rendered subtotal /
-//     grand-total cells display the same ratio Excel would emit at
-//     those positions.
-//   * RunningTotalInRow / RunningTotalInCol leave subtotals and grand
-//     totals at their raw aggregate. A running total at a subtotal
-//     break is semantically the cumulative position at that point, but
-//     subtotal rows are aggregated independently from the leaf cells;
-//     the running cumulative position is no longer recoverable
-//     post-aggregation, so we surface the raw subtotal aggregate
-//     instead of synthesising a misleading running value.
-//   * Index uses partials (row_sum * col_sum / total) that have no
-//     meaningful analogue at a subtotal break, so subtotals and grand
-//     totals stay raw for the same reason.
+// Cells are addressed by item path on each axis. Modes along a base field
+// (difference, percent, running total, rank, percent of parent) act on the
+// siblings of the cell at the base field's depth; the cells at or above
+// that depth (the totals along the base field) render blank.
 //
 // After mutation, the legacy mirror `result.subtotals[i]` is re-synced
 // from `result.row_subtotals[i].values`, and `result.grand_total` is
@@ -51,11 +27,8 @@
 namespace formulon::pivot {
 
 /// Applies the `show_as` transform of every data field in `table` to
-/// `result`. `row_subtotal_leaf_sets` / `col_subtotal_leaf_sets` are
-/// the per-subtotal leaf-set vectors the evaluator built when emitting
-/// `result.row_subtotals` / `result.col_subtotals`; PercentOfParent*
-/// uses them to locate the right subtotal for each leaf. `cache` is the
-/// table's bound cache, which labels a specific `baseItem`.
+/// `result`. `cache` is the table's bound cache, which labels a specific
+/// `baseItem`. The subtotal leaf-set vectors are not consulted.
 void apply_show_values_as_transforms(const PivotTable& table, const PivotCache& cache, PivotResult& result,
                                      const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                                      const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);

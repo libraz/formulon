@@ -96,7 +96,8 @@ std::optional<ValueSortSpec> resolve_value_sort(const PivotTable& table, std::ui
 /// nothing is unfiltered, which is also what an empty item list means — a
 /// table assembled in memory lists items only once something filters them.
 std::string page_item_label(const PivotCache& cache, std::size_t field_index, const PivotField& field,
-                            std::optional<std::uint32_t> selected, const PivotLayoutOptions& options) {
+                            std::optional<std::uint32_t> selected, bool subtotal_hidden_items,
+                            const PivotLayoutOptions& options) {
   const auto label_of = [&](const PivotItem& item) {
     std::string label = pivot_item_label(cache, field_index, item);
     return label.empty() ? options.blank_item_label : label;
@@ -113,7 +114,8 @@ std::string page_item_label(const PivotCache& cache, std::size_t field_index, co
     ++visible_count;
     only_visible = &item;
   }
-  if (visible_count == field.items.size()) {
+  // Hidden items still count, so the field reads as unfiltered.
+  if (visible_count == field.items.size() || subtotal_hidden_items) {
     return options.all_pages_label;
   }
   if (visible_count == 1U && only_visible != nullptr) {
@@ -135,8 +137,9 @@ void resolve_page_selections(const PivotTable& table, const PivotCache& cache, c
         break;
       }
     }
-    result.page_selections.push_back(PivotPageSelection{field_index, pivot_field_display_name(field),
-                                                        page_item_label(cache, field_index, field, selected, options)});
+    result.page_selections.push_back(PivotPageSelection{
+        field_index, pivot_field_display_name(field),
+        page_item_label(cache, field_index, field, selected, table.subtotal_hidden_items(), options)});
   }
 }
 
@@ -228,12 +231,17 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     resolved_env.pinned_now = date_time::host_civil_time();
   }
   const PreparedRecordFilter record_filter(table, cache, resolved_env);
-  std::vector<std::size_t> surviving;
-  surviving.reserve(cache.records().size());
-  for (std::size_t i = 0; i < cache.records().size(); ++i) {
-    if (record_filter.passes(cache.records()[i])) {
-      surviving.push_back(i);
+  // Excel compacts the record order in one forward pass: a filtered entry is
+  // replaced by the current last one and the slot is checked again.
+  std::vector<std::size_t> surviving(cache.records().size());
+  std::iota(surviving.begin(), surviving.end(), std::size_t{0});
+  for (std::size_t i = 0; i < surviving.size();) {
+    if (record_filter.passes(cache.records()[surviving[i]])) {
+      ++i;
+      continue;
     }
+    surviving[i] = surviving.back();
+    surviving.pop_back();
   }
 
   // 3. Build hierarchies.

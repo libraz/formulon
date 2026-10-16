@@ -41,7 +41,7 @@ static_assert(kPivotAggregationNames.size() == static_cast<std::size_t>(pivot::A
 /// `<dataField showDataAs="...">` spellings; `Normal` is the omitted default.
 /// `runTotalInCol` is the Excel-private column-direction spelling the reader
 /// accepts; the writer emits `runTotal` for both directions.
-inline constexpr std::array<EnumName, 11> kPivotShowDataAsNames = {{
+inline constexpr std::array<EnumName, 9> kPivotShowDataAsNames = {{
     {pivot::ShowValuesAs::PercentOfRow, "percentOfRow"},
     {pivot::ShowValuesAs::PercentOfCol, "percentOfCol"},
     {pivot::ShowValuesAs::PercentOfTotal, "percentOfTotal"},
@@ -50,10 +50,22 @@ inline constexpr std::array<EnumName, 11> kPivotShowDataAsNames = {{
     {pivot::ShowValuesAs::Index, "index"},
     {pivot::ShowValuesAs::DifferenceFrom, "difference"},
     {pivot::ShowValuesAs::PercentDifferenceFrom, "percentDiff"},
+    {pivot::ShowValuesAs::PercentOf, "percent"},
+}};
+
+/// Modes Excel stores in the `<x14:dataField pivotShowAs="...">` extension of a `<dataField>`
+/// instead of `showDataAs`.
+inline constexpr std::array<EnumName, 6> kPivotShowAsX14Names = {{
     {pivot::ShowValuesAs::PercentOfParentRow, "percentOfParentRow"},
     {pivot::ShowValuesAs::PercentOfParentCol, "percentOfParentCol"},
     {pivot::ShowValuesAs::PercentOfParent, "percentOfParent"},
+    {pivot::ShowValuesAs::PercentOfRunningTotal, "percentOfRunningTotal"},
+    {pivot::ShowValuesAs::RankAscending, "rankAscending"},
+    {pivot::ShowValuesAs::RankDescending, "rankDescending"},
 }};
+
+/// `<ext uri>` of the extension carrying `kPivotShowAsX14Names`.
+inline constexpr std::string_view kPivotDataFieldExtUri = "{E15A36E0-9728-4e99-A89B-3F7291B0FE68}";
 
 /// One subtotal function's `<pivotField>` boolean attribute (`sumSubtotal`) and
 /// its `<item t="...">` token (`sum`) inside the field's `<items>` list.

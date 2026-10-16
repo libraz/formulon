@@ -446,7 +446,7 @@ fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
   if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, api, "aggregation"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT, api, "show_as");
+  return check_enum_domain(spec.show_as, FM_PIVOT_SHOW_AS_RANK_DESCENDING, api, "show_as");
 }
 
 fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api) {

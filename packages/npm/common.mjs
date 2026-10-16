@@ -49,6 +49,10 @@ export const PivotShowValuesAs = Object.freeze({
   PercentOfParentRow: 9,
   PercentOfParentCol: 10,
   PercentOfParent: 11,
+  PercentOf: 12,
+  PercentOfRunningTotal: 13,
+  RankAscending: 14,
+  RankDescending: 15,
 });
 export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
 export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;

@@ -289,6 +289,10 @@ export const PivotShowValuesAs: Readonly<{
   PercentOfParentRow: 9;
   PercentOfParentCol: 10;
   PercentOfParent: 11;
+  PercentOf: 12;
+  PercentOfRunningTotal: 13;
+  RankAscending: 14;
+  RankDescending: 15;
 }>;
 
 /** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning

@@ -98,11 +98,11 @@ class PivotTable {
   // — see `write_pivot_table_definition`, which synthesises `<pageFields>`
   // only for a table that never carried one.
   //
-  // Selection is not a filter: a page field's hidden items already prune
-  // records through `PreparedRecordFilter`, which keys off
-  // `PivotField::items` on every axis alike. What this list adds is the
-  // report order and the explicit single-item selection, neither of which
-  // is recoverable from `<pivotFields>`.
+  // A page field's hidden items prune records through
+  // `PreparedRecordFilter`, which keys off `PivotField::items` on every axis
+  // alike; a single selected item (`item_index`) filters on that item too.
+  // This list adds the report order and that selection, neither of which is
+  // recoverable from `<pivotFields>`.
   const std::vector<PivotPageField>& page_fields() const { return page_fields_; }
   std::vector<PivotPageField>& mutable_page_fields() { return page_fields_; }
 
@@ -339,6 +339,11 @@ class PivotTable {
     grand_totals_cols_ = cols;
   }
 
+  /// `subtotalHiddenItems`: hidden page items still count in every cell, as
+  /// if the page filter were absent.
+  bool subtotal_hidden_items() const { return subtotal_hidden_items_; }
+  void set_subtotal_hidden_items(bool on) { subtotal_hidden_items_ = on; }
+
  private:
   std::string name_;
   std::string data_caption_ = "Values";
@@ -363,6 +368,7 @@ class PivotTable {
   std::optional<std::uint32_t> location_col_page_count_;
   bool grand_totals_rows_ = true;
   bool grand_totals_cols_ = true;
+  bool subtotal_hidden_items_ = false;
   std::vector<PivotFilter> active_filters_;
   std::vector<AuthoredCaptionFilter> authored_caption_filters_;
   std::vector<AuthoredValueFilter> authored_value_filters_;

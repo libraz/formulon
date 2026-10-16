@@ -35,6 +35,25 @@
 
 namespace formulon::pivot {
 
+/// True for the types ranked on an aggregate after aggregation (Top-N and the
+/// value comparisons), as opposed to label / date types applied per record.
+inline bool is_value_filter_type(FilterType type) {
+  switch (type) {
+    case FilterType::ValueTop10:
+    case FilterType::ValueGreaterThan:
+    case FilterType::ValueBetween:
+    case FilterType::ValueEqual:
+    case FilterType::ValueNotEqual:
+    case FilterType::ValueGreaterThanOrEqual:
+    case FilterType::ValueLessThan:
+    case FilterType::ValueLessThanOrEqual:
+    case FilterType::ValueNotBetween:
+      return true;
+    default:
+      return false;
+  }
+}
+
 /// Evaluation-time inputs a filter can need beyond the pivot model itself.
 ///
 /// Only the relative-period family reads any of this, but it travels with

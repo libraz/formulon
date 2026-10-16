@@ -567,7 +567,7 @@ TEST(PivotEvaluator, ShowAsPercentOfTotalAppliesToSubtotalsAndGrandTotal) {
   }
 }
 
-TEST(PivotEvaluator, ShowAsRunningTotalInRowKeepsRawSubtotals) {
+TEST(PivotEvaluator, ShowAsRunningTotalInRowAccumulatesSubtotalsAndBlanksTotalsAlongBaseField) {
   PivotCache cache = build_show_as_cache();
   PivotTable table = build_show_as_table(ShowValuesAs::RunningTotalInRow, /*grand_totals=*/true);
 
@@ -575,35 +575,24 @@ TEST(PivotEvaluator, ShowAsRunningTotalInRowKeepsRawSubtotals) {
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   const PivotResult& r = r_or.value();
 
-  // North row leaf sums: Widget=30 (Online=10, Store=20),
-  // Gadget=70 (Online=30, Store=40); the running-total transform
-  // rewrites each row so the LAST col cell equals the row's raw sum.
-  // With 2 col leaves, last col = full row sum.
+  // North / Gadget: Online=30, Store=40 -> 30, 70.
   ASSERT_EQ(r.values.size(), 4U);
-  for (const auto& row_slot : r.values) {
-    ASSERT_EQ(row_slot.size(), 2U);
-    ASSERT_TRUE(row_slot[0][0].is_number());
-    ASSERT_TRUE(row_slot[1][0].is_number());
-    // Strictly non-decreasing along the row (running sum of
-    // non-negative cells).
-    EXPECT_GE(row_slot[1][0].as_number(), row_slot[0][0].as_number());
-  }
-  // Row subtotals must remain at raw aggregate (North=100, South=260).
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 30.0);
+  EXPECT_DOUBLE_EQ(r.values[0][1][0].as_number(), 70.0);
+  // The Region subtotal rows accumulate across the channels too:
+  // North Online=40, Store=60 -> 40, 100.
   ASSERT_EQ(r.row_subtotals.size(), 2U);
-  std::vector<double> raw_subtotals;
-  for (const RowSubtotal& sub : r.row_subtotals) {
-    ASSERT_FALSE(sub.values.empty());
-    ASSERT_TRUE(sub.values[0].is_number());
-    raw_subtotals.push_back(sub.values[0].as_number());
-  }
-  std::sort(raw_subtotals.begin(), raw_subtotals.end());
-  EXPECT_NEAR(raw_subtotals[0], 100.0, 1e-9);
-  EXPECT_NEAR(raw_subtotals[1], 260.0, 1e-9);
-
-  // Grand total stays at raw 360.
+  const RowSubtotal& north = r.row_subtotals[0];
+  EXPECT_DOUBLE_EQ(north.col_values[0][0].as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(north.col_values[1][0].as_number(), 100.0);
+  // The totals along the base field render blank.
+  EXPECT_TRUE(north.values[0].is_blank());
+  EXPECT_TRUE(r.row_leaf_totals[0][0].is_blank());
   ASSERT_EQ(r.grand_totals.size(), 1U);
-  ASSERT_TRUE(r.grand_totals[0].is_number());
-  EXPECT_NEAR(r.grand_totals[0].as_number(), 360.0, 1e-9);
+  EXPECT_TRUE(r.grand_totals[0].is_blank());
+  // The Grand Total row accumulates across the channels: 160, 360.
+  EXPECT_DOUBLE_EQ(r.col_leaf_totals[0][0].as_number(), 160.0);
+  EXPECT_DOUBLE_EQ(r.col_leaf_totals[1][0].as_number(), 360.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -717,8 +706,7 @@ TEST(PivotEvaluator, ShowAsDifferenceFromSpecificItem) {
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   const PivotResult& r = r_or.value();
   ASSERT_EQ(r.values.size(), 3U);
-  ASSERT_TRUE(r.values[0][0][0].is_number());
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 0.0);  // A - A = 0.
+  EXPECT_TRUE(r.values[0][0][0].is_blank());  // The base item itself is blank.
   ASSERT_TRUE(r.values[1][0][0].is_number());
   EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 15.0);  // B - A = 25 - 10.
   ASSERT_TRUE(r.values[2][0][0].is_number());
@@ -748,8 +736,7 @@ TEST(PivotEvaluator, ShowAsDifferenceFromUnnamedItemMatchesItsBoundLabel) {
   ASSERT_EQ(r.values.size(), 3U);
   ASSERT_TRUE(r.values[0][0][0].is_number());
   EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), -15.0);  // A - B = 10 - 25.
-  ASSERT_TRUE(r.values[1][0][0].is_number());
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 0.0);
+  EXPECT_TRUE(r.values[1][0][0].is_blank());
   ASSERT_TRUE(r.values[2][0][0].is_number());
   EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 15.0);  // C - B = 40 - 25.
 }
@@ -894,28 +881,115 @@ TEST(PivotEvaluator, IndexWorksWithoutGrandTotals) {
 }
 
 // ---------------------------------------------------------------------------
-// M-19: runTotal accumulation direction follows the data field's baseField,
-// not the enum spelling. A base field on the column axis accumulates down
-// columns even when the mode is RunningTotalInRow.
+// runTotal accumulation direction follows the data field's baseField, not the
+// enum spelling. A base field on the column axis accumulates across the
+// columns even when the mode is RunningTotalInCol.
 // ---------------------------------------------------------------------------
 
 TEST(PivotEvaluator, RunTotalDirectionFollowsBaseFieldAxis) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
-  table.mutable_data_fields()[0].show_as = ShowValuesAs::RunningTotalInRow;
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::RunningTotalInCol;
   table.mutable_data_fields()[0].show_as_base_field = 1;  // Product = a column field.
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   const PivotResult& r = r_or.value();
-  // Row leaves: North(0), South(1). Col leaves: Gadget(0), Widget(1).
-  // Column-direction running total down the Gadget column: North=50,
-  // South=50+300=350. Row-direction would have left South/Gadget at 300.
   const std::size_t south = row_index(r, "South");
   ASSERT_LT(south, r.values.size());
-  ASSERT_GE(r.values[south].size(), 1U);
-  ASSERT_FALSE(r.values[south][0].empty());
-  ASSERT_TRUE(r.values[south][0][0].is_number());
-  EXPECT_NEAR(r.values[south][0][0].as_number(), 350.0, 1e-9);
+  ASSERT_EQ(r.values[south].size(), 2U);
+  const PivotResult plain = evaluate(build_sum_amount_table({0}, {1}), cache).value();
+  // Across the Product columns: Gadget keeps its own value, Widget adds it.
+  const double gadget = plain.values[south][0][0].as_number();
+  const double widget = plain.values[south][1][0].as_number();
+  EXPECT_NEAR(r.values[south][0][0].as_number(), gadget, 1e-9);
+  EXPECT_NEAR(r.values[south][1][0].as_number(), gadget + widget, 1e-9);
+}
+
+TEST(PivotEvaluator, ShowAsPercentOfBaseItem) {
+  PivotCache cache = build_diff_from_cache();
+  PivotTable table = build_diff_from_table();
+  auto& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::PercentOf;
+  df.show_as_base_field = 0U;
+  df.show_as_base_item = 1U;  // items[1] = "B"
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.values.size(), 3U);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0 / 25.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 1.0);  // The base item is c / c.
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 40.0 / 25.0);
+}
+
+TEST(PivotEvaluator, ShowAsPercentDifferenceFromFirstItemPreviousIsItself) {
+  PivotCache cache = build_diff_from_cache();
+  PivotTable table = build_diff_from_table();
+  auto& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::PercentOf;
+  df.show_as_base_field = 0U;
+  df.show_as_base_item = kShowAsBasePrev;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);  // The first item's previous is itself.
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 25.0 / 10.0);
+}
+
+TEST(PivotEvaluator, ShowAsPercentOfRunningTotalDividesByTheTotalOverTheBaseField) {
+  PivotCache cache = build_diff_from_cache();
+  PivotTable table = build_diff_from_table();
+  auto& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::PercentOfRunningTotal;
+  df.show_as_base_field = 0U;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0 / 75.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 35.0 / 75.0);
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 1.0);
+}
+
+TEST(PivotEvaluator, ShowAsRankIsDenseAndTiesShareARank) {
+  PivotCache cache = build_diff_from_cache();
+  // A and B tie at 10; C is 40.
+  cache.mutable_records()[1].cells[1] = Value::number(10.0);
+  PivotTable table = build_diff_from_table();
+  auto& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::RankDescending;
+  df.show_as_base_field = 0U;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(r_or.value().values[1][0][0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(r_or.value().values[2][0][0].as_number(), 1.0);
+
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::RankAscending;
+  auto asc_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(asc_or)) << asc_or.error().message;
+  EXPECT_DOUBLE_EQ(asc_or.value().values[0][0][0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(asc_or.value().values[1][0][0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(asc_or.value().values[2][0][0].as_number(), 2.0);
+}
+
+TEST(PivotEvaluator, ShowAsPercentOfParentRowIsBlankWhenTheParentIsZero) {
+  PivotCache cache = build_show_as_cache();
+  // North sums to 100; zero out its records so the parent is 0.
+  for (std::size_t i = 0; i < 4; ++i) {
+    cache.mutable_records()[i].cells[3] = Value::number(0.0);
+  }
+  PivotTable table = build_show_as_table(ShowValuesAs::PercentOfParentRow, /*grand_totals=*/true);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  // North / Gadget: the North subtotal in the same column is 0 -> blank (not #DIV/0!).
+  EXPECT_TRUE(r.values[0][0][0].is_blank());
+  // South / Gadget Online: 70 / South Online subtotal 120.
+  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 70.0 / 120.0);
 }
 
 }  // namespace

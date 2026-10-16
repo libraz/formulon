@@ -241,6 +241,14 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
     if (pugi::xml_attribute bi = df.attribute("baseItem"); bi) {
       entry.show_as_base_item = parse_xml_u32_attr(bi, 0U);
     }
+    for (pugi::xml_node ext : df.child("extLst").children("ext")) {
+      if (ext.attribute("uri").as_string() != kPivotDataFieldExtUri) {
+        continue;
+      }
+      if (pugi::xml_attribute sa = ext.child("x14:dataField").attribute("pivotShowAs"); sa) {
+        entry.show_as = enum_from_name(kPivotShowAsX14Names, sa.as_string(), entry.show_as);
+      }
+    }
     out->mutable_data_fields().push_back(std::move(entry));
   }
   return Expected<void, Error>::Ok();
@@ -333,7 +341,13 @@ std::optional<pivot::FilterType> ParseValueFilterType(std::string_view text) {
       {"percent", pivot::FilterType::ValueTop10},
       {"sum", pivot::FilterType::ValueTop10},
       {"valueGreaterThan", pivot::FilterType::ValueGreaterThan},
+      {"valueEqual", pivot::FilterType::ValueEqual},
+      {"valueNotEqual", pivot::FilterType::ValueNotEqual},
+      {"valueGreaterThanOrEqual", pivot::FilterType::ValueGreaterThanOrEqual},
+      {"valueLessThan", pivot::FilterType::ValueLessThan},
+      {"valueLessThanOrEqual", pivot::FilterType::ValueLessThanOrEqual},
       {"valueBetween", pivot::FilterType::ValueBetween},
+      {"valueNotBetween", pivot::FilterType::ValueNotBetween},
       {"dateBetween", pivot::FilterType::LabelDate},
   };
   for (const Entry& entry : kEntries) {
@@ -529,7 +543,8 @@ void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* 
       entry.value = *count_or;
       entry.top = CollectTopDirection(node);
     } else {
-      const bool ranged = *type_or == pivot::FilterType::ValueBetween || *type_or == pivot::FilterType::LabelDate;
+      const bool ranged = *type_or == pivot::FilterType::ValueBetween ||
+                          *type_or == pivot::FilterType::ValueNotBetween || *type_or == pivot::FilterType::LabelDate;
       const std::vector<std::string_view> criteria = CollectFilterCriteria(node);
       if (criteria.size() < (ranged ? 2U : 1U)) {
         continue;
@@ -647,6 +662,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     const bool row_grand = attr_bool(root, "rowGrandTotals", true);
     const bool col_grand = attr_bool(root, "colGrandTotals", true);
     table.set_grand_totals(row_grand, col_grand);
+    table.set_subtotal_hidden_items(attr_bool(root, "subtotalHiddenItems", false));
   }
 
   // Report layout mode, provisionally from the table-level defaults Excel
@@ -664,7 +680,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // so the writer re-emits them verbatim.
   capture_unknown_attrs(root,
                         {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline",
-                         "compactData", "outlineData"},
+                         "compactData", "outlineData", "subtotalHiddenItems"},
                         table.mutable_passthrough_attrs());
 
   pugi::xml_node loc = root.child("location");

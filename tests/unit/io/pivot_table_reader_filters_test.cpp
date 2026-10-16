@@ -366,6 +366,49 @@ TEST(PivotTableReader, WeekPeriodFiltersDecodeAlongsideTheOtherWindows) {
   EXPECT_EQ(periods[1].period, pivot::RelativePeriod::LastWeek);
   EXPECT_EQ(periods[2].period, pivot::RelativePeriod::NextWeek);
 }
+TEST(PivotTableReader, EveryValueComparisonTypeIsDecodedAndRoundTrips) {
+  struct Case {
+    const char* type;
+    pivot::FilterType expected;
+    bool ranged;
+  };
+  const Case cases[] = {
+      {"valueEqual", pivot::FilterType::ValueEqual, false},
+      {"valueNotEqual", pivot::FilterType::ValueNotEqual, false},
+      {"valueGreaterThan", pivot::FilterType::ValueGreaterThan, false},
+      {"valueGreaterThanOrEqual", pivot::FilterType::ValueGreaterThanOrEqual, false},
+      {"valueLessThan", pivot::FilterType::ValueLessThan, false},
+      {"valueLessThanOrEqual", pivot::FilterType::ValueLessThanOrEqual, false},
+      {"valueBetween", pivot::FilterType::ValueBetween, true},
+      {"valueNotBetween", pivot::FilterType::ValueNotBetween, true},
+  };
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/><filters count=\"8\">");
+  for (const Case& c : cases) {
+    xml.append("<filter fld=\"0\" type=\"").append(c.type).append("\" iMeasureFld=\"0\"><autoFilter ref=\"A1\">");
+    xml.append("<filterColumn colId=\"0\"><customFilters><customFilter operator=\"equal\" val=\"4\"/>");
+    if (c.ranged) {
+      xml.append("<customFilter operator=\"equal\" val=\"9\"/>");
+    }
+    xml.append("</customFilters></filterColumn></autoFilter></filter>");
+  }
+  xml.append("</filters></pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const auto& decoded = table_or.value().authored_value_filters();
+  ASSERT_EQ(decoded.size(), 8U);
+  for (std::size_t i = 0; i < decoded.size(); ++i) {
+    EXPECT_EQ(decoded[i].type, cases[i].expected) << cases[i].type;
+    EXPECT_EQ(decoded[i].value, 4.0) << cases[i].type;
+    EXPECT_EQ(decoded[i].value_high.has_value(), cases[i].ranged) << cases[i].type;
+  }
+  const std::string round = write_pivot_table_definition(table_or.value());
+  for (const Case& c : cases) {
+    EXPECT_NE(round.find(std::string("type=\"") + c.type + "\""), std::string::npos) << c.type;
+  }
+}
 TEST(PivotTableReader, ValueFilterCriteriaThatAreNotNumbersAreSkipped) {
   // The criterion shares the sheet path's number lexer, so a caption-ish
   // payload under a value type is refused instead of reaching the

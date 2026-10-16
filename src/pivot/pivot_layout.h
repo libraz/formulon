@@ -105,8 +105,8 @@ struct PivotCells {
 
 /// Projects an evaluated pivot result into absolute sheet coordinates.
 ///
-/// The returned cells use `table.anchor_row()` / `anchor_col()` as their
-/// top-left origin. Missing row or column axes are represented as one
+/// The report body starts at `table.anchor_row()` / `anchor_col()`; the
+/// page-field block, when present, sits above it. Missing row or column axes are represented as one
 /// implicit leaf so the data area remains rectangular.
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
                                    const PivotLayoutOptions& options = PivotLayoutOptions{});

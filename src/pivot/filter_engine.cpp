@@ -157,6 +157,12 @@ bool label_filter_passes(const PivotFilter& f, std::optional<eval::CollatedWildc
     case FilterType::ValueTop10:
     case FilterType::ValueGreaterThan:
     case FilterType::ValueBetween:
+    case FilterType::ValueEqual:
+    case FilterType::ValueNotEqual:
+    case FilterType::ValueGreaterThanOrEqual:
+    case FilterType::ValueLessThan:
+    case FilterType::ValueLessThanOrEqual:
+    case FilterType::ValueNotBetween:
     case FilterType::LabelDate:
       // Value-axis filters: handled later by the post-aggregation pass.
       // `LabelDate` is dispatched through `label_date_filter_passes` above
@@ -270,8 +276,25 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
   for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
     HiddenItems hidden;
     hidden.field_index = fi;
-    for (const PivotItem& item : table.fields()[fi].items) {
-      if (item.visible) {
+    // A page field with a single selected item hides every other item. With
+    // subtotalHiddenItems its hidden items are not a filter at all.
+    bool is_page = false;
+    std::optional<std::uint32_t> selected;
+    for (const PivotPageField& page : table.page_fields()) {
+      if (page.field_index == fi) {
+        is_page = true;
+        selected = page.item_index;
+        break;
+      }
+    }
+    if (is_page && table.subtotal_hidden_items()) {
+      continue;
+    }
+    const std::vector<PivotItem>& field_items = table.fields()[fi].items;
+    for (std::size_t item_pos = 0; item_pos < field_items.size(); ++item_pos) {
+      const PivotItem& item = field_items[item_pos];
+      const bool selected_out = selected.has_value() && *selected < field_items.size() && *selected != item_pos;
+      if (item.visible && !selected_out) {
         continue;
       }
       if (item.name.empty()) {
@@ -552,8 +575,7 @@ DateWindow resolve_relative_period(RelativePeriod period, const date_time::Civil
 
 std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
                                                                  const AuthoredValueFilter& authored) {
-  if (authored.type != FilterType::ValueTop10 && authored.type != FilterType::ValueGreaterThan &&
-      authored.type != FilterType::ValueBetween) {
+  if (!is_value_filter_type(authored.type)) {
     return std::nullopt;
   }
   const auto on_axis = [&](const std::vector<std::uint32_t>& order) {
@@ -646,29 +668,38 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
     }
     return keep;
   }
-  if (f.type == FilterType::ValueGreaterThan) {
-    const double threshold = filter_number_value(f);
+  const double lo = filter_number_value(f);
+  const auto keep_where = [&](auto&& test) {
     for (std::size_t i = 0; i < n; ++i) {
-      if (!axis.all_blank[i] && axis.scores[i] > threshold) {
-        keep[i] = true;
-      }
+      keep[i] = !axis.all_blank[i] && test(axis.scores[i]);
     }
     return keep;
-  }
-  if (f.type == FilterType::ValueBetween) {
-    const double lo = filter_number_value(f);
-    const auto hi_or = filter_number_value_high(f);
-    if (!hi_or) {
-      return std::nullopt;  // Unbounded above -> no-op for this filter.
-    }
-    for (std::size_t i = 0; i < n; ++i) {
-      if (!axis.all_blank[i] && axis.scores[i] >= lo && axis.scores[i] <= *hi_or) {
-        keep[i] = true;
+  };
+  switch (f.type) {
+    case FilterType::ValueGreaterThan:
+      return keep_where([&](double s) { return s > lo; });
+    case FilterType::ValueGreaterThanOrEqual:
+      return keep_where([&](double s) { return s >= lo; });
+    case FilterType::ValueLessThan:
+      return keep_where([&](double s) { return s < lo; });
+    case FilterType::ValueLessThanOrEqual:
+      return keep_where([&](double s) { return s <= lo; });
+    case FilterType::ValueEqual:
+      return keep_where([&](double s) { return s == lo; });
+    case FilterType::ValueNotEqual:
+      return keep_where([&](double s) { return s != lo; });
+    case FilterType::ValueBetween:
+    case FilterType::ValueNotBetween: {
+      const auto hi_or = filter_number_value_high(f);
+      if (!hi_or) {
+        return std::nullopt;  // Unbounded above -> no-op for this filter.
       }
+      const bool inside = f.type == FilterType::ValueBetween;
+      return keep_where([&](double s) { return (s >= lo && s <= *hi_or) == inside; });
     }
-    return keep;
+    default:
+      return std::nullopt;
   }
-  return std::nullopt;
 }
 
 std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilter& f, TopNBasis basis, double target,
