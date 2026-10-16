@@ -4,13 +4,16 @@
 
 #include "eval/iterative_solver.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <queue>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -233,6 +236,143 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
   // the last commits intact; `converged` stays false to signal that the
   // finite budget was consumed rather than a threshold met.
   return out;
+}
+
+void fuse_cyclic_components(std::vector<std::vector<CellNodeId>>* components, const DepGraph& graph) {
+  std::vector<std::vector<CellNodeId>>& comps = *components;
+  std::vector<std::size_t> cyclic;
+  for (std::size_t i = 0; i < comps.size(); ++i) {
+    if (is_cyclic_component(comps[i], graph)) {
+      cyclic.push_back(i);
+    }
+  }
+  if (cyclic.size() < 2U) {
+    return;
+  }
+  std::unordered_map<CellNodeId, std::size_t, CellNodeIdHash> comp_of;
+  for (std::size_t i = 0; i < comps.size(); ++i) {
+    for (const CellNodeId c : comps[i]) {
+      comp_of.emplace(c, i);
+    }
+  }
+  const auto precedents_of = [&](std::size_t comp) {
+    std::unordered_set<std::size_t> seen;
+    std::vector<std::size_t> stack{comp};
+    while (!stack.empty()) {
+      const std::size_t cur = stack.back();
+      stack.pop_back();
+      for (const CellNodeId c : comps[cur]) {
+        for (const CellNodeId dep : graph.dependencies_of_ref(c)) {
+          const auto it = comp_of.find(dep);
+          if (it != comp_of.end() && it->second != comp && seen.insert(it->second).second) {
+            stack.push_back(it->second);
+          }
+        }
+      }
+    }
+    return seen;
+  };
+  std::unordered_set<std::size_t> fused;
+  std::unordered_set<std::size_t> downstream;
+  const auto absorb = [&](std::size_t comp) {
+    fused.insert(comp);
+    downstream.erase(comp);
+    std::vector<std::size_t> stack{comp};
+    while (!stack.empty()) {
+      const std::size_t cur = stack.back();
+      stack.pop_back();
+      for (const CellNodeId c : comps[cur]) {
+        for (const CellNodeId dependent : graph.dependents_of_ref(c)) {
+          const auto it = comp_of.find(dependent);
+          if (it != comp_of.end() && fused.count(it->second) == 0U && downstream.insert(it->second).second) {
+            stack.push_back(it->second);
+          }
+        }
+      }
+    }
+  };
+  for (const std::size_t k : cyclic) {
+    if (fused.empty()) {
+      absorb(k);
+      continue;
+    }
+    bool eligible = true;
+    for (const std::size_t p : precedents_of(k)) {
+      if (fused.count(p) == 0U && downstream.count(p) != 0U) {
+        eligible = false;
+        break;
+      }
+    }
+    if (eligible) {
+      absorb(k);
+    }
+  }
+  if (fused.size() < 2U) {
+    return;
+  }
+
+  // Rebuild in dependency order (Kahn, ties by original position).
+  std::vector<std::vector<CellNodeId>> merged;
+  std::vector<std::size_t> position;
+  std::vector<CellNodeId> fused_cells;
+  std::size_t fused_position = comps.size();
+  for (std::size_t i = 0; i < comps.size(); ++i) {
+    if (fused.count(i) != 0U) {
+      fused_position = std::min(fused_position, i);
+      fused_cells.insert(fused_cells.end(), comps[i].begin(), comps[i].end());
+    }
+  }
+  std::sort(fused_cells.begin(), fused_cells.end(), CellNodeIdOrder{});
+  for (std::size_t i = 0; i < comps.size(); ++i) {
+    if (fused.count(i) != 0U) {
+      if (i == fused_position) {
+        merged.push_back(std::move(fused_cells));
+        position.push_back(i);
+      }
+      continue;
+    }
+    merged.push_back(std::move(comps[i]));
+    position.push_back(i);
+  }
+  std::unordered_map<CellNodeId, std::size_t, CellNodeIdHash> new_comp_of;
+  for (std::size_t i = 0; i < merged.size(); ++i) {
+    for (const CellNodeId c : merged[i]) {
+      new_comp_of.emplace(c, i);
+    }
+  }
+  std::vector<std::vector<std::size_t>> successors(merged.size());
+  std::vector<std::size_t> pending(merged.size(), 0U);
+  for (std::size_t i = 0; i < merged.size(); ++i) {
+    for (const CellNodeId c : merged[i]) {
+      for (const CellNodeId dep : graph.dependencies_of_ref(c)) {
+        const auto it = new_comp_of.find(dep);
+        if (it != new_comp_of.end() && it->second != i) {
+          successors[it->second].push_back(i);
+          ++pending[i];
+        }
+      }
+    }
+  }
+  const auto later = [&](std::size_t a, std::size_t b) { return position[a] > position[b]; };
+  std::priority_queue<std::size_t, std::vector<std::size_t>, decltype(later)> ready(later);
+  for (std::size_t i = 0; i < merged.size(); ++i) {
+    if (pending[i] == 0U) {
+      ready.push(i);
+    }
+  }
+  std::vector<std::vector<CellNodeId>> ordered;
+  ordered.reserve(merged.size());
+  while (!ready.empty()) {
+    const std::size_t i = ready.top();
+    ready.pop();
+    ordered.push_back(std::move(merged[i]));
+    for (const std::size_t next : successors[i]) {
+      if (--pending[next] == 0U) {
+        ready.push(next);
+      }
+    }
+  }
+  comps = std::move(ordered);
 }
 
 bool settle_cycle_by_reads(std::size_t count,

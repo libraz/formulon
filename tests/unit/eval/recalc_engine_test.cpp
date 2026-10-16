@@ -6,6 +6,7 @@
 #include "eval/recalc_engine.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -418,6 +419,59 @@ TEST(RecalcEngine, IterationLimitRetainsLastApproximation) {
   const Value value = CellValue(wb, 0U, 0U, 0U);
   ASSERT_TRUE(value.is_number());
   EXPECT_DOUBLE_EQ(value.as_number(), 1.0);
+}
+
+TEST(RecalcEngine, IterativeStopRuleIsWorkbookWide) {
+  // The fast cycle (A1) keeps sweeping until the slow one (B1) meets the
+  // change threshold, so it ends at exactly 2 instead of at its own stop.
+  Workbook wb = Workbook::create();
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 100U;
+  options.max_change = 0.001;
+  wb.set_iterative_options(options);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=A1/2+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=B1*0.9+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  double slow = 0.0;
+  for (int sweep = 0; sweep < 100; ++sweep) {
+    const double next = slow * 0.9 + 1.0;
+    const bool done = std::fabs(next - slow) < 0.001;
+    slow = next;
+    if (done) {
+      break;
+    }
+  }
+  EXPECT_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 2.0);
+  EXPECT_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), slow);
+}
+
+TEST(RecalcEngine, IterativeCycleAloneStopsAtItsOwnThreshold) {
+  Workbook wb = Workbook::create();
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 100U;
+  options.max_change = 0.001;
+  wb.set_iterative_options(options);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=A1/2+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 1.9990234375);
+}
+
+TEST(RecalcEngine, IterativePairSweepsInCellOrder) {
+  // A1 reads B1 and B1 reads A1: each sweep updates A1 first, then B1 from
+  // the fresh A1. Mac Excel's values after the entry sweep and one Calculate.
+  Workbook wb = Workbook::create();
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 100U;
+  options.max_change = 0.001;
+  wb.set_iterative_options(options);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=B1*0.9+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1*0.9+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 9.99630011514965);
+  EXPECT_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 9.996670103634685);
 }
 
 TEST(RecalcEngine, DirectCycleProducesRefError) {

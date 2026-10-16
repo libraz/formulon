@@ -76,9 +76,8 @@ TEST(Scheduler, ParallelIterativeProgressCallbackCanAbort) {
 TEST(Scheduler, IterativeProgressCallbackRunsOnCallerThread) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+1000)/2")));
-  // A second, disjoint self-cycle makes the cyclic layer genuinely wide.
-  // Before callback affinity was enforced, the scheduler dispatched these
-  // two SCCs to separate workers and invoked the progress callback there.
+  // A second, disjoint self-cycle. Excel's stop test is workbook-wide, so the
+  // two cycles are solved as one fused component on the caller's thread.
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=(C1+2000)/2")));
 
   IterativeOptions options;
@@ -95,7 +94,7 @@ TEST(Scheduler, IterativeProgressCallbackRunsOnCallerThread) {
   config.num_threads = 4U;
   SchedulerStats stats;
   ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), config, &stats)));
-  EXPECT_EQ(stats.cycle_recoveries, 2U);
+  EXPECT_EQ(stats.cycle_recoveries, 1U);
   EXPECT_EQ(stats.cells_evaluated, 2U);
   EXPECT_EQ(stats.parallel_steps, 0U);
   EXPECT_EQ(stats.serial_fallback_steps, 1U);

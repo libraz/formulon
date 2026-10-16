@@ -789,6 +789,9 @@ recalc_next_wave:
   dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
   std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_nodes);
   dynamic.settle_sccs(sccs, dirty_nodes);
+  if (iterative_.enabled) {
+    fuse_cyclic_components(&sccs, graph_);
+  }
 
   // ---- Phase 4: evaluate every dirty SCC. ----
   // Also track which dirty cells have been visited via the SCC walk, so a
@@ -1103,6 +1106,9 @@ partial_recalc_next_wave:
   for_each_dirty_in_closure([&](CellNodeId c) { dirty_closure.insert(c); });
   std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_closure);
   dynamic.settle_sccs(sccs, dirty_closure);
+  if (iterative_.enabled) {
+    fuse_cyclic_components(&sccs, graph_);
+  }
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
   RETURN_IF_ERROR(evaluate_dirty_components_locked(
       pass, sccs, &closure, "evaluation arena exhausted during partial recalc", visited_in_sccs));

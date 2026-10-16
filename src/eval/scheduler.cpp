@@ -677,6 +677,9 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     engine.dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
     std::vector<std::vector<CellNodeId>> dirty_sccs = engine.graph_.tarjan_scc_subset(dirty_nodes);
     dynamic.settle_sccs(dirty_sccs, dirty_nodes);
+    if (engine.iterative_options().enabled) {
+      fuse_cyclic_components(&dirty_sccs, engine.graph_);
+    }
     scc_nodes_considered += dirty_nodes.size();
 
     // Assign condensed-graph indices. Every emitted component is dirty by

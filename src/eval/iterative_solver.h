@@ -124,6 +124,15 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
 /// Returns false when a member reads itself or the observed reads form a
 /// cycle -- the cycle is real -- leaving what it committed for the caller to
 /// replace.
+/// Fuses independent cyclic components into one, so the solver sweeps every
+/// circular cell of the workbook together and applies a single max-change
+/// test, as Excel's iterative calculation does. `components` is in dependency
+/// order (precedents first) and keeps that order; the fused component's cells
+/// are sorted by sheet, row and column. A cyclic component is fused only when
+/// no non-fused cell lies on a path from an already fused component to it;
+/// the rest stay separate.
+void fuse_cyclic_components(std::vector<std::vector<CellNodeId>>* components, const DepGraph& graph);
+
 bool settle_cycle_by_reads(std::size_t count,
                            const std::function<Value(std::size_t, std::vector<std::size_t>*)>& evaluate_one,
                            const std::function<void(std::size_t, Value)>& commit);
