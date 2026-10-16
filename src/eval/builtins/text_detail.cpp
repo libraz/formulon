@@ -6,11 +6,13 @@
 
 #include "eval/builtins/text_detail.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
 #include "eval/coerce.h"
 #include "eval/collated_wildcard.h"
+#include "eval/dbcs_table.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
@@ -31,24 +33,28 @@ bool question_spans_sbcs_only(DbcsCodepage codepage) noexcept {
 
 }  // namespace
 
-int dbcs_char_bytes(std::uint32_t codepoint, bool halfwidth_kana_single_byte) noexcept {
+int dbcs_char_bytes(std::uint32_t codepoint, DbcsCodepage codepage) noexcept {
   if (codepoint <= 0x7Fu) {
     return 1;
   }
-  if (halfwidth_kana_single_byte && codepoint >= 0xFF61u && codepoint <= 0xFF9Fu) {
-    return 1;
+  if (codepoint <= 0xFFFFu) {
+    const DbcsWidthToggles toggles = dbcs_width_toggles(codepage);
+    if (toggles.count != 0) {
+      const std::uint16_t* end = toggles.points + toggles.count;
+      const auto flips = static_cast<std::size_t>(std::upper_bound(toggles.points, end, codepoint) - toggles.points);
+      return 1 + static_cast<int>(flips & 1u);
+    }
   }
   return 2;
 }
 
-std::uint64_t dbcs_bytes_in(std::string_view s, bool halfwidth_kana_single_byte) noexcept {
+std::uint64_t dbcs_bytes_in(std::string_view s, DbcsCodepage codepage) noexcept {
   std::uint64_t bytes = 0;
   std::size_t i = 0;
   while (i < s.size()) {
     std::size_t step = 0;
     const std::uint32_t cp = decode_utf8_step(s, i, &step);
-    bytes +=
-        (step == 1 && cp == 0xFFFDu) ? 1u : static_cast<std::uint64_t>(dbcs_char_bytes(cp, halfwidth_kana_single_byte));
+    bytes += (step == 1 && cp == 0xFFFDu) ? 1u : static_cast<std::uint64_t>(dbcs_char_bytes(cp, codepage));
     i += step;
   }
   return bytes;
@@ -98,10 +104,9 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
     return false;
   }
   const int start = parsed.value();
-  const std::uint64_t total =
-      (unit == SearchUnit::DbcsByte)
-          ? dbcs_bytes_in(haystack.value(), locale_facts(current_eval_profile()).halfwidth_kana_single_byte)
-          : static_cast<std::uint64_t>(utf16_units_in(haystack.value()));
+  const std::uint64_t total = (unit == SearchUnit::DbcsByte)
+                                  ? dbcs_bytes_in(haystack.value(), locale_facts(current_eval_profile()).dbcs_codepage)
+                                  : static_cast<std::uint64_t>(utf16_units_in(haystack.value()));
   if (start < 1 || static_cast<std::uint64_t>(start) > total + 1) {
     *out_result = Value::error(ErrorCode::Value);
     return false;

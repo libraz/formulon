@@ -135,6 +135,32 @@ TEST(TextLenb, SupplementaryPlaneIsTwoBytes) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+// Measured Mac Excel widths of the combining and half-width probes per locale.
+struct LenbLocaleCase {
+  ExcelLocale locale;
+  double halfwidth_kana;  // LENB("ｱｲｳ")
+  double e_acute;         // LENB("e" & UNICHAR(769))
+  double dakuten;         // LENB(UNICHAR(12441))
+  double latin1_a_circ;   // LENB("â")
+};
+
+TEST(TextLenb, MeasuredWidthsFollowTheLocaleTable) {
+  constexpr std::array<LenbLocaleCase, 3> kCases = {{
+      {ExcelLocale::kJaJP, 3.0, 3.0, 2.0, 2.0},
+      {ExcelLocale::kKoKR, 6.0, 2.0, 1.0, 2.0},
+      {ExcelLocale::kZhTW, 6.0, 2.0, 1.0, 1.0},
+  }};
+  for (const LenbLocaleCase& c : kCases) {
+    const ExcelProfile profile{ExcelHost::kMac365, c.locale};
+    EXPECT_DOUBLE_EQ(EvalWithProfile("=LENB(\"ｱｲｳ\")", profile).as_number(), c.halfwidth_kana);
+    EXPECT_DOUBLE_EQ(EvalWithProfile("=LENB(\"e\" & UNICHAR(769))", profile).as_number(), c.e_acute);
+    EXPECT_DOUBLE_EQ(EvalWithProfile("=LENB(UNICHAR(12441))", profile).as_number(), c.dakuten);
+    EXPECT_DOUBLE_EQ(EvalWithProfile("=LENB(\"â\")", profile).as_number(), c.latin1_a_circ);
+    EXPECT_DOUBLE_EQ(EvalWithProfile("=LENB(\"abc\")", profile).as_number(), 3.0);
+    EXPECT_DOUBLE_EQ(EvalWithProfile("=LENB(\"😀\")", profile).as_number(), 2.0);
+  }
+}
+
 TEST(TextLenb, CoercesNumber) {
   // LENB(123) -> LENB("123") -> 3.
   const Value v = EvalSource("=LENB(123)");

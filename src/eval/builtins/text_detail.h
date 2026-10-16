@@ -19,6 +19,7 @@
 #include <string_view>
 #include <vector>
 
+#include "excel_locale.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -95,14 +96,14 @@ struct TextWindowArgs {
 // reads `start` through `read_snapped_int_arg`.
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start);
 
-// DBCS byte cost of one code point: 1 for ASCII, 1 for half-width katakana
-// when the locale encodes it single-byte, 2 for everything else (including
-// characters the code page cannot encode, measured by lenb_hangul and
-// lenb_kanji_not_in_gb2312).
-int dbcs_char_bytes(std::uint32_t codepoint, bool halfwidth_kana_single_byte) noexcept;
+// DBCS byte cost of one code point: 1 for ASCII, the measured per-code-point
+// width of the code page's locale for the BMP (`dbcs_width_toggles`), and 2
+// for everything else (including characters the code page cannot encode,
+// measured by lenb_hangul and lenb_kanji_not_in_gb2312).
+int dbcs_char_bytes(std::uint32_t codepoint, DbcsCodepage codepage) noexcept;
 
 // Sum of `dbcs_char_bytes` over `s`; a malformed UTF-8 byte costs 1.
-std::uint64_t dbcs_bytes_in(std::string_view s, bool halfwidth_kana_single_byte) noexcept;
+std::uint64_t dbcs_bytes_in(std::string_view s, DbcsCodepage codepage) noexcept;
 
 // Per-character record: UTF-8 byte offset, byte length, 1-based DBCS
 // position (byte position under the active DBCS rule), and DBCS cost.
@@ -114,7 +115,7 @@ struct DbcsCharRec {
 };
 
 // Walks `src` once and builds the per-character map. O(n) time, one pass.
-std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, bool halfwidth_kana_single_byte);
+std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, DbcsCodepage codepage);
 
 // MID / REPLACE in UTF-16 units. Defined in `text.cpp`; MIDB / REPLACEB
 // fall back to them outside a DBCS profile.

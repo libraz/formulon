@@ -28,8 +28,8 @@ bool uses_dbcs_profile() noexcept {
   return locale_facts(current_eval_profile()).dbcs_codepage != DbcsCodepage::kNone;
 }
 
-bool halfwidth_kana_single_byte() noexcept {
-  return locale_facts(current_eval_profile()).halfwidth_kana_single_byte;
+DbcsCodepage dbcs_codepage() noexcept {
+  return locale_facts(current_eval_profile()).dbcs_codepage;
 }
 
 }  // namespace
@@ -57,7 +57,7 @@ Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
     return early;
   }
-  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, halfwidth_kana_single_byte());
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, dbcs_codepage());
   for (const DbcsCharRec& rec : chars) {
     if (rec.dbcs_position < static_cast<std::uint64_t>(sargs.start)) {
       continue;
@@ -86,8 +86,8 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
     return early;
   }
-  const bool kana_single = halfwidth_kana_single_byte();
-  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, kana_single);
+  const DbcsCodepage codepage = dbcs_codepage();
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, codepage);
   // Find the byte offset that corresponds to `start`. If `start` lands
   // strictly inside a 2-byte character, round up to the next character
   // boundary (matches SEARCH's rounding-up convention on UTF-16 splits).
@@ -119,7 +119,7 @@ Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Defensive: if the match happens to land exactly at haystack.size()
   // (possible with wildcard on empty trailing), return the final position
   // after the last character.
-  return Value::number(static_cast<double>(dbcs_bytes_in(sargs.haystack, kana_single) + 1));
+  return Value::number(static_cast<double>(dbcs_bytes_in(sargs.haystack, codepage) + 1));
 }
 
 }  // namespace text_detail
@@ -129,9 +129,8 @@ namespace {
 // --- Byte-oriented text family (LENB / LEFTB / RIGHTB / MIDB / CHAR / CODE)
 //
 // A DBCS profile measures "byte" length with `dbcs_char_bytes`: ASCII is 1
-// byte, half-width katakana is 1 where the locale encodes it single-byte
-// (ja), and every other character -- including supplementary-plane code
-// points such as emoji -- counts as 2 bytes.
+// byte, a BMP character takes the locale's measured width (1 or 2), and a
+// supplementary-plane code point such as an emoji counts as 2 bytes.
 //
 // When a byte-budgeted slice (LEFTB/RIGHTB/MIDB) would land in the middle
 // of a 2-byte character (i.e. we have exactly 1 byte of budget left and the
@@ -148,7 +147,7 @@ struct Utf8Step {
   int dbcs_bytes;           // DBCS byte cost under the active profile.
 };
 
-Utf8Step next_utf8_step(std::string_view src, std::size_t i, bool kana_single) noexcept {
+Utf8Step next_utf8_step(std::string_view src, std::size_t i, DbcsCodepage codepage) noexcept {
   std::size_t bytes = 0;
   const std::uint32_t cp = decode_utf8_step(src, i, &bytes);
   // Lenient decoder reports U+FFFD on malformed input with a 1-byte
@@ -157,7 +156,7 @@ Utf8Step next_utf8_step(std::string_view src, std::size_t i, bool kana_single) n
   if (bytes == 1 && cp == 0xFFFDu) {
     return {0xFFFDu, 1u, 1};
   }
-  return {cp, bytes, text_detail::dbcs_char_bytes(cp, kana_single)};
+  return {cp, bytes, text_detail::dbcs_char_bytes(cp, codepage)};
 }
 
 // Reads the `text, [num_bytes=1]` prologue LEFTB and RIGHTB share.
@@ -219,9 +218,8 @@ Value Lenb(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!text) {
     return Value::error(text.error());
   }
-  const double length = uses_dbcs_profile()
-                            ? static_cast<double>(dbcs_bytes_in(text.value(), halfwidth_kana_single_byte()))
-                            : static_cast<double>(utf16_units_in(text.value()));
+  const double length = uses_dbcs_profile() ? static_cast<double>(dbcs_bytes_in(text.value(), dbcs_codepage()))
+                                            : static_cast<double>(utf16_units_in(text.value()));
   return Value::number(length);
 }
 
@@ -232,7 +230,7 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return leftb_utf16(args, arity, arena);
   }
-  const bool kana_single = halfwidth_kana_single_byte();
+  const DbcsCodepage codepage = dbcs_codepage();
   std::string src;
   std::uint64_t budget = 0;
   Value early = Value::blank();
@@ -244,7 +242,7 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
   out.reserve(src.size());
   std::size_t i = 0;
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i, kana_single);
+    const Utf8Step step = next_utf8_step(src, i, codepage);
     const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
     if (used + cost <= budget) {
       out.append(src, i, step.byte_len);
@@ -274,7 +272,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return rightb_utf16(args, arity, arena);
   }
-  const bool kana_single = halfwidth_kana_single_byte();
+  const DbcsCodepage codepage = dbcs_codepage();
   std::string src;
   std::uint64_t budget = 0;
   Value early = Value::blank();
@@ -293,7 +291,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
   {
     std::size_t i = 0;
     while (i < src.size()) {
-      const Utf8Step step = next_utf8_step(src, i, kana_single);
+      const Utf8Step step = next_utf8_step(src, i, codepage);
       chars.push_back({i, step.byte_len, step.dbcs_bytes});
       i += step.byte_len;
     }
@@ -341,7 +339,7 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return Mid(args, arity, arena);
   }
-  const bool kana_single = halfwidth_kana_single_byte();
+  const DbcsCodepage codepage = dbcs_codepage();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -365,7 +363,7 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
   bool head_pad = false;
 
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i, kana_single);
+    const Utf8Step step = next_utf8_step(src, i, codepage);
     const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
     const std::uint64_t char_start = cursor + 1;   // 1-based byte position of this char.
     const std::uint64_t char_end = cursor + cost;  // 1-based byte position of final byte.
@@ -423,13 +421,13 @@ Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
 // stores the character's UTF-8 byte offset and length, its DBCS cost, and
 // its 1-based DBCS position. Used by FINDB / SEARCHB / REPLACEB to
 // translate between UTF-8 byte offsets and DBCS byte positions.
-std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, bool kana_single) {
+std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, DbcsCodepage codepage) {
   std::vector<DbcsCharRec> out;
   out.reserve(src.size());
   std::uint64_t dbcs_cursor = 1;  // 1-based DBCS position of the next character
   std::size_t i = 0;
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i, kana_single);
+    const Utf8Step step = next_utf8_step(src, i, codepage);
     DbcsCharRec rec;
     rec.byte_offset = i;
     rec.byte_len = step.byte_len;
@@ -454,7 +452,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
     return Replace_(args, arity, arena);
   }
-  const bool kana_single = halfwidth_kana_single_byte();
+  const DbcsCodepage codepage = dbcs_codepage();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -478,7 +476,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
   bool in_deletion = false;  // we've emitted either the head_pad or started consuming the deletion window
 
   while (i < src.size()) {
-    const Utf8Step step = next_utf8_step(src, i, kana_single);
+    const Utf8Step step = next_utf8_step(src, i, codepage);
     const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
     const std::uint64_t char_start = cursor + 1;   // 1-based first byte
     const std::uint64_t char_end = cursor + cost;  // 1-based last byte
@@ -529,7 +527,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
         // fully or emit tail pad on partial overflow.
         std::uint64_t budget_left = remaining_budget;
         while (i < src.size() && budget_left > 0) {
-          const Utf8Step s2 = next_utf8_step(src, i, kana_single);
+          const Utf8Step s2 = next_utf8_step(src, i, codepage);
           const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
           if (c2 <= budget_left) {
             cursor += c2;
@@ -552,7 +550,7 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
     {
       std::uint64_t budget_left = budget;
       while (i < src.size() && budget_left > 0) {
-        const Utf8Step s2 = next_utf8_step(src, i, kana_single);
+        const Utf8Step s2 = next_utf8_step(src, i, codepage);
         const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
         if (c2 <= budget_left) {
           cursor += c2;

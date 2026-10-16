@@ -33,6 +33,15 @@ std::uint16_t lookup_dbcs_to_unicode(DbcsCodepage codepage, std::uint8_t row, st
 /// form plus 0x8080), 0 for Big5 (its packed value is the raw code) and `kNone`.
 std::uint16_t dbcs_code_bias(DbcsCodepage codepage) noexcept;
 
+/// Sorted BMP code points where a character's LENB width flips between 1 and 2,
+/// starting at width 1 from U+0000; empty when the code page has no measured
+/// widths. Defined in the generated dbcs_lenb_table.cpp.
+struct DbcsWidthToggles {
+  const std::uint16_t* points;
+  std::size_t count;
+};
+DbcsWidthToggles dbcs_width_toggles(DbcsCodepage codepage) noexcept;
+
 namespace dbcs_detail {
 
 /// Code space of one table: `lead_count` leads from `lead_first`, each with
