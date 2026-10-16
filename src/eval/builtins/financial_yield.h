@@ -30,6 +30,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <utility>
 
 #include "utils/arena.h"
 #include "utils/error.h"
