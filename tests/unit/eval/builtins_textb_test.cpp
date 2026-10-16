@@ -145,8 +145,9 @@ struct LenbLocaleCase {
 };
 
 TEST(TextLenb, MeasuredWidthsFollowTheLocaleTable) {
-  constexpr std::array<LenbLocaleCase, 3> kCases = {{
+  constexpr std::array<LenbLocaleCase, 4> kCases = {{
       {ExcelLocale::kJaJP, 3.0, 3.0, 2.0, 2.0},
+      {ExcelLocale::kZhCN, 6.0, 2.0, 2.0, 2.0},
       {ExcelLocale::kKoKR, 6.0, 2.0, 1.0, 2.0},
       {ExcelLocale::kZhTW, 6.0, 2.0, 1.0, 1.0},
   }};

@@ -39,7 +39,7 @@ CODEPAGES = {
     "ksx1001": "kKsX1001",
     "big5": "kBig5",
 }
-PROBE_LOCALES = {"jis0208": "ja_JP", "ksx1001": "ko_KR", "big5": "zh_TW"}
+PROBE_LOCALES = {"jis0208": "ja_JP", "gb2312": "zh_CN", "ksx1001": "ko_KR", "big5": "zh_TW"}
 
 
 def toggles(runs: list[list[int]]) -> list[int]:
