@@ -355,10 +355,10 @@ TEST(HypothesisZTest, ZeroSigmaIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(HypothesisZTest, ConstantSampleNoSigmaIsDiv0) {
+TEST(HypothesisZTest, ConstantSampleNoSigmaIsNum) {
   const Value v = EvalSource("=Z.TEST({7,7,7,7}, 7)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(HypothesisZTest, ArityWrong) {
@@ -524,6 +524,32 @@ TEST(HypothesisProb, TextOnlyRangesAreDiv0) {
   const Value v = EvalSourceIn("=PROB(A1:A2,B1:B2,C1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+void ExpectZTestExact(const char* formula, double expected) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_number()) << formula;
+  EXPECT_EQ(v.as_number(), expected) << formula;
+}
+
+TEST(HypothesisZTest, MatchesExcelValues) {
+  ExpectZTestExact("=Z.TEST({3,6,7,8,6,5,4,2,1,9},4,2)", 0.04099516050019153);
+  ExpectZTestExact("=Z.TEST({3,6,7,8,6,5,4,2,1,9},4)", 0.09057419685136381);
+  ExpectZTestExact("=Z.TEST({3,6,7,8,6,5,4,2,1,9},0,2)", 3.6976929098244557e-16);
+  ExpectZTestExact("=ZTEST({3,6,7,8,6,5,4,2,1,9},0)", 2.825439313895175e-10);
+  ExpectZTestExact("=ZTEST({3,6,7,8,6,5,4,2,1,9},0,1)", 8.159969764416682e-59);
+  ExpectZTestExact("=Z.TEST({-2,0,1,3,5},0,2)", 0.05876243404831959);
+  ExpectZTestExact("=ZTEST({-2,0,1,3,5},0,0.5)", 1.9127011629693126e-10);
+  ExpectZTestExact("=Z.TEST({-2,0,1,3,5},0,3.7)", 0.19875412121755615);
+}
+
+TEST(HypothesisZTest, DegenerateSamples) {
+  const Value one = EvalSource("=Z.TEST({5},4)");
+  ASSERT_TRUE(one.is_error());
+  EXPECT_EQ(one.as_error(), ErrorCode::Div0);
+  const Value flat = EvalSource("=Z.TEST({5,5,5},4)");
+  ASSERT_TRUE(flat.is_error());
+  EXPECT_EQ(flat.as_error(), ErrorCode::Num);
 }
 
 }  // namespace

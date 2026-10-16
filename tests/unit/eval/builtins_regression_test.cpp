@@ -429,6 +429,39 @@ TEST(RegressionCovariance, ScalarArgumentsAreOneElementArrays) {
   ExpectRegErr("=COVARIANCE.S(1,2)", ErrorCode::Div0);
 }
 
+void ExpectRegExact(const char* formula, double expected) {
+  const Value v = EvalSource(formula);
+  ASSERT_TRUE(v.is_number()) << formula;
+  EXPECT_EQ(v.as_number(), expected) << formula;
+}
+
+TEST(RegressionFamily, MatchesExcelValues) {
+  constexpr const char* kY = "{2;4;5;4;5}";
+  constexpr const char* kX = "{1;2;3;4;5}";
+  ExpectRegExact((std::string("=CORREL(") + kY + "," + kX + ")").c_str(), 0.7745966692414833);
+  ExpectRegExact((std::string("=PEARSON(") + kY + "," + kX + ")").c_str(), 0.7745966692414833);
+  ExpectRegExact((std::string("=RSQ(") + kY + "," + kX + ")").c_str(), 0.6000000000000001);
+
+  const std::string pair = "{3;6;7;8;6;5;4;2;1;9},{2.5;3.1;4.0;4.2;3.9;3.3;2.8;2.0;1.1;5.0})";
+  ExpectRegExact(("=CORREL(" + pair).c_str(), 0.9740600040261604);
+  ExpectRegExact(("=PEARSON(" + pair).c_str(), 0.9740600040261604);
+  ExpectRegExact(("=RSQ(" + pair).c_str(), 0.9487928914434437);
+  ExpectRegExact(("=SLOPE(" + pair).c_str(), 2.2045588358987303);
+  ExpectRegExact(("=INTERCEPT(" + pair).c_str(), -1.9325426865169506);
+  ExpectRegExact(("=STEYX(" + pair).c_str(), 0.6243509541009645);
+  ExpectRegExact(("=COVARIANCE.S(" + pair).c_str(), 2.9122222222222223);
+  ExpectRegExact(("=COVARIANCE.P(" + pair).c_str(), 2.621);
+  ExpectRegExact(("=COVAR(" + pair).c_str(), 2.621);
+  const std::string tail = ",{3;6;7;8;6;5;4;2;1;9},{2.5;3.1;4.0;4.2;3.9;3.3;2.8;2.0;1.1;5.0})";
+  ExpectRegExact(("=FORECAST(2.5" + tail).c_str(), 3.578854403229875);
+  ExpectRegExact(("=FORECAST.LINEAR(7" + tail).c_str(), 13.499369164774162);
+  ExpectRegExact(("=FORECAST(-1" + tail).c_str(), -4.137101522415681);
+}
+
+TEST(RegressionFamily, NumericLiteralKeepsFifteenDigits) {
+  ExpectRegExact("=3.8541666666666665", 3.85416666666666);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

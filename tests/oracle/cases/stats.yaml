@@ -220,10 +220,12 @@ cases:
   - id: steyx_basic
     description: "Classic {1,2,3,4,5} vs {2,4,6,8,10} -> perfect fit -> 0"
     formula: "=STEYX({2;4;6;8;10},{1;2;3;4;5})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: steyx_small_residuals
     description: "Noisy data; STEYX > 0"
     formula: "=STEYX({2;4;5;8;10},{1;2;3;4;5})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: steyx_too_few_is_div0
     formula: "=STEYX({1;2},{3;4})"
@@ -750,6 +752,7 @@ cases:
   - id: steyx_three_points
     description: "Minimal n=3 sample; non-zero residual"
     formula: "=STEYX({2;3;5},{1;2;3})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: median_only_omitted_slots
     description: "MEDIAN counts omitted slots as 0"

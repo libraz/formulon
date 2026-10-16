@@ -82,17 +82,20 @@ cases:
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=Z.TEST(A1:A10, 4, 2)"
     tolerance: { abs: 0, rel: 0 }
+    tolerance: { abs: 0, rel: 0 }
 
   - id: z_test_sample_sigma
     description: "One-tailed z-test using the sample standard deviation"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=Z.TEST(A1:A10, 4)"
     tolerance: { abs: 0, rel: 0 }
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ztest_legacy_matches
     description: "Legacy ZTEST must match Z.TEST exactly"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=ZTEST(A1:A10, 4) - Z.TEST(A1:A10, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- PROB ----------------------------------------------------------------
   - id: prob_point
@@ -250,6 +253,7 @@ cases:
     description: "Z.TEST with x far below sample mean (x=0) — extreme tail probability"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=Z.TEST(A1:A10, 0, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: z_test_single_point_is_div0
     description: "Z.TEST with one observation and no sigma -> sample std undefined -> #DIV/0!"
@@ -371,17 +375,20 @@ cases:
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=ZTEST(A1:A10, 4, 2)"
     tolerance: { abs: 0, rel: 0 }
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ztest_sample_sigma
     description: "ZTEST one-tailed using sample standard deviation"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=ZTEST(A1:A10, 4)"
     tolerance: { abs: 0, rel: 0 }
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ztest_x_outside_range
     description: "ZTEST with x far below sample mean — extreme tail probability"
     setup: { A1: 3, A2: 6, A3: 7, A4: 8, A5: 6, A6: 5, A7: 4, A8: 2, A9: 1, A10: 9 }
     formula: "=ZTEST(A1:A10, 0, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ztest_sigma_zero_is_div0
     description: "ZTEST with sigma=0 -> #DIV/0!"

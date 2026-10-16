@@ -98,6 +98,11 @@ RegressionStats compute_regression_stats(const NumericPairs& p) noexcept {
   return s;
 }
 
+// (Sxy/d) / (sqrt(Sxx/d) * sqrt(Syy/d)); d is the divisor shared by all three terms.
+double pearson_r(const RegressionStats& s, double d) noexcept {
+  return (s.sum_xy / d) / (std::sqrt(s.sum_xx / d) * std::sqrt(s.sum_yy / d));
+}
+
 // Shared front-end for every 2-arity regression lazy impl: arity check
 // + pair collection. Returns either the error `Value` to surface (on
 // the left of the variant) or the distilled pairs (on the right).
@@ -239,7 +244,7 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
       if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
         return Value::error(ErrorCode::Div0);
       }
-      return to_finite_value(s.sum_xy / std::sqrt(s.sum_xx * s.sum_yy));
+      return to_finite_value(pearson_r(s, static_cast<double>(n)));
     case PairStat::CovarianceP:
       return to_finite_value(s.sum_xy / static_cast<double>(n));
     case PairStat::CovarianceS:
@@ -248,8 +253,11 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
       if (s.sum_xx == 0.0 || s.sum_yy == 0.0) {
         return Value::error(ErrorCode::Div0);
       }
-      // CORREL^2 computed directly avoids the intermediate sqrt.
-      return to_finite_value((s.sum_xy * s.sum_xy) / (s.sum_xx * s.sum_yy));
+      // Squared coefficient taken over n - 1, so it may exceed 1 by an ulp.
+      {
+        const double r = pearson_r(s, static_cast<double>(n - 1U));
+        return to_finite_value(r * r);
+      }
     default: {  // Steyx
       if (s.sum_xx == 0.0) {
         return Value::error(ErrorCode::Div0);

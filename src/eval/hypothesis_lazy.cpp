@@ -407,24 +407,23 @@ Value eval_z_test_lazy(const parser::AstNode& call, Arena& arena, const Function
       return Value::error(ErrorCode::Num);
     }
   } else {
-    // No sigma supplied: use the sample standard deviation. Excel needs
-    // n >= 2 in that case (the sample SD is undefined at n == 1) and
-    // errors with `#DIV/0!` if the sample SD comes out exactly zero.
-    double m_ignored = 0.0;
-    double var = 0.0;
-    if (!mean_and_sample_variance(samples, &m_ignored, &var)) {
+    // Sample SD (two-pass) needs n >= 2; a zero SD is #NUM!.
+    if (samples.size() < 2U) {
       return Value::error(ErrorCode::Div0);
     }
-    if (var <= 0.0) {
-      return Value::error(ErrorCode::Div0);
+    double ss = 0.0;
+    for (double v : samples) {
+      ss += (v - mean) * (v - mean);
     }
-    sigma = std::sqrt(var);
+    sigma = std::sqrt(ss / (n - 1.0));
+    if (sigma == 0.0) {
+      return Value::error(ErrorCode::Num);
+    }
   }
 
-  // Z-statistic on the sample mean under the null hypothesis μ == x.
-  const double z = (mean - x) / (sigma / std::sqrt(n));
-  // One-tailed upper area: `1 - Φ(z) = Φ(-z)`.
-  const double p = stats::normal_cdf(-z);
+  // Upper-tail area of the standard normal at z.
+  const double z = (std::sqrt(n) * (mean - x)) / sigma;
+  const double p = stats::erfc_excel(z * 0.7071067811865476) * 0.5;
   return to_finite_value(p);
 }
 
