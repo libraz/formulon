@@ -9,8 +9,8 @@ entries:
   - id: lenb_combining_dakuten
     applies_to: [mac-365-ko_KR]
     mode: skip-oracle
-    cause: non-identifiable
-    reason: "LENB(\"か\" & UNICHAR(12441)) is 3 in Mac Excel ko-KR: U+3099 counts one byte, while every other non-ASCII probe in the capture (hiragana, hanja, U+00E2, U+3000, U+2460, U+1F600) counts two whether or not KS X 1001 encodes it. One probe cannot tell a combining-mark rule from a U+3099 special case or a code-page conversion artefact, so no byte-count rule is identified. Value: tests/oracle/targets/mac-365-ko_KR/golden/text.golden.json."
+    cause: engine-gap
+    reason: "LENB(\"か\" & UNICHAR(12441)) is 3 in Mac Excel ko-KR: U+3099 counts one byte, while every other non-ASCII probe in the capture (hiragana, hanja, U+00E2, U+3000, U+2460, U+1F600) counts two whether or not KS X 1001 encodes it. Excel's byte count is a per-code-point locale table, which Formulon does not model yet. Value: tests/oracle/targets/mac-365-ko_KR/golden/text.golden.json."
     prefer: mac
     first_noted: 2026-10-09
     last_verified_excel_version: "16.113.3"

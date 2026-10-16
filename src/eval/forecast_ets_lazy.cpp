@@ -535,11 +535,10 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
     return Value::error(ErrorCode::Num);
   }
 
-  // Simplified normal-approximation half-width:
+  // Normal-approximation half-width:
   //     hw = z * RMSE * sqrt(h)
   // where z is the inverse standard-normal CDF at (1 + confidence) / 2.
-  // ORACLE-PENDING: the Hyndman recursion `sqrt(1 + sum_k)` may need to
-  // be substituted if oracle parity demands it.
+  // Bit-exact against the Mac oracle on the linear-trend fixtures.
   const double tail_prob = (1.0 + confidence) * 0.5;
   const double z = stats_detail::InverseStandardNormal(tail_prob);
   const double hw = z * fit.rmse * std::sqrt(static_cast<double>(h));

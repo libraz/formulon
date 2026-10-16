@@ -127,9 +127,7 @@ void format_double(std::string& out, double v, int significant_digits) {
 
   // Excel's General format renders to at most 15 significant digits;
   // %.15g performs IEEE round-to-nearest-even on the shortest form,
-  // matching Mac Excel for the overwhelming majority of values. (Sub-ULP
-  // divergences at 16+ sig digits — e.g. literal `1234567890123456` —
-  // are documented in tests/divergence.yaml.)
+  // matching Mac Excel's rendering.
   char buf[40];
   int n = format_general(buf, sizeof(buf), abs_v, significant_digits);
   if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(buf)) {

@@ -49,15 +49,41 @@ TEST(DateTimeWeeknum, Iso21_2023Jan1_RollsToPrevYear) {
   EXPECT_EQ(v.as_number(), 52.0);
 }
 
-// Windows Excel 365 (the primary reference) rejects an unsupported
-// return_type with #NUM!; only 1, 2, 11..17 and 21 are accepted.
+// An unsupported return_type is #NUM! on every host; 0, 3..10 and 18..20 are
+// always rejected, as are types truncating to them or to a negative / 22+ value.
 TEST(DateTimeWeeknum, InvalidReturnTypeIsNum) {
   for (const char* src :
        {"=WEEKNUM(DATE(2024,1,1),99)", "=WEEKNUM(DATE(2024,1,1),0)", "=WEEKNUM(DATE(2024,1,1),3)",
-        "=WEEKNUM(DATE(2024,1,1),10)", "=WEEKNUM(DATE(2024,1,1),18)", "=WEEKNUM(DATE(2024,1,1),22)"}) {
+        "=WEEKNUM(DATE(2024,1,1),10)", "=WEEKNUM(DATE(2024,1,1),18)", "=WEEKNUM(DATE(2024,1,1),20)",
+        "=WEEKNUM(DATE(2024,1,1),22)", "=WEEKNUM(DATE(2024,1,1),-1)", "=WEEKNUM(DATE(2024,1,1),-12)",
+        "=WEEKNUM(DATE(2024,1,1),0.9)", "=WEEKNUM(DATE(2024,1,1),-0.5)", "=WEEKNUM(DATE(2024,1,1),3.9)"}) {
     const Value v = EvalSource(src);
     ASSERT_TRUE(v.is_error()) << src;
     EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+}
+
+// return_type truncates toward zero and a numeric string coerces.
+TEST(DateTimeWeeknum, ReturnTypeTruncatesAndCoerces) {
+  // 2024-01-01 is a Monday: type 1 (Sunday start) and type 2 (Monday start) both give week 1,
+  // 2024-01-07 (Sunday) tells them apart: 2 under type 1, 1 under type 2.
+  const Value truncated = EvalSource("=WEEKNUM(DATE(2024,1,7),2.9)");
+  ASSERT_TRUE(truncated.is_number());
+  EXPECT_EQ(truncated.as_number(), 1.0);
+  const Value text = EvalSource("=WEEKNUM(DATE(2024,1,7),\"2\")");
+  ASSERT_TRUE(text.is_number());
+  EXPECT_EQ(text.as_number(), 1.0);
+  const Value top = EvalSource("=WEEKNUM(DATE(2024,1,1),21.9)");
+  ASSERT_TRUE(top.is_number());
+  EXPECT_EQ(top.as_number(), 1.0);
+}
+
+TEST(DateTimeWeeknum, NonNumericReturnTypeIsValueError) {
+  for (const char* src :
+       {"=WEEKNUM(DATE(2024,1,1),TRUE)", "=WEEKNUM(DATE(2024,1,1),\"\")", "=WEEKNUM(DATE(2024,1,1),\"abc\")"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
   }
 }
 

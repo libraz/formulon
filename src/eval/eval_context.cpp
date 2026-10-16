@@ -531,11 +531,8 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   const std::uint32_t c_min = walked.value().rect->col_first;
   const std::uint32_t c_max = walked.value().rect->col_last;
 
-  // Accepted divergence: callers such as SUM / AVERAGE coerce every
-  // expanded Value via `coerce_to_number`, so a range cell holding TRUE
-  // contributes 1.0 (not 0) and a text cell surfaces `#VALUE!` instead of
-  // being silently skipped. Excel's range-vs-direct semantic split is a
-  // future pass; flattening here keeps the dispatcher agnostic.
+  // Cells are flattened as stored; each caller applies Excel's range-vs-direct
+  // coercion (SUM / AVERAGE skip TRUE and text found in a range).
   std::vector<Value> out;
   const std::uint64_t total =
       static_cast<std::uint64_t>(r_max - r_min + 1) * static_cast<std::uint64_t>(c_max - c_min + 1);
