@@ -520,6 +520,30 @@ TEST(DateTimeSerialWeekday, MatchesExcelGrid) {
   }
 }
 
+// Excel 365 doubles, bit-exact.
+TEST(ExcelExactTime, MatchesExcelBitForBit) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=TIME(25,0,0)", 0.04166666666666674},
+      {"=TIME(32767,0,0)", 0.29166666666674246},
+      {"=TIME(49,30,0)", 0.0625},
+      {"=TIME(0,1441,0)", 0.000694444444444553},
+      {"=TIME(100,7,13)", 0.17167824074074112},
+      {"=TIME(32767,32767,32767)", 0.4257754629629744},
+      {"=TIME(1,0,0)", 0.041666666666666664},
+      {"=TIME(13,17,29)", 0.5538078703703704},
+      {"=TIME(23,59,59)", 0.999988425925926},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSourcePinned(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

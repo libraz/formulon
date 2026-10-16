@@ -594,6 +594,47 @@ TEST(BuiltinsMath3Registration, AllNamesRegistered) {
   }
 }
 
+// Excel 365 doubles, bit-exact.
+TEST(ExcelExactTrigLog, MatchesExcelBitForBit) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=LOG(1000)", 3.0},
+      {"=LOG(0.00001)", -5.0},
+      {"=LOG(2)", 0.3010299956639812},
+      {"=LOG(1E+300)", 300.0},
+      {"=LOG(7)", 0.8450980400142568},
+      {"=LOG(8,2)", 3.0},
+      {"=LOG(1000,10)", 2.9999999999999996},
+      {"=LOG(125,5)", 3.0000000000000004},
+      {"=ASINH(1)", 0.8813735870195429},
+      {"=ASINH(-1)", -0.8813735870195429},
+      {"=ASINH(0.5)", 0.48121182505960347},
+      {"=ASINH(2)", 1.4436354751788103},
+      {"=ASINH(-3)", -1.8184464592320668},
+      {"=ASINH(0.00001)", 9.999999999902983e-06},
+      {"=ASINH(1000)", 7.600902709541988},
+      {"=COT(0.9)*TAN(0.9)", 1.0},
+      {"=COT(0.9)", 0.7935511478423173},
+      {"=COT(2)", -0.45765755436028577},
+      {"=COT(0.1)", 9.96664442325924},
+      {"=ACOT(1000000)", 9.999999999996666e-07},
+      {"=ACOT(10)", 0.09966865249116204},
+      {"=ACOT(-1000000)", 3.141591653589793},
+      {"=ACOT(0.5)", 1.1071487177940906},
+      {"=ACOT(0.001)", 1.5697963271282298},
+      {"=ACOT(1E+300)", 1e-300},
+      {"=ACOT(3)", 0.3217505543966422},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

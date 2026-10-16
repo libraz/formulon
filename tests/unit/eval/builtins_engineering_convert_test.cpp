@@ -185,6 +185,26 @@ TEST(BuiltinsConvert, NonNumericValueIsValue) {
   EXPECT_EQ(r.as_error(), ErrorCode::Value);
 }
 
+// Excel 365 doubles, bit-exact.
+TEST(ExcelExactConvert, MatchesExcelBitForBit) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=CONVERT(1,\"m\",\"ft\")", 3.2808398950131235},
+      {"=CONVERT(1,\"m\",\"in\")", 39.37007874015748},
+      {"=CONVERT(1,\"ft\",\"m\")", 0.3048},
+      {"=CONVERT(1,\"mi\",\"km\")", 1.609344},
+      {"=CONVERT(1,\"km\",\"mi\")", 0.621371192237334},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -288,6 +288,36 @@ TEST(FinancialCumprinc, RejectsBoolType) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// Excel 365 doubles, bit-exact.
+TEST(ExcelExactTimeValue, MatchesExcelBitForBit) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=PV(0.05/12, 60, -500)", 26495.35316196374},
+      {"=PV(0.05/12, 60, -500, -10000)", 34287.407065133426},
+      {"=PV(0.05/12, 60, -500, 0, 1)", 26605.750466805257},
+      {"=PV(0.5, 10, -500)", 982.6584700841673},
+      {"=FV(0.08/12, 120, -200)", 36589.20703634143},
+      {"=FV(0.05/12, 60, -500, -10000)", 46836.62820545683},
+      {"=FV(0.08/12, 120, -200, 0, 1)", 36833.13508325037},
+      {"=FV(0.1, 20, -100)", 5727.499949325609},
+      {"=FV(-0.99, 1000, 1)", -1.0101010101010102},
+      {"=EFFECT(0.0525,12)", 0.0537818867274622},
+      {"=EFFECT(0.05,4)", 0.050945336914062445},
+      {"=EFFECT(0.1,4)", 0.10381289062499977},
+      {"=EFFECT(0.05,365)", 0.0512674964674229},
+      {"=EFFECT(0.0525,1)", 0.05249999999999999},
+      {"=EFFECT(0.0525,2)", 0.05318906250000022},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

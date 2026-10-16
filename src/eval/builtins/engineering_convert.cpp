@@ -369,6 +369,10 @@ bool resolve_unit(std::string_view name, Resolved* out) {
 // CONVERT impl
 // ---------------------------------------------------------------------------
 
+constexpr double kInchInMeters = 0.0254;
+constexpr double kInchesPerFoot = 12.0;
+constexpr double kFootInMeters = 0.3048;
+
 Value Convert(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto number = coerce_to_number(args[0]);
   if (!number) {
@@ -400,6 +404,11 @@ Value Convert(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     const double kelvin = v * from_unit.factor + from_unit.offset;
     const double result = (kelvin - to_unit.offset) / to_unit.factor;
     return Value::number(result);
+  }
+  if (from_unit.category == Category::kDistance && from_unit.dim == 1 && from_unit.factor == 1.0 && to_unit.dim == 1 &&
+      to_unit.factor == kFootInMeters) {
+    // Excel reaches the foot through the inch.
+    return Value::number(v / kInchInMeters / kInchesPerFoot);
   }
   return Value::number(v * from_unit.factor / to_unit.factor);
 }

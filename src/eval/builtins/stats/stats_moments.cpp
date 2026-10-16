@@ -41,26 +41,73 @@ Expected<std::vector<double>, ErrorCode> collect_nonempty_direct_stats(const Val
   return std::move(collected.value());
 }
 
+/// Double-double value `hi + lo` used to evaluate `y^n` past double precision.
+struct DoubleDouble {
+  double hi;
+  double lo;
+};
+
+/// Exact product of two doubles via Veltkamp splitting (no fma dependency).
+DoubleDouble two_product(double a, double b) {
+  constexpr double kSplit = 134217729.0;  // 2^27 + 1
+  const double hi = a * b;
+  const double ta = kSplit * a;
+  const double a_hi = ta - (ta - a);
+  const double a_lo = a - a_hi;
+  const double tb = kSplit * b;
+  const double b_hi = tb - (tb - b);
+  const double b_lo = b - b_hi;
+  return {hi, ((a_hi * b_hi - hi) + a_hi * b_lo + a_lo * b_hi) + a_lo * b_lo};
+}
+
+DoubleDouble dd_mul(DoubleDouble a, DoubleDouble b) {
+  DoubleDouble p = two_product(a.hi, b.hi);
+  p.lo += a.hi * b.lo + a.lo * b.hi;
+  const double hi = p.hi + p.lo;
+  return {hi, p.lo - (hi - p.hi)};
+}
+
+/// Correctly rounded n-th root of a positive finite `value`: `pow` seeds the
+/// root and one Newton step against `y^n` in double-double lands on the
+/// nearest double, which is the root Excel returns.
+double nth_root(double value, std::uint32_t n) {
+  const double seed = std::pow(value, 1.0 / static_cast<double>(n));
+  if (n == 1U || seed == 0.0 || !std::isfinite(seed)) {
+    return seed;
+  }
+  DoubleDouble power{1.0, 0.0};
+  DoubleDouble square{seed, 0.0};
+  for (std::uint32_t k = n; k != 0U; k >>= 1U) {
+    if ((k & 1U) != 0U) {
+      power = dd_mul(power, square);
+    }
+    square = dd_mul(square, square);
+  }
+  const double residual = (value - power.hi) - power.lo;
+  const double root = seed + seed * residual / (static_cast<double>(n) * value);
+  return std::isfinite(root) ? root : seed;
+}
+
 }  // namespace
 
 // GEOMEAN(value, ...) - geometric mean. Every numeric input must be
 // strictly positive; a zero or negative value (including a range cell
-// coerced via the numeric provenance rule) yields `#NUM!`. Computed in
-// log-space to avoid overflow for long data sets: exp(mean(ln(x_i))).
+// coerced via the numeric provenance rule) yields `#NUM!`. Computed as the
+// n-th root of the product accumulated in argument order.
 Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto collected = collect_nonempty_direct_stats(args, arity);
   if (!collected) {
     return Value::error(collected.error());
   }
   const std::vector<double>& xs = collected.value();
-  double log_sum = 0.0;
+  double product = 1.0;
   for (double x : xs) {
     if (x <= 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    log_sum += std::log(x);
+    product *= x;
   }
-  const double r = std::exp(log_sum / static_cast<double>(xs.size()));
+  const double r = nth_root(product, static_cast<std::uint32_t>(xs.size()));
   return finite_number_result(r);
 }
 

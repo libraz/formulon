@@ -70,6 +70,7 @@ cases:
 
   - id: asinh_of_one
     formula: "=ASINH(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: asinh_sinh_round_trip
     formula: "=ASINH(SINH(0.75))"
@@ -77,6 +78,7 @@ cases:
   - id: asinh_of_negative_one
     description: "ASINH is odd: ASINH(-1) == -ASINH(1)."
     formula: "=ASINH(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: asinh_large_grows_like_log
     description: "ASINH(x) ~ ln(2x) for large x."
@@ -171,6 +173,7 @@ cases:
   - id: cot_identity_with_tan
     description: "COT(x) * TAN(x) == 1."
     formula: "=COT(0.9)*TAN(0.9)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- ACOT ----------------------------------------------------------------
   - id: acot_of_zero
@@ -188,6 +191,7 @@ cases:
   - id: acot_large_approaches_zero
     description: "ACOT(x) -> 0 as x -> +infinity."
     formula: "=ACOT(1000000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: acot_round_trip_with_cot
     description: "COT(ACOT(x)) == x."

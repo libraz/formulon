@@ -105,8 +105,9 @@ Value Ln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_guarded_unary_math(&std::log, &positive_domain, args);
 }
 
-// LOG(x, [base]) - logarithm with an optional base (default 10). Excel
-// quirks pinned here:
+// LOG(x, [base]) - logarithm with an optional base. The one-argument form
+// is `log10(x)`; an explicit base divides natural logarithms. Excel quirks
+// pinned here:
 //   - `x <= 0`            -> `#NUM!`
 //   - `base <= 0`         -> `#NUM!` (would-be `ln(base)` on a non-positive
 //                            value already fails before the divide)
@@ -128,6 +129,9 @@ Value Log(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double base = parsed.value();
   if (base <= 0.0) {
     return Value::error(ErrorCode::Num);
+  }
+  if (arity < 2) {
+    return to_finite_value(std::log10(x.value()));
   }
   const double denom = std::log(base);
   if (denom == 0.0) {
@@ -243,9 +247,13 @@ Value Tanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_math(&std::tanh, args);
 }
 
-// ASINH(x) - inverse hyperbolic sine. Domain: all reals.
+// ASINH(x) - inverse hyperbolic sine. Domain: all reals. Excel evaluates the
+// closed form `sign(x) * ln(|x| + sqrt(x*x + 1))` without cancellation guards.
 Value Asinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::asinh, args);
+  return apply_unary_value(args, [](double x) {
+    const double magnitude = std::log(std::fabs(x) + std::sqrt(x * x + 1.0));
+    return to_finite_value(x < 0.0 ? -magnitude : magnitude);
+  });
 }
 
 // ACOSH(x) - inverse hyperbolic cosine. Domain: `[1, +inf)`. `x < 1` is
@@ -294,26 +302,27 @@ Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   });
 }
 
-// COT(x) - cotangent, `cos(x) / sin(x)` (equivalently `1 / tan(x)`).
-// `sin(x) == 0` -> `#DIV/0!`. Implemented as `cos / sin` rather than
-// `1 / tan` because `tan(x)` can round exactly to 0 at multiples of PI
-// even when `sin(x)` is non-zero on the same argument, which would miss
-// the divide-by-zero case.
+// COT(x) - cotangent, `1 / tan(x)`. `sin(x) == 0` -> `#DIV/0!`; the sine
+// test comes first because `tan(x)` can round exactly to 0 at multiples of
+// PI even when `sin(x)` is non-zero on the same argument.
 Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
     const double s = std::sin(x);
     if (s == 0.0) {
       return Value::error(ErrorCode::Div0);
     }
-    return to_finite_value(std::cos(x) / s);
+    return to_finite_value(1.0 / std::tan(x));
   });
 }
 
-// ACOT(x) - inverse cotangent, `PI/2 - atan(x)`. Range `(0, PI)`. No
-// domain restriction. Note Excel's ACOT does NOT follow the `atan(1/x)`
-// definition on `x < 0`; `PI/2 - atan(x)` is the correct formula.
+// ACOT(x) - inverse cotangent, `atan(1/x)` shifted by PI for `x < 0`. Range
+// `(0, PI)`. No domain restriction. The reciprocal form keeps full relative
+// precision for large `|x|`, where `PI/2 - atan(x)` cancels to zero.
 Value Acot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_value(args, [](double x) { return to_finite_value(kPi / 2.0 - std::atan(x)); });
+  return apply_unary_value(args, [](double x) {
+    const double r = std::atan(1.0 / x);
+    return to_finite_value(x < 0.0 ? r + kPi : r);
+  });
 }
 
 // SECH(x) - hyperbolic secant, `1 / cosh(x)`. `cosh` is always >= 1, so

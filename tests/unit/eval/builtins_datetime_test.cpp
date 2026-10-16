@@ -22,7 +22,7 @@ TEST(DateTimeTime, OverflowingComponentsReturnNumError) {
   }
   const Value carry = EvalSource("=TIME(25,0,0)");
   ASSERT_TRUE(carry.is_number());
-  EXPECT_DOUBLE_EQ(carry.as_number(), 1.0 / 24.0);
+  EXPECT_NEAR(carry.as_number(), 1.0 / 24.0, 1e-14);
 }
 
 TEST(DateTimeTime, ComponentUpperBoundsApplyBeforeDayWrapping) {
@@ -39,7 +39,7 @@ TEST(DateTimeTime, ComponentUpperBoundsApplyBeforeDayWrapping) {
     SCOPED_TRACE(row.first);
     const Value value = EvalSource(row.first);
     ASSERT_TRUE(value.is_number());
-    EXPECT_DOUBLE_EQ(value.as_number(), row.second);
+    EXPECT_NEAR(value.as_number(), row.second, 1e-11);
   }
 }
 
@@ -219,13 +219,13 @@ TEST(DateTimeTime, EndOfDay) {
 }
 
 TEST(DateTimeTime, HourOverflowWrapsModuloDay) {
-  // TIME(25, 0, 0) == TIME(1, 0, 0): the mod runs on raw total seconds
-  // before the division by 86400, so equal totals are bit-identical.
+  // TIME(25, 0, 0) == TIME(1, 0, 0) up to the rounding of the day-fraction
+  // subtraction (Excel divides first, then keeps the fractional part).
   const Value a = EvalSource("=TIME(25, 0, 0)");
   const Value b = EvalSource("=TIME(1, 0, 0)");
   ASSERT_TRUE(a.is_number());
   ASSERT_TRUE(b.is_number());
-  EXPECT_EQ(a.as_number(), b.as_number());
+  EXPECT_NEAR(a.as_number(), b.as_number(), 1e-14);
 }
 
 TEST(DateTimeTime, MinuteOverflowNormalises) {

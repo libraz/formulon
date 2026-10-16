@@ -101,8 +101,17 @@ Value compound_rate_conversion(const Value* args, bool nominal_to_effective) {
   if (rate <= 0.0 || npery < 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = nominal_to_effective ? std::pow(1.0 + rate / npery, npery) - 1.0
-                                             : npery * (std::pow(1.0 + rate, 1.0 / npery) - 1.0);
+  double result = 0.0;
+  if (nominal_to_effective) {
+    // Same integer-power squaring as POWER, so the last bits match Excel.
+    auto grown = apply_pow(1.0 + rate / npery, npery);
+    if (!grown) {
+      return Value::error(ErrorCode::Num);
+    }
+    result = grown.value() - 1.0;
+  } else {
+    result = npery * (std::pow(1.0 + rate, 1.0 / npery) - 1.0);
+  }
   return finalize(result);
 }
 

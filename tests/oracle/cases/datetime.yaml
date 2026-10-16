@@ -24,6 +24,7 @@ cases:
   - id: time_wrap_25_hours
     description: "TIME(25,0,0) wraps to 01:00 (fraction 1/24)"
     formula: "=TIME(25,0,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- YEAR / MONTH / DAY --------------------------------------------------
   - id: year_of_serial
@@ -654,6 +655,7 @@ cases:
 
   - id: time_hour_32767
     formula: "=TIME(32767,0,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: time_hour_32768
     formula: "=TIME(32768,0,0)"

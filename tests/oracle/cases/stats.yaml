@@ -670,6 +670,7 @@ cases:
   # -- GEOMEAN --------------------------------------------------------------
   - id: geomean_single_value
     formula: "=GEOMEAN(7)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- HARMEAN --------------------------------------------------------------
   - id: harmean_single_value
@@ -805,6 +806,7 @@ cases:
   - id: geomean_direct_numeric_text
     description: "GEOMEAN counts direct numeric text"
     formula: "=GEOMEAN(1,2,\"10\",\"20\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: geomean_direct_bool_is_num
     description: "GEOMEAN with a direct FALSE (0) is #NUM!"

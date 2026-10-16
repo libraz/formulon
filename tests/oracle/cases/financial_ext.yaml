@@ -52,6 +52,7 @@ cases:
   - id: effect_monthly_compounding
     description: "5.25% nominal compounded monthly -> ~5.378% effective"
     formula: "=EFFECT(0.0525, 12)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: effect_annual_is_identity
     description: "npery=1: effect == nominal"

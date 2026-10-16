@@ -204,6 +204,7 @@ cases:
   - id: log_default_base_10
     description: "LOG(n) with no base defaults to base 10"
     formula: "=LOG(1000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: log_explicit_base_2
     formula: "=LOG(8,2)"

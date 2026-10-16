@@ -371,6 +371,27 @@ TEST(BuiltinsDirectStatArgs, RangeSourcedBooleansStillSkipped) {
   ExpectStatRel("=AVEDEV({1,2,TRUE})", 0.5, 1e-14);
 }
 
+// Excel 365 doubles, bit-exact.
+TEST(ExcelExactGeomean, MatchesExcelBitForBit) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=GEOMEAN(7)", 7.0},
+      {"=GEOMEAN(1,2,\"10\",\"20\")", 4.47213595499958},
+      {"=GEOMEAN(2,8)", 4.0},
+      {"=GEOMEAN(1,2,3)", 1.8171205928321397},
+      {"=GEOMEAN(3,5,7,11,13)", 6.8439222529680235},
+      {"=GEOMEAN(10)", 10.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

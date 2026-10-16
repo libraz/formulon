@@ -168,8 +168,8 @@ Expected<std::pair<std::int64_t, std::int64_t>, ErrorCode> cum_period_bounds(dou
 // Matches Excel's documented formula:
 //
 //   rate == 0  ->  PV = -(pmt * nper + fv)
-//   rate != 0  ->  f  = (1 + rate)^nper
-//                  PV = -((fv + pmt * (1 + rate*type) * (f - 1) / rate) / f)
+//   rate != 0  ->  f  = (1 + rate)^nper   (POWER's integer squaring)
+//                  PV = (-fv - pmt * (1 + rate*type) * ((f - 1) / rate)) / f
 //
 // Sign convention follows Excel: cash-out values are negative, cash-in
 // values are positive. Non-finite intermediate or final values surface as
@@ -188,12 +188,16 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (r == 0.0) {
     return finalize(-(p * n + f));
   }
-  const double pow_term = std::pow(1.0 + r, n);
+  auto grown = apply_pow(1.0 + r, n);
+  if (!grown) {
+    return Value::error(grown.error() == ErrorCode::Div0 ? ErrorCode::Div0 : ErrorCode::Num);
+  }
+  const double pow_term = grown.value();
   if (pow_term == 0.0) {
     // An underflowed discount factor divides by zero like rate == -1 does.
     return Value::error(ErrorCode::Div0);
   }
-  const double result = -((f + p * (1.0 + r * t) * (pow_term - 1.0) / r) / pow_term);
+  const double result = (-f - p * (1.0 + r * t) * ((pow_term - 1.0) / r)) / pow_term;
   return finalize(result);
 }
 
@@ -201,7 +205,7 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //
 //   rate == 0  ->  FV = -(pv + pmt * nper)
 //   rate != 0  ->  f  = (1 + rate)^nper
-//                  FV = -(pv * f + pmt * (1 + rate*type) * (f - 1) / rate)
+//                  FV = -(pv * f + pmt * (1 + rate*type) * ((f - 1) / rate))
 Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_tvm_args(args, arity, 0.0);
   if (!input) {
@@ -216,8 +220,12 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (r == 0.0) {
     return finalize(-(v + p * n));
   }
-  const double pow_term = std::pow(1.0 + r, n);
-  const double result = -(v * pow_term + p * (1.0 + r * t) * (pow_term - 1.0) / r);
+  auto grown = apply_pow(1.0 + r, n);
+  if (!grown) {
+    return Value::error(grown.error() == ErrorCode::Div0 ? ErrorCode::Div0 : ErrorCode::Num);
+  }
+  const double pow_term = grown.value();
+  const double result = -(v * pow_term + p * (1.0 + r * t) * ((pow_term - 1.0) / r));
   return finalize(result);
 }
 

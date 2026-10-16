@@ -472,7 +472,7 @@ TEST(DateTimeDateLimits, DaySaturates) {
 }
 
 TEST(DateTimeDateLimits, TimeLimits) {
-  ExpectNumber("=TIME(32767,0,0)*24", 7.0);
+  ExpectNumber("=ROUND(TIME(32767,0,0)*24, 9)", 7.0);
   ExpectError("=TIME(32768,0,0)", ErrorCode::Num);
   ExpectError("=TIME(0,0,100000)", ErrorCode::Num);
 }

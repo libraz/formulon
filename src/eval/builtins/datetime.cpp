@@ -335,12 +335,10 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!std::isfinite(total) || total < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  // Normalise modulo a full day so `TIME(25, 0, 0) == TIME(1, 0, 0)`.
-  // Mod first, then divide: dividing before the mod rounds the quotient
-  // and loses bit-identity between argument triples with equal totals.
-  const double day_fraction =
-      std::fmod(total, static_cast<double>(kSecondsPerDay)) / static_cast<double>(kSecondsPerDay);
-  return Value::number(day_fraction);
+  // Excel divides the total first and keeps the fractional part, so
+  // `TIME(25, 0, 0) == TIME(1, 0, 0)` holds only to the last rounding.
+  const double days = total / static_cast<double>(kSecondsPerDay);
+  return Value::number(days - std::floor(days));
 }
 
 /// YEAR(serial). Returns the 4-digit Gregorian year. Extracts the date

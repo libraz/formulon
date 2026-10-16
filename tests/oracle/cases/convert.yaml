@@ -11,6 +11,7 @@ cases:
   - id: convert_meter_to_foot
     description: "1 m = 3.280839895... ft"
     formula: "=CONVERT(1,\"m\",\"ft\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Mass: gram -> kilogram (decimal SI prefix) -------------------------
   - id: convert_gram_to_kilogram
