@@ -75,6 +75,7 @@ cases:
   - id: pmt_zero_rate
     description: "rate=0: PMT = -(pv+fv)/nper"
     formula: "=PMT(0, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: pmt_type_1
     description: "Annuity-due payment (smaller magnitude than end-of-period)"

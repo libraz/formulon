@@ -232,11 +232,11 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // --- PMT(rate, nper, pv, [fv=0], [type=0]) ------------------------------
 //
 //   rate == 0   ->  PMT = -(pv + fv) / nper   (nper == 0 -> #NUM!)
-//   rate != 0   ->  f   = (1 + rate)^nper
-//                   PMT = -(pv * f + fv) * rate / ((1 + rate*type) * (f - 1))
+//   rate != 0   ->  om  = 1 - (1 + rate)^-nper   (= -expm1(-nper * log1p(rate)))
+//                   PMT = -(rate / (1 + rate*type)) * ((pv + fv) / om - fv)
 //
-// Zero denominators (nper == 0 when rate == 0, or f == 1 when rate != 0
-// with nper == 0) surface as `#NUM!`.
+// The `(pv + fv) / om - fv` shape reproduces Excel's cancellation (including
+// an exact 0 when om rounds to 1). A zero om (nper == 0) surfaces as `#NUM!`.
 Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_tvm_args(args, arity, 0.0);
   if (!input) {
@@ -257,12 +257,11 @@ Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
     return finalize(-(v + f) / n);
   }
-  const double pow_term = std::pow(1.0 + r, n);
-  const double denom = (1.0 + r * t) * (pow_term - 1.0);
-  if (denom == 0.0) {
+  const double om = -std::expm1(-n * std::log1p(r));
+  if (om == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = -(v * pow_term + f) * r / denom;
+  const double result = -(r / (1.0 + r * t)) * ((v + f) / om - f);
   return finalize(result);
 }
 

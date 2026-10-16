@@ -95,6 +95,30 @@ TEST(FinancialPMT, CarLoanPayment) {
   EXPECT_NEAR(v.as_number(), -471.78084, 1e-4);
 }
 
+TEST(FinancialPMT, BitExactExcelValues) {
+  // Mac Excel 365 readbacks at full precision.
+  const Value a = EvalSource("=PMT(0.1,120,100000,250,0)");
+  ASSERT_TRUE(a.is_number());
+  EXPECT_EQ(a.as_number(), -10000.108135139992);
+  const Value b = EvalSource("=PMT(0.08/12,60,-5000,0,0)");
+  ASSERT_TRUE(b.is_number());
+  EXPECT_EQ(b.as_number(), 101.3819714420684);
+  const Value c = EvalSource("=PMT(0.05/12,7,25000,5000,1)");
+  ASSERT_TRUE(c.is_number());
+  EXPECT_EQ(c.as_number(), -4318.612302329094);
+}
+
+TEST(FinancialPMT, FvCancellationOutliers) {
+  // (pv + fv) / om - fv cancels: the first keeps Excel's rounding residue,
+  // the second is exactly 0 because om rounds to 1.
+  const Value a = EvalSource("=PMT(0.15,120,0,-1000,1)");
+  ASSERT_TRUE(a.is_number());
+  EXPECT_NEAR(a.as_number(), 6.786605418394332e-06, 1e-11);
+  const Value b = EvalSource("=PMT(0.15,360,0,250,1)");
+  ASSERT_TRUE(b.is_number());
+  EXPECT_EQ(b.as_number(), 0.0);
+}
+
 TEST(FinancialPMT, ZeroRate) {
   // rate==0: PMT = -(pv+fv)/nper = -25000/60 ~= -416.6667.
   const Value v = EvalSource("=PMT(0, 60, 25000)");
