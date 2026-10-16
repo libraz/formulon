@@ -457,6 +457,12 @@ class ExcelOracle(OracleDriver):
                         case["formula"],
                         context=f"case {case['id']!r} result",
                     )
+                    # Entering a formula can make Excel auto-apply a currency or date
+                    # format; reset so the read-back is the full-precision double.
+                    try:
+                        result_cell.number_format = "General"
+                    except Exception:
+                        pass
                 except Exception as exc:
                     write_errors[case["id"]] = _format_mac_error(exc)
 
@@ -536,6 +542,12 @@ class ExcelOracle(OracleDriver):
                             case["formula"],
                             context=f"case {case['id']!r} result",
                         )
+                        # Entering a formula can make Excel auto-apply a currency or date
+                        # format; reset so the read-back is the full-precision double.
+                        try:
+                            result_cell.number_format = "General"
+                        except Exception:
+                            pass
                     except Exception as exc:
                         out.append(
                             CaseResult(

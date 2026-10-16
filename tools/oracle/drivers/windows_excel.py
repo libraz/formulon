@@ -408,6 +408,12 @@ class WindowsExcelOracle(OracleDriver):
                         result_cell.formula2 = case["formula"]
                     except Exception:
                         result_cell.formula = case["formula"]
+                    # Entering a formula can make Excel auto-apply a currency or date
+                    # format; reset so the read-back is the full-precision double.
+                    try:
+                        result_cell.number_format = "General"
+                    except Exception:
+                        pass
                 except Exception as exc:
                     write_errors[case["id"]] = _format_com_error(exc)
 
@@ -504,6 +510,12 @@ class WindowsExcelOracle(OracleDriver):
                             result_cell.formula2 = case["formula"]
                         except Exception:
                             result_cell.formula = case["formula"]
+                        # Entering a formula can make Excel auto-apply a currency or date
+                        # format; reset so the read-back is the full-precision double.
+                        try:
+                            result_cell.number_format = "General"
+                        except Exception:
+                            pass
                     except Exception as exc:
                         write_error = _format_com_error(exc)
                     self._app.calculate()

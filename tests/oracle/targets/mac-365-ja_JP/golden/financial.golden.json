@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-15T07:35:14Z"
+    "generated_at": "2026-10-16T06:13:27Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -19,7 +19,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 26495.3532
+        "value": 26495.35316196374
       }
     },
     {
@@ -37,7 +37,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 34287.4071
+        "value": 34287.407065133426
       }
     },
     {
@@ -46,7 +46,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 26605.7505
+        "value": 26605.750466805257
       }
     },
     {
@@ -55,7 +55,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 982.6585
+        "value": 982.6584700841673
       }
     },
     {
@@ -82,7 +82,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 36589.207
+        "value": 36589.20703634143
       }
     },
     {
@@ -100,7 +100,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 46836.6282
+        "value": 46836.62820545683
       }
     },
     {
@@ -109,7 +109,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 36833.1351
+        "value": 36833.13508325037
       }
     },
     {
@@ -118,7 +118,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 5727.4999
+        "value": 5727.499949325609
       }
     },
     {
@@ -127,7 +127,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0101
+        "value": -1.0101010101010102
       },
       "tolerance": {
         "abs": 0.0001,
@@ -140,7 +140,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -471.7808
+        "value": -471.7808411002734
       }
     },
     {
@@ -149,7 +149,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -416.6667
+        "value": -416.6666666666667
       }
     },
     {
@@ -158,7 +158,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -469.8232
+        "value": -469.8232442492349
       }
     },
     {
@@ -212,7 +212,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 481.5928
+        "value": 481.59278737791124
       }
     },
     {
@@ -234,7 +234,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 481.5928
+        "value": 481.59278737791124
       }
     },
     {
@@ -252,7 +252,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": 483.2662
+        "value": 483.26617034355564
       }
     },
     {
@@ -438,7 +438,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -104.1667
+        "value": -104.16666666666667
       }
     },
     {
@@ -447,7 +447,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.9576
+        "value": -1.9575968510384782
       },
       "tolerance": {
         "abs": 0.0001,
@@ -487,7 +487,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -367.6142
+        "value": -367.6141744336067
       }
     },
     {
@@ -496,7 +496,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -469.8232
+        "value": -469.8232442492349
       }
     },
     {
@@ -514,7 +514,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -416.6667
+        "value": -416.6666666666667
       }
     },
     {
@@ -523,7 +523,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -469.8232
+        "value": -469.8232442492349
       }
     },
     {
@@ -757,7 +757,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 584.9838
+        "value": 584.9837512884901
       }
     },
     {
@@ -775,7 +775,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 238.5271
+        "value": 238.52712458788181
       }
     },
     {
