@@ -63,6 +63,7 @@ cases:
   - id: tanh_identity_sinh_over_cosh
     description: "TANH(x) == SINH(x)/COSH(x)."
     formula: "=TANH(0.5)-SINH(0.5)/COSH(0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- ASINH / ACOSH / ATANH -----------------------------------------------
   - id: asinh_of_zero

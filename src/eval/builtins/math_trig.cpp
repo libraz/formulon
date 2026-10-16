@@ -231,14 +231,33 @@ Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // forward hyperbolics SINH / COSH, can arise from overflow at `|x|` beyond
 // roughly 710) and surfaces `#NUM!` in that case, mirroring ACOS / ASIN.
 
-// Excel builds the hyperbolics from EXP: SINH and TANH for |x| >= 1, COSH for
-// every x. The |x| < 1 branches of SINH / TANH are not decoded and keep libm.
+// Excel builds the hyperbolics from EXP; for |x| < 1 SINH and TANH use Kahan's
+// expm1 (exp(x) - 1 corrected by log(exp(x))) instead.
 double hyp_exp(double x) {
   return current_eval_profile().host == ExcelHost::kWin365 ? x87_exp(x) : std::exp(x);
 }
 
+double hyp_log(double x) {
+  return current_eval_profile().host == ExcelHost::kWin365 ? x87_ln(x) : std::log(x);
+}
+
+double expm1_kahan(double x) {
+  const double u = hyp_exp(x);
+  if (u == 1.0) {
+    return x;
+  }
+  const double um1 = u - 1.0;
+  if (um1 == -1.0) {
+    return -1.0;
+  }
+  return (um1 * x) / hyp_log(u);
+}
+
 double sinh_excel(double x) {
-  return std::fabs(x) < 1.0 ? std::sinh(x) : (hyp_exp(x) - hyp_exp(-x)) / 2.0;
+  if (std::fabs(x) < 1.0) {
+    return (expm1_kahan(x) - expm1_kahan(-x)) / 2.0;
+  }
+  return (hyp_exp(x) - hyp_exp(-x)) / 2.0;
 }
 
 double cosh_excel(double x) {
@@ -247,7 +266,9 @@ double cosh_excel(double x) {
 
 double tanh_excel(double x) {
   if (std::fabs(x) < 1.0) {
-    return std::tanh(x);
+    const double p = expm1_kahan(x);
+    const double m = expm1_kahan(-x);
+    return (p - m) / (p + m + 2.0);
   }
   const double c = cosh_excel(x);
   if (std::isinf(c)) {
