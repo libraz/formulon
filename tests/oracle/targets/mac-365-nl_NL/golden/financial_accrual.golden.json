@@ -6,7 +6,7 @@
     "excel_locale": "nl-NL",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T23:30:23Z"
+    "generated_at": "2026-10-16T07:52:48Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -64,7 +64,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 1.3151
+        "value": 1.3150684931506849
       },
       "tolerance": {
         "abs": 0.0001,
@@ -95,7 +95,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 2100.0
+        "value": 2100.000000000001
       }
     },
     {
