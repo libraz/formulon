@@ -311,7 +311,11 @@
         "kind": "text",
         "value": "0.498337030555187+0.591083841721045i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsc_one_plus_i",
@@ -322,7 +326,7 @@
         "value": "0.621518017170428-0.303931001628427i"
       },
       "tolerance": {
-        "abs": 1e-14,
+        "abs": 0.0,
         "rel": 0.0
       },
       "compare_mode": "complex_text"
@@ -805,7 +809,11 @@
         "kind": "text",
         "value": "1.18839510577812"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsc_pure_imag",
@@ -815,7 +823,11 @@
         "kind": "text",
         "value": "-0.850918128239322i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsc_negative_real",
@@ -825,7 +837,11 @@
         "kind": "text",
         "value": "-1.18839510577812"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsc_zero_is_num",
@@ -1035,7 +1051,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsec_pure_real",
@@ -1045,7 +1065,11 @@
         "kind": "text",
         "value": "1.85081571768093"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsec_pure_imag",
@@ -1055,7 +1079,11 @@
         "kind": "text",
         "value": "0.648054273663885"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsec_negative_real",
@@ -1065,7 +1093,11 @@
         "kind": "text",
         "value": "1.85081571768093"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsin_zero",

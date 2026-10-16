@@ -443,83 +443,104 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const auto [cost, salvage, life, start_period, end_period, factor, no_switch] = parsed.value();
-  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || factor < 0.0) {
+  const VdbArgs& in = parsed.value();
+  const double cost = in.cost;
+  const double salvage = in.salvage;
+  const double life_arg = in.life;
+  const double start_period = in.start_period;
+  const double end_period = in.end_period;
+  const double factor = in.factor;
+  const bool no_switch = in.no_switch;
+  if (cost < 0.0 || salvage < 0.0 || life_arg <= 0.0 || factor < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (start_period < 0.0 || start_period > end_period || end_period > life) {
+  if (start_period < 0.0 || start_period > end_period || end_period > life_arg) {
     return Value::error(ErrorCode::Num);
   }
-  // The loop below walks one iteration per integer period up to
-  // `end_period`, and the switch-to-straight-line state machine has no
-  // closed form to fall back on, so an over-long schedule is refused
-  // outright.
+  // The schedule walks one iteration per integer period, and the
+  // switch-to-straight-line state machine has no closed form to fall back
+  // on, so an over-long schedule is refused outright.
   if (end_period > kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
-  // start_period == end_period is a zero-length interval: every
-  // segment-clip below produces seg_hi - seg_lo == 0, so the loop
-  // contributes nothing and `accumulated` stays at 0. factor == 0
-  // means no declining-balance acceleration; under no_switch=FALSE
-  // the SL switch picks up immediately and matches Mac Excel's
-  // observed result.
 
-  // Walk integer periods 1..ceil(end_period), maintaining the running
-  // book value. Each integer period `t` covers the half-open segment
-  // (t-1, t]; we clip that segment to [start_period, end_period] and
-  // linearly prorate the full-period depreciation by the clipped
-  // length.
-  const auto last_iter = static_cast<std::int64_t>(std::ceil(end_period));
-  double book = cost;
-  double accumulated = 0.0;
-  bool switched = false;  // Sticky once we flip to straight-line.
-  double straight_line_dep = 0.0;
+  // Declining-balance charge of 1-based period `n`, floored at the salvage.
+  const auto ddb = [&](double n) {
+    const double r = factor / life_arg;
+    const double q = 1.0 - r;
+    if (!(q > 0.0) && n - 1.0 != 0.0) {
+      return 0.0;
+    }
+    const double book = cost * (n - 1.0 > 0.0 ? excel_power(q, n - 1.0) : 1.0);
+    const double charge = book * r;
+    const double remaining = book - salvage;
+    if (remaining - charge > 0.0) {
+      return charge;
+    }
+    return remaining > 0.0 ? remaining : 0.0;
+  };
 
-  for (std::int64_t t = 1; t <= last_iter; ++t) {
-    // Full-period depreciation under the active method. Under
-    // no_switch=FALSE we compare DDB against the straight-line charge
-    // spread over the remaining life; once SL wins we stay on SL.
-    double dep = 0.0;
-    if (no_switch) {
-      dep = book * factor / life;
-    } else {
-      if (switched) {
-        dep = straight_line_dep;
-      } else {
-        const double ddb = book * factor / life;
-        const double remaining_life = life - static_cast<double>(t - 1);
-        const double sl_candidate = remaining_life > 0.0 ? (book - salvage) / remaining_life : 0.0;
-        if (sl_candidate > ddb) {
-          switched = true;
-          straight_line_dep = sl_candidate;
-          dep = sl_candidate;
-        } else {
-          dep = ddb;
-        }
-      }
+  if (no_switch) {
+    double n = std::trunc(std::fabs(start_period)) + 1.0;
+    double charge = ddb(n);
+    double total = ((n - 1.0) - start_period) * charge;
+    while (end_period - n > 0.0) {
+      total = charge + total;
+      n = n + 1.0;
+      charge = ddb(n);
     }
-    // Salvage floor: depreciation drives book toward salvage, never
-    // past it. When salvage > cost the cap is negative and the first
-    // period's depreciation comes out negative — Mac Excel surfaces
-    // that as appreciation rather than #NUM!.
-    const double cap = book - salvage;
-    if (dep > cap) {
-      dep = cap;
-    }
-
-    // Clip integer-period segment (t-1, t] to [start_period, end_period].
-    const double seg_lo = std::max(start_period, static_cast<double>(t - 1));
-    const double seg_hi = std::min(end_period, static_cast<double>(t));
-    if (seg_hi > seg_lo) {
-      accumulated += dep * (seg_hi - seg_lo);
-    }
-    book -= dep;
-    if (book <= salvage) {
-      // Book has converged to salvage; no further depreciation possible.
-      break;
-    }
+    return finalize(((end_period - n) + 1.0) * charge + total);
   }
-  return finalize(accumulated);
+
+  double life = life_arg;
+  const double rate = factor / life;
+  double total = 0.0;
+  double book = cost;
+  double start = start_period;
+  const double whole = std::trunc(std::fabs(start));
+  if (end_period - whole != 0.0) {
+    const double first = ddb(1.0);
+    const double straight = (cost - salvage) / life;
+    if (straight - first > 0.0) {
+      return finalize((end_period - start) * straight + total);
+    }
+    const double fraction = start - whole;
+    book = -(fraction * first) + cost;
+    life = life - fraction;
+  }
+  // One step of the declining-balance walk: the charge for the current
+  // period, or the straight-line charge `slope` once that beats it.
+  const auto walk = [&](double* charge, double* slope) {
+    *charge = book * rate;
+    const double remaining = book - salvage;
+    if (!(remaining - *charge > 0.0)) {
+      *charge = remaining;
+      return false;
+    }
+    *slope = remaining / life;
+    return *slope - *charge > 0.0;
+  };
+  double charge = 0.0;
+  double slope = 0.0;
+  for (auto i = static_cast<std::int64_t>(whole); i > 0; --i) {
+    if (walk(&charge, &slope)) {
+      return finalize((end_period - start) * slope + total);
+    }
+    book = book - charge;
+    life = life - 1.0;
+  }
+  while (true) {
+    if (walk(&charge, &slope)) {
+      return finalize((end_period - start) * slope + total);
+    }
+    if (!((end_period - start) - 1.0 > 0.0)) {
+      return finalize((end_period - start) * charge + total);
+    }
+    total = total + charge;
+    book = book - charge;
+    start = start + 1.0;
+    life = life - 1.0;
+  }
 }
 
 // --- AMORDEGRC(cost, date_purchased, first_period, salvage, period,
@@ -607,7 +628,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 // the first accounting period; every subsequent period charges the
 // same flat amount (`cost * rate`) until the asset reaches salvage.
 //
-//   dep_0          = cost * rate * YEARFRAC(date_purchased, first_period, basis)
+//   dep_0          = ((days / B) * rate) * cost       (B = year length of the basis)
 //   dep_i (i>=1)   = cost * rate
 //
 // The last period is whatever remains to bring the book value down to
@@ -616,7 +637,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 // amount, matching Excel.
 //
 // Domain: same as AMORDEGRC minus the life-bucket rejection (AMORLINC
-// is valid for every positive rate).
+// is valid for every positive rate); basis 2 and first_period < date_purchased are #NUM!.
 Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto parsed = read_amor_args(args, arity);
   if (!parsed) {
@@ -624,20 +645,48 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   }
   const double cost = parsed.value().cost;
   const double salvage = parsed.value().salvage;
-  const double period = parsed.value().period;
   const double rate = parsed.value().rate;
-
-  auto yf =
-      yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis, date1904);
-  if (!yf) {
-    return Value::error(yf.error());
+  const int basis = parsed.value().basis;
+  const double purchased = std::trunc(parsed.value().date_purchased);
+  const double first_period = std::trunc(parsed.value().first_period);
+  if (basis == 2 || first_period < purchased) {
+    return Value::error(ErrorCode::Num);
   }
 
-  const double dep_first = cost * rate * yf.value();
-  const double dep_flat = cost * rate;
-
-  return finalize(run_amor_schedule(cost, salvage, period,
-                                    [&](std::int64_t i, double /*book*/) { return i == 0 ? dep_first : dep_flat; }));
+  const date_time::YMD dp = date_time::ymd_from_serial(purchased, date1904);
+  // Actual-day bases clip a February 29 to the 28th on both ends.
+  const auto clipped = [&](double serial) {
+    const date_time::YMD d = date_time::ymd_from_serial(serial, date1904);
+    return d.m == 2u && d.d > 28u ? date_time::serial_from_ymd(d.y, 2u, 28u, date1904) : serial;
+  };
+  double days = 0.0;
+  if (basis == 0 || basis == 4) {
+    days = days_30_360(purchased, first_period, 2, basis == 0, date1904);
+  } else {
+    days = clipped(first_period) - clipped(purchased);
+  }
+  double year = 360.0;
+  if (basis == 3) {
+    year = 365.0;
+  } else if (basis == 1) {
+    year = date_time::days_in_month(dp.y, 2u) == 29u ? 366.0 : 365.0;
+  }
+  double first = ((days / year) * rate) * cost;
+  if (first == 0.0) {
+    first = cost * rate;
+  }
+  first = std::min(first, cost - salvage);
+  const double period = std::trunc(parsed.value().period);
+  if (period == 0.0) {
+    return finalize(first);
+  }
+  double remaining = (cost - salvage) - first;
+  double charge = rate * cost;
+  for (double p = 1.0; p <= period; p += 1.0) {
+    charge = std::min(charge, remaining);
+    remaining = std::max(remaining - charge, 0.0);
+  }
+  return finalize(charge);
 }
 
 }  // namespace financial_detail

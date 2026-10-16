@@ -270,3 +270,4 @@ cases:
 
   - id: opt_price_basis_omit
     formula: "=PRICE(DATE(2024,1,15),DATE(2030,1,15),0.05,0.06,100,2,)"
+    tolerance: { abs: 0, rel: 0 }

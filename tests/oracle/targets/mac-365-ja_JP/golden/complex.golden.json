@@ -281,6 +281,10 @@
       "expect": {
         "kind": "text",
         "value": "0.498337030555187+0.591083841721045i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -292,7 +296,7 @@
         "value": "0.621518017170428-0.303931001628427i"
       },
       "tolerance": {
-        "abs": 1e-14,
+        "abs": 0.0,
         "rel": 0.0
       },
       "compare_mode": "complex_text"
@@ -727,6 +731,10 @@
       "expect": {
         "kind": "text",
         "value": "1.18839510577812"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -736,6 +744,10 @@
       "expect": {
         "kind": "text",
         "value": "-0.850918128239322i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -745,6 +757,10 @@
       "expect": {
         "kind": "text",
         "value": "-1.18839510577812"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -934,6 +950,10 @@
       "expect": {
         "kind": "text",
         "value": "1"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -943,6 +963,10 @@
       "expect": {
         "kind": "text",
         "value": "1.85081571768093"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -952,6 +976,10 @@
       "expect": {
         "kind": "text",
         "value": "0.648054273663885"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -961,6 +989,10 @@
       "expect": {
         "kind": "text",
         "value": "1.85081571768093"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {

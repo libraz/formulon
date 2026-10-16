@@ -4,26 +4,20 @@
 //   * PRICE(settlement, maturity, rate, yld, redemption, frequency,
 //           [basis=0])
 //
-// Returns the clean price per 100 face. The classical (Mac Excel 365 /
-// Microsoft documented) closed form has two branches keyed on the number
-// of coupons remaining after settlement:
+// Returns the clean price per 100 face. The closed form has two branches
+// keyed on the number of coupons remaining after settlement:
 //
-//   t1  = days_nc / period_days        (fractional periods to NCD)
-//   cf  = 100 * rate / frequency       (per-period coupon cash flow)
-//   AI  = 100 * rate * days_bs / (period_days * frequency)
+//   E = coupon period days, A = accrued days, DSC = E - A, cf = 100 * rate / frequency
 //
 //   if n == 1:
-//     PRICE = (redemption + cf) / (1 + t1 * (yld / frequency)) - AI
+//     PRICE = (cf + redemption) / ((yld / frequency) * (DSC / E) + 1) - cf * (A / E)
 //   else:
-//     b     = 1 + yld / frequency
-//     PRICE = redemption / b^(n-1+t1) + sum_{k=1..n} cf / b^(k-1+t1) - cf * days_bs / period_days
+//     b     = yld / frequency + 1,  f = DSC / E
+//     PRICE = (redemption / b^((n - 1) + f) + sum_{k=1..n} cf / b^((k - 1) + f))
+//             - ((rate / frequency) * (A / E)) * 100
 //
-// The two branches do NOT collapse at full precision: the n==1 branch
-// uses simple-interest (linear) discounting of the single remaining cash
-// flow, matching Microsoft's documented last-period formula. Substituting
-// `v^t1` for `1 / (1 + t1*(yld/frequency))` would change the result at
-// the sub-penny level on real bonds and break 1-bit oracle parity, so
-// the impl deliberately keeps both forms.
+// The branches do NOT collapse: the n == 1 branch discounts the single
+// remaining cash flow with simple interest, so both forms are kept.
 //
 // Coupon-schedule mechanics are delegated to the shared engine in
 // `eval/coupon_schedule.h` (the same engine used by COUP*, DURATION,
@@ -93,39 +87,34 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
     return ErrorCode::Num;
   }
 
-  // `bond_dsc` (not the raw `days_nc`) is the DSC the bond formula
-  // needs: it satisfies `days_bs + bond_dsc == period_days` for all
-  // bases, including bases 2 / 3 where the raw COUPDAYSNC value would
-  // break the identity. See `coupon_schedule.h` for the rationale.
-  const double t1 = cd.bond_dsc / cd.period_days;
+  // DSC is the rest of the coupon period after the accrued days, E - A, so that
+  // `A / E + DSC / E` is one for every basis.
+  const double e = cd.period_days;
+  const double a = cd.days_bs;
+  const double dsc = e - a;
   const std::int32_t n = cd.coupons_remaining;
   const double yfreq = yld / freq_d;
 
-  // Single-period branch: simple-interest discounting on the final
-  // cash flow. See the file header for why this is NOT the same as
-  // substituting v^t1 below.
+  double price = 0.0;
   if (n == 1) {
-    const double denom = 1.0 + t1 * yfreq;
+    // Single-period branch: simple-interest discounting on the final cash flow.
+    const double denom = (yfreq * (dsc / e)) + 1.0;
     if (denom == 0.0) {
       return ErrorCode::Num;
     }
-    const double price = (red + cf) / denom - ai;
-    if (std::isnan(price) || std::isinf(price)) {
-      return ErrorCode::Num;
+    price = ((cf + red) / denom) - cf * (a / e);
+  } else {
+    // Multi-period branch: the redemption term and the coupon sum are
+    // accumulated separately, then added; accrued interest is applied last.
+    const double base = yfreq + 1.0;
+    const double f = dsc / e;
+    double coupons = 0.0;
+    for (std::int32_t k = 1; k <= n; ++k) {
+      coupons = (cf / excel_power(base, (static_cast<double>(k) - 1.0) + f)) + coupons;
     }
-    return price;
+    const double redemption_term = red / excel_power(base, (static_cast<double>(n) - 1.0) + f);
+    price = (redemption_term + coupons) - ((tail.rate / freq_d) * (a / e)) * 100.0;
   }
-
-  // Multi-period branch, summed the way Excel does: the redemption term and
-  // the coupon sum are accumulated separately, then added, and the accrued
-  // interest is `cf * (days_bs / period_days)`.
-  const double base = 1.0 + yfreq;
-  const double t_n = static_cast<double>(n - 1) + t1;
-  double coupons = 0.0;
-  for (std::int32_t k = 1; k <= n; ++k) {
-    coupons += cf / excel_power(base, static_cast<double>(k - 1) + t1);
-  }
-  const double price = red / excel_power(base, t_n) + coupons - cf * cd.days_bs / cd.period_days;
   if (std::isnan(price) || std::isinf(price)) {
     return ErrorCode::Num;
   }

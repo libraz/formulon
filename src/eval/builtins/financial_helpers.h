@@ -247,6 +247,39 @@ inline double excel_power(double base, double exponent) noexcept {
   return exponent < 0.0 ? 1.0 / result : result;
 }
 
+inline bool is_feb_end(const date_time::YMD& d) noexcept {
+  return d.m == 2u && d.d == date_time::days_in_month(d.y, 2u);
+}
+
+// 30/360 day count from `start` to `end`. `mode` 3 forces a February-end or
+// 31st end day to 30; other modes follow the US rules. `us == false` is the
+// European count.
+inline double days_30_360(double start, double end, int mode, bool us, bool date1904) noexcept {
+  const date_time::YMD a = date_time::ymd_from_serial(start, date1904);
+  const date_time::YMD b = date_time::ymd_from_serial(end, date1904);
+  unsigned d1 = a.d;
+  unsigned d2 = b.d;
+  if (!us) {
+    d1 = d1 == 31u ? 30u : d1;
+    d2 = d2 == 31u ? 30u : d2;
+  } else {
+    if (is_feb_end(b) && (is_feb_end(a) || mode == 3)) {
+      d2 = 30u;
+    }
+    if (d2 == 31u && (mode == 3 || d1 >= 30u)) {
+      d2 = 30u;
+    }
+    if (d1 == 31u) {
+      d1 = 30u;
+    }
+    if (is_feb_end(a)) {
+      d1 = 30u;
+    }
+  }
+  return static_cast<double>(b.y - a.y) * 360.0 + (static_cast<double>(b.m) - static_cast<double>(a.m)) * 30.0 +
+         (static_cast<double>(d2) - static_cast<double>(d1));
+}
+
 // A span between two dates as DISC / YIELDMAT count it: the day count and the
 // year length it is measured against (`days / year` is the YEARFRAC value).
 struct DayCountSpan {

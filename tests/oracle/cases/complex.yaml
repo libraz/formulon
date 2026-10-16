@@ -120,12 +120,13 @@ cases:
   - id: imsec_one_plus_i
     description: "sec(z) = 1/cos(z) — Excel ja-JP locale check"
     formula: "=IMSEC(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcsc_one_plus_i
     description: "IMCSC(1+i) -- 1-ULP drift at 15th digit (libm); compare components numerically"
     formula: "=IMCSC(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
     compare_mode: complex_text
-    tolerance: { abs: 1e-14 }
 
   # -- Logarithm variants ------------------------------------------------
   - id: imlog2_two_plus_i
@@ -329,14 +330,17 @@ cases:
   - id: imcsc_pure_real
     description: "csc(1) = 1/sin(1) — real input"
     formula: "=IMCSC(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcsc_pure_imag
     description: "csc(i) = -i/sinh(1)"
     formula: "=IMCSC(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcsc_negative_real
     description: "csc(-1) = -csc(1) — odd function"
     formula: "=IMCSC(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcsc_zero_is_num
     description: "csc(0) is undefined — Excel: #NUM!"
@@ -429,18 +433,22 @@ cases:
   - id: imsec_zero
     description: "sec(0) = 1+0i"
     formula: "=IMSEC(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsec_pure_real
     description: "sec(1) = 1/cos(1)"
     formula: "=IMSEC(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsec_pure_imag
     description: "sec(i) = 1/cosh(1)+0i"
     formula: "=IMSEC(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsec_negative_real
     description: "sec(-1) = sec(1) — even function"
     formula: "=IMSEC(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMSIN perspectives -------------------------------------------------
   - id: imsin_zero

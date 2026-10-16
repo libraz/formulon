@@ -152,10 +152,12 @@ cases:
     description: "Microsoft docs: {-120000, 39000, 30000, 21000, 37000, 46000} @ 10%/12%"
     setup: { A1: -120000, A2: 39000, A3: 30000, A4: 21000, A5: 37000, A6: 46000 }
     formula: "=MIRR(A1:A6, 0.1, 0.12)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mirr_array_literal
     description: "Inline array literal cash flows"
     formula: "=MIRR({-1000, 500, 700}, 0.1, 0.1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mirr_all_positive_is_div0
     description: "No sign change -> #DIV/0!"
@@ -164,11 +166,13 @@ cases:
   - id: mirr_all_negative_is_minus_one
     description: "All-negative CF: npv_pos=0 -> ratio=0 -> pow(0, x)-1 = -1"
     formula: "=MIRR({-100, -200, -300}, 0.1, 0.1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mirr_reinvestment_above_finance_rate
     description: "Reinvestment rate (15%) > finance rate (5%): MIRR exceeds the standard IRR for the same flows."
     setup: { A1: -1000, A2: 200, A3: 300, A4: 400, A5: 500 }
     formula: "=MIRR(A1:A5, 0.05, 0.15)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- ISPMT --------------------------------------------------------------
   - id: ispmt_first_period_full_interest

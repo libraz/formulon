@@ -263,51 +263,39 @@ double irr_bracket(const std::vector<double>& flows) noexcept {
                            [&](double guess) noexcept { return irr_newton(flows, guess); });
 }
 
-// Closed-form MIRR helper. `flows` must already have been validated to
-// contain at least one positive and at least one negative value. Returns
-// NaN on a degenerate ratio (e.g. all-positive or all-negative schedule
-// bypasses this function via the caller's pre-check; this guard is
-// defensive). `n` is `flows.size()` cached by the caller.
+// Closed-form MIRR helper. Positive flows discount at the reinvestment rate and
+// negative ones at the finance rate (the first flow undiscounted), each into
+// its own accumulator:
+//
+//   MIRR = POWER(-((A * F) / q) / B, 1 / (n - 1)) - 1
+//
+// with F = q^n the reinvestment growth factor after the walk. Returns NaN when
+// `flows` holds fewer than two values or the negative accumulator is zero.
 double mirr_closed_form(const std::vector<double>& flows, double finance_rate, double reinvest_rate) noexcept {
   const std::size_t n = flows.size();
   if (n < 2) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  // Walk once: period index runs 0..n-1. Positive flows discount at
-  // reinvest_rate; negative flows discount at finance_rate. We sum each
-  // into its own accumulator so the final ratio is a single division.
+  const double q = 1.0 + reinvest_rate;
+  const double p = 1.0 + finance_rate;
   double npv_pos = 0.0;
   double npv_neg = 0.0;
-  double pos_factor = 1.0;  // (1 + reinvest_rate)^0
-  double neg_factor = 1.0;  // (1 + finance_rate)^0
-  const double pos_base = 1.0 + reinvest_rate;
-  const double neg_base = 1.0 + finance_rate;
+  double pos_factor = 1.0;
+  double neg_factor = 1.0;
   for (std::size_t i = 0; i < n; ++i) {
     if (flows[i] > 0.0) {
-      npv_pos += flows[i] / pos_factor;
+      npv_pos = npv_pos + flows[i] / pos_factor;
     } else if (flows[i] < 0.0) {
-      npv_neg += flows[i] / neg_factor;
+      npv_neg = npv_neg + flows[i] / neg_factor;
     }
-    pos_factor *= pos_base;
-    neg_factor *= neg_base;
+    pos_factor = pos_factor * q;
+    neg_factor = neg_factor * p;
   }
   if (npv_neg == 0.0) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  // Canonical Excel form: (-npv_pos * (1+reinvest)^(n-1) / npv_neg)^(1/(n-1)) - 1.
-  // We already have (1+reinvest)^n cached in `pos_factor` at loop exit,
-  // so divide once by pos_base to get (1+reinvest)^(n-1).
-  const double pos_n_minus_1 = pos_factor / pos_base;
-  const double ratio = -npv_pos * pos_n_minus_1 / npv_neg;
-  // `ratio < 0.0` keeps the usual NaN guard (a real-valued `(n-1)`th root
-  // of a negative number is undefined in the reals). `ratio == 0.0` is
-  // valid and arises when npv_pos == 0 (all-negative schedule): IEEE-754
-  // `pow(0, 1/(n-1)) = 0` for positive exponents, so the result is -1.0,
-  // which matches Mac Excel 365.
-  if (ratio < 0.0) {
-    return std::numeric_limits<double>::quiet_NaN();
-  }
-  return std::pow(ratio, 1.0 / static_cast<double>(n - 1)) - 1.0;
+  const double base = (-((npv_pos * pos_factor) / q)) / npv_neg;
+  return financial_detail::excel_power(base, 1.0 / static_cast<double>(n - 1)) - 1.0;
 }
 
 // Reads an optional guess argument into `*guess`; a blank leaves the caller's default so a trailing

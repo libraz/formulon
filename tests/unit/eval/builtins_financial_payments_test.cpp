@@ -362,6 +362,46 @@ TEST(FinancialKernels, MatchesExcelValues) {
   }
 }
 
+TEST(FinancialSchedules, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=VDB(1234.56,300,20,3,6)", 243.89843904000003},
+      {"=VDB(0.75,0,7,1,3,3,FALSE)", 0.2886297376093295},
+      {"=VDB(1000000,1,5,3,4,2,TRUE)", 86400.0},
+      {"=PRICE(DATE(2014,2,28),DATE(2034,8,31),0.08,0.09,100,1,4)", 90.70079326566801},
+      {"=PRICE(DATE(2016,1,1),DATE(2025,3,31),0.065,0.1,100,1,4)", 79.43965091302346},
+      {"=ACCRINT(DATE(2008,3,1),DATE(2010,8,31),DATE(2008,12,31),0.05,100,1,1)", 4.171232876712328},
+      {"=ACCRINT(DATE(2007,8,31),DATE(2012,8,31),DATE(2013,3,1),0.1,1000,1,4)", 550.2777777777778},
+      {"=AMORLINC(5000,DATE(2008,8,19),DATE(2008,12,31),123.45,2,0.15,1)", 750.0},
+      {"=AMORLINC(1234.56,DATE(2012,2,29),DATE(2012,12,31),0,5,0.15)", 185.184},
+      {"=MIRR({-1000,500,700},0.1,0.1)", 0.1180339887498949},
+      {"=MIRR({-1000,500,700},0.1,0.12)", 0.12249721603218244},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(FinancialSchedules, AmorlincBasisTwoIsNum) {
+  const Value v = EvalSource("=AMORLINC(5000,DATE(2008,8,19),DATE(2008,12,31),123.45,2,0.15,2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(ComplexReciprocalTrig, MatchesExcelValues) {
+  const Value csc = EvalSource("=IMCSC(\"1+i\")");
+  ASSERT_TRUE(csc.is_text());
+  EXPECT_EQ(csc.as_text(), "0.621518017170428-0.303931001628427i");
+  const Value csc_conj = EvalSource("=IMCSC(\"1-i\")");
+  ASSERT_TRUE(csc_conj.is_text());
+  EXPECT_EQ(csc_conj.as_text(), "0.621518017170428+0.303931001628427i");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

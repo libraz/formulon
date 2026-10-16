@@ -12,14 +12,17 @@ cases:
   - id: accrint_ms_doc
     description: "ACCRINT MS-doc canonical: issue 2008-03-01, settlement 2008-05-01 -> 16.6667"
     formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2, 0, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: accrint_calc_method_default
     description: "ACCRINT without calc_method defaults to TRUE -> issue-to-settlement"
     formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,8,31), DATE(2008,5,1), 0.1, 1000, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: accrint_calc_method_false_first_interest
     description: "ACCRINT calc_method=FALSE with settlement > first_interest uses first_interest as start"
     formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,5,1), DATE(2008,8,31), 0.1, 1000, 2, 0, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- ACCRINTM ------------------------------------------------------------
   - id: accrintm_ms_doc
@@ -34,21 +37,24 @@ cases:
   - id: vdb_single_day
     description: "VDB one-day DDB: 2400/3650*2 ~ 1.3151"
     formula: "=VDB(2400, 300, 10*365, 0, 1, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
     # xlwings returned the Excel-displayed value (1.3151, 4dp) rather than
     # the underlying double; Formulon's 1.315068 differs by ~3.2e-5.
-    tolerance: { abs: 1.0e-4 }
 
   - id: vdb_fractional_factor15
     description: "VDB fractional end 0.875 * (2400 * 0.15) = 315.0"
     formula: "=VDB(2400, 300, 10, 0, 0.875, 1.5, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vdb_full_life_sums_to_depreciable
     description: "VDB over [0, life] must equal cost - salvage = 2100"
     formula: "=VDB(2400, 300, 10, 0, 10, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vdb_no_switch_true
     description: "VDB with no_switch=TRUE keeps pure declining-balance throughout"
     formula: "=VDB(2400, 300, 10, 0, 10, 2, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- AMORDEGRC -----------------------------------------------------------
   - id: amordegrc_ms_doc
@@ -59,10 +65,12 @@ cases:
   - id: amorlinc_ms_doc
     description: "AMORLINC MS-doc canonical: flat second period = 360"
     formula: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: amorlinc_first_period_prorated
     description: "AMORLINC first period (period 0) is YEARFRAC-prorated"
     formula: "=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 0, 0.15, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # =========================================================================
   # Expanded probes: day-count basis sweep, error / boundary conditions,
@@ -115,6 +123,7 @@ cases:
   - id: accrint_freq_4_quarterly
     description: "Quarterly frequency"
     formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,6,1), DATE(2008,5,1), 0.1, 1000, 4, 0, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: accrint_freq_12_monthly
     formula: "=ACCRINT(DATE(2008,3,1), DATE(2008,4,1), DATE(2008,5,1), 0.1, 1000, 12, 0, TRUE)"
@@ -130,6 +139,7 @@ cases:
   - id: vdb_factor_1_is_sln_like
     description: "VDB with factor=1 is straight-line-like for the first period"
     formula: "=VDB(2400, 300, 10, 0, 1, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vdb_negative_period_is_num
     formula: "=VDB(2400, 300, 10, -1, 5, 2, FALSE)"
@@ -137,12 +147,15 @@ cases:
   - id: vdb_start_period_gte_end_is_num
     description: "start_period >= end_period -> #NUM!"
     formula: "=VDB(2400, 300, 10, 5, 5, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vdb_factor_zero_is_num
     formula: "=VDB(2400, 300, 10, 0, 5, 0, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vdb_salvage_gt_cost_is_num
     formula: "=VDB(300, 2400, 10, 0, 5, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- AMORDEGRC: end of life --------------------------------------------
   - id: amordegrc_zero_rate_is_num
@@ -182,3 +195,4 @@ cases:
 
   - id: opt_accrint_calc_bool
     formula: "=ACCRINT(DATE(2024,1,15),DATE(2024,1,15)+182,DATE(2030,1,15),0.1,1000,2,0,FALSE)"
+    tolerance: { abs: 0, rel: 0 }

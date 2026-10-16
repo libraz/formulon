@@ -645,10 +645,10 @@ Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return im_trig_ratio(args, arena, /*cot=*/false);
 }
 
-// Shared kernel for IMSEC / IMCSC / IMSECH / IMCSCH: computes 1 / op(z),
-// where `op` is one of cplx_cos / cplx_sin / cplx_cosh / cplx_sinh. Returns
+// Shared kernel for IMSECH / IMCSCH: computes 1 / op(z),
+// where `op` is cplx_cosh / cplx_sinh. Returns
 // #NUM! when |op(z)| == 0 (avoids divide-by-zero). Marked `noinline` so the
-// body is emitted once and shared across all four wrappers — without it,
+// body is emitted once and shared across both wrappers — without it,
 // O3+LTO would inline a separate specialization per call site and undo the
 // deduplication this kernel exists to provide.
 [[gnu::noinline]] Value im_unary_recip(Complex (*op)(Complex), const Value* args, Arena& arena) {
@@ -664,12 +664,91 @@ Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return text_complex(cplx_recip(w), arena);
 }
 
+// 2 * cosh(y) and -2 * sinh(y), each with its own large-|y| and small-|y| form.
+double two_cosh(double y) noexcept {
+  const double ay = std::fabs(y);
+  if (ay > 20.0) {
+    return std::exp(ay);
+  }
+  if (ay > 0.0001) {
+    const double e = std::exp(y);
+    return (1.0 / e) + e;
+  }
+  const double y2 = y * y;
+  return ((y2 * y2) / 12.0) + (y2 + 2.0);
+}
+
+double neg_two_sinh(double y) noexcept {
+  const double ay = std::fabs(y);
+  if (ay > 20.0) {
+    const double e = std::exp(ay);
+    return y > 0.0 ? -e : e;
+  }
+  if (ay > 0.01) {
+    const double e = std::exp(y);
+    return (1.0 / e) - e;
+  }
+  const double ny = -y;
+  const double y2 = ny * ny;
+  double sum = ny * 2.0;
+  double term = (y2 * ny) / 3.0;
+  sum = term + sum;
+  term = (term * y2) / 20.0;
+  return term + sum;
+}
+
+// IMCSC (sin / cos) and IMSEC (cos / sin, with the imaginary sign flipped):
+// 1 / sin(z) and 1 / cos(z) from the real and imaginary parts directly.
+//
+//   D    = (2 f1(x))^2 + (2cosh(2y) - 2)
+//   real = (2cosh(y) / D) * (2 f1(x))
+//   imag = (-2sinh(y) / D) * (s * 2 f2(x))
+//
+// with f1, f2, s = sin, cos, +1 for IMCSC and cos, sin, -1 for IMSEC. Beyond
+// |y| ~ 354 the squares overflow, so the quotient form
+// (2 f1(x)) / 2cosh(y), (s 2 f2(x)) / -2sinh(y) is used, and past |y| ~ 709
+// the result is 0.
+Value im_csc_sec(const Value* args, Arena& arena, bool sec) {
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  const Complex c = z.value();
+  const double f1 = sec ? std::cos(c.re) : std::sin(c.re);
+  const double f2 = sec ? std::sin(c.re) : std::cos(c.re);
+  const double sign2 = sec ? -2.0 : 2.0;
+  if (c.im == 0.0) {
+    if (f1 == 0.0) {
+      return Value::error(ErrorCode::Num);
+    }
+    return text_complex(Complex{1.0 / f1, 0.0, c.suffix}, arena);
+  }
+  if (c.im > 354.5 || c.im < -354.0) {
+    if (c.im > 709.0 || c.im < -708.0) {
+      return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
+    }
+    const double a = f1 * 2.0;
+    const double b = f2 * sign2;
+    return text_complex(Complex{a / two_cosh(c.im), b / neg_two_sinh(c.im), c.suffix}, arena);
+  }
+  const double sinh_term = neg_two_sinh(c.im);
+  const double cosh_term = two_cosh(c.im);
+  const double a = f1 * 2.0;
+  const double d = a * a + (two_cosh(c.im * 2.0) - 2.0);
+  if (d == 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double real = (cosh_term / d) * a;
+  const double imag = (sinh_term / d) * (f2 * sign2);
+  return text_complex(Complex{real, imag, c.suffix}, arena);
+}
+
 Value ImSec(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_recip(&cplx_cos, args, arena);
+  return im_csc_sec(args, arena, /*sec=*/true);
 }
 
 Value ImCsc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_recip(&cplx_sin, args, arena);
+  return im_csc_sec(args, arena, /*sec=*/false);
 }
 
 Value ImCot(const Value* args, std::uint32_t /*arity*/, Arena& arena) {

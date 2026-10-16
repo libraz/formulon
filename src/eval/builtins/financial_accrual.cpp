@@ -5,7 +5,7 @@
 //
 // ACCRINTM is simple interest, `par * rate * YEARFRAC(issue, settlement,
 // basis)`. ACCRINT instead counts coupon periods on the quasi-coupon grid
-// anchored on `first_interest`; see `accrint_periods` for the measured rule.
+// anchored on `first_interest`; see `accrint_periods`.
 
 #include <cmath>
 #include <cstdint>
@@ -40,81 +40,85 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
   return coerced.value() != 0.0;
 }
 
-// Quasi-coupon dates anchored on `first_interest`: `at(k)` lies `k` periods
-// before the anchor (negative `k` steps forward). A month-end anchor keeps
-// every quasi date on its month's end (2024-02-29 -> 2023-08-31).
-struct QuasiCouponGrid {
-  date_time::YMD anchor;
-  unsigned anchor_day;
-  int step_months;
-  bool date1904;
-
-  double at(int k) const noexcept {
-    int y = anchor.y;
-    unsigned m = anchor.m;
-    const std::int64_t months = -static_cast<std::int64_t>(k) * static_cast<std::int64_t>(step_months);
-    date_time::shift_year_month(y, m, months);
-    return date_time::serial_from_ymd_clamped(y, m, anchor_day, date1904);
-  }
-};
-
-// Length of the quasi-coupon period [start, end]: actual days for basis 1,
-// otherwise the nominal 360/freq (365/freq for basis 3).
-double quasi_period_length(double start, double end, int basis, int frequency) noexcept {
-  if (basis == 1) {
-    return end - start;
-  }
-  return (basis == 3 ? 365.0 : 360.0) / static_cast<double>(frequency);
+// `serial` moved by `months` calendar months; a month-end schedule keeps every
+// date on its month's end, otherwise the day clamps to the shorter month.
+double add_months(double serial, int months, bool month_end, bool date1904) noexcept {
+  const date_time::YMD d = date_time::ymd_from_serial(serial, date1904);
+  int y = d.y;
+  unsigned m = d.m;
+  date_time::shift_year_month(y, m, months);
+  return date_time::serial_from_ymd_clamped(y, m, month_end ? 31u : d.d, date1904);
 }
 
-// Accrued interest of ACCRINT in coupon units (multiples of
-// par * rate / frequency), as Mac Excel 365 computes it. With quasi dates
-// q(k) counted back from first_interest = q(0) (k <= 0 lies after it),
-// issue in (q(n), q(n-1)], D the basis day count and E = length of
-// (q(1), q(0)]:
-//   - calc_method TRUE with settlement after first_interest walks forward:
-//     the issue part D(issue, q(n-1)) / len(issue period) and every whole
-//     period count in full, and the period holding settlement counts
-//     D(start, settlement) / E; issue and settlement in one period give
-//     D(issue, settlement) / E.
-//   - otherwise n <= 1: D(issue, settlement) / E.
-//   - otherwise base = issue part + D(q(1), settlement) / E, plus n - 2
-//     whole periods when calc_method is TRUE. The q(1) leg is signed, so
-//     settlement before q(1) gives FALSE its negative values.
+// Day count of `[start, end]` for the basis: actual for basis 1, basis 2 when
+// `actual` and basis 3, European 30/360 for basis 4, US 30/360 otherwise.
+double accrint_days(double start, double end, int basis, bool actual, int mode, bool date1904) noexcept {
+  if (basis == 1 || (basis == 2 && actual) || (basis == 3 && actual)) {
+    return end - start;
+  }
+  return days_30_360(start, end, mode, basis != 4, date1904);
+}
+
+// Length of the coupon period starting at `pcd` on the schedule counted back
+// from `anchor`: 360/freq (365/freq for basis 3), or for basis 1 the actual
+// span of the period holding `pcd`.
+double accrint_period_length(double anchor, double pcd, int frequency, int basis, bool month_end,
+                             bool date1904) noexcept {
+  const double freq = static_cast<double>(frequency);
+  if (basis == 3) {
+    return 365.0 / freq;
+  }
+  if (basis != 1) {
+    return 360.0 / freq;
+  }
+  double current = anchor;
+  while (true) {
+    const double previous = add_months(current, -(12 / frequency), month_end, date1904);
+    if (previous <= pcd) {
+      return current - previous;
+    }
+    current = previous;
+  }
+}
+
+// Accrued interest of ACCRINT in coupon units (multiples of par * rate /
+// frequency). The period holding settlement contributes A / E; walking back
+// from its start, every period before issue's contributes `calc_method` (1 for
+// TRUE, 0 for FALSE) and the period holding issue contributes its fraction.
+// With calc_method TRUE and settlement after first_interest the settlement
+// period is found by walking forward from first_interest.
 double accrint_periods(double issue, double first_interest, double settlement, int frequency, int basis,
                        bool calc_method, bool date1904) noexcept {
+  const int months = 12 / frequency;
   const date_time::YMD anchor = date_time::ymd_from_serial(first_interest, date1904);
   const bool month_end = anchor.d == date_time::days_in_month(anchor.y, anchor.m);
-  const QuasiCouponGrid q{anchor, month_end ? 31u : anchor.d, 12 / frequency, date1904};
-  const auto days = [&](double a, double b) {
-    return std::round(date_time::basis_days_between(a, b, basis, date1904));
-  };
-
-  int n = 1;
-  while (q.at(n) >= issue) {
-    ++n;
-  }
-  while (q.at(n - 1) < issue) {
-    --n;
-  }
-  const double e_last = quasi_period_length(q.at(1), q.at(0), basis, frequency);
-  const double issue_part = days(issue, q.at(n - 1)) / quasi_period_length(q.at(n), q.at(n - 1), basis, frequency);
-
-  if (calc_method && settlement > first_interest) {
-    int k = n;
-    while (q.at(k - 1) < settlement) {
-      --k;
+  double pcd = 0.0;
+  if (settlement > first_interest && calc_method) {
+    double current = first_interest;
+    pcd = first_interest;
+    while (current < settlement) {
+      pcd = current;
+      current = add_months(current, months, month_end, date1904);
     }
-    if (k == n) {
-      return days(issue, settlement) / e_last;
-    }
-    return issue_part + static_cast<double>(n - 1 - k) + days(q.at(k), settlement) / e_last;
+  } else {
+    pcd = add_months(first_interest, -months, month_end, date1904);
   }
-  if (n <= 1) {
-    return days(issue, settlement) / e_last;
+  const bool issue_after = issue > pcd;
+  const double start = issue_after ? issue : pcd;
+  const double a = accrint_days(start, settlement, basis, true, issue_after ? 0 : 1, date1904);
+  const double e = accrint_period_length(first_interest, pcd, frequency, basis, month_end, date1904);
+  double total = a / e;
+  while (pcd > issue) {
+    const double old = pcd;
+    pcd = add_months(old, -months, month_end, date1904);
+    const bool partial = issue > pcd;
+    const double period_start = partial ? issue : pcd;
+    const double ai = accrint_days(period_start, old, basis, true, partial ? 2 : 3, date1904);
+    const double ei =
+        basis == 3 ? 365.0 / static_cast<double>(frequency) : accrint_days(pcd, old, basis, false, 3, date1904);
+    total = total + (partial ? ai / ei : (calc_method ? 1.0 : 0.0));
   }
-  const double from_q1 = issue_part + days(q.at(1), settlement) / e_last;
-  return calc_method ? from_q1 + static_cast<double>(n - 2) : from_q1;
+  return total;
 }
 
 }  // namespace
@@ -122,7 +126,7 @@ double accrint_periods(double issue, double first_interest, double settlement, i
 // --- ACCRINT(issue, first_interest, settlement, rate, par, frequency,
 //             [basis=0], [calc_method=TRUE]) --------------------------------
 //
-//   ACCRINT = par * rate / frequency * accrint_periods(...)
+//   ACCRINT = (par * (rate / frequency)) * accrint_periods(...)
 //
 // Domain:
 //   - issue >= settlement            ->  #NUM!
@@ -160,7 +164,7 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   }
   const double periods = accrint_periods(issue, first_interest, settlement, frequency.value(), basis.value(),
                                          calc_method.value(), date1904);
-  return finalize(par * rate / static_cast<double>(frequency.value()) * periods);
+  return finalize((par * (rate / static_cast<double>(frequency.value()))) * periods);
 }
 
 // --- ACCRINTM(issue, settlement, rate, par, [basis=0]) -----------------
