@@ -15,8 +15,10 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "eval/coerce.h"
+#include "utils/double_format.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -73,6 +75,15 @@ struct NumberTriple {
   double second;
   double third;
 };
+
+/// ROUND's rounding of `x` at `factor` = 10^digits: half away from zero on the
+/// 15-significant-digit view, nudged by a relative 2 * epsilon so values a ULP
+/// or two below a decimal half land on the decimal-correct side.
+inline double round_at_scale(double x, double factor) noexcept {
+  const double scaled = excel_decimal_view(x, 15) * factor;
+  const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
+  return std::round(scaled + bias) / factor;
+}
 
 /// Reads a required numeric argument from `args[index]`; a non-finite value
 /// surfaces as `#NUM!` from `coerce_to_number`.

@@ -318,21 +318,42 @@ TEST(ExcelExactTimeValue, MatchesExcelBitForBit) {
   }
 }
 
-// IPMT / PPMT / CUMIPMT / CUMPRINC follow PMT's expm1 / log1p structure; the
-// expected values are the closed forms evaluated bit for bit.
-TEST(FinancialPaymentsClosedForm, IpmtPpmtAndCumulativeSums) {
+TEST(FinancialPaymentsClosedForm, MatchesExcelValues) {
   struct Case {
     const char* formula;
     double expected;
   };
   const Case cases[] = {
-      {"=IPMT(0.05/12, 60, 60, 25000)", -1.9575968510384785},
-      {"=PPMT(0.05/12, 1, 60, 25000)", -367.61417443360665},
-      {"=PPMT(0.05/12, 60, 60, 25000)", -469.82324424923485},
-      {"=PPMT(0.05/12, 1, 60, 25000, 0, 1)", -469.82324424923485},
+      {"=IPMT(0.05/12, 60, 60, 25000)", -1.9575968510384782},
+      {"=PPMT(0.05/12, 1, 60, 25000)", -367.6141744336067},
+      {"=PPMT(0.05/12, 60, 60, 25000)", -469.8232442492349},
+      {"=PPMT(0.05/12, 1, 60, 25000, 0, 1)", -469.8232442492349},
       {"=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0)", -25000.0},
-      {"=CUMPRINC(0.05/12, 60, 25000, 1, 12, 1)", -4598.885966346848},
+      {"=CUMPRINC(0.05/12, 60, 25000, 1, 12, 1)", -4598.88596634685},
       {"=CUMIPMT(0.05/12, 60, 25000, 1, 12, 0)", -1147.4887686633192},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(FinancialKernels, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=PDURATION(0.01,1,2)", 69.66071689357483},
+      {"=DB(2400,300,10,0.5)", 451.2},
+      {"=DB(2400,300,10,10.5)", 69.24259796758413},
+      {"=MULTINOMIAL(1,2,3)", 59.99999999999993},
+      {"=YIELDDISC(DATE(2005,12,31),DATE(2015,7,15),99.795,1000,0)", 0.9453843260780671},
+      {"=YIELDDISC(DATE(2008,2,29),DATE(2021,2,28),90.5,1000)", 0.7730556736081599},
+      {"=YIELDDISC(DATE(2014,2,28),DATE(2016,7,1),97.3,100,2)", 0.011697567339236688},
+      {"=DURATION(DATE(2005,12,31),DATE(2021,2,28),0.1,0.05,1,0)", 9.17079402150038},
+      {"=MDURATION(DATE(2008,2,29),DATE(2021,2,28),0.1,0.15,2,0)", 6.106342401129919},
   };
   for (const Case& c : cases) {
     const Value v = EvalSource(c.formula);

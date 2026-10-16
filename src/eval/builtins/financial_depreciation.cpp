@@ -15,6 +15,7 @@
 #include <cstdint>
 
 #include "eval/builtins/financial_helpers.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -318,10 +319,10 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //                                        9-decimal DB formula even though
 //                                        the argument boundary accepts a
 //                                        fractional value.)
-//   rate      = round((1 - (salvage/cost)^(1/life)) * 1000) / 1000
-//   dep_1     = cost * rate * (month_int / 12)
-//   dep_i     = (cost - total_prior_dep) * rate            (2 <= i <= life)
-//   dep_L+1   = (cost - total_prior_dep) * rate * (12 - month_int) / 12
+//   rate      = ROUND(1 - POWER(salvage/cost, 1/life), 3)
+//   dep_1     = (cost * rate) * (month_int / 12)
+//   dep_i     = book * rate, book -= dep_i                 (2 <= i <= life)
+//   dep_L+1   = (12 - month_int) * ((book / 12) * rate)
 //                                                           (only when
 //                                                            month_int < 12)
 //
@@ -361,7 +362,7 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Excel 365 Mac floors `month` before every downstream use (domain
   // checks, first-period proration, and the partial-last-year factor).
   const double month_int = std::floor(month_e.value());
-  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period < 1.0 || month_int < 1.0 || month_int > 12.0) {
+  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period <= 0.0 || month_int < 1.0 || month_int > 12.0) {
     return Value::error(ErrorCode::Num);
   }
   // Zero-cost asset: salvage/cost would be +inf and pow(inf, 1/life) also
@@ -376,41 +377,38 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (period > life + 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (period > life && month_int >= 12.0) {
+  if (std::floor(period) > life && month_int >= 12.0) {
     return Value::error(ErrorCode::Num);
   }
   if (period > kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
-  // Rate: (1 - (salvage/cost)^(1/life)), rounded to 3 decimals. When
-  // salvage == 0, pow(0, 1/life) == 0 -> rate = 1.000 exactly.
-  double rate_raw = 1.0 - std::pow(salvage / cost, 1.0 / life);
-  const double rate = std::floor(rate_raw * 1000.0 + 0.5) / 1000.0;
+  // Rate: 1 - (salvage/cost)^(1/life) through POWER, rounded to 3 decimals.
+  const double rate = builtins_detail::round_at_scale(1.0 - excel_power(salvage / cost, 1.0 / life), 1000.0);
   // First period: prorated by (month_int/12).
-  const double dep_1 = cost * rate * month_int / 12.0;
+  const double dep_1 = (cost * rate) * (month_int / 12.0);
   if (period < 2.0) {
     return finalize(dep_1);
   }
-  double total = dep_1;
+  double book = cost - dep_1;
   double dep_i = dep_1;
   // Middle periods: i in [2, min(period, life)].
   const auto last_full = static_cast<std::int64_t>(std::floor(std::min(period, life)));
   for (std::int64_t i = 2; i <= last_full; ++i) {
-    dep_i = (cost - total) * rate;
-    total += dep_i;
+    dep_i = book * rate;
+    book = book - dep_i;
   }
   // Partial-last-year formula fires only when `period` has crossed the
   // life+1 threshold (i.e. is >= life + 1.0). Fractional periods strictly
   // below life+1 (e.g. period=4.5 with life=4) are treated like period 4:
   // Excel returns the integer-step schedule's last computed dep, without
   // proration. Verified against IronCalc DB G39
-  // (`=DB(12, 10, 4, 4.5, 2)` → 0.488800, matching dep_4 exactly).
+  // (`=DB(12, 10, 4, 4.5, 2)` -> 0.488800, matching dep_4 exactly).
   if (period < life + 1.0) {
     return finalize(dep_i);
   }
   // period >= life + 1 (partial last year). Guarded above so month_int < 12.
-  const double dep_last = (cost - total) * rate * (12.0 - month_int) / 12.0;
-  return finalize(dep_last);
+  return finalize((12.0 - month_int) * ((book / 12.0) * rate));
 }
 
 // --- VDB(cost, salvage, life, start_period, end_period, [factor=2],

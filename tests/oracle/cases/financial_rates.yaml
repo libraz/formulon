@@ -32,10 +32,12 @@ cases:
   - id: intrate_basis_actual_360
     description: "Microsoft docs example: INTRATE with basis 2 ~ 0.05768"
     formula: "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: intrate_default_basis
     description: "INTRATE with default basis 0"
     formula: "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: intrate_settlement_after_maturity_is_num
     description: "INTRATE with settlement after maturity -> #NUM!"
@@ -45,10 +47,12 @@ cases:
   - id: received_basis_actual_360
     description: "Microsoft docs example: RECEIVED with basis 2 ~ 1014584.65"
     formula: "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: received_default_basis
     description: "RECEIVED with default basis 0"
     formula: "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- TBILLPRICE ---------------------------------------------------------
   - id: tbillprice_basic
@@ -81,10 +85,12 @@ cases:
   - id: pricedisc_basis_actual_360
     description: "PRICEDISC: 100 - discount*redemption*YEARFRAC, basis 2"
     formula: "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: pricedisc_default_basis
     description: "PRICEDISC with default basis 0 (US 30/360)"
     formula: "=PRICEDISC(DATE(2018,2,16), DATE(2018,3,1), 0.0525, 100)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: pricedisc_invalid_basis_is_num
     description: "PRICEDISC with unsupported basis -> #NUM!"
@@ -107,10 +113,12 @@ cases:
   - id: yielddisc_basis_actual_360
     description: "Microsoft docs example: YIELDDISC basis 2 ~ 0.052823"
     formula: "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: yielddisc_default_basis
     description: "YIELDDISC with default basis 0 (US 30/360)"
     formula: "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- YIELDMAT -----------------------------------------------------------
   - id: yieldmat_basis_zero
@@ -132,6 +140,7 @@ cases:
   - id: intrate_basis_european_30_360
     description: "INTRATE with basis 4 (European 30/360)"
     formula: "=INTRATE(DATE(2008,2,15), DATE(2008,5,15), 1000000, 1014420, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: intrate_zero_investment_is_num
     description: "INTRATE with investment <= 0 -> #NUM!"
@@ -141,6 +150,7 @@ cases:
   - id: received_basis_actual_actual
     description: "RECEIVED with basis 1 (actual/actual)"
     formula: "=RECEIVED(DATE(2008,2,15), DATE(2008,5,15), 1000000, 0.0575, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: received_settlement_after_maturity_is_num
     description: "RECEIVED with settlement >= maturity -> #NUM!"
@@ -211,6 +221,7 @@ cases:
   - id: yielddisc_basis_actual_actual
     description: "YIELDDISC with basis 1 (actual/actual)"
     formula: "=YIELDDISC(DATE(2008,2,16), DATE(2008,3,1), 99.795, 100, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: yielddisc_settlement_after_maturity_is_num
     description: "YIELDDISC with settlement >= maturity -> #NUM!"

@@ -96,7 +96,7 @@ Expected<MaturityYearFracs, ErrorCode> maturity_year_fracs(const MaturityInteres
 //
 // Price per $100 face value of a discounted security:
 //
-//   PRICEDISC = redemption - discount * redemption * YEARFRAC(settlement, maturity, basis)
+//   PRICEDISC = redemption - ((discount * redemption) * DSM) / B
 //
 // Domain per Microsoft docs:
 //   - settlement >= maturity         ->  #NUM!
@@ -109,14 +109,11 @@ Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, discount, redemption, basis] = parsed.value();
-  auto yf = yearfrac_for_basis(settlement, maturity, basis, date1904);
-  if (!yf) {
-    return Value::error(yf.error());
+  auto span = day_count_span(settlement, maturity, basis, date1904);
+  if (!span) {
+    return Value::error(span.error());
   }
-  // settlement < maturity guarantees a strictly positive yearfrac for
-  // every supported basis; there is no divide here, so a degenerate
-  // yearfrac is not a concern.
-  const double result = redemption - discount * redemption * yf.value();
+  const double result = -(((discount * redemption) * span.value().days) / span.value().year) + redemption;
   return finalize(result);
 }
 
@@ -164,7 +161,7 @@ Value PriceMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
 //
 // Annual yield for a discounted security:
 //
-//   YIELDDISC = ((redemption - pr) / pr) / YEARFRAC(settlement, maturity, basis)
+//   YIELDDISC = (B / DSM) * ((redemption - pr) / pr)
 //
 // Domain per Microsoft docs:
 //   - settlement >= maturity          ->  #NUM!
@@ -177,16 +174,14 @@ Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, pr, redemption, basis] = parsed.value();
-  auto yf = yearfrac_for_basis(settlement, maturity, basis, date1904);
-  if (!yf) {
-    return Value::error(yf.error());
+  auto span = day_count_span(settlement, maturity, basis, date1904);
+  if (!span) {
+    return Value::error(span.error());
   }
-  if (yf.value() == 0.0) {
-    // settlement < maturity is enforced above, but a degenerate basis
-    // could still yield 0 (not with basis 0..4, but guard anyway).
+  if (span.value().days <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = ((redemption - pr) / pr) / yf.value();
+  const double result = (span.value().year / span.value().days) * ((redemption - pr) / pr);
   return finalize(result);
 }
 

@@ -17,6 +17,7 @@
 
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
+#include "eval/excel_math.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
@@ -220,24 +221,30 @@ inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, 
   return yf;
 }
 
-// `base^exponent` as Excel's financial solvers evaluate it: a right-to-left
-// square-and-multiply for an integral exponent, exp(exponent * log(base))
-// otherwise (NaN when `base <= 0`).
+// `base^exponent` as Excel's financial kernels evaluate it, on |exponent| and
+// reciprocated when the exponent is negative: a right-to-left
+// square-and-multiply for an integral magnitude, sqrt for 0.5,
+// exp(|exponent| * log(base)) otherwise (NaN when `base <= 0`).
 inline double excel_power(double base, double exponent) noexcept {
-  if (std::trunc(exponent) == exponent && std::fabs(exponent) < 2147483648.0) {
-    std::uint64_t n = static_cast<std::uint64_t>(std::fabs(exponent));
-    double acc = 1.0;
+  const double magnitude = std::fabs(exponent);
+  double result = 0.0;
+  if (std::trunc(magnitude) == magnitude && magnitude < 2147483648.0) {
+    std::uint64_t n = static_cast<std::uint64_t>(magnitude);
+    result = 1.0;
     double b = base;
     while (n != 0) {
       if ((n & 1U) != 0) {
-        acc *= b;
+        result *= b;
       }
       b *= b;
       n >>= 1U;
     }
-    return exponent >= 0.0 ? acc : 1.0 / acc;
+  } else if (magnitude == 0.5) {
+    result = std::sqrt(base);
+  } else {
+    result = std::exp(std::log(base) * magnitude);
   }
-  return std::exp(exponent * std::log(base));
+  return exponent < 0.0 ? 1.0 / result : result;
 }
 
 // A span between two dates as DISC / YIELDMAT count it: the day count and the
@@ -292,36 +299,40 @@ inline double normalize_type(double t) noexcept {
 // compute directly from doubles and return NaN on degenerate cases; the
 // callers translate NaN into `#NUM!` via `finalize`.
 
-// Annuity discount complement om(m) = 1 - (1 + rate)^-m, evaluated as
-// -expm1(-m * log1p(rate)) so it stays accurate at small rates.
-inline double annuity_om(double rate, double m) noexcept {
-  return -std::expm1(-m * std::log1p(rate));
+// Annuity kernels on Excel's own log1p / expm1.
+//
+//   H(r, m) = expm1(m * log1p(r))      V(r, m) = exp(m * log1p(r))
+//   f       = r (type 0), 1 / ((1 / r) + 1) (type 1)
+//   K       = -((pv + fv) / H(r, -n))
+inline double annuity_h(double rate, double m) noexcept {
+  return excel_expm1(excel_log1p(rate) * m);
+}
+
+inline double annuity_v(double rate, double m) noexcept {
+  return std::exp(excel_log1p(rate) * m);
+}
+
+inline double payment_factor(double rate, double type) noexcept {
+  return type != 0.0 ? 1.0 / ((1.0 / rate) + 1.0) : rate;
+}
+
+inline double annuity_k(double rate, double nper, double pv, double fv) noexcept {
+  return -((pv + fv) / annuity_h(rate, 0.0 - nper));
 }
 
 // Internal PMT formula; returns NaN if the inputs are degenerate.
 // Callers must check `std::isnan(result)` before returning to the user.
 //
-//   rate == 0  ->  PMT = -(pv + fv) / nper
-//   rate != 0  ->  PMT = -(rate / (1 + rate*type)) * ((pv + fv) / om(nper) - fv)
-//
-// The `(pv + fv) / om - fv` shape reproduces Excel's cancellation (including
-// an exact 0 when om rounds to 1).
+//   rate == 0  ->  PMT = (pv + fv) / -nper
+//   rate != 0  ->  PMT = (fv - K) * f
 inline double pmt_scalar(double rate, double nper, double pv, double fv, double type) noexcept {
-  if (rate <= -1.0) {
-    // log1p has no real value here; caller surfaces as #NUM!.
-    return std::numeric_limits<double>::quiet_NaN();
-  }
   if (rate == 0.0) {
-    if (nper == 0.0) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    return -(pv + fv) / nper;
+    return (pv + fv) / (0.0 - nper);
   }
-  const double om = annuity_om(rate, nper);
-  if (om == 0.0) {
+  if (!(rate > -1.0)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  return -(rate / (1.0 + rate * type)) * ((pv + fv) / om - fv);
+  return (fv - annuity_k(rate, nper, pv, fv)) * payment_factor(rate, type);
 }
 
 // Shared `per` domain of IPMT / PPMT.
@@ -334,57 +345,43 @@ inline bool per_in_schedule(double per, double nper) noexcept {
   return per >= 1.0 && !(per > nper && std::floor(per) == per);
 }
 
-// Internal IPMT formula (type 0 / type 1 share the closed form below):
+// Internal IPMT formula:
 //
-//   K    = (pv + fv) / om(nper)                       (PMT's inner term)
-//   IPMT = -rate * (K * om(nper - per + 1) - fv)
-//   type == 1: 0 at per == 1, otherwise the above / (1 + rate)
+//   IPMT = (K * H(r, per - (n + 1)) + fv) * f
 //
-// If `rate == 0`, no interest ever accrues, so IPMT is 0 for any period.
+// `rate == 0` accrues no interest, and type 1 pays nothing at per == 1.
 // Returns NaN on degenerate inputs (propagated up as `#NUM!`).
 inline double ipmt_scalar(double rate, double per, double nper, double pv, double fv, double type) noexcept {
   if (!per_in_schedule(per, nper)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  if (rate == 0.0) {
+  if (rate == 0.0 || (type != 0.0 && per == 1.0)) {
     return 0.0;
   }
-  if (rate <= -1.0) {
+  if (!(rate > -1.0)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  const double om = annuity_om(rate, nper);
-  if (om == 0.0) {
-    return std::numeric_limits<double>::quiet_NaN();
-  }
-  if (type == 1.0 && per == 1.0) {
-    return 0.0;
-  }
-  const double k = (pv + fv) / om;
-  const double interest = -rate * (k * annuity_om(rate, nper - per + 1.0) - fv);
-  return type == 1.0 ? interest / (1.0 + rate) : interest;
+  const double k = annuity_k(rate, nper, pv, fv);
+  return (k * annuity_h(rate, per - (nper + 1.0)) + fv) * payment_factor(rate, type);
 }
 
-// Internal PPMT formula. Not PMT - IPMT: the fv terms cancel exactly in
+// Internal PPMT formula:
 //
-//   PPMT = -(rate / (1 + rate*type)) * (K * (1 + rate)^-(nper - per + 1))
+//   PPMT = ((K * V(r, per - (n + 1))) * -1) * f
 //
 // and type 1 at per == 1 is PMT itself. Returns NaN on degenerate inputs.
 inline double ppmt_scalar(double rate, double per, double nper, double pv, double fv, double type) noexcept {
   if (!per_in_schedule(per, nper)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  if (rate == 0.0 || (type == 1.0 && per == 1.0)) {
+  if (rate == 0.0 || (type != 0.0 && per == 1.0)) {
     return pmt_scalar(rate, nper, pv, fv, type);
   }
-  if (rate <= -1.0) {
+  if (!(rate > -1.0)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  const double om = annuity_om(rate, nper);
-  if (om == 0.0) {
-    return std::numeric_limits<double>::quiet_NaN();
-  }
-  const double k = (pv + fv) / om;
-  return -(rate / (1.0 + rate * type)) * (k * std::exp(-(nper - per + 1.0) * std::log1p(rate)));
+  const double k = annuity_k(rate, nper, pv, fv);
+  return ((k * annuity_v(rate, per - (nper + 1.0))) * -1.0) * payment_factor(rate, type);
 }
 
 // Value-returning builtins implemented in `financial_depreciation.cpp`.

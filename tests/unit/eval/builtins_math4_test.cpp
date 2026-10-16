@@ -214,24 +214,24 @@ TEST(BuiltinsMath4CombinA, KGreaterThanNAllowed) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsMath4Multinomial, SingleArgIsOne) {
-  // MULTINOMIAL(n) = n!/n! = 1.
+  // MULTINOMIAL(n) = n!/n! = 1, evaluated through base-10 logarithms.
   const Value v = EvalSource("=MULTINOMIAL(5)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 1.0);
+  EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
 }
 
 TEST(BuiltinsMath4Multinomial, TwoArgsMatchBinomial) {
   // MULTINOMIAL(2, 3) = 5! / (2! 3!) = 10.
   const Value v = EvalSource("=MULTINOMIAL(2, 3)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 10.0);
+  EXPECT_NEAR(v.as_number(), 10.0, 1e-12);
 }
 
 TEST(BuiltinsMath4Multinomial, ThreeArgs) {
   // MULTINOMIAL(1, 2, 3) = 6! / (1! 2! 3!) = 720 / 12 = 60.
   const Value v = EvalSource("=MULTINOMIAL(1, 2, 3)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 60.0);
+  EXPECT_NEAR(v.as_number(), 60.0, 1e-12);
 }
 
 TEST(BuiltinsMath4Multinomial, NegativeYieldsNum) {

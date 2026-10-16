@@ -210,7 +210,7 @@ Value FvSchedule(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Number of periods required for an investment at `rate` to grow from `pv`
 // to `fv`:
 //
-//   PDURATION = log(fv / pv) / log(1 + rate)
+//   PDURATION = (log(fv) - log(pv)) / log(rate + 1)
 //
 // Domain per Microsoft docs:
 //   - rate <= 0, pv <= 0, fv <= 0  ->  #NUM!
@@ -223,7 +223,7 @@ Value PDuration(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (rate <= 0.0 || pv <= 0.0 || fv <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = std::log(fv / pv) / std::log(1.0 + rate);
+  const double result = (std::log(fv) - std::log(pv)) / std::log(rate + 1.0);
   return finalize(result);
 }
 

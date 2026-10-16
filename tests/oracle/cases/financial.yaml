@@ -71,6 +71,7 @@ cases:
   - id: pmt_basic
     description: "Car loan payment: =PMT(0.05/12, 60, 25000) negative"
     formula: "=PMT(0.05/12, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: pmt_zero_rate
     description: "rate=0: PMT = -(pv+fv)/nper"
@@ -80,6 +81,7 @@ cases:
   - id: pmt_type_1
     description: "Annuity-due payment (smaller magnitude than end-of-period)"
     formula: "=PMT(0.05/12, 60, 25000, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- NPER ----------------------------------------------------------------
   - id: nper_basic
@@ -194,9 +196,9 @@ cases:
   - id: ipmt_last_period
     description: "Final-period interest is small (most of payment is principal)"
     formula: "=IPMT(0.05/12, 60, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
     # xlwings returned the Excel-displayed value (-1.9576, 4dp) rather than
     # the underlying double; Formulon's -1.957597 differs by ~3e-6.
-    tolerance: { abs: 1.0e-4 }
 
   - id: ipmt_per_out_of_range_is_num
     description: "per > nper -> #NUM!"
@@ -216,10 +218,12 @@ cases:
   - id: ppmt_first_period
     description: "First-period principal is small relative to IPMT"
     formula: "=PPMT(0.05/12, 1, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ppmt_last_period
     description: "Final-period principal is nearly the full payment"
     formula: "=PPMT(0.05/12, 60, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ipmt_plus_ppmt_equals_pmt
     description: |
@@ -238,6 +242,7 @@ cases:
       Annuity-due first-period PPMT equals the full PMT (since the
       first-period interest under type=1 is exactly zero).
     formula: "=PPMT(0.05/12, 1, 60, 25000, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- CUMIPMT -------------------------------------------------------------
   - id: cumipmt_full_range
@@ -274,10 +279,12 @@ cases:
   - id: cumprinc_first_year
     description: "Principal paid during the first 12 periods of a 5-year loan"
     formula: "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: cumprinc_type_1
     description: "Annuity-due CUMPRINC (type=1) has slightly smaller magnitude than type=0"
     formula: "=CUMPRINC(0.05/12, 60, 25000, 1, 12, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: cumprinc_reversed_range_is_num
     description: "start > end -> #NUM!"
@@ -360,22 +367,26 @@ cases:
       Fixed-rate declining balance, full-year month=12. rate = round(1 -
       (1000/10000)^(1/5), 3) = 0.369; dep_1 = 10000 * 0.369 = 3690.
     formula: "=DB(10000, 1000, 5, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: db_full_year_last_period
     description: "DB period 5: residual charge after 4 periods at rate=0.369"
     formula: "=DB(10000, 1000, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: db_partial_first_year
     description: |
       month=6 prorates the first year: dep_1 = 10000 * 0.369 * 6/12 =
       1845.
     formula: "=DB(10000, 1000, 5, 1, 6)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: db_period_life_plus_one_with_partial
     description: |
       Partial first year (month=6) leaves a partial last year at period
       life+1 = 6; formula yields the remaining-book * rate * (12-6)/12.
     formula: "=DB(10000, 1000, 5, 6, 6)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: db_invalid_month_is_num
     description: "month > 12 -> #NUM!"

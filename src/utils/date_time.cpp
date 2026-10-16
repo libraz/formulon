@@ -294,11 +294,33 @@ void shift_year_month(int& y, unsigned& m, std::int64_t delta_months) noexcept {
 
 double basis_days_between(double a, double b, int basis, bool date1904) noexcept {
   if (basis == 0 || basis == 4) {
+    // Security day counts: the start's month-end-of-February rule is applied
+    // last, after the end day has been compared against the unadjusted start.
     const YMD ya = ymd_from_serial(a, date1904);
     const YMD yb = ymd_from_serial(b, date1904);
-    const double yf = basis == 0 ? yearfrac_us30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d)
-                                 : yearfrac_eu30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d);
-    return yf * 360.0;
+    unsigned d1 = ya.d;
+    unsigned d2 = yb.d;
+    if (basis == 4) {
+      d1 = d1 == 31u ? 30u : d1;
+      d2 = d2 == 31u ? 30u : d2;
+    } else {
+      const bool a_feb_end = ya.m == 2u && ya.d == days_in_month(ya.y, 2u);
+      const bool b_feb_end = yb.m == 2u && yb.d == days_in_month(yb.y, 2u);
+      if (a_feb_end && b_feb_end) {
+        d2 = 30u;
+      }
+      if (d2 == 31u && d1 >= 30u) {
+        d2 = 30u;
+      }
+      if (d1 == 31u) {
+        d1 = 30u;
+      }
+      if (a_feb_end) {
+        d1 = 30u;
+      }
+    }
+    return 360.0 * (yb.y - ya.y) + 30.0 * (static_cast<double>(yb.m) - static_cast<double>(ya.m)) +
+           (static_cast<double>(d2) - static_cast<double>(d1));
   }
   // Bases 1, 2, 3: actual days.
   return b - a;

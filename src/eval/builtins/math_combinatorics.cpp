@@ -293,38 +293,44 @@ Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
 }
 
 // MULTINOMIAL(a1, a2, ...) - multinomial coefficient = (sum(a_i))! / prod(a_i!).
-// Each argument truncated to non-negative integer; negative -> #NUM!.
-// Overflow -> #NUM!. A boolean (including one read from a range cell) is
-// #VALUE!, as for GCD / LCM.
+// Each argument truncated to non-negative integer; negative -> #NUM!. A sum
+// above 170 (the factorial limit) is #NUM!. A boolean (including one read from
+// a range cell) is #VALUE!, as for GCD / LCM.
+//
+// Evaluated as POWER(10, L) with L = sum_{k=2..sum} log10(k) minus, for each
+// argument from the last to the first, sum_{k=2..a_i} log10(k), accumulated
+// one term at a time.
 Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  // Accumulate sum first while validating each argument.
+  constexpr std::uint64_t kMaxSum = 170;
   std::uint64_t total = 0;
-  // We also maintain the running result multiplicatively using
-  // multinomial(n, k) = multinomial(n-1, k_last_minus_1) * C(n, k_last);
-  // equivalently: result = (sum!) / prod(k_i!) which we compute incrementally
-  // via `result *= C(total_so_far, next_k)` (Pascal's rule for multinomials).
-  double result = 1.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
     if (args[i].is_boolean()) {
       return Value::error(ErrorCode::Value);
     }
-    auto k_e = read_nonneg_uint_arg(args, i, static_cast<std::uint64_t>(1) << 52u);
+    auto k_e = read_nonneg_uint_arg(args, i, kMaxSum);
     if (!k_e) {
       return Value::error(k_e.error());
     }
-    const std::uint64_t k = k_e.value();
-    total += k;
-    if (total > (static_cast<std::uint64_t>(1) << 52u)) {
-      return Value::error(ErrorCode::Num);
-    }
-    // multinomial step: multiply by C(total, k).
-    const double step = combin_exact(total, k);
-    result *= step;
-    if (std::isnan(result) || std::isinf(result)) {
+    total += k_e.value();
+    if (total > kMaxSum) {
       return Value::error(ErrorCode::Num);
     }
   }
-  return Value::number(result);
+  double log_sum = 0.0;
+  for (std::uint64_t k = 2; k <= total; ++k) {
+    log_sum = std::log10(static_cast<double>(k)) + log_sum;
+  }
+  for (std::uint32_t i = arity; i-- > 0;) {
+    const std::uint64_t a = read_nonneg_uint_arg(args, i, kMaxSum).value();
+    for (std::uint64_t k = 2; k <= a; ++k) {
+      log_sum = (-std::log10(static_cast<double>(k))) + log_sum;
+    }
+  }
+  auto result = apply_pow(10.0, log_sum);
+  if (!result) {
+    return Value::error(result.error());
+  }
+  return Value::number(result.value());
 }
 
 // ---------------------------------------------------------------------------

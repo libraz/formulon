@@ -113,10 +113,12 @@ cases:
   - id: pduration_double_at_ten_percent
     description: "log(2000/1000)/log(1.1) ~= 7.27 periods"
     formula: "=PDURATION(0.1, 1000, 2000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: pduration_no_growth_is_zero
     description: "pv==fv: log(1)/log(1+r) = 0"
     formula: "=PDURATION(0.05, 1000, 1000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: pduration_rate_zero_is_num
     formula: "=PDURATION(0, 1000, 2000)"

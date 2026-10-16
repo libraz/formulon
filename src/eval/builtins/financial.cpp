@@ -42,10 +42,13 @@ namespace formulon {
 namespace eval {
 namespace {
 
-using financial_detail::annuity_om;
+using financial_detail::annuity_h;
+using financial_detail::annuity_k;
+using financial_detail::annuity_v;
 using financial_detail::finalize;
 using financial_detail::ipmt_scalar;
 using financial_detail::normalize_type;
+using financial_detail::payment_factor;
 using financial_detail::pmt_scalar;
 using financial_detail::ppmt_scalar;
 using financial_detail::read_optional_number;
@@ -232,11 +235,7 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // --- PMT(rate, nper, pv, [fv=0], [type=0]) ------------------------------
 //
-//   rate == 0   ->  PMT = -(pv + fv) / nper   (nper == 0 -> #NUM!)
-//   rate != 0   ->  om  = 1 - (1 + rate)^-nper   (= -expm1(-nper * log1p(rate)))
-//                   PMT = -(rate / (1 + rate*type)) * ((pv + fv) / om - fv)
-//
-// See `pmt_scalar`; a zero om (nper == 0) surfaces as `#NUM!`.
+// See `pmt_scalar`; nper == 0 surfaces as `#NUM!`.
 Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_tvm_args(args, arity, 0.0);
   if (!input) {
@@ -471,23 +470,24 @@ Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return finalize(ppmt_scalar(in.rate, in.per, in.nper, in.pv, in.fv, in.type));
 }
 
-// Closed-form sum of PPMT over the periods [a, b] (`principal`), or the
-// geometric-sum factor CUMIPMT subtracts from `(b - a + 1) * PMT` (interest).
-// Type 1 starting at period 1 splits PMT off, since PPMT(1) is PMT there.
-double cum_principal_closed(double rate, double nper, double pv, double a, double b, double type, bool principal) {
-  const double pmt = pmt_scalar(rate, nper, pv, 0.0, type);
-  const bool first = type == 1.0 && a == 1.0;
-  const double lo = first ? a + 1.0 : a;
-  if (b < lo) {
-    return pmt;
+// Principal sum S over the periods [start, end] (`principal`) or the interest
+// sum (CUMIPMT = payment * d - S, d the signed period count). Type 1 starting
+// at period 1 takes the first payment out of S.
+double cum_payment_closed(double rate, double nper, double pv, double start, double end, double type, bool principal) {
+  const bool first = type != 0.0 && start == 1.0;
+  const double f = payment_factor(rate, type);
+  const double k = annuity_k(rate, nper, pv, 0.0);
+  const double payment = k * f;
+  double d = start - end;
+  if (!first) {
+    d = d - 1.0;
   }
-  const double k = pv / annuity_om(rate, nper);
-  const double cnt = b - lo + 1.0;
-  const double v_hi = std::exp(-(nper - b + 1.0) * std::log1p(rate));
-  const double s = principal ? v_hi * annuity_om(rate, cnt) / annuity_om(rate, 1.0)
-                             : v_hi * (annuity_om(rate, cnt) * (1.0 + rate) / rate);
-  const double val = -k * (s * (rate / (1.0 + rate * type)));
-  return first ? val + pmt : val;
+  const double g = type != 0.0 ? 1.0 : 1.0 + rate;
+  const double sum = ((annuity_h(rate, d) * annuity_v(rate, (end - nper) - 1.0)) * k) * g;
+  if (!principal) {
+    return payment * d - sum;
+  }
+  return first ? sum - payment : sum;
 }
 
 // Shared body of CUMIPMT / CUMPRINC: validates the common domain and totals
@@ -512,14 +512,8 @@ Value cum_payment_sum(const Value* args, bool principal) {
   if (static_cast<double>(end_i - start_i) + 1.0 > financial_detail::kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
-  const double a = static_cast<double>(start_i);
-  const double b = static_cast<double>(end_i);
-  const double type = input.value().type;
-  const double principal_sum = cum_principal_closed(rate, nper, pv, a, b, type, principal);
-  if (principal) {
-    return finalize(principal_sum);
-  }
-  return finalize((b - a + 1.0) * pmt_scalar(rate, nper, pv, 0.0, type) - principal_sum);
+  return finalize(cum_payment_closed(rate, nper, pv, static_cast<double>(start_i), static_cast<double>(end_i),
+                                     input.value().type, principal));
 }
 
 // --- CUMIPMT(rate, nper, pv, start, end, type) --------------------------

@@ -26,6 +26,7 @@ namespace formulon {
 namespace eval {
 namespace {
 
+using builtins_detail::round_at_scale;
 using builtins_detail::snap_to_integer;
 using builtins_detail::to_finite_value;
 
@@ -240,9 +241,7 @@ Value Round(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
       args, 2,
       [](double x, double factor) {
         // Ties at the 16th digit follow Excel's 15-digit decimal view (100000000000001.5 rounds to ...01).
-        const double scaled = excel_decimal_view(x, 15) * factor;
-        const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
-        return to_finite_value(std::round(scaled + bias) / factor);
+        return to_finite_value(round_at_scale(x, factor));
       },
       /*snap_digits=*/true);
 }

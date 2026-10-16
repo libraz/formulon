@@ -38,21 +38,6 @@ struct TBillArgs {
   double dsm;
 };
 
-// Computes YEARFRAC(settlement, maturity, basis) under the same rules as
-// the YEARFRAC builtin. Returns `#NUM!` for an unsupported basis (or if
-// the helper would yield a non-finite / zero value — the latter would
-// otherwise divide to infinity in the callers).
-Expected<double, ErrorCode> positive_yearfrac(double settlement, double maturity, int basis, bool date1904) {
-  auto yf = yearfrac_for_basis(settlement, maturity, basis, date1904);
-  if (!yf) {
-    return std::move(yf.error());
-  }
-  if (yf.value() <= 0.0) {
-    return ErrorCode::Num;
-  }
-  return yf.value();
-}
-
 bool has_direct_bool_tbill_arg(const Value* args) {
   return args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool || args[2].kind() == ValueKind::Bool;
 }
@@ -136,7 +121,7 @@ Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date19
 //
 // Interest rate for a fully invested security:
 //
-//   INTRATE = ((redemption - investment) / investment) / YEARFRAC(settlement, maturity, basis)
+//   INTRATE = (B / DSM) * ((redemption - investment) / investment)
 //
 // Domain per Microsoft docs:
 //   - settlement >= maturity  ->  #NUM!
@@ -148,11 +133,14 @@ Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, investment, redemption, basis] = parsed.value();
-  auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
-  if (!yf) {
-    return Value::error(yf.error());
+  auto span = day_count_span(settlement, maturity, basis, date1904);
+  if (!span) {
+    return Value::error(span.error());
   }
-  const double result = ((redemption - investment) / investment) / yf.value();
+  if (span.value().days <= 0.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double result = (span.value().year / span.value().days) * ((redemption - investment) / investment);
   return finalize(result);
 }
 
@@ -160,30 +148,29 @@ Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
 //
 // Amount received at maturity for a fully invested security:
 //
-//   RECEIVED = investment / (1 - discount * YEARFRAC(settlement, maturity, basis))
+//   RECEIVED = investment / (1 - (discount * DSM) / B)
 //
 // Domain per Microsoft docs:
 //   - settlement >= maturity  ->  #NUM!
 //   - investment <= 0 or discount <= 0  ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}  ->  #NUM!
-//   - 1 - discount*yearfrac == 0 (or negative)  ->  #NUM!
+//   - (discount * DSM) / B >= 1  ->  #NUM!
 Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto parsed = read_security_rate_args(args, arity);
   if (!parsed) {
     return Value::error(parsed.error());
   }
   const auto [settlement, maturity, investment, disc_rate, basis] = parsed.value();
-  auto yf = positive_yearfrac(settlement, maturity, basis, date1904);
-  if (!yf) {
-    return Value::error(yf.error());
+  auto span = day_count_span(settlement, maturity, basis, date1904);
+  if (!span) {
+    return Value::error(span.error());
   }
-  const double denom = 1.0 - disc_rate * yf.value();
-  if (denom <= 0.0) {
-    // Excel returns #NUM! when the discount consumes the whole face
-    // value (result would be infinite or negative).
+  const double x = (disc_rate * span.value().days) / span.value().year;
+  if (!(x < 1.0)) {
+    // The discount consumes the whole face value (result would be infinite or negative).
     return Value::error(ErrorCode::Num);
   }
-  const double result = investment / denom;
+  const double result = investment / (-x + 1.0);
   return finalize(result);
 }
 

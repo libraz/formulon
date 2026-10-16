@@ -30,9 +30,10 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
 
   // Decompose maturity into (y, m, d). The anchor day-of-month is
   // preserved across the backward walk and clamped to each target
-  // month's last day as needed.
+  // month's last day as needed. A month-end maturity anchors every coupon
+  // date at its own month end.
   const date_time::YMD mat = date_time::ymd_from_serial(m, date1904);
-  const unsigned anchor_day = mat.d;
+  const unsigned anchor_day = mat.d == date_time::days_in_month(mat.y, mat.m) ? 31u : mat.d;
   const int step_months = 12 / frequency;
 
   // Walk backwards from maturity in `step_months` increments until
@@ -44,7 +45,7 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
   // we performed before reaching PCD.
   int y_walk = mat.y;
   unsigned m_walk = mat.m;
-  double current = date_time::serial_from_ymd(y_walk, m_walk, anchor_day, date1904);
+  double current = m;
   std::int32_t coupons = 0;
 
   // If maturity's own serial is already <= settlement (shouldn't

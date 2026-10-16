@@ -183,18 +183,23 @@ cases:
   - id: duration_canonical_basis_1
     description: "DURATION docs canonical (basis 1) -> ~5.9938"
     formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)'
+    tolerance: { abs: 0, rel: 0 }
   - id: duration_basis_0_us_30_360
     description: "DURATION basis 0 (US 30/360)"
     formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)'
+    tolerance: { abs: 0, rel: 0 }
   - id: duration_basis_2_actual_360
     description: "DURATION basis 2 (actual/360)"
     formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)'
+    tolerance: { abs: 0, rel: 0 }
   - id: duration_basis_3_actual_365
     description: "DURATION basis 3 (actual/365)"
     formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)'
+    tolerance: { abs: 0, rel: 0 }
   - id: duration_basis_4_european_30_360
     description: "DURATION basis 4 (European 30/360)"
     formula: '=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)'
+    tolerance: { abs: 0, rel: 0 }
   - id: duration_settlement_eq_maturity_error
     description: "DURATION settlement >= maturity -> #NUM!"
     formula: '=DURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)'
@@ -208,18 +213,23 @@ cases:
   - id: mduration_canonical_basis_1
     description: "MDURATION docs canonical (basis 1) -> ~5.7355"
     formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)'
+    tolerance: { abs: 0, rel: 0 }
   - id: mduration_basis_0_us_30_360
     description: "MDURATION basis 0 (US 30/360)"
     formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)'
+    tolerance: { abs: 0, rel: 0 }
   - id: mduration_basis_2_actual_360
     description: "MDURATION basis 2 (actual/360)"
     formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)'
+    tolerance: { abs: 0, rel: 0 }
   - id: mduration_basis_3_actual_365
     description: "MDURATION basis 3 (actual/365)"
     formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)'
+    tolerance: { abs: 0, rel: 0 }
   - id: mduration_basis_4_european_30_360
     description: "MDURATION basis 4 (European 30/360)"
     formula: '=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)'
+    tolerance: { abs: 0, rel: 0 }
   - id: mduration_settlement_eq_maturity_error
     description: "MDURATION settlement >= maturity -> #NUM!"
     formula: '=MDURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)'

@@ -121,7 +121,11 @@
         "kind": "text",
         "value": "-471.7808"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "pmt_zero_rate",
@@ -145,7 +149,11 @@
         "kind": "text",
         "value": "-469.8232"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "nper_basic",
@@ -482,7 +490,7 @@
         "value": "-1.9576"
       },
       "tolerance": {
-        "abs": 0.0001,
+        "abs": 0.0,
         "rel": 0.0
       },
       "compare_mode": "numeric_text"
@@ -533,7 +541,11 @@
         "kind": "text",
         "value": "-367.6142"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "ppmt_last_period",
@@ -543,7 +555,11 @@
         "kind": "text",
         "value": "-469.8232"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "ipmt_plus_ppmt_equals_pmt",
@@ -581,7 +597,11 @@
         "kind": "text",
         "value": "-469.8232"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "cumipmt_full_range",
@@ -667,7 +687,11 @@
         "kind": "number",
         "value": -4513.8813245399615
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "cumprinc_type_1",
@@ -677,7 +701,11 @@
         "kind": "number",
         "value": -4598.88596634685
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "cumprinc_reversed_range_is_num",
@@ -847,7 +875,11 @@
         "kind": "text",
         "value": "3690"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "db_full_year_last_period",
@@ -857,7 +889,11 @@
         "kind": "text",
         "value": "584.9838"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "db_partial_first_year",
@@ -867,7 +903,11 @@
         "kind": "text",
         "value": "1845"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "db_period_life_plus_one_with_partial",
@@ -877,7 +917,11 @@
         "kind": "text",
         "value": "238.5271"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "db_invalid_month_is_num",

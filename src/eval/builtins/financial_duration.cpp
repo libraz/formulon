@@ -5,23 +5,17 @@
 //   * DURATION(settlement, maturity, coupon, yld, frequency, [basis=0])
 //   * MDURATION(settlement, maturity, coupon, yld, frequency, [basis=0])
 //
-// Both share the closed-form formula
+// Both share the closed-form formula, evaluated term by term in this order:
 //
-//   v       = 1 / (1 + yld/frequency)
-//   t1      = days_nc / period_days        (fractional periods to NCD)
-//   time_i  = (i - 1) + t1                 for i = 1..n
-//   CF_i    = coupon / frequency           for i < n
-//   CF_n    = coupon / frequency + 1       (face = 1)
+//   f = (E - A) / E                  (E = coupon period days, A = days since PCD)
+//   q = yld/frequency + 1,  p = (f + n) - 1
+//   t_k = (k - 1) + f,  c_k = ((100 * coupon) / frequency) / POWER(q, t_k)
 //
-//   num = sum_i (time_i * CF_i * v^time_i)
-//   den = sum_i (CF_i * v^time_i)
+//   num = (p * 100) / POWER(q, p) + sum_k c_k * t_k
+//   den = 100 / POWER(q, p)       + sum_k c_k
 //
 //   DURATION  = (num / den) / frequency
 //   MDURATION = DURATION / (1 + yld/frequency)
-//
-// The face value is normalised to 1 (instead of the textbook 100); the
-// factor cancels in num / den so this saves one multiplication per term
-// without changing the result.
 //
 // Coupon-schedule mechanics are delegated to the shared engine in
 // `eval/coupon_schedule.h` (the same engine used by the COUP* family
@@ -43,7 +37,7 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
-// Computes Macaulay duration with face = 1. Returns `#NUM!` on any
+// Computes Macaulay duration. Returns `#NUM!` on any
 // validation or numerical failure. The caller (DURATION) returns this
 // value directly; MDURATION divides it by `(1 + yld/frequency)`.
 Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t arity, bool date1904) {
@@ -88,28 +82,24 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   }
 
   const double freq_d = static_cast<double>(frequency);
-  const double v = 1.0 / (1.0 + yld / freq_d);
-  // `bond_dsc` (not the raw `days_nc`) keeps `A/E + DSC/E == 1` on
-  // bases 2 / 3; see `coupon_schedule.h` for the rationale.
-  const double t1 = cd.bond_dsc / cd.period_days;
-  const double cf_coupon = coupon / freq_d;
+  const double e = cd.period_days;
+  const double f = (e - cd.days_bs) / e;
   const std::int32_t n = cd.coupons_remaining;
+  const double p = (f + static_cast<double>(n)) - 1.0;
+  const double q = (yld / freq_d) + 1.0;
+  const double p1 = excel_power(q, p);
 
-  double num = 0.0;
-  double den = 0.0;
-  for (std::int32_t i = 1; i <= n; ++i) {
-    const double time_i = static_cast<double>(i - 1) + t1;
-    const double cf_i = (i == n) ? (cf_coupon + 1.0) : cf_coupon;
-    const double disc = std::pow(v, time_i);
-    if (std::isnan(disc) || std::isinf(disc)) {
-      return ErrorCode::Num;
-    }
-    const double pv = cf_i * disc;
-    num += time_i * pv;
-    den += pv;
+  double sum_num = 0.0;
+  double sum_den = 0.0;
+  for (std::int32_t k = 1; k <= n; ++k) {
+    const double t = (static_cast<double>(k) - 1.0) + f;
+    const double c = ((100.0 * coupon) / freq_d) / excel_power(q, t);
+    sum_num = (c * t) + sum_num;
+    sum_den = c + sum_den;
   }
-
-  if (den == 0.0) {
+  const double num = ((p * 100.0) / p1) + sum_num;
+  const double den = (100.0 / p1) + sum_den;
+  if (std::isnan(num) || std::isnan(den) || den == 0.0) {
     return ErrorCode::Num;
   }
   const double duration = (num / den) / freq_d;

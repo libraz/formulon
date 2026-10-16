@@ -90,14 +90,17 @@ cases:
   # -- MULTINOMIAL ---------------------------------------------------------
   - id: multinomial_single_arg
     formula: "=MULTINOMIAL(5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: multinomial_two_args
     description: "MULTINOMIAL(2, 3) = 5!/(2!*3!) = 10."
     formula: "=MULTINOMIAL(2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: multinomial_three_args
     description: "MULTINOMIAL(1, 2, 3) = 6!/(1!*2!*3!) = 60."
     formula: "=MULTINOMIAL(1, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: multinomial_negative_is_num
     formula: "=MULTINOMIAL(2, -1, 3)"
@@ -105,6 +108,7 @@ cases:
   - id: multinomial_with_zero
     description: "MULTINOMIAL(0, 3, 2) = 5!/(0!*3!*2!) = 10."
     formula: "=MULTINOMIAL(0, 3, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- GCD -----------------------------------------------------------------
   - id: gcd_two_args
