@@ -36,16 +36,17 @@
 //   E       = normal coupon-period length (basis-adjusted)
 //   N       = compute_coupon_dates(first_coupon, maturity, ...).coupons_remaining
 //
-//   v   = 1 / (1 + yld/freq)
+//   b   = 1 + yld/freq
 //   cf  = 100 * rate / freq
-//   x   = nq + dsc/E
+//   t1  = nq + dsc/E
 //
-//   first_period_pv = cf * sum_{i=0..nc-1} (dc[i]/nl[i]) * v^x
-//   reg_coupons_pv  = cf * sum_{j=1..N} v^(x + j)
-//   redemption_pv   = redemption * v^(x + N)
-//   ai              = cf * sum_i (a[i]/nl[i])
+//   ODDFPRICE = redemption / b^(N + t1)
+//             + (sum_i cf * dc[i] / nl[i]) / b^t1
+//             + sum_{j=1..N} cf / b^(j + t1)
+//             - sum_i cf * a[i] / nl[i]
 //
-//   ODDFPRICE = first_period_pv + reg_coupons_pv + redemption_pv - ai
+// Integer exponents use right-to-left square-and-multiply and fractional ones
+// exp(e * log(b)), in the term order above, as Excel evaluates them.
 //
 // Coupon-schedule mechanics for the trailing regular periods are
 // delegated to the shared engine in `eval/coupon_schedule.h` (as in
@@ -203,7 +204,7 @@ Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settleme
   // With `settlement = first_coupon` it returns the count of regular
   // coupons in (first_coupon, maturity]; we add 1 for the
   // first_coupon itself only when it's not already counted -- but
-  // first_coupon is the irregular coupon (handled by first_period_pv),
+  // first_coupon is the irregular coupon (priced by the odd-coupon term),
   // not part of the regular series. So `n_regular = coupons_remaining`
   // counts the regular coupons after first_coupon up to and including
   // maturity. When first_coupon == maturity, coupons_remaining == 0
@@ -268,66 +269,39 @@ Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::
   return out;
 }
 
+Expected<double, ErrorCode> oddf_price_at(const OddFirstSchedule& sched, const OddFirstArgs& in, double yld) {
+  const double cf = 100.0 * in.rate / in.freq_d;
+  const double b = 1.0 + yld / in.freq_d;
+  // Periods from settlement to first_coupon, where the whole odd coupon is paid.
+  const double t1 = static_cast<double>(sched.nq) + sched.dsc / sched.e;
+
+  // Terms in Excel's order: redemption, odd coupon, regular coupons, then accrued interest.
+  double price = in.redemption / excel_power(b, static_cast<double>(sched.n_regular) + t1);
+  double first_units = 0.0;
+  double ai = 0.0;
+  for (int i = 0; i < sched.nc; ++i) {
+    first_units += cf * sched.qp[i].dc / sched.qp[i].nl;
+    ai += cf * sched.qp[i].a / sched.qp[i].nl;
+  }
+  price += first_units / excel_power(b, t1);
+  double regular = 0.0;
+  for (std::int32_t j = 1; j <= sched.n_regular; ++j) {
+    regular += cf / excel_power(b, static_cast<double>(j) + t1);
+  }
+  price = price + regular - ai;
+  if (std::isnan(price) || std::isinf(price)) {
+    return ErrorCode::Num;
+  }
+  return price;
+}
+
 Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
   OddFirstSchedule sched{};
   auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/false, date1904, sched);
   if (!in) {
     return std::move(in.error());
   }
-  const double redemption_v = in.value().redemption;
-
-  const double freq_d = in.value().freq_d;
-  const double cf = 100.0 * in.value().rate / freq_d;
-  const double v_denom = 1.0 + in.value().slot5 / freq_d;
-  if (v_denom == 0.0) {
-    return ErrorCode::Num;
-  }
-  const double v = 1.0 / v_denom;
-  // Periods from settlement to first_coupon, where the whole odd coupon is paid.
-  const double dsc_over_e = static_cast<double>(sched.nq) + sched.dsc / sched.e;
-
-  double first_coupon_units = 0.0;
-  for (int i = 0; i < sched.nc; ++i) {
-    first_coupon_units += sched.qp[i].dc / sched.qp[i].nl;
-  }
-  const double first_disc = std::pow(v, dsc_over_e);
-  if (std::isnan(first_disc) || std::isinf(first_disc)) {
-    return ErrorCode::Num;
-  }
-  const double first_period_pv = cf * first_coupon_units * first_disc;
-
-  // Regular coupons: cf * sum_{j=1..N} v^(dsc/E + j).
-  double reg_coupons_pv = 0.0;
-  for (std::int32_t j = 1; j <= sched.n_regular; ++j) {
-    const double disc = std::pow(v, dsc_over_e + static_cast<double>(j));
-    if (std::isnan(disc) || std::isinf(disc)) {
-      return ErrorCode::Num;
-    }
-    reg_coupons_pv += cf * disc;
-  }
-
-  // Redemption at maturity: redemption * v^(dsc/E + N).
-  const double red_disc = std::pow(v, dsc_over_e + static_cast<double>(sched.n_regular));
-  if (std::isnan(red_disc) || std::isinf(red_disc)) {
-    return ErrorCode::Num;
-  }
-  const double redemption_pv = redemption_v * red_disc;
-
-  // Accrued interest: cf * sum_i (a[i] / nl[i]).
-  double ai_units = 0.0;
-  for (int i = 0; i < sched.nc; ++i) {
-    if (sched.qp[i].nl <= 0.0) {
-      return ErrorCode::Num;
-    }
-    ai_units += sched.qp[i].a / sched.qp[i].nl;
-  }
-  const double ai = cf * ai_units;
-
-  const double price = first_period_pv + reg_coupons_pv + redemption_pv - ai;
-  if (std::isnan(price) || std::isinf(price)) {
-    return ErrorCode::Num;
-  }
-  return price;
+  return oddf_price_at(sched, in.value(), in.value().slot5);
 }
 
 // --- ODDFPRICE(settlement, maturity, issue, first_coupon, rate, yld,

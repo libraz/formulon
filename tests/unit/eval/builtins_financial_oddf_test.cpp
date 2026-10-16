@@ -227,15 +227,11 @@ TEST(FinancialOddf, ShortFirstPeriodSensiblePrice) {
   EXPECT_GT(v.as_number(), 80.0);
   EXPECT_LT(v.as_number(), 110.0);
 
-  // Confirm round-trip.
-  char buf[64];
-  std::snprintf(buf, sizeof(buf), "%.17g", v.as_number());
-  const std::string yield_src =
-      std::string("=ODDFYIELD(DATE(2024,6,1), DATE(2027,9,15), DATE(2024,3,15), DATE(2024,9,15), 0.05, ") + buf +
-      ", 100, 2, 0)";
-  const Value yld_v = EvalSource(yield_src);
-  ASSERT_TRUE(yld_v.is_number());
-  EXPECT_NEAR(yld_v.as_number(), 0.05, 1e-9);
+  // Excel rejects the yield when issue -> first_coupon is exactly one regular period.
+  const Value yld_v =
+      EvalSource("=ODDFYIELD(DATE(2024,6,1), DATE(2027,9,15), DATE(2024,3,15), DATE(2024,9,15), 0.05, 99, 100, 2, 0)");
+  ASSERT_TRUE(yld_v.is_error());
+  EXPECT_EQ(yld_v.as_error(), ErrorCode::Num);
 }
 
 // ---------------------------------------------------------------------------
@@ -491,11 +487,8 @@ TEST(FinancialOddf, OddfYieldZeroRedemptionIsNum) {
 }
 
 TEST(FinancialOddf, OddfYieldUnreachablePriceIsNum) {
-  // ODDFYIELD shares `solve_yield_by_newton` with YIELD (see
-  // FinancialYield.UnreachablePriceIsNum). No non-negative yield can reach
-  // a price this far above the bond's theoretical yld=0 ceiling, so the
-  // solver must surface #NUM! instead of the boundary-clamped 0 it used to
-  // return once its step underflowed there.
+  // No yield can reach a price this far above the bond's theoretical yld=0
+  // ceiling, so the solver must surface #NUM! rather than a boundary value.
   const Value v = EvalSource(
       "=ODDFYIELD(DATE(2008,11,11), DATE(2021,3,1), DATE(2008,10,15), DATE(2009,3,1), 0.0785, 100000, 100, 2, 1)");
   ASSERT_TRUE(v.is_error());
@@ -598,6 +591,15 @@ TEST(FinancialOddf, OddfYieldLowYieldRoundTrip) {
       "100, 2, 0)");
   ASSERT_TRUE(yld_v.is_number());
   EXPECT_NEAR(yld_v.as_number(), 0.0125, 1e-9);
+}
+
+TEST(FinancialOddf, OddfYieldMatchesMeasuredValueWithinOneUlp) {
+  // Excel's iteration divides by the regular-bond derivative, so its result
+  // sits ~1e-12 from the exact root; the engine reproduces it to the last bit.
+  const Value v = EvalSource(
+      "=ODDFYIELD(DATE(2008,11,11), DATE(2021,3,1), DATE(2008,10,15), DATE(2009,3,1), 0.0575, 84.5, 100, 2, 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.07724554159729888, 2e-17);
 }
 
 }  // namespace

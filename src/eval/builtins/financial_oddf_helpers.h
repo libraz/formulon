@@ -3,7 +3,7 @@
 //
 // Shared schedule walker + clean-price kernel used by both ODDFPRICE
 // (clean price per 100 face) and ODDFYIELD (yield-to-maturity inferred
-// by Newton-Raphson on the price kernel). The "odd first" family
+// by Newton's method on the price kernel). The "odd first" family
 // handles a bond whose initial coupon period does not align with the
 // regular `12/freq`-month grid: the issue date precedes the first
 // coupon date by an arbitrary span which may be shorter than, equal
@@ -52,24 +52,17 @@
 // closed form:
 //
 //   cf  = 100 * rate / freq
-//   ai  = cf * sum_i (a[i] / nl[i])
-//   v   = 1 / (1 + yld / freq)
-//   x   = nq + dsc / E
-//   first_period_pv = cf * sum_i (dc[i] / nl[i]) * v^x
-//   reg_coupons_pv  = cf * sum_{j=1..n_regular} v^(x + j)
-//   redemption_pv   = redemption * v^(x + n_regular)
-//   ODDFPRICE       = first_period_pv + reg_coupons_pv + redemption_pv - ai
+//   b   = 1 + yld / freq
+//   t1  = nq + dsc / E
+//   ODDFPRICE = redemption / b^(n_regular + t1)
+//             + (sum_i cf * dc[i] / nl[i]) / b^t1
+//             + sum_{j=1..n_regular} cf / b^(j + t1)
+//             - sum_i cf * a[i] / nl[i]
 //
-// When NC == 1 (short first period) the first_period_pv collapses to
-// the standard short-first-period formula; this implementation walks
-// the same code path for every NC.
-//
-// `compute_oddf_yield` inverts the above for `yld` via Newton-Raphson
-// on `price(yld) - pr` with a central-difference derivative. The
-// initial guess is Microsoft's documented "approximate yield"
-// formula. There is no closed-form inverse: the price kernel is a
-// polynomial in `v` of degree `nc + n_regular`, which has no
-// algebraic solution in `yld` for the general case.
+// `compute_oddf_yield` inverts the above for `yld` by Newton's method on
+// `ODDFPRICE(yld) - pr`, with YIELD's start and step shell but the derivative
+// of the regular PRICE formula (the odd first coupon taken as a full one),
+// which is how Excel's result comes to sit slightly off the true root.
 
 #ifndef FORMULON_EVAL_BUILTINS_FINANCIAL_ODDF_HELPERS_H_
 #define FORMULON_EVAL_BUILTINS_FINANCIAL_ODDF_HELPERS_H_
@@ -149,6 +142,11 @@ struct OddFirstArgs {
 Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::uint32_t arity,
                                                         bool slot5_must_be_positive, bool date1904,
                                                         OddFirstSchedule& sched_out);
+
+/// ODDFPRICE's closed form at yield `yld` for an already validated schedule
+/// and argument set; `in.slot5` is not read. `ErrorCode::Num` on a non-finite
+/// result.
+Expected<double, ErrorCode> oddf_price_at(const OddFirstSchedule& sched, const OddFirstArgs& in, double yld);
 
 /// Computes the ODDFPRICE clean price per 100 face. Performs the same
 /// argument validation order as PRICE / ODDLPRICE (date ordering ->

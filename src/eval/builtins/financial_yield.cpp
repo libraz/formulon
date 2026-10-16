@@ -54,14 +54,6 @@
 namespace formulon {
 namespace eval {
 namespace financial_detail {
-namespace {
-
-constexpr int kMaxNewtonSteps = 100;
-constexpr double kStepTolerance = 1.0e-10;
-
-// Settlement-to-maturity span in years: whole anniversary years of settlement
-// plus the remaining days over the basis' year length (basis 1: the length of
-// the anniversary year holding the remainder).
 double years_to_maturity(double settlement, double maturity, int basis, bool date1904) {
   const double s = std::trunc(settlement);
   const double m = std::trunc(maturity);
@@ -103,6 +95,8 @@ double years_to_maturity(double settlement, double maturity, int basis, bool dat
   }
   return static_cast<double>(years) + remainder / year_len;
 }
+
+namespace {
 
 // Computes the YIELD result. Returns the yield-to-maturity (decimal) on
 // success or `ErrorCode::Num` on any validation / numerical failure.
@@ -148,32 +142,28 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
     return ErrorCode::Num;
   }
   const double ny = years_to_maturity(settlement.value(), maturity.value(), tail.basis, date1904);
-  const double denom0 = ny * (100.0 + pr_v) / 2.0 + (pr_v - 100.0) / 4.0;
-  double yld = (100.0 * (rate * ny) + (100.0 - pr_v)) / denom0;
-  const double t1 = cd.bond_dsc / cd.period_days;
-  for (int iter = 0; iter < kMaxNewtonSteps; ++iter) {
-    const double b = 1.0 + yld / freq_d;
+  const double yld = yield_initial_guess(rate, pr_v, ny);
+  // Plain locals: a lambda cannot capture structured bindings in C++17.
+  const double freq = freq_d;
+  const double coupon = cf;
+  const double days_bs = cd.days_bs;
+  const double period_days = cd.period_days;
+  const double t1 = cd.bond_dsc / period_days;
+  return newton_yield_by_steps(yld, [&](double y) -> Expected<double, ErrorCode> {
+    const double b = 1.0 + y / freq;
     const double t_n = static_cast<double>(n - 1) + t1;
     double price = red / excel_power(b, t_n);
     double coupons = 0.0;
     for (std::int32_t k = 1; k <= n; ++k) {
-      coupons += cf / excel_power(b, static_cast<double>(k - 1) + t1);
+      coupons += coupon / excel_power(b, static_cast<double>(k - 1) + t1);
     }
-    price = price + coupons - cf * cd.days_bs / cd.period_days;
+    price = price + coupons - coupon * days_bs / period_days;
     double d = -t_n * red / excel_power(b, static_cast<double>(n) + t1);
     for (std::int32_t k = 1; k <= n; ++k) {
-      d += -(static_cast<double>(k - 1) + t1) * cf / excel_power(b, static_cast<double>(k) + t1);
+      d += -(static_cast<double>(k - 1) + t1) * coupon / excel_power(b, static_cast<double>(k) + t1);
     }
-    const double step = (price - pr_v) / (d / freq_d);
-    if (std::isnan(step) || std::isinf(step)) {
-      return ErrorCode::Num;
-    }
-    if (std::fabs(step) < kStepTolerance) {
-      return yld;
-    }
-    yld -= step;
-  }
-  return ErrorCode::Num;
+    return (price - pr_v) / (d / freq);
+  });
 }
 
 }  // namespace

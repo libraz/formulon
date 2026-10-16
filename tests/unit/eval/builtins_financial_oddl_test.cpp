@@ -397,6 +397,27 @@ TEST(FinancialOddl, OddlYieldTooManyArgsIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// Terms are formed per quasi-coupon period and summed left to right, so the
+// closed forms reproduce Excel to the last bit.
+TEST(FinancialOddl, BitExactAgainstMeasuredValues) {
+  const Value yield0 =
+      EvalSource("=ODDLYIELD(DATE(2008,4,20), DATE(2008,6,15), DATE(2007,12,24), 0.0375, 99.875, 100, 2, 0)");
+  ASSERT_TRUE(yield0.is_number());
+  EXPECT_EQ(yield0.as_number(), 0.04519223562916916);
+  const Value yield1 =
+      EvalSource("=ODDLYIELD(DATE(2008,4,20), DATE(2008,6,15), DATE(2007,12,24), 0.0375, 99.875, 100, 2, 1)");
+  ASSERT_TRUE(yield1.is_number());
+  EXPECT_EQ(yield1.as_number(), 0.04517988549187201);
+  const Value price0 =
+      EvalSource("=ODDLPRICE(DATE(2008,2,7), DATE(2008,6,15), DATE(2007,10,15), 0.0375, 0.0405, 100, 2, 0)");
+  ASSERT_TRUE(price0.is_number());
+  EXPECT_EQ(price0.as_number(), 99.87828601472134);
+  const Value price1 =
+      EvalSource("=ODDLPRICE(DATE(2008,2,7), DATE(2008,6,15), DATE(2007,10,15), 0.0375, 0.0405, 100, 2, 1)");
+  ASSERT_TRUE(price1.is_number());
+  EXPECT_EQ(price1.as_number(), 99.87916768152911);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

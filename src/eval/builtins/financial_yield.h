@@ -28,9 +28,12 @@
 #ifndef FORMULON_EVAL_BUILTINS_FINANCIAL_YIELD_H_
 #define FORMULON_EVAL_BUILTINS_FINANCIAL_YIELD_H_
 
+#include <cmath>
 #include <cstdint>
 
 #include "utils/arena.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -38,6 +41,42 @@ namespace eval {
 namespace financial_detail {
 
 Value Yield(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
+
+// Settlement-to-maturity span in years: whole anniversary years of settlement
+// plus the remaining days over the basis' year length (basis 1: the length of
+// the anniversary year holding the remainder).
+double years_to_maturity(double settlement, double maturity, int basis, bool date1904);
+
+// Excel's start for the yield Newton iteration, from the coupon rate, the
+// market price and the settlement-to-maturity span `ny` in years.
+inline double yield_initial_guess(double rate, double pr, double ny) noexcept {
+  const double denom = ny * (100.0 + pr) / 2.0 + (pr - 100.0) / 4.0;
+  return (100.0 * (rate * ny) + (100.0 - pr)) / denom;
+}
+
+// Newton shell shared by YIELD and ODDFYIELD. `step_at(yld)` returns the
+// Newton step `(price - pr) / slope` as an `Expected<double, ErrorCode>`.
+// A step below `1e-10` ends the iteration and is NOT applied; a non-finite
+// step or 100 iterations without convergence is `#NUM!`.
+template <typename StepFn>
+Expected<double, ErrorCode> newton_yield_by_steps(double yld, StepFn step_at) {
+  constexpr int kMaxNewtonSteps = 100;
+  constexpr double kStepTolerance = 1.0e-10;
+  for (int iter = 0; iter < kMaxNewtonSteps; ++iter) {
+    Expected<double, ErrorCode> step = step_at(yld);
+    if (!step) {
+      return std::move(step.error());
+    }
+    if (std::isnan(step.value()) || std::isinf(step.value())) {
+      return ErrorCode::Num;
+    }
+    if (std::fabs(step.value()) < kStepTolerance) {
+      return yld;
+    }
+    yld -= step.value();
+  }
+  return ErrorCode::Num;
+}
 
 }  // namespace financial_detail
 }  // namespace eval

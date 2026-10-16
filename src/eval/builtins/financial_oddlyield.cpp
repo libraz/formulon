@@ -19,8 +19,8 @@
 //   1 + dsc_units * yld / freq = (redemption + cf) / (pr + ai)
 //   dsc_units * yld / freq     = (redemption + cf) / (pr + ai) - 1
 //                             = (redemption + cf - pr - ai) / (pr + ai)
-//   yld                       = (freq / dsc_units) *
-//                              ((redemption + cf - pr - ai) / (pr + ai))
+//   yld                       = (((redemption + cf) - (pr + ai)) / (pr + ai)) *
+//                              (freq / dsc_units)
 //
 // See `financial_oddl_helpers.h` for the schedule walker shared with
 // ODDLPRICE.
@@ -50,8 +50,8 @@ Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t 
   if (denom == 0.0 || in.value().dsc_units == 0.0) {
     return ErrorCode::Num;
   }
-  const double yld = (in.value().freq_d / in.value().dsc_units) *
-                     ((in.value().redemption + in.value().cf - pr_v - in.value().ai) / denom);
+  const double yld =
+      (((in.value().redemption + in.value().cf) - denom) / denom) * (in.value().freq_d / in.value().dsc_units);
   if (std::isnan(yld) || std::isinf(yld)) {
     return ErrorCode::Num;
   }

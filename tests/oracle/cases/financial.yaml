@@ -189,6 +189,7 @@ cases:
   - id: ipmt_first_period
     description: "First-period interest dominates: ~-104.17 for 25k loan at 5%/12"
     formula: "=IPMT(0.05/12, 1, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ipmt_last_period
     description: "Final-period interest is small (most of payment is principal)"
@@ -204,10 +205,12 @@ cases:
   - id: ipmt_type_1_first_period_is_zero
     description: "Annuity-due first-period interest is exactly 0"
     formula: "=IPMT(0.05/12, 1, 60, 25000, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ipmt_zero_rate_is_zero
     description: "rate=0 -> IPMT=0 for any period"
     formula: "=IPMT(0, 5, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- PPMT ----------------------------------------------------------------
   - id: ppmt_first_period
@@ -223,10 +226,12 @@ cases:
       Identity: IPMT(i) + PPMT(i) - PMT = 0 for any period i in range.
       Authored as an algebraic difference so the oracle is verifying zero.
     formula: "=IPMT(0.05/12,5,60,25000) + PPMT(0.05/12,5,60,25000) - PMT(0.05/12,60,25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ppmt_zero_rate
     description: "rate=0 -> PPMT = -pv/nper for every period (whole payment is principal)"
     formula: "=PPMT(0, 5, 60, 25000)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ppmt_type_1_first_period
     description: |
@@ -238,10 +243,12 @@ cases:
   - id: cumipmt_full_range
     description: "Total interest over 5 years on a 25k loan at 5%/12"
     formula: "=CUMIPMT(0.05/12, 60, 25000, 1, 60, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: cumipmt_first_year
     description: "Interest paid during the first 12 periods"
     formula: "=CUMIPMT(0.05/12, 60, 25000, 1, 12, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: cumipmt_start_out_of_range_is_num
     description: "start_period < 1 -> #NUM!"
@@ -255,12 +262,14 @@ cases:
   - id: cumprinc_full_range
     description: "Total principal paid equals -pv (loan fully amortised)"
     formula: "=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: cumprinc_plus_cumipmt_eq_total_payments
     description: |
       Identity: CUMPRINC + CUMIPMT - PMT*nper = 0 over the full range.
       Authored as an algebraic difference so the oracle verifies zero.
     formula: "=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0) + CUMIPMT(0.05/12, 60, 25000, 1, 60, 0) - PMT(0.05/12, 60, 25000)*60"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: cumprinc_first_year
     description: "Principal paid during the first 12 periods of a 5-year loan"

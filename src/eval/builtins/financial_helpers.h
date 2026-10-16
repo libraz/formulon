@@ -292,13 +292,23 @@ inline double normalize_type(double t) noexcept {
 // compute directly from doubles and return NaN on degenerate cases; the
 // callers translate NaN into `#NUM!` via `finalize`.
 
+// Annuity discount complement om(m) = 1 - (1 + rate)^-m, evaluated as
+// -expm1(-m * log1p(rate)) so it stays accurate at small rates.
+inline double annuity_om(double rate, double m) noexcept {
+  return -std::expm1(-m * std::log1p(rate));
+}
+
 // Internal PMT formula; returns NaN if the inputs are degenerate.
 // Callers must check `std::isnan(result)` before returning to the user.
+//
+//   rate == 0  ->  PMT = -(pv + fv) / nper
+//   rate != 0  ->  PMT = -(rate / (1 + rate*type)) * ((pv + fv) / om(nper) - fv)
+//
+// The `(pv + fv) / om - fv` shape reproduces Excel's cancellation (including
+// an exact 0 when om rounds to 1).
 inline double pmt_scalar(double rate, double nper, double pv, double fv, double type) noexcept {
-  if (rate == -1.0) {
-    // Denominator (1+rate)*(pow_term-1) vanishes; caller surfaces as #NUM!
-    // (scalar layer cannot distinguish DIV/0 from NUM — the Value-level
-    // impls catch the rate==-1 case explicitly to return #DIV/0!).
+  if (rate <= -1.0) {
+    // log1p has no real value here; caller surfaces as #NUM!.
     return std::numeric_limits<double>::quiet_NaN();
   }
   if (rate == 0.0) {
@@ -307,86 +317,74 @@ inline double pmt_scalar(double rate, double nper, double pv, double fv, double 
     }
     return -(pv + fv) / nper;
   }
-  const double pow_term = std::pow(1.0 + rate, nper);
-  const double denom = (1.0 + rate * type) * (pow_term - 1.0);
-  if (denom == 0.0) {
+  const double om = annuity_om(rate, nper);
+  if (om == 0.0) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  return -(pv * pow_term + fv) * rate / denom;
+  return -(rate / (1.0 + rate * type)) * ((pv + fv) / om - fv);
 }
 
-// Internal FV formula. Matches the Fv() public impl above; extracted so
-// IPMT / PPMT can compute balances mid-schedule without re-parsing args.
-inline double fv_scalar(double rate, double nper, double pmt, double pv, double type) noexcept {
-  if (rate == -1.0) {
-    // Division by rate in the closed form; caller surfaces as #NUM!
-    // (scalar callers — IPMT/PPMT/CUMIPMT/CUMPRINC — treat the degenerate
-    // rate identically to other NaN-producing inputs).
-    return std::numeric_limits<double>::quiet_NaN();
-  }
-  if (rate == 0.0) {
-    return -(pv + pmt * nper);
-  }
-  const double pow_term = std::pow(1.0 + rate, nper);
-  return -(pv * pow_term + pmt * (1.0 + rate * type) * (pow_term - 1.0) / rate);
-}
-
-// Internal IPMT formula used by IPMT / PPMT / CUMIPMT / CUMPRINC. Per
-// Microsoft's documentation:
+// Shared `per` domain of IPMT / PPMT.
 //
-//   - type == 0: the balance at the start of period p is the running
-//     `FV(rate, p-1, pmt, pv, 0)` — a signed Excel FV, so for a loan
-//     with positive pv the value comes back *negative* (representing
-//     the remaining debt from the lender's perspective). Interest
-//     charged for the period is `balance * rate` — negative when pv is
-//     positive, matching Excel's "interest is cash out from the
-//     borrower" sign convention.
-//   - type == 1 && p == 1: no interest has accrued on the first period's
-//     start-of-period payment, so IPMT is 0.
-//   - type == 1 && p  > 1: the balance-at-start is `FV(rate, p-1, pmt,
-//     pv, 1)`, and Excel divides interest by `(1 + rate)` because part
-//     of the accrued interest is paid at the start of the period rather
-//     than the end.
+// Mac Excel 365 rejects `per < 1` and integer `per > nper` (an
+// "out-of-schedule" amortisation period) with `#NUM!`, but evaluates the
+// closed form when `per` is fractional -- even for `per > nper`. CUMIPMT /
+// CUMPRINC apply their own tighter range checks.
+inline bool per_in_schedule(double per, double nper) noexcept {
+  return per >= 1.0 && !(per > nper && std::floor(per) == per);
+}
+
+// Internal IPMT formula (type 0 / type 1 share the closed form below):
+//
+//   K    = (pv + fv) / om(nper)                       (PMT's inner term)
+//   IPMT = -rate * (K * om(nper - per + 1) - fv)
+//   type == 1: 0 at per == 1, otherwise the above / (1 + rate)
 //
 // If `rate == 0`, no interest ever accrues, so IPMT is 0 for any period.
 // Returns NaN on degenerate inputs (propagated up as `#NUM!`).
-//
-// Note: Mac Excel 365 (and the IronCalc oracle) reject `per < 1` and
-// integer `per > nper` (an "out-of-schedule" amortisation period) with
-// `#NUM!`, but evaluate the closed-form formula directly when `per` is
-// fractional — even for `per > nper`. We mirror that: a fractional `per`
-// is always accepted as long as it is >= 1. CUMIPMT / CUMPRINC apply their
-// own tighter range checks before calling this helper.
 inline double ipmt_scalar(double rate, double per, double nper, double pv, double fv, double type) noexcept {
-  if (per < 1.0) {
-    return std::numeric_limits<double>::quiet_NaN();
-  }
-  // Reject integer per > nper as an out-of-schedule period. Fractional per
-  // is accepted for any value >= 1 (matches Mac Excel 365 oracle).
-  if (per > nper && std::floor(per) == per) {
+  if (!per_in_schedule(per, nper)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
   if (rate == 0.0) {
     return 0.0;
   }
-  const double pmt = pmt_scalar(rate, nper, pv, fv, type);
-  if (std::isnan(pmt)) {
-    return pmt;
+  if (rate <= -1.0) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const double om = annuity_om(rate, nper);
+  if (om == 0.0) {
+    return std::numeric_limits<double>::quiet_NaN();
   }
   if (type == 1.0 && per == 1.0) {
     return 0.0;
   }
-  // fv_scalar follows Excel's signed convention, so for a loan with
-  // positive pv the returned "balance" is already negative. Multiplying
-  // by rate directly gives Excel's signed interest (negative for a
-  // borrower paying interest out).
-  const double balance = fv_scalar(rate, per - 1.0, pmt, pv, type);
-  const double interest = balance * rate;
-  if (type == 1.0) {
-    // per > 1 here by the branch above.
-    return interest / (1.0 + rate);
+  const double k = (pv + fv) / om;
+  const double interest = -rate * (k * annuity_om(rate, nper - per + 1.0) - fv);
+  return type == 1.0 ? interest / (1.0 + rate) : interest;
+}
+
+// Internal PPMT formula. Not PMT - IPMT: the fv terms cancel exactly in
+//
+//   PPMT = -(rate / (1 + rate*type)) * (K * (1 + rate)^-(nper - per + 1))
+//
+// and type 1 at per == 1 is PMT itself. Returns NaN on degenerate inputs.
+inline double ppmt_scalar(double rate, double per, double nper, double pv, double fv, double type) noexcept {
+  if (!per_in_schedule(per, nper)) {
+    return std::numeric_limits<double>::quiet_NaN();
   }
-  return interest;
+  if (rate == 0.0 || (type == 1.0 && per == 1.0)) {
+    return pmt_scalar(rate, nper, pv, fv, type);
+  }
+  if (rate <= -1.0) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const double om = annuity_om(rate, nper);
+  if (om == 0.0) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const double k = (pv + fv) / om;
+  return -(rate / (1.0 + rate * type)) * (k * std::exp(-(nper - per + 1.0) * std::log1p(rate)));
 }
 
 // Value-returning builtins implemented in `financial_depreciation.cpp`.
@@ -397,89 +395,6 @@ Value Db(const Value* args, std::uint32_t arity, Arena& arena);
 Value Vdb(const Value* args, std::uint32_t arity, Arena& arena);
 Value Amordegrc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 Value Amorlinc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
-
-// A bond price kernel evaluated at one candidate yield, in the shape the
-// yield solvers below invert: the call's own argument vector with the
-// yield slot replaced by `yld`. `date1904` is the calling workbook's date
-// system, needed by any day-count decomposition the kernel performs.
-using BondPriceFn = Expected<double, ErrorCode> (*)(const Value* args, std::uint32_t arity, double yld, bool date1904);
-
-// Solves `price_at(yld) == target_price` by Newton-Raphson, shared by
-// YIELD and ODDFYIELD. The derivative is a central difference with step
-// `1e-7 * max(1, |yld|)`, one-sided while the iterate sits within one
-// step of zero, because every price kernel here has domain `yld >= 0`
-// and a damped step keeps the iterate on that side of the boundary.
-//
-// Converges on `|price - target| < 1e-12 * (|target| + 1)` or on a step
-// below `1e-15`. A degenerate derivative, a non-finite iterate, or
-// exhausting the iteration cap surfaces `#NUM!`, which is what Excel
-// reports for a price the bond cannot reach.
-inline Expected<double, ErrorCode> solve_yield_by_newton(BondPriceFn price_at, const Value* args, std::uint32_t arity,
-                                                         double target_price, double initial_guess, bool date1904) {
-  constexpr int kMaxIter = 100;
-  constexpr double kStepTol = 1.0e-15;
-  const double f_tol = 1.0e-12 * (std::fabs(target_price) + 1.0);
-  double yld = initial_guess;
-  for (int iter = 0; iter < kMaxIter; ++iter) {
-    auto f0 = price_at(args, arity, yld, date1904);
-    if (!f0) {
-      return std::move(f0.error());
-    }
-    const double residual = f0.value() - target_price;
-    if (std::fabs(residual) < f_tol) {
-      if (std::isnan(yld) || std::isinf(yld)) {
-        return ErrorCode::Num;
-      }
-      return yld;
-    }
-    const double step = 1.0e-7 * std::fmax(1.0, std::fabs(yld));
-    auto f_plus = price_at(args, arity, yld + step, date1904);
-    if (!f_plus) {
-      return std::move(f_plus.error());
-    }
-    double df = 0.0;
-    if (yld < step) {
-      df = (f_plus.value() - f0.value()) / step;
-    } else {
-      auto f_minus = price_at(args, arity, yld - step, date1904);
-      if (!f_minus) {
-        return std::move(f_minus.error());
-      }
-      df = (f_plus.value() - f_minus.value()) / (2.0 * step);
-    }
-    if (df == 0.0 || std::isnan(df) || std::isinf(df)) {
-      return ErrorCode::Num;
-    }
-    double damped_delta = residual / df;
-    double new_yld = yld - damped_delta;
-    while (new_yld < 0.0 && std::fabs(damped_delta) >= kStepTol) {
-      damped_delta *= 0.5;
-      new_yld = yld - damped_delta;
-    }
-    new_yld = std::fmax(0.0, new_yld);
-    if (std::isnan(new_yld) || std::isinf(new_yld)) {
-      return ErrorCode::Num;
-    }
-    if (std::fabs(damped_delta) < kStepTol) {
-      // The step underflowed without the top-of-loop residual check ever
-      // firing -- typically because the iterate is pinned at the yld >= 0
-      // domain boundary and can shrink no further. Step-size convergence
-      // alone does not mean the target price was reached, so certify the
-      // residual here too before accepting the answer.
-      auto f_new = price_at(args, arity, new_yld, date1904);
-      if (!f_new) {
-        return std::move(f_new.error());
-      }
-      if (std::fabs(f_new.value() - target_price) < f_tol) {
-        return new_yld;
-      }
-      return ErrorCode::Num;
-    }
-    yld = new_yld;
-  }
-  // Iteration cap reached without convergence.
-  return ErrorCode::Num;
-}
 
 // Value-returning builtins implemented in `financial_accrual.cpp`.
 Value Accrint(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);

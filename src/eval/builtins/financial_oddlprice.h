@@ -12,13 +12,13 @@
 //                  single irregular coupon + redemption at `maturity`).
 //                  Uses Microsoft's documented closed form:
 //
-//                    cf   = 100 * rate / freq * dc_units
-//                    ai   = 100 * rate / freq * a_units
+//                    cf   = sum_i 100 * rate / freq * DC_i / NL_i
+//                    ai   = sum_i 100 * rate / freq * A_i / NL_i
 //                    disc = 1 + dsc_units * yld / freq
 //                    ODDLPRICE = (redemption + cf) / disc - ai
 //
 //                  See `financial_oddl_helpers.h` for the schedule
-//                  walker that supplies dc_units / a_units / dsc_units.
+//                  walker that supplies cf / ai / dsc_units.
 
 #ifndef FORMULON_EVAL_BUILTINS_FINANCIAL_ODDLPRICE_H_
 #define FORMULON_EVAL_BUILTINS_FINANCIAL_ODDLPRICE_H_

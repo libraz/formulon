@@ -147,7 +147,7 @@ TEST(FinancialYield, UnreachablePriceIsNum) {
 }
 
 TEST(FinancialYield1904, AgreesWithThe1900EquivalentCalendarDate) {
-  // Exercises the n>1 Newton branch's `solve_yield_by_newton` /
+  // Exercises the n>1 Newton branch's `newton_yield_by_steps` /
   // `price_at` -> `compute_clean_price` -> `compute_coupon_dates` chain:
   // decomposing the serial without threading date1904 through every link
   // would shift the coupon schedule by the ~1462-day epoch gap.

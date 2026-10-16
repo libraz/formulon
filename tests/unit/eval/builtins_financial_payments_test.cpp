@@ -318,6 +318,29 @@ TEST(ExcelExactTimeValue, MatchesExcelBitForBit) {
   }
 }
 
+// IPMT / PPMT / CUMIPMT / CUMPRINC follow PMT's expm1 / log1p structure; the
+// expected values are the closed forms evaluated bit for bit.
+TEST(FinancialPaymentsClosedForm, IpmtPpmtAndCumulativeSums) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=IPMT(0.05/12, 60, 60, 25000)", -1.9575968510384785},
+      {"=PPMT(0.05/12, 1, 60, 25000)", -367.61417443360665},
+      {"=PPMT(0.05/12, 60, 60, 25000)", -469.82324424923485},
+      {"=PPMT(0.05/12, 1, 60, 25000, 0, 1)", -469.82324424923485},
+      {"=CUMPRINC(0.05/12, 60, 25000, 1, 60, 0)", -25000.0},
+      {"=CUMPRINC(0.05/12, 60, 25000, 1, 12, 1)", -4598.885966346848},
+      {"=CUMIPMT(0.05/12, 60, 25000, 1, 12, 0)", -1147.4887686633192},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

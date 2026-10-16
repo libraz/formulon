@@ -467,7 +467,11 @@
         "kind": "text",
         "value": "-104.1667"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "ipmt_last_period",
@@ -501,7 +505,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "ipmt_zero_rate_is_zero",
@@ -511,7 +519,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "ppmt_first_period",
@@ -541,7 +553,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "ppmt_zero_rate",
@@ -551,7 +567,11 @@
         "kind": "text",
         "value": "-416.6667"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "ppmt_type_1_first_period",
@@ -571,7 +591,11 @@
         "kind": "number",
         "value": -3306.8504660164035
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "cumipmt_first_year",
@@ -581,7 +605,11 @@
         "kind": "number",
         "value": -1147.4887686633192
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "cumipmt_start_out_of_range_is_num",
@@ -611,7 +639,11 @@
         "kind": "number",
         "value": -25000.0
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "cumprinc_plus_cumipmt_eq_total_payments",
@@ -621,7 +653,11 @@
         "kind": "number",
         "value": 0.0
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "cumprinc_first_year",

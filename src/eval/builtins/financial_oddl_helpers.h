@@ -14,22 +14,21 @@
 //
 // `compute_odd_last_schedule` sums, over those periods, each period's
 // days divided by its normal length NL_i (360/freq for bases 0 / 4, the
-// period's actual length for bases 1 / 2 / 3):
+// period's actual length for bases 1 / 2 / 3). Each term is formed
+// left to right, as Excel does, and accumulated in period order:
 //
-//   * `dc_units`  -- sum of DC_i / NL_i, days from last_interest to maturity.
-//   * `a_units`   -- sum of A_i / NL_i, days from last_interest to settlement.
+//   * `cf`        -- sum of 100 * rate / freq * DC_i / NL_i (last_interest to maturity).
+//   * `ai`        -- sum of 100 * rate / freq * A_i / NL_i (last_interest to settlement).
 //   * `dsc_units` -- sum of DSC_i / NL_i, days from settlement to maturity.
 //
 // `compute_oddl_clean_price` evaluates ODDLPRICE's closed form:
 //
-//   cf   = 100 * rate / freq * dc_units
-//   ai   = 100 * rate / freq * a_units
 //   disc = 1 + dsc_units * yld / freq
 //   ODDLPRICE = (redemption + cf) / disc - ai
 //
 // `compute_oddl_yield` inverts the above for `yld`:
 //
-//   yld = (freq / dsc_units) * ((redemption + cf - pr - ai) / (pr + ai))
+//   yld = (((redemption + cf) - (pr + ai)) / (pr + ai)) * (freq / dsc_units)
 //
 // All three helpers return `Expected<...>` and surface any
 // validation/numerical failure as `ErrorCode::Num`.
@@ -52,13 +51,13 @@ namespace financial_detail {
 
 /// Schedule context for an ODDLPRICE / ODDLYIELD evaluation.
 struct OddLastSchedule {
-  double dc_units;   ///< Coupon periods from last_interest to maturity.
-  double a_units;    ///< Coupon periods from last_interest to settlement.
+  double cf;         ///< Irregular final coupon per 100 face.
+  double ai;         ///< Accrued interest per 100 face.
   double dsc_units;  ///< Coupon periods from settlement to maturity.
 };
 
 /// Builds the OddLastSchedule for `(last_interest, settlement, maturity,
-/// frequency, basis)`. Callers must have already validated
+/// rate, frequency, basis)`. Callers must have already validated
 /// `last_interest < settlement < maturity`, `frequency` in {1, 2, 4}, and
 /// `basis` in {0..4}.
 ///
@@ -68,7 +67,8 @@ struct OddLastSchedule {
 /// this path is not reachable in practice; the failure modes are
 /// pathological-input defenses.
 Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement, double maturity, double last_interest,
-                                                               int frequency, int basis, bool date1904) noexcept;
+                                                               double rate, int frequency, int basis,
+                                                               bool date1904) noexcept;
 
 /// Everything ODDLPRICE and ODDLYIELD read and derive before their closed
 /// forms diverge. Slot 4 is the one argument whose meaning differs between the

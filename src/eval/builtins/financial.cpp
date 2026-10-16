@@ -42,11 +42,12 @@ namespace formulon {
 namespace eval {
 namespace {
 
+using financial_detail::annuity_om;
 using financial_detail::finalize;
-using financial_detail::fv_scalar;
 using financial_detail::ipmt_scalar;
 using financial_detail::normalize_type;
 using financial_detail::pmt_scalar;
+using financial_detail::ppmt_scalar;
 using financial_detail::read_optional_number;
 using financial_detail::read_required_number;
 using financial_detail::read_required_numbers;
@@ -235,8 +236,7 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   rate != 0   ->  om  = 1 - (1 + rate)^-nper   (= -expm1(-nper * log1p(rate)))
 //                   PMT = -(rate / (1 + rate*type)) * ((pv + fv) / om - fv)
 //
-// The `(pv + fv) / om - fv` shape reproduces Excel's cancellation (including
-// an exact 0 when om rounds to 1). A zero om (nper == 0) surfaces as `#NUM!`.
+// See `pmt_scalar`; a zero om (nper == 0) surfaces as `#NUM!`.
 Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_tvm_args(args, arity, 0.0);
   if (!input) {
@@ -251,18 +251,7 @@ Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     // oracle).
     return Value::error(ErrorCode::Num);
   }
-  if (r == 0.0) {
-    if (n == 0.0) {
-      return Value::error(ErrorCode::Num);
-    }
-    return finalize(-(v + f) / n);
-  }
-  const double om = -std::expm1(-n * std::log1p(r));
-  if (om == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double result = -(r / (1.0 + r * t)) * ((v + f) / om - f);
-  return finalize(result);
+  return finalize(pmt_scalar(r, n, v, f, t));
 }
 
 // --- NPER(rate, pmt, pv, [fv=0], [type=0]) ------------------------------
@@ -471,38 +460,38 @@ Value Ipmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // --- PPMT(rate, per, nper, pv, [fv=0], [type=0]) ------------------------
 //
-// Principal portion of the period-`per` payment = PMT - IPMT. PPMT shares
-// IPMT's domain: `per < 1` and integer `per > nper` surface as `#NUM!`,
-// but a fractional `per > nper` evaluates the closed form (matches Mac
-// Excel 365 / IronCalc oracle). The integer-per > nper check is applied
-// inside `ipmt_scalar`, so PPMT itself only needs to reject `per < 1`.
+// Principal portion of the period-`per` payment; see `ppmt_scalar`. PPMT
+// shares IPMT's `per` domain.
 Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_payment_args(args, arity);
   if (!input) {
     return Value::error(input.error());
   }
-  const double rate = input.value().rate;
-  const double per = input.value().per;
-  const double nper = input.value().nper;
-  const double pv = input.value().pv;
-  const double fv = input.value().fv;
-  const double type = input.value().type;
-  if (per < 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double pmt = pmt_scalar(rate, nper, pv, fv, type);
-  if (std::isnan(pmt)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double interest = ipmt_scalar(rate, per, nper, pv, fv, type);
-  if (std::isnan(interest)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return finalize(pmt - interest);
+  const auto& in = input.value();
+  return finalize(ppmt_scalar(in.rate, in.per, in.nper, in.pv, in.fv, in.type));
 }
 
-// Shared body of CUMIPMT / CUMPRINC: validates the common domain and sums
-// either the interest or the principal portion over [start, end].
+// Closed-form sum of PPMT over the periods [a, b] (`principal`), or the
+// geometric-sum factor CUMIPMT subtracts from `(b - a + 1) * PMT` (interest).
+// Type 1 starting at period 1 splits PMT off, since PPMT(1) is PMT there.
+double cum_principal_closed(double rate, double nper, double pv, double a, double b, double type, bool principal) {
+  const double pmt = pmt_scalar(rate, nper, pv, 0.0, type);
+  const bool first = type == 1.0 && a == 1.0;
+  const double lo = first ? a + 1.0 : a;
+  if (b < lo) {
+    return pmt;
+  }
+  const double k = pv / annuity_om(rate, nper);
+  const double cnt = b - lo + 1.0;
+  const double v_hi = std::exp(-(nper - b + 1.0) * std::log1p(rate));
+  const double s = principal ? v_hi * annuity_om(rate, cnt) / annuity_om(rate, 1.0)
+                             : v_hi * (annuity_om(rate, cnt) * (1.0 + rate) / rate);
+  const double val = -k * (s * (rate / (1.0 + rate * type)));
+  return first ? val + pmt : val;
+}
+
+// Shared body of CUMIPMT / CUMPRINC: validates the common domain and totals
+// either the interest or the principal portion over [start, end] in closed form.
 Value cum_payment_sum(const Value* args, bool principal) {
   auto input = read_cum_payment_args(args);
   if (!input) {
@@ -520,26 +509,17 @@ Value cum_payment_sum(const Value* args, bool principal) {
   }
   const std::int64_t start_i = bounds.value().first;
   const std::int64_t end_i = bounds.value().second;
-  // The loop runs once per period; a longer span is rejected, not walked.
   if (static_cast<double>(end_i - start_i) + 1.0 > financial_detail::kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
-  double pmt = 0.0;
+  const double a = static_cast<double>(start_i);
+  const double b = static_cast<double>(end_i);
+  const double type = input.value().type;
+  const double principal_sum = cum_principal_closed(rate, nper, pv, a, b, type, principal);
   if (principal) {
-    pmt = pmt_scalar(rate, nper, pv, 0.0, input.value().type);
-    if (std::isnan(pmt)) {
-      return Value::error(ErrorCode::Num);
-    }
+    return finalize(principal_sum);
   }
-  double total = 0.0;
-  for (std::int64_t p = start_i; p <= end_i; ++p) {
-    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, input.value().type);
-    if (std::isnan(interest) || std::isinf(interest)) {
-      return Value::error(ErrorCode::Num);
-    }
-    total += principal ? pmt - interest : interest;
-  }
-  return finalize(total);
+  return finalize((b - a + 1.0) * pmt_scalar(rate, nper, pv, 0.0, type) - principal_sum);
 }
 
 // --- CUMIPMT(rate, nper, pv, start, end, type) --------------------------

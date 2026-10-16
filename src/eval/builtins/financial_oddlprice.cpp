@@ -11,8 +11,8 @@
 // `maturity`. Microsoft's documented closed form (semi-annual / annual
 // / quarterly):
 //
-//   cf   = 100 * rate / freq * sum_i DC_i / NL_i
-//   ai   = 100 * rate / freq * sum_i A_i  / NL_i
+//   cf   = sum_i 100 * rate / freq * DC_i / NL_i
+//   ai   = sum_i 100 * rate / freq * A_i  / NL_i
 //   disc = 1 + (sum_i DSC_i / NL_i) * yld / freq
 //   ODDLPRICE = (redemption + cf) / disc - ai
 //
@@ -62,7 +62,8 @@ double quasi_after(const date_time::YMD& anchor, int k, int frequency, bool date
 }  // namespace
 
 Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement, double maturity, double last_interest,
-                                                               int frequency, int basis, bool date1904) noexcept {
+                                                               double rate, int frequency, int basis,
+                                                               bool date1904) noexcept {
   const double s = std::trunc(settlement);
   const double m = std::trunc(maturity);
   const double li = std::trunc(last_interest);
@@ -72,6 +73,7 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
   // Each quasi-period (q(k-1), q(k)] contributes its DC / A / DSC days over
   // its own normal length NL: 360/freq for the 30/360 bases, the period's
   // actual length for bases 1 / 2 / 3.
+  const double coupon = 100.0 * rate / static_cast<double>(frequency);
   OddLastSchedule out{};
   for (int k = 1;; ++k) {
     const double qstart = quasi_after(anchor, k - 1, frequency, date1904);
@@ -81,9 +83,9 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
       return ErrorCode::Num;
     }
     const double end = qend < m ? qend : m;
-    out.dc_units += days(qstart, end) / nl;
+    out.cf += coupon * days(qstart, end) / nl;
     if (s > qstart) {
-      out.a_units += days(qstart, s < end ? s : end) / nl;
+      out.ai += coupon * days(qstart, s < end ? s : end) / nl;
     }
     if (end > s) {
       out.dsc_units += days(s > qstart ? s : qstart, end) / nl;
@@ -92,10 +94,10 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
       break;
     }
   }
-  if (std::isnan(out.dc_units) || std::isnan(out.a_units) || std::isnan(out.dsc_units)) {
+  if (std::isnan(out.cf) || std::isnan(out.ai) || std::isnan(out.dsc_units)) {
     return ErrorCode::Num;
   }
-  if (out.dc_units <= 0.0 || out.dsc_units <= 0.0) {
+  if (out.dsc_units <= 0.0) {
     return ErrorCode::Num;
   }
   return out;
@@ -129,7 +131,7 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
     return ErrorCode::Num;
   }
 
-  auto sched = compute_odd_last_schedule(settlement, maturity, last_interest, frequency, basis, date1904);
+  auto sched = compute_odd_last_schedule(settlement, maturity, last_interest, rate, frequency, basis, date1904);
   if (!sched) {
     return std::move(sched.error());
   }
@@ -140,8 +142,8 @@ Expected<OddLastInputs, ErrorCode> read_odd_last_inputs(const Value* args, std::
   out.redemption = redemption;
   out.dsc_units = sched.value().dsc_units;
   out.freq_d = freq_d;
-  out.cf = 100.0 * rate / freq_d * sched.value().dc_units;
-  out.ai = 100.0 * rate / freq_d * sched.value().a_units;
+  out.cf = sched.value().cf;
+  out.ai = sched.value().ai;
   return out;
 }
 
