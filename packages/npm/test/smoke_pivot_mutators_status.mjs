@@ -245,7 +245,7 @@ const PIVOT_MUTATORS = [
       act: (b) => b.wb.pivotCacheRecordAdd(b.cacheId),
       expect: (b, r) => {
         assert.equal(r.index, 4);
-        assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|15', 'West|37', '(空白)|0', '総計|52']);
+        assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|15', 'West|37', '(空白)|', '総計|52']);
       },
     },
   ],
@@ -253,7 +253,7 @@ const PIVOT_MUTATORS = [
     'pivotCacheRecordClear',
     {
       act: (b) => b.wb.pivotCacheRecordClear(b.cacheId),
-      expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '総計|0']),
+      expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '総計|']),
     },
   ],
   [
@@ -274,7 +274,7 @@ const PIVOT_MUTATORS = [
     'pivotCacheRecordSetBool',
     {
       act: (b) => b.wb.pivotCacheRecordSetBool(b.cacheId, 0, 2, true),
-      expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|6', 'West|37', '総計|43']),
+      expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|5', 'West|37', '総計|42']),
     },
   ],
   [

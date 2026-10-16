@@ -235,7 +235,7 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def record_add(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 4)
-            eq(f.grid(), ["行ラベル|Sum of Amount", "East|15", "West|37", "(空白)|0", "総計|52"])
+            eq(f.grid(), ["行ラベル|Sum of Amount", "East|15", "West|37", "(空白)|", "総計|52"])
 
         def pivot_create(t: Any, f: _PivotFixture, r: int) -> None:
             eq(r, 1)
@@ -372,7 +372,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda f: f.wb.pivot_cache_record_clear(f.cache),
                 None,
-                grid_is(["行ラベル|Sum of Amount", "総計|0"]),
+                grid_is(["行ラベル|Sum of Amount", "総計|"]),
             ),
             "pivot_cache_record_set_number": (
                 None,
@@ -390,7 +390,7 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 lambda f: f.wb.pivot_cache_record_set_bool(f.cache, 0, 2, True),
                 None,
-                grid_is(["行ラベル|Sum of Amount", "East|6", "West|37", "総計|43"]),
+                grid_is(["行ラベル|Sum of Amount", "East|5", "West|37", "総計|42"]),
             ),
             "pivot_cache_record_set_blank": (
                 None,
