@@ -321,33 +321,16 @@ TEST(RegexExtract, Mode2NonCapturingGroupSkipped) {
 }
 
 // ---------------------------------------------------------------------------
-// REGEXEXTRACT — return_mode 3 (all matches' capture groups, 2D array)
+// REGEXEXTRACT — return_mode 3 is not a documented mode
 // ---------------------------------------------------------------------------
 
-TEST(RegexExtract, Mode3AllCaptureGroups2D) {
-  const Value v = EvalSource("=REGEXEXTRACT(\"a1 b2 c3\", \"(\\w)(\\d)\", 3)");
-  ASSERT_TRUE(v.is_array());
-  const ArrayValue* arr = v.as_array();
-  EXPECT_EQ(arr->rows, 3U);
-  EXPECT_EQ(arr->cols, 2U);
-  EXPECT_EQ(arr->cells[0].as_text(), "a");
-  EXPECT_EQ(arr->cells[1].as_text(), "1");
-  EXPECT_EQ(arr->cells[2].as_text(), "b");
-  EXPECT_EQ(arr->cells[3].as_text(), "2");
-  EXPECT_EQ(arr->cells[4].as_text(), "c");
-  EXPECT_EQ(arr->cells[5].as_text(), "3");
-}
-
-TEST(RegexExtract, Mode3NoCaptureGroupsValueError) {
-  const Value v = EvalSource("=REGEXEXTRACT(\"abc abc\", \"abc\", 3)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-TEST(RegexExtract, Mode3NoMatchNA) {
-  const Value v = EvalSource("=REGEXEXTRACT(\"xyz\", \"(\\d)(\\d)\", 3)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+TEST(RegexExtract, Mode3IsValueError) {
+  for (const char* src : {"=REGEXEXTRACT(\"a1 b2 c3\", \"(\\w)(\\d)\", 3)", "=REGEXEXTRACT(\"abc abc\", \"abc\", 3)",
+                          "=REGEXEXTRACT(\"xyz\", \"(\\d)(\\d)\", 3)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -664,7 +647,7 @@ TEST(RegexExtract, MatchAccumulationPastBudgetIsCalcError) {
     pattern += "()";
   }
   pattern += ".";
-  const Value v = EvalSource("=REGEXEXTRACT(REPT(\"a\", 32767), \"" + pattern + "\", 3)");
+  const Value v = EvalSource("=REGEXEXTRACT(REPT(\"a\", 32767), \"" + pattern + "\", 1)");
   ASSERT_TRUE(v.is_error()) << "expected #CALC! once the match budget is exhausted";
   EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
@@ -694,9 +677,9 @@ TEST(RegexReplace, NthOccurrenceWithinBudgetSucceeds) {
 
 // A scan well inside the budget is unaffected.
 TEST(RegexExtract, MatchAccumulationWithinBudgetSucceeds) {
-  const Value v = EvalSource("=REGEXEXTRACT(\"abcabc\", \"(a)(b)\", 3)");
-  ASSERT_TRUE(v.is_array()) << "expected the 2x2 capture matrix";
-  EXPECT_EQ(v.as_array_rows(), 2U);
+  const Value v = EvalSource("=REGEXEXTRACT(\"abcabc\", \"(a)(b)\", 1)");
+  ASSERT_TRUE(v.is_array()) << "expected the 1x2 match row";
+  EXPECT_EQ(v.as_array_rows(), 1U);
   EXPECT_EQ(v.as_array_cols(), 2U);
 }
 

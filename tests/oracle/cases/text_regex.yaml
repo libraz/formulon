@@ -44,7 +44,7 @@ cases:
     formula: '=REGEXEXTRACT("john@example", "(\w+)@(\w+)", 2)'
 
   - id: regexextract_mode_3_all_capture_groups
-    description: "Mode 3 returns 2D array (N x G) of capture groups from every match"
+    description: "Mode 3 is not a documented return_mode -> #VALUE!"
     formula: '=REGEXEXTRACT("a1 b2 c3", "(\w)(\d)", 3)'
 
   - id: regexextract_no_match

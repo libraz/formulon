@@ -56,8 +56,8 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
 ///   * 0 -> scalar text of the first whole match.
 ///   * 1 -> row array (1 x N) of all whole matches.
 ///   * 2 -> row array (1 x G) of capture groups from the FIRST match.
-///   * 3 -> 2D array (N x G) of capture groups from every match.
-/// Modes 2 and 3 yield `#VALUE!` when the pattern has no capture groups
+/// Any other mode (3 included) is `#VALUE!`.
+/// Mode 2 yields `#VALUE!` when the pattern has no capture groups
 /// AND a match occurred (no match still yields `#N/A`). Resource
 /// exhaustion yields `#CALC!`.
 Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

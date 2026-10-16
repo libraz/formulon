@@ -158,7 +158,7 @@ struct KernelResult {
   bool ok = true;
   // Error to return when ok == false. Distinct from a "no match" (which
   // is ok = true with matches empty); the distinction matters because
-  // REGEXEXTRACT mode 2/3 needs to surface #N/A on no match versus
+  // REGEXEXTRACT mode 2 needs to surface #N/A on no match versus
   // #VALUE! on no capture groups.
   Value err = Value::error(ErrorCode::Value);
 };
@@ -515,34 +515,6 @@ Value extract_mode2(const KernelResult& kr, std::string_view subject, Arena& are
   return Value::array(out);
 }
 
-// mode 3: 2D array (N x G). Same #N/A / #VALUE! split as mode 2.
-Value extract_mode3(const KernelResult& kr, std::string_view subject, Arena& arena) {
-  if (kr.matches.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  if (kr.capture_count == 0U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const std::uint32_t n = static_cast<std::uint32_t>(kr.matches.size());
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(n, kr.capture_count, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::uint32_t i = 0; i < n; ++i) {
-    const MatchSpan& m = kr.matches[i];
-    for (std::uint32_t g = 0; g < kr.capture_count; ++g) {
-      const std::size_t idx = static_cast<std::size_t>(i) * static_cast<std::size_t>(kr.capture_count) + g;
-      if (!m.participated[g]) {
-        cells[idx] = Value::text(arena.intern(""));
-      } else {
-        cells[idx] = text_from_span(subject, m.groups[g].first, m.groups[g].second, arena);
-      }
-    }
-  }
-  return Value::array(out);
-}
-
 Value extract_dispatch(const KernelResult& kr, std::string_view subject, long long mode, Arena& arena) {
   switch (mode) {
     case 0:
@@ -551,8 +523,6 @@ Value extract_dispatch(const KernelResult& kr, std::string_view subject, long lo
       return extract_mode1(kr, subject, arena);
     case 2:
       return extract_mode2(kr, subject, arena);
-    case 3:
-      return extract_mode3(kr, subject, arena);
     default:
       return Value::error(ErrorCode::Value);
   }
@@ -877,7 +847,7 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     if (!coerce_int_arg(call.as_call_arg(2), arena, registry, ctx, mode, err)) {
       return err;
     }
-    if (mode < 0 || mode > 3) {
+    if (mode < 0 || mode > 2) {
       return Value::error(ErrorCode::Value);
     }
   }
@@ -888,19 +858,19 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return err;
   }
 
-  // For modes 1 and 3 a single match already yields an array — so
+  // For mode 1 a single match already yields an array — so
   // running them in array context (per-cell broadcast) produces an
   // array of arrays which Excel/Formulon do not represent.
   // Mac Excel surfaces #CALC! in that situation; we follow suit by
   // collapsing the broadcast to per-cell scalars only when the mode
   // is 0 or 2 (both produce a single scalar / row), and rejecting
-  // arrays for modes 1 / 3.
-  const bool mode_yields_array = (mode == 1 || mode == 3);
+  // arrays for mode 1.
+  const bool mode_yields_array = (mode == 1);
 
   // Compile once for the whole call; every subject reuses the program.
   const CompiledPattern program(pattern, case_insensitive);
 
-  // find_all is needed for modes 1 and 3; modes 0 and 2 want only the first match.
+  // find_all is needed for mode 1; modes 0 and 2 want only the first match.
   auto per_subject = [&](std::string_view subject) -> Value {
     KernelResult kr = regex_kernel(program, subject, /*find_all=*/mode_yields_array,
                                    /*on_match_limit_returns_no_match=*/false);
