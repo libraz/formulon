@@ -1,15 +1,16 @@
 //
 // LINEST implementation. See linest_lazy.h for the user-facing
 // contract; this file owns the numerical recipe (build the design
-// matrix, form the normal equations, solve via Gauss-Jordan with
-// partial pivoting, optionally derive the regression statistics).
+// matrix, solve by Householder QR, optionally derive the regression
+// statistics). One kernel serves LINEST, LOGEST, TREND and GROWTH.
 //
-// The matrix kernel is intentionally hand-rolled — same `~150 line`
-// budget as MINVERSE — to keep the WASM size policy intact (no Eigen,
-// no LAPACK).
+// The kernel is hand-rolled to keep the WASM size policy intact (no
+// Eigen, no LAPACK). Operation order follows the measured Mac Excel 365
+// results to the last bit.
 
 #include "eval/linest_lazy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -64,64 +65,6 @@ bool eval_bool_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegis
   return false;
 }
 
-/// Solves `A * X = B` in-place via rank-aware Gauss-Jordan with partial
-/// pivoting. `aug` is a row-major `n x w` buffer with `w = n + extra`
-/// and the augmented columns laid out to the right of `A`. On return,
-/// the non-redundant pivot rows are normalised and back-eliminated; rows
-/// corresponding to redundant (rank-deficient) columns are zeroed.
-///
-/// Rank-deficiency policy: at step `k`, partial pivoting picks the
-/// largest |entry| in column `k` from rows `k..n-1`. If that magnitude
-/// is below `kPivotEpsilon = 1e-12 * max|A_initial|`, column `k` is
-/// declared redundant — row `k` is zeroed (so its b-slot becomes 0 and
-/// its inverse-slot row becomes 0), no swap / divide / elimination is
-/// performed for that step, and the loop continues. The non-zero
-/// off-diagonal entries that remain in earlier rows do not affect the
-/// solution because the corresponding `x_k` is forced to 0.
-///
-/// Always returns `true`; callers do not need to handle a failure path.
-/// Mirrors Mac Excel 365's behaviour of returning a partial fit on
-/// rank-deficient systems rather than `#NUM!`.
-bool gauss_jordan(std::vector<double>& aug, std::uint32_t n, std::uint32_t w) {
-  // Establish the rank-deficiency tolerance from the initial scale of A
-  // (the left n columns of aug). A relative tolerance keeps the test
-  // sensible across very different problem magnitudes; an absolute
-  // 1e-12 floor avoids treating a genuinely zero matrix as non-trivial.
-  double max_abs = 0.0;
-  for (std::uint32_t r = 0; r < n; ++r) {
-    for (std::uint32_t c = 0; c < n; ++c) {
-      const double v = std::fabs(aug[static_cast<std::size_t>(r) * w + c]);
-      if (v > max_abs) {
-        max_abs = v;
-      }
-    }
-  }
-  const double kPivotEpsilon = 1e-12 * (max_abs > 0.0 ? max_abs : 1.0);
-
-  for (std::uint32_t k = 0; k < n; ++k) {
-    std::uint32_t pivot = k;
-    double pivot_abs = std::fabs(aug[static_cast<std::size_t>(k) * w + k]);
-    for (std::uint32_t r = k + 1U; r < n; ++r) {
-      const double v = std::fabs(aug[static_cast<std::size_t>(r) * w + k]);
-      if (v > pivot_abs) {
-        pivot_abs = v;
-        pivot = r;
-      }
-    }
-    if (pivot_abs < kPivotEpsilon) {
-      // Column k is redundant. Zero out row k entirely so the b-slot
-      // becomes 0 (coefficient = 0 in the unpacked solution) and the
-      // inverse-slot row becomes 0 (SE = 0 for that coefficient).
-      for (std::uint32_t c = 0; c < w; ++c) {
-        aug[static_cast<std::size_t>(k) * w + c] = 0.0;
-      }
-      continue;
-    }
-    gauss_jordan_eliminate(aug, n, w, k, pivot);
-  }
-  return true;
-}
-
 /// One observation row in the design matrix view: the `k` predictor
 /// values plus an implicit constant `1` (when `with_const`). The
 /// caller indexes `m` rows of these.
@@ -139,141 +82,261 @@ struct FitStats {
   double mean_y = 0.0;
 };
 
-/// Forms `A = X^T X` (p x p) and `b = X^T y` (length p) given the
-/// design matrix view `dm`. `p` = `k + (with_const ? 1 : 0)`.
-void normal_equations(const DesignMatrix& dm, std::vector<double>& a, std::vector<double>& b) {
-  const std::uint32_t p = dm.k + (dm.with_const ? 1U : 0U);
-  const std::uint32_t m = dm.m;
-  a.assign(static_cast<std::size_t>(p) * p, 0.0);
-  b.assign(p, 0.0);
-  for (std::uint32_t i = 0; i < m; ++i) {
-    for (std::uint32_t r = 0; r < p; ++r) {
-      const double xri = dm.data[static_cast<std::size_t>(i) * p + r];
-      b[r] += xri * dm.y[i];
-      for (std::uint32_t c = 0; c < p; ++c) {
-        a[static_cast<std::size_t>(r) * p + c] += xri * dm.data[static_cast<std::size_t>(i) * p + c];
+/// Least-squares result in the caller's parameter order `[b_0 .. b_{k-1}, a]`.
+struct LinFit {
+  std::vector<double> coeffs;     // dropped (collinear) columns are 0
+  std::vector<double> var_diag;   // diag of (X'X)^-1 per parameter; 0 for dropped columns
+  double ss_resid = 0.0;          // sum of squares of the reflected-y tail
+  double sxx = 0.0;               // univariate: sum of squared (centred) x
+  double mean_x = 0.0;            // univariate with const: mean of x
+  std::size_t ratio_dropped = 0;  // columns dropped by the norm-ratio test (not exact zeros)
+  double r00 = 0.0;               // univariate with const: R of [1, x - mean]
+  double r01 = 0.0;
+  double r11 = 0.0;
+};
+
+/// A column is dropped as collinear when its norm after the earlier
+/// reflections falls below this fraction of its original norm.
+constexpr double kCollinearRatio = 1e-6;
+
+double sum_forward(const std::vector<double>& v) {
+  double s = 0.0;
+  for (const double x : v) {
+    s += x;
+  }
+  return s;
+}
+
+double sum_backward(const std::vector<double>& v) {
+  double s = 0.0;
+  for (std::size_t i = v.size(); i > 0U; --i) {
+    s += v[i - 1U];
+  }
+  return s;
+}
+
+/// Sum of squares of `col[from..]`, accumulated forward.
+double column_norm_sq(const std::vector<double>& col, std::size_t from) {
+  double s = 0.0;
+  for (std::size_t i = from; i < col.size(); ++i) {
+    s += col[i] * col[i];
+  }
+  return s;
+}
+
+/// Householder-QR least squares. With a constant, x and y are centred by
+/// their means but a ones column is kept in the design; columns are
+/// reflected ones-first then by descending centred norm. Parameters come
+/// back in original order with the intercept recovered from the means.
+void fit_least_squares(const DesignMatrix& dm, bool want_inv, LinFit* out) {
+  const std::size_t m = dm.m;
+  const std::size_t k = dm.k;
+  const std::size_t p = k + (dm.with_const ? 1U : 0U);
+  const std::size_t off = dm.with_const ? 1U : 0U;
+
+  std::vector<std::vector<double>> xcols(k, std::vector<double>(m));
+  for (std::size_t j = 0; j < k; ++j) {
+    for (std::size_t i = 0; i < m; ++i) {
+      xcols[j][i] = dm.data[i * p + j];
+    }
+  }
+  std::vector<double> yy = dm.y;
+  std::vector<double> mx(k, 0.0);
+  double my = 0.0;
+  if (dm.with_const) {
+    for (std::size_t j = 0; j < k; ++j) {
+      mx[j] = sum_forward(xcols[j]) / static_cast<double>(m);
+      for (std::size_t i = 0; i < m; ++i) {
+        xcols[j][i] -= mx[j];
       }
     }
+    my = sum_forward(yy) / static_cast<double>(m);
+    for (std::size_t i = 0; i < m; ++i) {
+      yy[i] -= my;
+    }
+  }
+
+  std::vector<std::size_t> order(k);
+  std::vector<double> norm_sq(k);
+  for (std::size_t j = 0; j < k; ++j) {
+    order[j] = j;
+    norm_sq[j] = column_norm_sq(xcols[j], 0U);
+  }
+  std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return norm_sq[a] > norm_sq[b]; });
+  // Of two dependent columns of equal norm the first survives without a constant, the last with one.
+  if (dm.with_const) {
+    for (std::size_t t = 0; t + 1U < k; ++t) {
+      const std::size_t a = order[t];
+      const std::size_t b = order[t + 1U];
+      if (norm_sq[a] != norm_sq[b] || a > b) {
+        continue;
+      }
+      double dot = 0.0;
+      for (std::size_t i = 0; i < m; ++i) {
+        dot += xcols[a][i] * xcols[b][i];
+      }
+      const double resid = norm_sq[b] - dot * dot / norm_sq[a];
+      if (norm_sq[a] > 0.0 && resid < kCollinearRatio * kCollinearRatio * norm_sq[b]) {
+        std::swap(order[t], order[t + 1U]);
+      }
+    }
+  }
+
+  // Reflected columns in processing order; `param[t]` is the slot in [c0?, x_0..].
+  std::vector<std::vector<double>> cols;
+  std::vector<std::size_t> param;
+  if (dm.with_const) {
+    cols.emplace_back(m, 1.0);
+    param.push_back(0U);
+  }
+  for (const std::size_t j : order) {
+    cols.push_back(xcols[j]);
+    param.push_back(off + j);
+  }
+  std::vector<double> orig_norm(cols.size());
+  for (std::size_t t = 0; t < cols.size(); ++t) {
+    orig_norm[t] = std::sqrt(column_norm_sq(cols[t], 0U));
+  }
+
+  std::vector<std::size_t> surv;  // processing index of each kept column; row = ordinal
+  std::vector<double> v(m);
+  for (std::size_t t = 0; t < cols.size(); ++t) {
+    const std::size_t r = surv.size();
+    if (r >= m) {
+      continue;
+    }
+    const double nrm = std::sqrt(column_norm_sq(cols[t], r));
+    if (nrm == 0.0) {
+      continue;
+    }
+    if (nrm < kCollinearRatio * orig_norm[t]) {
+      ++out->ratio_dropped;
+      continue;
+    }
+    const double x1 = cols[t][r];
+    const double beta = -std::copysign(nrm, x1);
+    std::vector<double> vtail;
+    v[r] = x1 - beta;
+    for (std::size_t i = r + 1U; i < m; ++i) {
+      v[i] = cols[t][i];
+    }
+    vtail.assign(v.begin() + static_cast<std::ptrdiff_t>(r), v.end());
+    for (double& e : vtail) {
+      e *= e;
+    }
+    const double vn = sum_backward(vtail);
+    const auto reflect = [&](std::vector<double>& col) {
+      double d = 0.0;
+      for (std::size_t i = r; i < m; ++i) {
+        d += v[i] * col[i];
+      }
+      const double f = 2.0 * d / vn;
+      for (std::size_t i = r; i < m; ++i) {
+        col[i] -= f * v[i];
+      }
+    };
+    for (std::size_t u = t + 1U; u < cols.size(); ++u) {
+      reflect(cols[u]);
+    }
+    reflect(yy);
+    cols[t][r] = beta;
+    surv.push_back(t);
+  }
+
+  const std::size_t rank = surv.size();
+  const auto r_at = [&](std::size_t i, std::size_t j) { return cols[surv[j]][i]; };
+  std::vector<double> sol(rank, 0.0);
+  for (std::size_t i = rank; i > 0U; --i) {
+    const std::size_t row = i - 1U;
+    double s = yy[row];
+    for (std::size_t j = row + 1U; j < rank; ++j) {
+      s -= r_at(row, j) * sol[j];
+    }
+    sol[row] = s / r_at(row, row);
+  }
+
+  std::vector<double> pc(p, 0.0);  // centred-parameter values, [c0?, x_0..]
+  for (std::size_t s = 0; s < rank; ++s) {
+    pc[param[surv[s]]] = sol[s];
+  }
+  out->coeffs.assign(p, 0.0);
+  for (std::size_t j = 0; j < k; ++j) {
+    out->coeffs[j] = pc[off + j];
+  }
+  if (dm.with_const) {
+    double a = my;
+    for (std::size_t j = 0; j < k; ++j) {
+      a -= out->coeffs[j] * mx[j];
+    }
+    out->coeffs[k] = a;
+  }
+
+  std::vector<double> tail;
+  for (std::size_t i = rank; i < m; ++i) {
+    tail.push_back(yy[i] * yy[i]);
+  }
+  out->ss_resid = sum_forward(tail);
+
+  if (k == 1U) {
+    std::vector<double> sq(m);
+    for (std::size_t i = 0; i < m; ++i) {
+      sq[i] = xcols[0][i] * xcols[0][i];
+    }
+    out->sxx = sum_backward(sq);
+    out->mean_x = mx[0];
+    if (dm.with_const && rank == 2U) {
+      out->r00 = r_at(0U, 0U);
+      out->r01 = r_at(0U, 1U);
+      out->r11 = r_at(1U, 1U);
+    }
+  }
+
+  if (!want_inv) {
+    return;
+  }
+  // (R'R)^-1 over the kept columns, scattered to centred-parameter slots.
+  std::vector<double> rinv(rank * rank, 0.0);
+  for (std::size_t c = 0; c < rank; ++c) {
+    for (std::size_t i = c + 1U; i > 0U; --i) {
+      const std::size_t row = i - 1U;
+      double s = (row == c) ? 1.0 : 0.0;
+      for (std::size_t j = row + 1U; j <= c; ++j) {
+        s -= r_at(row, j) * rinv[j * rank + c];
+      }
+      rinv[row * rank + c] = s / r_at(row, row);
+    }
+  }
+  std::vector<double> vp(p * p, 0.0);
+  for (std::size_t a = 0; a < rank; ++a) {
+    for (std::size_t b = 0; b < rank; ++b) {
+      double s = 0.0;
+      for (std::size_t l = std::max(a, b); l < rank; ++l) {
+        s += rinv[a * rank + l] * rinv[b * rank + l];
+      }
+      vp[param[surv[a]] * p + param[surv[b]]] = s;
+    }
+  }
+  out->var_diag.assign(p, 0.0);
+  for (std::size_t j = 0; j < k; ++j) {
+    out->var_diag[j] = vp[(off + j) * p + (off + j)];
+  }
+  if (dm.with_const) {
+    double var_a = vp[0];
+    for (std::size_t j = 0; j < k; ++j) {
+      var_a -= 2.0 * mx[j] * vp[off + j];
+      for (std::size_t l = 0; l < k; ++l) {
+        var_a += mx[j] * mx[l] * vp[(off + j) * p + (off + l)];
+      }
+    }
+    out->var_diag[k] = var_a;
   }
 }
 
-/// End-to-end coefficient solve. Forms the normal equations
-/// `A * beta = b`, then runs the rank-aware Gauss-Jordan kernel on
-/// `[A | b | I]` (when `want_inv=true`) or `[A | b]` (otherwise).
-/// Writes `*coeffs` (length `p`) and — when requested — `*inv_a`
-/// (`p x p` row-major).
-///
-/// Intercept-first permutation: when `dm.with_const` is true the
-/// design-matrix layout puts the intercept column at index `k` (last).
-/// To make the rank-aware kernel's left-to-right "first surviving
-/// column wins" rule match Mac Excel 365's behaviour on rank-deficient
-/// X — where the intercept absorbs `mean(y)` and collinear predictors
-/// drop to 0 — we swap row/column 0 with row/column k of A (and entry
-/// 0 with entry k of b) before solving, then reverse the swap on
-/// `coeffs` and on the rows + columns of `inv_a` afterwards. For
-/// non-singular systems the permutation is a no-op (matrix swaps are
-/// invertible), so this only changes behaviour at the rank-deficient
-/// boundary.
-///
-/// Always returns `true` — `gauss_jordan` is rank-aware and never
-/// fails. The bool return is preserved for call-site stability.
-bool solve_normal_equations(const DesignMatrix& dm, bool want_inv, std::vector<double>* coeffs,
-                            std::vector<double>* inv_a) {
-  const std::uint32_t p = dm.k + (dm.with_const ? 1U : 0U);
-  std::vector<double> a;
-  std::vector<double> b;
-  normal_equations(dm, a, b);
-
-  // Intercept-first permutation: swap rows 0 and k of A (symmetric, so
-  // swap matching columns too) and entries 0 and k of b. Only meaningful
-  // when an intercept is present and there is at least one predictor.
-  const bool permute = dm.with_const && dm.k >= 1U;
-  const std::uint32_t k_idx = dm.k;  // intercept column index in design.
-  if (permute) {
-    for (std::uint32_t c = 0; c < p; ++c) {
-      const std::size_t i0 = static_cast<std::size_t>(0) * p + c;
-      const std::size_t ik = static_cast<std::size_t>(k_idx) * p + c;
-      const double tmp = a[i0];
-      a[i0] = a[ik];
-      a[ik] = tmp;
-    }
-    for (std::uint32_t r = 0; r < p; ++r) {
-      const std::size_t i0 = static_cast<std::size_t>(r) * p + 0U;
-      const std::size_t ik = static_cast<std::size_t>(r) * p + k_idx;
-      const double tmp = a[i0];
-      a[i0] = a[ik];
-      a[ik] = tmp;
-    }
-    const double tmp_b = b[0];
-    b[0] = b[k_idx];
-    b[k_idx] = tmp_b;
-  }
-
-  const std::uint32_t w = p + 1U + (want_inv ? p : 0U);
-  std::vector<double> aug(static_cast<std::size_t>(p) * w, 0.0);
-  for (std::uint32_t r = 0; r < p; ++r) {
-    for (std::uint32_t c = 0; c < p; ++c) {
-      aug[static_cast<std::size_t>(r) * w + c] = a[static_cast<std::size_t>(r) * p + c];
-    }
-    aug[static_cast<std::size_t>(r) * w + p] = b[r];
-    if (want_inv) {
-      aug[static_cast<std::size_t>(r) * w + (p + 1U + r)] = 1.0;
-    }
-  }
-
-  (void)gauss_jordan(aug, p, w);
-
-  coeffs->assign(p, 0.0);
-  for (std::uint32_t r = 0; r < p; ++r) {
-    (*coeffs)[r] = aug[static_cast<std::size_t>(r) * w + p];
-  }
-  if (want_inv) {
-    inv_a->assign(static_cast<std::size_t>(p) * p, 0.0);
-    for (std::uint32_t r = 0; r < p; ++r) {
-      for (std::uint32_t c = 0; c < p; ++c) {
-        (*inv_a)[static_cast<std::size_t>(r) * p + c] = aug[static_cast<std::size_t>(r) * w + (p + 1U + c)];
-      }
-    }
-  }
-
-  // Unpermute: undo the (0 <-> k_idx) swap on coeffs and on rows + cols
-  // of inv_a so the caller sees them in the original predictor-first
-  // layout.
-  if (permute) {
-    const double tmp_c = (*coeffs)[0];
-    (*coeffs)[0] = (*coeffs)[k_idx];
-    (*coeffs)[k_idx] = tmp_c;
-    if (want_inv) {
-      for (std::uint32_t c = 0; c < p; ++c) {
-        const std::size_t i0 = static_cast<std::size_t>(0) * p + c;
-        const std::size_t ik = static_cast<std::size_t>(k_idx) * p + c;
-        const double tmp = (*inv_a)[i0];
-        (*inv_a)[i0] = (*inv_a)[ik];
-        (*inv_a)[ik] = tmp;
-      }
-      for (std::uint32_t r = 0; r < p; ++r) {
-        const std::size_t i0 = static_cast<std::size_t>(r) * p + 0U;
-        const std::size_t ik = static_cast<std::size_t>(r) * p + k_idx;
-        const double tmp = (*inv_a)[i0];
-        (*inv_a)[i0] = (*inv_a)[ik];
-        (*inv_a)[ik] = tmp;
-      }
-    }
-  }
-  return true;
-}
-
-FitStats compute_fit_stats(const DesignMatrix& dm, const std::vector<double>& coeffs) {
-  const std::uint32_t p = dm.k + (dm.with_const ? 1U : 0U);
+FitStats compute_fit_stats(const DesignMatrix& dm, const LinFit& fit) {
   FitStats stats;
+  stats.ss_resid = fit.ss_resid;
   double sum_y = 0.0;
   for (std::uint32_t i = 0; i < dm.m; ++i) {
-    double yhat = 0.0;
-    for (std::uint32_t j = 0; j < p; ++j) {
-      yhat += coeffs[j] * dm.data[static_cast<std::size_t>(i) * p + j];
-    }
-    const double e = dm.y[i] - yhat;
-    stats.ss_resid += e * e;
     sum_y += dm.y[i];
   }
   stats.mean_y = sum_y / static_cast<double>(dm.m);
@@ -412,16 +475,25 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
 }
 
 ArrayValue* build_prediction_output(const std::vector<double>& coeffs, const std::vector<double>& pred_design,
-                                    std::uint32_t n_obs, std::uint32_t p, bool y_is_col, bool exp_result,
-                                    Arena& arena) {
+                                    std::uint32_t n_obs, std::uint32_t p, bool with_const, bool y_is_col,
+                                    bool exp_result, Arena& arena) {
+  const std::uint32_t k = with_const ? p - 1U : p;
   std::vector<Value> cells;
   cells.reserve(n_obs);
   for (std::uint32_t i = 0; i < n_obs; ++i) {
-    double s = 0.0;
-    for (std::uint32_t j = 0; j < p; ++j) {
-      s += coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
+    double v = 0.0;
+    if (exp_result) {
+      // exp(a) times one exp factor per predictor, in column order.
+      v = with_const ? std::exp(coeffs[k]) : 1.0;
+      for (std::uint32_t j = 0; j < k; ++j) {
+        v *= std::exp(coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j]);
+      }
+    } else {
+      v = with_const ? coeffs[k] : 0.0;
+      for (std::uint32_t j = 0; j < k; ++j) {
+        v += coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
+      }
     }
-    const double v = exp_result ? std::exp(s) : s;
     cells.push_back(is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num));
   }
 
@@ -456,16 +528,15 @@ ArrayValue* build_simple_output(const std::vector<double>& coeffs, std::uint32_t
   return array_from_values(1U, out_cols, cells.data(), cells.size(), arena);
 }
 
-/// Builds the 5x(k+1) statistics matrix. `inv_a` is `A^{-1}` (the
-/// inverse of `X^T X`) in normal index order. `coeffs` is in the same
-/// order. The reverse-ordering and the `#N/A` padding rules mirror
+/// Builds the 5x(k+1) statistics matrix. `fit.var_diag` is the diagonal
+/// of `(X^T X)^{-1}` in normal index order, like `fit.coeffs`. The reverse-ordering and the `#N/A` padding rules mirror
 /// `build_simple_output`. When `log_form=true`, only row 1
 /// (coefficients) is exponentiated; rows 2-5 stay on the linear /
 /// log-domain scale because Excel's LOGEST documents that the
 /// "additional statistics" are computed on the linearised model.
-ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vector<double>& inv_a,
-                               const DesignMatrix& dm, double ss_resid, double ss_total, double mean_y, Arena& arena,
-                               bool log_form = false) {
+ArrayValue* build_stats_output(const LinFit& fit, const DesignMatrix& dm, double ss_resid, double ss_total,
+                               Arena& arena, bool log_form = false) {
+  const std::vector<double>& coeffs = fit.coeffs;
   const std::uint32_t k = dm.k;
   const std::uint32_t p = k + (dm.with_const ? 1U : 0U);
   const std::uint32_t out_cols = k + 1U;
@@ -473,7 +544,7 @@ ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vec
   std::vector<Value> cells(static_cast<std::size_t>(out_rows) * out_cols, Value::error(ErrorCode::NA));
 
   const double m = static_cast<double>(dm.m);
-  const double df_resid_d = m - static_cast<double>(p);
+  const double df_resid_d = std::max(0.0, m - static_cast<double>(p) + static_cast<double>(fit.ratio_dropped));
   const double k_d = static_cast<double>(k);
 
   // Row 1: coefficients in reverse order. Intercept slot is 0 (LINEST)
@@ -491,44 +562,46 @@ ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vec
     cells[k] = Value::number(log_form ? 1.0 : 0.0);
   }
 
-  // Row 2: standard errors. SE[j] = sqrt(inv_a[j,j] * ss_resid / df_resid).
-  // df_resid <= 0 (under-determined system) makes SE undefined -> #N/A.
+  // Row 2: standard errors. SE[j] = sqrt(var_diag[j] * ss_resid / df_resid);
+  // the univariate case follows Excel's operation order instead.
+  // df_resid == 0 (saturated fit) reports zero errors.
   // When const=false, SE for the intercept slot is #N/A (no intercept
   // was estimated).
   const bool df_ok = df_resid_d > 0.0;
   const double sigma2 = df_ok ? ss_resid / df_resid_d : 0.0;
+  const double sey = df_ok ? std::sqrt(sigma2) : 0.0;
+  const bool uni = k == 1U && fit.var_diag[0] > 0.0;
   for (std::uint32_t j = 0; j < k; ++j) {
-    if (!df_ok) {
-      cells[out_cols + (k - 1U - j)] = Value::error(ErrorCode::NA);
-      continue;
-    }
-    const double var = sigma2 * inv_a[static_cast<std::size_t>(j) * p + j];
+    const double var = uni ? sey * sey / fit.sxx : sigma2 * fit.var_diag[j];
     const double se = (var >= 0.0 && is_finite(var)) ? std::sqrt(var) : std::nan("");
     cells[out_cols + (k - 1U - j)] = is_finite(se) ? Value::number(se) : Value::error(ErrorCode::NA);
   }
   if (dm.with_const) {
-    if (!df_ok) {
-      cells[out_cols + k] = Value::error(ErrorCode::NA);
-    } else {
-      const double var = sigma2 * inv_a[static_cast<std::size_t>(k) * p + k];
-      const double se = (var >= 0.0 && is_finite(var)) ? std::sqrt(var) : std::nan("");
+    {
+      double var_a = sigma2 * fit.var_diag[k];
+      if (uni) {
+        // v = (R'R)^-1 of the [1, x - mean] QR, shifted back by the mean.
+        const double i11 = 1.0 / fit.r00;
+        const double i12 = -fit.r01 / (fit.r00 * fit.r11);
+        const double i22 = 1.0 / fit.r11;
+        const double v00 = i11 * i11 + i12 * i12;
+        const double v01 = i12 * i22;
+        const double v11 = i22 * i22;
+        const double s2 = sey * sey;
+        var_a = s2 * v00 + s2 * fit.mean_x * fit.mean_x * v11 - 2 * s2 * fit.mean_x * v01;
+      }
+      const double se = (var_a >= 0.0 && is_finite(var_a)) ? std::sqrt(var_a) : std::nan("");
       cells[out_cols + k] = is_finite(se) ? Value::number(se) : Value::error(ErrorCode::NA);
     }
   } else {
     cells[out_cols + k] = Value::error(ErrorCode::NA);
   }
 
-  // Row 3: [r^2, se_y, #N/A, ...]. Suppress `mean_y` warning when
-  // const=false (reference is unused on that branch by design).
-  (void)mean_y;
-  const double r2 = (ss_total > 0.0 && is_finite(ss_total)) ? 1.0 - ss_resid / ss_total : std::nan("");
+  // Row 3: [r^2, se_y, #N/A, ...].
+  const double ss_reg_r2 = ss_total - ss_resid;
+  const double r2 = (ss_total > 0.0 && is_finite(ss_total)) ? ss_reg_r2 / (ss_reg_r2 + ss_resid) : std::nan("");
   cells[2U * out_cols + 0U] = is_finite(r2) ? Value::number(r2) : Value::error(ErrorCode::NA);
-  if (df_ok) {
-    const double sey = std::sqrt(sigma2);
-    cells[2U * out_cols + 1U] = is_finite(sey) ? Value::number(sey) : Value::error(ErrorCode::NA);
-  } else {
-    cells[2U * out_cols + 1U] = Value::error(ErrorCode::NA);
-  }
+  cells[2U * out_cols + 1U] = is_finite(sey) ? Value::number(sey) : Value::error(ErrorCode::NA);
 
   // Row 4: [F, df_resid, #N/A, ...]. F = (ss_reg / k) / (ss_resid / df_resid).
   //
@@ -599,14 +672,13 @@ bool read_known_xy(const parser::AstNode& call, Arena& arena, const FunctionRegi
 }
 
 /// Builds the design matrix, applies the `ln(y)` transform when
-/// `log_form`, and solves the normal equations — the step shared by the
-/// fit and prediction families. Non-positive y under `log_form`, fewer
-/// observations than parameters, or a failed solve is `#NUM!`.
+/// `log_form`, and solves the least-squares fit — the step shared by the
+/// fit and prediction families. Non-positive y under `log_form` or fewer
+/// observations than parameters is `#NUM!`.
 ///
 /// Returns `false` with the propagating error in `*out_err`.
 bool fit_coefficients(const ArrayValue& y_arr, const ArrayValue* x_arr, bool with_const, bool log_form, bool want_inv,
-                      DesignMatrix* out_dm, std::vector<double>* out_coeffs, std::vector<double>* out_inv_a,
-                      Value* out_err) {
+                      DesignMatrix* out_dm, LinFit* out_fit, Value* out_err) {
   if (!build_design_matrix(y_arr, x_arr, with_const, out_dm, out_err)) {
     return false;
   }
@@ -614,16 +686,12 @@ bool fit_coefficients(const ArrayValue& y_arr, const ArrayValue* x_arr, bool wit
     *out_err = Value::error(ErrorCode::Num);
     return false;
   }
-  const std::uint32_t p = out_dm->k + (with_const ? 1U : 0U);
-  if (out_dm->m < p) {
-    // Fewer observations than parameters -> system is under-determined.
+  if (out_dm->m < out_dm->k) {
+    // Fewer observations than predictors -> system is under-determined.
     *out_err = Value::error(ErrorCode::Num);
     return false;
   }
-  if (!solve_normal_equations(*out_dm, want_inv, out_coeffs, out_inv_a)) {
-    *out_err = Value::error(ErrorCode::Num);
-    return false;
-  }
+  fit_least_squares(*out_dm, want_inv, out_fit);
   return true;
 }
 
@@ -656,11 +724,11 @@ Value eval_fit(const parser::AstNode& call, Arena& arena, const FunctionRegistry
   }
 
   DesignMatrix dm;
-  std::vector<double> coeffs;
-  std::vector<double> inv_a;
-  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/want_stats, &dm, &coeffs, &inv_a, &err)) {
+  LinFit fit;
+  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/want_stats, &dm, &fit, &err)) {
     return err;
   }
+  const std::vector<double>& coeffs = fit.coeffs;
 
   if (!want_stats) {
     // `build_simple_output` reads coeffs[0..k-1] always and coeffs[k]
@@ -673,9 +741,8 @@ Value eval_fit(const parser::AstNode& call, Arena& arena, const FunctionRegistry
     return Value::array(arr);
   }
 
-  const FitStats stats = compute_fit_stats(dm, coeffs);
-  ArrayValue* arr =
-      build_stats_output(coeffs, inv_a, dm, stats.ss_resid, stats.ss_total, stats.mean_y, arena, log_form);
+  const FitStats stats = compute_fit_stats(dm, fit);
+  ArrayValue* arr = build_stats_output(fit, dm, stats.ss_resid, stats.ss_total, arena, log_form);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -787,11 +854,11 @@ Value eval_prediction(const parser::AstNode& call, Arena& arena, const FunctionR
   }
 
   DesignMatrix dm;
-  std::vector<double> coeffs;
-  std::vector<double> unused_inv;
-  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/false, &dm, &coeffs, &unused_inv, &err)) {
+  LinFit fit;
+  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/false, &dm, &fit, &err)) {
     return err;
   }
+  const std::vector<double>& coeffs = fit.coeffs;
   const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
 
   // Build the prediction design buffer. When new_x is omitted, this is
@@ -810,7 +877,8 @@ Value eval_prediction(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   }
 
-  ArrayValue* arr = build_prediction_output(coeffs, pred_design, n_obs, p, y_is_col, /*exp_result=*/log_form, arena);
+  ArrayValue* arr =
+      build_prediction_output(coeffs, pred_design, n_obs, p, with_const, y_is_col, /*exp_result=*/log_form, arena);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

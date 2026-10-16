@@ -271,10 +271,11 @@ TEST(BuiltinsLinest, PerfectFitReportsAHugeFiniteFStatistic) {
   ASSERT_TRUE(c[6].is_number()) << "F slot should not be an error on a perfect fit";
   EXPECT_TRUE(std::isfinite(c[6].as_number()));
   EXPECT_GT(c[6].as_number(), 1e20);
-  // Row 5 col 2: the reported residual sum stays the true 0, untouched by
-  // the floor used for F.
+  // Row 5 col 2: the reported residual sum is the reflected-y tail, rounding
+  // noise at most, untouched by the floor used for F.
   ASSERT_TRUE(c[9].is_number());
-  EXPECT_DOUBLE_EQ(c[9].as_number(), 0.0);
+  EXPECT_GE(c[9].as_number(), 0.0);
+  EXPECT_LT(c[9].as_number(), 1e-20);
 }
 
 TEST(BuiltinsLinest, FlatResponseLeavesTheFStatisticUndefined) {
@@ -465,14 +466,14 @@ TEST(BuiltinsLinest, CollinearXReturnsPartialFit) {
 }
 
 TEST(BuiltinsLinest, UnderdeterminedSystemReturnsNum) {
-  // m=2, k=2 + intercept => p=3 > m. Under-determined -> #NUM!.
+  // m=2 observations, k=3 predictors: fewer observations than predictors -> #NUM!.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
   Arena parse_arena;
   Arena eval_arena;
-  const Value v = EvalUnder("=LINEST({1;2}, {1,2;3,4})", &parse_arena, &eval_arena, ctx);
+  const Value v = EvalUnder("=LINEST({1;2}, {1,2,3;4,5,6})", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -490,6 +491,94 @@ TEST(BuiltinsLinest, BooleanCellsCoerceToNumeric) {
   ASSERT_TRUE(v.is_array());
   EXPECT_NEAR(v.as_array_cells()[0].as_number(), 2.0, kEps);
   EXPECT_NEAR(v.as_array_cells()[1].as_number(), 0.0, kEps);
+}
+
+// ---------------------------------------------------------------------------
+// Bit-exact coefficient rows measured in Excel (const=TRUE and FALSE,
+// univariate and multivariate, collinear-column drop boundary)
+// ---------------------------------------------------------------------------
+
+struct ExactRow {
+  const char* formula;
+  double expected[5];
+  std::uint32_t cols;
+};
+
+TEST(BuiltinsLinest, CoefficientRowsAreBitExact) {
+  static const ExactRow kRows[] = {
+      {"=LINEST({1;2;3;4;5},{1;2;3;4;5})", {0.9999999999999999, 4.440892098500626e-16}, 2U},
+      {"=LINEST({14;20;17;7;7},{1;5;3;9;8})", {-1.2053571428571428, 19.267857142857142}, 2U},
+      {"=LINEST({14;20;17;7;7},{1;5;3;9;8},FALSE)", {1.5777777777777775, 0.0}, 2U},
+      {"=LINEST({16;7;0;6;17},{6;0;6;7;5})", {0.07142857142857155, 8.857142857142856}, 2U},
+      {"=LINEST({0;18;1;1;19;17},{7,7,5;6,9,4;1,0,8;7,3,2;2,9,8;3,7,4})",
+       {-2.332817935833012, 2.458059528411287, -3.5270583687669133, 22.33146501739468},
+       4U},
+      {"=LINEST({11;14;16;12;18;12},{8,5,8;8,7,8;0,7,8;4,1,0;9,8,7;5,4,5},FALSE)",
+       {-0.9651233627779482, 2.9708853690730033, 0.43222662199208034, 0.0},
+       4U},
+      // Second column is twice the first plus a small step: dropped (coefficient 0) below
+      // the 1e-6 norm ratio, kept above it; the boundary differs between the two modes.
+      {"=LINEST({3;5;8;9;13;12},{1,2;2,4;3,6.000005;4,8;5,10;6,12})",
+       {1.0000001190473384, 0.0, 1.3333316666685322},
+       3U},
+      {"=LINEST({3;5;8;9;13;12},{1,2;2,4;3,6.00001;4,8;5,10;6,12})",
+       {81395.34884895838, -162788.67444210278, 1.1162790696835145},
+       3U},
+      {"=LINEST({3;5;8;9;13;12},{1,2;2,4;3,6.00001;4,8;5,10;6,12},FALSE)", {1.1538459932372678, 0.0, 0.0}, 3U},
+      {"=LINEST({3;5;8;9;13;12},{1,2;2,4;3,6.00005;4,8;5,10;6,12},FALSE)",
+       {23902.43902495025, -47802.609757217586, 0.0},
+       3U},
+  };
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  for (const ExactRow& row : kRows) {
+    Arena parse_arena;
+    Arena eval_arena;
+    const Value v = EvalUnder(row.formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array()) << row.formula;
+    ASSERT_EQ(v.as_array_cols(), row.cols) << row.formula;
+    for (std::uint32_t i = 0; i < row.cols; ++i) {
+      EXPECT_EQ(v.as_array_cells()[i].as_number(), row.expected[i]) << row.formula << " cell " << i;
+    }
+  }
+}
+
+TEST(BuiltinsLinest, TrendAndGrowthFollowTheSharedFit) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  // TREND = a + b*x with the LINEST coefficients; GROWTH = exp(a) * exp(b*x).
+  const Value t = EvalUnder("=TREND({14;20;17;7;7},{1;5;3;9;8},{2})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(t.is_array());
+  EXPECT_EQ(t.as_array_cells()[0].as_number(), 19.267857142857142 + -1.2053571428571428 * 2.0);
+  const Value g = EvalUnder("=GROWTH({2;4;8;16},{1;2;3;4},{5})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(g.is_array());
+  EXPECT_NEAR(g.as_array_cells()[0].as_number(), 32.0, 1e-12);
+}
+
+TEST(BuiltinsLinest, SaturatedFitReportsZeroErrorsAndZeroDf) {
+  // m=2, k=2 with intercept: one column is dropped, df_resid is 0 and the
+  // errors are 0; the wider-norm column survives.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LINEST({4.2;7.52},{7.25,2.92;9.71,1.26},TRUE,TRUE)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  const Value* c = v.as_array_cells();
+  EXPECT_EQ(c[0].as_number(), 0.0);
+  EXPECT_EQ(c[1].as_number(), 1.3495934959349591);
+  EXPECT_EQ(c[2].as_number(), -5.584552845528455);
+  EXPECT_EQ(c[3].as_number(), 0.0);
+  EXPECT_EQ(c[6].as_number(), 1.0);
+  EXPECT_EQ(c[10].as_number(), 0.0);
 }
 
 }  // namespace

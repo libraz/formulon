@@ -2,14 +2,12 @@
 // LINEST — multivariate ordinary-least-squares regression.
 //
 // `LINEST(known_y, [known_x], [const]=TRUE, [stats]=FALSE)` fits the
-// linear model `y = b_0 + b_1*x_1 + ... + b_k*x_k` via the normal
-// equations `(X^T X) β = X^T y`. The system is solved by Gauss-Jordan
-// elimination on the augmented matrix `[A | b | I]` so the same pass
-// yields both the coefficient vector β and the inverse `A^-1`, the
-// latter being needed for the per-coefficient standard errors when
-// `stats=TRUE`. The Gauss-Jordan kernel is the same one used by
-// MINVERSE; LINEST does not call MINVERSE directly, but the numerical
-// recipe is identical.
+// linear model `y = b_0 + b_1*x_1 + ... + b_k*x_k` by Householder QR.
+// With an intercept, x and y are centred by their means and a ones
+// column is kept in the design; a column whose norm collapses against
+// the earlier ones is dropped (coefficient 0). Operation order follows
+// the measured Mac Excel 365 results. The same kernel serves LOGEST, TREND and
+// GROWTH.
 //
 // Output shapes (all returned as a 2-D `ArrayValue`):
 //   stats=FALSE -> 1 x (k+1) row `[b_k, b_{k-1}, ..., b_1, b_0]`
@@ -26,9 +24,7 @@
 // (CORREL / SLOPE / INTERCEPT / RSQ / STEYX / FORECAST.LINEAR) — those
 // are scalar reductions over a single predictor and share the same
 // `(known_y, known_x)` argument convention but not the matrix machinery.
-// See `eval/matrix_ops_lazy.h` for the underlying linear-algebra
-// primitives (Gauss-Jordan with partial pivoting, strict numeric
-// matrix coercion).
+// See `eval/matrix_ops_lazy.h` for strict numeric matrix coercion.
 
 #ifndef FORMULON_EVAL_LINEST_LAZY_H_
 #define FORMULON_EVAL_LINEST_LAZY_H_
@@ -76,7 +72,7 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
 /// `TREND(known_y, [known_x], [new_x], [const]=TRUE)` — predicted
 /// `y` values along the same least-squares fit that LINEST would
 /// estimate, evaluated at `new_x`. Internally fits the model the same
-/// way (normal equations + Gauss-Jordan), then computes
+/// way (Householder QR), then computes
 /// `y_hat = beta . [features, 1]` for each row of `new_x`.
 ///
 /// `new_x` is optional. When omitted, it defaults to `known_x`, which

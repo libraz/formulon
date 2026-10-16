@@ -11,6 +11,7 @@ cases:
   - id: linest_univariate_stats_false
     description: "LINEST({1;2;3;4;5}, {1;2;3;4;5}) -> {1, 0} (1x2 spill, slope=1, intercept=0)"
     formula: '=LINEST({1;2;3;4;5}, {1;2;3;4;5})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: linest_univariate_stats_true
     description: "LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE) -> 5x2 stats matrix"
@@ -23,6 +24,7 @@ cases:
   - id: linest_const_false_no_intercept
     description: "LINEST({1;2;3}, {1;2;3}, FALSE) -> 1x2 spill, intercept slot = 0"
     formula: '=LINEST({1;2;3}, {1;2;3}, FALSE)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: linest_shape_mismatch_error
     description: "LINEST({1;2;3}, {1;2}) -> error (#REF! per Formulon docs; oracle reveals truth)"
@@ -43,10 +45,12 @@ cases:
   - id: trend_univariate_omit_new_x
     description: "TREND({2;4;6}, {1;2;3}) -> 3x1 spill of fitted y at known_x"
     formula: '=TREND({2;4;6}, {1;2;3})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: trend_univariate_with_new_x
     description: "TREND({2;4;6}, {1;2;3}, {4;5}) -> 2x1 spill at new_x = {4;5}"
     formula: '=TREND({2;4;6}, {1;2;3}, {4;5})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: trend_multivariate_basic
     description: "TREND({1;2;4;7}, {1,1;2,1;3,2;4,3}) -> 4x1 spill of fitted y"
@@ -55,6 +59,7 @@ cases:
   - id: trend_const_false_no_intercept
     description: "TREND({2;4;6}, {1;2;3}, , FALSE) -> 3x1 spill (forced through origin)"
     formula: '=TREND({2;4;6}, {1;2;3}, , FALSE)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: trend_shape_mismatch_error
     description: "TREND({1;2;3}, {1;2}) -> error (#REF! per Formulon docs)"
@@ -88,6 +93,7 @@ cases:
   - id: logest_const_false_intercept_one
     description: "LOGEST({2;4;8;16}, {1;2;3;4}, FALSE) -> 1x2 spill, trailing slot = 1 (exp(0))"
     formula: '=LOGEST({2;4;8;16}, {1;2;3;4}, FALSE)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: logest_negative_y_num
     description: "LOGEST({1;-2;3}, {1;2;3}) -> #NUM! (y<=0 makes ln undefined)"
@@ -120,6 +126,7 @@ cases:
   - id: growth_const_false_no_intercept
     description: "GROWTH({2;4;8;16}, {1;2;3;4}, , FALSE) -> 4x1 spill (forced through 1)"
     formula: '=GROWTH({2;4;8;16}, {1;2;3;4}, , FALSE)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: growth_negative_y_num
     description: "GROWTH({1;-2;3}, {1;2;3}) -> #NUM! (y<=0 makes ln undefined)"
