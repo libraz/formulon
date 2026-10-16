@@ -395,7 +395,9 @@ class ExcelOracle(OracleDriver):
         # Cross-sheet setup ("Sheet2!A1") must be isolated per case --
         # see the windows_excel.py counterpart for the rationale.
         cross_sheet = any(any("!" in addr for addr in (case.get("setup") or {})) for case in cases)
-        if cross_sheet:
+        # Excel stops iterating only when every circular cell in the workbook has
+        # converged, so iterative cases must not share a workbook.
+        if cross_sheet or iterative:
             return self._run_suite_per_case_workbook(suite_name, cases, date1904=date1904, iterative=iterative)
 
         wb = self._app.books.add()
@@ -513,6 +515,10 @@ class ExcelOracle(OracleDriver):
             for case in cases:
                 wb = self._app.books.add()
                 try:
+                    if iterative:
+                        # A workbook created while Excel has none open starts in automatic
+                        # mode, which would sweep the cycle again on every entry.
+                        self._app.calculation = "manual"
                     # Pin the workbook date system before writing any setup or
                     # formula. _set_date1904 intentionally propagates
                     # AppleScript failures instead of marking them skipped.

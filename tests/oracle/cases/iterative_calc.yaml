@@ -6,10 +6,13 @@ description: >
   formulas converge to a fixed point instead of raising #CIRC!. The
   driver flips that flag for this suite via `options.iterative`; Excel
   defaults are MaxIterations=100, MaxChange=0.001, which give exact
-  integer fixed points for monotonic clamp formulas and ~3 decimal
-  digits of agreement for slow linear convergence (the smoothing case
-  stops at MaxChange before reaching the theoretical fixed point of 10).
-tolerance: { abs: 1.0e-3, rel: 1.0e-3 }
+  integer fixed points for monotonic clamp formulas, and for slow linear
+  convergence a value that stops at the first sweep whose change is
+  below MaxChange (the smoothing case stops short of its fixed point
+  of 10). The result is read after the entry evaluation and one
+  Calculate; every circular cell in the workbook sweeps together until
+  the largest change anywhere drops below MaxChange.
+tolerance: { abs: 0.0, rel: 0.0 }
 locale: ja-JP
 options:
   iterative: true

@@ -1,16 +1,16 @@
 {
   "suite": "iterative_calc",
-  "description": "Iterative-calc convergence. With Excel's \"Enable iterative calculation\" toggle ON (`Application.Iteration = True` on COM, `enable_iterative_calculation` on appscript), circular formulas converge to a fixed point instead of raising #CIRC!. The driver flips that flag for this suite via `options.iterative`; Excel defaults are MaxIterations=100, MaxChange=0.001, which give exact integer fixed points for monotonic clamp formulas and ~3 decimal digits of agreement for slow linear convergence (the smoothing case stops at MaxChange before reaching the theoretical fixed point of 10).\n",
+  "description": "Iterative-calc convergence. With Excel's \"Enable iterative calculation\" toggle ON (`Application.Iteration = True` on COM, `enable_iterative_calculation` on appscript), circular formulas converge to a fixed point instead of raising #CIRC!. The driver flips that flag for this suite via `options.iterative`; Excel defaults are MaxIterations=100, MaxChange=0.001, which give exact integer fixed points for monotonic clamp formulas, and for slow linear convergence a value that stops at the first sweep whose change is below MaxChange (the smoothing case stops short of its fixed point of 10). The result is read after the entry evaluation and one Calculate; every circular cell in the workbook sweeps together until the largest change anywhere drops below MaxChange.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": true,
-    "generated_at": "2026-10-08T06:01:49Z"
+    "generated_at": "2026-10-16T08:23:03Z"
   },
   "tolerance": {
-    "abs": 0.001,
-    "rel": 0.001
+    "abs": 0.0,
+    "rel": 0.0
   },
   "cases": [
     {
@@ -32,7 +32,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 2.0
+        "value": 1.9990234375
       }
     },
     {
@@ -41,7 +41,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 9.999444667132748
+        "value": 9.991404955442832
       }
     },
     {
