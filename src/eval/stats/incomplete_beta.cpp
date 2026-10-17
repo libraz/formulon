@@ -690,10 +690,10 @@ double beta_ratio_excel(double a, double b, double x, bool upper, double y) noex
       }
       return finish(v, comp, upper);
     }
-    const double mx = a0 > b0 ? a0 : b0;
-    const double t = mul(mx, 0.03);
+    const double mn = a0 < b0 ? a0 : b0;
+    const double t = mul(mn, 0.03);
     const double v =
-        (mx > 10000.0 && !(t < lam)) ? uniform_expansion_beta(a0, b0, lam) : continued_fraction(a0, b0, x0, y0);
+        (mn > 10000.0 && !(t < lam)) ? uniform_expansion_beta(a0, b0, lam) : continued_fraction(a0, b0, x0, y0);
     return finish(v, comp, upper);
   }
   bool swapped_comp;

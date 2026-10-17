@@ -530,3 +530,68 @@ cases:
     description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
     formula: "=GAMMA.DIST(VALUE(\"1e+300\"),1,VALUE(\"1e+300\"),TRUE)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_00
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.INV(0.5,100000,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_01
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=F.DIST(1,10000,10000,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_02
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=F.DIST(1,10000,100000000,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_03
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=F.DIST(2805.56718139,10000,10000,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_04
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.DIST(1000000.32314775,1,0.5,FALSE,1000000,1000001)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_05
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BINOM.DIST(100000,100000,0.3,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_06
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.DIST(1000000.50538874,1,1,TRUE,1000000,1000001)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_07
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.INV(0.25,10000,10000)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_08
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.INV(0.001,100000,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_09
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.DIST(0.5870934,100000,100000,TRUE,0,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_10
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=F.DIST(0.83857431,2,100000000,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_11
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.INV(0.99,10000,10000)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: beta_large_params_12
+    description: "incomplete beta with large shape parameters: the asymptotic expansion applies when min(a, b) > 10000"
+    formula: "=BETA.DIST(1340779.41556626,100000,0.5,TRUE,1000000,3000000)"
+    tolerance: { abs: 0, rel: 0 }

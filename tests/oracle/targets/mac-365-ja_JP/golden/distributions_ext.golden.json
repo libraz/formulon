@@ -1213,6 +1213,175 @@
         "abs": 0.0,
         "rel": 0.0
       }
+    },
+    {
+      "id": "beta_large_params_00",
+      "formula": "=BETA.INV(0.5,100000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999832167548567
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_01",
+      "formula": "=F.DIST(1,10000,10000,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5000000000000004
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_02",
+      "formula": "=F.DIST(1,10000,100000000,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5018803519601795
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_03",
+      "formula": "=F.DIST(2805.56718139,10000,10000,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_04",
+      "formula": "=BETA.DIST(1000000.32314775,1,0.5,FALSE,1000000,1000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6077473388437132
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_05",
+      "formula": "=BINOM.DIST(100000,100000,0.3,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_06",
+      "formula": "=BETA.DIST(1000000.50538874,1,1,TRUE,1000000,1000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5053887399844825
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_07",
+      "formula": "=BETA.INV(0.25,10000,10000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4976153023717551
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_08",
+      "formula": "=BETA.INV(0.001,100000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999076705895216
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_09",
+      "formula": "=BETA.DIST(0.5870934,100000,100000,TRUE,0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_10",
+      "formula": "=F.DIST(0.83857431,2,100000000,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.432326443548872
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_11",
+      "formula": "=BETA.INV(0.99,10000,10000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5082244282031153
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_12",
+      "formula": "=BETA.DIST(1340779.41556626,100000,0.5,TRUE,1000000,3000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     }
   ]
 }
