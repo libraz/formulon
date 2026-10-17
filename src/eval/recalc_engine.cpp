@@ -405,9 +405,11 @@ Expected<void, Error> RecalcEngine::evaluate_dirty_components_locked(
 void RecalcEngine::commit_unresolved_cycle_locked(const SerialEvalPass& pass,
                                                   const std::vector<CellNodeId>& component) {
   // Excel shows a warning and leaves the cells as they were; with no UI to
-  // host that banner Formulon surfaces #REF!, keeping Excel's last value
-  // only for a cycle through an OFFSET / INDIRECT read.
+  // host that banner Formulon surfaces #REF! (0 for a cell that is its own
+  // cycle), keeping Excel's last value only for a cycle through an OFFSET /
+  // INDIRECT read.
   const bool dynamic_cycle = closes_through_dynamic_edge(component, graph_);
+  const Value unresolved = unresolved_cycle_value(component);
   const std::uint64_t ordinal = pass.dynamic.next_ordinal();
   if (dynamic_cycle) {
     pass.dynamic.log().restore_prior_values(pass.workbook, component);
@@ -419,7 +421,7 @@ void RecalcEngine::commit_unresolved_cycle_locked(const SerialEvalPass& pass,
     if (!dynamic_cycle) {
       Sheet& sheet = pass.workbook.sheet(c.sheet_id);
       SpillCommitter committer(&sheet, c.row, c.col, pass.release_callback, pass.release_user_data);
-      sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
+      sheet.set_cell_cached_value(c.row, c.col, committer.commit(unresolved));
     }
     pass.dynamic.log().note_commit(c, ordinal);
     ++pass.stats.cycle_cells;

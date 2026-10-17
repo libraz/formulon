@@ -184,6 +184,27 @@ std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(s
   return BlockedSpillFootprint{covering->anchor_row, covering->anchor_col, covering->rows, covering->cols};
 }
 
+std::optional<SpillFootprint> Sheet::array_block_covering(std::uint32_t row, std::uint32_t col) const {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const Cell* anchor = cell_at_locked(row, col);
+  if (anchor != nullptr && anchor->array_block_rows != 0U) {
+    return SpillFootprint{row, col, anchor->array_block_rows, anchor->array_block_cols};
+  }
+  if (spill_table_ == nullptr) {
+    return std::nullopt;
+  }
+  const SpillRegion* covering = find_region_covering(*spill_table_, row, col);
+  if (covering == nullptr) {
+    return std::nullopt;
+  }
+  anchor = cell_at_locked(covering->anchor_row, covering->anchor_col);
+  if (anchor == nullptr || anchor->array_block_rows == 0U || row - covering->anchor_row >= anchor->array_block_rows ||
+      col - covering->anchor_col >= anchor->array_block_cols) {
+    return std::nullopt;
+  }
+  return SpillFootprint{covering->anchor_row, covering->anchor_col, anchor->array_block_rows, anchor->array_block_cols};
+}
+
 std::vector<SpillFootprint> Sheet::committed_spill_footprints() const {
   std::vector<SpillFootprint> out;
   const std::lock_guard<std::mutex> guard(*spill_mutex_);

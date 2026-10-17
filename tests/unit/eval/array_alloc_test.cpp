@@ -82,6 +82,33 @@ TEST(ArrayAlloc, RejectsFullGridRequest) {
   EXPECT_EQ(buffer, nullptr);
 }
 
+TEST(ArrayAlloc, ArrayPastExcelsElementBoundAbandonsTheFormula) {
+  // floor(2^29 / 10) elements is the largest array a formula may evaluate;
+  // one more abandons it, whatever the shape.
+  const ScopedFormulaAbandon scope;
+  EXPECT_FALSE(abandons_formula(3277U, 16383U));
+  EXPECT_FALSE(abandons_formula(5461U, 9831U));
+  EXPECT_FALSE(scope.abandoned());
+  Arena arena;
+  Value* buffer = nullptr;
+  EXPECT_EQ(allocate_array_value(6553U, 8193U, arena, buffer, kMaxDerivedArrayCells), nullptr);
+  EXPECT_EQ(buffer, nullptr);
+  EXPECT_TRUE(scope.abandoned());
+  EXPECT_FALSE(arena.exhausted()) << "an abandoning request must not reach the arena";
+}
+
+TEST(ArrayAlloc, AbandonmentIsScopedToOneFormula) {
+  const ScopedFormulaAbandon outer;
+  {
+    const ScopedFormulaAbandon inner;
+    EXPECT_TRUE(abandons_formula(Sheet::kMaxRows, 52U));
+    EXPECT_TRUE(inner.abandoned());
+  }
+  EXPECT_FALSE(outer.abandoned());
+  EXPECT_FALSE(abandons_formula(Sheet::kMaxRows, 51U));
+  EXPECT_FALSE(outer.abandoned());
+}
+
 TEST(ArrayAlloc, ReportsArenaExhaustion) {
   // A budgeted arena that cannot satisfy the buffer returns nullptr rather
   // than handing back a partially-sized allocation.

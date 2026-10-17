@@ -148,6 +148,10 @@ bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellN
       [&](std::size_t i, Value v) { commit(cells[i], v); });
 }
 
+Value unresolved_cycle_value(const std::vector<CellNodeId>& component) {
+  return cells_of_component(component).size() == 1U ? Value::number(0.0) : Value::error(ErrorCode::Ref);
+}
+
 void prepare_iterative_component_seeds(Workbook& workbook, const std::vector<CellNodeId>& cells) {
   if (!workbook.recalc_engine().disabled_cycle_refs_pending()) {
     return;

@@ -1136,6 +1136,11 @@ class Sheet {
   /// mutation callers need the complete rectangle before they clear it.
   std::optional<BlockedSpillFootprint> committed_spill_footprint_covering(std::uint32_t row, std::uint32_t col) const;
 
+  /// Returns the legacy array formula (CSE) block containing `(row, col)`,
+  /// anchor included, as its anchor and extent (`Cell::array_block_rows`),
+  /// or `nullopt` when no block contains it.
+  std::optional<SpillFootprint> array_block_covering(std::uint32_t row, std::uint32_t col) const;
+
   /// Returns copies of every currently committed spill rectangle. The sheet
   /// spill mutex is held exactly once for the snapshot and no references to
   /// the spill table escape. Blocked footprints are intentionally excluded.

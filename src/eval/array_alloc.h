@@ -16,6 +16,10 @@
 //   * a cell-count ceiling chosen by the caller, and
 //   * arena-OOM propagation (`nullptr`, which callers surface as `#NUM!`).
 //
+// Past every ceiling sits Excel's own bound, `kMaxEvaluatedArrayElements`:
+// an array that large abandons the whole formula, which then evaluates to the
+// number 0 whatever encloses the array (`abandon_formula`).
+//
 // Two ceilings are in use. `kMaxDynamicArrayCells` bounds arrays a formula
 // conjures out of nothing (SEQUENCE, RANDARRAY, MAKEARRAY, EXPAND); a request
 // past it is a user error. `kMaxDerivedArrayCells` bounds arrays derived from
@@ -28,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "eval/formula_abandon.h"
 #include "utils/resource_budget.h"
 #include "value.h"
 
@@ -51,6 +56,21 @@ inline constexpr std::uint64_t kMaxDerivedArrayCells = kMaxRangeExpansionCells;
 static_assert(kMaxDerivedArrayCells * sizeof(Value) <= kMaxEvalArenaBytes,
               "kMaxEvalArenaBytes must admit one full-size derived array");
 
+/// Element count past which Excel abandons a formula that evaluates an array:
+/// floor(2^29 / 10). The whole formula then evaluates to the number 0, so
+/// `SUM(A:A+1:1)`, `ISERROR(...)` and `ROWS(...)` of such an array are all 0.
+inline constexpr std::uint64_t kMaxEvaluatedArrayElements = 53'687'091U;
+
+/// True when an array of `rows` x `cols` elements abandons its formula, which
+/// is then marked (`abandon_formula`). The caller must not build the array.
+inline bool abandons_formula(std::uint64_t rows, std::uint64_t cols) noexcept {
+  if (rows * cols <= kMaxEvaluatedArrayElements) {
+    return false;
+  }
+  abandon_formula();
+  return true;
+}
+
 /// Allocates a `(rows, cols)` `ArrayValue` and its row-major `Value[]` backing
 /// buffer from `arena`, writing the buffer to `out_buffer`.
 ///
@@ -58,6 +78,8 @@ static_assert(kMaxDerivedArrayCells * sizeof(Value) <= kMaxEvalArenaBytes,
 /// following holds, so a caller that only checks the return value cannot
 /// proceed with a stale buffer:
 ///   * either axis is zero or exceeds its Excel grid bound,
+///   * `rows * cols` exceeds `kMaxEvaluatedArrayElements`, which also abandons
+///     the formula (`abandons_formula`),
 ///   * `rows * cols` overflows `std::size_t`,
 ///   * `rows * cols` exceeds `max_cells`,
 ///   * the arena cannot satisfy the request.

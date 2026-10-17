@@ -679,12 +679,13 @@ TEST(TreeWalkerFormulaRefs, ChainedFormulasInSum) {
   EXPECT_EQ(v.as_number(), 13.0);
 }
 
-TEST(TreeWalkerFormulaRefs, CycleInFormulaResolvesToRef) {
+TEST(TreeWalkerFormulaRefs, CellReadingItselfResolvesToZero) {
+  // A1 is the only member of its cycle, which Excel leaves at 0.
   Sheet sheet("Sheet1");
   sheet.set_cell_formula(0, 0, "=A1+1");
   const Value v = EvalInSheetWithState(sheet, "=A1");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(TreeWalkerFormulaRefs, FormulaErrorPropagatesThroughArith) {
@@ -972,16 +973,17 @@ TEST(TreeWalkerRanges, RangeInNonAggregatorSpills) {
   EXPECT_EQ(arr->cells[2].as_number(), 0.0);
 }
 
-TEST(TreeWalkerRanges, CycleViaAggregator_ReturnsRef) {
+TEST(TreeWalkerRanges, CycleViaAggregatorResolvesToZero) {
   Sheet sheet("Sheet1");
   // A1 aggregates a range that includes itself; EvalState catches the
-  // re-entry on A1 and surfaces #REF!.
+  // re-entry on A1, the only member of the cycle, which Excel leaves at 0
+  // whatever the rest of the range holds.
   sheet.set_cell_formula(0, 0, "=SUM(A1:A3)");
   sheet.set_cell_value(1, 0, Value::number(2.0));
   sheet.set_cell_value(2, 0, Value::number(3.0));
   const Value v = EvalInSheetWithState(sheet, "=A1");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 // ---------------------------------------------------------------------------

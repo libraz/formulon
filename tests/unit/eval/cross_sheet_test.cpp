@@ -196,17 +196,18 @@ TEST(EvalContextCrossSheet, CrossSheetFormulaCellEvaluates) {
   EXPECT_EQ(v.as_number(), 3.0);
 }
 
-TEST(EvalContextCrossSheet, CrossSheetCycleDirectReturnsRef) {
+TEST(EvalContextCrossSheet, CrossSheetCycleDirectReturnsZero) {
   // Sheet1!A1 = =Sheet1!A1 — direct self-cycle via qualifier. The
-  // `(target_sheet, row, col)` key catches it.
+  // `(target_sheet, row, col)` key catches it, and a cell that is its own
+  // only cycle member is 0.
   Workbook wb = MakeTwoSheetWorkbook();
   wb.sheet(0).set_cell_formula(0, 0, "=Sheet1!A1");
   EvalState state;
   Arena arena;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = ctx.resolve_ref(MakeLocalRef(0, 0), arena, default_registry());
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(EvalContextCrossSheet, CrossSheetCycleIndirectReturnsRef) {

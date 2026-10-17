@@ -171,27 +171,27 @@ TEST(WholeAxisSpill, BlockerRightOfPopulatedExtentStopsRowSpill) {
 // ---------------------------------------------------------------------------
 
 TEST(WholeAxisSpill, ColumnContainingItsOwnFormulaCellIsCircular) {
-  // `=A:A` at A1, column A otherwise empty. Excel leaves 0 with iterative
-  // calculation off; Formulon reports every cycle member as `#REF!`.
+  // `=A:A` at A1, column A otherwise empty. The formula cell is the cycle's
+  // only member, and Excel leaves it at 0 with iterative calculation off.
   //
   // Both drivers are asserted on purpose. Recalc alone proves nothing about
   // the evaluator: with a clear runway the rectangle commits, the committed
   // footprint then feeds a self-edge back into the graph, and the engine's
-  // SCC pass reaches `#REF!` on its own — after materialising 1,048,576
-  // cells. The read-only driver has no graph to fall back on, so it is the
-  // one that shows the evaluator recognised the cycle.
+  // SCC pass answers on its own — after materialising 1,048,576 cells. The
+  // read-only driver has no graph to fall back on, so it is the one that
+  // shows the evaluator recognised the cycle.
   Workbook wb = Workbook::create();
   SeedNumber(wb, 0U, 1U, 10.0);
   SeedNumber(wb, 0U, 2U, 100.0);
   const Sheet& sheet = RecalcWith(wb, 0U, 0U, "=A:A");
   const Value v = sheet.resolve_cell_value(0U, 0U);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
   EXPECT_EQ(sheet.spill_region_at_anchor(0U, 0U), nullptr);
 
   const Value adhoc = AdhocValue(wb, sheet, 0U, 0U, "=A:A");
-  ASSERT_TRUE(adhoc.is_error());
-  EXPECT_EQ(adhoc.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(adhoc.is_number()) << adhoc.debug_to_string();
+  EXPECT_EQ(adhoc.as_number(), 0.0);
 }
 
 TEST(WholeAxisSpill, RowContainingItsOwnFormulaCellIsCircular) {
@@ -201,12 +201,12 @@ TEST(WholeAxisSpill, RowContainingItsOwnFormulaCellIsCircular) {
   SeedNumber(wb, 0U, 1U, 10.0);
   const Sheet& sheet = RecalcWith(wb, 4U, 0U, "=5:5");
   const Value v = sheet.resolve_cell_value(4U, 0U);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
 
   const Value adhoc = AdhocValue(wb, sheet, 4U, 0U, "=5:5");
-  ASSERT_TRUE(adhoc.is_error());
-  EXPECT_EQ(adhoc.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(adhoc.is_number()) << adhoc.debug_to_string();
+  EXPECT_EQ(adhoc.as_number(), 0.0);
 }
 
 TEST(WholeAxisSpill, CircularityIsDecidedBeforeTheFootprint) {
@@ -220,8 +220,59 @@ TEST(WholeAxisSpill, CircularityIsDecidedBeforeTheFootprint) {
   SeedNumber(wb, 2U, 0U, 3.0);
   const Sheet& sheet = RecalcWith(wb, 0U, 0U, "=A:A");
   const Value v = sheet.resolve_cell_value(0U, 0U);
-  ASSERT_TRUE(v.is_error());
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(WholeAxisSpill, AnotherFormulaInsideTheAxisKeepsTheCyclePolicy) {
+  // A2 reads A1, so `=A:A` at A1 closes a cycle through two cells, whose
+  // Excel values depend on the order they were entered; every member is
+  // `#REF!`.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=A1+1")));
+  const Sheet& sheet = RecalcWith(wb, 0U, 0U, "=A:A");
+  const Value v = sheet.resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(WholeAxisSpill, DerivedSelfReferenceIsZero) {
+  // `=A:A+0` at A1, `=SUM(C:C*1)` at C1 and `=E1+1` at E1 read their own
+  // cell through an operation rather than as a bare range; the cell is still
+  // the cycle's only member. The read-only driver reads the cell as 0 and
+  // evaluates the whole-axis formulas around it, so their top-left element
+  // is the same 0.
+  Workbook wb = Workbook::create();
+  const struct {
+    std::uint32_t col;
+    const char* formula;
+    bool read_only_zero;
+  } cases[] = {{0U, "=A:A+0", true}, {2U, "=SUM(C:C*1)", true}, {4U, "=E1+1", false}};
+  for (const auto& c : cases) {
+    const Sheet& sheet = RecalcWith(wb, 0U, c.col, c.formula);
+    const Value v = sheet.resolve_cell_value(0U, c.col);
+    ASSERT_TRUE(v.is_number()) << c.formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 0.0) << c.formula;
+    EXPECT_EQ(sheet.spill_region_at_anchor(0U, c.col), nullptr) << c.formula;
+    if (c.read_only_zero) {
+      Value adhoc = AdhocValue(wb, sheet, 0U, c.col, c.formula);
+      if (adhoc.is_array()) {
+        adhoc = adhoc.as_array_cells()[0];
+      }
+      ASSERT_TRUE(adhoc.is_number()) << c.formula << " " << adhoc.debug_to_string();
+      EXPECT_EQ(adhoc.as_number(), 0.0) << c.formula;
+    }
+  }
+}
+
+TEST(WholeAxisSpill, RowsOfASelfReferenceKeepsTheDeclaredHeightInTheReadOnlyDriver) {
+  // `=ROWS(G:G+0)` at G1: the read-only driver reads G1 as 0 and sizes
+  // the column around it, which is Excel's 1048576.
+  Workbook wb = Workbook::create();
+  const Sheet& sheet = RecalcWith(wb, 0U, 6U, "=ROWS(G:G+0)");
+  const Value adhoc = AdhocValue(wb, sheet, 0U, 6U, "=ROWS(G:G+0)");
+  ASSERT_TRUE(adhoc.is_number()) << adhoc.debug_to_string();
+  EXPECT_EQ(adhoc.as_number(), static_cast<double>(Sheet::kMaxRows));
 }
 
 TEST(WholeAxisSpill, BlockedButNotCircularStillReportsSpill) {

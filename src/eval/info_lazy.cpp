@@ -102,6 +102,59 @@ Value number_of(const Value& v) {
   return Value::error(ErrorCode::Value);
 }
 
+// T's coercion of one value: text and errors as they are, anything else as "".
+Value text_of(const Value& v) {
+  if (v.is_text() || v.is_error()) {
+    return v;
+  }
+  return Value::text({});
+}
+
+// Shared body of N and T. A reference argument reads its first cell rather
+// than each of its cells; any other argument is evaluated, and an array
+// result is coerced element by element.
+Value eval_first_cell_coercion(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, Value (*coerce)(const Value&)) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const parser::AstNode& target = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  const parser::NodeKind kind = target.kind();
+  if (kind == parser::NodeKind::Ref || kind == parser::NodeKind::RangeOp || kind == parser::NodeKind::IntersectOp ||
+      kind == parser::NodeKind::NameRef ||
+      (kind == parser::NodeKind::Call && is_reference_call_name(target.as_call_name()))) {
+    std::string_view sheet;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
+    ErrorCode err = ErrorCode::Value;
+    if (resolve_reference_rect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+      parser::Reference first{};
+      first.sheet = sheet;
+      first.row = top;
+      first.col = left;
+      return coerce(ctx.resolve_ref(first, arena, registry));
+    }
+  }
+  const Value v = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (!v.is_array()) {
+    return coerce(v);
+  }
+  const std::uint32_t rows = v.as_array_rows();
+  const std::uint32_t cols = v.as_array_cols();
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const Value* cells = v.as_array_cells();
+  for (std::size_t i = 0; i < static_cast<std::size_t>(rows) * cols; ++i) {
+    buf[i] = coerce(cells[i]);
+  }
+  return Value::array(out);
+}
+
 // Locates `sheet` inside `workbook` by pointer identity and returns
 // the 1-based sheet number on success, 0 on failure. Pointer identity
 // is sufficient because `EvalContext` holds a raw pointer into the
@@ -160,6 +213,17 @@ Expected<SingleReference, ErrorCode> resolve_single_reference(const parser::AstN
   return SingleReference{sheet, top, left};
 }
 
+// The cell holding the formula shown at `(row, col)`: the cell itself, or
+// for a cell inside a legacy array formula block, the block's anchor.
+const Cell* formula_cell_at(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
+  const Cell* cell = sheet.cell_at(row, col);
+  if (cell != nullptr && !cell->formula_text.empty()) {
+    return cell;
+  }
+  const std::optional<SpillFootprint> block = sheet.array_block_covering(row, col);
+  return block.has_value() ? sheet.cell_at(block->anchor_row, block->anchor_col) : cell;
+}
+
 }  // namespace
 
 Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -181,7 +245,7 @@ Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const Funct
       (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name()))) {
     auto target = resolve_single_reference(arg, arena, registry, ctx);
     if (target) {
-      const Cell* cell = target.value().sheet->cell_at(target.value().row, target.value().col);
+      const Cell* cell = formula_cell_at(*target.value().sheet, target.value().row, target.value().col);
       return Value::boolean((cell != nullptr) && !cell->formula_text.empty());
     }
     // A reference-shaped call may instead choose a scalar (for example
@@ -212,7 +276,7 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (!target) {
     return Value::error(target.error());
   }
-  const Cell* cell = target.value().sheet->cell_at(target.value().row, target.value().col);
+  const Cell* cell = formula_cell_at(*target.value().sheet, target.value().row, target.value().col);
   if (cell == nullptr || cell->formula_text.empty()) {
     // No formula in the target cell (blank, value-only, or missing
     // slot). Excel 365 answers `#N/A`.
@@ -273,45 +337,11 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
 }
 
 Value eval_n_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  // A reference reads its first cell rather than each of its cells.
-  const parser::AstNode& target = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
-  const parser::NodeKind kind = target.kind();
-  if (kind == parser::NodeKind::Ref || kind == parser::NodeKind::RangeOp || kind == parser::NodeKind::IntersectOp ||
-      kind == parser::NodeKind::NameRef ||
-      (kind == parser::NodeKind::Call && is_reference_call_name(target.as_call_name()))) {
-    std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
-    ErrorCode err = ErrorCode::Value;
-    if (resolve_reference_rect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
-      parser::Reference first{};
-      first.sheet = sheet;
-      first.row = top;
-      first.col = left;
-      return number_of(ctx.resolve_ref(first, arena, registry));
-    }
-  }
-  const Value v = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (!v.is_array()) {
-    return number_of(v);
-  }
-  const std::uint32_t rows = v.as_array_rows();
-  const std::uint32_t cols = v.as_array_cols();
-  Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const Value* cells = v.as_array_cells();
-  for (std::size_t i = 0; i < static_cast<std::size_t>(rows) * cols; ++i) {
-    buf[i] = number_of(cells[i]);
-  }
-  return Value::array(out);
+  return eval_first_cell_coercion(call, arena, registry, ctx, &number_of);
+}
+
+Value eval_t_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  return eval_first_cell_coercion(call, arena, registry, ctx, &text_of);
 }
 
 Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

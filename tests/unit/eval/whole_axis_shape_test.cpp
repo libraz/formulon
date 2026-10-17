@@ -235,6 +235,31 @@ TEST_F(WholeAxisShape, ScalarFunctionOverAColumnStaysCompactUntilExpanded) {
   EXPECT_LT(bytes, kWholeColumnBytes / 16U);
 }
 
+TEST_F(WholeAxisShape, ArrayPastExcelsElementBoundMakesTheFormulaZero) {
+  // A whole column plus a whole row is the full grid, and an operation over
+  // 52 whole columns is 54,525,952 elements: both are past the bound, so the
+  // formula holds 0 whatever encloses the array. A reader of the cell sees
+  // that 0.
+  const char* const formulas[] = {"=SUM(L!A:A+L!1:1)",    "=ISERROR(L!A:A+L!1:1)",
+                                  "=ROWS(L!A:A+L!1:1)",   "=SUM(IFERROR(L!A:A+L!1:1,1))",
+                                  "=\"x\"&SUM(L!A:AZ+0)", "=SUM(SEQUENCE(6553,8193)*0+1)"};
+  for (const char* formula : formulas) {
+    Put(kH, 0U, kHCol, formula);
+    const Value v = At(kH, 0U, kHCol);
+    ASSERT_TRUE(v.is_number()) << formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 0.0) << formula;
+    EXPECT_EQ(Region(kH, 0U, kHCol), nullptr) << formula;
+  }
+  Put(kH, 1U, kHCol, "=H1+5");
+  EXPECT_EQ(At(kH, 1U, kHCol).as_number(), 5.0);
+}
+
+TEST_F(WholeAxisShape, ArrayAtExcelsElementBoundStillEvaluates) {
+  // 51 whole columns is 53,477,376 elements, inside the bound.
+  Put(kH, 0U, kHCol, "=ROWS(L!A:AY+0)");
+  EXPECT_EQ(At(kH, 0U, kHCol).as_number(), static_cast<double>(Sheet::kMaxRows));
+}
+
 TEST(WholeAxisShapeFirstElement, ReducesAnArrayToItsFirstElementWithoutExpandingIt) {
   Sheet sheet("Sheet1");
   for (std::uint32_t r = 0; r < 5U; ++r) {

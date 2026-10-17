@@ -750,6 +750,11 @@ FM_API fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet, ui
  * Excel does: a cell that has no style of its own takes its row's style
  * (`fm_sheet_set_row_style`), else its column's, as its cell XF. A cell that
  * already carries an XF, including an explicit XF 0, keeps it.
+ *
+ * Every setter here, `fm_workbook_set_blank` included, refuses a non-anchor
+ * cell of a legacy array formula (CSE) block: it returns
+ * `kPreconditionFailed` and leaves the block unchanged. A write to the
+ * block's anchor replaces the whole block.
  */
 
 /**

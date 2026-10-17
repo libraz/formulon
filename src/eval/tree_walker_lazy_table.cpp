@@ -280,6 +280,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SUMX2PY2", &eval_sumx2py2_lazy, LazyResultShape::kReduce},
     {"SUMXMY2", &eval_sumxmy2_lazy, LazyResultShape::kReduce},
     {"SWITCH", &eval_switch_lazy, LazyResultShape::kBroadcast},
+    {"T", &eval_t_lazy, LazyResultShape::kBroadcast},
     {"T.TEST", &eval_t_test_lazy, LazyResultShape::kReduce},
     {"TAKE", &eval_take_lazy, LazyResultShape::kArray},
     {"TBILLEQ", &eval_financial_date_lazy, LazyResultShape::kScalar},

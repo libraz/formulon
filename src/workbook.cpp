@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -107,6 +108,20 @@ Expected<void, Error> check_cell_target(const char* op, std::size_t sheet_index,
   }
   if (!Sheet::coord_in_grid(row, col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op) + ": coordinate out of grid",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+// `op`-prefixed refusal of a write into part of a legacy array formula
+// block: a block is only ever replaced as a whole, so a write into one of
+// its non-anchor cells leaves it unchanged. A write to the anchor replaces
+// the whole block.
+Expected<void, Error> check_not_part_of_array(const char* op, const Sheet& sheet, std::uint32_t row,
+                                              std::uint32_t col) {
+  const std::optional<SpillFootprint> block = sheet.array_block_covering(row, col);
+  if (block.has_value() && (block->anchor_row != row || block->anchor_col != col)) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": cannot change part of an array",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   return Expected<void, Error>::Ok();
@@ -1125,6 +1140,7 @@ void mark_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutat
 Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                Value value) {
   RETURN_IF_ERROR(check_cell_target("set_cell_value", sheet_index, sheets_.size(), row, col));
+  RETURN_IF_ERROR(check_not_part_of_array("set_cell_value", sheets_[sheet_index], row, col));
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 
@@ -1162,6 +1178,7 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
 Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                               std::string_view text) {
   RETURN_IF_ERROR(check_cell_target("set_cell_text", sheet_index, sheets_.size(), row, col));
+  RETURN_IF_ERROR(check_not_part_of_array("set_cell_text", sheets_[sheet_index], row, col));
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
@@ -1498,6 +1515,7 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula, FormulaSource source) {
   RETURN_IF_ERROR(check_cell_target("set_cell_formula", sheet_index, sheets_.size(), row, col));
+  RETURN_IF_ERROR(check_not_part_of_array("set_cell_formula", sheets_[sheet_index], row, col));
 
   // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
   // storage prefixes to the canonical formula-bar form at the single

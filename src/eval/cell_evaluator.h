@@ -106,6 +106,13 @@ bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellN
                                const std::function<Value(CellNodeId, EvalState*)>& evaluate,
                                const std::function<void(CellNodeId, Value)>& commit);
 
+/// The value every member cell of a genuine cycle holds with iterative
+/// calculation off: 0 for a cell whose cycle runs through itself alone, which
+/// Excel leaves at 0 unevaluated (`=A:A` in A1, `=A1+1` in A1), and `#REF!`
+/// for a cycle through several cells, whose Excel values depend on the order
+/// the cells were entered.
+Value unresolved_cycle_value(const std::vector<CellNodeId>& component);
+
 /// Prepares the cached values of an iterative component for its first solve.
 /// A cycle persisted while iterative calculation was disabled holds `#REF!`,
 /// which is not a useful numerical seed. Until the first full recalculation

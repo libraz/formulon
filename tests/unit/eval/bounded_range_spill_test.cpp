@@ -273,15 +273,16 @@ TEST(BoundedRangeSpill, SmallRectangleContainingItsOwnFormulaCellSpillsZerosInTh
 
 TEST(BoundedRangeSpill, SmallRectangleContainingItsOwnFormulaCellIsCircularInTheCommittingDriver) {
   // The committed footprint feeds a self-edge back into the dependency graph
-  // and the engine's cycle policy answers, so the cell is `#REF!` with
-  // nothing spilled. This is the answer a workbook shows, and it is reached
-  // through the graph rather than by pre-emption — which is why it is
-  // unchanged by where the pre-emption line is drawn.
+  // and the engine's cycle policy answers: the formula cell is the cycle's
+  // only member, so it is 0 with nothing spilled, as in Excel. This is the
+  // answer a workbook shows, and it is reached through the graph rather than
+  // by pre-emption — which is why it is unchanged by where the pre-emption
+  // line is drawn.
   Workbook wb = Workbook::create();
   const Sheet& sheet = RecalcWith(wb, 1U, 1U, "=A1:C3");
   const Value cell = sheet.resolve_cell_value(1U, 1U);
-  ASSERT_TRUE(cell.is_error());
-  EXPECT_EQ(cell.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(cell.is_number()) << cell.debug_to_string();
+  EXPECT_EQ(cell.as_number(), 0.0);
   EXPECT_EQ(sheet.spill_region_at_anchor(1U, 1U), nullptr);
   EXPECT_TRUE(sheet.resolve_cell_value(1U, 2U).is_blank());
   EXPECT_TRUE(sheet.resolve_cell_value(2U, 1U).is_blank());
@@ -380,12 +381,10 @@ TEST(BoundedRangeSpill, SpellingsExcelCanonicalisesAnswerIdentically) {
   // Excel rewrites `=A1:XFD1048576` into the whole-axis spelling on entry,
   // so after entry there is one formula. Both spellings are anchored inside
   // the rectangle — a full-grid rectangle contains every cell, so every
-  // anchor is — and both therefore report the cycle.
+  // anchor is — and both therefore report the cycle: 0, as the formula cell
+  // is the cycle's only member.
   //
-  // This is the assertion the full-height / full-width rule exists for. It
-  // is `#REF!` because Formulon reports every cycle member that way; Excel
-  // leaves 0, which is the registered engine-wide divergence and not
-  // something this pair claims to match.
+  // This is the assertion the full-height / full-width rule exists for.
   Workbook wb = Workbook::create();
   SeedNumber(wb, 0U, 0U, 1.0);
   const Sheet& sheet = wb.sheet(0);
@@ -395,11 +394,10 @@ TEST(BoundedRangeSpill, SpellingsExcelCanonicalisesAnswerIdentically) {
   std::size_t whole_axis_bytes = 0;
   const Value whole_axis = AdhocValueAndBytes(wb, sheet, 0U, 1U, "=A:XFD", &whole_axis_bytes);
 
-  ASSERT_TRUE(bounded.is_error());
-  ASSERT_TRUE(whole_axis.is_error());
-  EXPECT_EQ(bounded.as_error(), ErrorCode::Ref);
-  EXPECT_EQ(whole_axis.as_error(), ErrorCode::Ref);
-  EXPECT_EQ(bounded.as_error(), whole_axis.as_error());
+  ASSERT_TRUE(bounded.is_number()) << bounded.debug_to_string();
+  ASSERT_TRUE(whole_axis.is_number()) << whole_axis.debug_to_string();
+  EXPECT_EQ(bounded.as_number(), 0.0);
+  EXPECT_EQ(whole_axis.as_number(), 0.0);
   // Neither spelling builds anything to say so.
   EXPECT_LT(bounded_bytes, kWholeColumnBytes / 16U);
   EXPECT_LT(whole_axis_bytes, kWholeColumnBytes / 16U);

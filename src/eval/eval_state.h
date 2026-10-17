@@ -66,6 +66,13 @@ class EvalState {
   /// callers must thread the same `Sheet*` through the push / pop pair.
   bool push_cell(const Sheet* sheet, std::uint32_t row, std::uint32_t col);
 
+  /// True when `(sheet, row, col)` is the top frame: the cell whose formula
+  /// is being evaluated innermost, so a failed push of it is the cell reading
+  /// itself rather than a cycle through other cells.
+  bool is_top_cell(const Sheet* sheet, std::uint32_t row, std::uint32_t col) const noexcept {
+    return !stack_.empty() && stack_.back() == CellKey{sheet, row, col};
+  }
+
   /// Pops the top frame. In debug builds, asserts that the top matches
   /// `(sheet, row, col)`; in release builds the mismatch is silent but
   /// still unbalanced — callers must pair pushes with pops along every

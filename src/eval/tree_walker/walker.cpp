@@ -258,17 +258,16 @@ Shaped build_declared_rect(const parser::Reference& top_left, const parser::Refe
 //
 // For the committing driver this is a difference in cost, not in verdict:
 // the materialised footprint feeds a self-edge back into the dependency
-// graph and the engine's cycle policy reaches `#REF!` on its own, after
-// building the rectangle. Pre-empting reaches the same answer without
-// building it — the same shape as the footprint pre-check above. The
-// read-only driver has no graph to fall back on, which is where the two
-// spellings visibly disagreed.
+// graph and the engine's cycle policy answers on its own, after building
+// the rectangle. Pre-empting reaches the same answer without building it —
+// the same shape as the footprint pre-check above. The read-only driver has
+// no graph to fall back on, which is where the two spellings visibly
+// disagreed.
 //
-// The pre-emption does not introduce a divergence from Excel. Excel
-// abandons the closure for a self-covering rectangle and leaves 0, while
-// Formulon reports every cycle member as `#REF!`; that is the registered
-// engine-wide policy, and this extends it to a spelling Excel treats as
-// identical to one already covered by it.
+// The answer is the engine's cycle policy. With no other formula inside the
+// rectangle the formula cell is the only member of its cycle, and Excel
+// leaves it at 0; another formula inside may close a cycle through several
+// cells, which Formulon reports as `#REF!`.
 //
 // Without a formula cell to anchor against there is no footprint to
 // measure and nothing that could spill, so the rectangle is built
@@ -294,18 +293,26 @@ Shaped evaluate_bare_range_spill(const parser::Reference& top_left, const parser
   if (settle_circularity && same_sheet && anchor_row >= top_left.row && anchor_row <= bottom_right.row &&
       anchor_col >= top_left.col && anchor_col <= bottom_right.col) {
     // Circular, and reported as the engine reports every other cycle
-    // rather than as anything specific to this shape: `#REF!` with
-    // iterative calculation off, the cell's last computed value when it is
-    // on. That mirrors `EvalContext::resolve_ref`'s back-edge branch and
-    // the sentinel `RecalcEngine` writes for each member of a cyclic
-    // component. It cannot be delegated to `resolve_ref` here, because the
+    // rather than as anything specific to this shape: with iterative
+    // calculation off, 0 for a cell that is its own only cycle member and
+    // `#REF!` otherwise; the cell's last computed value when it is on. That
+    // mirrors `EvalContext::resolve_ref`'s back-edge branch and the value
+    // `RecalcEngine` writes for each member of a cyclic component. It
+    // cannot be delegated to `resolve_ref` here, because the
     // dependency-ordered recalc path evaluates with no `EvalState` and
     // short-circuits formula references to their cached values — asking it
-    // would yield the anchor's stale value instead of a cycle. Excel
-    // leaves 0 in the cell, which Formulon deliberately does not match.
+    // would yield the anchor's stale value instead of a cycle.
     const Workbook* workbook = ctx.workbook();
     if (workbook != nullptr && workbook->iterative_options().enabled) {
       return Shaped{sheet->resolve_cell_value(anchor_row, anchor_col), nullptr};
+    }
+    const std::vector<CellAddress> formulas =
+        sheet->formula_cells_in(top_left.row, top_left.col, bottom_right.row, bottom_right.col);
+    const bool sole_member = std::all_of(formulas.begin(), formulas.end(), [&](const CellAddress& a) {
+      return a.row == anchor_row && a.col == anchor_col;
+    });
+    if (sole_member) {
+      abandon_formula();
     }
     return Shaped{Value::error(ErrorCode::Ref), nullptr};
   }
@@ -915,8 +922,8 @@ enum class TopResult : std::uint8_t {
 
 // The one top-level evaluation behind `evaluate`, `evaluate_first_element` and
 // `evaluate_array_formula`. They differ only in what an array result becomes.
-Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   TopResult mode) {
+Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, TopResult mode) {
   const bool first_element_only = mode == TopResult::kFirstElement;
   const ScopedEvalProfile profile_scope(ctx.excel_profile());
   const ScopedEvalClock clock_scope(ctx.pinned_now());
@@ -956,11 +963,9 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
   // blocks it, and unpopulated cells spill as 0 -- are pinned by
   // tests/oracle/cases/whole_axis_spill.yaml.
   //
-  // One consequence in that suite is deliberately NOT matched. A formula
-  // sitting inside the axis it references is circular; Excel resolves the
-  // cycle to 0 with iterative calculation off, while Formulon's engine-wide
-  // policy reports `#REF!` for every cycle member. That difference is a
-  // registered divergence, not an observation this code reproduces.
+  // A formula sitting inside the axis it references is circular, and
+  // answered by the engine's cycle policy: 0 when the formula cell is the
+  // cycle's only member, as Excel leaves it with iterative calculation off.
   // `evaluate_bare_range_spill` settles circularity before the footprint so
   // the cycle cannot be pre-empted by a blocker.
   //
@@ -1170,6 +1175,15 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
     }
   }
   return v;
+}
+
+Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                   TopResult mode) {
+  // An array past Excel's element bound abandons the whole formula, which
+  // then holds 0 whatever encloses the array.
+  const ScopedFormulaAbandon abandon_scope;
+  const Value v = evaluate_top_body(node, arena, registry, ctx, mode);
+  return abandon_scope.abandoned() ? Value::number(0.0) : v;
 }
 
 }  // namespace

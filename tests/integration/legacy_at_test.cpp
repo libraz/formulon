@@ -866,5 +866,72 @@ TEST(LegacyAt, LegacyImpliedAtIsNotStored) {
   }
 }
 
+// Every cell of a legacy array formula block reports the block's formula
+// (FORMULATEXT in braces, ISFORMULA TRUE), and a write into a non-anchor
+// cell is refused, leaving the block unchanged. A write to the anchor
+// replaces the whole block.
+TEST(LegacyAt, LegacyArrayFormulaBlockIsChangedOnlyAsAWhole) {
+  const std::string sheet_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+      "<row r=\"1\"><c r=\"A1\"><v>5</v></c><c r=\"B1\"><f t=\"array\" ref=\"B1:B4\">ROW(A1:A3)</f></c>"
+      "<c r=\"D1\"><f t=\"array\" ref=\"D1\">1+1</f></c>"
+      "<c r=\"F1\"><f>_xlfn.FORMULATEXT(B1)</f></c><c r=\"G1\"><f>_xlfn.ISFORMULA(B1)</f></c></row>"
+      "<row r=\"2\"><c r=\"A2\"><v>7</v></c>"
+      "<c r=\"F2\"><f>_xlfn.FORMULATEXT(B2)</f></c><c r=\"G2\"><f>_xlfn.ISFORMULA(B2)</f></c></row>"
+      "<row r=\"3\"><c r=\"F3\"><f>_xlfn.FORMULATEXT(B3)</f></c><c r=\"G3\"><f>_xlfn.ISFORMULA(B3)</f></c></row>"
+      "<row r=\"4\"><c r=\"F4\"><f>_xlfn.FORMULATEXT(B4)</f></c><c r=\"G4\"><f>_xlfn.ISFORMULA(B4)</f></c>"
+      "</row>"
+      "<row r=\"5\"><c r=\"F5\"><f>_xlfn.FORMULATEXT(B5)</f></c><c r=\"G5\"><f>_xlfn.ISFORMULA(B5)</f></c>"
+      "</row>"
+      "</sheetData></worksheet>";
+  const std::vector<std::uint8_t> package =
+      test::BuildOoxmlPackage(test::OoxmlContentTypes(test::kXlsxWorkbookContentType), sheet_xml);
+  auto loaded = io::read_ooxml(SpanOf(package));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Sheet& s = wb.sheet(0);
+  const char* const block[] = {"1", "2", "3", "#N/A"};
+  const auto expect_block = [&]() {
+    for (std::uint32_t r = 0; r < 4U; ++r) {
+      EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 1U)), block[r]) << r;
+      EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 5U)), "{=ROW(A1:A3)}") << r;
+      EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 6U)), "TRUE") << r;
+    }
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(4U, 5U)), "#N/A");
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(4U, 6U)), "FALSE");
+    const Cell* anchor = s.cell_at(0U, 1U);
+    ASSERT_NE(anchor, nullptr);
+    EXPECT_EQ(anchor->formula_text, "=ROW(A1:A3)");
+    EXPECT_EQ(anchor->array_block_rows, 4U);
+    EXPECT_EQ(anchor->array_block_cols, 1U);
+  };
+  expect_block();
+
+  const auto refused = [](const Expected<void, Error>& r) {
+    return !r && r.error().code == FormulonErrorCode::kPreconditionFailed;
+  };
+  EXPECT_TRUE(refused(wb.set_cell_formula(0U, 1U, 1U, "=10")));
+  EXPECT_TRUE(refused(wb.set_cell_value(0U, 2U, 1U, Value::number(9.0))));
+  EXPECT_TRUE(refused(wb.set_cell_value(0U, 3U, 1U, Value::blank())));
+  EXPECT_TRUE(refused(wb.set_cell_text(0U, 1U, 1U, "x")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  expect_block();
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::blank())));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t r = 0; r < 4U; ++r) {
+    EXPECT_TRUE(s.resolve_cell_value(r, 1U).is_blank()) << r;
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 6U)), "FALSE") << r;
+  }
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(4.0))));
+  const Cell* replaced = s.cell_at(0U, 3U);
+  ASSERT_NE(replaced, nullptr);
+  EXPECT_TRUE(replaced->formula_text.empty());
+  EXPECT_EQ(replaced->array_block_rows, 0U);
+}
+
 }  // namespace
 }  // namespace formulon

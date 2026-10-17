@@ -65,8 +65,9 @@ TEST(WorkbookIterative, DefaultDisabledStillSurfacesRefForCycle) {
 
 TEST(WorkbookIterative, ChangingOptionsInvalidatesCachedCycleResults) {
   // A self-referential averaging formula converges to 2 only when iterative
-  // calculation is enabled. Changing the workbook option must therefore
-  // re-run the already-cached cycle in both directions.
+  // calculation is enabled; disabled, the cell is its cycle's only member
+  // and holds 0. Changing the workbook option must therefore re-run the
+  // already-cached cycle in both directions.
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+2)/2")));
 
@@ -74,8 +75,8 @@ TEST(WorkbookIterative, ChangingOptionsInvalidatesCachedCycleResults) {
   ASSERT_TRUE(static_cast<bool>(disabled_stats));
   EXPECT_EQ(disabled_stats.value().cycle_cells, 1U);
   Value a1 = StoredValue(wb, 0U, 0U, 0U);
-  ASSERT_TRUE(a1.is_error());
-  EXPECT_EQ(a1.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(a1.is_number());
+  EXPECT_EQ(a1.as_number(), 0.0);
 
   IterativeOptions enabled;
   enabled.enabled = true;
@@ -120,15 +121,16 @@ TEST(WorkbookIterative, ChangingOptionsInvalidatesCachedCycleResults) {
   EXPECT_EQ(disabled_again_stats.value().cycle_cells, 1U);
   EXPECT_EQ(disabled_again_stats.value().iterative_cells, 0U);
   a1 = StoredValue(wb, 0U, 0U, 0U);
-  ASSERT_TRUE(a1.is_error());
-  EXPECT_EQ(a1.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(a1.is_number());
+  EXPECT_EQ(a1.as_number(), 0.0);
 }
 
 TEST(WorkbookIterative, EnablingIterationPreservesIndependentRefUntilRecalc) {
   // A1 is an ordinary formula whose #REF! is genuine. B1 is an independent
-  // circular formula that should be re-seeded only when its SCC is actually
-  // evaluated. Enabling the option dirties both formulas, but must not erase
-  // either cached result before the caller chooses a recalc scope.
+  // circular formula, 0 while iterative calculation is off, that should be
+  // re-seeded only when its SCC is actually evaluated. Enabling the option
+  // dirties both formulas, but must not erase either cached result before
+  // the caller chooses a recalc scope.
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=#REF!")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=(B1+2)/2")));
@@ -139,9 +141,9 @@ TEST(WorkbookIterative, EnablingIterationPreservesIndependentRefUntilRecalc) {
   const Value disabled_a1 = StoredValue(wb, 0U, 0U, 0U);
   const Value disabled_b1 = StoredValue(wb, 0U, 0U, 1U);
   ASSERT_TRUE(disabled_a1.is_error()) << "A1 kind=" << static_cast<int>(disabled_a1.kind());
-  ASSERT_TRUE(disabled_b1.is_error()) << "B1 kind=" << static_cast<int>(disabled_b1.kind());
+  ASSERT_TRUE(disabled_b1.is_number()) << "B1 kind=" << static_cast<int>(disabled_b1.kind());
   EXPECT_EQ(disabled_a1.as_error(), ErrorCode::Ref);
-  EXPECT_EQ(disabled_b1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(disabled_b1.as_number(), 0.0);
 
   IterativeOptions enabled;
   enabled.enabled = true;
@@ -150,13 +152,13 @@ TEST(WorkbookIterative, EnablingIterationPreservesIndependentRefUntilRecalc) {
   wb.set_iterative_options(enabled);
 
   // This is the regression witness: changing an option must not globally
-  // rewrite cached #REF! values before the subsequent recalc.
+  // rewrite cached values before the subsequent recalc.
   const Value cached_a1 = StoredValue(wb, 0U, 0U, 0U);
   const Value cached_b1 = StoredValue(wb, 0U, 0U, 1U);
   ASSERT_TRUE(cached_a1.is_error()) << "A1 kind=" << static_cast<int>(cached_a1.kind());
-  ASSERT_TRUE(cached_b1.is_error()) << "B1 kind=" << static_cast<int>(cached_b1.kind());
+  ASSERT_TRUE(cached_b1.is_number()) << "B1 kind=" << static_cast<int>(cached_b1.kind());
   EXPECT_EQ(cached_a1.as_error(), ErrorCode::Ref);
-  EXPECT_EQ(cached_b1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(cached_b1.as_number(), 0.0);
 
   eval::SheetCellRange b1;
   b1.sheet_id = 0U;
@@ -199,9 +201,9 @@ TEST(WorkbookIterative, EnablingIterationPreservesIndependentRefOnParallelRecalc
   const Value disabled_a1 = StoredValue(wb, 0U, 0U, 0U);
   const Value disabled_b1 = StoredValue(wb, 0U, 0U, 1U);
   ASSERT_TRUE(disabled_a1.is_error()) << "A1 kind=" << static_cast<int>(disabled_a1.kind());
-  ASSERT_TRUE(disabled_b1.is_error()) << "B1 kind=" << static_cast<int>(disabled_b1.kind());
+  ASSERT_TRUE(disabled_b1.is_number()) << "B1 kind=" << static_cast<int>(disabled_b1.kind());
   EXPECT_EQ(disabled_a1.as_error(), ErrorCode::Ref);
-  EXPECT_EQ(disabled_b1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(disabled_b1.as_number(), 0.0);
 
   IterativeOptions enabled;
   enabled.enabled = true;
@@ -211,9 +213,9 @@ TEST(WorkbookIterative, EnablingIterationPreservesIndependentRefOnParallelRecalc
   const Value cached_a1 = StoredValue(wb, 0U, 0U, 0U);
   const Value cached_b1 = StoredValue(wb, 0U, 0U, 1U);
   ASSERT_TRUE(cached_a1.is_error()) << "A1 kind=" << static_cast<int>(cached_a1.kind());
-  ASSERT_TRUE(cached_b1.is_error()) << "B1 kind=" << static_cast<int>(cached_b1.kind());
+  ASSERT_TRUE(cached_b1.is_number()) << "B1 kind=" << static_cast<int>(cached_b1.kind());
   EXPECT_EQ(cached_a1.as_error(), ErrorCode::Ref);
-  EXPECT_EQ(cached_b1.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(cached_b1.as_number(), 0.0);
 
   auto enabled_stats = wb.recalc_parallel(eval::default_registry(), cfg, nullptr);
   ASSERT_TRUE(static_cast<bool>(enabled_stats));

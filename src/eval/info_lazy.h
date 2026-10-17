@@ -53,6 +53,12 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
 /// is coerced element by element.
 Value eval_n_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// `T(value)` — the value as text: text unchanged, an error propagated, and
+/// anything else as "". A reference argument reads its top-left cell like
+/// `N`, so `T(A1:A3)` is A1's text and never spills; an array argument is
+/// coerced element by element.
+Value eval_t_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
+
 /// `ISREF(value)` — returns TRUE iff the argument AST is a reference
 /// shape (Ref / RangeOp / StructuredRef / NameRef) or a
 /// reference-returning call (INDIRECT / OFFSET / INDEX / CHOOSE) that

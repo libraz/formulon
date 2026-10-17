@@ -319,13 +319,14 @@ TEST(EvalContextRecursive, MutableThreeDRangeUsesScalarFormulaAnchors) {
   EXPECT_DOUBLE_EQ(aggregate.as_number(), 27.0);
 }
 
-TEST(EvalContextRecursive, DirectCycleReturnsRef) {
+TEST(EvalContextRecursive, DirectCycleReturnsZero) {
+  // A cell reading itself is its cycle's only member, which Excel leaves at 0.
   Sheet sheet("Sheet1");
   sheet.set_cell_formula(0, 0, "=A1");
   EvalState state;
   const Value v = ResolveWithState(sheet, state, 0, 0);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(EvalContextRecursive, IndirectCycleReturnsRef) {

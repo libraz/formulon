@@ -512,9 +512,41 @@ TEST(BuiltinsT, BoolBecomesEmptyText) {
 }
 
 TEST(BuiltinsT, BlankBecomesEmptyText) {
-  const Value v = CallSingle("T", Value::blank());
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=T(A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "");
+}
+
+TEST(BuiltinsT, ReferenceReadsItsFirstCell) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("x"));
+  s.set_cell_value(1U, 0U, Value::text("y"));
+  s.set_cell_value(2U, 0U, Value::text("z"));
+  s.set_cell_value(0U, 1U, Value::number(1.0));
+  s.set_cell_value(1U, 1U, Value::number(2.0));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "Sheet1!$A$2:$B$3")));
+  const struct {
+    const char* src;
+    const char* expected;
+  } cases[] = {{"=T(A1:A3)", "x"},        {"=T(B1:B3)", ""},        {"=T(A2:A3)", "y"},
+               {"=T(Rng)", "y"},          {"=T(A1:B2 A2:B3)", "y"}, {"=T(OFFSET(A1,2,0,2,1))", "z"},
+               {"=T(A1:A3)&\"!\"", "x!"}, {"=T(C1:C3)", ""}};
+  for (const auto& c : cases) {
+    const Value v = EvalSourceIn(c.src, wb, s);
+    ASSERT_TRUE(v.is_text()) << c.src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_text(), c.expected) << c.src;
+  }
+}
+
+TEST(BuiltinsT, ArrayIsCoercedElementByElement) {
+  const Value v = EvalSource("=T({\"a\",1,TRUE})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "a");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "");
+  EXPECT_EQ(v.as_array_cells()[2].as_text(), "");
 }
 
 TEST(BuiltinsT, ErrorPropagates) {

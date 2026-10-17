@@ -19,6 +19,9 @@ ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& 
   if (rows == 0U || cols == 0U || rows > Sheet::kMaxRows || cols > Sheet::kMaxCols) {
     return nullptr;
   }
+  if (abandons_formula(rows, cols)) {
+    return nullptr;
+  }
   const auto total = checked_mul_size_t(rows, cols);
   if (!total || static_cast<std::uint64_t>(total.value()) > max_cells) {
     return nullptr;
@@ -54,6 +57,10 @@ ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Valu
 
 const TailArray* make_tail_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::uint32_t head,
                                  TailAxis axis, const Value* cells, const Value* tail, bool from_reference) {
+  // A reference read is no evaluated array; an operation's result is.
+  if (!from_reference && abandons_formula(rows, cols)) {
+    return nullptr;
+  }
   return arena.create<TailArray>(TailArray{rows, cols, head, axis, cells, tail, from_reference});
 }
 

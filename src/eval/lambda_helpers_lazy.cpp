@@ -524,7 +524,8 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (!read_count_arg(call.as_call_arg(1), arena, registry, ctx, a1::kMaxCols, &cols, &err)) {
     return err;
   }
-  if (static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
+  if (abandons_formula(rows, cols) ||
+      static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
     return Value::error(ErrorCode::Num);
   }
   const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);

@@ -15,6 +15,7 @@
 #include "eval/builtin_names.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_state.h"
+#include "eval/formula_abandon.h"
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
@@ -344,6 +345,11 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     if (workbook_ != nullptr && workbook_->iterative_options().enabled) {
       const Value cached = adopt_text_into(arena, read.value());
       return scalarize_result ? scalarize_formula_ref(cached) : cached;
+    }
+    // A cell reading itself is the only member of its cycle, and Excel
+    // leaves such a cell at 0 unevaluated.
+    if (state_->is_top_cell(target, ref.row, ref.col)) {
+      abandon_formula();
     }
     return Value::error(ErrorCode::Ref);
   }

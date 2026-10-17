@@ -321,13 +321,17 @@ class Workbook {
   ///     recalc pass would discover them via BFS anyway, but eager marking
   ///     keeps the dirty set inspectable between mutations.
   ///
-  /// Returns `kInvalidArgument` when `sheet_index >= sheet_count()`.
+  /// Returns `kInvalidArgument` when `sheet_index >= sheet_count()`, and
+  /// `kPreconditionFailed`, changing nothing, when the cell is a non-anchor
+  /// cell of a legacy array formula block; a write to the anchor replaces
+  /// the whole block.
   Expected<void, Error> set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
 
   /// Stores a text literal whose bytes are copied into the destination cell.
   /// This is appropriate for short-lived caller buffers; source readers that
   /// keep a workbook-scoped shared-string store can use `set_cell_value`
-  /// with `Value::text` instead.
+  /// with `Value::text` instead. Refuses a non-anchor cell of a legacy array
+  /// formula block like `set_cell_value`.
   Expected<void, Error> set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                       std::string_view text);
 
@@ -361,7 +365,10 @@ class Workbook {
   ///   * Re-registers the cell with the dep graph and volatile tracker.
   ///   * Marks the cell and its existing dependents dirty.
   ///
-  /// Returns `kInvalidArgument` when `sheet_index >= sheet_count()`.
+  /// Returns `kInvalidArgument` when `sheet_index >= sheet_count()`, and
+  /// `kPreconditionFailed`, changing nothing, when the cell is a non-anchor
+  /// cell of a legacy array formula block; a write to the anchor replaces
+  /// the whole block.
   Expected<void, Error> set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                          std::string formula, FormulaSource source = FormulaSource::kEntered);
 

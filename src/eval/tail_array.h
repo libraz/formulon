@@ -43,7 +43,9 @@ struct Shaped {
 };
 
 /// Allocates a `TailArray` in `arena`. Returns `nullptr` when the arena is
-/// exhausted. `cells` and `tail` are stored as given, not copied.
+/// exhausted, or when an operation's result (not `from_reference`) declares
+/// more than `kMaxEvaluatedArrayElements`, which abandons the formula.
+/// `cells` and `tail` are stored as given, not copied.
 const TailArray* make_tail_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::uint32_t head,
                                  TailAxis axis, const Value* cells, const Value* tail, bool from_reference);
 

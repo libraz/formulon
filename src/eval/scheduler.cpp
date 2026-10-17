@@ -277,9 +277,9 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         out.cells_evaluated += cells.size();
         return out;
       }
-      // Otherwise every member surfaces #REF!, except that a cycle closing
-      // through an OFFSET / INDIRECT read keeps its members at their last
-      // value, as Excel does.
+      // Otherwise every member surfaces #REF! (0 for a cell that is its own
+      // cycle), except that a cycle closing through an OFFSET / INDIRECT read
+      // keeps its members at their last value, as Excel does.
       if (dynamic_cycle) {
         std::lock_guard<std::mutex> guard(write_mutex);
         obs.log->restore_prior_values(wb, component);
@@ -295,7 +295,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         Sheet& sheet = wb.sheet(c.sheet_id);
         std::lock_guard<std::mutex> guard(write_mutex);
         SpillCommitter committer(&sheet, c.row, c.col, release_callback, release_user_data);
-        sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
+        sheet.set_cell_cached_value(c.row, c.col, committer.commit(unresolved_cycle_value(component)));
       }
       return out;
     }
