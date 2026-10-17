@@ -7,6 +7,10 @@
 // its leading whitespace kept. Excel drops a space before `,`, around `:`,
 // inside an array constant and at the end when it reads the text, and stores
 // the rest in the token stream, which reads back to the same text.
+//
+// `tests/fixtures/excel/xlsb_formula_whitespace_placements.xlsb` holds, in
+// C1:C6 of its one sheet, formulas typed with whitespace in further
+// positions; Excel keeps all of it except the spaces before a line feed.
 
 #include <cstddef>
 #include <cstdint>
@@ -40,9 +44,9 @@ namespace io {
 namespace xlsb {
 namespace {
 
-std::vector<std::uint8_t> ReadFixture() {
+std::vector<std::uint8_t> ReadFixture(const char* file = "xlsb_formula_whitespace.xlsb") {
   std::vector<std::uint8_t> out;
-  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_formula_whitespace.xlsb";
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/" + file;
   FILE* f = std::fopen(path.c_str(), "rb");
   if (f == nullptr) {
     ADD_FAILURE() << "could not open fixture: " << path;
@@ -297,8 +301,9 @@ bool HasAttrSpace(const std::vector<std::uint8_t>& rgce) {
 TEST(XlsbFormulaWhitespace, DropsWhitespaceExcelDoesNotStore) {
   const std::pair<const char*, const char*> cases[] = {
       {"SUM(1 ,2)", "SUM(1,2)"},   {"1+2 ", "1+2"},   {"1+2\n", "1+2"},
-      {"1+ (2)", "1+(2)"},         {"1+\t2", "1+2"},  {"1+ \n2", "1+2"},
-      {"SUM(1,2 ,)", "SUM(1,2,)"}, {"- (5)", "-(5)"}, {"1+ SUM(2)", "1+SUM(2)"},
+      {"1+\n(2)", "1+(2)"},        {"1+\t2", "1+2"},  {"1+ \n2", "1+2"},
+      {"SUM(1,2 ,)", "SUM(1,2,)"}, {"1 \n+2", "1+2"}, {"1+ SUM(2)", "1+SUM(2)"},
+      {"A1: (B1)", "A1:(B1)"},
   };
   for (const auto& [spaced, bare] : cases) {
     const std::vector<std::uint8_t> rgce = Encode(spaced);
@@ -326,7 +331,8 @@ std::string Decode(const std::vector<std::uint8_t>& rgce) {
 // A whitespace type or placement outside the ones Excel writes for formula
 // text is skipped rather than guessed at.
 TEST(XlsbFormulaWhitespace, SkipsUnknownPlacements) {
-  // Spaces before an open parenthesis (type 2), and two attrs before one token.
+  // Spaces before an open parenthesis (type 2) ahead of an operand token, and
+  // spaces then line feeds before one token.
   EXPECT_EQ(Decode({0x19, 0x40, 0x02, 0x01, 0x1E, 0x01, 0x00, 0x15}), "(1)");
   EXPECT_EQ(Decode({0x19, 0x40, 0x00, 0x01, 0x19, 0x40, 0x01, 0x01, 0x1E, 0x01, 0x00}), "1");
   // Spaces before an operand ahead of a unary minus token.
@@ -334,6 +340,73 @@ TEST(XlsbFormulaWhitespace, SkipsUnknownPlacements) {
   // A control attr between the space and its token is transparent.
   EXPECT_EQ(Decode({0x1E, 0x01, 0x00, 0x19, 0x40, 0x04, 0x02, 0x19, 0x08, 0x03, 0x00, 0x42, 0x01, 0x04, 0x00}),
             "SUM(1  )");
+}
+
+// What Excel shows for C1:C6 of the placements fixture.
+constexpr std::pair<std::uint32_t, const char*> kPlacementText[] = {
+    {0U, "=1+ (2)"}, {1U, "=SUM(1\n)"}, {2U, "=NOW( )"}, {3U, "=1+\n2"}, {4U, "=LET(x, 1,\n x)"}, {5U, "=(A1, A2)"},
+};
+
+TEST(XlsbFormulaWhitespace, ReadsPlacements) {
+  const Workbook wb = Load(ReadFixture("xlsb_formula_whitespace_placements.xlsb"));
+  ASSERT_GE(wb.sheet_count(), 1U);
+  for (const auto& [row, text] : kPlacementText) {
+    EXPECT_EQ(FormulaAt(wb, row, 2U), text) << "row " << row + 1U;
+  }
+}
+
+TEST(XlsbFormulaWhitespace, EncodesPlacementTokens) {
+  const std::vector<std::uint8_t> package = ReadFixture("xlsb_formula_whitespace_placements.xlsb");
+  const Workbook wb = Load(package);
+  const ExcelTokens excel = ReadExcelTokens(package);
+  const std::vector<std::string> sheets = {wb.sheet(0).name()};
+  // The fixture's own name indices.
+  const NameTable names = {{"_xlfn.LET", 3U}, {"_xlpm.x", 4U}};
+  for (const auto& [row, text] : kPlacementText) {
+    const Cell* cell = wb.sheet(0).cell_at(row, 2U);
+    ASSERT_NE(cell, nullptr) << text;
+    const std::string body = Body(cell->formula_text);
+    Arena arena;
+    parser::Parser p(body, arena);
+    const parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << body;
+    auto encoded = encode_ptgs(*root, sheets, excel.sheet_ranges, names, PtgRootClass::kValue, std::nullopt,
+                               cell->dynamic_array ? PtgEvaluation::kDynamicArray : PtgEvaluation::kLegacy,
+                               name_shapes(wb, 0), body);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << body << ": " << encoded.error().message;
+    const auto it = excel.cells.find({row, 2U});
+    ASSERT_NE(it, excel.cells.end()) << body;
+    EXPECT_EQ(ClearUnused(encoded.value().rgce), ClearUnused(it->second)) << body;
+  }
+}
+
+TEST(XlsbFormulaWhitespace, WriteReadKeepsPlacements) {
+  const Workbook wb = Load(ReadFixture("xlsb_formula_whitespace_placements.xlsb"));
+  auto bytes = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
+  const Workbook back = Load(bytes.value());
+  for (const auto& [row, text] : kPlacementText) {
+    EXPECT_EQ(FormulaAt(back, row, 2U), text) << "row " << row + 1U;
+  }
+}
+
+// The same placements in other contexts encode and decode to the same text.
+TEST(XlsbFormulaWhitespace, PlacementsRoundTripInOtherContexts) {
+  const char* const texts[] = {
+      "- (5)",     "SUM(1, (2))", "1+ ( 2 )",   "1+ ( (2))", "(1\n)+2", "(1\n )+2",
+      "SUM(1\n )", "SUM(1,\n 2)", "IF(1,\n 2)", "RAND( )",   "1+\n 2",
+  };
+  for (const char* text : texts) {
+    EXPECT_EQ(Decode(Encode(text)), text);
+  }
+}
+
+// A volatile formula keeps `PtgAttrSemi` unless a whitespace attr opens it.
+TEST(XlsbFormulaWhitespace, VolatileFlagRidesOnAnOpeningSpaceAttr) {
+  EXPECT_EQ(Encode("NOW( )"), (std::vector<std::uint8_t>{0x19, 0x41, 0x04, 0x01, 0x41, 0x4A, 0x00}));
+  EXPECT_EQ(Encode("NOW()"), (std::vector<std::uint8_t>{0x19, 0x01, 0x00, 0x00, 0x41, 0x4A, 0x00}));
+  EXPECT_EQ(Encode("1+NOW( )"), (std::vector<std::uint8_t>{0x19, 0x01, 0x00, 0x00, 0x1E, 0x01, 0x00, 0x19, 0x40, 0x04,
+                                                           0x01, 0x41, 0x4A, 0x00, 0x03}));
 }
 
 }  // namespace

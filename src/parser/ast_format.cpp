@@ -82,14 +82,16 @@ struct Layout {
   const FormulaWhitespace* whitespace = nullptr;
 };
 
-// Appends the whitespace run kept at `slot` / `index` of `node`, if any.
+// Appends the whitespace runs kept at `slot` / `index` of `node`, if any.
 void AppendWhitespace(const Layout& layout, const AstNode& node, WhitespaceSlot slot, std::uint8_t index,
                       std::string& out) {
   if (layout.whitespace == nullptr) {
     return;
   }
-  if (const WhitespaceRun* run = find_whitespace(*layout.whitespace, node, slot, index); run != nullptr) {
-    out.append(run->count, run->ch);
+  for (const WhitespaceRun& run : *layout.whitespace) {
+    if (run.node == &node && run.slot == slot && run.index == index) {
+      out.append(run.count, run.ch);
+    }
   }
 }
 
@@ -749,7 +751,10 @@ void FormatBare(const AstNode& node, std::string& out, const Layout& layout) {
 
 void FormatNode(const AstNode& node, std::string& out, const Layout& layout) {
   const std::uint8_t n = ParenCount(layout.parens, node);
-  out.append(n, '(');
+  for (unsigned i = n; i >= 1U; --i) {
+    AppendWhitespace(layout, node, WhitespaceSlot::kBeforeOpen, static_cast<std::uint8_t>(i), out);
+    out.push_back('(');
+  }
   AppendWhitespace(layout, node, WhitespaceSlot::kBeforeText, 0, out);
   FormatBare(node, out, layout);
   for (unsigned i = 1; i <= n; ++i) {

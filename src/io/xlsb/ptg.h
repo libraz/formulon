@@ -163,9 +163,11 @@ enum class PtgAttrKind : std::uint8_t {
 
 /// `PtgAttrSpace` whitespace types ([MS-XLSB] PtgAttrSpaceType) the reader
 /// and writer carry. The attr precedes the token it applies to.
-inline constexpr std::uint8_t kPtgSpaceSpaces = 0x00;       ///< Spaces before the next token.
-inline constexpr std::uint8_t kPtgSpaceLineFeeds = 0x01;    ///< Line breaks (`\n`) before the next token.
-inline constexpr std::uint8_t kPtgSpaceBeforeClose = 0x04;  ///< Spaces before a close parenthesis.
+inline constexpr std::uint8_t kPtgSpaceSpaces = 0x00;                ///< Spaces before the next token.
+inline constexpr std::uint8_t kPtgSpaceLineFeeds = 0x01;             ///< Line breaks (`\n`) before the next token.
+inline constexpr std::uint8_t kPtgSpaceBeforeOpen = 0x02;            ///< Spaces before an open parenthesis.
+inline constexpr std::uint8_t kPtgSpaceBeforeClose = 0x04;           ///< Spaces before a close parenthesis.
+inline constexpr std::uint8_t kPtgSpaceLineFeedsBeforeClose = 0x05;  ///< Line breaks before a close parenthesis.
 
 /// One row of the dispatch table.
 ///

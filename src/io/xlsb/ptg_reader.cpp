@@ -568,18 +568,27 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     return n;
   };
 
-  // `PtgAttrSpace` runs waiting for the token they precede.
+  // `PtgAttrSpace` attrs waiting for the token they precede: how many, and
+  // the (type, count) of the first `kMaxPendingSpaces`.
+  struct PendingSpace {
+    std::uint8_t type;
+    std::uint8_t count;
+  };
+  constexpr std::uint32_t kMaxPendingSpaces = 3;
   std::uint32_t pending_spaces = 0;
-  std::uint8_t pending_type = 0;
-  std::uint8_t pending_count = 0;
+  PendingSpace pending[kMaxPendingSpaces] = {};
 
-  // Records the pending run against `node`, the result of a `kind` token.
+  // Records the pending attrs against `node`, the result of a `kind` token,
+  // when they form one of the sequences `decode_ptgs` documents.
   auto record_space = [&](PtgKind kind, const parser::AstNode* node) {
-    if (whitespace == nullptr || node == nullptr || pending_count == 0) {
+    if (whitespace == nullptr || node == nullptr || pending_spaces == 0 || pending_spaces > kMaxPendingSpaces) {
       return;
     }
-    const bool run = pending_type == kPtgSpaceSpaces || pending_type == kPtgSpaceLineFeeds;
-    const char ch = pending_type == kPtgSpaceLineFeeds ? '\n' : ' ';
+    parser::WhitespaceSlot slot = parser::WhitespaceSlot::kBeforeText;
+    std::uint8_t index = 0;
+    std::uint8_t spaces_type = kPtgSpaceSpaces;
+    std::uint8_t feeds_type = kPtgSpaceLineFeeds;
+    bool paren = false;
     switch (kind) {
       case PtgKind::Int:
       case PtgKind::Num:
@@ -599,10 +608,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::RefErr3d:
       case PtgKind::AreaErr:
       case PtgKind::AreaErr3d:
-        if (run) {
-          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeText, 0, ch, pending_count});
-        }
-        return;
+        break;
       case PtgKind::Add:
       case PtgKind::Sub:
       case PtgKind::Mul:
@@ -617,25 +623,51 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Ne:
       case PtgKind::Isect:
       case PtgKind::Percent:
-        if (run) {
-          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeOperator, 0, ch, pending_count});
-        }
-        return;
+        slot = parser::WhitespaceSlot::kBeforeOperator;
+        break;
       case PtgKind::Paren:
-        if (pending_type == kPtgSpaceBeforeClose) {
-          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeClose, node->paren_depth(), ' ', pending_count});
-        }
-        return;
+        slot = parser::WhitespaceSlot::kBeforeClose;
+        index = node->paren_depth();
+        spaces_type = kPtgSpaceBeforeClose;
+        feeds_type = kPtgSpaceLineFeedsBeforeClose;
+        paren = true;
+        break;
       case PtgKind::Func:
       case PtgKind::FuncVar:
       case PtgKind::Attr:
-        if (pending_type == kPtgSpaceBeforeClose && node->kind() == parser::NodeKind::Call &&
-            node->as_call_arity() != 0) {
-          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeClose, 0, ' ', pending_count});
+        if (node->kind() != parser::NodeKind::Call) {
+          return;
         }
-        return;
+        slot = parser::WhitespaceSlot::kBeforeClose;
+        spaces_type = kPtgSpaceBeforeClose;
+        feeds_type = kPtgSpaceLineFeedsBeforeClose;
+        break;
       default:
         return;
+    }
+    // Spaces before a pair's `(`, then line feeds, then spaces, each at most once.
+    std::uint32_t at = 0;
+    if (paren && pending[at].type == kPtgSpaceBeforeOpen) {
+      ++at;
+    }
+    for (const std::uint8_t type : {feeds_type, spaces_type}) {
+      if (at < pending_spaces && pending[at].type == type) {
+        ++at;
+      }
+    }
+    if (at != pending_spaces) {
+      return;
+    }
+    for (std::uint32_t i = 0; i < pending_spaces; ++i) {
+      const PendingSpace& p = pending[i];
+      if (p.count == 0) {
+        continue;
+      }
+      if (paren && p.type == kPtgSpaceBeforeOpen) {
+        whitespace->push_back({node, parser::WhitespaceSlot::kBeforeOpen, index, ' ', p.count});
+      } else {
+        whitespace->push_back({node, slot, index, p.type == feeds_type ? '\n' : ' ', p.count});
+      }
     }
   };
 
@@ -1425,8 +1457,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
               return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgAttrSpace payload truncated",
                                 "context=xlsb_ptg_reader");
             }
-            pending_type = cursor.data[0];
-            pending_count = cursor.data[1];
+            if (pending_spaces < kMaxPendingSpaces) {
+              pending[pending_spaces] = PendingSpace{cursor.data[0], cursor.data[1]};
+            }
             ++pending_spaces;
             cursor.data += 2;
             cursor.size -= 2;
@@ -1483,7 +1516,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         return unsupported_ptg(first_byte, info->name);
     }
     if (pending_spaces != 0 && !keeps_pending_space) {
-      if (pending_spaces == 1 && !stack.empty()) {
+      if (!stack.empty()) {
         record_space(info->kind, stack.back());
       }
       pending_spaces = 0;

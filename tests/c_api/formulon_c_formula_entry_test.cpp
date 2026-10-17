@@ -37,7 +37,8 @@ void MakeWorkbook(WorkbookGuard* wb) {
 
 const std::vector<std::string>& RejectedFormulas() {
   static const std::vector<std::string> formulas = {
-      "=TRUE!A1", "=SUM(", "=1+", "=Data!SUM(A1:A2)", "=SUM(Data:Sheet1!A1", "=(1+2", "SUM(",
+      "=TRUE!A1", "=SUM(", "=1+",    "=Data!SUM(A1:A2)", "=SUM(Data:Sheet1!A1",
+      "=(1+2",    "SUM(",  "=1\t+2", "=SUM(1,\r\n2)",    "=SUM (1)",
   };
   return formulas;
 }
@@ -319,6 +320,38 @@ TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
     ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, i, &v), 0);
     EXPECT_STREQ(v.formula1, expected[i]);
   }
+}
+
+// Whitespace Excel keeps is stored as typed; spaces before a line feed go.
+TEST(FormulonCApiFormulaEntry, EnteredWhitespaceTakesTheStoredSpelling) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  const std::pair<const char*, const char*> cases[] = {
+      {"=1+ (2)", "=1+ (2)"},
+      {"=SUM(1\n)", "=SUM(1\n)"},
+      {"=NOW( )", "=NOW( )"},
+      {"=1+ \n2", "=1+\n2"},
+      {"=LET(x, 1,\n x)", "=LET(x, 1,\n x)"},
+      {"=(A1, A2)", "=(A1, A2)"},
+  };
+  std::uint32_t row = 10;
+  for (const auto& [typed, stored] : cases) {
+    SCOPED_TRACE(typed);
+    ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, row, 2, typed), 0) << fm_last_error_message();
+    EXPECT_EQ(GetFormula(wb.handle, row, 2), stored);
+    ++row;
+  }
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  for (const auto& [r, expected] : {std::pair<std::uint32_t, double>{10, 3.0}, {11, 1.0}, {13, 3.0}, {14, 1.0}}) {
+    fm_value_t value{};
+    ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, r, 2, &value), 0);
+    ASSERT_EQ(value.kind, FM_VAL_NUMBER) << "row " << r;
+    EXPECT_EQ(value.u.number, expected) << "row " << r;
+  }
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 15, 2, &value), 0);
+  ASSERT_EQ(value.kind, FM_VAL_ERROR);
+  EXPECT_EQ(value.u.error_code, 2);  // #VALUE!
 }
 
 TEST(FormulonCApiFormulaEntry, LoadedUnparseableFormulaIsKeptVerbatim) {

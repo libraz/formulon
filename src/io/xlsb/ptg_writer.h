@@ -309,14 +309,17 @@ std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& 
 /// and a legacy formula's `legacy_intersections`.
 ///
 /// `source`, when given, is the text `node` was parsed from (without the
-/// `=`); its whitespace is stored as `PtgAttrSpace` where Excel keeps it:
-/// a run of spaces or of line feeds before an operand token (after an
-/// operator, `(`, a call's `,` or at the start), before a binary operator
-/// or `%`, and beyond the one space of an intersection; a run of spaces
-/// before a `)` that follows an operand. Whitespace around `:`, before a
-/// `,`, at the end and inside an array constant is dropped as Excel drops
-/// it; so is whitespace in any other position (before a `(`, a function
-/// name or a prefix operator token, inside LET / LAMBDA).
+/// `=`); its whitespace is stored as `PtgAttrSpace` where Excel keeps it.
+/// A run of spaces, of line feeds, or line feeds then spaces: before an
+/// operand token (at the start, after an operator, `(`, or the `,` of a
+/// call, a union or a LET value or body), before a binary operator or `%`,
+/// before a `)` that follows an operand, and inside an empty call. A run of
+/// spaces: before the `(` of a parenthesised operand, and beyond the one
+/// space of an intersection. Whitespace around `:`, before a `,`, at the
+/// end and inside an array constant is dropped as Excel drops it; so is
+/// whitespace in any other position (before a function name or a prefix
+/// operator token, before a LET name, inside LAMBDA). A volatile formula
+/// opening with a whitespace attr stores it as `PtgAttrSpaceSemi`.
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt,

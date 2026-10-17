@@ -46,9 +46,13 @@ enum class WhitespaceSlot : std::uint8_t {
   /// Before a `)`: `index` 0 is a call's own, `index` i >= 1 the i-th pair
   /// printed around the node, innermost first.
   kBeforeClose,
+  /// Before the `(` of the i-th pair (`index` >= 1) printed around the node,
+  /// innermost first.
+  kBeforeOpen,
 };
 
 /// One whitespace run: `count` repetitions of `ch` (a space or a line feed).
+/// A slot may hold several runs, printed in the order they are listed.
 struct WhitespaceRun {
   const AstNode* node;
   WhitespaceSlot slot;
@@ -61,7 +65,7 @@ struct WhitespaceRun {
 /// formatter prints nothing for a slot without an entry.
 using FormulaWhitespace = std::vector<WhitespaceRun>;
 
-/// The run at `slot` / `index` of `node`, or null.
+/// The first run at `slot` / `index` of `node`, or null.
 const WhitespaceRun* find_whitespace(const FormulaWhitespace& whitespace, const AstNode& node, WhitespaceSlot slot,
                                      std::uint8_t index = 0);
 

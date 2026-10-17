@@ -89,8 +89,10 @@ fm_status_t finish_status(const formulon::Expected<void, formulon::Error>& r);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message);
 
-// Entry check for formula text a public setter is about to store: applies the
-// storage normalization `Workbook::set_cell_formula` applies, then requires
+// Entry check for formula text a public setter is about to store: refuses the
+// whitespace Excel refuses (`parser::has_refused_whitespace`: a tab, a carriage
+// return, a run between a built-in's name and its `(`), applies the storage
+// normalization `Workbook::set_cell_formula` applies, then requires
 // `eval::parse_formula_entry` to accept it. Returns 0, or sets
 // `kParserUnexpectedToken` ("<api>: formula does not parse") with `context`.
 fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context);

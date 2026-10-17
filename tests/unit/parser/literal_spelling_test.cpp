@@ -360,6 +360,11 @@ TEST(DropUnkeptWhitespace, MatchesStoredFormText) {
       {"=1+2\n", "=1+2"},
       {"= 1+2 ", "= 1+2"},
       {"=SUM(1, 2) \n ", "=SUM(1, 2)"},
+      {"=1+ \n2", "=1+\n2"},
+      {"=1+  \n 2", "=1+\n 2"},
+      {"=1+ \n \n2", "=1+\n\n2"},
+      {"=SUM(1 \n)", "=SUM(1\n)"},
+      {"=LET(x, 1, \n x)", "=LET(x, 1,\n x)"},
   };
   for (const Case& c : cases) {
     EXPECT_EQ(drop_unkept_whitespace(c.typed), c.stored) << c.typed;
@@ -396,6 +401,12 @@ TEST(DropUnkeptWhitespace, KeepsWhitespaceThatHasAPlaceInTheFormula) {
       "=-\n5",
       "=\"x , y : z \"",
       "=Table1[[#This Row], [Col]]",
+      "=1+ (2)",
+      "=SUM(1\n)",
+      "=NOW( )",
+      "=LET(x, 1,\n x)",
+      "=(A1, A2)",
+      "=\"a \nb\"",
   };
   for (const std::string_view text : kept) {
     EXPECT_EQ(drop_unkept_whitespace(text), text) << text;
@@ -441,6 +452,30 @@ TEST(SpellEnteredFormula, IdempotentOnStoredText) {
   };
   for (const std::string_view text : stored) {
     EXPECT_EQ(spell_entered_formula(text), text) << text;
+  }
+}
+
+bool IsTestFunction(std::string_view name) {
+  return name == "SUM" || name == "LOG10" || name == "NOW";
+}
+
+TEST(HasRefusedWhitespace, RefusesTabCarriageReturnAndSpacedCall) {
+  const std::vector<std::string_view> refused = {
+      "=1\t+2", "=SUM(1,\r\n2)", "=1+\r2", "=SUM (1)", "=SUM\n(1)", "=LOG10 (100)", "=1+NOW ()", "SUM (1)",
+  };
+  for (const std::string_view text : refused) {
+    EXPECT_TRUE(has_refused_whitespace(text, &IsTestFunction)) << text;
+  }
+}
+
+TEST(HasRefusedWhitespace, AcceptsKeptWhitespaceAndIntersections) {
+  const std::vector<std::string_view> accepted = {
+      "=1+ (2)",  "=SUM(1\n)",    "=NOW( )",     "=1+ \n2",   "=(A1, A2)",
+      "=A1 (A1)", "=Rng (A1:B2)", "=S!SUM (A1)", "=\"a\tb\"", "=Table1[[#This Row], [Col]]",
+      "",
+  };
+  for (const std::string_view text : accepted) {
+    EXPECT_FALSE(has_refused_whitespace(text, &IsTestFunction)) << text;
   }
 }
 

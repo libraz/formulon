@@ -16,6 +16,7 @@
 #include "cf/cf_types.h"
 #include "eval/builtin_names.h"
 #include "num_fmt_locale.h"
+#include "parser/literal_spelling.h"
 #include "sheet.h"
 #include "styles.h"
 #include "utils/arena.h"
@@ -555,14 +556,24 @@ fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, con
 
 namespace {
 
-// Parse check of text already in stored spelling.
-fm_status_t check_normalized_formula_parses(const char* api, std::string_view normalized, std::string context) {
-  std::string_view body = normalized;
+bool is_builtin_function_name(std::string_view name) {
+  return formulon::eval::resolve_builtin_function_name(name) != nullptr;
+}
+
+// Parse check of entered text: whitespace Excel refuses fails it, and so
+// does a stored spelling that does not parse. `*stored` receives the stored
+// spelling.
+fm_status_t check_entered_formula_parses(const char* api, std::string_view formula, std::string context,
+                                         std::string* stored) {
+  *stored =
+      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
+  std::string_view body = *stored;
   if (!body.empty() && body.front() == '=') {
     body.remove_prefix(1);
   }
   formulon::Arena arena;
-  if (formulon::eval::parse_formula_entry(body, arena) != nullptr) {
+  if (!formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name) &&
+      formulon::eval::parse_formula_entry(body, arena) != nullptr) {
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
@@ -572,10 +583,8 @@ fm_status_t check_normalized_formula_parses(const char* api, std::string_view no
 }  // namespace
 
 fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context) {
-  return check_normalized_formula_parses(
-      api,
-      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered),
-      std::move(context));
+  std::string stored;
+  return check_entered_formula_parses(api, formula, std::move(context), &stored);
 }
 
 fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string context, std::string* out) {
@@ -588,9 +597,8 @@ fm_status_t check_stored_formula(const char* api, std::string_view formula, std:
     return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
                              (std::string(api) + ": formula does not parse").c_str(), std::move(context));
   }
-  std::string stored =
-      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
-  if (auto rc = check_normalized_formula_parses(api, stored, std::move(context)); rc != 0) {
+  std::string stored;
+  if (auto rc = check_entered_formula_parses(api, formula, std::move(context), &stored); rc != 0) {
     return rc;
   }
   if (!stored.empty() && stored.front() == '=') {

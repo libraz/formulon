@@ -251,7 +251,7 @@ class SourceWhitespace {
         break;
       case parser::NodeKind::UnionOp:
         for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-          visit(node.as_union_child(i), i == 0U && inside);
+          visit(node.as_union_child(i), i == 0U ? inside : true);
         }
         break;
       case parser::NodeKind::Call:
@@ -269,9 +269,15 @@ class SourceWhitespace {
           visit(*anchor, inside);
         }
         break;
+      case parser::NodeKind::LetBinding:
+        // Binding names take no whitespace; values and the body follow a `,`.
+        for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+          visit(node.as_let_binding_expr(i), true);
+        }
+        visit(node.as_let_body(), true);
+        break;
       case parser::NodeKind::ImplicitIntersection:
       case parser::NodeKind::Lambda:
-      case parser::NodeKind::LetBinding:
       case parser::NodeKind::LambdaCall:
       case parser::NodeKind::StructuredRef:
       case parser::NodeKind::ErrorPlaceholder:
@@ -281,6 +287,7 @@ class SourceWhitespace {
         });
         break;
     }
+    paren_opens(node, lead_allowed);
     paren_closes(node);
   }
 
@@ -318,21 +325,29 @@ class SourceWhitespace {
   }
 
   // Records the whitespace token `i`, less `skip` characters, as `slot` of
-  // `node` when it is one run of spaces, or of line feeds if allowed.
+  // `node` when it is a run of spaces or, if allowed, of line feeds, or line
+  // feeds then spaces.
   void record(std::size_t i, const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint8_t index,
               bool line_feeds_allowed, std::size_t skip = 0) {
     if (!is(i, parser::TokenKind::Whitespace)) {
       return;
     }
-    const std::string_view run = (*tokens_)[i].lexeme;
-    if (run.size() <= skip || run.size() - skip > 0xFFU) {
+    std::string_view run = (*tokens_)[i].lexeme;
+    if (run.size() <= skip) {
       return;
     }
-    const char ch = run.front();
-    if ((ch != ' ' && !(line_feeds_allowed && ch == '\n')) || run.find_first_not_of(ch) != std::string_view::npos) {
+    run.remove_prefix(skip);
+    const std::size_t feeds = line_feeds_allowed ? std::min(run.find_first_not_of('\n'), run.size()) : 0U;
+    const std::size_t spaces = run.size() - feeds;
+    if (run.find_first_not_of(' ', feeds) != std::string_view::npos || feeds > 0xFFU || spaces > 0xFFU) {
       return;
     }
-    out_.push_back({&node, slot, index, ch, static_cast<std::uint8_t>(run.size() - skip)});
+    if (feeds != 0U) {
+      out_.push_back({&node, slot, index, '\n', static_cast<std::uint8_t>(feeds)});
+    }
+    if (spaces != 0U) {
+      out_.push_back({&node, slot, index, ' ', static_cast<std::uint8_t>(spaces)});
+    }
   }
 
   void lead(const parser::AstNode& node, bool allowed) {
@@ -366,7 +381,25 @@ class SourceWhitespace {
         is(rparen - 2U, parser::TokenKind::LParen)) {
       return;
     }
-    record(rparen - 1U, node, parser::WhitespaceSlot::kBeforeClose, index, false);
+    record(rparen - 1U, node, parser::WhitespaceSlot::kBeforeClose, index, true);
+  }
+
+  // Spaces before each `(` of the node's own pairs; before the outermost one
+  // only where whitespace may precede an operand.
+  void paren_opens(const parser::AstNode& node, bool lead_allowed) {
+    std::size_t i = token_at(node.range().start);
+    for (unsigned level = node.paren_depth(); level >= 1U; --level) {
+      if (!is(i, parser::TokenKind::LParen)) {
+        return;
+      }
+      if (i != 0U && (lead_allowed || level != node.paren_depth())) {
+        record(i - 1U, node, parser::WhitespaceSlot::kBeforeOpen, static_cast<std::uint8_t>(level), false);
+      }
+      ++i;
+      if (is(i, parser::TokenKind::Whitespace)) {
+        ++i;
+      }
+    }
   }
 
   void paren_closes(const parser::AstNode& node) {
@@ -384,6 +417,11 @@ class SourceWhitespace {
   void call_close(const parser::AstNode& node) {
     const std::uint32_t arity = node.as_call_arity();
     if (arity == 0U) {
+      // Whitespace inside an empty call: name, `(`, the run, `)`.
+      const std::size_t name = first_bare_token(node);
+      if (name != kNone && is(name + 1U, parser::TokenKind::LParen) && is(name + 3U, parser::TokenKind::RParen)) {
+        record(name + 2U, node, parser::WhitespaceSlot::kBeforeClose, 0, true);
+      }
       return;
     }
     const parser::AstNode& last = node.as_call_arg(arity - 1U);
@@ -504,6 +542,7 @@ class Encoder {
     RETURN_IF_ERROR(emit_node(node));
     if (const auto it = parens_.find(&node); it != parens_.end()) {
       for (unsigned i = 1; i <= it->second; ++i) {
+        emit_space(node, parser::WhitespaceSlot::kBeforeOpen, static_cast<std::uint8_t>(i));
         emit_space(node, parser::WhitespaceSlot::kBeforeClose, static_cast<std::uint8_t>(i));
         emit_u8(out_, 0x15);  // PtgParen, one per pair
       }
@@ -519,23 +558,37 @@ class Encoder {
     emit_u16(out_, 0);
   }
 
+  /// Drops the leading `PtgAttrSemi` when a `PtgAttrSpace` follows it, which
+  /// then carries the volatile flag as `PtgAttrSpaceSemi`.
+  void fold_attr_semi() {
+    if (out_.size() >= 8U && out_[4] == 0x19 && out_[5] == static_cast<std::uint8_t>(PtgAttrKind::Space)) {
+      out_.erase(out_.begin(), out_.begin() + 4);
+      out_[1] = static_cast<std::uint8_t>(PtgAttrKind::SpaceSemi);
+    }
+  }
+
  private:
   /// True when the source kept whitespace at `slot` of `node`.
   bool has_space(const parser::AstNode& node, parser::WhitespaceSlot slot) const {
     return parser::find_whitespace(whitespace_, node, slot) != nullptr;
   }
 
-  /// Emits the `PtgAttrSpace` for the whitespace kept at `slot` / `index`
-  /// of `node`, if any.
+  /// Emits one `PtgAttrSpace` per whitespace run kept at `slot` / `index`
+  /// of `node`, in order.
   void emit_space(const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint8_t index = 0) {
-    const parser::WhitespaceRun* run = parser::find_whitespace(whitespace_, node, slot, index);
-    if (run == nullptr) {
-      return;
+    for (const parser::WhitespaceRun& run : whitespace_) {
+      if (run.node != &node || run.slot != slot || run.index != index) {
+        continue;
+      }
+      const bool feeds = run.ch == '\n';
+      std::uint8_t type = feeds ? kPtgSpaceLineFeeds : kPtgSpaceSpaces;
+      if (slot == parser::WhitespaceSlot::kBeforeClose) {
+        type = feeds ? kPtgSpaceLineFeedsBeforeClose : kPtgSpaceBeforeClose;
+      } else if (slot == parser::WhitespaceSlot::kBeforeOpen) {
+        type = kPtgSpaceBeforeOpen;
+      }
+      emit_attr(static_cast<std::uint8_t>(PtgAttrKind::Space), static_cast<std::uint16_t>(type | (run.count << 8)));
     }
-    const std::uint8_t type = slot == parser::WhitespaceSlot::kBeforeClose ? kPtgSpaceBeforeClose
-                              : run->ch == '\n'                            ? kPtgSpaceLineFeeds
-                                                                           : kPtgSpaceSpaces;
-    emit_attr(static_cast<std::uint8_t>(PtgAttrKind::Space), static_cast<std::uint16_t>(type | (run->count << 8)));
   }
 
   Expected<void, Error> emit_node(const parser::AstNode& node) {
@@ -1414,6 +1467,9 @@ class Encoder {
         patch_u16(at + 2U, out_.size() - (at + 4U) - 1U);
       }
     };
+    if (arity == 0U) {
+      emit_space(node, parser::WhitespaceSlot::kBeforeClose);
+    }
     // Excel 365 stores a one-argument SUM as `PtgAttrSum` rather than a call.
     if (arity == 1U && strings::case_insensitive_eq(name, "SUM")) {
       emit_u8(out_, 0x19);  // PtgAttr
@@ -1485,6 +1541,9 @@ class Encoder {
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
       RETURN_IF_ERROR(emit_call_arg(node, name, i));
+    }
+    if (arity == 0U) {
+      emit_space(node, parser::WhitespaceSlot::kBeforeClose);
     }
     // +1 for the name-ref operand.
     return emit_hidden_call_tail(arity + 1, "Call(arity>254, future function)", cls);
@@ -1653,13 +1712,18 @@ Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const s
   Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, names, std::move(whitespace));
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
-  // (measured for cells and name bodies; the u16 is unused).
-  if (formula_calls_volatile(node)) {
+  // (measured for cells and name bodies; the u16 is unused). A whitespace
+  // attr opening the formula carries the flag instead.
+  const bool volatile_formula = formula_calls_volatile(node);
+  if (volatile_formula) {
     enc.emit_attr_semi();
   }
   auto status = enc.emit(node);
   if (!status) {
     return std::move(status.error());
+  }
+  if (volatile_formula) {
+    enc.fold_attr_semi();
   }
   return enc.take();
 }

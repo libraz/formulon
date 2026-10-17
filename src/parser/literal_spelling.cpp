@@ -4,6 +4,7 @@
 
 #include "parser/literal_spelling.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <vector>
 
@@ -170,14 +171,56 @@ std::string drop_unkept_whitespace(std::string_view formula) {
     const bool before_separator =
         (next.kind == TokenKind::Comma || next.kind == TokenKind::Colon) && begin_of(next) == to;
     const bool after_colon = i > 0 && tokens[i - 1].kind == TokenKind::Colon && end_of(tokens[i - 1]) == from;
-    if (to != formula.size() && !before_separator && !after_colon && braces == 0) {
-      continue;
-    }
     out.append(formula.substr(copied, from - copied));
     copied = to;
+    if (to != formula.size() && !before_separator && !after_colon && braces == 0) {
+      // Spaces directly before a line feed go.
+      const std::string_view run = token.lexeme;
+      for (std::size_t k = 0; k < run.size();) {
+        const std::size_t end = run[k] == ' ' ? std::min(run.find_first_not_of(' ', k), run.size()) : k + 1U;
+        if (run[k] != ' ' || end == run.size() || run[end] != '\n') {
+          out.append(run.substr(k, end - k));
+        }
+        k = end;
+      }
+    }
   }
   out.append(formula.substr(copied));
   return out;
+}
+
+bool has_refused_whitespace(std::string_view formula, bool (*is_function_name)(std::string_view)) {
+  std::string_view body = formula;
+  if (!body.empty() && body.front() == '=') {
+    body.remove_prefix(1);
+  }
+  Tokenizer tokenizer(body);
+  const std::vector<Token>& tokens = tokenizer.tokens();
+  int brackets = 0;
+  for (std::size_t i = 0; i < tokens.size(); ++i) {
+    const Token& token = tokens[i];
+    if (token.kind == TokenKind::Eof) {
+      break;
+    }
+    if (token.kind == TokenKind::LBracket) {
+      ++brackets;
+    } else if (token.kind == TokenKind::RBracket && brackets > 0) {
+      --brackets;
+    }
+    if (token.kind != TokenKind::Whitespace || brackets > 0) {
+      continue;
+    }
+    if (token.lexeme.find_first_of("\t\r") != std::string_view::npos) {
+      return true;
+    }
+    // An unqualified name before the run, a `(` after it.
+    if (i > 0 && tokens[i + 1].kind == TokenKind::LParen &&
+        (tokens[i - 1].kind == TokenKind::Ident || tokens[i - 1].kind == TokenKind::CellRef) &&
+        (i < 2 || tokens[i - 2].kind != TokenKind::Bang) && is_function_name(tokens[i - 1].lexeme)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 std::string spell_entered_formula(std::string_view formula) {

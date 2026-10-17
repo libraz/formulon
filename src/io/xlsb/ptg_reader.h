@@ -168,11 +168,13 @@ using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 /// `whitespace`, when given, receives the formula text's whitespace that
 /// `PtgAttrSpace` tokens record, for `parser::format_formula` to print.
 /// An attr applies to the token after it (control attrs and memory tokens
-/// in between are transparent): spaces (type 0) or line feeds (type 1)
-/// before an operand token precede that operand's text, before an operator
-/// token the operator; spaces before a close parenthesis (type 4) precede
-/// the `)` of the `PtgParen` or of the call token that follows. Any other
-/// placement, type, or two attrs before one token is dropped.
+/// in between are transparent). Before an operand token, spaces (type 0),
+/// line feeds (type 1), or line feeds then spaces precede that operand's
+/// text; before an operator token, the operator. Before a `PtgParen` or a
+/// call token, spaces (type 4), line feeds (type 5), or line feeds then
+/// spaces precede the `)`, and on a `PtgParen` spaces before an open
+/// parenthesis (type 2), written first, precede its `(`. Any other
+/// placement, type or sequence is dropped.
 ///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set

@@ -36,11 +36,18 @@ std::string spell_number_literals(std::string_view formula);
 
 /// Returns `formula` (a leading `=` optional) without the whitespace Excel
 /// drops when it parses entered text: the trailing run, a run before a `,`,
-/// a run on either side of a `:` and every run inside an array constant.
-/// Every other run is kept, the intersection operator, a leading run and
-/// line feeds among them. Text inside structured-reference brackets and
-/// string literals is left alone; nothing is validated.
+/// a run on either side of a `:`, every run inside an array constant and,
+/// in any other run, the spaces directly before a line feed. Every other
+/// run is kept, the intersection operator, a leading run and line feeds
+/// among them. Text inside structured-reference brackets and string
+/// literals is left alone; nothing is validated.
 std::string drop_unkept_whitespace(std::string_view formula);
+
+/// True when entered `formula` (a leading `=` optional) holds whitespace
+/// Excel refuses to store: a tab or a carriage return between tokens, or a
+/// run between a function name (`is_function_name`) and its `(`. Text inside
+/// structured-reference brackets and string literals is not looked at.
+bool has_refused_whitespace(std::string_view formula, bool (*is_function_name)(std::string_view));
 
 /// Stored spelling of entered formula text: `drop_unkept_whitespace`, then
 /// `spell_number_literals`.
