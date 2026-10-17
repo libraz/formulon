@@ -274,3 +274,65 @@ cases:
   - id: regexreplace_unicode_u_literal
     description: "A u escape upper-cases the next character, not a Unicode escape"
     formula: '=REGEXREPLACE("aéb","é","\u00e9")'
+
+  - id: regexreplace_lower_next
+    description: "Lower-case the next character"
+    formula: '=REGEXREPLACE("B","(B)","\l\1")'
+
+  - id: regexreplace_lower_run
+    description: "Lower-case a span to the end marker"
+    formula: '=REGEXREPLACE("BC","(B)(C)","\L\1\EX\2")'
+
+  - id: regexreplace_lower_run_unterminated
+    description: "Unterminated lower-case span runs to the end"
+    formula: '=REGEXREPLACE("BC","(B)(C)","\L\1\2")'
+
+  - id: regexreplace_title_compose
+    description: "Upper-case first then lower-case span"
+    formula: '=REGEXREPLACE("BC","(BC)","\u\L\1\E")'
+
+  - id: regexreplace_lower_upper_compose
+    description: "Lower-case first then upper-case span"
+    formula: '=REGEXREPLACE("bc","(bc)","\l\U\1\E")'
+
+  - id: regexreplace_lone_end_ignored
+    description: "A lone end marker is ignored"
+    formula: '=REGEXREPLACE("abc","b","x\E")'
+
+
+
+  - id: regexreplace_nul_length
+    description: "A NUL escape inserts a real character"
+    formula: '=LEN(REGEXREPLACE("abc","b","\00"))'
+
+  - id: regexreplace_nul_code
+    description: "The inserted NUL is code 0"
+    formula: '=CODE(MID(REGEXREPLACE("abc","b","\x00"),2,1))'
+
+  - id: regexreplace_nul_tail
+    description: "Text after a NUL is kept"
+    formula: '=RIGHT(REGEXREPLACE("abc","b","\x{0}"),1)'
+
+  - id: regexreplace_angle_numeric
+    description: "Numeric angle reference is an error"
+    formula: '=REGEXREPLACE("abc","(b)","$<1>")'
+
+  - id: regexreplace_angle_named_ok
+    description: "Named angle reference"
+    formula: '=REGEXREPLACE("abc","(?<g>b)","$<g>x")'
+
+  - id: regexreplace_subject_then_literal
+    description: "Subject followed by literal name characters"
+    formula: '=REGEXREPLACE("abc","b","$_x")'
+
+  - id: regexreplace_subject_with_group_name
+    description: "Subject wins over a group named like the following characters"
+    formula: '=REGEXREPLACE("abc","(?<_x>b)","$_x")'
+
+  - id: regexreplace_malformed_no_match
+    description: "Malformed replacement without a match is not an error"
+    formula: '=REGEXREPLACE("abc","x","$1")'
+
+  - id: regexreplace_malformed_missing_occurrence
+    description: "Malformed replacement with a missing occurrence is not an error"
+    formula: '=REGEXREPLACE("abc","b","$1",3)'

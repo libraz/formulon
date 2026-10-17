@@ -824,8 +824,12 @@ TEST(RegexReplace, BackslashCharacters) {
   EXPECT_EQ(Replace("b", "\\\\n"), "a\\nc");
 }
 
-TEST(RegexReplace, NulEndsTheResult) {
-  EXPECT_EQ(Replace("b", "\\00"), "a");
+TEST(RegexReplace, NulIsKeptInTheResult) {
+  for (const char* rep : {"\\00", "\\000", "\\x00", "\\x{0}"}) {
+    const Value v = EvalSource(std::string("=LEN(REGEXREPLACE(\"abc\", \"b\", \"") + rep + "\"))");
+    ASSERT_TRUE(v.is_number()) << rep << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 3.0) << rep;
+  }
 }
 
 TEST(RegexReplace, CaseForcingAndQuoting) {
@@ -834,6 +838,33 @@ TEST(RegexReplace, CaseForcingAndQuoting) {
   EXPECT_EQ(Replace("(b)", "\\Uxy\\Ez"), "aXYzc");
   EXPECT_EQ(Replace("(b)", "\\Q\\1\\E"), "a\\1c");
   EXPECT_EQ(Replace("b", "\\u00e9"), "a00e9c");
+}
+
+TEST(RegexReplace, LowerCaseEscapes) {
+  EXPECT_EQ(Replace("(b)", "\\l\\U\\1\\E"), "abc");
+  EXPECT_EQ(Replace("(B)|b", "\\L\\1X\\EY"), "axYc");
+  const Value l = EvalSource("=REGEXREPLACE(\"B\", \"(B)\", \"\\l\\1\")");
+  ASSERT_TRUE(l.is_text());
+  EXPECT_EQ(l.as_text(), "b");
+  const Value title = EvalSource("=REGEXREPLACE(\"BC\", \"(BC)\", \"\\u\\L\\1\\E\")");
+  ASSERT_TRUE(title.is_text());
+  EXPECT_EQ(title.as_text(), "Bc");
+  const Value flip = EvalSource("=REGEXREPLACE(\"bc\", \"(bc)\", \"\\l\\U\\1\\E\")");
+  ASSERT_TRUE(flip.is_text());
+  EXPECT_EQ(flip.as_text(), "bC");
+}
+
+TEST(RegexReplace, UnderscoreDollarIsAlwaysTheSubject) {
+  EXPECT_EQ(Replace("b", "$_x"), "aabcxc");
+  EXPECT_EQ(Replace("b", "$_1"), "aabc1c");
+  EXPECT_EQ(Replace("(?<_x>b)", "$_x"), "aabcxc");
+  EXPECT_EQ(Replace("b", "$_$_"), "aabcabcc");
+}
+
+TEST(RegexReplace, AngleReferenceNamesGroupsOnly) {
+  EXPECT_TRUE(ReplaceIsValueError("(b)", "$<1>"));
+  EXPECT_TRUE(ReplaceIsValueError("(?<g>b)", "$<h>"));
+  EXPECT_TRUE(ReplaceIsValueError("(?<g>b)", "$<g"));
 }
 
 TEST(RegexReplace, InvalidBackslashIsValueError) {

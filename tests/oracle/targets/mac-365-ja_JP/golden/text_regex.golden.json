@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T06:37:29Z"
+    "generated_at": "2026-10-17T07:08:38Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -610,6 +610,141 @@
       "expect": {
         "kind": "text",
         "value": "a00e9b"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next",
+      "formula": "=REGEXREPLACE(\"B\",\"(B)\",\"\\l\\1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "regexreplace_lower_run",
+      "formula": "=REGEXREPLACE(\"BC\",\"(B)(C)\",\"\\L\\1\\EX\\2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bXC"
+      }
+    },
+    {
+      "id": "regexreplace_lower_run_unterminated",
+      "formula": "=REGEXREPLACE(\"BC\",\"(B)(C)\",\"\\L\\1\\2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bc"
+      }
+    },
+    {
+      "id": "regexreplace_title_compose",
+      "formula": "=REGEXREPLACE(\"BC\",\"(BC)\",\"\\u\\L\\1\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Bc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_upper_compose",
+      "formula": "=REGEXREPLACE(\"bc\",\"(bc)\",\"\\l\\U\\1\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bC"
+      }
+    },
+    {
+      "id": "regexreplace_lone_end_ignored",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"x\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "axc"
+      }
+    },
+    {
+      "id": "regexreplace_nul_length",
+      "formula": "=LEN(REGEXREPLACE(\"abc\",\"b\",\"\\00\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "regexreplace_nul_code",
+      "formula": "=CODE(MID(REGEXREPLACE(\"abc\",\"b\",\"\\x00\"),2,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "regexreplace_nul_tail",
+      "formula": "=RIGHT(REGEXREPLACE(\"abc\",\"b\",\"\\x{0}\"),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "regexreplace_angle_numeric",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"$<1>\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_angle_named_ok",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<g>b)\",\"$<g>x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abxc"
+      }
+    },
+    {
+      "id": "regexreplace_subject_then_literal",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$_x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aabcxc"
+      }
+    },
+    {
+      "id": "regexreplace_subject_with_group_name",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<_x>b)\",\"$_x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aabcxc"
+      }
+    },
+    {
+      "id": "regexreplace_malformed_no_match",
+      "formula": "=REGEXREPLACE(\"abc\",\"x\",\"$1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_malformed_missing_occurrence",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$1\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
       }
     }
   ]

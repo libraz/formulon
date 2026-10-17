@@ -558,7 +558,8 @@ Value extract_dispatch(const KernelResult& kr, std::string_view subject, long lo
 //   backslash layer `\1`..`\99` and `\g<n>` / `\g<name>` (group references),
 //                   `\n \t \r \e \a \f \v \b`, `\xHH`, `\x{H..}`, octal `\0HH`
 //                   / `\ooo`, `\\ \$ \&`, `\u` (upper-case the next
-//                   character), `\U`..`\E` (upper-case a run), `\Q`..`\E`
+//                   character), `\l` (lower-case the next), `\U`..`\E` /
+//                   `\L`..`\E` (upper- / lower-case a run), `\Q`..`\E`
 //                   (literal span).
 //
 // Anything else (a bare `$`, `$+`, `\0`, `\g1`, `\k<name>`, an
@@ -575,7 +576,9 @@ enum class ReplTokenKind : std::uint8_t {
   kAfter,    // text after the match
   kSubject,  // the whole subject
   kUpperNext,
+  kLowerNext,
   kUpperRun,
+  kLowerRun,
   kCaseEnd,
   kInvalid,
 };
@@ -701,10 +704,13 @@ ReplToken parse_dollar(std::string_view r, std::size_t& i) {
       return tok;
     }
     tok = group_reference_token(r.substr(i + 1U, close - i - 1U));
+    if (tok.kind == ReplTokenKind::kGroup) {
+      tok.kind = ReplTokenKind::kInvalid;  // `$<n>` names groups only.
+    }
     i = close + 1U;
     return tok;
   }
-  if (c == '_' && !(i + 1U < r.size() && is_name_byte(r[i + 1U]))) {
+  if (c == '_') {
     ++i;
     tok.kind = ReplTokenKind::kSubject;
     return tok;
@@ -786,8 +792,14 @@ ReplToken parse_backslash(std::string_view r, std::size_t& i) {
     case 'u':
       tok.kind = ReplTokenKind::kUpperNext;
       return tok;
+    case 'l':
+      tok.kind = ReplTokenKind::kLowerNext;
+      return tok;
     case 'U':
       tok.kind = ReplTokenKind::kUpperRun;
+      return tok;
+    case 'L':
+      tok.kind = ReplTokenKind::kLowerRun;
       return tok;
     case 'E':
       tok.kind = ReplTokenKind::kCaseEnd;
@@ -895,31 +907,33 @@ std::vector<ReplToken> parse_replacement(std::string_view r) {
   return tokens;
 }
 
-// Output of one expansion, with the `\u` / `\U` case state applied as text is
-// appended.
+// Output of one expansion, with the pending `\u` / `\l` and the `\U` / `\L`
+// run applied to text as it is appended; a one-shot mapping beats the run.
 class ReplacementWriter {
  public:
   explicit ReplacementWriter(std::string& out) : out_(out) {}
 
   void append(std::string_view text) {
     for (const char c : text) {
-      if (upper_run_ || upper_next_) {
-        out_.push_back(strings::ascii_to_upper(c));
-        // A multi-byte lead keeps the pending flag until its last byte; ASCII
-        // case mapping touches single bytes only, so clear on any byte.
-        upper_next_ = false;
-      } else {
-        out_.push_back(c);
+      CaseMode mode = run_;
+      if (next_ != CaseMode::kNone) {
+        mode = next_;
+        next_ = CaseMode::kNone;
       }
+      out_.push_back(mode == CaseMode::kUpper   ? strings::ascii_to_upper(c)
+                     : mode == CaseMode::kLower ? strings::ascii_to_lower(c)
+                                                : c);
     }
   }
-  void upper_next() { upper_next_ = true; }
-  void upper_run(bool on) { upper_run_ = on; }
+  void next(bool upper) { next_ = upper ? CaseMode::kUpper : CaseMode::kLower; }
+  void run(bool upper) { run_ = upper ? CaseMode::kUpper : CaseMode::kLower; }
+  void end_run() { run_ = CaseMode::kNone; }
 
  private:
+  enum class CaseMode : std::uint8_t { kNone, kUpper, kLower };
   std::string& out_;
-  bool upper_run_ = false;
-  bool upper_next_ = false;
+  CaseMode run_ = CaseMode::kNone;
+  CaseMode next_ = CaseMode::kNone;
 };
 
 // Resolves a group number from a name; -1 when absent or ambiguous.
@@ -970,13 +984,19 @@ bool expand_replacement(const std::vector<ReplToken>& tokens, const CompiledPatt
         writer.append(subject);
         break;
       case ReplTokenKind::kUpperNext:
-        writer.upper_next();
+        writer.next(/*upper=*/true);
+        break;
+      case ReplTokenKind::kLowerNext:
+        writer.next(/*upper=*/false);
         break;
       case ReplTokenKind::kUpperRun:
-        writer.upper_run(true);
+        writer.run(/*upper=*/true);
+        break;
+      case ReplTokenKind::kLowerRun:
+        writer.run(/*upper=*/false);
         break;
       case ReplTokenKind::kCaseEnd:
-        writer.upper_run(false);
+        writer.end_run();
         break;
       case ReplTokenKind::kInvalid:
         return false;
@@ -988,13 +1008,8 @@ bool expand_replacement(const std::vector<ReplToken>& tokens, const CompiledPatt
   return true;
 }
 
-// Finishes a replacement result: the text ends at an embedded NUL, and a
-// result past the Excel text cap is `#VALUE!`.
-Value finish_replacement(std::string& out, Arena& arena) {
-  const std::size_t nul = out.find('\0');
-  if (nul != std::string::npos) {
-    out.resize(nul);
-  }
+// Finishes a replacement result: one past the Excel text cap is `#VALUE!`.
+Value finish_replacement(const std::string& out, Arena& arena) {
   if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
     return Value::error(ErrorCode::Value);
   }
