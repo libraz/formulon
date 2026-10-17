@@ -169,3 +169,4 @@ cases:
   - id: combina_1000_200
     description: "COMBINA(1000,200) -- Mac=1.6676833067813678e+233, Formulon=1.667683306781633e+233 (~1202 ULP, lgamma fallback)"
     formula: "=COMBINA(1000, 200)"
+    tolerance: { abs: 0, rel: 0 }

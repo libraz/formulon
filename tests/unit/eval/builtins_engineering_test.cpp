@@ -285,11 +285,22 @@ TEST(BuiltinsEngineering, Bin2DecTooManyDigits) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsEngineering, Bin2DecEmptyString) {
-  // Empty text is rejected per the spec.
-  const Value v = EvalSource("=BIN2DEC(\"\")");
+TEST(BuiltinsEngineering, EmptyTextReadsAsZero) {
+  const Value dec = EvalSource("=BIN2DEC(\"\")");
+  ASSERT_TRUE(dec.is_number());
+  EXPECT_EQ(dec.as_number(), 0.0);
+  const Value hex = EvalSource("=BIN2HEX(\"\")");
+  ASSERT_TRUE(hex.is_text());
+  EXPECT_EQ(hex.as_text(), "0");
+}
+
+TEST(BuiltinsEngineering, PlacesAreValidatedBeforeTheNumber) {
+  const Value v = EvalSource("=DEC2BIN(\"FF\", 0)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  const Value w = EvalSource("=DEC2HEX(\"FF\", 4)");
+  ASSERT_TRUE(w.is_error());
+  EXPECT_EQ(w.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

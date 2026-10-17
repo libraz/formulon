@@ -169,13 +169,13 @@ Expected<int, ErrorCode> coerce_places(const Value& v) {
 // Extracts the input digit string for *2* source-side parsing. For Text,
 // returns the view as-is (caller trims nothing -- Excel rejects leading /
 // trailing whitespace with #NUM!). For Number and Bool, renders the
-// truncated integer form. Empty text yields #NUM!.
+// truncated integer form. Empty text reads as "0".
 Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
   switch (v.kind()) {
     case ValueKind::Text: {
       const std::string_view s = v.as_text();
       if (s.empty()) {
-        return ErrorCode::Num;
+        return std::string("0");
       }
       return std::string(s);
     }
@@ -261,6 +261,13 @@ Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const 
 // Dispatches a DEC -> * conversion. Takes a numeric input (truncated toward
 // zero), range-checks against `dst`, and encodes.
 Value convert_from_dec(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& dst) {
+  // `places` is validated before the number is read.
+  if (arity >= 2) {
+    auto places = coerce_places(args[1]);
+    if (!places) {
+      return Value::error(places.error());
+    }
+  }
   // Excel-quirk: DEC2BIN / DEC2OCT / DEC2HEX reject a direct Bool argument
   // with `#VALUE!` rather than coercing TRUE/FALSE to 1/0. Matches EFFECT /
   // NOMINAL's strict-Bool rejection (see `financial_misc.cpp`). Bool inside

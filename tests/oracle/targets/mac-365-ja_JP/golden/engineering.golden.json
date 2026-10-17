@@ -1184,6 +1184,95 @@
         "kind": "text",
         "value": "101"
       }
+    },
+    {
+      "id": "radix_dec2bin_ff_0",
+      "formula": "=DEC2BIN(\"FF\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_dec2oct_ff_0",
+      "formula": "=DEC2OCT(\"FF\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_dec2hex_ff_0",
+      "formula": "=DEC2HEX(\"FF\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_bin2dec",
+      "formula": "=BIN2DEC(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_oct2dec",
+      "formula": "=OCT2DEC(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_bin2hex",
+      "formula": "=BIN2HEX(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_bin2oct",
+      "formula": "=BIN2OCT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_oct2bin",
+      "formula": "=OCT2BIN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_oct2hex",
+      "formula": "=OCT2HEX(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
     }
   ]
 }

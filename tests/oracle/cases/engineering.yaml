@@ -489,3 +489,41 @@ cases:
 
   - id: opt_dec2bin_places_omit
     formula: "=DEC2BIN(5,)"
+
+  - id: radix_dec2bin_ff_0
+    description: "radix rule: DEC2BIN('FF',0)"
+    formula: "=DEC2BIN(\"FF\",0)"
+
+  - id: radix_dec2oct_ff_0
+    description: "radix rule: DEC2OCT('FF',0)"
+    formula: "=DEC2OCT(\"FF\",0)"
+
+  - id: radix_dec2hex_ff_0
+    description: "radix rule: DEC2HEX('FF',0)"
+    formula: "=DEC2HEX(\"FF\",0)"
+
+  - id: radix_bin2dec
+    description: "radix rule: BIN2DEC('')"
+    formula: "=BIN2DEC(\"\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_oct2dec
+    description: "radix rule: OCT2DEC('')"
+    formula: "=OCT2DEC(\"\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_bin2hex
+    description: "radix rule: BIN2HEX('')"
+    formula: "=BIN2HEX(\"\")"
+
+  - id: radix_bin2oct
+    description: "radix rule: BIN2OCT('')"
+    formula: "=BIN2OCT(\"\")"
+
+  - id: radix_oct2bin
+    description: "radix rule: OCT2BIN('')"
+    formula: "=OCT2BIN(\"\")"
+
+  - id: radix_oct2hex
+    description: "radix rule: OCT2HEX('')"
+    formula: "=OCT2HEX(\"\")"

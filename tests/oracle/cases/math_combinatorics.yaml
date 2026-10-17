@@ -58,6 +58,7 @@ cases:
 
   - id: combin_k_greater_is_num
     formula: "=COMBIN(3, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combin_fractional_truncates
     formula: "=COMBIN(5.9, 2.5)"
@@ -72,24 +73,30 @@ cases:
   - id: combina_four_three
     description: "Multichoose(4, 3) = C(6, 3) = 20."
     formula: "=COMBINA(4, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combina_k_greater_allowed
     description: "Multichoose(3, 5) = C(7, 5) = 21."
     formula: "=COMBINA(3, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combina_zero_zero
     formula: "=COMBINA(0, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combina_negative_is_num
     formula: "=COMBINA(-1, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combina_zero_positive_is_num
     description: "An empty set has no multisets of size k > 0: #NUM!."
     formula: "=COMBINA(0, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combina_k_zero
     description: "Multichoose(n, 0) = 1."
     formula: "=COMBINA(5, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- MULTINOMIAL ---------------------------------------------------------
   - id: multinomial_single_arg
@@ -327,40 +334,50 @@ cases:
   - id: permut_basic
     description: "5 * 4 = 20"
     formula: "=PERMUT(5, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permut_k_zero
     description: "Empty product is 1"
     formula: "=PERMUT(5, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permut_k_gt_n_is_num
     formula: "=PERMUT(3, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permut_k_equals_n
     description: "PERMUT(n, n) = n!; PERMUT(5, 5) = 120."
     formula: "=PERMUT(5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permut_fractional_truncates
     description: "Both arguments truncate toward zero before computation."
     formula: "=PERMUT(5.9, 2.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permutationa_basic
     description: "3^2 = 9"
     formula: "=PERMUTATIONA(3, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permutationa_zero_zero_is_one
     formula: "=PERMUTATIONA(0, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permutationa_k_gt_n_allowed
     description: "With repetition k may exceed n: PERMUTATIONA(3, 5) = 3^5 = 243."
     formula: "=PERMUTATIONA(3, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permutationa_n_zero_k_positive
     description: "PERMUTATIONA(0, k>0) = 0^k = 0; Excel emits #NUM!."
     formula: "=PERMUTATIONA(0, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: permutationa_fractional_truncates
     description: "Both arguments truncate toward zero before computation."
     formula: "=PERMUTATIONA(3.9, 2.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
@@ -408,6 +425,7 @@ cases:
 
   - id: pf_permut
     formula: "=PERMUT(5.9999999,2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: atp_gcd_bool
     formula: "=GCD(TRUE,2)"
@@ -472,4 +490,296 @@ cases:
   - id: near_combin
     description: "Excel 365: 10"
     formula: "=COMBIN(5.9999999,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_10_3
+    formula: "=COMBIN(10,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_10_3
+    formula: "=COMBINA(10,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_10_3
+    formula: "=PERMUT(10,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_10_3
+    formula: "=PERMUTATIONA(10,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_50_25
+    formula: "=COMBIN(50,25)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_50_25
+    formula: "=COMBINA(50,25)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_50_25
+    formula: "=PERMUT(50,25)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_50_25
+    formula: "=PERMUTATIONA(50,25)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_100_50
+    formula: "=COMBIN(100,50)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_100_50
+    formula: "=COMBINA(100,50)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_100_50
+    formula: "=PERMUT(100,50)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_100_50
+    formula: "=PERMUTATIONA(100,50)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_1029_514
+    formula: "=COMBIN(1029,514)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_1029_514
+    formula: "=COMBINA(1029,514)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_1029_514
+    formula: "=PERMUT(1029,514)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_1029_514
+    formula: "=PERMUTATIONA(1029,514)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_1030_515
+    formula: "=COMBIN(1030,515)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_1030_515
+    formula: "=COMBINA(1030,515)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_1030_515
+    formula: "=PERMUT(1030,515)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_1030_515
+    formula: "=PERMUTATIONA(1030,515)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_2000_1000
+    formula: "=COMBIN(2000,1000)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_2000_1000
+    formula: "=COMBINA(2000,1000)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_2000_1000
+    formula: "=PERMUT(2000,1000)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_2000_1000
+    formula: "=PERMUTATIONA(2000,1000)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_60_30
+    formula: "=COMBIN(60,30)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_60_30
+    formula: "=COMBINA(60,30)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_60_30
+    formula: "=PERMUT(60,30)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_60_30
+    formula: "=PERMUTATIONA(60,30)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_170_85
+    formula: "=COMBIN(170,85)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_170_85
+    formula: "=COMBINA(170,85)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_170_85
+    formula: "=PERMUT(170,85)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_170_85
+    formula: "=PERMUTATIONA(170,85)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_5_7
+    formula: "=COMBIN(5,7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_5_7
+    formula: "=COMBINA(5,7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_5_7
+    formula: "=PERMUT(5,7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_5_7
+    formula: "=PERMUTATIONA(5,7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_1_0
+    formula: "=COMBIN(-1,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_1_0
+    formula: "=COMBINA(-1,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_1_0
+    formula: "=PERMUT(-1,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_1_0
+    formula: "=PERMUTATIONA(-1,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_10_9_3_9
+    formula: "=COMBIN(10.9,3.9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_10_9_3_9
+    formula: "=COMBINA(10.9,3.9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_10_9_3_9
+    formula: "=PERMUT(10.9,3.9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_10_9_3_9
+    formula: "=PERMUTATIONA(10.9,3.9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_1e_15_2
+    formula: "=COMBIN(1E+15,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_1e_15_2
+    formula: "=COMBINA(1E+15,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_1e_15_2
+    formula: "=PERMUT(1E+15,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_1e_15_2
+    formula: "=PERMUTATIONA(1E+15,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_1e_15_3
+    formula: "=COMBIN(1E+15,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_1e_15_3
+    formula: "=COMBINA(1E+15,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_1e_15_3
+    formula: "=PERMUT(1E+15,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_1e_15_3
+    formula: "=PERMUTATIONA(1E+15,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_1e_16_1
+    formula: "=COMBIN(1E+16,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_1e_16_1
+    formula: "=COMBINA(1E+16,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permut_1e_16_1
+    formula: "=PERMUT(1E+16,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_permutationa_1e_16_1
+    formula: "=PERMUTATIONA(1E+16,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combin_2147483647_0
+    formula: "=COMBIN(2147483647,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: cr_combina_2147483646_2
+    formula: "=COMBINA(2147483646,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_base_0_2_256
+    description: "radix rule: BASE(0,2,256)"
+    formula: "=BASE(0,2,256)"
+
+  - id: radix_base_7_2_1
+    description: "radix rule: BASE(7,2,-1)"
+    formula: "=BASE(7,2,-1)"
+
+  - id: radix_base_65535_2_256
+    description: "radix rule: BASE(65535,2,256)"
+    formula: "=BASE(65535,2,256)"
+
+  - id: radix_decimal_ff_16
+    description: "radix rule: DECIMAL('FF ',16)"
+    formula: "=DECIMAL(\"FF \",16)"
+
+  - id: radix_decimal_ff_36
+    description: "radix rule: DECIMAL('FF ',36)"
+    formula: "=DECIMAL(\"FF \",36)"
+
+  - id: radix_decimal_0x1f_16
+    description: "radix rule: DECIMAL('0x1F',16)"
+    formula: "=DECIMAL(\"0x1F\",16)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_decimal_0x1f_16_5
+    description: "radix rule: DECIMAL('0x1F',16.5)"
+    formula: "=DECIMAL(\"0x1F\",16.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_decimal_7fffffffffffffff_16
+    description: "radix rule: DECIMAL('7fffffffffffffff',16)"
+    formula: "=DECIMAL(\"7fffffffffffffff\",16)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_decimal_7fffffffffffffff_36
+    description: "radix rule: DECIMAL('7fffffffffffffff',36)"
+    formula: "=DECIMAL(\"7fffffffffffffff\",36)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_decimal_abcdefghijklmnopqrstuvwxyz_36
+    description: "radix rule: DECIMAL('abcdefghijklmnopqrstuvwxyz',36)"
+    formula: "=DECIMAL(\"abcdefghijklmnopqrstuvwxyz\",36)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_decimal_55_ones_base_10
+    description: "radix rule: DECIMAL('1111111111111111111111111111111111111111111111111111111',10)"
+    formula: "=DECIMAL(\"1111111111111111111111111111111111111111111111111111111\",10)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_decimal_55_ones_base_36
+    description: "radix rule: DECIMAL('1111111111111111111111111111111111111111111111111111111',36)"
+    formula: "=DECIMAL(\"1111111111111111111111111111111111111111111111111111111\",36)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: radix_decimal_55_ones_base_2
+    description: "radix rule: DECIMAL('1111111111111111111111111111111111111111111111111111111',2)"
+    formula: "=DECIMAL(\"1111111111111111111111111111111111111111111111111111111\",2)"
     tolerance: { abs: 0, rel: 0 }

@@ -26,7 +26,6 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
-#include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -97,6 +96,9 @@ Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::
   }
   return out;
 }
+
+// Largest `n` the combinatorial functions accept; `n` at or above 2^31 - 1 is #NUM!.
+constexpr std::uint64_t kMaxCombinatorialN = 2147483646U;
 
 struct UIntPair {
   std::uint64_t first;
@@ -177,42 +179,7 @@ Value FactDouble(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // COMBIN / COMBINA / MULTINOMIAL
 // ---------------------------------------------------------------------------
 
-// Computes nCk exactly as a double via the multiplicative running product
-// C(n-k+i, i) = C(n-k+i-1, i-1) * (n-k+i) / i, falling back to log-gamma
-// only once that product overflows. A direct `n! / (k! * (n-k)!)` ratio
-// loses precision even for small results (e.g. C(28, 2) comes out as
-// 377.999999999999994), because n! stops being exactly representable well
-// before 170! does; every partial product here is instead an exact integer
-// whenever the final C(n, k) fits inside 2^53. Returns +Inf on overflow;
-// the caller must map that to #NUM!.
-inline double combin_exact(std::uint64_t n, std::uint64_t k) {
-  if (k > n) {
-    return 0.0;
-  }
-  if (k > n - k) {
-    k = n - k;
-  }
-  if (k == 0) {
-    return 1.0;
-  }
-  double result = 1.0;
-  for (std::uint64_t i = 1; i <= k; ++i) {
-    result = result * static_cast<double>(n - k + i) / static_cast<double>(i);
-    if (!std::isfinite(result)) {
-      break;
-    }
-  }
-  if (std::isfinite(result)) {
-    return result;
-  }
-  // Fallback via log-gamma once the exact multiplicative loop overflows.
-  const double log_combin = stats::log_gamma(static_cast<double>(n) + 1.0) -
-                            stats::log_gamma(static_cast<double>(k) + 1.0) -
-                            stats::log_gamma(static_cast<double>(n - k) + 1.0);
-  return std::exp(log_combin);
-}
-
-// nCk for COMBIN: the numerators max(k, n-k)+1..n and denominators
+// nCk for COMBIN and COMBINA: the numerators max(k, n-k)+1..n and denominators
 // 2..min(k, n-k) are consumed pairwise as `prod = (N_t / D_t) * prod`, then the
 // leftover numerators multiply and the leftover denominators divide. Returns
 // +Inf on overflow; the caller maps that to #NUM!.
@@ -249,6 +216,9 @@ Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
+  if (n > kMaxCombinatorialN) {
+    return Value::error(ErrorCode::Num);
+  }
   return to_finite_value(combin_pairwise(n, k));
 }
 
@@ -269,12 +239,11 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (n == 0) {
     return Value::error(ErrorCode::Num);
   }
-  // Guard against overflow on n + k - 1.
-  if (n > (static_cast<std::uint64_t>(1) << 52u) || k > (static_cast<std::uint64_t>(1) << 52u)) {
+  const std::uint64_t upper = n + k - 1;
+  if (upper > kMaxCombinatorialN) {
     return Value::error(ErrorCode::Num);
   }
-  const std::uint64_t upper = n + k - 1;
-  return to_finite_value(combin_exact(upper, k));
+  return to_finite_value(combin_pairwise(upper, k));
 }
 
 // PERMUT(n, k) - number of k-permutations of n distinct items =
@@ -288,11 +257,14 @@ Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
-  // Multiply incrementally in double precision; bail out as soon as the
-  // running product overflows to infinity.
+  if (n > kMaxCombinatorialN) {
+    return Value::error(ErrorCode::Num);
+  }
+  // Ascending running product (n-k+1) * ... * n; bail out as soon as it
+  // overflows to infinity.
   double result = 1.0;
-  for (std::uint64_t i = 0; i < k; ++i) {
-    result *= static_cast<double>(n - i);
+  for (std::uint64_t i = n - k + 1U; i <= n && k != 0U; ++i) {
+    result *= static_cast<double>(i);
     if (std::isinf(result) || std::isnan(result)) {
       return Value::error(ErrorCode::Num);
     }
@@ -301,8 +273,9 @@ Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // PERMUTATIONA(n, k) - number of k-permutations of n items with repetition =
-// n^k. Both arguments floor to non-negative integer. `PERMUTATIONA(0, 0) = 1`
-// by Excel convention; `PERMUTATIONA(0, k>0) = 0`. Overflow yields `#NUM!`.
+// n^k through the shared power core. Both arguments floor to non-negative
+// integer. `PERMUTATIONA(0, 0) = 1` by Excel convention; `PERMUTATIONA(0, k>0)
+// = 0`. Overflow yields `#NUM!`.
 Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto pair = read_nonneg_uint_pair(args);
   if (!pair) {
@@ -316,7 +289,14 @@ Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
   if (n == 0) {
     return Value::number(0.0);
   }
-  return to_finite_value(std::pow(static_cast<double>(n), static_cast<double>(k)));
+  if (n > kMaxCombinatorialN) {
+    return Value::error(ErrorCode::Num);
+  }
+  auto power = apply_pow(static_cast<double>(n), static_cast<double>(k));
+  if (!power) {
+    return Value::error(power.error());
+  }
+  return to_finite_value(power.value());
 }
 
 // MULTINOMIAL(a1, a2, ...) - multinomial coefficient = (sum(a_i))! / prod(a_i!).
@@ -634,7 +614,7 @@ Value Base(const Value* args, std::uint32_t arity, Arena& arena) {
     }
     const double lf = std::trunc(len_v.value());
     if (std::isnan(lf) || std::isinf(lf) || lf < 0.0 || lf > 255.0) {
-      return Value::error(ErrorCode::Value);
+      return Value::error(ErrorCode::Num);
     }
     min_len = static_cast<int>(lf);
   }
@@ -690,14 +670,29 @@ Value Decimal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
-  const std::string_view s = trim_space_tab(text.value());
-  if (s.empty()) {
-    // Excel 365 returns 0 for empty / whitespace-only input.
-    return Value::number(0.0);
+  // Leading blanks are skipped; a trailing blank is not a digit.
+  std::string_view s = text.value();
+  while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
+    s.remove_prefix(1);
   }
-  std::uint64_t acc = 0;
-  const std::uint64_t kLimit = (static_cast<std::uint64_t>(1) << 53u) - 1;
-  for (const char c : s) {
+  if (!s.empty() && (s.back() == ' ' || s.back() == '\t')) {
+    return Value::error(ErrorCode::Num);
+  }
+  if (radix == 16 && !s.empty()) {
+    // A `0x`, `0X` or bare `x` / `X` prefix is accepted for hexadecimal text.
+    if (s.size() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+      s.remove_prefix(2);
+    } else if (s[0] == 'x' || s[0] == 'X') {
+      s.remove_prefix(1);
+    }
+  }
+  // Sum of digit * radix^position, positions counted from the last digit with a
+  // running power; the sum rounds as it grows. A non-finite result is #NUM!.
+  double sum = 0.0;
+  double power = 1.0;
+  const double base = static_cast<double>(radix);
+  for (auto it = s.rbegin(); it != s.rend(); ++it) {
+    const char c = *it;
     int d = -1;
     if (c >= '0' && c <= '9') {
       d = c - '0';
@@ -709,13 +704,13 @@ Value Decimal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     if (d < 0 || d >= radix) {
       return Value::error(ErrorCode::Num);
     }
-    // Overflow guard: acc * radix + d must stay within 2^53 - 1.
-    if (acc > (kLimit - static_cast<std::uint64_t>(d)) / static_cast<std::uint64_t>(radix)) {
-      return Value::error(ErrorCode::Num);
-    }
-    acc = acc * static_cast<std::uint64_t>(radix) + static_cast<std::uint64_t>(d);
+    sum += static_cast<double>(d) * power;
+    power *= base;
   }
-  return Value::number(static_cast<double>(acc));
+  if (!std::isfinite(sum)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(sum);
 }
 
 // ---------------------------------------------------------------------------

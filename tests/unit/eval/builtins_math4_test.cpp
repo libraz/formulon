@@ -38,6 +38,35 @@ constexpr double kPi = 3.14159265358979323846;
 // FACT
 // ---------------------------------------------------------------------------
 
+TEST(BuiltinsBaseDecimalRadix, BaseMinLengthOutOfRangeIsNum) {
+  for (const char* src : {"=BASE(7, 2, 256)", "=BASE(7, 2, -1)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+}
+
+TEST(BuiltinsBaseDecimalRadix, DecimalTrailingBlankIsNumAndLeadingBlankIsKept) {
+  const Value trailing = EvalSource("=DECIMAL(\"FF \", 16)");
+  ASSERT_TRUE(trailing.is_error());
+  EXPECT_EQ(trailing.as_error(), ErrorCode::Num);
+  const Value leading = EvalSource("=DECIMAL(\" FF\", 16)");
+  ASSERT_TRUE(leading.is_number());
+  EXPECT_EQ(leading.as_number(), 255.0);
+}
+
+TEST(BuiltinsBaseDecimalRadix, DecimalHexPrefixAndLargeValues) {
+  const Value prefixed = EvalSource("=DECIMAL(\"0x1F\", 16)");
+  ASSERT_TRUE(prefixed.is_number());
+  EXPECT_EQ(prefixed.as_number(), 31.0);
+  const Value large = EvalSource("=DECIMAL(\"7fffffffffffffff\", 16)");
+  ASSERT_TRUE(large.is_number());
+  EXPECT_EQ(large.as_number(), 9.223372036854776e18);
+  const Value long36 = EvalSource("=DECIMAL(\"abcdefghijklmnopqrstuvwxyz\", 36)");
+  ASSERT_TRUE(long36.is_number());
+  EXPECT_EQ(long36.as_number(), 8.337503854730415e39);
+}
+
 TEST(BuiltinsMath4Fact, ZeroIsOne) {
   const Value v = EvalSource("=FACT(0)");
   ASSERT_TRUE(v.is_number());
@@ -1022,6 +1051,63 @@ TEST(BuiltinsMath4ExcelBits, HyperbolicSmallArgumentAndLimits) {
     const Value v = EvalSource(f);
     ASSERT_TRUE(v.is_error()) << f;
     EXPECT_EQ(v.as_error(), ErrorCode::Num) << f;
+  }
+}
+
+TEST(CombinatoricsRanges, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=COMBIN(10,3)", 120.0},
+      {"=COMBINA(10,3)", 220.0},
+      {"=PERMUT(10,3)", 720.0},
+      {"=PERMUTATIONA(10,3)", 1000.0},
+      {"=COMBIN(50,25)", 126410606437751.98},
+      {"=COMBINA(50,25)", 3.5059031427432595e+19},
+      {"=PERMUT(50,25)", 1.9607814681608194e+39},
+      {"=PERMUTATIONA(50,25)", 2.9802322387695315e+42},
+      {"=COMBIN(100,50)", 1.0089134454556413e+29},
+      {"=COMBINA(100,50)", 1.3419107273154626e+40},
+      {"=PERMUT(100,50)", 3.0685187562549655e+93},
+      {"=PERMUTATIONA(100,50)", 1.0000000000000002e+100},
+      {"=COMBIN(1029,514)", 1.4298206864989032e+308},
+      {"=COMBIN(60,30)", 1.1826458156486144e+17},
+      {"=COMBINA(60,30)", 4.4875531633772e+23},
+      {"=PERMUT(60,30)", 3.137001847457161e+49},
+      {"=PERMUTATIONA(60,30)", 2.2107391972073335e+53},
+      {"=COMBIN(170,85)", 9.144841845131565e+49},
+      {"=COMBINA(170,85)", 1.0926446010344746e+69},
+      {"=PERMUT(170,85)", 2.5761971587279537e+178},
+      {"=PERMUTATIONA(170,85)", 3.8739884106085687e+189},
+      {"=COMBINA(5,7)", 330.0},
+      {"=PERMUTATIONA(5,7)", 78125.0},
+      {"=COMBIN(10.9,3.9)", 120.0},
+      {"=COMBINA(10.9,3.9)", 220.0},
+      {"=PERMUT(10.9,3.9)", 720.0},
+      {"=PERMUTATIONA(10.9,3.9)", 1000.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(CombinatoricsRanges, OutOfRangeIsNum) {
+  for (const char* formula :
+       {"=COMBINA(1029,514)",     "=PERMUT(1029,514)",     "=PERMUTATIONA(1029,514)",  "=COMBIN(1030,515)",
+        "=COMBINA(1030,515)",     "=PERMUT(1030,515)",     "=PERMUTATIONA(1030,515)",  "=COMBIN(2000,1000)",
+        "=COMBINA(2000,1000)",    "=PERMUT(2000,1000)",    "=PERMUTATIONA(2000,1000)", "=COMBIN(5,7)",
+        "=PERMUT(5,7)",           "=COMBIN(-1,0)",         "=COMBINA(-1,0)",           "=PERMUT(-1,0)",
+        "=PERMUTATIONA(-1,0)",    "=COMBIN(1E+15,2)",      "=COMBINA(1E+15,2)",        "=PERMUT(1E+15,2)",
+        "=PERMUTATIONA(1E+15,2)", "=COMBIN(1E+15,3)",      "=COMBINA(1E+15,3)",        "=PERMUT(1E+15,3)",
+        "=PERMUTATIONA(1E+15,3)", "=COMBIN(1E+16,1)",      "=COMBINA(1E+16,1)",        "=PERMUT(1E+16,1)",
+        "=PERMUTATIONA(1E+16,1)", "=COMBIN(2147483647,0)", "=COMBINA(2147483646,2)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
   }
 }
 
