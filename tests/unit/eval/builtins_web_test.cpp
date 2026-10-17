@@ -28,6 +28,15 @@ namespace {
 using formulon::test::EvalSource;
 using formulon::test::EvalSourceIn;
 
+// Evaluates `src` under a ja-JP profile of `host`.
+Value EvalOnHost(ExcelHost host, const char* src) {
+  const ExcelProfile profile{host, ExcelLocale::kJaJP};
+  ScopedEvalProfile scope(profile);
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(profile);
+  return EvalSourceIn(src, wb, wb.sheet(0));
+}
+
 // ---------------------------------------------------------------------------
 // Registry pin
 // ---------------------------------------------------------------------------
@@ -278,6 +287,28 @@ TEST(BuiltinsWebFilterXml, ArityMismatchSurfacesValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsWebFilterXml, MacProfileReturnsNameWhateverTheArguments) {
+  // Mac Excel has no FILTERXML, so the name is unknown there.
+  for (const char* src : {"=FILTERXML(\"<r><a>hello</a></r>\",\"//a\")", "=FILTERXML(1/0,\"//a\")",
+                          "=FILTERXML(\"<r/>\",NA())", "=FILTERXML(\"<r/>\")"}) {
+    const Value v = EvalOnHost(ExcelHost::kMac365, src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Name) << src;
+  }
+}
+
+TEST(BuiltinsWebFilterXml, WindowsProfileEvaluates) {
+  const Value v = EvalOnHost(ExcelHost::kWin365, "=FILTERXML(\"<r><a>hello</a></r>\",\"//a\")");
+  ASSERT_TRUE(v.is_text()) << v.debug_to_string();
+  EXPECT_EQ(v.as_text(), "hello");
+  const Value err = EvalOnHost(ExcelHost::kWin365, "=FILTERXML(1/0,\"//a\")");
+  ASSERT_TRUE(err.is_error());
+  EXPECT_EQ(err.as_error(), ErrorCode::Div0);
+  const Value web = EvalOnHost(ExcelHost::kWin365, "=WEBSERVICE(\"http://example.com\")");
+  ASSERT_TRUE(web.is_error());
+  EXPECT_EQ(web.as_error(), ErrorCode::Value);
+}
+
 // ---------------------------------------------------------------------------
 // WEBSERVICE (stub)
 // ---------------------------------------------------------------------------
@@ -289,13 +320,11 @@ TEST(BuiltinsWebWebService, AlwaysReturnsValue) {
 }
 
 TEST(BuiltinsWebWebService, MacProfileReturnsName) {
-  const ExcelProfile mac{ExcelHost::kMac365, ExcelLocale::kJaJP};
-  ScopedEvalProfile scope(mac);
-  Workbook wb = Workbook::create();
-  wb.set_excel_profile(mac);
-  const Value v = EvalSourceIn("=WEBSERVICE(\"http://example.com\")", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  for (const char* src : {"=WEBSERVICE(\"http://example.com\")", "=WEBSERVICE(1/0)", "=WEBSERVICE()"}) {
+    const Value v = EvalOnHost(ExcelHost::kMac365, src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Name) << src;
+  }
 }
 
 TEST(BuiltinsWebWebService, PropagatesArgumentError) {

@@ -38,6 +38,7 @@
 #include "eval/defined_name_resolve.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/external_ref.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -51,6 +52,7 @@
 #include "eval/tail_array.h"
 #include "eval/tree_walker/depth_guard.h"
 #include "eval/tree_walker_lazy_table.h"
+#include "excel_profile.h"
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -471,7 +473,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   }
 
   const FunctionDef* def = registry.lookup(name);
-  if (def == nullptr) {
+  if (def == nullptr || (def->absent_on_mac && current_eval_profile().host == ExcelHost::kMac365)) {
     return Value::error(ErrorCode::Name);
   }
   // The pre-expansion arity guards min_arity / max_arity. This happens to

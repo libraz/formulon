@@ -3,9 +3,11 @@
 //
 //   * ENCODEURL(text)        -- Excel-compatible percent-encoding.
 //   * FILTERXML(xml, xpath)  -- pugixml-backed XPath 1.0 evaluation.
-//   * WEBSERVICE(url)        -- fixed #VALUE! (no network I/O); #NAME? on
-//                               Mac Excel, which has no WEBSERVICE.
+//   * WEBSERVICE(url)        -- fixed #VALUE! (no network I/O).
 //   * PY(expression)         -- fixed #NAME? (no embedded Python).
+//
+// Mac Excel provides neither FILTERXML nor WEBSERVICE, so both are
+// registered `absent_on_mac`: a Mac profile answers #NAME? for them.
 //
 // ENCODEURL and FILTERXML are real implementations. WEBSERVICE and PY are
 // intentional stubs: their semantics require a runtime environment that a
@@ -28,9 +30,7 @@
 #include "eval/array_alloc.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
-#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
-#include "excel_profile.h"
 #include "pugixml.hpp"
 #include "utils/arena.h"
 #include "utils/double_parse.h"
@@ -305,14 +305,10 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //
 // Returns #VALUE!. Formulon is a pure calculation engine and does not
 // perform network I/O under any circumstances; there is no HTTP client in
-// the dependency set (see the strict dependency policy in CLAUDE.md). Mac
-// Excel does not provide WEBSERVICE, so a Mac profile returns #NAME?. The
+// the dependency set (see the strict dependency policy in CLAUDE.md). The
 // argument is still evaluated by the dispatcher so an error there
 // propagates normally.
 Value WebService(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  if (current_eval_profile().host == ExcelHost::kMac365) {
-    return Value::error(ErrorCode::Name);
-  }
   return Value::error(ErrorCode::Value);
 }
 
@@ -335,9 +331,10 @@ void register_web_builtins(FunctionRegistry& registry) {
   // propagate_errors = true) before the fixed return fires.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"ENCODEURL", 1u, 1u, &EncodeUrl},
-      {"FILTERXML", 2u, 2u, &FilterXml, true, false, false, false, false, FunctionDef::BlankScalarPolicy::Allow,
-       ErrorCode::Value, FunctionDef::ResultShape::kArray},
-      {"WEBSERVICE", 1u, 1u, &WebService},
+      builtins_detail::absent_on_mac({"FILTERXML", 2u, 2u, &FilterXml, true, false, false, false, false,
+                                      FunctionDef::BlankScalarPolicy::Allow, ErrorCode::Value,
+                                      FunctionDef::ResultShape::kArray}),
+      builtins_detail::absent_on_mac({"WEBSERVICE", 1u, 1u, &WebService}),
       {"PY", 1u, 1u, &Py},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));

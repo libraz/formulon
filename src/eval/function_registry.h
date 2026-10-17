@@ -145,6 +145,10 @@ struct FunctionDef {
   /// filters and coerces as a direct argument, and an array or multi-cell
   /// range there evaluates the function once per element.
   bool last_arg_scalar = false;
+  /// Mac Excel does not provide the function, so on a Mac profile the name
+  /// is unknown: the call is `#NAME?` before arity or arguments are checked,
+  /// whatever the arguments evaluate to.
+  bool absent_on_mac = false;
 };
 
 /// Case-insensitive function lookup table. Registry keys are stored in an

@@ -35,6 +35,7 @@ struct BuiltinRegistration {
   bool analysis_toolpak_args = false;
   bool atp_omitted_optional_is_na = false;
   bool last_arg_scalar = false;
+  bool absent_on_mac = false;
 };
 
 /// Marks `def` as a former Analysis-ToolPak function; see
@@ -58,6 +59,13 @@ constexpr BuiltinRegistration analysis_toolpak_no_omitted_default(BuiltinRegistr
 constexpr BuiltinRegistration scalar_last_arg(BuiltinRegistration def) noexcept {
   def.last_arg_scalar = true;
   def.result_shape = FunctionDef::ResultShape::kArray;
+  return def;
+}
+
+/// Marks `def` as a function Mac Excel does not provide; see
+/// `FunctionDef::absent_on_mac`.
+constexpr BuiltinRegistration absent_on_mac(BuiltinRegistration def) noexcept {
+  def.absent_on_mac = true;
   return def;
 }
 
@@ -116,6 +124,7 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
     fn.analysis_toolpak_args = def.analysis_toolpak_args;
     fn.atp_omitted_optional_is_na = def.atp_omitted_optional_is_na;
     fn.last_arg_scalar = def.last_arg_scalar;
+    fn.absent_on_mac = def.absent_on_mac;
     registry.register_function(fn);
   }
 }
