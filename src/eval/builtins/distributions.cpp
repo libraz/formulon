@@ -44,6 +44,7 @@
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
@@ -194,17 +195,6 @@ double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
 // BETA family
 // ---------------------------------------------------------------------------
 
-// Beta PDF on [0, 1] in log space:
-//   pdf(x) = exp( (alpha-1)*log(x) + (beta-1)*log(1-x)
-//                - lgamma(alpha) - lgamma(beta) + lgamma(alpha+beta) )
-// Callers must pre-reject x <= 0 and x >= 1; the 0^(a-1) cases have
-// distribution-dependent boundary values that the wrappers handle directly.
-double BetaPdfStd(double x, double alpha, double beta_shape) noexcept {
-  const double log_pdf = (alpha - 1.0) * std::log(x) + (beta_shape - 1.0) * std::log(1.0 - x) -
-                         stats::log_gamma(alpha) - stats::log_gamma(beta_shape) + stats::log_gamma(alpha + beta_shape);
-  return std::exp(log_pdf);
-}
-
 // BETA.DIST(x, alpha, beta, cumulative, [A], [B]) - beta distribution on
 // the optional support [A, B]. The standard [0, 1] form is recovered by
 // omitting A / B (defaults A = 0, B = 1). For x == A or x == B the PDF
@@ -239,8 +229,7 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (parsed.value().cumulative) {
     // CDF boundaries: the regularized incomplete beta already returns 0
     // at y == 0 and 1 at y == 1 exactly, so no special-case is needed.
-    const double r = stats::regularized_incomplete_beta(alpha, beta_shape, y);
-    return finalize(r);
+    return finalize(stats::beta_dist_cdf_excel(x, alpha, beta_shape, a, b));
   }
   // PDF boundaries at y == 0 and y == 1:
   //   alpha < 1 or beta < 1: PDF diverges -> #NUM!
@@ -265,8 +254,7 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
     return finalize(0.0);
   }
-  const double r = BetaPdfStd(y, alpha, beta_shape) / span;
-  return finalize(r);
+  return finalize(stats::beta_dist_pdf_excel(x, alpha, beta_shape, a, b));
 }
 
 // BETA.INV(p, alpha, beta, [A], [B]) - inverse of BETA.DIST's CDF. Solves
@@ -491,22 +479,6 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // HYPGEOM.DIST
 // ---------------------------------------------------------------------------
 
-// Log-combination log(C(n, k)) = lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1).
-// Callers pre-validate 0 <= k <= n so the lgamma arguments stay positive.
-double LogCombination(double n, double k) noexcept {
-  return stats::log_gamma(n + 1.0) - stats::log_gamma(k + 1.0) - stats::log_gamma(n - k + 1.0);
-}
-
-// Hypergeometric PMF at k successes drawn from a population of N with K
-// successes, sampling n without replacement:
-//   PMF(k) = C(K, k) * C(N-K, n-k) / C(N, n)
-// Computed via log-combinations to avoid overflow of the individual
-// binomial coefficients for even moderately large N.
-double HypgeomPmf(double k, double n, double K, double N) noexcept {
-  const double log_pmf = LogCombination(K, k) + LogCombination(N - K, n - k) - LogCombination(N, n);
-  return std::exp(log_pmf);
-}
-
 // HYPGEOM.DIST(sample_s, number_sample, population_s, number_pop, cumulative).
 // Maps to the hypergeometric PMF / CDF with:
 //   k = sample_s, n = number_sample, K = population_s, N = number_pop.
@@ -558,18 +530,17 @@ Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     if (k >= k_max) {
       return finalize(1.0);
     }
-    // No closed form: a span past the term cap is rejected rather than walked.
+    // The cdf is a term-by-term recurrence: a span past the term cap is rejected rather than walked.
     if (k - k_min >= stats_detail::kMaxCumulativeTerms) {
       return Value::error(ErrorCode::Num);
     }
-    const double acc = stats_detail::sum_pmf(k_min, k, [&](double i) { return HypgeomPmf(i, n, big_k, big_n); });
-    return finalize(std::clamp(acc, 0.0, 1.0));
+    return finalize(stats::hypgeom_cdf_excel(k, n, big_k, big_n));
   }
   // PMF branch: 0 outside the support, otherwise the log-combination form.
   if (k < k_min || k > k_max) {
     return finalize(0.0);
   }
-  return finalize(HypgeomPmf(k, n, big_k, big_n));
+  return finalize(stats::hypgeom_pmf_excel(k, n, big_k, big_n));
 }
 
 // ---------------------------------------------------------------------------

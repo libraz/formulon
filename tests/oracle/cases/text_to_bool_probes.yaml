@@ -75,14 +75,17 @@ cases:
   - id: text_bool_betadist_uppercase
     description: "BETA.DIST(0.234, 2, 2.5, \"TRUE\", 0.15, 1.2)"
     formula: "=BETA.DIST(0.234, 2, 2.5, \"TRUE\", 0.15, 1.2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: text_bool_betadist_lowercase
     description: "BETA.DIST(0.234, 2, 2.5, \"true\", 0.15, 1.2)"
     formula: "=BETA.DIST(0.234, 2, 2.5, \"true\", 0.15, 1.2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: text_bool_betadist_pdf_text
     description: "BETA.DIST(0.234, 2, 2.5, \"FALSE\", 0.15, 1.2) - PDF mode"
     formula: "=BETA.DIST(0.234, 2, 2.5, \"FALSE\", 0.15, 1.2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # ---------------------------------------------------------------------
   # E) Direct coercion via N() / arithmetic. Less interesting because

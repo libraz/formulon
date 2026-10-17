@@ -24,6 +24,7 @@
 
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
+#include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
@@ -117,15 +118,9 @@ double BinomPmf(double k, double n, double prob) {
   return stats::dbinom_raw(n, prob, k);
 }
 
-// Closed-form binomial CDF. See the declaration in `stats_helpers.h` for
-// the contract; the identity is `P(X <= k) = I_{1-p}(n - k, k + 1)`.
+// Binomial CDF `P(X <= k)`; see the declaration in `stats_helpers.h`.
 double BinomCdf(double k, double n, double prob) noexcept {
-  // `k == n` is the whole support, and the identity's first shape
-  // parameter `n - k` would be 0, which is outside the beta domain.
-  if (k >= n) {
-    return 1.0;
-  }
-  return stats::regularized_incomplete_beta(n - k, k + 1.0, 1.0 - prob);
+  return stats::binom_cdf_excel(k, n, prob);
 }
 
 // BINOM.DIST(number_s, trials, probability_s, cumulative) - binomial
@@ -149,16 +144,7 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   double r;
   if (input.value().cumulative) {
-    if (k >= kMaxCumulativeTerms) {
-      if (!beta_shapes_are_resolvable(n - k, k + 1.0)) {
-        return Value::error(ErrorCode::Num);
-      }
-      r = BinomCdf(k, n, p);
-    } else {
-      // CDF: sum pmf(i) for i in [0, k]. The cast is safe because the
-      // branch above bounds `k` well inside the integer range.
-      r = sum_pmf(0.0, k, [&](double i) { return BinomPmf(i, n, p); });
-    }
+    r = BinomCdf(k, n, p);
   } else {
     r = BinomPmf(k, n, p);
   }
@@ -402,22 +388,6 @@ static double TDistRtCore(double x, double df) noexcept {
   return (x >= 0.0) ? half : 1.0 - half;
 }
 
-// Student's t CDF at `x` with `df` degrees of freedom. A negative `x` reads
-// the left tail off the symmetric right tail so it does not round to 0
-// through `1 - (1 - tail)`.
-static double TDistCdf(double x, double df) noexcept {
-  return x < 0.0 ? TDistRtCore(-x, df) : 1.0 - TDistRtCore(x, df);
-}
-
-// Student's t PDF at `x` with `df` degrees of freedom, computed in log
-// space via lgamma to stay stable for large df (tgamma overflows past ~170).
-static double TDistPdf(double x, double df) noexcept {
-  const double log_norm =
-      stats::log_gamma(0.5 * (df + 1.0)) - stats::log_gamma(0.5 * df) - 0.5 * std::log(df * kStatsPi);
-  const double log_kernel = -0.5 * (df + 1.0) * std::log(1.0 + x * x / df);
-  return std::exp(log_norm + log_kernel);
-}
-
 // T.DIST(x, deg_freedom, cumulative) - Student's t-distribution PDF or CDF.
 // `df` is floored toward -inf and must satisfy `df >= 1`, except that the
 // PDF at a floored `df == 0` is `#DIV/0!`; `x` is unrestricted (the
@@ -436,7 +406,8 @@ Value TDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(input.value().cumulative ? TDistCdf(x, df) : TDistPdf(x, df));
+  return finite_number_result(input.value().cumulative ? stats::t_dist_tail_excel(x, df, false)
+                                                       : stats::t_dist_pdf_excel(x, df));
 }
 
 // T.DIST.2T(x, deg_freedom) - two-tailed Student's t probability. Excel
@@ -452,10 +423,7 @@ Value TDist2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  // Two-tailed probability is `I_y(df/2, 1/2)` with y = df / (df + x*x),
-  // which for x >= 0 is exactly `2 * TDistRtCore(x, df)` -- routing through
-  // the shared helper picks up its large-df asymptotic path too.
-  return finite_number_result(2.0 * TDistRtCore(x, df));
+  return finite_number_result(stats::t_dist_2t_excel(x, df));
 }
 
 // T.DIST.RT(x, deg_freedom) - right-tailed Student's t CDF, `1 - CDF(x)`.
@@ -465,7 +433,7 @@ Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!input) {
     return Value::error(input.error());
   }
-  return finite_number_result(TDistRtCore(input.value().first, input.value().second));
+  return finite_number_result(stats::t_dist_tail_excel(input.value().first, input.value().second, true));
 }
 
 // Probability mass of Student's t between 0 and `x >= 0`. Evaluated from the
@@ -559,40 +527,6 @@ Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(p < 1.0 ? TInvTail(0.5 * p, df) : -TInvTail(1.0 - 0.5 * p, df));
 }
 
-// Snedecor's F CDF at `x >= 0` with `(d1, d2)` degrees of freedom, via
-// the regularized incomplete beta on `y = x / (x + d2/d1)`. This is
-// algebraically identical to `d1*x / (d1*x + d2)` but retains a finite
-// ratio for large finite x instead of forming an Inf/Inf intermediate.
-static double FDistCdf(double x, double d1, double d2) noexcept {
-  if (x <= 0.0) {
-    return 0.0;
-  }
-  const double y = x / (x + d2 / d1);
-  return stats::regularized_incomplete_beta(0.5 * d1, 0.5 * d2, y);
-}
-
-// Right tail of the F CDF, evaluated directly as the complementary
-// regularized beta.  Computing `1 - FDistCdf` loses every meaningful bit in
-// the extreme tail and prevents the inverse from bracketing its quantile.
-static double FDistRtCore(double x, double d1, double d2) noexcept {
-  if (x <= 0.0) {
-    return 1.0;
-  }
-  const double scale = d2 / d1;
-  const double z = scale / (x + scale);
-  return stats::regularized_incomplete_beta(0.5 * d2, 0.5 * d1, z);
-}
-
-// Snedecor's F PDF at `x > 0` with `(d1, d2)` degrees of freedom,
-// computed in log space. The caller handles the x == 0 boundary
-// (divergent for d1 < 2, equal to 1 for d1 == 2, and 0 for d1 > 2).
-static double FDistPdf(double x, double d1, double d2) noexcept {
-  const double log_pdf = 0.5 * d1 * std::log(d1) + 0.5 * d2 * std::log(d2) + (0.5 * d1 - 1.0) * std::log(x) -
-                         0.5 * (d1 + d2) * std::log(d1 * x + d2) + stats::log_gamma(0.5 * (d1 + d2)) -
-                         stats::log_gamma(0.5 * d1) - stats::log_gamma(0.5 * d2);
-  return std::exp(log_pdf);
-}
-
 // F.DIST(x, d1, d2, cumulative) - Snedecor's F distribution PDF or CDF.
 // `d1` and `d2` floor toward -inf and must both satisfy `>= 1`. `x < 0`
 // yields `#NUM!`. At `x == 0` the PDF is divergent for `d1 == 1` (Excel
@@ -610,7 +544,7 @@ Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   double r;
   if (input.value().cumulative) {
-    r = FDistCdf(x, d1, d2);
+    r = stats::f_dist_cdf_excel(x, d1, d2, false);
   } else {
     if (x == 0.0) {
       if (d1 == 1.0) {
@@ -618,7 +552,7 @@ Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
       }
       r = (d1 == 2.0) ? 1.0 : 0.0;
     } else {
-      r = FDistPdf(x, d1, d2);
+      r = stats::f_dist_pdf_excel(x, d1, d2);
     }
   }
   return finite_number_result(r);
@@ -652,7 +586,7 @@ Value FDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(FDistRtCore(x, d1, d2));
+  return finite_number_result(stats::f_dist_cdf_excel(x, d1, d2, true));
 }
 
 // Inverts Snedecor's F CDF through the inverse incomplete beta, on whichever

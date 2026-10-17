@@ -343,13 +343,13 @@ TEST(BuiltinsDistributionBounds, NegBinomCdfAnswersPastTheTermCeiling) {
   }
 }
 
-TEST(BuiltinsDistributionBounds, NegBinomCdfBalancedShapesAreNum) {
-  // A `number_s` as large as `number_f` makes the pair balanced, where
-  // the closed form can no longer hold the family's tolerance. Refused
-  // rather than answered outside it.
+TEST(BuiltinsDistributionBounds, NegBinomCdfBalancedShapesAnswerPromptly) {
+  // A `number_s` as large as `number_f` makes the pair balanced; the cdf is a
+  // single incomplete-beta evaluation at any magnitude.
   const Value v = EvalSource("=NEGBINOM.DIST(1E12, 1E12, 0.25, TRUE)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GE(v.as_number(), 0.0);
+  EXPECT_LE(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsDistributionBounds, NegBinomPmfIsUnaffectedByTheCeiling) {

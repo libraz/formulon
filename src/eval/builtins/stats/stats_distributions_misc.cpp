@@ -20,6 +20,7 @@
 
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
+#include "eval/stats/incomplete_beta.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -244,15 +245,6 @@ Value Phi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // NEGBINOM.DIST / NEGBINOMDIST
 // ---------------------------------------------------------------------------
 
-// Log-space PMF of NegBinom(s, p) at f failures:
-//   lgamma(f + s) - lgamma(f + 1) - lgamma(s) + s*log(p) + f*log(1-p).
-// Caller must reject p == 0 (because s*log(p) diverges to -inf) and p == 1
-// (Excel surfaces #NUM! for the degenerate distribution).
-static double NegBinomLogPmf(double f, double s, double p) noexcept {
-  return stats::log_gamma(f + s) - stats::log_gamma(f + 1.0) - stats::log_gamma(s) + s * std::log(p) +
-         f * std::log1p(-p);
-}
-
 // NEGBINOM.DIST(number_f, number_s, probability_s, cumulative) - negative
 // binomial PMF or CDF. `number_f` and `number_s` floor toward -inf; Excel
 // requires f >= 0, s >= 1, and p strictly in (0, 1) -- both p == 0 and
@@ -273,20 +265,7 @@ Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
   if (f < 0.0 || s < 1.0 || p <= 0.0 || p >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  double r;
-  if (input.value().cumulative) {
-    if (f >= kMaxCumulativeTerms) {
-      if (!beta_shapes_are_resolvable(s, f + 1.0)) {
-        return Value::error(ErrorCode::Num);
-      }
-      // P(F <= f) = I_p(s, f + 1).
-      r = stats::regularized_incomplete_beta(s, f + 1.0, p);
-    } else {
-      r = sum_pmf(0.0, f, [&](double i) { return std::exp(NegBinomLogPmf(i, s, p)); });
-    }
-  } else {
-    r = std::exp(NegBinomLogPmf(f, s, p));
-  }
+  const double r = input.value().cumulative ? stats::negbinom_cdf_excel(f, s, p) : stats::negbinom_pmf_excel(f, s, p);
   return finite_number_result(r);
 }
 

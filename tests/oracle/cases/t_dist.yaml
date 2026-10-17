@@ -12,18 +12,22 @@ cases:
   - id: t_dist_cdf_0_5df
     description: "CDF at x=0 is exactly 0.5 (symmetry)"
     formula: "=T.DIST(0, 5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_cdf_1_5df
     description: "CDF of t(df=5) at x=1 ~ 0.8184"
     formula: "=T.DIST(1, 5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_pdf_0_5df
     description: "PDF of t(df=5) at x=0 ~ 0.3796"
     formula: "=T.DIST(0, 5, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_cdf_negative
     description: "Symmetry: CDF(-1, 5) = 1 - CDF(1, 5) ~ 0.1816"
     formula: "=T.DIST(-1, 5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_df_zero_is_num
     description: "df < 1 yields #NUM!"
@@ -33,11 +37,13 @@ cases:
   - id: t_dist_rt_basic
     description: "Right-tail CDF of t(df=10) at x=1.5 ~ 0.0822"
     formula: "=T.DIST.RT(1.5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- T.DIST.2T -----------------------------------------------------------
   - id: t_dist_2t_basic
     description: "Two-tail probability of t(df=10) at x=2 ~ 0.0734 (= 2 * sf(2, 10))"
     formula: "=T.DIST.2T(2, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_2t_negative_x_is_num
     description: "Two-tail rejects negative x (#NUM!)"
@@ -70,18 +76,22 @@ cases:
   - id: t_dist_df_one_cauchy
     description: "df=1 is Cauchy; CDF at x=1 = 0.75"
     formula: "=T.DIST(1, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_df_large_normal_like
     description: "df=10000 approximates standard normal; CDF at x=1 ~ NORM.S.DIST(1, TRUE)"
     formula: "=T.DIST(1, 10000, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_x_very_small
     description: "Tail near zero on the left"
     formula: "=T.DIST(-100, 5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_x_very_large
     description: "Tail near 1 on the right"
     formula: "=T.DIST(100, 5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- T.DIST: error inputs ----------------------------------------------
   - id: t_dist_negative_df_is_num
@@ -90,28 +100,34 @@ cases:
   - id: t_dist_fractional_df_truncates
     description: "df=5.7 should truncate to 5 (matching Excel for integer-only df)"
     formula: "=T.DIST(1, 5.7, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_pdf_at_extreme_x
     description: "PDF at x=10 — very small but finite"
     formula: "=T.DIST(10, 5, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- T.DIST.RT --------------------------------------------------------
   - id: t_dist_rt_at_zero
     description: "Right-tail at x=0 is 0.5"
     formula: "=T.DIST.RT(0, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_rt_negative_x_is_num
     description: "T.DIST.RT rejects negative x in Excel (#NUM!)"
     formula: "=T.DIST.RT(-1, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_rt_large_x_near_zero
     description: "Right-tail at large positive x approaches 0"
     formula: "=T.DIST.RT(100, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- T.DIST.2T --------------------------------------------------------
   - id: t_dist_2t_at_zero
     description: "Two-tail at x=0 is 1.0 (the entire distribution mass)"
     formula: "=T.DIST.2T(0, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_2t_zero_df_is_num
     formula: "=T.DIST.2T(2, 0)"
@@ -157,6 +173,7 @@ cases:
   - id: t_dist_rt_plus_dist_is_1
     description: "T.DIST(x, df, TRUE) + T.DIST.RT(x, df) == 1"
     formula: "=T.DIST(1.5, 10, TRUE) + T.DIST.RT(1.5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_dist_pdf_df_zero_is_div0
     description: "T.DIST pdf with df=0 is #DIV/0!"

@@ -349,15 +349,13 @@ TEST(BuiltinsDistributionBounds, BinomCdfFullSupportIsExactlyOne) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsDistributionBounds, BinomCdfUnresolvableShapeIsNum) {
-  // Balanced shapes this large cannot be held to the family's tolerance:
-  // the closed form's prefactor cancels in log space and what comes back
-  // is off by more than the oracle tolerance. Refused rather than
-  // answered with a number we cannot stand behind -- and refused
-  // promptly, rather than summed for hours.
+TEST(BuiltinsDistributionBounds, BinomCdfBalancedShapesAnswerPromptly) {
+  // The cdf is a single incomplete-beta evaluation, so balanced shapes this
+  // large answer at once rather than being summed.
   const Value v = EvalSource("=BINOM.DIST(5E11, 1E12, 0.5, TRUE)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GE(v.as_number(), 0.0);
+  EXPECT_LE(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsDistributionBounds, BinomPmfIsUnaffectedByTheCeiling) {

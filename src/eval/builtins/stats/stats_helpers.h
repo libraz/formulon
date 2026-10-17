@@ -279,13 +279,10 @@ inline bool beta_shapes_are_resolvable(double a, double b) noexcept {
 // BINOM.DIST.RANGE (in `stats_distributions_misc.cpp`).
 double BinomPmf(double k, double n, double prob);
 
-// Cumulative distribution function of Binomial(n, p) at k, in closed form
-// via the regularized incomplete beta identity
-// `P(X <= k) = I_{1-p}(n - k, k + 1)`. Assumes the caller has validated
-// `0 <= k <= n` and `0 <= p <= 1`, and has checked the shapes with
-// `beta_shapes_are_resolvable`. Constant time regardless of `n`; returns
-// NaN when the underlying recursion cannot produce a value, which callers
-// surface as `#NUM!`.
+// Cumulative distribution function of Binomial(n, p) at k, one
+// `stats::binom_cdf_excel` evaluation (a regularized incomplete beta).
+// Constant time regardless of `n`; NaN when the underlying recursion cannot
+// produce a value, which callers surface as `#NUM!`.
 double BinomCdf(double k, double n, double prob) noexcept;
 
 // Cumulative distribution function of Poisson(mean) at k, in closed form

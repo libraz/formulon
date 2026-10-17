@@ -51,6 +51,7 @@ cases:
 
   - id: binomdist_cdf
     formula: "=BINOMDIST(5, 10, 0.5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binomdist_k_above_n_is_num
     formula: "=BINOMDIST(11, 10, 0.5, FALSE)"
@@ -114,6 +115,7 @@ cases:
   # -- FDIST / FINV --------------------------------------------------------
   - id: fdist_right_tail
     formula: "=FDIST(2, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: fdist_negative_x_is_num
     formula: "=FDIST(-1, 5, 5)"
@@ -157,19 +159,23 @@ cases:
   - id: hypgeomdist_pmf
     description: "Legacy HYPGEOMDIST is PMF-only (no cumulative flag)"
     formula: "=HYPGEOMDIST(3, 5, 10, 20)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: hypgeomdist_boundary_zero
     description: "k above support -> PMF = 0"
     formula: "=HYPGEOMDIST(6, 5, 10, 20)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BETADIST / BETAINV --------------------------------------------------
   - id: betadist_default_bounds_cdf
     description: "3-arg BETADIST(x, alpha, beta) uses [A,B]=[0,1]"
     formula: "=BETADIST(0.5, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: betadist_custom_bounds_cdf
     description: "5-arg form with A=0, B=10 — x = 5 maps to y = 0.5"
     formula: "=BETADIST(5, 2, 3, 0, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: betadist_x_outside_bounds_is_num
     formula: "=BETADIST(11, 2, 3, 0, 10)"
@@ -184,10 +190,12 @@ cases:
   - id: tdist_right_tail
     description: "tails=1 -> right-tail = T.DIST.RT"
     formula: "=TDIST(1.5, 5, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: tdist_two_tail
     description: "tails=2 -> two-tail = T.DIST.2T"
     formula: "=TDIST(1.5, 5, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: tdist_negative_x_is_num
     description: "Legacy TDIST rejects x < 0 with #NUM! (even for right-tail)"
@@ -304,6 +312,7 @@ cases:
   - id: fdist_large_x
     description: "Right tail at large F -> near 0"
     formula: "=FDIST(10, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: fdist_df_zero_is_num
     formula: "=FDIST(2, 0, 5)"
@@ -386,6 +395,7 @@ cases:
   - id: hypgeomdist_k_zero
     description: "k=0 boundary (still on support)"
     formula: "=HYPGEOMDIST(0, 5, 10, 20)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: hypgeomdist_negative_k_is_num
     formula: "=HYPGEOMDIST(-1, 5, 10, 20)"
@@ -393,15 +403,18 @@ cases:
   - id: hypgeomdist_full_overlap
     description: "When sample = population, PMF concentrates on K successes"
     formula: "=HYPGEOMDIST(5, 5, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Additional BETADIST / BETAINV perspectives -------------------------
   - id: betadist_x_at_lower_bound
     description: "BETADIST at x=A returns 0 (CDF lower bound)"
     formula: "=BETADIST(0, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: betadist_x_at_upper_bound
     description: "BETADIST at x=B returns 1"
     formula: "=BETADIST(1, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: betainv_p_zero
     description: "p=0 -> A (lower bound)"
@@ -414,6 +427,7 @@ cases:
   - id: tdist_at_zero_two_tail
     description: "Two-tailed T at x=0 = 1 (entire mass)"
     formula: "=TDIST(0, 5, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: tdist_df_zero_is_num
     description: "df < 1 -> #NUM!"
@@ -471,6 +485,7 @@ cases:
   - id: fdist_at_one
     description: "FDIST(1, df1, df2) is the right-tail at the symmetry point"
     formula: "=FDIST(1, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: lognormdist_at_one
     description: "LOGNORMDIST(1, 0, 1) -> CDF at the median = 0.5"

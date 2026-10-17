@@ -84,6 +84,7 @@ cases:
   - id: binom_cdf_fair_coin
     description: "P(X<=5) for BINOM(10, 0.5) ~ 0.623047"
     formula: "=BINOM.DIST(5, 10, 0.5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_edge_zero_success
     description: "P(X=0) for BINOM(10, 0.5) = 2^-10 ~ 0.000977"
@@ -214,14 +215,17 @@ cases:
   - id: negbinom_dist_pmf
     description: "C(14,4) * 0.25^5 * 0.75^10 ~ 0.055049"
     formula: "=NEGBINOM.DIST(10, 5, 0.25, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: negbinom_dist_cdf
     description: "CDF strictly exceeds the PMF at the same point"
     formula: "=NEGBINOM.DIST(10, 5, 0.25, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: negbinomdist_legacy_matches
     description: "Legacy 3-arg spelling always returns the PMF"
     formula: "=NEGBINOMDIST(10, 5, 0.25)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: negbinom_dist_prob_zero_is_num
     formula: "=NEGBINOM.DIST(10, 5, 0, FALSE)"
@@ -361,6 +365,7 @@ cases:
   - id: negbinom_dist_zero_failures
     description: "PMF at f=0 = p^r"
     formula: "=NEGBINOM.DIST(0, 5, 0.25, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: negbinom_dist_prob_one_pmf
     description: "Excel rejects p=1 with #NUM! (degenerate distribution)"
@@ -370,6 +375,7 @@ cases:
   - id: negbinomdist_zero_failures
     description: "Legacy PMF at f=0 = p^r"
     formula: "=NEGBINOMDIST(0, 5, 0.25)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: negbinomdist_prob_zero_is_num
     description: "Legacy alias rejects p=0 with #NUM!"
@@ -382,6 +388,7 @@ cases:
   - id: negbinomdist_large_count
     description: "Larger failure count produces a smaller PMF tail"
     formula: "=NEGBINOMDIST(20, 5, 0.25)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- NORM.S.DIST (extra perspectives) ------------------------------------
   - id: norm_s_dist_negative_cdf
