@@ -201,7 +201,7 @@ inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, 
       yf = date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d);
       break;
     case 1:
-      yf = date_time::yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d);
+      yf = date_time::yearfrac_actual_actual(e - s, a.y, a.m, a.d, b.y, b.m, b.d);
       break;
     case 2:
       yf = (e - s) / 360.0;

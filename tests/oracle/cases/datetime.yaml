@@ -1298,3 +1298,83 @@ cases:
   - id: days360_out_of_ghost_day
     formula: "=DAYS360(60,61)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_59_36584
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(59,36584,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_1_62
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(1,62,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_60_426
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(60,426,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_1_2958465
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(1,2958465,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_2_2958465
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(2,2958465,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_60_2958465
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(60,2958465,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_1_731
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(1,731,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yearfrac_basis_1_serial_1_1462
+    description: "YEARFRAC basis 1 counts the serial difference, including the 1900 day 60"
+    formula: "=YEARFRAC(1,1462,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_44256_45656
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(44256,45656,"YD")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_43830_45292
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(43830,45292,"YD")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_44985_45349
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(44985,45349,"YD")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_43888_45350
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(43888,45350,"YD")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_45291_45351
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(45291,45351,"YD")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_44381_45290
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(44381,45290,"YD")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_44560_44986
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(44560,44986,"YD")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: datedif_yd_serial_43466_45290
+    description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
+    formula: '=DATEDIF(43466,45290,"YD")'
+    tolerance: { abs: 0, rel: 0 }

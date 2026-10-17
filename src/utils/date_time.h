@@ -175,10 +175,11 @@ double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, 
 double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
 
 /// Year fraction under the Actual/Actual convention — Excel basis 1.
-/// A same-year span divides by that year's length; a span of at most one
+/// `days` is the difference of the two serials (the 1900 day 60 counts as a
+/// day). A same-year span divides by that year's length; a span of at most one
 /// year divides by 366 when a Feb 29 lies in `[start, end]`, else 365; a
 /// longer span divides by the average full length of the years `y1..y2`.
-double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
+double yearfrac_actual_actual(double days, int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
 
 /// Year length, in days, that `yearfrac_actual_actual` divides the actual day
 /// count by for the span `(y1, m1, d1)` to `(y2, m2, d2)`.

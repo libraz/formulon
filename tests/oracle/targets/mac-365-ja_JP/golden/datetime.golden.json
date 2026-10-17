@@ -3084,6 +3084,214 @@
         "abs": 0.0,
         "rel": 0.0
       }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_59_36584",
+      "formula": "=YEARFRAC(59,36584,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.000677690431
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_62",
+      "formula": "=YEARFRAC(1,62,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.16712328767123288
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_60_426",
+      "formula": "=YEARFRAC(60,426,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0027397260273974
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_2958465",
+      "formula": "=YEARFRAC(1,2958465,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8100.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_2_2958465",
+      "formula": "=YEARFRAC(2,2958465,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8099.997262092761
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_60_2958465",
+      "formula": "=YEARFRAC(60,2958465,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8099.838463472937
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_731",
+      "formula": "=YEARFRAC(1,731,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_1462",
+      "formula": "=YEARFRAC(1,1462,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.000547645125958
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44256_45656",
+      "formula": "=DATEDIF(44256,45656,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 304.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_43830_45292",
+      "formula": "=DATEDIF(43830,45292,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44985_45349",
+      "formula": "=DATEDIF(44985,45349,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 364.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_43888_45350",
+      "formula": "=DATEDIF(43888,45350,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_45291_45351",
+      "formula": "=DATEDIF(45291,45351,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44381_45290",
+      "formula": "=DATEDIF(44381,45290,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 179.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44560_44986",
+      "formula": "=DATEDIF(44560,44986,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_43466_45290",
+      "formula": "=DATEDIF(43466,45290,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 363.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     }
   ]
 }

@@ -237,9 +237,9 @@ double actual_actual_year_length(int y1, unsigned m1, unsigned d1, int y2, unsig
   return denom;
 }
 
-double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
-  const double actual_days = static_cast<double>(days_from_civil(y2, m2, d2) - days_from_civil(y1, m1, d1));
-  return actual_days / actual_actual_year_length(y1, m1, d1, y2, m2, d2);
+double yearfrac_actual_actual(double days, int y1, unsigned m1, unsigned d1, int y2, unsigned m2,
+                              unsigned d2) noexcept {
+  return days / actual_actual_year_length(y1, m1, d1, y2, m2, d2);
 }
 
 HMS hms_from_fraction(double serial) noexcept {

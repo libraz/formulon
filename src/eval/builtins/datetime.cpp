@@ -748,7 +748,7 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     case 0:
       return Value::number(date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d));
     case 1:
-      return Value::number(date_time::yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d));
+      return Value::number(date_time::yearfrac_actual_actual(e - s, a.y, a.m, a.d, b.y, b.m, b.d));
     case 2:
       // Actual/360 -- raw day diff honours the 1900 leap-bug so we compute
       // it from the Excel serials (not days_from_civil) for parity.
@@ -762,6 +762,27 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   }
 }
 
+// Days in a month of Excel's calendar, where February 1900 has 29 days.
+unsigned workbook_days_in_month(int y, unsigned m) noexcept {
+  return (y == 1900 && m == 2u) ? 29u : days_in_month(y, m);
+}
+
+// DATEDIF "MD": the day-of-month difference, borrowing the length of the
+// month before end's month when it is negative.
+long long datedif_md_days(const date_time::YMD& a, const date_time::YMD& b) noexcept {
+  long long diff = static_cast<long long>(b.d) - static_cast<long long>(a.d);
+  if (diff < 0) {
+    int prev_y = b.y;
+    int prev_m = static_cast<int>(b.m) - 1;
+    if (prev_m == 0) {
+      prev_m = 12;
+      prev_y -= 1;
+    }
+    diff += static_cast<long long>(days_in_month(prev_y, static_cast<unsigned>(prev_m)));
+  }
+  return diff;
+}
+
 /// DATEDIF(start, end, unit). Returns the signed difference between two
 /// dates expressed in the requested unit. Unit strings are matched
 /// case-insensitively, as Excel accepts the documented tokens regardless of
@@ -771,7 +792,7 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 ///   "M"  - complete months between start and end
 ///   "D"  - day difference (`floor(end) - floor(start)`)
 ///   "YM" - complete months between, ignoring the year part
-///   "YD" - days between, treating start as if it fell in end's year
+///   "YD" - the "MD" days plus the lengths of the "YM" months from start's month
 ///   "MD" - days between, ignoring months and years (known buggy in Excel)
 ///
 /// `end < start` yields `#NUM!`; an unknown unit also yields `#NUM!`.
@@ -811,37 +832,23 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
     return Value::number(static_cast<double>(months % 12));
   }
   if (strings::case_insensitive_eq(u, "YD")) {
-    // Shift `start` into the same or preceding year as `end` so the
-    // calendar anniversary logic falls out directly. If start's (m,d)
-    // has already passed in end's year, the anniversary for the "partial
-    // year" is in end's year; otherwise in the year before.
-    int anniversary_y = b.y;
-    // Calendar comparison (m,d) of start vs end.
-    if (a.m > b.m || (a.m == b.m && a.d > b.d)) {
-      anniversary_y = b.y - 1;
+    // The "MD" day difference plus the lengths of the "YM" whole months
+    // walked forward from start's month.
+    const long long months = completed_months(a.y, a.m, a.d, b.y, b.m, b.d) % 12;
+    long long days = datedif_md_days(a, b);
+    int walk_y = a.y;
+    unsigned walk_m = a.m;
+    for (long long i = 0; i < months; ++i) {
+      days += static_cast<long long>(workbook_days_in_month(walk_y, walk_m));
+      if (++walk_m > 12u) {
+        walk_m = 1u;
+        ++walk_y;
+      }
     }
-    const std::int64_t anniv = date_time::days_from_civil(anniversary_y, a.m, a.d);
-    const std::int64_t end_days = date_time::days_from_civil(b.y, b.m, b.d);
-    return Value::number(static_cast<double>(end_days - anniv));
+    return Value::number(static_cast<double>(days));
   }
   if (strings::case_insensitive_eq(u, "MD")) {
-    // Days ignoring months and years: pretend both dates share end's
-    // (year, month) and return `b.d - a.d`; if that would be negative,
-    // borrow a month (one full calendar month of end's previous month).
-    // This mirrors Excel's classic (and buggy) formulation rather than
-    // a "correct" calendar-difference algorithm.
-    long long diff = static_cast<long long>(b.d) - static_cast<long long>(a.d);
-    if (diff < 0) {
-      // Borrow the previous month's length relative to the END date.
-      int prev_y = b.y;
-      int prev_m = static_cast<int>(b.m) - 1;
-      if (prev_m == 0) {
-        prev_m = 12;
-        prev_y -= 1;
-      }
-      diff += static_cast<long long>(days_in_month(prev_y, static_cast<unsigned>(prev_m)));
-    }
-    return Value::number(static_cast<double>(diff));
+    return Value::number(static_cast<double>(datedif_md_days(a, b)));
   }
   return Value::error(ErrorCode::Num);
 }
