@@ -13,7 +13,8 @@
 // Spec / oracle references:
 //   * Excel REGEX function family signatures and shape semantics:
 //     Mac Excel oracle observations.
-//   * Resource limits: match_limit = 1_000_000, depth_limit = 10_000.
+//   * Resource limits: match_limit = 1_000_000, depth_limit = 10_000;
+//     exhausting the match limit is #VALUE!.
 //   * Pattern length cap (32_767 bytes): matches Excel's worksheet
 //     formula text limit; longer patterns yield #VALUE! before
 //     pcre2_compile is invoked.
@@ -253,9 +254,9 @@ class CompiledPattern {
 // everything else wants every hit).
 //
 // `on_match_limit_returns_no_match`: when true (REGEXTEST), a hit on
-// match_limit / depth_limit is converted to "no match" (kernel still
-// returns ok=true with matches empty). When false (the extract /
-// replace pair), it surfaces as #CALC!.
+// depth_limit is converted to "no match" (kernel still returns ok=true with
+// matches empty). When false (the extract / replace pair), it surfaces as
+// #CALC!. Exhausting the match budget is #VALUE! either way.
 KernelResult regex_kernel(const CompiledPattern& program, std::string_view subject, bool find_all,
                           bool on_match_limit_returns_no_match) {
   KernelResult result;
@@ -294,9 +295,13 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
       result.err = Value::error(ErrorCode::Calc);
       return result;
     }
+    if (rc == PCRE2_ERROR_MATCHLIMIT) {
+      result.ok = false;
+      result.err = Value::error(ErrorCode::Value);
+      return result;
+    }
     if (rc < 0) {
-      // Resource exhaustion: PCRE2_ERROR_MATCHLIMIT / DEPTHLIMIT /
-      // HEAPLIMIT. Treat as a graceful no-match for REGEXTEST (the
+      // Resource exhaustion: PCRE2_ERROR_DEPTHLIMIT / HEAPLIMIT. Treat as a graceful no-match for REGEXTEST (the
       // predicate semantics make a soft FALSE more useful than an
       // error), and as #CALC! for the extract / replace pair.
       if (on_match_limit_returns_no_match) {
@@ -656,7 +661,10 @@ Value substitute_with_flags(const CompiledPattern& program, std::string_view sub
 
   if (rc < 0) {
     // Match-limit / depth-limit / malformed replacement.
-    if (rc == PCRE2_ERROR_MATCHLIMIT || rc == PCRE2_ERROR_DEPTHLIMIT || rc == PCRE2_ERROR_HEAPLIMIT) {
+    if (rc == PCRE2_ERROR_MATCHLIMIT) {
+      return Value::error(ErrorCode::Value);
+    }
+    if (rc == PCRE2_ERROR_DEPTHLIMIT || rc == PCRE2_ERROR_HEAPLIMIT) {
       return Value::error(ErrorCode::Calc);
     }
     return Value::error(ErrorCode::Value);

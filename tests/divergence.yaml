@@ -274,43 +274,6 @@ entries:
   # trailing params bind to an "omitted" sentinel detected by ISOMITTED
   # via the active NameEnv frame.
 
-  # Gap 3: REGEX* family with catastrophic-backtracking inputs. PCRE2
-  # bounds runtime via match_limit (1_000_000) and depth_limit (10_000),
-  # surfacing FALSE (REGEXTEST) or #CALC! (REGEXEXTRACT / REGEXREPLACE)
-  # when a pattern blows past the budget. Excel bounds the same inputs and
-  # reports #VALUE! for all three, so the divergence is which surface a
-  # bounded run reports, not whether the run terminates.
-  - id: regex_match_limit_regextest
-    applies_to: [mac-365-ja_JP]
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [tests/unit/eval/builtins_regex_test.cpp]
-    reason: "`=REGEXTEST(REPT(\"a\",30)&\"!\",\"(a+)+$\")`: Excel returns #VALUE! (its own ERROR.TYPE on the cell reports 3, and the calculation returns at once rather than blocking), Formulon returns FALSE once pcre2_match_limit=1000000 is reached."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-  - id: regex_match_limit_regexextract
-    applies_to: [mac-365-ja_JP]
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [tests/unit/eval/builtins_regex_test.cpp]
-    reason: "`=REGEXEXTRACT(REPT(\"a\",30)&\"!\",\"(a+)+$\")`: Excel returns #VALUE! promptly, Formulon returns #CALC! once the pcre2 match limit is exceeded."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-  - id: regex_match_limit_regexreplace
-    applies_to: [mac-365-ja_JP]
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [tests/unit/eval/builtins_regex_test.cpp]
-    reason: "`=REGEXREPLACE(REPT(\"a\",30)&\"!\",\"(a+)+$\",\"x\")`: Excel returns #VALUE! promptly, Formulon returns #CALC! once the pcre2 match limit is exceeded."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-
   # Stale `forecast_ets_seasonality_linear_no_period` removed: the
   # seasonality detector now removes the linear trend before computing the
   # autocorrelation, so a perfectly linear series reports no period (0) like
@@ -899,17 +862,6 @@ entries:
     prefer: win-excel-365
     first_noted: 2026-08-22
     last_verified_excel_version: "16.0.20326"
-
-  - id: xlookup_binary_search_dirty_data
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [tests/unit/eval/builtins_xlookup_test.cpp]
-    reason: "Binary search (search_mode 2/-2) is only defined on sorted input. Formulon treats incomparable cells as greater-than-target to keep the upper bound monotone, so on unsorted/dirty data a near match can be stepped over. Excel's binary search is likewise undefined on unsorted data and lands on a different cell; the divergence only occurs on contract-violating input."
-    prefer: formulon
-    first_noted: 2026-06-26
-    last_verified_excel_version: "16.112.1"
 
   # -- Page-field header block --------------------------------------------
   # Retired the pair of `engine-gap` entries that claimed GETPIVOTDATA

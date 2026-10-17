@@ -930,6 +930,51 @@ TEST(RegexReplace, NthOccurrenceBroadcastCompilesThePatternOncePerCall) {
   EXPECT_EQ(regex_compile_count() - before, 1U);
 }
 
+// Exhausting the backtracking budget is #VALUE! for all three functions.
+TEST(RegexMatchLimit, CatastrophicBacktrackingIsValueError) {
+  for (const char* fn : {"REGEXTEST(REPT(\"a\",19)&\"!\",\"(a+)+$\")", "REGEXEXTRACT(REPT(\"a\",19)&\"!\",\"(a+)+$\")",
+                         "REGEXREPLACE(REPT(\"a\",19)&\"!\",\"(a+)+$\",\"x\")"}) {
+    const Value v = EvalSource(std::string("=") + fn);
+    ASSERT_TRUE(v.is_error()) << fn;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << fn;
+  }
+}
+
+TEST(RegexMatchLimit, NestedQuantifierJustUnderTheLimitIsFalse) {
+  const Value v = EvalSource("=REGEXTEST(REPT(\"a\",18)&\"!\",\"(a+)+$\")");
+  ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(RegexMatchLimit, AlternationFlipsAtSeventeenPairs) {
+  const Value pass = EvalSource("=REGEXTEST(REPT(\"ab\",16)&\"!\",\"(a|b|ab)*$\")");
+  ASSERT_TRUE(pass.is_boolean()) << pass.debug_to_string();
+  const Value fail = EvalSource("=REGEXTEST(REPT(\"ab\",17)&\"!\",\"(a|b|ab)*$\")");
+  ASSERT_TRUE(fail.is_error()) << fail.debug_to_string();
+  EXPECT_EQ(fail.as_error(), ErrorCode::Value);
+}
+
+TEST(RegexMatchLimit, AnchoredAlternationFlipsAtTwentySix) {
+  const Value pass = EvalSource("=REGEXTEST(REPT(\"a\",25)&\"!\",\"^(a|aa)+$\")");
+  ASSERT_TRUE(pass.is_boolean()) << pass.debug_to_string();
+  const Value fail = EvalSource("=REGEXTEST(REPT(\"a\",26)&\"!\",\"^(a|aa)+$\")");
+  ASSERT_TRUE(fail.is_error()) << fail.debug_to_string();
+  EXPECT_EQ(fail.as_error(), ErrorCode::Value);
+}
+
+// The limit does not depend on the subject length.
+TEST(RegexMatchLimit, LongSubjectDoesNotRaiseTheLimit) {
+  const Value v = EvalSource("=REGEXTEST(REPT(\"a\",19)&\"!\"&REPT(\"z\",2000),\"(a+)+$\")");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(RegexMatchLimit, TripleNestedQuantifierUnderTheLimitIsFalse) {
+  const Value v = EvalSource("=REGEXTEST(REPT(\"a\",9)&\"!\",\"(((a+)+)+)+$\")");
+  ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
+  EXPECT_FALSE(v.as_boolean());
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
