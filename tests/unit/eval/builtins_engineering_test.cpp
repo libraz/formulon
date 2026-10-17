@@ -586,6 +586,56 @@ TEST(EngineeringAnalysisToolPak, DeltaOmittedRequiredIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+TEST(BitShiftRanges, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;  // negative: #NUM!
+  };
+  const Case cases[] = {
+      {"=BITLSHIFT(0,-60)", 0.0},
+      {"=BITLSHIFT(0,-49)", 0.0},
+      {"=BITLSHIFT(0,-1)", 0.0},
+      {"=BITLSHIFT(0,47)", 0.0},
+      {"=BITLSHIFT(0,53)", 0.0},
+      {"=BITRSHIFT(0,-60)", 0.0},
+      {"=BITRSHIFT(0,-49)", 0.0},
+      {"=BITRSHIFT(0,-1)", 0.0},
+      {"=BITRSHIFT(0,47)", 0.0},
+      {"=BITRSHIFT(0,53)", 0.0},
+      {"=BITLSHIFT(1,-60)", -1.0},
+      {"=BITLSHIFT(1,-49)", 0.0},
+      {"=BITLSHIFT(1,-1)", 0.0},
+      {"=BITLSHIFT(1,47)", 140737488355328.0},
+      {"=BITLSHIFT(1,53)", 0.0},
+      {"=BITRSHIFT(1,-60)", -1.0},
+      {"=BITRSHIFT(1,-49)", 0.0},
+      {"=BITRSHIFT(1,-1)", 2.0},
+      {"=BITRSHIFT(1,47)", 0.0},
+      {"=BITRSHIFT(1,53)", 0.0},
+      {"=BITLSHIFT(255,-60)", -1.0},
+      {"=BITLSHIFT(255,54)", -1.0},
+      {"=BITRSHIFT(255,47)", 0.0},
+      {"=BITLSHIFT(1048576,-47)", 0.0},
+      {"=BITRSHIFT(1048576,49)", 0.0},
+      {"=BITLSHIFT(1099511627776,53)", 0.0},
+      {"=BITLSHIFT(140737488355328,48)", -1.0},
+      {"=BITRSHIFT(140737488355328,47)", 1.0},
+      {"=BITLSHIFT(281474976710655,-47)", 1.0},
+      {"=BITLSHIFT(281474976710655,53)", 0.0},
+      {"=BITRSHIFT(281474976710655,40)", 255.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    if (c.expected < 0.0) {
+      ASSERT_TRUE(v.is_error()) << c.formula;
+      EXPECT_EQ(v.as_error(), ErrorCode::Num) << c.formula;
+    } else {
+      ASSERT_TRUE(v.is_number()) << c.formula;
+      EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+    }
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

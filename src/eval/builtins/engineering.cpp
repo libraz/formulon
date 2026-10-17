@@ -363,17 +363,20 @@ Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
   return static_cast<std::uint64_t>(d);
 }
 
-// Coerces a shift magnitude: finite number truncated toward zero, in
-// [-53, 53]. Non-numeric -> #VALUE!; out-of-range -> #NUM!. Unlike the
-// value argument, the shift is Excel-truncated (34.67 -> 34) rather than
-// rejected.
+// Coerces a shift count: a finite number truncated toward zero (34.67 -> 34).
+// Non-numeric -> #VALUE!; non-finite -> #NUM!. The magnitude limit is applied by
+// `apply_bit_shift`, because a zero value shifts to 0 by any count.
 Expected<int, ErrorCode> coerce_shift(const Value& v) {
-  auto t = coerce_truncated_in_range(v, -static_cast<double>(kBitShiftMagnitudeMax),
-                                     static_cast<double>(kBitShiftMagnitudeMax), /*reject_bool=*/false);
-  if (!t) {
-    return std::move(t.error());
+  auto n = coerce_to_number(v);
+  if (!n) {
+    return std::move(n.error());
   }
-  return static_cast<int>(t.value());
+  const double d = n.value();
+  if (std::isnan(d) || std::isinf(d)) {
+    return ErrorCode::Num;
+  }
+  constexpr double kClamp = 1000.0;
+  return static_cast<int>(std::trunc(std::fmax(-kClamp, std::fmin(kClamp, d))));
 }
 
 using BitwiseOp = std::uint64_t (*)(std::uint64_t, std::uint64_t);
@@ -402,36 +405,30 @@ Value BitXor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_bitwise_op(args, [](std::uint64_t a, std::uint64_t b) { return a ^ b; });
 }
 
-// Applies a left-then-right or right-then-left shift according to sign.
-// Shared between BITLSHIFT and BITRSHIFT so the overflow-check policy stays
-// in a single spot: *left* shifts must fit in 48 bits, right shifts simply
-// collapse to 0 once the shift consumes every bit.
+// Applies the net left shift `shift_left` (negative: right) to `n`. Zero stays
+// zero for any count; a count beyond 53 either way is #NUM!. A left shift is
+// #NUM! when the result reaches 2^48 and for a count of 48, and is 0 for counts
+// 49 through 53. A right shift drains `n` to 0 once it consumes every bit.
 Expected<std::uint64_t, ErrorCode> apply_bit_shift(std::uint64_t n, int shift_left) {
-  if (shift_left == 0) {
-    return n;
-  }
-  if (shift_left > 0) {
-    // Left shift. A shift >= 64 in C++ is UB, so short-circuit any shift
-    // >= 48 that would be guaranteed to overflow anyway (n <= 2^48-1).
-    if (shift_left >= 48 && n != 0) {
-      return ErrorCode::Num;
-    }
-    if (shift_left >= 64) {
-      // n must be 0 here (caught above), but keep the guard explicit.
-      return static_cast<std::uint64_t>(0);
-    }
-    const std::uint64_t shifted = n << static_cast<unsigned>(shift_left);
-    if (shifted > kBit48Max) {
-      return ErrorCode::Num;
-    }
-    return shifted;
-  }
-  // Right shift. A shift >= 64 in C++ is UB; any such shift fully drains n.
-  const int amount = -shift_left;
-  if (amount >= 64) {
+  if (n == 0) {
     return static_cast<std::uint64_t>(0);
   }
-  return n >> static_cast<unsigned>(amount);
+  if (shift_left < -kBitShiftMagnitudeMax || shift_left > kBitShiftMagnitudeMax) {
+    return ErrorCode::Num;
+  }
+  if (shift_left < 0) {
+    return n >> static_cast<unsigned>(-shift_left);
+  }
+  if (shift_left <= 47) {
+    if (n > (kBit48Max >> static_cast<unsigned>(shift_left))) {
+      return ErrorCode::Num;
+    }
+    return n << static_cast<unsigned>(shift_left);
+  }
+  if (shift_left == 48) {
+    return ErrorCode::Num;
+  }
+  return static_cast<std::uint64_t>(0);
 }
 
 Value apply_bit_shift_args(const Value* args, bool left) {
@@ -444,7 +441,6 @@ Value apply_bit_shift_args(const Value* args, bool left) {
     return Value::error(shift.error());
   }
 
-  // The shift coercion bounds the magnitude to 53 before this negation.
   auto result = apply_bit_shift(n.value(), left ? shift.value() : -shift.value());
   if (!result) {
     return Value::error(result.error());
