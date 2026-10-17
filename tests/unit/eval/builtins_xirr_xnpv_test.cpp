@@ -171,15 +171,15 @@ TEST(FinancialXirr, AllNegativeIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialXirr, SingleCashFlowIsNum) {
-  // Fewer than two surviving cash flows: Excel rejects with #NUM!.
+TEST(FinancialXirr, SingleCashFlowIsNotAvailable) {
+  // Fewer than two surviving cash flows leave no rate to find: #N/A.
   Workbook wb = Workbook::create();
   auto& s = wb.sheet(0);
   s.set_cell_value(0, 0, Value::number(-100.0));
   s.set_cell_value(0, 1, Value::number(39448.0));
   const Value v = EvalSourceIn("=XIRR(A1:A1, B1:B1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 TEST(FinancialXirr, MismatchedRangeSizesIsNum) {

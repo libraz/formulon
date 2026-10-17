@@ -609,88 +609,94 @@ double xnpv_sum(const std::vector<double>& values, const std::vector<double>& da
   return total;
 }
 
-// XIRR's net present value: the later flows in listed order, then the first
-// flow added last (Mac Excel's evaluation order, visible in tail bits).
-double xirr_npv(const std::vector<double>& values, const std::vector<double>& dates, double rate) noexcept {
-  const double base = 1.0 + rate;
-  double later = 0.0;
+// The later flows discounted at `x`, summed in listed order. A discount
+// factor that is NaN, infinite or zero makes the whole evaluation fail.
+bool xirr_rest(const std::vector<double>& values, const std::vector<double>& dates, double x, double* out) noexcept {
+  const double base = x + 1.0;
+  double total = 0.0;
   for (std::size_t i = 1; i < values.size(); ++i) {
-    later += values[i] / std::pow(base, (dates[i] - dates[0]) / 365.0);
-  }
-  return values[0] + later;
-}
-
-// The side of the root `f` lies on: a schedule opening with a payment
-// (v0 < 0) has f > 0 below its root, any other one f < 0.
-bool xirr_below_root(double first_value, double f) noexcept {
-  return first_value < 0.0 ? f > 0.0 : f < 0.0;
-}
-
-// Bisects [lo, hi] as Mac Excel's XIRR does: the midpoint is taken from `hi`
-// and a zero or NaN midpoint moves `hi`. The result is the first midpoint
-// within 5e-9 + 1e-8|m| of the previous one that also passes the residual
-// test |f| < 2e-8 |v0|, when `check_residual` asks for it.
-double xirr_bisect(const std::vector<double>& values, const std::vector<double>& dates, double lo, double hi,
-                   bool check_residual) noexcept {
-  constexpr int kMaxIter = 2200;
-  const double first_value = values[0];
-  double prev = std::numeric_limits<double>::quiet_NaN();
-  for (int iter = 0; iter < kMaxIter; ++iter) {
-    const double mid = hi - (hi - lo) / 2.0;
-    const double f_mid = xirr_npv(values, dates, mid);
-    if (std::fabs(mid - prev) < 5.0e-9 + 1.0e-8 * std::fabs(mid) &&
-        (!check_residual || std::fabs(f_mid) / std::fabs(first_value) < 2.0e-8)) {
-      return mid;
+    const double p = std::pow(base, (dates[i] - dates[0]) / 365.0);
+    if (!std::isfinite(p) || p == 0.0) {
+      return false;
     }
-    prev = mid;
-    if (xirr_below_root(first_value, f_mid)) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
+    total = values[i] / p + total;
   }
-  return std::numeric_limits<double>::quiet_NaN();
+  *out = total;
+  return true;
 }
 
-// Mac Excel's XIRR search from step `s` (the guess, or 1e-5 for a zero
-// guess). The positive side runs only when the later flows cover |v0|:
-// [0, 2s] doubled while f stays below the root, bisected with no residual
-// test. Otherwise [-s, 0] when f(-s) is finite and strictly opposite to f(0),
-// then [-1, -s] when s < 1, both with the residual test. NaN when none applies.
-double xirr_solve(const std::vector<double>& values, const std::vector<double>& dates, double s) noexcept {
+// The side of zero `f` must lie on to be opposite to the first flow.
+bool xirr_opposite(double first_value, double f) noexcept {
+  return first_value != 0.0 && ((f > 0.0) - (f < 0.0)) == -((first_value > 0.0) - (first_value < 0.0));
+}
+
+// XIRR's search from the guess `g` (non-zero, above -1). The guess is negated
+// when the first flow outweighs the rest and it is positive. A negative guess
+// bisects [0, -1] until both the residual and the bracket are small; a
+// positive one doubles until the sign flips, then bisects a bracket. 100
+// passes without convergence give NaN.
+double xirr_solve(const std::vector<double>& values, const std::vector<double>& dates, double g) noexcept {
+  constexpr int kMaxPasses = 100;
   const double first_value = values[0];
   double later_sum = 0.0;
   for (std::size_t i = 1; i < values.size(); ++i) {
-    later_sum += values[i];
+    later_sum = values[i] + later_sum;
   }
-  if (std::fabs(later_sum) >= std::fabs(first_value)) {
-    double hi = 2.0 * s;
-    while (std::isfinite(hi) && xirr_below_root(first_value, xirr_npv(values, dates, hi))) {
-      hi *= 2.0;
+  if (std::fabs(first_value) > std::fabs(later_sum) && g > 0.0) {
+    g = -g;
+  }
+  double rest = 0.0;
+  if (!xirr_rest(values, dates, g, &rest)) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  if (g < 0.0) {
+    double lo = 0.0;
+    double hi = -1.0;
+    for (int pass = 0; pass < kMaxPasses; ++pass) {
+      const double f = first_value + rest;
+      const double residual_limit = (std::fabs(rest) + std::fabs(first_value)) * 1.0e-8;
+      if (std::fabs(f) < residual_limit && std::fabs(hi - lo) < (std::fabs(lo + hi) + 1.0) * 1.0e-8) {
+        return g;
+      }
+      if (xirr_opposite(first_value, f)) {
+        hi = g;
+      } else {
+        lo = g;
+      }
+      g = (hi - lo) / 2.0 + lo;
+      if (!xirr_rest(values, dates, g, &rest)) {
+        return std::numeric_limits<double>::quiet_NaN();
+      }
     }
-    if (std::isfinite(hi)) {
-      return xirr_bisect(values, dates, 0.0, hi, /*check_residual=*/false);
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  bool bracketed = false;
+  double lo = 0.0;
+  double hi = 0.0;
+  for (int pass = 0; pass < kMaxPasses; ++pass) {
+    if (bracketed && std::fabs(hi - lo) < (std::fabs(lo + hi) + 1.0) * 1.0e-8) {
+      return g;
     }
-  }
-  const double f_zero = xirr_npv(values, dates, 0.0);
-  const double f_neg_step = xirr_npv(values, dates, -s);
-  if (std::isfinite(f_neg_step) && ((f_neg_step < 0.0 && f_zero > 0.0) || (f_neg_step > 0.0 && f_zero < 0.0))) {
-    return xirr_bisect(values, dates, -s, 0.0, /*check_residual=*/true);
-  }
-  if (s < 1.0) {
-    return xirr_bisect(values, dates, -1.0, -s, /*check_residual=*/true);
-  }
-  return std::numeric_limits<double>::quiet_NaN();
-}
-
-// A guess in (-1, 0) searches only below zero: when f(guess) is finite and
-// strictly opposite to f(0), [guess, 0] is bisected with the residual test;
-// NaN otherwise.
-double xirr_solve_negative(const std::vector<double>& values, const std::vector<double>& dates, double guess) noexcept {
-  const double f_zero = xirr_npv(values, dates, 0.0);
-  const double f_guess = xirr_npv(values, dates, guess);
-  if (std::isfinite(f_guess) && ((f_guess < 0.0 && f_zero > 0.0) || (f_guess > 0.0 && f_zero < 0.0))) {
-    return xirr_bisect(values, dates, guess, 0.0, /*check_residual=*/true);
+    const double f = first_value + rest;
+    if (xirr_opposite(first_value, f)) {
+      if (bracketed) {
+        lo = g;
+        g = (hi - lo) / 2.0 + lo;
+      } else {
+        g = g * 2.0;
+      }
+    } else if (bracketed) {
+      hi = g;
+      g = (hi - lo) / 2.0 + lo;
+    } else {
+      bracketed = true;
+      hi = g;
+      g = g / 2.0;
+      lo = 0.0;
+    }
+    if (!xirr_rest(values, dates, g, &rest)) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
   }
   return std::numeric_limits<double>::quiet_NaN();
 }
@@ -718,26 +724,23 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
 
-  // XIRR needs at least two cash flows with opposite sign; Mac Excel 365
-  // reports #NUM! otherwise.
-  if (values.size() < 2U) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (!has_opposite_cash_flow_signs(values)) {
-    return Value::error(ErrorCode::Num);
-  }
-
   double guess = 0.1;  // default guess per Excel.
   if (arity == 3U &&
       !read_optional_guess(call.as_call_arg(2), arena, registry, ctx, /*analysis_toolpak=*/true, &guess, &err)) {
     return err;
   }
-  // A guess of -1 or below is outside the rate domain.
-  if (guess <= -1.0) {
+  // A guess of -1 or below is outside the rate domain; a single flow has no
+  // rate to find, and the flows must include both signs.
+  if (!(guess > -1.0)) {
     return Value::error(ErrorCode::Num);
   }
-  const double rate = guess < 0.0 ? xirr_solve_negative(values, dates, guess)
-                                  : xirr_solve(values, dates, guess == 0.0 ? 1.0e-5 : guess);
+  if (values.size() < 2U) {
+    return Value::error(ErrorCode::NA);
+  }
+  if (!has_opposite_cash_flow_signs(values)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double rate = xirr_solve(values, dates, guess == 0.0 ? 1.0e-5 : guess);
   if (std::isfinite(rate)) {
     return Value::number(rate);
   }

@@ -330,3 +330,75 @@ cases:
   - id: xirr_negative_guess_11_gm1p5
     description: "XIRR with a guess in (-1, 0) searches only below zero; -1 and below is #NUM!"
     formula: "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-1.5)"
+
+  - id: xirr_solver_widening_00
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.02)"
+
+  - id: xirr_solver_widening_01
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-5152.23;989.51;42.47;2748.5;-116.35;-131.51},{43249;43290;43586;44288;44704;45187},-0.02)"
+
+  - id: xirr_solver_widening_02
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.3)"
+
+  - id: xirr_solver_widening_03
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-7655.62;3049.09;1527.8},{44382;45951;46005},-0.005)"
+
+  - id: xirr_solver_widening_04
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-5152.23;989.51;42.47;2748.5;-116.35;-131.51},{43249;43290;43586;44288;44704;45187},-0.12)"
+
+  - id: xirr_solver_widening_05
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.1)"
+
+  - id: xirr_solver_widening_06
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.12)"
+
+  - id: xirr_solver_widening_07
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.005)"
+
+  - id: xirr_solver_widening_08
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.05)"
+
+  - id: xirr_solver_widening_09
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.05)"
+
+  - id: xirr_solver_widening_10
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.15)"
+
+  - id: xirr_solver_widening_11
+    description: "XIRR search below zero widens the bracket as Excel does"
+    formula: "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-0.005)"
+
+  - id: xirr_solver_edge_00
+    description: "XIRR solver edges: single flow, flipped guess, zero discount factor"
+    formula: "=XIRR({-100},{43831})"
+
+  - id: xirr_solver_edge_01
+    description: "XIRR solver edges: single flow, flipped guess, zero discount factor"
+    formula: "=XIRR({-100;50},{43831;44196},1)"
+
+  - id: xirr_solver_edge_02
+    description: "XIRR solver edges: single flow, flipped guess, zero discount factor"
+    formula: "=XIRR({-1000;300;300;300;300},{43831;44196;44561;44926;45291},-0.3)"
+
+  - id: xirr_solver_edge_03
+    description: "XIRR solver edges: single flow, flipped guess, zero discount factor"
+    formula: "=XIRR({-1000;1000},{43831;44196},-0.1)"
+
+  - id: xirr_solver_edge_04
+    description: "XIRR solver edges: single flow, flipped guess, zero discount factor"
+    formula: "=XIRR({100;-50},{43831;44196},0.1)"
+
+  - id: xirr_solver_edge_05
+    description: "XIRR solver edges: single flow, flipped guess, zero discount factor"
+    formula: "=XIRR({-100;150},{43831;44196},1E+300)"
