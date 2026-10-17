@@ -729,3 +729,295 @@ cases:
       A3: null
       A4: apple
     formula: '=COUNTIF(A1:A4,"*")'
+
+  # ---------------------------------------------------------------------
+  # Supplementary-plane characters: `?` matches one UTF-16 unit.
+  # ---------------------------------------------------------------------
+  - id: countif_question_one
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"?")'
+
+  - id: countif_question_two
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"??")'
+
+  - id: countif_question_three
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"???")'
+
+  - id: countif_question_mid
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"a?b")'
+
+  - id: countif_question_mid2
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"a??b")'
+
+  - id: countif_question_mid3
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"a???b")'
+
+  - id: countif_question_star_then_question
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"*?b")'
+
+  - id: countif_question_question_prefix
+    description: "COUNTIF question mark counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"??b")'
+
+  - id: sumif_question_two
+    description: "SUMIF question marks count UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=SUMIF(A1:A6,"??",B1:B6)'
+
+  - id: countifs_question_three
+    description: "COUNTIFS question marks count UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIFS(A1:A6,"???",B1:B6,">0")'
+
+  - id: match_question_two
+    description: "MATCH exact wildcard counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=IFERROR(MATCH("??",A1:A6,0),0)'
+
+  - id: match_question_three
+    description: "MATCH exact wildcard counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=IFERROR(MATCH("???",A1:A6,0),0)'
+
+  - id: xmatch_question_two
+    description: "XMATCH wildcard counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=IFERROR(XMATCH("??",A1:A6,2),0)'
+
+  - id: xlookup_question_three
+    description: "XLOOKUP wildcard counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=IFERROR(XLOOKUP("???",A1:A6,B1:B6,0,2),0)'
+
+  - id: vlookup_question_three
+    description: "VLOOKUP exact wildcard counts UTF-16 units"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=IFERROR(VLOOKUP("???",A1:B6,2,FALSE),0)'
+
+  - id: countif_escaped_question
+    description: "COUNTIF escaped question mark is literal"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"a~?b")'
+
+  - id: countif_star_between
+    description: "COUNTIF star spans supplementary characters"
+    setup:
+      A1: "a😀b"
+      A2: "😀"
+      A3: "ab"
+      A4: "😀😀"
+      A5: "x😀"
+      A6: "a?b"
+      B1: 1
+      B2: 2
+      B3: 4
+      B4: 8
+      B5: 16
+      B6: 32
+    formula: '=COUNTIF(A1:A6,"a*b")'

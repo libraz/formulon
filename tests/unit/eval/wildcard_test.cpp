@@ -37,10 +37,25 @@ TEST(WildcardMatchCodepoint, QuestionMatchesExactlyOneCodepoint) {
   EXPECT_FALSE(wildcard_match("??", "\xE3\x81\x82"));  // one cp cannot fill two ?
 }
 
-TEST(WildcardMatchCodepoint, QuestionMatchesSupplementaryPlaneEmoji) {
-  // A 4-byte codepoint (U+1F600) is one "?" unit.
-  EXPECT_TRUE(wildcard_match("?", "\xF0\x9F\x98\x80"));
-  EXPECT_TRUE(wildcard_match("a?b",
+TEST(WildcardMatchCodepoint, SupplementaryCharacterTakesTwoQuestionMarks) {
+  // A 4-byte codepoint (U+1F600) is two UTF-16 units, so one "?" matches half of it.
+  EXPECT_FALSE(wildcard_match("?", "\xF0\x9F\x98\x80"));
+  EXPECT_TRUE(wildcard_match("??", "\xF0\x9F\x98\x80"));
+  EXPECT_FALSE(wildcard_match("a?b",
+                              "a"
+                              "\xF0\x9F\x98\x80"
+                              "b"));
+  EXPECT_TRUE(wildcard_match("a??b",
+                             "a"
+                             "\xF0\x9F\x98\x80"
+                             "b"));
+  // A literal never matches half of a character, but a star can stop inside one.
+  EXPECT_TRUE(wildcard_match("*?b",
+                             "a"
+                             "\xF0\x9F\x98\x80"
+                             "b"));
+  EXPECT_FALSE(wildcard_match("a?\xF0\x9F\x98\x80", "a\xF0\x9F\x98\x80"));
+  EXPECT_TRUE(wildcard_match("a*b",
                              "a"
                              "\xF0\x9F\x98\x80"
                              "b"));

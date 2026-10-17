@@ -80,21 +80,42 @@ std::size_t utf8_codepoint_bytes(std::string_view text, std::size_t i) {
   return len;
 }
 
+// A text position: a byte offset, plus `half` when only the first of the two
+// UTF-16 units of the supplementary-plane character at `ti` is consumed.
+struct TextPos {
+  std::size_t ti = 0;
+  bool half = false;
+};
+
+// One UTF-16 unit further.
+TextPos advance_unit(std::string_view text, TextPos pos) {
+  const std::size_t bytes = utf8_codepoint_bytes(text, pos.ti);
+  if (pos.half) {
+    return {pos.ti + bytes, false};
+  }
+  if (bytes == 4) {
+    return {pos.ti, true};
+  }
+  return {pos.ti + (bytes == 0 ? 1 : bytes), false};
+}
+
+// `?` matches one UTF-16 unit, so a supplementary-plane character takes `??`
+// and a literal never matches half of one.
 bool wildcard_match_impl(std::string_view pattern, std::string_view text) {
   std::size_t pi = 0;
-  std::size_t ti = 0;
+  TextPos pos;
   std::size_t star_pi = std::string_view::npos;
-  std::size_t star_ti = 0;
-  while (ti < text.size()) {
+  TextPos star_pos;
+  while (pos.ti < text.size()) {
     if (pi < pattern.size()) {
       const char pc = pattern[pi];
       if (pc == '~' && pi + 1 < pattern.size()) {
         // Escaped literal: match the next pattern byte case-insensitively
         // (Excel preserves the overall case-insensitive rule even for
         // escape-protected characters).
-        if (strings::ascii_to_lower(pattern[pi + 1]) == strings::ascii_to_lower(text[ti])) {
+        if (!pos.half && strings::ascii_to_lower(pattern[pi + 1]) == strings::ascii_to_lower(text[pos.ti])) {
           pi += 2;
-          ++ti;
+          ++pos.ti;
           continue;
         }
       } else if (pc == '~' && pi + 1 == pattern.size()) {
@@ -104,33 +125,24 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text) {
         continue;
       } else if (pc == '*') {
         star_pi = pi;
-        star_ti = ti;
+        star_pos = pos;
         ++pi;
         continue;
       } else if (pc == '?') {
-        // `?` matches exactly one UTF-8 code point (1-4 bytes) rather than a
-        // single byte, so multibyte scripts (CJK, emoji, combining marks
-        // treated as atomic) match as Excel users would expect.
-        const std::size_t cp_bytes = utf8_codepoint_bytes(text, ti);
         ++pi;
-        ti += cp_bytes;
+        pos = advance_unit(text, pos);
         continue;
-      } else if (strings::ascii_to_lower(pc) == strings::ascii_to_lower(text[ti])) {
+      } else if (!pos.half && strings::ascii_to_lower(pc) == strings::ascii_to_lower(text[pos.ti])) {
         ++pi;
-        ++ti;
+        ++pos.ti;
         continue;
       }
     }
     if (star_pi != std::string_view::npos) {
-      // Backtrack: extend the most-recent `*` by one CODEPOINT of text. This
-      // must advance a whole UTF-8 codepoint, not a single byte — otherwise
-      // `star_ti` can land mid-sequence and a following `?` or literal would
-      // match a continuation byte (e.g. `*??c*` against `あcう` split the
-      // 3-byte `あ`). Codepoint-stepping keeps every subsequent match aligned.
+      // Backtrack: extend the most-recent `*` by one UTF-16 unit of text.
       pi = star_pi + 1;
-      const std::size_t step = utf8_codepoint_bytes(text, star_ti);
-      star_ti += (step == 0 ? 1 : step);
-      ti = star_ti;
+      star_pos = advance_unit(text, star_pos);
+      pos = star_pos;
       continue;
     }
     return false;
