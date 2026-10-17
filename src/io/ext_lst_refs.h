@@ -74,8 +74,9 @@ struct SparklineClone {
   }
 };
 
-/// Relative copy of a formula `steps` rows or columns further on; absolute
-/// coordinates stay put.
+/// Copy of a formula `steps` rows or columns further on. `$`-absolute
+/// coordinates move too; only a whole-column (whole-row) reference stays put
+/// on the axis it spans.
 class TranslateTransform final : public parser::RefTransform {
  public:
   TranslateTransform(bool row_axis, std::uint32_t steps) noexcept : row_axis_(row_axis), steps_(steps) {}
@@ -83,8 +84,8 @@ class TranslateTransform final : public parser::RefTransform {
   std::optional<parser::Reference> apply(const parser::Reference& ref) const override {
     parser::Reference out = ref;
     std::uint32_t& coord = row_axis_ ? out.row : out.col;
-    const bool absolute = row_axis_ ? ref.row_abs || ref.is_full_col : ref.col_abs || ref.is_full_row;
-    if (!absolute) {
+    const bool spans_axis = row_axis_ ? ref.is_full_col : ref.is_full_row;
+    if (!spans_axis) {
       coord += steps_;
       if (coord >= (row_axis_ ? Sheet::kMaxRows : Sheet::kMaxCols)) {
         return std::nullopt;

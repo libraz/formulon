@@ -462,14 +462,23 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
     to.has_explicit_xf = true;
   };
   if (edit.row_axis) {
-    const RowLayout* styled = find_row_override(layout_, source);
-    if (styled != nullptr && styled->has_style) {
-      const std::uint32_t style_xf = styled->style_xf;
+    // Style and an explicit height carry over; hidden state and outline level do not.
+    // Copied by value: inserting overrides below invalidates pointers into the list.
+    const RowLayout* found = find_row_override(layout_, source);
+    const RowLayout styled_row = found != nullptr ? *found : RowLayout{};
+    const RowLayout* styled = &styled_row;
+    const bool inherits_height = styled->has_height && styled->custom_height;
+    if (styled->has_style || inherits_height) {
       for (std::uint32_t row = edit.index; row < end; ++row) {
         RowLayout entry;
         entry.row = row;
-        entry.has_style = true;
-        entry.style_xf = style_xf;
+        entry.has_style = styled->has_style;
+        entry.style_xf = styled->has_style ? styled->style_xf : 0U;
+        if (inherits_height) {
+          entry.has_height = true;
+          entry.height = styled->height;
+          entry.custom_height = true;
+        }
         insert_row_override(layout_, entry);
       }
     }
@@ -491,12 +500,14 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
   // inserted ones; only a span ending there needs a new entry.
   const auto span = std::find_if(layout_.columns.begin(), layout_.columns.end(),
                                  [&](const ColumnLayout& c) { return c.first <= source && source <= c.last; });
-  if (span != layout_.columns.end() && span->has_style && span->last == source) {
+  if (span != layout_.columns.end() && (span->has_style || HasExplicitColumnWidth(*span)) && span->last == source) {
     ColumnLayout entry;
     entry.first = edit.index;
     entry.last = end - 1U;
-    entry.has_style = true;
-    entry.style_xf = span->style_xf;
+    entry.has_style = span->has_style;
+    entry.style_xf = span->has_style ? span->style_xf : 0U;
+    entry.has_width = HasExplicitColumnWidth(*span);
+    entry.width = span->width;
     layout_.columns.insert(span + 1, entry);
   }
   for (auto& kv : rows_) {
