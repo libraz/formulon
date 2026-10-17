@@ -58,10 +58,33 @@ enum class XSearchMode : std::int8_t { FirstToLast = 1, LastToFirst = -1, Binary
 // Three-way compare of (cell - lookup) honouring Excel 365's cross-type
 // ordering for XLOOKUP approximate-match: kind-rank first, value second.
 // Rank 0 = Number / Blank (Blank acts as 0.0), Rank 1 = Text (case-insensitive
-// ASCII compare), Rank 2 = Bool (FALSE < TRUE). Anything else (Error, Array,
-// Ref, Lambda) is incomparable and the function returns `false` so callers
-// can decide how to handle it. On success writes the sign to `*out_cmp` and
-// returns `true`.
+// ASCII compare), Rank 2 = Bool (FALSE < TRUE), Rank 3 = Error (ordered by
+// ERROR.TYPE code). Anything else (Array, Ref, Lambda) is incomparable and the
+// function returns `false` so callers can decide how to handle it. On success
+// writes the sign to `*out_cmp` and returns `true`.
+// Position of an error in ERROR.TYPE order (`#NULL!` 1 .. `#N/A` 7); other
+// errors sort after them.
+int error_order(ErrorCode code) {
+  switch (code) {
+    case ErrorCode::Null:
+      return 1;
+    case ErrorCode::Div0:
+      return 2;
+    case ErrorCode::Value:
+      return 3;
+    case ErrorCode::Ref:
+      return 4;
+    case ErrorCode::Name:
+      return 5;
+    case ErrorCode::Num:
+      return 6;
+    case ErrorCode::NA:
+      return 7;
+    default:
+      return 8;
+  }
+}
+
 bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, int* out_cmp) {
   auto cmp_numeric = [](double x, double y) -> int {
     if (x < y) {
@@ -85,6 +108,10 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
       *rank = 2;
       return true;
     }
+    if (v.is_error()) {
+      *rank = 3;
+      return true;
+    }
     return false;
   };
   int cell_rank = 0;
@@ -99,6 +126,10 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
   // Same kind — compare values directly.
   if (cell_rank == 1) {
     *out_cmp = collate(cell.as_text(), lookup.as_text(), profile, CollationStrength::kDynamic);
+    return true;
+  }
+  if (cell_rank == 3) {
+    *out_cmp = cmp_numeric(error_order(cell.as_error()), error_order(lookup.as_error()));
     return true;
   }
   if (cell_rank == 2) {
@@ -310,7 +341,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
 
   // Binary search over the array as given: one comparison per probe, an equal
   // probe is remembered and the search continues toward the start of the sorted
-  // order. A cell incomparable with the lookup (Error / Array / Ref / Lambda)
+  // order. A cell incomparable with the lookup (Array / Ref / Lambda)
   // counts as greater.
   const bool descending = search_mode == XSearchMode::BinaryDesc;
   const auto probe = [&](std::size_t i) -> int {

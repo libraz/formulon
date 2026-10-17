@@ -582,6 +582,17 @@ TEST(BuiltinsMatchApproximate, DescendingIsLinearScan) {
   EXPECT_EQ(hit.as_number(), 2.0);
 }
 
+TEST(BuiltinsMatchApproximate, ErrorCellProbeLooksPastToTheNextSameTypeCell) {
+  // A smaller cell after the error becomes the candidate.
+  const Value smaller = EvalSource("=MATCH(45,{80,70,60,#N/A,40,30,20,10},1)");
+  ASSERT_TRUE(smaller.is_number()) << smaller.debug_to_string();
+  EXPECT_EQ(smaller.as_number(), 8.0);
+  // An equal cell after the error ends the search at the last cell of its run.
+  const Value equal = EvalSource("=MATCH(80,{10,20,30,#N/A,80,70,80,90},1)");
+  ASSERT_TRUE(equal.is_number()) << equal.debug_to_string();
+  EXPECT_EQ(equal.as_number(), 5.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

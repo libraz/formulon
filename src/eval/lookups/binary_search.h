@@ -51,9 +51,11 @@ SortedSearchResult sorted_search(std::size_t n, bool descending, bool prefer_las
 }
 
 // MATCH(..., 1), LOOKUP and VLOOKUP / HLOOKUP with range_lookup TRUE. Binary
-// search over same-type probes (an equal probe continues right, a smaller one
-// becomes the candidate); the first foreign-type probe abandons it and scans
-// the remaining interval left to right. Returns SIZE_MAX when nothing matches.
+// search where an equal probe continues right and a smaller one becomes the
+// candidate. A foreign-type probe (another type, or an error) is looked past:
+// the first same-type cell after it decides, a greater one sends the search
+// left, a smaller one becomes the candidate, and an equal one ends the search
+// at the last cell of its run. Returns SIZE_MAX when nothing matches.
 template <typename Cmp>
 std::size_t approximate_search(std::size_t n, const Cmp& cmp) {
   std::ptrdiff_t lo = 0;
@@ -62,22 +64,24 @@ std::size_t approximate_search(std::size_t n, const Cmp& cmp) {
   std::size_t candidate = SIZE_MAX;
   while (lo <= hi) {
     const std::ptrdiff_t mid = (lo + hi) >> 1;
-    const int c = cmp(static_cast<std::size_t>(mid));
+    int c = cmp(static_cast<std::size_t>(mid));
     if (c == kForeignType) {
-      for (std::ptrdiff_t i = lo; i <= hi; ++i) {
-        const int s = cmp(static_cast<std::size_t>(i));
-        if (s == kForeignType) {
-          continue;
-        }
-        if (s == 0) {
-          return static_cast<std::size_t>(i);
-        }
-        if (s > 0) {
-          break;
-        }
-        candidate = static_cast<std::size_t>(i);
+      std::size_t j = static_cast<std::size_t>(mid) + 1U;
+      while (j < n && (c = cmp(j)) == kForeignType) {
+        ++j;
       }
-      break;
+      if (j >= n || c > 0) {
+        hi = mid - 1;
+      } else if (c < 0) {
+        candidate = j;
+        lo = static_cast<std::ptrdiff_t>(j) + 1;
+      } else {
+        while (j + 1U < n && cmp(j + 1U) == 0) {
+          ++j;
+        }
+        return j;
+      }
+      continue;
     }
     if (c == 0) {
       found = static_cast<std::size_t>(mid);

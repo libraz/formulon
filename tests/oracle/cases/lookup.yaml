@@ -1106,3 +1106,1264 @@ cases:
   - id: vlookup_col_25
     description: "Excel 365: 2"
     formula: "=VLOOKUP(1,{1,2},2.5,FALSE)"
+
+  # -- Error cells inside the lookup array ----------------------------------
+  - id: err_cells_a1_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 90
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a1_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 90
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a1_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 90
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a1_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 90
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a1_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 90
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a1_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 90
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a2_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a2_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a2_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a2_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a2_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a2_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a3_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a3_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a3_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a3_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a3_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a3_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a4_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 90
+      A7: 80
+      A8: 80
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a4_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 90
+      A7: 80
+      A8: 80
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a4_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 90
+      A7: 80
+      A8: 80
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a4_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 90
+      A7: 80
+      A8: 80
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a4_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 90
+      A7: 80
+      A8: 80
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a4_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 90
+      A7: 80
+      A8: 80
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a5_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: { kind: error, code: "#N/A" }
+      A6: 80
+      A7: 70
+      A8: 60
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a5_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: { kind: error, code: "#N/A" }
+      A6: 80
+      A7: 70
+      A8: 60
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a5_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: { kind: error, code: "#N/A" }
+      A6: 80
+      A7: 70
+      A8: 60
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a5_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: { kind: error, code: "#N/A" }
+      A6: 80
+      A7: 70
+      A8: 60
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a5_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: { kind: error, code: "#N/A" }
+      A6: 80
+      A7: 70
+      A8: 60
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a5_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: { kind: error, code: "#N/A" }
+      A6: 80
+      A7: 70
+      A8: 60
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a6_match1_80
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#N/A" }
+      A3: 20
+      A4: 30
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a6_lookup_80
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#N/A" }
+      A3: 20
+      A4: 30
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a6_match1_75
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#N/A" }
+      A3: 20
+      A4: 30
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a6_lookup_75
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#N/A" }
+      A3: 20
+      A4: 30
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a6_match1_95
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#N/A" }
+      A3: 20
+      A4: 30
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a6_lookup_95
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#N/A" }
+      A3: 20
+      A4: 30
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a7_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 70
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a7_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 70
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a7_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 70
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a7_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 70
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a7_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 70
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a7_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 80
+      A8: 70
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a8_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a8_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a8_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a8_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a8_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a8_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a9_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a9_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a9_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a9_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a9_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a9_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 80
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a10_match1_80
+    setup:
+      A1: 80
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a10_lookup_80
+    setup:
+      A1: 80
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a10_match1_75
+    setup:
+      A1: 80
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a10_lookup_75
+    setup:
+      A1: 80
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a10_match1_95
+    setup:
+      A1: 80
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a10_lookup_95
+    setup:
+      A1: 80
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 60
+      A8: 50
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a11_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 90
+      A8: 80
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a11_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 90
+      A8: 80
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a11_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 90
+      A8: 80
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a11_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 90
+      A8: 80
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a11_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 90
+      A8: 80
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a11_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 80
+      A6: 70
+      A7: 90
+      A8: 80
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_a12_match1_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 70
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(80,A1:A8,1),"#"&ERROR.TYPE(MATCH(80,A1:A8,1)))'
+
+  - id: err_cells_a12_lookup_80
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 70
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(80,A1:A8),"#"&ERROR.TYPE(LOOKUP(80,A1:A8)))'
+
+  - id: err_cells_a12_match1_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 70
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(75,A1:A8,1),"#"&ERROR.TYPE(MATCH(75,A1:A8,1)))'
+
+  - id: err_cells_a12_lookup_75
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 70
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(75,A1:A8),"#"&ERROR.TYPE(LOOKUP(75,A1:A8)))'
+
+  - id: err_cells_a12_match1_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 70
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(MATCH(95,A1:A8,1),"#"&ERROR.TYPE(MATCH(95,A1:A8,1)))'
+
+  - id: err_cells_a12_lookup_95
+    setup:
+      A1: 10
+      A2: 20
+      A3: 30
+      A4: { kind: error, code: "#N/A" }
+      A5: 70
+      A6: 70
+      A7: 80
+      A8: 50
+    formula: '=IFERROR(LOOKUP(95,A1:A8),"#"&ERROR.TYPE(LOOKUP(95,A1:A8)))'
+
+  - id: err_cells_err1_xmatch_80_m1
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))'
+
+  - id: err_cells_err1_xmatch_80_mn
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XMATCH(80,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))'
+
+  - id: err_cells_err1_xmatch_95_m1
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XMATCH(95,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))'
+
+  - id: err_cells_err1_xmatch_95_mn
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XMATCH(95,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))'
+
+  - id: err_cells_err1_xmatch_10_m1
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XMATCH(10,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))'
+
+  - id: err_cells_err1_xmatch_10_mn
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XMATCH(10,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))'
+
+  - id: err_cells_err1_xlookup_next_larger
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1),"#"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1)))'
+
+  - id: err_cells_err1_xmatch_binary_80
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#VALUE!" }
+      A3: 30
+      A4: { kind: error, code: "#DIV/0!" }
+      A5: 50
+      A6: { kind: error, code: "#N/A" }
+      A7: 60
+      A8: 70
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,2),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))'
+
+  - id: err_cells_err2_xmatch_80_m1
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))'
+
+  - id: err_cells_err2_xmatch_80_mn
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XMATCH(80,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))'
+
+  - id: err_cells_err2_xmatch_95_m1
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XMATCH(95,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))'
+
+  - id: err_cells_err2_xmatch_95_mn
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XMATCH(95,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))'
+
+  - id: err_cells_err2_xmatch_10_m1
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XMATCH(10,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))'
+
+  - id: err_cells_err2_xmatch_10_mn
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XMATCH(10,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))'
+
+  - id: err_cells_err2_xlookup_next_larger
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1),"#"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1)))'
+
+  - id: err_cells_err2_xmatch_binary_80
+    setup:
+      A1: { kind: error, code: "#N/A" }
+      A2: { kind: error, code: "#NUM!" }
+      A3: { kind: error, code: "#NAME?" }
+      A4: { kind: error, code: "#REF!" }
+      A5: { kind: error, code: "#VALUE!" }
+      A6: { kind: error, code: "#DIV/0!" }
+      A7: { kind: error, code: "#NULL!" }
+      A8: 10
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,2),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))'
+
+  - id: err_cells_err3_xmatch_80_m1
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))'
+
+  - id: err_cells_err3_xmatch_80_mn
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XMATCH(80,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))'
+
+  - id: err_cells_err3_xmatch_95_m1
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XMATCH(95,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))'
+
+  - id: err_cells_err3_xmatch_95_mn
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XMATCH(95,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))'
+
+  - id: err_cells_err3_xmatch_10_m1
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XMATCH(10,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))'
+
+  - id: err_cells_err3_xmatch_10_mn
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XMATCH(10,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))'
+
+  - id: err_cells_err3_xlookup_next_larger
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1),"#"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1)))'
+
+  - id: err_cells_err3_xmatch_binary_80
+    setup:
+      A1: 10
+      A2: { kind: error, code: "#NULL!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      A4: { kind: error, code: "#VALUE!" }
+      A5: { kind: error, code: "#REF!" }
+      A6: { kind: error, code: "#NAME?" }
+      A7: { kind: error, code: "#NUM!" }
+      A8: { kind: error, code: "#N/A" }
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,2),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))'
+
+  - id: err_cells_err4_xmatch_80_m1
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))'
+
+  - id: err_cells_err4_xmatch_80_mn
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XMATCH(80,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))'
+
+  - id: err_cells_err4_xmatch_95_m1
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XMATCH(95,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))'
+
+  - id: err_cells_err4_xmatch_95_mn
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XMATCH(95,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))'
+
+  - id: err_cells_err4_xmatch_10_m1
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XMATCH(10,A1:A8,1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))'
+
+  - id: err_cells_err4_xmatch_10_mn
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XMATCH(10,A1:A8,-1,1),"#"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))'
+
+  - id: err_cells_err4_xlookup_next_larger
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1),"#"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,"nf",1,1)))'
+
+  - id: err_cells_err4_xmatch_binary_80
+    setup:
+      A1: { kind: error, code: "#NUM!" }
+      A2: 10
+      A3: { kind: error, code: "#VALUE!" }
+      A4: 20
+      A5: { kind: error, code: "#N/A" }
+      A6: 30
+      A7: { kind: error, code: "#DIV/0!" }
+      A8: 40
+    formula: '=IFERROR(XMATCH(80,A1:A8,1,2),"#"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))'
+
+  - id: err_cells_desc_vlookup
+    setup:
+      A1: 80
+      A2: 70
+      A3: 60
+      A4: { kind: error, code: "#N/A" }
+      A5: 40
+      A6: 30
+      A7: 20
+      A8: 10
+    formula: '=IFERROR(MATCH(45,A1:A8,1),"#"&ERROR.TYPE(MATCH(45,A1:A8,1)))'

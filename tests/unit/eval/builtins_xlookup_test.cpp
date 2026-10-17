@@ -1187,6 +1187,21 @@ TEST(BuiltinsXLookup, BinarySearchUnsortedNextSmallerTakesLowerBound) {
   EXPECT_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsXLookup, ErrorCellsRankAboveBooleansByErrorType) {
+  const Value next = EvalSource("=XMATCH(95,{10,#VALUE!,30,#DIV/0!,50,#N/A,60,70},1,1)");
+  ASSERT_TRUE(next.is_number()) << next.debug_to_string();
+  EXPECT_EQ(next.as_number(), 4.0);
+  const Value order = EvalSource("=XMATCH(80,{#N/A,#NUM!,#NAME?,#REF!,#VALUE!,#DIV/0!,#NULL!,10},1,1)");
+  ASSERT_TRUE(order.is_number()) << order.debug_to_string();
+  EXPECT_EQ(order.as_number(), 7.0);
+}
+
+TEST(BuiltinsXLookup, NextLargerResultCanBeAnErrorCell) {
+  const Value v = EvalSource("=XLOOKUP(95,{#N/A,20,30,40,50,60,70,80},{#N/A,20,30,40,50,60,70,80},\"nf\",1,1)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
