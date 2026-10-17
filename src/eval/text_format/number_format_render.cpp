@@ -208,7 +208,8 @@ void cap_integer_significant_digits(std::string* digits) {
       }
     }
   }
-  prefix.append(original_length - prefix.size(), '0');
+  // The dropped digits become zeros; a carry out of an all-9s prefix has already added its leading digit.
+  prefix.append(original_length - kSignificantDigits, '0');
   *digits = std::move(prefix);
 }
 

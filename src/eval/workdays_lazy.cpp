@@ -341,6 +341,10 @@ Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const Func
     return err;
   }
   const bool date1904 = ctx.date1904();
+  if (add_days) {
+    // WORKDAY truncates a fractional start before the range check.
+    start = std::trunc(start);
+  }
   if (!is_valid_workday_serial(start, date1904) ||
       !(add_days ? is_valid_workday_count(second, date1904) : is_valid_workday_serial(second, date1904))) {
     return Value::error(ErrorCode::Num);

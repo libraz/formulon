@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-16T07:59:08Z"
+    "generated_at": "2026-10-17T08:57:56Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -2979,6 +2979,110 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "workday_fractional_start_at_limit",
+      "formula": "=WORKDAY(2958465.9,-30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958423.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "workday_fractional_start_zero_days",
+      "formula": "=WORKDAY(2958465.9,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "workday_intl_fractional_start_code",
+      "formula": "=WORKDAY.INTL(2958465.9,-30,11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958430.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "workday_intl_fractional_start_mask",
+      "formula": "=WORKDAY.INTL(2958465.9,-1,\"0101000\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958463.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "eomonth_before_calendar_start",
+      "formula": "=EOMONTH(1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "date_march_day_zero_1900",
+      "formula": "=DATE(1900,3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "days360_into_ghost_day",
+      "formula": "=DAYS360(59,60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "days360_out_of_ghost_day",
+      "formula": "=DAYS360(60,61)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

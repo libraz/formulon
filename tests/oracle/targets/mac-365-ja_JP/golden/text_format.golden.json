@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-14T09:39:06Z"
+    "generated_at": "2026-10-17T08:58:05Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1370,6 +1370,45 @@
       "expect": {
         "kind": "text",
         "value": "0    "
+      }
+    },
+    {
+      "id": "text_percent_1e21",
+      "formula": "=TEXT(VALUE(\"1E+21\"),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000000000000%"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_percent_1e21_decimal",
+      "formula": "=TEXT(VALUE(\"1E+21\"),\"0.0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000000000000.0%"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_percent_1e22",
+      "formula": "=TEXT(VALUE(\"1E+22\"),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000000000000000000000000%"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

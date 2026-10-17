@@ -502,3 +502,16 @@ cases:
     formula: "=TEXT(0, \"# ???/???\")"
   - id: text_fraction_conv_21
     formula: "=TEXT(-0, \"# ?/?\")"
+
+  # -- Percent scaling keeps every digit of a carried 15-digit view ---
+  - id: text_percent_1e21
+    formula: "=TEXT(VALUE(\"1E+21\"),\"0%\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: text_percent_1e21_decimal
+    formula: "=TEXT(VALUE(\"1E+21\"),\"0.0%\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: text_percent_1e22
+    formula: "=TEXT(VALUE(\"1E+22\"),\"0%\")"
+    tolerance: { abs: 0, rel: 0 }

@@ -69,11 +69,11 @@ bool is_valid_date_time_serial(double serial, bool date1904) noexcept {
 }
 
 double serial_from_date_components(int y, unsigned m, long long d, bool date1904) noexcept {
-  // Preserve the 1900-system ghost-day spelling before normalising the raw
+  // Preserve the 1900-system ghost-day spellings (Feb 29, or day 0 of March) before normalising the raw
   // components into a civil date. All other dates can be converted from the
   // civil day of the first of the month plus the signed day offset, avoiding
   // any signed-to-unsigned wrap for valid negative day arguments.
-  if (!date1904 && y == 1900 && m == 2u && d == 29) {
+  if (!date1904 && y == 1900 && ((m == 2u && d == 29) || (m == 3u && d == 0))) {
     return 60.0;
   }
   const std::int64_t civil_day = date_time::days_from_civil(y, m, 1u) + d - 1;
@@ -569,6 +569,10 @@ Value Eomonth_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
   if (!shifted) {
     return Value::error(shifted.error());
   }
+  // The target month itself must lie inside the calendar.
+  if (shifted.value().y < (date1904 ? 1904 : 1900)) {
+    return Value::error(ErrorCode::Num);
+  }
   const double serial =
       date_time::serial_from_ymd(shifted.value().y, shifted.value().m, shifted.value().eom_d, date1904);
   if (!is_valid_generated_date_serial(serial, date1904)) {
@@ -911,7 +915,9 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     // A start date on the last day of February is treated the same as day
     // 31: it becomes day 30 before the day-31 rule below runs, so the
     // "end day 31" check below sees the adjusted start day.
-    if (sm == 2 && sd == static_cast<int>(days_in_month(sy, 2u))) {
+    // The 1900 calendar's February has 29 days (the fictitious leap day included).
+    const int feb_length = sy == 1900 ? 29 : static_cast<int>(days_in_month(sy, 2u));
+    if (sm == 2 && sd == feb_length) {
       sd = 30;
     }
     if (ed == 31 && sd >= 30) {

@@ -204,10 +204,10 @@ TEST(DateTimeEomonth, FinalDayTimeFractionCannotCrossUpperEndpoint) {
   EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
 }
 
-TEST(DateTimeEomonth, LowerBoundaryPreviousMonthIsZero) {
+TEST(DateTimeEomonth, LowerBoundaryPreviousMonthIsNum) {
   const Value v = EvalSource("=EOMONTH(1, -1)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(DateTimeEomonth, GiganticMonthOffsetIsNum) {

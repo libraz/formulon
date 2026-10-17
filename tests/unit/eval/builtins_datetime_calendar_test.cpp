@@ -513,7 +513,7 @@ TEST(DateTimeSerialZero, EomonthAndEdate) {
   EXPECT_EQ(blank_start.as_number(), 31.0);
   ExpectNumber("=EDATE(0,1)", 31.0);
   ExpectNumber("=EDATE(0,0)", 0.0);
-  ExpectNumber("=EOMONTH(1,-1)", 0.0);
+  ExpectError("=EOMONTH(1,-1)", ErrorCode::Num);
 }
 
 TEST(DateTimeWeekday, TextReturnTypeCheckedBeforeSerialRange) {

@@ -1265,3 +1265,36 @@ cases:
     description: "Excel 365: 0"
     setup: { A1: true }
     formula: "=DATEDIF(1,A1,\"d\")"
+
+  # -- Calendar edges: fractional WORKDAY start, EOMONTH before 1900, the 1900 leap day ---
+  - id: workday_fractional_start_at_limit
+    formula: "=WORKDAY(2958465.9,-30)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: workday_fractional_start_zero_days
+    formula: "=WORKDAY(2958465.9,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: workday_intl_fractional_start_code
+    formula: "=WORKDAY.INTL(2958465.9,-30,11)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: workday_intl_fractional_start_mask
+    formula: "=WORKDAY.INTL(2958465.9,-1,\"0101000\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: eomonth_before_calendar_start
+    formula: "=EOMONTH(1,-1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: date_march_day_zero_1900
+    formula: "=DATE(1900,3,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: days360_into_ghost_day
+    formula: "=DAYS360(59,60)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: days360_out_of_ghost_day
+    formula: "=DAYS360(60,61)"
+    tolerance: { abs: 0, rel: 0 }
