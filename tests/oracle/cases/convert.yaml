@@ -17,16 +17,19 @@ cases:
   - id: convert_gram_to_kilogram
     description: "1000 g = 1 kg"
     formula: "=CONVERT(1000,\"g\",\"kg\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Temperature: Kelvin -> Celsius (offset, not scale) -----------------
   - id: convert_kelvin_to_celsius
     description: "273.15 K = 0 C"
     formula: "=CONVERT(273.15,\"K\",\"C\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Energy: joule -> calorie -------------------------------------------
   - id: convert_joule_to_calorie
     description: "1 J ~ 0.2390057... cal (thermochemical)"
     formula: "=CONVERT(1,\"J\",\"cal\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Invalid unit -> #N/A -----------------------------------------------
   - id: convert_invalid_unit_is_na
@@ -48,3 +51,223 @@ cases:
   # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: opt_convert_omit_unit
     formula: "=CONVERT(1,,\"cm\")"
+
+  # -- Exact unit table, prefix resolution, the "pc" reading, temperature pairs and overflow ---
+  - id: convert_exact_weight_hweight
+    description: "hweight alias of the UK hundredweight"
+    formula: '=CONVERT(1,"hweight","g")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_weight_cwt_ratio
+    description: "US and UK hundredweight ratio"
+    formula: '=CONVERT(1,"hweight","cwt")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_pressure_si_at
+    description: "technical atmosphere takes SI prefixes"
+    formula: '=CONVERT(1,"SI_at","Pa")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_pressure_at_to_si_at
+    description: "at to SI_at"
+    formula: '=CONVERT(1,"at","SI_at")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_distance_foot_ratio
+    description: "metre to foot"
+    formula: '=CONVERT(3,"m","ft")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_distance_mile_to_km
+    description: "mile to kilometre"
+    formula: '=CONVERT(1,"mi","km")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_distance_pica
+    description: "Pica to inch"
+    formula: '=CONVERT(1,"Pica","in")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_volume_litre_to_gal
+    description: "litre to gallon"
+    formula: '=CONVERT(1,"l","gal")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_volume_tsp_to_cup
+    description: "teaspoon to cup"
+    formula: '=CONVERT(1,"tsp","cup")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_volume_bushel
+    description: "bushel to litre"
+    formula: '=CONVERT(1,"bushel","l")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_area_acre_to_m2
+    description: "US acre to square metre"
+    formula: '=CONVERT(1,"us_acre","m2")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_energy_cal_to_j
+    description: "thermochemical calorie to joule"
+    formula: '=CONVERT(1,"cal","J")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_energy_hph_to_j
+    description: "horsepower-hour to joule"
+    formula: '=CONVERT(1,"HPh","J")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_force_lbf_to_n
+    description: "pound-force to newton"
+    formula: '=CONVERT(1,"lbf","N")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_magnetism_gauss_to_t
+    description: "gauss to tesla"
+    formula: '=CONVERT(1,"ga","T")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_deka
+    description: "da prefix is deka"
+    formula: '=CONVERT(1,"dam","m")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_deka_e
+    description: "e prefix is deka"
+    formula: '=CONVERT(1,"em","m")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_deka_squared
+    description: "da prefix on a squared unit"
+    formula: '=CONVERT(1,"dam2","m2")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_km2
+    description: "SI prefix on a squared unit"
+    formula: '=CONVERT(1,"km2","m2")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_mm3_caret
+    description: "SI prefix on a cubed unit, caret spelling"
+    formula: '=CONVERT(1,"mm^3","m^3")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_extreme_cubed
+    description: "largest to smallest cubed prefix"
+    formula: '=CONVERT(1,"Ym3","ym3")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_binary_kibit
+    description: "binary prefix on bit"
+    formula: '=CONVERT(1,"kibit","bit")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_binary_on_distance
+    description: "binary prefix on a distance is unknown"
+    formula: '=CONVERT(1,"kim","m")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_deka_alone
+    description: "a bare da is unknown"
+    formula: '=CONVERT(1,"da","m")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_case_sensitive
+    description: "prefixes are case-sensitive"
+    formula: '=CONVERT(1,"KM","m")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_no_trimming
+    description: "unit names are not trimmed"
+    formula: '=CONVERT(1,"km ","m")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_pc_to_joule
+    description: "pc against energy reads as pico-calorie"
+    formula: '=CONVERT(1,"pc","J")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_pc_from_calorie
+    description: "c to pc"
+    formula: '=CONVERT(1,"c","pc")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_pc_distance_parsec
+    description: "pc against distance is the parsec"
+    formula: '=CONVERT(1,"pc","m")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_pc_kpc_energy_unknown
+    description: "kpc against energy stays unknown"
+    formula: '=CONVERT(1,"kpc","c")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_kelvin_prefix_to_c
+    description: "prefixed kelvin to Celsius"
+    formula: '=CONVERT(1,"kK","C")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_c_to_prefixed_k
+    description: "Celsius to prefixed kelvin"
+    formula: '=CONVERT(1,"C","kK")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_reaumur_to_prefixed_k
+    description: "Reaumur to prefixed kelvin ignores the prefix"
+    formula: '=CONVERT(1,"Reau","kK")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_prefixed_k_to_rankine
+    description: "prefixed kelvin to Rankine ignores the prefix"
+    formula: '=CONVERT(1,"kK","Rank")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_prefixed_k_to_f
+    description: "prefixed kelvin to Fahrenheit"
+    formula: '=CONVERT(1,"kK","F")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_f_to_c_small
+    description: "Fahrenheit to Celsius"
+    formula: '=CONVERT(0.00075,"F","C")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_c_self_small
+    description: "Celsius to Celsius is exact"
+    formula: '=CONVERT(0.00075,"C","C")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_temp_prefix_on_celsius
+    description: "only kelvin takes a prefix"
+    formula: '=CONVERT(1,"kC","K")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_overflow_distance
+    description: "overflow in the first product falls back, then #NUM!"
+    setup: { A1: 1.0e+308 }
+    formula: '=CONVERT(A1,"m","ft")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_overflow_cubed_fallback
+    description: "overflow fallback gives a finite result"
+    setup: { A1: 1.0e+308 }
+    formula: '=CONVERT(A1,"ang3","ly3")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_overflow_prefix_ratio
+    description: "prefix ratio overflows to #NUM!"
+    setup: { A1: 1.0e+308 }
+    formula: '=CONVERT(A1,"Yg","yg")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_overflow_temperature
+    description: "temperature overflow is #NUM!"
+    setup: { A1: 1.0e+308 }
+    formula: '=CONVERT(A1,"C","F")'
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: convert_exact_prefix_small_input_flush
+    description: "a subnormal-scale input flushes to zero"
+    formula: '=CONVERT(2.5E-308,"g","Yg")'
+    tolerance: { abs: 0, rel: 0 }

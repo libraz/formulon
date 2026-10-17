@@ -205,6 +205,72 @@ TEST(ExcelExactConvert, MatchesExcelBitForBit) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Exact values: unit factors, prefix resolution order, the "pc" reading and
+// the temperature pair formulas.
+// ---------------------------------------------------------------------------
+
+TEST(ConvertTable, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=CONVERT(1,\"hweight\",\"g\")", 50802.34544},
+      {"=CONVERT(1,\"hweight\",\"cwt\")", 1.1199999999999999},
+      {"=CONVERT(1,\"SI_at\",\"Pa\")", 98066.51},
+      {"=CONVERT(1,\"at\",\"SI_at\")", 1.033227347440018},
+      {"=CONVERT(1,\"dam\",\"m\")", 10.0},
+      {"=CONVERT(1,\"em\",\"m\")", 10.0},
+      {"=CONVERT(1,\"dam2\",\"m2\")", 100.0},
+      {"=CONVERT(1,\"km2\",\"m2\")", 1000000.0},
+      {"=CONVERT(1,\"mm^3\",\"m^3\")", 1e-09},
+      {"=CONVERT(1,\"cm3\",\"ml\")", 1.0},
+      {"=CONVERT(1,\"Ym3\",\"ym3\")", 1e+144},
+      {"=CONVERT(1,\"kibit\",\"bit\")", 1024.0},
+      {"=CONVERT(1,\"ly3\",\"ang3\")", 8.467866646237152e+77},
+      {"=CONVERT(1,\"ang\",\"ly\")", 1.0570008340246154e-26},
+      {"=CONVERT(1,\"pc\",\"J\")", 4.184e-12},
+      {"=CONVERT(1,\"c\",\"pc\")", 1000000000000.0},
+      {"=CONVERT(1,\"pc\",\"m\")", 3.0856775812815532e+16},
+      {"=CONVERT(1,\"kpc\",\"m\")", 3.085677581281553e+19},
+      {"=CONVERT(1,\"kK\",\"C\")", 726.85},
+      {"=CONVERT(1,\"C\",\"kK\")", 0.27415},
+      {"=CONVERT(1,\"Reau\",\"kK\")", 274.4},
+      {"=CONVERT(1,\"kK\",\"Rank\")", 1.8},
+      {"=CONVERT(1,\"kK\",\"F\")", 1340.3300000000002},
+      {"=CONVERT(1,\"F\",\"kK\")", 0.25592777777777775},
+      {"=CONVERT(1E308,\"g\",\"Yg\")", 9.999999999999999e+283},
+      {"=CONVERT(1E308,\"F\",\"C\")", 5.555555555555556e+307},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(ConvertTable, ErrorsMatchExcel) {
+  struct Case {
+    const char* formula;
+    ErrorCode expected;
+  };
+  const Case cases[] = {
+      {"=CONVERT(1,\"eam\",\"m\")", ErrorCode::NA},       {"=CONVERT(1,\"da\",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"Kibit\",\"bit\")", ErrorCode::NA},   {"=CONVERT(1,\"kim\",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"KM\",\"m\")", ErrorCode::NA},        {"=CONVERT(1,\"km \",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"\",\"m\")", ErrorCode::NA},          {"=CONVERT(1,\"kpc\",\"c\")", ErrorCode::NA},
+      {"=CONVERT(1,\"parsec\",\"c\")", ErrorCode::NA},    {"=CONVERT(1,\"kC\",\"K\")", ErrorCode::NA},
+      {"=CONVERT(1E308,\"m\",\"ft\")", ErrorCode::Num},   {"=CONVERT(1E308,\"C\",\"F\")", ErrorCode::Num},
+      {"=CONVERT(1E308,\"K\",\"Rank\")", ErrorCode::Num}, {"=CONVERT(1E308,\"Yg\",\"yg\")", ErrorCode::Num},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_error()) << c.formula;
+    EXPECT_EQ(v.as_error(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
