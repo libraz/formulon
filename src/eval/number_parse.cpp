@@ -6,7 +6,6 @@
 
 #include "eval/number_parse.h"
 
-#include <cfloat>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -475,17 +474,7 @@ bool excel_text_number(std::string_view magnitude, bool negative, int percent_co
   if (normalized < -308 || normalized > 308) {
     return false;
   }
-  double value = 0.0;
-  if (mantissa != 0) {
-    char decimal[48];
-    int len = format_unsigned(decimal, sizeof(decimal), mantissa);
-    decimal[len++] = 'e';
-    len += format_signed(decimal + len, sizeof(decimal) - static_cast<std::size_t>(len), scale);
-    parse_double_exact(std::string_view(decimal, static_cast<std::size_t>(len)), &value);
-    if (value < DBL_MIN) {
-      value = 0.0;
-    }
-  }
+  const double value = excel_scale_decimal(mantissa, scale);
   *out = negative && value != 0.0 ? -value : value;
   return true;
 }

@@ -4,9 +4,8 @@
 //
 //   * UTF-8 decoding is hand-rolled (no `<codecvt>` / ICU): we only need
 //     byte-length and UTF-16 code-unit count per codepoint.
-//   * Numbers go through the shared decimal parser (`utils/double_parse.h`,
-//     IEEE 754 round-to-nearest), which matches Excel across the oracle
-//     corpus with no observed divergence.
+//   * Numbers keep 15 significant digits and are scaled the way Excel does
+//     (`parse_excel_decimal` in `utils/double_parse.h`).
 //   * String / quoted-sheet-name escapes expand into the tokenizer's arena
 //     so token views remain stable for the lifetime of the tokenizer.
 //   * The spilled-range `#` operator is disambiguated from `#error!` by
@@ -104,62 +103,6 @@ std::uint32_t row_digits_to_index(std::string_view digits) noexcept {
     }
   }
   return static_cast<std::uint32_t>(v);
-}
-
-// Excel stores numbers with at most 15 significant digits; any digit past
-// the fifteenth is set to zero (truncation, not rounding). Returns the
-// lexeme with that rule applied, or an empty string when no truncation is
-// needed (the caller then uses the original lexeme).
-//
-// The lexeme is sign-free (a leading `-`/`+` is a separate token), so this
-// operates purely on the digit/dot/exponent string.
-std::string truncate_to_excel_precision(std::string_view lex) {
-  // Split into mantissa M and exponent suffix E at the first 'e'/'E'.
-  std::size_t exp_pos = lex.size();
-  for (std::size_t i = 0; i < lex.size(); ++i) {
-    if (lex[i] == 'e' || lex[i] == 'E') {
-      exp_pos = i;
-      break;
-    }
-  }
-  const std::string_view mantissa = lex.substr(0, exp_pos);
-  const std::string_view exponent = lex.substr(exp_pos);
-
-  std::string result;
-  result.reserve(lex.size());
-  bool seen_dot = false;
-  bool found_significant = false;
-  int sig_count = 0;
-
-  for (char ch : mantissa) {
-    if (ch == '.') {
-      result.push_back(ch);
-      seen_dot = true;
-      continue;
-    }
-    // Leading zeros (before the first nonzero digit) are not significant.
-    if (!found_significant && ch == '0') {
-      result.push_back(ch);
-      continue;
-    }
-    // First nonzero digit, or any digit after it, is significant.
-    found_significant = true;
-    ++sig_count;
-    if (sig_count <= 15) {
-      result.push_back(ch);
-    } else if (!seen_dot) {
-      // Integer-position digit past the fifteenth: zero it (keep magnitude).
-      result.push_back('0');
-    }
-    // Fractional-position digit past the fifteenth: drop it entirely.
-  }
-
-  // No digit past the fifteenth -> no truncation; signal "use original".
-  if (sig_count <= 15) {
-    return std::string();
-  }
-  result.append(exponent);
-  return result;
 }
 
 // Byte length of a `[Book]Name` written with no `!` at the `[` at `pos`, a
@@ -968,10 +911,8 @@ void Tokenizer::scan_number() {
     }
     numeric_lex = invariant;
   }
-  const std::string truncated = truncate_to_excel_precision(numeric_lex);
-  const std::string_view numeric_text = truncated.empty() ? numeric_lex : std::string_view(truncated);
   double value = 0.0;
-  if (!parse_double_exact(numeric_text, &value)) {
+  if (!parse_excel_decimal(numeric_lex, &value)) {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
     return;

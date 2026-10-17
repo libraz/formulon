@@ -17,6 +17,7 @@
 #define FORMULON_UTILS_DOUBLE_PARSE_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 namespace formulon {
@@ -37,6 +38,18 @@ struct ParsedDouble {
 /// the header comment. An exponent marker with no digits after it is not
 /// consumed (`"1e"` consumes one byte).
 ParsedDouble parse_double_prefix(std::string_view text) noexcept;
+
+/// `n * 10^e` the way Excel scales a decimal: 64-bit-significand power-of-ten
+/// factors, rounded to nearest even after each multiply, then rounded to a
+/// double. `n` is at most 15 digits. Magnitudes below 2^-1022 are 0 and those at
+/// or above 2^1024 are +inf.
+double excel_scale_decimal(std::uint64_t n, long long e) noexcept;
+
+/// Parses `text` as one decimal number with nothing after it, converting it as
+/// Excel does: at most 15 significant digits are kept (the rest are dropped, not
+/// rounded) and the value is formed by `excel_scale_decimal`. Same grammar and
+/// return convention as `parse_double_exact`.
+bool parse_excel_decimal(std::string_view text, double* out) noexcept;
 
 /// Parses `text` as one decimal number with nothing after it. Returns false
 /// for empty text or trailing bytes; the value is written even when it is
