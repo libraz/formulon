@@ -1,7 +1,8 @@
 //
-// Series preparation shared by the FORECAST.ETS family: pairing, ordering and
-// aggregating the (timeline, value) samples, resampling them onto an evenly
-// spaced grid, and detecting the seasonality length.
+// Series preparation shared by the FORECAST.ETS family: reading the
+// (timeline, value) cells, ordering them, detecting the timeline step,
+// building the regular grid, locating forecast targets on it and detecting
+// the seasonality length.
 
 #ifndef FORMULON_EVAL_ETS_SERIES_H_
 #define FORMULON_EVAL_ETS_SERIES_H_
@@ -15,8 +16,7 @@ namespace formulon {
 namespace eval {
 namespace ets {
 
-/// Excel's documented aggregation enumeration for repeated timeline entries.
-
+/// Aggregation applied to values sharing a grid node (option 1..7).
 enum class AggregationMode : std::uint32_t {
   kAverage = 1U,
   kCount = 2U,
@@ -27,22 +27,45 @@ enum class AggregationMode : std::uint32_t {
   kSum = 7U,
 };
 
-/// Parallel (t, y) sample vectors.
-struct Series {
-  std::vector<double> t;
-  std::vector<double> y;
+/// One input cell reduced to what the series reader distinguishes.
+struct SeriesCell {
+  enum class Kind : std::uint8_t { kNumber, kBlank, kText, kBool, kError };
+  Kind kind = Kind::kBlank;
+  double number = 0.0;
+  ErrorCode error = ErrorCode::NA;
 };
 
-/// Stable-sorts `src` by t and collapses runs of identical t via `mode`.
-Series sort_and_aggregate(const Series& src, AggregationMode mode);
+/// Timeline step and calendar classification.
+struct Timeline {
+  /// Step between grid nodes (days, or the histogram step for calendar data).
+  double step = 0.0;
+  /// True when the first and last timestamps are valid date serials.
+  bool is_date = false;
+  /// Months per node on a calendar timeline, otherwise 0 (or -1 before
+  /// classification).
+  std::int64_t months = 0;
+  /// Nominal node spacing in days on a calendar timeline.
+  double nominal = 0.0;
+  /// Number of steps in the chosen histogram window.
+  std::int64_t count = 0;
+  /// Timestamp of the last grid node.
+  double last = 0.0;
+};
 
-/// Median of consecutive deltas in a sorted timeline of at least two points.
-double median_delta(const std::vector<double>& t);
+/// Regularised series ready for fitting.
+struct PreparedSeries {
+  std::vector<double> y;
+  Timeline timeline;
+};
 
-/// Resamples a sorted, deduplicated series onto a grid of spacing `step`,
-/// filling gaps per `data_completion` (0 zero-fill, 1 linear interpolation).
-/// Writes `#NUM!` to `*out_err` and returns false on an irregular timeline.
-bool resample_to_grid(const Series& sorted, double step, int data_completion, Series* out, Value* out_err);
+/// Reads, sorts and regularises the series. `data_completion` is 0 (fill
+/// with zero) or 1 (interpolate). On failure writes `*err` and returns false.
+bool prepare_series(const std::vector<SeriesCell>& values, const std::vector<SeriesCell>& timeline, int data_completion,
+                    AggregationMode aggregation, PreparedSeries* out, ErrorCode* err);
+
+/// Locates `target` on the grid as a (possibly fractional) step count from
+/// the last node; `*interpolated` is set when it falls between two steps.
+bool target_position(const Timeline& timeline, double target, double* position, bool* interpolated, ErrorCode* err);
 
 /// Auto-detected seasonality length (>= 1); 1 means no seasonality.
 std::uint32_t detect_seasonality(const std::vector<double>& y);

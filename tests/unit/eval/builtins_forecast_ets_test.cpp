@@ -17,8 +17,6 @@
 #include <cfloat>
 #include <cmath>
 #include <cstddef>
-#include <iostream>  // TMPINC
-#include <sstream>   // TMPINC
 #include <string>
 #include <string_view>
 
@@ -206,7 +204,7 @@ TEST(ForecastEts, ErrorInTimelinePropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(ForecastEts, TextInTimelineIsValueError) {
+TEST(ForecastEts, TextInTimelineDropsThePair) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
   s.set_cell_value(0, 0, Value::number(1.0));
@@ -218,8 +216,7 @@ TEST(ForecastEts, TextInTimelineIsValueError) {
     s.set_cell_value(static_cast<std::uint32_t>(i), 1, Value::number(static_cast<double>(2 * (i + 1))));
   }
   const Value v = EvalSourceIn("=FORECAST.ETS(6, B1:B5, A1:A5, 0)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
 }
 
 TEST(ForecastEts, ArityUnderIsValueError) {
@@ -607,18 +604,18 @@ TEST(ForecastEtsCrossCut, AggregationSumRunsToCompletion) {
   ASSERT_TRUE(v.is_number());
 }
 
-TEST(ForecastEtsCrossCut, AggregationOutOfDomainHighIsValueError) {
+TEST(ForecastEtsCrossCut, AggregationOutOfDomainHighIsNumError) {
   const Workbook wb = MakeLinearWorkbook();
   const Value v = EvalSourceIn("=FORECAST.ETS(11, B1:B10, A1:A10, 0, 1, 8)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(ForecastEtsCrossCut, AggregationOutOfDomainLowIsValueError) {
+TEST(ForecastEtsCrossCut, AggregationOutOfDomainLowIsNumError) {
   const Workbook wb = MakeLinearWorkbook();
   const Value v = EvalSourceIn("=FORECAST.ETS(11, B1:B10, A1:A10, 0, 1, 0)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(ForecastEtsCrossCut, DataCompletionInterpolateVsZeroFillDiffer) {
@@ -642,18 +639,18 @@ TEST(ForecastEtsCrossCut, DataCompletionInterpolateVsZeroFillDiffer) {
   EXPECT_NE(v_interp.as_number(), v_zero.as_number());
 }
 
-TEST(ForecastEtsCrossCut, DataCompletionTwoIsValueError) {
+TEST(ForecastEtsCrossCut, DataCompletionTwoIsNumError) {
   const Workbook wb = MakeLinearWorkbook();
   const Value v = EvalSourceIn("=FORECAST.ETS(11, B1:B10, A1:A10, 0, 2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(ForecastEtsCrossCut, DataCompletionNegativeIsValueError) {
+TEST(ForecastEtsCrossCut, DataCompletionNegativeIsNumError) {
   const Workbook wb = MakeLinearWorkbook();
   const Value v = EvalSourceIn("=FORECAST.ETS(11, B1:B10, A1:A10, 0, -1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 // ---------------------------------------------------------------------------
@@ -861,6 +858,156 @@ TEST(ForecastEtsExact, ShortSeries) {
   EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",6,3)"), 3.231017634784275);
   EXPECT_EQ(EvalExact("=FORECAST.ETS(8," + kYsh_7 + "," + kTsh_7 + ",3)"), 11.92090460974675);
   EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(8," + kYsh_7 + "," + kTsh_7 + ",0.95,3)"), 7.193962107036191);
+}
+
+// ---------------------------------------------------------------------------
+// Timeline normalisation: ordering, grouping, gaps, calendar steps, targets
+// ---------------------------------------------------------------------------
+
+ErrorCode EvalError(const std::string& formula) {
+  const Value v = EvalSource(formula);
+  EXPECT_TRUE(v.is_error()) << formula;
+  return v.is_error() ? v.as_error() : ErrorCode::Null;
+}
+
+TEST(ForecastEtsTimeline, GroupedDuplicates) {
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11.0,{14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},0,1,1)"),
+            21.54142795852091);  // agg1
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11.0,{14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},0,1,2)"),
+            0.7544725192564488);  // agg2
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11.0,{14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},0,1,3)"),
+            0.7544725192564488);  // agg3
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11.0,{14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},0,1,4)"),
+            21.497995309190685);  // agg4
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11.0,{14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},0,1,5)"),
+            21.57703172041051);  // agg5
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11.0,{14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},0,1,6)"),
+            21.626440799021236);  // agg6
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11.0,{14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},0,1,7)"),
+            18.434583549355068);  // agg7
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT({14.5;12.25;10.5;11.0;13.75;12.5;11.5;16.0;18.0;15.5;19.0;21.5},{5.0;3.0;1.0;"
+                      "2.0;3.0;4.0;3.0;6.0;7.0;8.0;9.0;10.0},8,0,1,1)"),
+            1.0);  // unsorted_stat8
+}
+
+TEST(ForecastEtsTimeline, GapCompletion) {
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(13.0,{10.0;12.0;14.0;13.0;17.0;19.0;18.0;21.0;23.0;22.0},{1.0;2.0;3.0;4.0;7.0;8.0;"
+                      "9.0;10.0;11.0;12.0},0,1,1)"),
+            23.797998489528826);  // gap_c1
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(13.0,{10.0;12.0;14.0;13.0;17.0;19.0;18.0;21.0;23.0;22.0},{1.0;2.0;3.0;4.0;7.0;8.0;"
+                      "9.0;10.0;11.0;12.0},0,0,1)"),
+            23.546862593009674);  // gap_c0
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(13.0,{10.0;12.0;14.0;13.0;17.0;19.0;18.0;21.0;23.0;22.0},{1.0;2.0;3.0;4.0;"
+                      "7.0;8.0;9.0;10.0;11.0;12.0},0.95,0,1,1)"),
+            1.8127789621549355);  // gap_conf
+}
+
+TEST(ForecastEtsTimeline, CalendarSteps) {
+  EXPECT_EQ(
+      EvalExact(
+          "=FORECAST.ETS(45292.0,{100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0},{44927.0;"
+          "44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0},0,1,1)"),
+      122.06854734505528);  // monthly_next
+  EXPECT_EQ(
+      EvalExact("=FORECAST.ETS.STAT({100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0},{44927.0;"
+                "44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0},8,0,1,1)"),
+      31.0);  // monthly_step
+  EXPECT_EQ(
+      EvalExact(
+          "=FORECAST.ETS(45307.0,{100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0},{44927.0;"
+          "44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0},0,1,1)"),
+      122.92389789279682);  // monthly_mid
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(45323.0,{100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118."
+                      "0;125.0},{44927.0;44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231."
+                      "0;45261.0},0.95,0,1,1)"),
+            7.309925665120638);  // monthly_conf
+  EXPECT_EQ(
+      EvalExact(
+          "=FORECAST.ETS(45322.0,{100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0},{44957.0;"
+          "44985.0;45016.0;45046.0;45077.0;45107.0;45138.0;45169.0;45199.0;45230.0;45260.0;45291.0},0,1,1)"),
+      122.06854734505528);  // monthend_next
+  EXPECT_EQ(
+      EvalExact("=FORECAST.ETS(45322.0,{100.0;104.0;109.0;103.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0},{44957.0;"
+                "44985.0;45016.0;45046.0;45107.0;45138.0;45169.0;45199.0;45230.0;45260.0;45291.0},0,1,1)"),
+      122.05762809693425);  // monthend_gap
+}
+
+TEST(ForecastEtsTimeline, FractionalTargets) {
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(13.5,{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2.0;3.0;4."
+                      "0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0},0,1,1)"),
+            22.56794634344145);  // frac_ets
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(13.5,{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2."
+                      "0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0},0.95,0,1,1)"),
+            1.9490820308059253);  // frac_conf
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(3.0,{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2.0;3.0;4."
+                      "0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0},0,1,1)"),
+            12.003240904940714);  // in_window_target
+}
+
+TEST(ForecastEtsTimeline, RejectedInputs) {
+  EXPECT_EQ(EvalError("=FORECAST.ETS(13.0,{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2.0;3.0;4."
+                      "0;5.0;6.0;7.0;8.0;9.0;10.0;11.0},0,1,1)"),
+            ErrorCode::NA);                                                 // mismatch
+  EXPECT_EQ(EvalError("=FORECAST.ETS(2.0,{1.0},{1.0})"), ErrorCode::Div0);  // one_point
+  EXPECT_EQ(EvalError("=FORECAST.ETS(13.0,{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2.0;3.0;4."
+                      "0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0},0,2,1)"),
+            ErrorCode::Num);  // bad_completion
+  EXPECT_EQ(EvalError("=FORECAST.ETS(13.0,{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2.0;3.0;4."
+                      "0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0},0,1,8)"),
+            ErrorCode::Num);  // bad_agg
+  EXPECT_EQ(EvalError("=FORECAST.ETS(13.0,{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{5.0;5.0;5.0;5."
+                      "0;5.0;5.0;5.0;5.0;5.0;5.0;5.0;5.0},0,1,1)"),
+            ErrorCode::Num);  // same_times
+}
+
+TEST(ForecastEtsTimeline, BlankAndTextValueCells) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  const double ys[10] = {10.0, 12.0, 0.0, 14.0, 0.0, 16.0, 15.0, 18.0, 17.0, 20.0};
+  for (std::uint32_t i = 0; i < 10; ++i) {
+    s.set_cell_value(i, 1, Value::number(static_cast<double>(i + 1)));
+    if (i != 2U && i != 4U) {
+      s.set_cell_value(i, 0, Value::number(ys[i]));
+    }
+  }
+  s.set_cell_value(4, 0, Value::text("x"));
+  const auto eval = [&](const char* f) {
+    const Value v = EvalSourceIn(f, wb, wb.sheet(0));
+    EXPECT_TRUE(v.is_number()) << f;
+    return v.is_number() ? v.as_number() : 0.0;
+  };
+  EXPECT_EQ(eval("=FORECAST.ETS(11, A1:A10, B1:B10, 0, 1)"), 20.09714968702844);
+  EXPECT_EQ(eval("=FORECAST.ETS(11, A1:A10, B1:B10, 0, 0)"), 21.054355325337056);
+  EXPECT_EQ(eval("=FORECAST.ETS(11, A1:A10, B1:B10, 0, 1, 3)"), 1.0);
+}
+
+TEST(ForecastEtsSeasonality, DetectorWindowIsLargestPowerOfTwoTail) {
+  // Period 7 for the first 1500 points, period 5 after. Only the last 2048
+  // points are analysed, so the period is 7; a 1024-point tail would give none.
+  constexpr std::uint32_t kPoints = 2100;
+  constexpr std::uint32_t kSplit = 1500;
+  const double heavy[7] = {3.0, -1.0, 2.0, -4.0, 0.0, 5.0, -3.0};
+  const double light[5] = {4.0, -2.0, 1.0, -3.0, 0.0};
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  std::uint32_t state = 12345U;
+  for (std::uint32_t i = 0; i < kPoints; ++i) {
+    state = state * 1664525U + 1013904223U;
+    const double noise = 0.3 * static_cast<double>(state >> 8U) / 16777216.0;
+    const double pattern = i < kSplit ? heavy[i % 7U] : light[i % 5U];
+    s.set_cell_value(i, 0, Value::number(50.0 + pattern + noise));
+    s.set_cell_value(i, 1, Value::number(static_cast<double>(i + 1U)));
+  }
+  const Value v = EvalSourceIn("=FORECAST.ETS.SEASONALITY(A1:A2100, B1:B2100)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 7.0);
 }
 
 }  // namespace

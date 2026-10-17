@@ -118,3 +118,104 @@ cases:
   - id: forecast_ets_stat_nine
     description: "stat=9 — out-of-range -> #NUM!"
     formula: "=FORECAST.ETS.STAT({1;2;3;4;5}, {1;2;3;4;5}, 9)"
+
+  # -- timeline normalisation ----------------------------------------------
+  - id: forecast_ets_date_timeline_monthly
+    description: "First-of-month dates, target one month after the last"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(45292, {100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 0)"
+
+  - id: forecast_ets_date_timeline_mid_month_target
+    description: "First-of-month dates, target between two month nodes"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(45307, {100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 0)"
+
+  - id: forecast_ets_date_timeline_month_end
+    description: "Month-end dates, target the next month end"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(45322, {100;104;109;103;108;114;107;113;119;111;118;125}, {44957;44985;45016;45046;45077;45107;45138;45169;45199;45230;45260;45291}, 0)"
+
+  - id: forecast_ets_date_timeline_confint
+    description: "First-of-month dates, CONFINT two months after the last"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS.CONFINT(45323, {100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 0.95, 0)"
+
+  - id: forecast_ets_date_timeline_step_size
+    description: "First-of-month dates, step size"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS.STAT({100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 8)"
+
+  - id: forecast_ets_gap_interpolated
+    description: "Missing timeline nodes filled by interpolation"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(13, {10;12;14;13;17;19;18;21;23;22}, {1;2;3;4;7;8;9;10;11;12}, 0, 1)"
+
+  - id: forecast_ets_gap_zero_filled
+    description: "Missing timeline nodes filled with zero"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(13, {10;12;14;13;17;19;18;21;23;22}, {1;2;3;4;7;8;9;10;11;12}, 0, 0)"
+
+  - id: forecast_ets_duplicates_average
+    description: "Unsorted timeline with repeated timestamps, aggregation 1"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 1)"
+
+  - id: forecast_ets_duplicates_median
+    description: "Unsorted timeline with repeated timestamps, aggregation 5"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 5)"
+
+  - id: forecast_ets_duplicates_sum
+    description: "Unsorted timeline with repeated timestamps, aggregation 7"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 7)"
+
+  - id: forecast_ets_duplicates_max
+    description: "Unsorted timeline with repeated timestamps, aggregation 4"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 4)"
+
+  - id: forecast_ets_duplicates_min
+    description: "Unsorted timeline with repeated timestamps, aggregation 6"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 6)"
+
+  - id: forecast_ets_duplicates_count
+    description: "Unsorted timeline with repeated timestamps, aggregation 2"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 2)"
+
+  - id: forecast_ets_fractional_target
+    description: "Target between two steps is interpolated"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(13.5, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0)"
+
+  - id: forecast_ets_fractional_target_confint
+    description: "CONFINT at a target between two steps"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS.CONFINT(13.5, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0.95, 0)"
+
+  - id: forecast_ets_target_inside_window
+    description: "Target inside the observed window"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(3, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0)"
+
+  - id: forecast_ets_aggregation_out_of_range
+    description: "aggregation=8 — #NUM!"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(13, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0, 1, 8)"
+
+  - id: forecast_ets_data_completion_out_of_range
+    description: "data_completion=2 — #NUM!"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(13, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0, 2)"
+
+  - id: forecast_ets_identical_timeline
+    description: "All timestamps equal — #NUM!"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(13, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {5;5;5;5;5;5;5;5;5;5;5;5}, 0)"
+
+  - id: forecast_ets_auto_detect_noisy_series
+    description: "Auto-detected period on a noisy series"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=FORECAST.ETS(26, {20.68;23.387;21.379;23.614;22.256;23.242;25.997;24.128;25.926;25.877;26.359;26.985}, {1;2;3;4;5;6;7;8;9;10;11;12})"

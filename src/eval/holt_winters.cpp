@@ -192,9 +192,9 @@ class Fitter {
     } else if (seasonal_) {
       double acc = 0.0;
       for (std::size_t p = 0; p < mp_; ++p) {
-        double arr[3];
+        double arr[4];
         std::size_t cnt = 0;
-        for (std::size_t k = p; k < n_ && cnt < 3U; k += mp_) {
+        for (std::size_t k = p; k < n_ && cnt < 4U; k += mp_) {
           arr[cnt++] = yw_[k];
         }
         acc = ols_slope(arr, cnt, nullptr, 0U) + acc;
@@ -457,7 +457,10 @@ double HoltWintersFit::forecast(std::int64_t h) const {
   v = v + state[0];
   const std::int64_t k = h >= 1 ? h : h + m * ((-h) / m + 1);
   const std::size_t idx = state.size() - 1U - static_cast<std::size_t>((k - 1) % m);
-  const double r = v + state[idx];
+  return v + state[idx];
+}
+
+double HoltWintersFit::zero_if_negligible(double r) const {
   // A result that is rounding noise next to the initial trend is zero.
   const double mag = std::fabs(r);
   if (r != 0.0 && mag < kTinyResult && mag < std::fabs(initial_trend)) {

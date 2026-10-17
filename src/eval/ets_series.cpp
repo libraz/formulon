@@ -13,252 +13,12 @@
 #include <utility>
 #include <vector>
 
-#include "utils/error.h"
-#include "utils/index_sort.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
 namespace ets {
-namespace {
-
-// Step-size deviation tolerance for the resample grid. A consecutive delta-t
-// is required to fall within +/-`kStepDeviation` of the median step
-// (Excel's documented +/-30% tolerance). ORACLE-PENDING.
-constexpr double kStepDeviation = 0.3;
-
-// ---------------------------------------------------------------------------
-// Aggregation
-// ---------------------------------------------------------------------------
-
-// Aggregates a run `[begin, end)` of identical-timeline points using the
-// requested mode. The COUNT / COUNTA modes return the run length (COUNT
-// excludes blanks but blanks have already been rejected at the strict-
-// numeric step, so the two modes coincide here -- both return the count).
-double aggregate_run(const Series& src, std::size_t begin, std::size_t end, AggregationMode mode) {
-  const std::size_t n = end - begin;
-  if (n == 0U) {
-    return 0.0;
-  }
-  if (n == 1U) {
-    // Optimisation: a singleton run with any mode collapses to its
-    // single sample (COUNT/COUNTA collapse to 1, but a singleton is
-    // already its own answer for 5 of the 7 modes; we special-case
-    // COUNT/COUNTA below).
-    if (mode == AggregationMode::kCount || mode == AggregationMode::kCountA) {
-      return 1.0;
-    }
-    return src.y[begin];
-  }
-  switch (mode) {
-    case AggregationMode::kCount:
-    case AggregationMode::kCountA:
-      return static_cast<double>(n);
-    case AggregationMode::kSum: {
-      double s = 0.0;
-      for (std::size_t i = begin; i < end; ++i)
-        s += src.y[i];
-      return s;
-    }
-    case AggregationMode::kMax: {
-      double m = src.y[begin];
-      for (std::size_t i = begin + 1U; i < end; ++i) {
-        if (src.y[i] > m)
-          m = src.y[i];
-      }
-      return m;
-    }
-    case AggregationMode::kMin: {
-      double m = src.y[begin];
-      for (std::size_t i = begin + 1U; i < end; ++i) {
-        if (src.y[i] < m)
-          m = src.y[i];
-      }
-      return m;
-    }
-    case AggregationMode::kMedian: {
-      std::vector<double> tmp(src.y.begin() + static_cast<std::ptrdiff_t>(begin),
-                              src.y.begin() + static_cast<std::ptrdiff_t>(end));
-      std::sort(tmp.begin(), tmp.end());
-      const std::size_t mid = tmp.size() / 2U;
-      if ((tmp.size() & 1U) == 1U) {
-        return tmp[mid];
-      }
-      return 0.5 * (tmp[mid - 1U] + tmp[mid]);
-    }
-    case AggregationMode::kAverage:
-    default: {
-      double s = 0.0;
-      for (std::size_t i = begin; i < end; ++i)
-        s += src.y[i];
-      return s / static_cast<double>(n);
-    }
-  }
-}
-
-}  // namespace
-
-// Sorts `src` by t (stable) and collapses runs of identical t via `mode`.
-// Returns the new (deduped, sorted) series.
-Series sort_and_aggregate(const Series& src, AggregationMode mode) {
-  const std::size_t n = src.t.size();
-  const auto by_t = [&src](std::uint32_t a, std::uint32_t b) { return src.t[a] < src.t[b]; };
-  std::vector<std::uint32_t> idx;
-  sorted_index_order(idx, static_cast<std::uint32_t>(n), make_index_less(by_t));
-  Series sorted;
-  sorted.t.reserve(n);
-  sorted.y.reserve(n);
-  for (std::size_t i = 0; i < n; ++i) {
-    sorted.t.push_back(src.t[idx[i]]);
-    sorted.y.push_back(src.y[idx[i]]);
-  }
-  // Aggregate consecutive runs with identical t.
-  Series out;
-  out.t.reserve(sorted.t.size());
-  out.y.reserve(sorted.y.size());
-  std::size_t i = 0;
-  while (i < sorted.t.size()) {
-    std::size_t j = i + 1U;
-    while (j < sorted.t.size() && sorted.t[j] == sorted.t[i]) {
-      ++j;
-    }
-    out.t.push_back(sorted.t[i]);
-    out.y.push_back(aggregate_run(sorted, i, j, mode));
-    i = j;
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Step detection and resampling
-// ---------------------------------------------------------------------------
-
-// Computes the median of consecutive deltas in a sorted timeline. Caller
-// guarantees `series.t.size() >= 2`.
-double median_delta(const std::vector<double>& t) {
-  std::vector<double> deltas;
-  deltas.reserve(t.size() - 1U);
-  for (std::size_t i = 1; i < t.size(); ++i) {
-    deltas.push_back(t[i] - t[i - 1U]);
-  }
-  std::sort(deltas.begin(), deltas.end());
-  const std::size_t mid = deltas.size() / 2U;
-  if ((deltas.size() & 1U) == 1U) {
-    return deltas[mid];
-  }
-  return 0.5 * (deltas[mid - 1U] + deltas[mid]);
-}
-
-// Resamples a sorted, deduplicated `series` onto an evenly spaced grid
-// with step `step`. The first point is taken as the grid origin; for
-// each later grid index `k = round((t_i - t_0) / step)` the value is
-// the corresponding y. Missing slots are then filled per
-// `data_completion`: 0 -> zero-fill, 1 -> linear interpolation between
-// the nearest known neighbours.
-//
-// On step / regularity failures writes `#NUM!` into `*out_err` and
-// returns `false`; otherwise writes the resampled series into `*out`.
-bool resample_to_grid(const Series& sorted, double step, int data_completion, Series* out, Value* out_err) {
-  if (step <= 0.0 || !std::isfinite(step)) {
-    *out_err = Value::error(ErrorCode::Num);
-    return false;
-  }
-  const double t0 = sorted.t.front();
-  const double t_last = sorted.t.back();
-  // Compute the integer index of the last point. A negative or non-finite
-  // span is impossible after sorting, but the round-then-cast guard below
-  // copes with floating-point jitter.
-  const double span = t_last - t0;
-  const double last_idx_d = std::round(span / step);
-  if (!std::isfinite(last_idx_d) || last_idx_d < 0.0) {
-    *out_err = Value::error(ErrorCode::Num);
-    return false;
-  }
-  const std::size_t grid_size = static_cast<std::size_t>(last_idx_d) + 1U;
-  // Defensive cap: a grid size > 2^20 would mean the timeline spans >1M
-  // steps, which is well beyond Excel's practical limits and almost
-  // certainly indicates a step-detection failure.
-  if (grid_size > (1U << 20U)) {
-    *out_err = Value::error(ErrorCode::Num);
-    return false;
-  }
-  std::vector<double> grid_y(grid_size, 0.0);
-  std::vector<bool> filled(grid_size, false);
-  for (std::size_t i = 0; i < sorted.t.size(); ++i) {
-    const double rel = (sorted.t[i] - t0) / step;
-    const double rounded = std::round(rel);
-    // Regularity check: every input must land within +/-30% of an
-    // integer grid index when measured in step units.
-    const double resid = std::fabs(rel - rounded);
-    if (resid > kStepDeviation) {
-      *out_err = Value::error(ErrorCode::Num);
-      return false;
-    }
-    const std::size_t k = static_cast<std::size_t>(rounded);
-    if (k >= grid_size) {
-      *out_err = Value::error(ErrorCode::Num);
-      return false;
-    }
-    if (filled[k]) {
-      // Two distinct timeline values mapping to the same grid index
-      // means the +/-30% tolerance was insufficient; treat as a
-      // step-detection failure.
-      *out_err = Value::error(ErrorCode::Num);
-      return false;
-    }
-    grid_y[k] = sorted.y[i];
-    filled[k] = true;
-  }
-
-  if (data_completion == 0) {
-    // Zero-fill: missing slots already initialised to 0.0; nothing
-    // further to do.
-  } else {
-    // Linear interpolation between known neighbours. The endpoints are
-    // always filled (the first sample lives at index 0; the last lives
-    // at index grid_size - 1) by construction.
-    std::size_t i = 0;
-    while (i < grid_size) {
-      if (filled[i]) {
-        ++i;
-        continue;
-      }
-      // Find the previous filled index (must exist; first cell is
-      // filled by construction).
-      std::size_t prev = i;
-      while (prev > 0U && !filled[prev])
-        --prev;
-      // Find the next filled index (must exist; last cell is filled).
-      std::size_t next = i;
-      while (next < grid_size && !filled[next])
-        ++next;
-      if (next >= grid_size) {
-        // No right anchor -- defensive; shouldn't happen since the last
-        // cell is always filled. Treat as a regularity failure.
-        *out_err = Value::error(ErrorCode::Num);
-        return false;
-      }
-      const double y_prev = grid_y[prev];
-      const double y_next = grid_y[next];
-      for (std::size_t k = prev + 1U; k < next; ++k) {
-        const double frac = static_cast<double>(k - prev) / static_cast<double>(next - prev);
-        grid_y[k] = y_prev + frac * (y_next - y_prev);
-        filled[k] = true;
-      }
-      i = next;
-    }
-  }
-
-  out->t.resize(grid_size);
-  out->y.resize(grid_size);
-  for (std::size_t i = 0; i < grid_size; ++i) {
-    out->t[i] = t0 + static_cast<double>(i) * step;
-    out->y[i] = grid_y[i];
-  }
-  return true;
-}
-
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -275,10 +35,10 @@ constexpr double kPi = 3.141592653589793;
 constexpr double kTwoPi = 6.283185307179586;
 constexpr double kInt32Min = -2147483648.0;
 constexpr double kInt32Max = 2147483647.0;
-// Longest series considered; the periodogram uses a power-of-two tail beyond
-// `kFftOnlyLength`.
+// Longest series considered by the detector.
 constexpr std::size_t kMaxDetectLength = 175680U;
-constexpr std::size_t kFftOnlyLength = 2049U;
+// From this length on, only the largest power-of-two tail is analysed.
+constexpr std::size_t kWindowedLength = 2049U;
 // Detected periods at or above this are reported as none.
 constexpr std::uint32_t kMaxDetectedPeriod = 8785U;
 // Fraction of the series tapered at each end before the periodogram.
@@ -1069,15 +829,1402 @@ class Detector {
 
 }  // namespace
 
+namespace {
+
+// ---------------------------------------------------------------------------
+// Timeline normalisation
+// ---------------------------------------------------------------------------
+//
+// Cells are paired, sorted when a negative step occurs, and the step is read
+// from a histogram of the consecutive differences. Series with gaps or
+// duplicate timestamps are rebuilt onto a regular grid node by node, walking
+// back from the last timestamp (by months on a calendar timeline).
+
+constexpr double kStepTolerance = 1e-5;
+// Percentage of the steps that must fall in the chosen histogram window.
+constexpr std::int64_t kMinWindowPercent = 50;
+constexpr std::int64_t kMaxHistogramBins = 3000;
+constexpr std::int64_t kMaxRefinePasses = 11;
+constexpr double kSameStepTolerance = 3e-7;
+constexpr std::uint32_t kMaxDateSerial = 2958465U;
+// Longest run of regular steps tracked when anchoring the grid.
+constexpr std::size_t kMaxAnchorRun = 20U;
+// Largest share (percent) of grid nodes that may be missing.
+constexpr std::int64_t kMaxMissingPercent = 30;
+constexpr std::int64_t kMaxGridNodes = 1000000;
+
+bool top_bits_zero(double v) noexcept {
+  std::uint64_t bits = 0;
+  std::memcpy(&bits, &v, sizeof bits);
+  return (bits >> 48U) == 0U;
+}
+
+bool is_inf_or_nan(double v) noexcept {
+  return std::isnan(v) || std::isinf(v);
+}
+
+bool sign_bit_set(double v) noexcept {
+  std::int64_t bits = 0;
+  std::memcpy(&bits, &v, sizeof bits);
+  return bits < 0;
+}
+
+template <typename V>
+auto& elem(V& v, std::int64_t i) {
+  return v[static_cast<std::size_t>(i)];
+}
+
+// -- calendar -----------------------------------------------------------
+
+std::int64_t floor_div(std::int64_t a, std::int64_t b) noexcept {
+  std::int64_t q = a / b;
+  if ((a % b != 0) && ((a < 0) != (b < 0))) {
+    --q;
+  }
+  return q;
+}
+
+// Days since 1970-01-01 of a proleptic Gregorian date.
+std::int64_t days_from_civil(std::int64_t y, std::int64_t m, std::int64_t d) noexcept {
+  y -= m <= 2 ? 1 : 0;
+  const std::int64_t era = floor_div(y, 400);
+  const std::int64_t yoe = y - era * 400;
+  const std::int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  const std::int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + doe - 719468;
+}
+
+void civil_from_days(std::int64_t z, std::int64_t* y, std::int64_t* m, std::int64_t* d) noexcept {
+  z += 719468;
+  const std::int64_t era = floor_div(z, 146097);
+  const std::int64_t doe = z - era * 146097;
+  const std::int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  const std::int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  const std::int64_t mp = (5 * doy + 2) / 153;
+  *d = doy - (153 * mp + 2) / 5 + 1;
+  *m = mp + (mp < 10 ? 3 : -9);
+  *y = yoe + era * 400 + (*m <= 2 ? 1 : 0);
+}
+
+// Serial 0 is 1899-12-30.
+std::int64_t spreadsheet_epoch_days() noexcept {
+  return days_from_civil(1899, 12, 30);
+}
+
+bool is_date_serial(double x) noexcept {
+  return sign_of(x) != -1 && to_uint32(x) <= kMaxDateSerial;
+}
+
+struct Ymd {
+  std::int64_t year = 0;
+  std::int64_t month = 0;
+  std::int64_t day = 0;
+};
+
+Ymd ymd_of(double serial) {
+  Ymd r;
+  civil_from_days(static_cast<std::int64_t>(std::floor(serial)) + spreadsheet_epoch_days(), &r.year, &r.month, &r.day);
+  return r;
+}
+
+// A day past the month end rolls into the next month.
+double serial_of(const Ymd& v) {
+  return static_cast<double>(days_from_civil(v.year, v.month, 1) - spreadsheet_epoch_days() + (v.day - 1));
+}
+
+// Moves the (year, month) pair in place, keeping the day.
+double add_months(Ymd* v, std::int64_t delta) {
+  const std::int64_t total = v->year * 12 + (v->month + delta) - 1;
+  v->year = floor_div(total, 12);
+  v->month = total - v->year * 12 + 1;
+  return serial_of(*v);
+}
+
+// Nearest month-step node from `a` toward `b` and the signed step count.
+bool month_walk(std::int64_t months, double a, double b, double* node, std::int64_t* count, ErrorCode* err) {
+  std::int64_t delta = 0;
+  std::int64_t sign = 0;
+  if (bit_compare(a, b) == -1) {
+    delta = months;
+    sign = 1;
+  } else {
+    delta = -months;
+    sign = -1;
+  }
+  if (months <= 0) {
+    *err = ErrorCode::Value;
+    return false;
+  }
+  std::int64_t cnt = 0;
+  double cur = a;
+  Ymd ymd = ymd_of(a);
+  double d = std::fabs(a - b);
+  while (true) {
+    const double next = add_months(&ymd, delta);
+    const double d2 = std::fabs(next - b);
+    if (bit_compare(d2, d) >= 0) {
+      break;
+    }
+    cur = next;
+    cnt += sign;
+    d = d2;
+  }
+  *node = cur;
+  *count = cnt;
+  return true;
+}
+
+// -- ordering -----------------------------------------------------------
+
+// Sorts `keys` ascending over [lo, hi], permuting `vals` alongside. Runs of
+// at most eight elements use a selection pass; larger ones are partitioned
+// around a median-of-three pivot with an explicit stack. The order of equal
+// keys is part of the contract: it fixes the summation order of grouped
+// values.
+void sort_pairs(std::vector<double>* keys, std::vector<double>* vals, std::int64_t lo, std::int64_t hi) {
+  std::vector<double>& k = *keys;
+  const auto cmp = [&](std::int64_t i, std::int64_t j) { return bit_compare(elem(k, i), elem(k, j)); };
+  const auto swap_at = [&](std::int64_t i, std::int64_t j) {
+    std::swap(elem(k, i), elem(k, j));
+    if (vals != nullptr) {
+      std::swap(elem(*vals, i), elem(*vals, j));
+    }
+  };
+  std::vector<std::pair<std::int64_t, std::int64_t>> stack;
+  while (true) {
+    const std::int64_t size = hi - lo + 1;
+    if (size <= 8) {
+      while (hi > lo) {
+        std::int64_t mx = lo;
+        for (std::int64_t p = lo + 1; p <= hi; ++p) {
+          if (cmp(p, mx) > 0) {
+            mx = p;
+          }
+        }
+        if (mx != hi) {
+          swap_at(mx, hi);
+        }
+        --hi;
+      }
+    } else {
+      std::int64_t mid = lo + size / 2;
+      if (cmp(lo, mid) > 0) {
+        swap_at(lo, mid);
+      }
+      if (cmp(lo, hi) > 0) {
+        swap_at(lo, hi);
+      }
+      if (cmp(mid, hi) > 0) {
+        swap_at(mid, hi);
+      }
+      std::int64_t loguy = lo;
+      std::int64_t higuy = hi;
+      while (true) {
+        if (mid > loguy) {
+          ++loguy;
+          while (loguy < mid && cmp(loguy, mid) <= 0) {
+            ++loguy;
+          }
+        }
+        if (mid <= loguy) {
+          ++loguy;
+          while (loguy <= hi && cmp(loguy, mid) <= 0) {
+            ++loguy;
+          }
+        }
+        --higuy;
+        while (higuy > mid && cmp(higuy, mid) > 0) {
+          --higuy;
+        }
+        if (higuy < loguy) {
+          break;
+        }
+        swap_at(loguy, higuy);
+        if (higuy == mid) {
+          mid = loguy;
+        }
+      }
+      ++higuy;
+      if (mid < higuy) {
+        --higuy;
+        while (higuy > mid && cmp(higuy, mid) == 0) {
+          --higuy;
+        }
+      }
+      if (mid >= higuy) {
+        --higuy;
+        while (higuy > lo && cmp(higuy, mid) == 0) {
+          --higuy;
+        }
+      }
+      if (higuy - lo >= hi - loguy) {
+        if (lo < higuy) {
+          stack.emplace_back(lo, higuy);
+        }
+        if (loguy < hi) {
+          lo = loguy;
+          continue;
+        }
+      } else {
+        if (loguy < hi) {
+          stack.emplace_back(loguy, hi);
+        }
+        if (lo < higuy) {
+          hi = higuy;
+          continue;
+        }
+      }
+    }
+    if (!stack.empty()) {
+      lo = stack.back().first;
+      hi = stack.back().second;
+      stack.pop_back();
+      continue;
+    }
+    break;
+  }
+}
+
+// -- reading ------------------------------------------------------------
+
+// Statistics of the consecutive timeline differences.
+struct StepStats {
+  double min = DBL_MAX;
+  double max = 0.0;
+  // Non-positive steps (duplicates, and negative steps when `needs_sort`).
+  std::int64_t nonpositive = 0;
+  bool needs_sort = false;
+
+  void add(double d) {
+    if (bit_compare(d, min) == -1) {
+      if (top_bits_zero(d)) {
+        ++nonpositive;
+      } else if (is_inf_or_nan(d)) {
+        // Not counted.
+      } else if (sign_bit_set(d)) {
+        ++nonpositive;
+        needs_sort = true;
+      } else {
+        min = d;
+      }
+    }
+    if (bit_compare(d, max) == 1) {
+      max = d;
+    }
+  }
+};
+
+// Pairs the cells in order. A pair with a blank, text or boolean timeline or
+// value cell is dropped, except that an error cell propagates, text values
+// count as 1 under COUNTA and blank values read as 0 without interpolation.
+// Under COUNT/COUNTA every kept value is 1.
+bool read_pairs(const std::vector<SeriesCell>& values, const std::vector<SeriesCell>& times, int completion,
+                AggregationMode agg, std::vector<double>* t, std::vector<double>* y, StepStats* stats, ErrorCode* err) {
+  if (values.size() != times.size()) {
+    *err = ErrorCode::NA;
+    return false;
+  }
+  const bool count_mode = agg == AggregationMode::kCount || agg == AggregationMode::kCountA;
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    const SeriesCell& tc = times[i];
+    SeriesCell yc = values[i];
+    if (tc.kind == SeriesCell::Kind::kError) {
+      *err = tc.error;
+      return false;
+    }
+    if (yc.kind == SeriesCell::Kind::kError) {
+      *err = yc.error;
+      return false;
+    }
+    if (tc.kind != SeriesCell::Kind::kNumber) {
+      continue;
+    }
+    if (yc.kind == SeriesCell::Kind::kBlank && completion == 0) {
+      yc.kind = SeriesCell::Kind::kNumber;
+      yc.number = 0.0;
+    }
+    double yv = 0.0;
+    if (yc.kind == SeriesCell::Kind::kText) {
+      if (agg != AggregationMode::kCountA) {
+        continue;
+      }
+      yv = 1.0;
+    } else if (yc.kind == SeriesCell::Kind::kNumber) {
+      yv = count_mode ? 1.0 : yc.number;
+    } else {
+      continue;
+    }
+    if (!t->empty()) {
+      stats->add(tc.number - t->back());
+    }
+    t->push_back(tc.number);
+    y->push_back(yv);
+  }
+  return true;
+}
+
+// -- step detection -----------------------------------------------------
+
+// Working state of the step histogram.
+struct Histogram {
+  std::vector<std::int64_t> counts;
+  std::vector<double> reps;
+  std::vector<std::int64_t> same;
+  std::int64_t nbins = 0;
+  std::int64_t zeros = 0;
+};
+
+// Do [a, b] and [lo, hi] intersect (inclusive)?
+bool ranges_overlap(double a, double b, double lo, double hi) {
+  const auto pos = [&](double v) {
+    if (bit_compare(v, a) == -1) {
+      return -1;
+    }
+    return bit_compare(v, b) == 1 ? 1 : 0;
+  };
+  const int pa = pos(lo);
+  const int pb = pos(hi);
+  if (pa != pb) {
+    return true;
+  }
+  return pa == 0;
+}
+
+// Number of steps whose bins intersect [lo, hi].
+std::int64_t count_in(double low, double bw, const std::vector<std::int64_t>& counts, std::int64_t nbins, double lo,
+                      double hi) {
+  const auto index = [&](double v) -> std::int64_t {
+    const double q = div_zero(v - low, bw);
+    if (!top_bits_zero(q) && !is_inf_or_nan(q) && sign_bit_set(q)) {
+      return -1;
+    }
+    return static_cast<std::int64_t>(to_uint32(q));
+  };
+  const std::int64_t i0 = index(lo);
+  const std::int64_t i1 = index(hi);
+  const std::int64_t start = i1 < 0 ? i0 : std::max<std::int64_t>(i0, 0);
+  const std::int64_t last = (start < nbins && i1 >= nbins) ? nbins - 1 : i1;
+  const std::int64_t first = std::max<std::int64_t>(start, 0);
+  if (first > last || first >= nbins) {
+    return 0;
+  }
+  std::int64_t sum = 0;
+  for (std::int64_t j = first; j < nbins; ++j) {
+    sum += elem(counts, j);
+    if (j >= last) {
+      break;
+    }
+  }
+  return sum;
+}
+
+// Steps of about k years.
+void classify_multiyear(Timeline* tl, double lo, double hi) {
+  const std::int64_t k = static_cast<std::int64_t>(to_uint32(round_away(div_zero(lo, 365.0))));
+  if (k < 2 || k > 100) {
+    return;
+  }
+  const std::int64_t nominal = static_cast<std::int64_t>(static_cast<double>(k) * 365.0 + static_cast<double>(k >> 2));
+  const std::int64_t tol = static_cast<std::int64_t>(std::log2(static_cast<double>(k)) + 2.0);
+  if (ranges_overlap(lo, hi, static_cast<double>(nominal - tol), static_cast<double>(nominal + tol))) {
+    tl->nominal = static_cast<double>(nominal);
+    tl->months = 12 * k;
+  }
+}
+
+// Calendar class of a constant step; `m` is the number of steps.
+void classify_constant(Timeline* tl, double step, std::int64_t m) {
+  tl->step = step;
+  tl->months = 0;
+  tl->count = m;
+  if (!tl->is_date) {
+    return;
+  }
+  if (ranges_overlap(step, step, 30.0, 31.0)) {
+    const std::int64_t lim = step == 29.5 ? 2 : 2 + (step > 29.5 ? 1 : 0);
+    if (m > lim) {
+      return;
+    }
+    tl->nominal = 30.5;
+    tl->months = 1;
+  } else if (ranges_overlap(step, step, 363.0, 367.0)) {
+    tl->nominal = 365.0;
+    tl->months = 12;
+  } else if (ranges_overlap(step, step, 90.0, 92.0)) {
+    const std::int64_t lim = step == 90.5 ? 2 : 2 + (step > 90.5 ? 1 : 0);
+    if (m > lim) {
+      return;
+    }
+    tl->nominal = 91.0;
+    tl->months = 3;
+  } else if (ranges_overlap(step, step, 181.5, 184.5)) {
+    if (m > 2) {
+      return;
+    }
+    tl->nominal = 183.0;
+    tl->months = 6;
+  } else if (bit_compare(step, 365.0) == 1) {
+    classify_multiyear(tl, step, step);
+  }
+}
+
+// Calendar class of the chosen histogram bin [lo, hi]; `rep` is the common
+// step of a pure bin.
+void classify_bin(Timeline* tl, double lo, double hi, bool has_rep, double rep, double low, double bw,
+                  const std::vector<std::int64_t>& counts, std::int64_t nbins) {
+  tl->step = has_rep ? rep : lo;
+  tl->months = 0;
+  if (!tl->is_date) {
+    return;
+  }
+  const auto cnt = [&](double a, double b) { return count_in(low, bw, counts, nbins, a, b); };
+  const auto set = [&](double nominal, std::int64_t months) {
+    tl->nominal = nominal;
+    tl->months = months;
+  };
+  if (ranges_overlap(lo, hi, 30.0, 31.0)) {
+    const std::int64_t c1 = cnt(27.5, 31.5);
+    if (c1 < 2) {
+      return set(30.5, 1);
+    }
+    const std::int64_t c2 = cnt(27.5, 29.5);
+    const std::int64_t c3 = cnt(29.5, 30.5);
+    const std::int64_t c4 = cnt(30.5, 31.5);
+    const std::int64_t c5 = cnt(29.5, 31.5);
+    if (c4 == 0 && (c3 > 2 || c2 > 2)) {
+      return;
+    }
+    if (c3 == 0) {
+      if (c4 > 4 || c2 > 2) {
+        return;
+      }
+      return set(30.5, 1);
+    }
+    if (c2 < 3) {
+      return set(30.5, 1);
+    }
+    if (c5 > 9) {
+      return set(30.5, 1);
+    }
+    if (c5 + c2 != c1) {
+      return set(30.5, 1);
+    }
+    return;
+  }
+  if (ranges_overlap(lo, hi, 363.0, 367.0)) {
+    return set(365.0, 12);
+  }
+  if (ranges_overlap(lo, hi, 90.0, 92.0)) {
+    const std::int64_t c1 = cnt(89.5, 92.5);
+    if (c1 < 2) {
+      return set(91.0, 3);
+    }
+    const std::int64_t c2 = cnt(89.5, 90.5);
+    const std::int64_t c3 = cnt(90.5, 91.5);
+    const std::int64_t c4 = cnt(91.5, 92.5);
+    const std::int64_t c5 = cnt(90.5, 92.5);
+    if (c3 == 0 && (c4 > 3 || c2 > 2)) {
+      return;
+    }
+    if (c4 == 0) {
+      if (c3 > 3 || c2 > 2) {
+        return;
+      }
+      return set(91.0, 3);
+    }
+    if (c2 < 3) {
+      return set(91.0, 3);
+    }
+    if (c5 > 1) {
+      return set(91.0, 3);
+    }
+    if (c5 + c2 == c1) {
+      return;
+    }
+    return set(91.0, 3);
+  }
+  if (ranges_overlap(lo, hi, 181.5, 184.5)) {
+    const std::int64_t c1 = cnt(89.5, 92.5);
+    if (c1 < 2) {
+      return set(183.0, 6);
+    }
+    const std::int64_t c2 = cnt(180.5, 181.5);
+    const std::int64_t c3 = cnt(181.5, 182.5);
+    const std::int64_t c4 = cnt(183.5, 184.5);
+    if (c2 == 0 && (c4 > 2 || c3 > 2)) {
+      return;
+    }
+    if (c4 == 0) {
+      if (c2 > 2 || c3 > 2) {
+        return;
+      }
+      return set(183.0, 6);
+    }
+    if (c3 < 3) {
+      return set(183.0, 6);
+    }
+    const std::int64_t s = c4 + c2;
+    if (s + c3 != c1) {
+      return set(183.0, 6);
+    }
+    if (s < 6) {
+      return;
+    }
+    return set(183.0, 6);
+  }
+  if (bit_compare(lo, 365.0) == 1) {
+    classify_multiyear(tl, lo, hi);
+  }
+}
+
+struct Binning {
+  double bw = 0.0;
+  std::int64_t nbins = 0;
+  double bw0 = 0.0;
+  bool capped = false;
+};
+
+// Histogram geometry for the full range of steps.
+Binning make_binning(const StepStats& st) {
+  double base = 0.0;
+  if (st.min == 0.0) {
+    base = kStepTolerance;
+  } else {
+    base = (bit_compare(kStepTolerance, st.min) == 1 && bit_compare(kStepTolerance, st.max) == -1) ? kStepTolerance
+                                                                                                   : st.min;
+  }
+  base = div_zero(base, 5.0);
+  const double bw0 = div_zero(base, 5.0);
+  const double range = st.max - st.min;
+  double q = div_zero(range, bw0);
+  q = q + 1.0;
+  Binning b;
+  if (bit_compare(q, static_cast<double>(kMaxHistogramBins)) == 1) {
+    b.bw = div_zero(range, static_cast<double>(kMaxHistogramBins - 1));
+    b.nbins = kMaxHistogramBins;
+    b.bw0 = bw0;
+    b.capped = true;
+    return b;
+  }
+  const std::uint32_t nb = to_uint32(q);
+  b.bw = div_zero(range, static_cast<double>(nb));
+  const double q2 = div_zero(range, b.bw) + 1.5;
+  b.nbins = static_cast<std::int64_t>(to_uint32(q2));
+  b.bw0 = b.bw;
+  return b;
+}
+
+void fill_histogram(Histogram* h, const std::vector<double>& t, std::int64_t nbins, double bw, double low, double high,
+                    bool bounded) {
+  h->counts.assign(static_cast<std::size_t>(nbins), 0);
+  h->reps.assign(static_cast<std::size_t>(nbins), 0.0);
+  h->same.assign(static_cast<std::size_t>(nbins), 0);
+  h->nbins = nbins;
+  h->zeros = 0;
+  for (std::size_t i = 1; i < t.size(); ++i) {
+    const double d = t[i] - t[i - 1];
+    if (top_bits_zero(d) || is_inf_or_nan(d)) {
+      ++h->zeros;
+      continue;
+    }
+    if (bounded && (bit_compare(d, low) == -1 || bit_compare(d, high) == 1)) {
+      continue;
+    }
+    double q = d - low;
+    q = div_zero(q, bw);
+    std::int64_t b = static_cast<std::int64_t>(to_uint32(q));
+    if (b >= nbins) {
+      b = nbins - 1;
+    }
+    const std::int64_t c = elem(h->counts, b);
+    elem(h->counts, b) = c + 1;
+    if (c == 0) {
+      elem(h->reps, b) = d;
+      elem(h->same, b) = 1;
+    } else if (std::fabs(elem(h->reps, b) - d) <= kSameStepTolerance) {
+      elem(h->same, b) += 1;
+    }
+  }
+}
+
+// Picks the step bin: a sliding window over the histogram for wide
+// histograms, the largest bin otherwise. Returns true when the bin is pure.
+bool choose_bin(const Histogram& h, double low, double bw, Timeline* tl) {
+  const std::vector<std::int64_t>& counts = h.counts;
+  const std::int64_t nbins = h.nbins;
+  std::int64_t b = 0;
+  std::int64_t wtotal = 0;
+  if (nbins <= 4) {
+    std::int64_t total = 0;
+    for (std::int64_t i = 0; i < nbins; ++i) {
+      total += elem(counts, i);
+    }
+    std::int64_t best_i = 0;
+    if (nbins >= 1 && total > 0) {
+      for (std::int64_t i = 1; i < nbins; ++i) {
+        if (elem(counts, i) > elem(counts, best_i)) {
+          best_i = i;
+        }
+      }
+    }
+    b = best_i;
+    wtotal = nbins >= 1 ? total : 0;
+  } else {
+    const double scaled_low = div_zero(low, bw);
+    std::int64_t w8 = 0;
+    std::int64_t w11 = 0;
+    std::int64_t w10 = 0;
+    std::int64_t w12 = 0;
+    std::int64_t w13 = 1;
+    std::int64_t w14 = 10;
+    std::int64_t acc = elem(counts, 0);
+    std::int64_t best = elem(counts, 0);
+    while (true) {
+      if (w13 < nbins) {
+        acc += elem(counts, w13);
+      }
+      const std::int64_t mid = (w12 + w13) / 2;
+      const double thr = static_cast<double>(w14 - (5 * w12 + mid));
+      if (bit_compare(scaled_low, thr) == -1) {
+        if (w12 >= 0) {
+          acc -= elem(counts, w12);
+        }
+        ++w12;
+      } else {
+        --w12;
+        if (w12 >= 0) {
+          acc += elem(counts, w12);
+        }
+      }
+      const std::int64_t mid2 = (w12 + w13) / 2;
+      if (mid2 >= nbins) {
+        break;
+      }
+      if (best < acc || (best == acc && elem(counts, w8) < elem(counts, mid2))) {
+        best = acc;
+        w8 = mid2;
+        w11 = w12;
+        w10 = w13;
+      }
+      ++w13;
+      w14 += 5;
+    }
+    std::int64_t w28 = std::max<std::int64_t>(w11, 0);
+    std::int64_t w27 = std::min<std::int64_t>(w10, nbins - 1);
+    std::int64_t w25 = 0;
+    std::int64_t w9 = 0;
+    if (w28 <= w27) {
+      w25 = w28;
+      w9 = elem(counts, w28);
+      for (std::int64_t i = w28 + 1; i <= w27; ++i) {
+        if (w9 < elem(counts, i)) {
+          w25 = i;
+          w9 = elem(counts, i);
+        }
+      }
+    }
+    if (w25 != w8 && !(w9 < best - 1 && 15 * best <= 100 * (best - w9))) {
+      double v = mul_flush(static_cast<double>(w25), bw) + low;
+      v = div_zero(v, 10.0);
+      v = div_zero(v, bw);
+      const std::int64_t r = static_cast<std::int64_t>(to_uint32(v));
+      w28 = std::max<std::int64_t>(w25 - r, 0);
+      w27 = std::min<std::int64_t>(w25 + r, nbins - 1);
+      wtotal = 0;
+      for (std::int64_t i = w28; i <= w27; ++i) {
+        wtotal += elem(counts, i);
+      }
+      b = w25;
+    } else {
+      b = w25 != w8 ? w8 : w25;
+      wtotal = best;
+    }
+  }
+  bool found = false;
+  double rep = 0.0;
+  if (elem(counts, b) >= 1 && elem(h.same, b) == elem(counts, b)) {
+    rep = elem(h.reps, b);
+    found = true;
+  }
+  const double lo = mul_flush(static_cast<double>(b), bw) + low;
+  const double hi = lo + bw;
+  classify_bin(tl, lo, hi, found, rep, low, bw, counts, nbins);
+  tl->count = wtotal;
+  return found;
+}
+
+// 4 * max(0.4 a, b).
+double window_width(double a, double b) {
+  double v = div_zero(a, 5.0);
+  v = mul_flush(v, 2.0);
+  if (bit_compare(v, b) == -1) {
+    v = b;
+  }
+  return mul_flush(v, 4.0);
+}
+
+struct Refined {
+  double low = 0.0;
+  double high = 0.0;
+  double bw = 0.0;
+  std::int64_t nbins = 0;
+  bool capped = false;
+};
+
+// Narrower histogram around the current step estimate.
+Refined refine_histogram(const StepStats& st, double bw, double bw0, double step) {
+  const double lowbase = st.min;
+  const double width = window_width(step, bw);
+  bool first = true;
+  while (true) {
+    const double v = div_zero(width, bw0);
+    if (bit_compare(v, 2900.0) == -1) {
+      break;
+    }
+    bw0 = mul_flush(bw0, bit_compare(v, 48000.0) == 1 ? 16.0 : 2.0);
+    first = false;
+  }
+  double newlow = step;
+  double v = div_zero(step - lowbase, bw0);
+  if (!(bit_compare(v, -1.0) == -1)) {
+    const std::uint32_t n0 = to_uint32(v);
+    v = mul_flush(static_cast<double>(n0), bw0);
+    newlow = v + lowbase;
+  }
+  const double w2 = window_width(newlow, bw);
+  const std::uint32_t k = to_uint32(div_zero(w2, bw0));
+  const double half = div_zero(mul_flush(static_cast<double>(k), bw0), 2.0);
+  Refined r;
+  r.low = newlow - half;
+  r.high = newlow + half;
+  if (bit_compare(r.low, lowbase) == -1) {
+    r.low = lowbase;
+  }
+  if (bit_compare(r.high, st.max) == 1) {
+    r.high = st.max;
+  }
+  r.nbins = static_cast<std::int64_t>(to_uint32(div_zero(r.high - r.low, bw0) + 1.0));
+  r.bw = bw0;
+  r.capped = first && bit_compare(step, bw0) == 1;
+  return r;
+}
+
+// Detects the timeline step. `*irregular` is set when the series has gaps or
+// duplicate timestamps and must be rebuilt.
+bool detect_step(const std::vector<double>& t, const StepStats& st, Timeline* tl, bool* irregular, ErrorCode* err) {
+  const std::int64_t n = static_cast<std::int64_t>(t.size());
+  tl->is_date = is_date_serial(t.front()) && is_date_serial(t.back());
+  tl->months = tl->is_date ? -1 : 0;
+  if (st.min == st.max || (st.nonpositive != 0 && st.max == 0.0)) {
+    if (st.max == 0.0) {
+      *err = ErrorCode::Num;
+      return false;
+    }
+    classify_constant(tl, st.max, n - st.nonpositive - 1);
+    *irregular = st.nonpositive != 0;
+    return true;
+  }
+  const Binning bin = make_binning(st);
+  double bw = bin.bw;
+  std::int64_t nbins = bin.nbins;
+  double bw0 = bin.bw0;
+  bool capped = bin.capped;
+  double low = st.min;
+  Histogram h;
+  fill_histogram(&h, t, nbins, bw, low, st.max, false);
+  bool found = choose_bin(h, low, bw, tl);
+  if (!found && capped) {
+    std::int64_t pass = 2;
+    while (true) {
+      const Refined r = refine_histogram(st, bw, bw0, tl->step);
+      low = r.low;
+      bw = r.bw;
+      nbins = r.nbins;
+      capped = r.capped;
+      fill_histogram(&h, t, nbins, bw, low, r.high, true);
+      found = choose_bin(h, low, bw, tl);
+      if (found || !capped) {
+        break;
+      }
+      if (pass >= kMaxRefinePasses) {
+        *err = ErrorCode::Num;
+        return false;
+      }
+      bw0 = bw;
+      ++pass;
+    }
+  }
+  *irregular = tl->count != n - 1;
+  const std::int64_t m = n - h.zeros;
+  if (!(tl->count * 100 > (m - 1) * kMinWindowPercent)) {
+    *err = ErrorCode::Num;
+    return false;
+  }
+  return true;
+}
+
+// -- grid ---------------------------------------------------------------
+
+struct GridContext {
+  const Timeline* tl;
+  double step;
+  AggregationMode agg;
+  bool count_mode;
+  int completion;
+  double tol;
+  double half;
+};
+
+// Maximum number of grid nodes.
+std::int64_t grid_capacity(std::int64_t n, double first, double last, double step) {
+  const double span = div_zero(last - first, step);
+  const std::int64_t by_count = (50 * n) / 35;
+  const double c = std::ceil(span);
+  std::int64_t w8 = 0;
+  if (bit_compare(c, static_cast<double>(kMaxGridNodes)) == 1) {
+    w8 = std::max<std::int64_t>(by_count, kMaxGridNodes);
+  } else {
+    w8 = static_cast<std::int64_t>(to_uint32(c)) + 1;
+  }
+  w8 += w8 > 54 ? w8 / 5 : 10;
+  std::int64_t w9 = std::min(by_count, w8);
+  if (!(w8 < kMaxGridNodes)) {
+    w9 = by_count;
+  }
+  return w9;
+}
+
+// Aggregates the points from `end` backwards while t >= `lower`; returns the
+// value and the index of the group's first point.
+bool aggregate_group(const GridContext& g, double lower, std::int64_t end, const std::vector<double>& t,
+                     std::vector<double>* yv, double* value, std::int64_t* first, ErrorCode* err) {
+  std::vector<double>& y = *yv;
+  if (end <= 0 || bit_compare(lower, elem(t, end - 1)) == 1) {
+    *value = g.count_mode ? 1.0 : elem(y, end);
+    *first = end;
+    return true;
+  }
+  std::int64_t j = end;
+  switch (g.agg) {
+    case AggregationMode::kAverage:
+    case AggregationMode::kSum: {
+      double acc = elem(y, end);
+      std::int64_t cnt = 1;
+      while (j > 0) {
+        if (bit_compare(lower, elem(t, j - 1)) == 1) {
+          break;
+        }
+        --j;
+        acc = acc + elem(y, j);
+        ++cnt;
+      }
+      *value = g.agg == AggregationMode::kAverage ? div_zero(acc, static_cast<double>(cnt)) : acc;
+      break;
+    }
+    case AggregationMode::kCount:
+    case AggregationMode::kCountA: {
+      std::int64_t cnt = 1;
+      while (j > 0) {
+        if (bit_compare(lower, elem(t, j - 1)) == 1) {
+          break;
+        }
+        --j;
+        ++cnt;
+      }
+      *value = static_cast<double>(cnt);
+      break;
+    }
+    case AggregationMode::kMax:
+    case AggregationMode::kMin: {
+      const int want = g.agg == AggregationMode::kMax ? -1 : 1;
+      double val = elem(y, end);
+      while (j > 0) {
+        if (bit_compare(lower, elem(t, j - 1)) == 1) {
+          break;
+        }
+        --j;
+        if (bit_compare(val, elem(y, j)) == want) {
+          val = elem(y, j);
+        }
+      }
+      *value = val;
+      break;
+    }
+    case AggregationMode::kMedian: {
+      while (j > 0 && bit_compare(lower, elem(t, j - 1)) != 1) {
+        --j;
+      }
+      const std::int64_t cnt = end - j + 1;
+      if (cnt > 1) {
+        sort_pairs(yv, nullptr, j, end);
+      }
+      if ((cnt & 1) != 0) {
+        *value = elem(y, j + (cnt >> 1));
+      } else {
+        const std::int64_t m = j + (cnt >> 1);
+        const double s = elem(y, m) + elem(y, m - 1);
+        *value = div_zero(s, 2.0);
+      }
+      break;
+    }
+    default:
+      *err = ErrorCode::Num;
+      return false;
+  }
+  *first = j;
+  return true;
+}
+
+// Index of the first of a run of equal timestamps ending at `j`.
+std::int64_t group_start(const std::vector<double>& t, std::int64_t j) {
+  while (j > 0 && elem(t, j - 1) == elem(t, j)) {
+    --j;
+  }
+  return j;
+}
+
+// Index of the point nearest `node` among the groups from `j` backwards.
+std::int64_t nearest_group(const std::vector<double>& t, std::int64_t j, std::int64_t floor_index, double node,
+                           double* best_distance) {
+  double bestd = DBL_MAX;
+  std::int64_t at = j;
+  while (j >= floor_index) {
+    const double d = std::fabs(node - elem(t, j));
+    if (bit_compare(d, bestd) >= 0) {
+      break;
+    }
+    bestd = d;
+    at = j;
+    if (j == 0) {
+      break;
+    }
+    j = group_start(t, j - 1);
+  }
+  *best_distance = bestd;
+  return at;
+}
+
+struct GridStart {
+  double node = 0.0;
+  double value = 0.0;
+  std::int64_t first = 0;
+  double stored = 0.0;
+};
+
+// Last grid node: anchored on the run of regular steps that covers most of
+// the series.
+bool first_node(const GridContext& g, const std::vector<double>& t, std::vector<double>* y, GridStart* out,
+                ErrorCode* err) {
+  const std::int64_t last = static_cast<std::int64_t>(t.size()) - 1;
+  const std::int64_t x23 = group_start(t, last);
+  std::size_t maxk = 0;
+  std::int64_t table[kMaxAnchorRun + 1];
+  for (std::int64_t& e : table) {
+    e = -1;
+  }
+  const auto record = [&](std::size_t run, std::int64_t runstart) {
+    const std::size_t k = std::min(run, kMaxAnchorRun);
+    if (table[k] < 0) {
+      table[k] = runstart;
+    }
+    if (k > maxk) {
+      maxk = k;
+    }
+  };
+  if (x23 > 0) {
+    std::size_t run = 0;
+    std::int64_t runstart = -1;
+    std::int64_t cur = x23;
+    while (true) {
+      const std::int64_t prev = group_start(t, cur - 1);
+      double d = (elem(t, cur) - elem(t, prev)) - g.step;
+      d = std::fabs(d);
+      if (bit_compare(d, g.tol) == 1) {
+        if (run >= 2 && run > maxk) {
+          record(run, runstart);
+        }
+        runstart = -1;
+        run = 0;
+      } else if (run == 0) {
+        run = 1;
+        runstart = cur;
+      } else {
+        ++run;
+        if (run >= kMaxAnchorRun) {
+          if (table[kMaxAnchorRun] < 0) {
+            table[kMaxAnchorRun] = runstart;
+          }
+          if (maxk <= kMaxAnchorRun - 1U) {
+            runstart = -1;
+            maxk = kMaxAnchorRun;
+          } else {
+            runstart = -1;
+          }
+        }
+      }
+      cur = prev;
+      if (prev <= 0) {
+        break;
+      }
+    }
+    if (run >= 2) {
+      if (run > maxk) {
+        record(run, runstart);
+      }
+    } else if (run == 1) {
+      if (maxk == 0) {
+        if (table[2] < 0) {
+          table[2] = runstart;
+        }
+        maxk = 2;
+      }
+    } else if (maxk == 0) {
+      *err = ErrorCode::Num;
+      return false;
+    }
+  } else if (maxk == 0) {
+    *err = ErrorCode::Num;
+    return false;
+  }
+  const double span = elem(t, last) - t.front();
+  double best = 0.0;
+  std::int64_t anchor = -1;
+  for (std::size_t k = maxk; k >= 2U; --k) {
+    const std::int64_t p = table[k];
+    if (p < 0) {
+      continue;
+    }
+    double v = div_zero(elem(t, last) - elem(t, p), span);
+    v = 1.0 - v;
+    v = mul_flush(v, static_cast<double>(k));
+    if (bit_compare(v, best) == 1) {
+      best = v;
+      anchor = p;
+    }
+  }
+  if (anchor < 0) {
+    *err = ErrorCode::Value;
+    return false;
+  }
+  const std::int64_t lastg = group_start(t, last);
+  bool has_stored = false;
+  double stored = 0.0;
+  double cur_t = 0.0;
+  if (lastg == anchor) {
+    cur_t = elem(t, last);
+  } else {
+    if (g.tl->months >= 1) {
+      std::int64_t unused = 0;
+      if (!month_walk(g.tl->months, elem(t, anchor), elem(t, lastg), &cur_t, &unused, err)) {
+        return false;
+      }
+    } else {
+      double v = div_zero(elem(t, last) - elem(t, anchor), g.step);
+      v = round_away(v);
+      v = mul_flush(v, g.step);
+      cur_t = v + elem(t, anchor);
+    }
+    double bestd = 0.0;
+    const std::int64_t at = nearest_group(t, lastg, anchor, cur_t, &bestd);
+    if (bit_compare(bestd, g.tol) == 1) {
+      has_stored = true;
+      stored = elem(t, at);
+    } else {
+      cur_t = elem(t, at);
+    }
+  }
+  const double lower = cur_t - g.half;
+  double value = 0.0;
+  std::int64_t first = 0;
+  if (!aggregate_group(g, lower, last, t, y, &value, &first, err)) {
+    return false;
+  }
+  out->node = cur_t;
+  out->value = value;
+  out->first = first;
+  out->stored = has_stored ? stored : cur_t;
+  return true;
+}
+
+struct PrevNode {
+  double node = 0.0;
+  std::int64_t steps = 0;
+  double value = 0.0;
+  std::int64_t first = 0;
+  double stored = 0.0;
+};
+
+// Node preceding `cur_t`, with the number of steps between them.
+bool previous_node(const GridContext& g, const std::vector<double>& t, std::vector<double>* y, std::int64_t ptr,
+                   double cur_t, PrevNode* out, ErrorCode* err) {
+  const std::int64_t x22 = group_start(t, ptr - 1);
+  const double t_prev = elem(t, x22);
+  double node = 0.0;
+  std::int64_t steps = 0;
+  if (g.tl->months >= 1) {
+    std::int64_t cnt = 0;
+    if (!month_walk(g.tl->months, cur_t, t_prev, &node, &cnt, err)) {
+      return false;
+    }
+    steps = -cnt;
+  } else {
+    const double tmp = cur_t - g.step;
+    const double lower = tmp - g.half;
+    if (bit_compare(lower, t_prev) != 1) {
+      steps = 1;
+      node = tmp;
+    } else {
+      double v = div_zero(cur_t - t_prev, g.step);
+      v = round_away(v);
+      steps = static_cast<std::int64_t>(to_uint32(v));
+      v = mul_flush(v, g.step);
+      node = cur_t - v;
+    }
+  }
+  double bestd = 0.0;
+  const std::int64_t at = nearest_group(t, x22, 0, node, &bestd);
+  bool has_stored = false;
+  double stored = 0.0;
+  if (bit_compare(bestd, g.tol) == 1) {
+    has_stored = true;
+    stored = elem(t, at);
+  } else {
+    node = elem(t, at);
+  }
+  const double lower2 = node - g.half;
+  double value = 0.0;
+  std::int64_t first = 0;
+  if (!aggregate_group(g, lower2, ptr - 1, t, y, &value, &first, err)) {
+    return false;
+  }
+  out->node = node;
+  out->steps = steps;
+  out->value = value;
+  out->first = first;
+  out->stored = has_stored ? stored : node;
+  return true;
+}
+
+// Rebuilds the series on a regular grid, filling skipped nodes per the data
+// completion option. `*missing` counts the filled nodes.
+bool build_grid(std::vector<double>* tv, std::vector<double>* yv, const Timeline& tl, int completion,
+                AggregationMode agg, std::vector<double>* out_t, std::vector<double>* out_y, std::int64_t* missing,
+                ErrorCode* err) {
+  const std::vector<double>& t = *tv;
+  const std::int64_t n = static_cast<std::int64_t>(t.size());
+  GridContext g{&tl,
+                tl.step,
+                agg,
+                agg == AggregationMode::kCount || agg == AggregationMode::kCountA,
+                completion,
+                div_zero(tl.step, 10.0),
+                div_zero(tl.step, 2.0)};
+  const std::int64_t cap = grid_capacity(n, t.front(), t.back(), g.step);
+  std::int64_t room = cap - 1;
+  *missing = 0;
+  const auto append = [&](double time, double value, bool real) {
+    if (room < 0 || room > cap) {
+      *err = ErrorCode::Num;
+      return false;
+    }
+    out_t->push_back(time);
+    out_y->push_back(value);
+    if (!real) {
+      ++*missing;
+    }
+    --room;
+    return true;
+  };
+  GridStart start;
+  if (!first_node(g, t, yv, &start, err)) {
+    return false;
+  }
+  double cur_t = start.node;
+  double cur_y = start.value;
+  std::int64_t ptr = start.first;
+  if (!append(start.stored, cur_y, true)) {
+    return false;
+  }
+  while (ptr > 0) {
+    PrevNode p;
+    if (!previous_node(g, t, yv, ptr, cur_t, &p, err)) {
+      return false;
+    }
+    if (p.steps >= 2) {
+      if (tl.months > 0) {
+        const double kd = static_cast<double>(p.steps);
+        Ymd ymd = ymd_of(cur_t);
+        std::int64_t gcount = p.steps;
+        while (gcount >= 2) {
+          --gcount;
+          const double node_t = add_months(&ymd, -tl.months);
+          double value = 0.0;
+          if (completion == 1) {
+            const double diff = cur_y - p.value;
+            double v = static_cast<double>(gcount);
+            v = mul_flush(v, diff);
+            v = div_zero(v, kd);
+            value = v + p.value;
+          }
+          if (!append(node_t, value, false)) {
+            return false;
+          }
+        }
+      } else {
+        const double span = cur_t - p.node;
+        std::int64_t gcount = p.steps;
+        double node_t = cur_t;
+        double value = 0.0;
+        while (gcount >= 2) {
+          node_t = node_t - g.step;
+          if (completion == 1) {
+            const double diff = cur_y - p.value;
+            double v = node_t - p.node;
+            v = mul_flush(v, diff);
+            v = div_zero(v, span);
+            value = v + p.value;
+          }
+          if (!append(node_t, value, false)) {
+            return false;
+          }
+          --gcount;
+        }
+      }
+    }
+    if (!append(p.stored, p.value, true)) {
+      return false;
+    }
+    cur_t = p.node;
+    cur_y = p.value;
+    ptr = p.first;
+  }
+  std::reverse(out_t->begin(), out_t->end());
+  std::reverse(out_y->begin(), out_y->end());
+  return true;
+}
+
+}  // namespace
+
+bool prepare_series(const std::vector<SeriesCell>& values, const std::vector<SeriesCell>& timeline, int data_completion,
+                    AggregationMode aggregation, PreparedSeries* out, ErrorCode* err) {
+  std::vector<double> t;
+  std::vector<double> y;
+  StepStats stats;
+  if (!read_pairs(values, timeline, data_completion, aggregation, &t, &y, &stats, err)) {
+    return false;
+  }
+  if (t.size() <= 1U) {
+    *err = ErrorCode::Div0;
+    return false;
+  }
+  if (stats.needs_sort) {
+    sort_pairs(&t, &y, 0, static_cast<std::int64_t>(t.size()) - 1);
+    stats = StepStats();
+    for (std::size_t i = 1; i < t.size(); ++i) {
+      stats.add(t[i] - t[i - 1]);
+    }
+    if (stats.needs_sort) {
+      *err = ErrorCode::Value;
+      return false;
+    }
+  }
+  Timeline tl;
+  bool irregular = false;
+  if (!detect_step(t, stats, &tl, &irregular, err)) {
+    return false;
+  }
+  std::vector<double> t2;
+  std::vector<double> y2;
+  if (irregular) {
+    std::int64_t missing = 0;
+    if (!build_grid(&t, &y, tl, data_completion, aggregation, &t2, &y2, &missing, err)) {
+      return false;
+    }
+    if (kMaxMissingPercent * static_cast<std::int64_t>(t2.size()) < 100 * missing) {
+      *err = ErrorCode::Num;
+      return false;
+    }
+  } else {
+    t2 = std::move(t);
+    y2 = std::move(y);
+  }
+  if (t2.size() <= 1U) {
+    *err = ErrorCode::Div0;
+    return false;
+  }
+  tl.last = t2.back();
+  out->y = std::move(y2);
+  out->timeline = tl;
+  return true;
+}
+
+bool target_position(const Timeline& tl, double target, double* position, bool* interpolated, ErrorCode* err) {
+  *interpolated = false;
+  if (tl.step == 0.0) {
+    *err = ErrorCode::Value;
+    return false;
+  }
+  if (tl.months >= 1) {
+    double v = div_zero(target - tl.last, tl.nominal);
+    v = std::floor(v);
+    std::int64_t k = static_cast<std::int64_t>(v);
+    Ymd ymd = ymd_of(tl.last);
+    double node = add_months(&ymd, tl.months * k);
+    while (bit_compare(node, target) == 1) {
+      --k;
+      node = add_months(&ymd, -tl.months);
+    }
+    if (node == target) {
+      *position = static_cast<double>(k);
+      return true;
+    }
+    std::int64_t extra = 0;
+    double hi = node;
+    while (bit_compare(hi, target) == -1) {
+      hi = add_months(&ymd, tl.months);
+      --extra;
+    }
+    if (hi == target) {
+      *position = static_cast<double>(k - extra);
+      return true;
+    }
+    if (extra != -1) {
+      k += (-extra - 1);
+      node = add_months(&ymd, -tl.months);
+    }
+    const double span = hi - node;
+    v = target - node;
+    v = div_zero(v, span);
+    *position = v + static_cast<double>(k);
+    *interpolated = true;
+    return true;
+  }
+  const double pos = div_zero(target - tl.last, tl.step);
+  const double r = round_away(pos);
+  if (r == pos) {
+    *position = pos;
+    return true;
+  }
+  double d = std::fabs(r - pos);
+  d = mul_flush(d, 1000.0);
+  if (bit_compare(d, 1.0) == 1) {
+    *position = pos;
+    *interpolated = true;
+    return true;
+  }
+  *position = r;
+  return true;
+}
+
 // Auto-detected seasonality length: 1 means none, otherwise at least 2.
 std::uint32_t detect_seasonality(const std::vector<double>& y) {
   std::size_t n = std::min(y.size(), kMaxDetectLength);
-  if (n >= kFftOnlyLength) {
+  if (n >= kWindowedLength) {
     std::size_t p = 1;
     while ((p << 1U) <= n) {
       p <<= 1U;
     }
-    n = p >> 1U;
+    n = p;
   }
   if (n < 2U) {
     return 1U;

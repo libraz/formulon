@@ -34,9 +34,11 @@ struct HoltWintersFit {
   /// [level, trend, seasonal slots...]; the seasonal slots are a ring.
   std::vector<double> state;
 
-  /// Point forecast `h` steps after the last observation (`h` may be <= 0);
-  /// a result that is negligible next to the initial trend is returned as 0.
+  /// Point forecast `h` steps after the last observation (`h` may be <= 0).
   double forecast(std::int64_t h) const;
+
+  /// Returns 0 for a forecast that is negligible next to the initial trend.
+  double zero_if_negligible(double r) const;
 
   /// Forecast error variance at horizon `h >= 1`.
   double variance(std::int64_t h) const;
