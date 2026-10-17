@@ -15,13 +15,13 @@
 // `centered_and_scaled`, `read_number_triple`, `finite_number_result`)
 // are declared in `stats/stats_helpers.h`.
 
-#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <utility>
 #include <vector>
 
 #include "eval/builtins/stats/stats_helpers.h"
+#include "eval/stats/flushed_ops.h"
 #include "utils/arena.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -41,16 +41,6 @@ Expected<std::vector<double>, ErrorCode> collect_nonempty_direct_stats(const Val
     return ErrorCode::Num;
   }
   return std::move(collected.value());
-}
-
-// Division with Excel's flush: a zero-magnitude divisor, an overflow or an
-// underflowing quotient gives 0.
-double flushed_div(double a, double b) {
-  if (std::fabs(b) < DBL_MIN) {
-    return 0.0;
-  }
-  const double r = a / b;
-  return (std::fabs(r) > DBL_MAX || std::fabs(r) < DBL_MIN) ? 0.0 : r;
 }
 
 }  // namespace
@@ -82,7 +72,8 @@ Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const long long q = exponent / n;
   const long long rem = exponent - q * n;
   const double scaled = std::ldexp(mantissa, static_cast<int>(rem));
-  const double r = std::exp(flush_subnormal(std::log(scaled) * flushed_div(1.0, static_cast<double>(n))));
+  const double r =
+      std::exp(flush_subnormal(std::log(scaled) * stats::flushed::guarded_div(1.0, static_cast<double>(n))));
   return finite_number_result(std::ldexp(r, static_cast<int>(q)));
 }
 
@@ -100,9 +91,10 @@ Value HarMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (x <= 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    inv_sum += flushed_div(1.0, x);
+    inv_sum += stats::flushed::guarded_div(1.0, x);
   }
-  const double r = flushed_div(1.0, flushed_div(inv_sum, static_cast<double>(xs.size())));
+  const double r =
+      stats::flushed::guarded_div(1.0, stats::flushed::guarded_div(inv_sum, static_cast<double>(xs.size())));
   return finite_number_result(r);
 }
 

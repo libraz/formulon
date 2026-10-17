@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 
 #include "utils/subnormal_flush.h"
 
@@ -22,6 +23,19 @@ inline double mul(double a, double b) noexcept {
 
 inline double div(double a, double b) noexcept {
   return flush_subnormal(a / b);
+}
+
+/// Quotient that is 0 when the divisor or the quotient is outside the normal range.
+inline double guarded_div(double a, double b) noexcept {
+  if (std::fabs(b) < std::numeric_limits<double>::min()) {
+    return 0.0;
+  }
+  const double r = a / b;
+  const double magnitude = std::fabs(r);
+  if (magnitude > std::numeric_limits<double>::max() || magnitude < std::numeric_limits<double>::min()) {
+    return 0.0;
+  }
+  return r;
 }
 
 inline std::uint64_t bits_of(double v) noexcept {
