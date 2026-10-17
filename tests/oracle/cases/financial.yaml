@@ -650,3 +650,81 @@ cases:
   - id: db_whole_year_rule_47
     formula: "=DB(100000,10000,4294967296,1,12)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_00
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-1;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_01
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-270.28;2866.71;1712.79;1047.43;363.31;4216.45})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_02
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-8918.6;2604.46;4587.87;2017.73;1024.51})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_03
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-5389.87;3723.73;2428.86;-140.72;-277.8;231.59;416.04;2460.15})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_04
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-6113.64;3719.37;3327.08;964.82;3910.05;2751.34})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_05
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-7655.62;3049.09;1527.8})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_06
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-100;60;60},0.15)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_07
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({100;-50;-60},0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_08
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-1000;300;300;300;300},1e-09)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_09
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({100;-50;-60},-0.99)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_10
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},1e-09)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_11
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},-0.9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_12
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-100;50;50;50;50},0.2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_13
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-50;-50;60;60;60},0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: irr_secant_14
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-5735.12;3912.46;-152.91;148.55},-2)"
+
+  - id: irr_secant_15
+    description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
+    formula: "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},-1)"

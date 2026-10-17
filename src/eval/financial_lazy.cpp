@@ -115,152 +115,153 @@ bool has_opposite_cash_flow_signs(const std::vector<double>& flows) noexcept {
   return signs.has_positive && signs.has_negative;
 }
 
-// Evaluates IRR's NPV function at `rate` for the cash flow sequence.
-// IRR uses period 0..n-1 indexing: the first cash flow is at time 0,
-// undiscounted, and the last is at time n-1.
-double irr_npv(const std::vector<double>& flows, double rate) noexcept {
-  const double base = 1.0 + rate;
-  double total = 0.0;
-  double discount = 1.0;  // (1+rate)^0
-  for (double v : flows) {
-    total += v / discount;
-    discount *= base;
-  }
-  return total;
+// Magnitudes below this are zero to the solver's tests.
+constexpr double kIrrTiny = 0x1p-1026;
+
+bool irr_normal(double x) noexcept {
+  return !(std::fabs(x) < kIrrTiny || std::isinf(x) || std::isnan(x));
 }
 
-// Derivative of irr_npv with respect to rate. With f(r) = sum v[i] /
-// (1+r)^i, f'(r) = sum -i * v[i] / (1+r)^(i+1).
-double irr_dnpv(const std::vector<double>& flows, double rate) noexcept {
-  const double base = 1.0 + rate;
-  double total = 0.0;
-  double discount = base;  // (1+rate)^1, used for i=0: derivative term is 0
-  for (std::size_t i = 0; i < flows.size(); ++i) {
-    if (i > 0) {
-      total += -static_cast<double>(i) * flows[i] / discount;
-    }
-    discount *= base;
-  }
-  return total;
+// Sign test of the solver: NaN, infinities and tiny values count as non-negative.
+bool irr_negative(double x) noexcept {
+  return x < 0.0 && !(std::fabs(x) < kIrrTiny) && !std::isnan(x);
 }
 
-// Runs Newton-Raphson on irr_npv starting from `guess`. Returns NaN on
-// failure (the iterate wanders past rate <= -1, derivative collapses, or
-// the iteration cap is exhausted without converging); otherwise the
-// converged rate. Used as the fast path for IRR; a bracket + bisection
-// fallback (`irr_bracket`) picks up cases where Newton diverges.
-double irr_newton(const std::vector<double>& flows, double guess) noexcept {
-  constexpr int kMaxIter = 100;
-  constexpr double kTolerance = 1.0e-10;
-  // Residual gate on the accepted root. Looser than the step tolerance
-  // because irr_npv's magnitude scales with the cashflow magnitudes; a
-  // legitimate root still leaves a small absolute residual.
-  constexpr double kResidualTolerance = 1.0e-6;
-  double rate = guess;
-  for (int iter = 0; iter < kMaxIter; ++iter) {
-    if (rate <= -1.0) {
-      return std::numeric_limits<double>::quiet_NaN();
+// The residual IRR's secant search drives to zero, as a function of
+// u = g / (-1 - g): `S = S + v / F; F = F * B` with `B = 1 / (1 + u)`, the
+// first flow undiscounted. A division by zero marks the evaluation failed.
+class IrrResidual {
+ public:
+  explicit IrrResidual(const std::vector<double>& flows) noexcept : flows_(flows) {}
+
+  double operator()(double u) noexcept {
+    const double denominator = 1.0 + u;
+    if (denominator == 0.0) {
+      failed_ = true;
+      return 0.0;
     }
-    const double npv = irr_npv(flows, rate);
-    const double dnpv = irr_dnpv(flows, rate);
-    if (dnpv == 0.0 || std::isnan(dnpv) || std::isinf(dnpv)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    const double new_rate = rate - npv / dnpv;
-    if (std::isnan(new_rate) || std::isinf(new_rate)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    if (std::fabs(new_rate - rate) < kTolerance) {
-      // Step convergence alone is not sufficient: on pathological
-      // cashflows the iterate can stall at a point where NPV is far from
-      // zero. Accept only when the residual is also near zero; otherwise
-      // report non-convergence so the bracketed fallback / #NUM! path
-      // takes over.
-      if (std::fabs(irr_npv(flows, new_rate)) < kResidualTolerance) {
-        return new_rate;
+    const double b = 1.0 / denominator;
+    double sum = 0.0;
+    double factor = 1.0;
+    for (const double v : flows_) {
+      if (factor == 0.0) {
+        failed_ = true;
+        return 0.0;
       }
-      return std::numeric_limits<double>::quiet_NaN();
+      sum = sum + v / factor;
+      factor = factor * b;
     }
-    rate = new_rate;
+    return sum;
   }
-  return std::numeric_limits<double>::quiet_NaN();
+
+  bool failed() const noexcept { return failed_; }
+
+ private:
+  const std::vector<double>& flows_;
+  bool failed_ = false;
+};
+
+struct IrrSecant {
+  bool converged;
+  double x;
+  double tolerance;
+};
+
+// True while `quantity` still exceeds `tolerance` in the solver's sense.
+bool irr_exceeds(double quantity, double tolerance) noexcept {
+  const double excess = std::fabs(quantity) - tolerance;
+  return irr_normal(excess) && excess > 0.0;
 }
 
-// Bracketed fallback for IRR when Newton diverges or can't
-// cross the rate = -1 singularity. Samples f(rate) on a log-linear grid
-// spanning the domain rate > -1, looks for an adjacent sign change, and
-// bisects. The final midpoint is optionally polished by the caller's
-// Newton implementation for full double precision.
-template <typename EvalFn, typename PolishFn>
-double bracket_rate_root(EvalFn eval_at_rate, PolishFn polish_midpoint) noexcept {
-  std::vector<double> grid;
-  grid.reserve(40);
-  for (int k = -10; k <= -1; ++k) {
-    grid.push_back(-1.0 + std::pow(10.0, static_cast<double>(k)));
+// Alternating secant steps on `f` from `a`: the second point sits 0.001 away,
+// a zero difference nudges a point by 0.001, and the search stops when both the
+// residual and the step are within 1e-7. After 100 passes a last test at 1e-4.
+IrrSecant irr_secant(IrrResidual& f, double a) noexcept {
+  constexpr IrrSecant kFailed = {false, 0.0, 0.0};
+  double tol = 1.0e-7;
+  double fa = f(a);
+  double b = irr_negative(fa) ? a - 0.001 : 0.001 + a;
+  double fb = f(b);
+  if (f.failed()) {
+    return kFailed;
   }
-  for (double m : {-0.8, -0.5, -0.2, 0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0}) {
-    grid.push_back(m);
-  }
-  for (int k = 1; k <= 6; ++k) {
-    grid.push_back(std::pow(10.0, static_cast<double>(k)));
-  }
-  std::sort(grid.begin(), grid.end());
-  // Scan for an adjacent sign change.
-  double prev_r = grid[0];
-  double prev_f = eval_at_rate(prev_r);
-  if (std::isfinite(prev_f) && std::fabs(prev_f) < 1.0e-10) {
-    return prev_r;
-  }
-  for (std::size_t i = 1; i < grid.size(); ++i) {
-    const double r = grid[i];
-    const double f = eval_at_rate(r);
-    if (!std::isfinite(f)) {
-      prev_r = r;
-      prev_f = f;
-      continue;
-    }
-    if (std::fabs(f) < 1.0e-10) {
-      return r;
-    }
-    if (std::isfinite(prev_f) && ((prev_f < 0.0 && f > 0.0) || (prev_f > 0.0 && f < 0.0))) {
-      double lo = prev_r;
-      double hi = r;
-      double f_lo = prev_f;
-      for (int iter = 0; iter < 200; ++iter) {
-        const double mid = 0.5 * (lo + hi);
-        const double f_mid = eval_at_rate(mid);
-        if (!std::isfinite(f_mid)) {
-          hi = mid;
-          continue;
-        }
-        if (std::fabs(f_mid) < 1.0e-12) {
-          return mid;
-        }
-        if ((f_lo < 0.0 && f_mid < 0.0) || (f_lo > 0.0 && f_mid > 0.0)) {
-          lo = mid;
-          f_lo = f_mid;
-        } else {
-          hi = mid;
-        }
-        if (std::fabs(hi - lo) < 1.0e-14) {
-          return 0.5 * (lo + hi);
-        }
+  double x = fb;
+  for (int pass = 0; pass < 100; ++pass) {
+    double d = x - fa;
+    if (!irr_normal(d)) {
+      const double e = a - b;
+      a = (!irr_normal(e) || irr_negative(e)) ? 0.001 + a : a - 0.001;
+      fa = f(a);
+      d = fb - fa;
+      if (f.failed() || !irr_normal(d)) {
+        return kFailed;
       }
-      const double refined = polish_midpoint(0.5 * (lo + hi));
-      if (std::isfinite(refined)) {
-        return refined;
-      }
-      return 0.5 * (lo + hi);
     }
-    prev_r = r;
-    prev_f = f;
+    a = b - ((b - a) * fb) / d;
+    fa = f(a);
+    if (f.failed()) {
+      return kFailed;
+    }
+    if (!irr_exceeds(fa, tol) && !irr_exceeds(a - b, tol)) {
+      return {true, a, tol};
+    }
+    d = fa - fb;
+    if (!irr_normal(d)) {
+      const double e = b - a;
+      b = (!irr_normal(e) || irr_negative(e)) ? 0.001 + b : b - 0.001;
+      fb = f(b);
+      d = fa - fb;
+      if (f.failed() || !irr_normal(d)) {
+        return kFailed;
+      }
+    }
+    b = a - ((a - b) * fa) / d;
+    fb = f(b);
+    if (f.failed()) {
+      return kFailed;
+    }
+    if (!irr_exceeds(fb, tol) && !irr_exceeds(a - b, tol)) {
+      return {true, b, tol};
+    }
+    x = fb;
   }
-  return std::numeric_limits<double>::quiet_NaN();
+  tol = 1.0e-4;
+  if (irr_exceeds(fb, tol) || irr_exceeds(a - b, tol)) {
+    return kFailed;
+  }
+  return {true, b, tol};
 }
 
-double irr_bracket(const std::vector<double>& flows) noexcept {
-  return bracket_rate_root([&](double rate) noexcept { return irr_npv(flows, rate); },
-                           [&](double guess) noexcept { return irr_newton(flows, guess); });
+// IRR from `guess`: the secant search in u, restarted from 0.1, -1/11 and 2
+// when it fails (the first restart is skipped when the guess is omitted).
+// A start whose 1 + u is not a positive normal number is #VALUE!; running out
+// of restarts is #NUM!.
+Value irr_solve(const std::vector<double>& flows, double guess, bool guess_given) noexcept {
+  constexpr double kRestarts[] = {0.1, -0.09090909090909091, 2.0};
+  std::size_t restart = guess_given ? 0U : 1U;
+  if (-1.0 - guess == 0.0) {
+    return Value::error(ErrorCode::Value);
+  }
+  double u = guess / (-1.0 - guess);
+  IrrResidual residual(flows);
+  while (true) {
+    const double base = 1.0 + u;
+    if (std::isnan(base) || std::isinf(base) || !(base > kIrrTiny)) {
+      return Value::error(ErrorCode::Value);
+    }
+    const IrrSecant found = irr_secant(residual, u);
+    if (residual.failed()) {
+      return Value::error(ErrorCode::Num);
+    }
+    if (found.converged && (found.x - found.tolerance) > -1.0) {
+      return Value::number(1.0 / (found.x + 1.0) - 1.0);
+    }
+    if (restart > 2U) {
+      return Value::error(ErrorCode::Num);
+    }
+    u = kRestarts[restart] / (-1.0 - kRestarts[restart]);
+    ++restart;
+  }
 }
 
 // Closed-form MIRR helper. Positive flows discount at the reinvestment rate and
@@ -299,10 +300,11 @@ double mirr_closed_form(const std::vector<double>& flows, double finance_rate, d
 }
 
 // Reads an optional guess argument into `*guess`; a blank leaves the caller's default so a trailing
-// comma matches an omitted argument. `analysis_toolpak` (XIRR) rejects a boolean guess with #VALUE!.
-// Returns false with the error in `*out_err` on error or non-numeric.
+// comma matches an omitted argument; `*supplied` (when given) is set when a value was read. `analysis_toolpak` (XIRR)
+// rejects a boolean guess with #VALUE!. Returns false with the error in `*out_err` on error or non-numeric.
 bool read_optional_guess(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, bool analysis_toolpak, double* guess, Value* out_err) {
+                         const EvalContext& ctx, bool analysis_toolpak, double* guess, Value* out_err,
+                         bool* supplied = nullptr) {
   const Value guess_v = eval_node(arg, arena, registry, ctx);
   if (guess_v.is_error()) {
     *out_err = guess_v;
@@ -321,6 +323,9 @@ bool read_optional_guess(const parser::AstNode& arg, Arena& arena, const Functio
       return false;
     }
     *guess = coerced.value();
+    if (supplied != nullptr) {
+      *supplied = true;
+    }
   }
   return true;
 }
@@ -348,32 +353,13 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   }
 
   double rate = 0.1;  // default guess per Excel.
+  bool guess_given = false;
   Value guess_err = Value::blank();
-  if (arity == 2U &&
-      !read_optional_guess(call.as_call_arg(1), arena, registry, ctx, /*analysis_toolpak=*/false, &rate, &guess_err)) {
+  if (arity == 2U && !read_optional_guess(call.as_call_arg(1), arena, registry, ctx, /*analysis_toolpak=*/false, &rate,
+                                          &guess_err, &guess_given)) {
     return guess_err;
   }
-  // An explicit out-of-domain guess (the NPV expansion needs 1 + rate > 0) is an input error, so
-  // Excel surfaces #VALUE! rather than the #NUM! the in-loop boundary check uses.
-  if (rate <= -1.0) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  // Try Newton-Raphson first; it converges quickly for the well-posed
-  // schedules (single positive root, guess near the answer). When it
-  // fails — typically because the true root lies near the rate = -1
-  // singularity and Newton walks past it — fall back to a bracket +
-  // bisection scan over the full rate > -1 domain. Mirrors the XIRR
-  // hybrid strategy used below.
-  const double newton_rate = irr_newton(flows, rate);
-  if (std::isfinite(newton_rate)) {
-    return Value::number(newton_rate);
-  }
-  const double bracket_rate = irr_bracket(flows);
-  if (std::isfinite(bracket_rate)) {
-    return Value::number(bracket_rate);
-  }
-  return Value::error(ErrorCode::Num);
+  return irr_solve(flows, rate, guess_given);
 }
 
 Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

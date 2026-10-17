@@ -1726,6 +1726,206 @@
         "abs": 0.0,
         "rel": 0.0
       }
+    },
+    {
+      "id": "irr_secant_00",
+      "formula": "=IRR({-1;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.11814510280868662
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_01",
+      "formula": "=IRR({-270.28;2866.71;1712.79;1047.43;363.31;4216.45})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.204826214680601
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_02",
+      "formula": "=IRR({-8918.6;2604.46;4587.87;2017.73;1024.51})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06720200649861763
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_03",
+      "formula": "=IRR({-5389.87;3723.73;2428.86;-140.72;-277.8;231.59;416.04;2460.15})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.21076373810033822
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_04",
+      "formula": "=IRR({-6113.64;3719.37;3327.08;964.82;3910.05;2751.34})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.41261347973304385
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_05",
+      "formula": "=IRR({-7655.62;3049.09;1527.8})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.3117552895490948
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_06",
+      "formula": "=IRR({-100;60;60},0.15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1306623862918075
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_07",
+      "formula": "=IRR({100;-50;-60},0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06394102980628036
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_08",
+      "formula": "=IRR({-1000;300;300;300;300},1e-09)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0771384729520821
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_09",
+      "formula": "=IRR({100;-50;-60},-0.99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0639410298049854
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_10",
+      "formula": "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},1e-09)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09851049098444498
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_11",
+      "formula": "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},-0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09851049098444498
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_12",
+      "formula": "=IRR({-100;50;50;50;50},0.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3490344565609991
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_13",
+      "formula": "=IRR({-50;-50;60;60;60},0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.27109694242567395
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_14",
+      "formula": "=IRR({-5735.12;3912.46;-152.91;148.55},-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "irr_secant_15",
+      "formula": "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     }
   ]
 }
