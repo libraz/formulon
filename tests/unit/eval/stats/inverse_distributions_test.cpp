@@ -4,6 +4,8 @@
 
 #include "eval/stats/inverse_distributions.h"
 
+#include <cmath>
+
 #include "gtest/gtest.h"
 
 namespace formulon {
@@ -49,6 +51,8 @@ const Pair kBetaInv[] = {
     {0.2451171875, 1.0, 1.0, 0.2451171875},        {0.953125, 1.0, 1.0, 0.953125},
     {0.7763671875, 0.7, 0.9, 0.7377449927402329},  {0.40234375, 0.7, 0.9, 0.3007178044590462},
     {0.6826171875, 150.0, 2.5, 0.989728952601804}, {0.29296875, 150.0, 2.5, 0.9798454311019609},
+    {0.01, 50.0, 0.01, 0.994660365533117},         {0.25, 50.0, 0.01, 0.9999999999999963},
+    {0.99, 0.01, 50.0, 0.005339634466883014},      {0.75, 0.01, 50.0, 3.6637359812630166e-15},
 };
 const Pair kFInv[] = {
     {0.140625, 1.0, 1.0, 0.05042607499071263},       {0.4443359375, 1.0, 1.0, 0.7036009142349744},
@@ -109,6 +113,12 @@ TEST(InverseDistributions, GammaFamilyMatchesExcelValues) {
   for (const Single& q : kChisqInvRt) {
     EXPECT_EQ(chisq_inv_excel(q.p, q.df, true), q.value) << q.p << " " << q.df;
   }
+}
+
+TEST(InverseDistributions, GammaNegativeInitialGuessIsNaN) {
+  EXPECT_TRUE(std::isnan(gamma_inv_excel(0.999, 0.001, 1.0)));
+  EXPECT_TRUE(std::isnan(gamma_inv_excel(0.999999, 0.001, 0.001)));
+  EXPECT_TRUE(std::isnan(gamma_inv_excel(0.999999999999999, 0.001, 1.0)));
 }
 
 TEST(InverseDistributions, BetaFamilyMatchesExcelValues) {

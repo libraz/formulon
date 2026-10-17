@@ -191,6 +191,9 @@ double gamma_inverse_excel(double a, double p, bool upper) noexcept {
   if (x0 == 0.0) {
     return 0.0;
   }
+  if (x0 < 0.0) {
+    return kNaN;
+  }
   double best_err = kDblMax;
   double best_x = x0;
   double x = x0;

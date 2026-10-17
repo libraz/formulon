@@ -54,9 +54,21 @@ inline double neg(double v) noexcept {
   return top16_clear(v) ? v : -v;
 }
 
-/// `x^y` as `exp(log(x) * y)`.
+/// `x^y` as `exp(log(x) * y)`; a negative base takes the sign of an odd integral
+/// exponent and is NaN for any other exponent, and -0 is NaN.
 inline double power(double x, double y) noexcept {
-  return std::exp(mul(std::log(x), y));
+  if (x > 0.0) {
+    return std::exp(mul(std::log(x), y));
+  }
+  if (x == 0.0) {
+    return std::signbit(x) ? std::numeric_limits<double>::quiet_NaN() : 0.0;
+  }
+  if (!(x < 0.0) || y != std::trunc(y)) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const double r = std::exp(mul(std::log(-x), y));
+  const bool odd = std::fabs(std::fmod(y, 2.0)) == 1.0;
+  return odd ? -r : r;
 }
 
 inline void two_sum(double a, double b, double* s, double* e) noexcept {
