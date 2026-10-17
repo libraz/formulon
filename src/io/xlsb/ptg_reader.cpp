@@ -1312,8 +1312,19 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         parser::AstNode* rhs = pop();
         parser::AstNode* lhs = pop();
-        const parser::AstNode* children[2] = {lhs, rhs};
-        parser::AstNode* n = parser::make_union_op(arena, children, 2);
+        // Excel chains a list `(a,b,c)` as `a b UNION c UNION`; an unparenthesised
+        // union on the left is the start of the same list.
+        const bool extends = lhs->kind() == parser::NodeKind::UnionOp && lhs->paren_depth() == 0U;
+        std::vector<const parser::AstNode*> children;
+        if (extends) {
+          for (std::uint32_t i = 0; i < lhs->as_union_arity(); ++i) {
+            children.push_back(&lhs->as_union_child(i));
+          }
+        } else {
+          children.push_back(lhs);
+        }
+        children.push_back(rhs);
+        parser::AstNode* n = parser::make_union_op(arena, children.data(), static_cast<std::uint32_t>(children.size()));
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (union op)", "context=xlsb_ptg_reader");
         }

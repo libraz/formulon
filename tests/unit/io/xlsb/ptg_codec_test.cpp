@@ -232,6 +232,29 @@ TEST(XlsbPtgCodec, NameBodyReferenceOperationsMatchExcelBytes) {
   EXPECT_EQ(EncodeOnSheet1("(Sheet1!$A$1:$A$2,Sheet1!$B$1:$B$2)", PtgRootClass::kReference).rgce, union_want);
   EXPECT_EQ(EncodeOnSheet1("Sheet1!$A$1:$B$2 Sheet1!$B$1:$C$3", PtgRootClass::kReference).rgce, isect_want);
 }
+// A reference list chains binary `PtgUnion`s, `a b UNION c UNION`, and reads
+// back as the one list; a parenthesised inner list stays nested.
+TEST(XlsbPtgCodec, UnionListsRoundTrip) {
+  const char* const formulas[] = {
+      "(A1,A2,A3)",        "((A1,A2),A3)",        "(A1,(A2,A3))",    "(A1:A2,B1:B2,C1:C2,D1)",
+      "SUM((A1,A2))",      "SUM((A1,A2,A3))",     "SUM((A1,A2),A3)", "INDEX((A1:A2,B1:B2),1,1,2)",
+      "AREAS((A1,B1,C1))", "AREAS(((A1,B1),C1))",
+  };
+  for (const char* formula : formulas) {
+    EXPECT_EQ(RoundTrip(formula), formula);
+  }
+  const std::vector<std::uint8_t> a1 = {0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
+  const std::vector<std::uint8_t> b1 = {0x24, 0x00, 0x00, 0x00, 0x00, 0x01, 0xC0};
+  const std::vector<std::uint8_t> c1 = {0x24, 0x00, 0x00, 0x00, 0x00, 0x02, 0xC0};
+  std::vector<std::uint8_t> want = {0x47, 0x0F, 0x00, 0x00, 0x00, 0x17, 0x00};
+  for (const auto* part : {&a1, &b1}) {
+    want.insert(want.end(), part->begin(), part->end());
+  }
+  want.push_back(0x10);
+  want.insert(want.end(), c1.begin(), c1.end());
+  want.insert(want.end(), {0x10, 0x15});
+  EXPECT_EQ(EncodeOnSheet1("(A1,B1,C1)", PtgRootClass::kValue).rgce, want);
+}
 TEST(XlsbPtgCodec, ParenthesesBecomePtgParen) {
   struct Case {
     const char* formula;

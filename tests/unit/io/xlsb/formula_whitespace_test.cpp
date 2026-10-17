@@ -401,6 +401,31 @@ TEST(XlsbFormulaWhitespace, PlacementsRoundTripInOtherContexts) {
   }
 }
 
+// Spaces after the commas of a reference list, whose memory token caches its
+// rectangles in `rgcb`, round-trip with the list.
+TEST(XlsbFormulaWhitespace, UnionListSpacesRoundTrip) {
+  const char* const texts[] = {
+      "(A1, A2, A3)",        "SUM((A1, A2))",  "SUM((A1, A2), A3)", "INDEX((A1:A2, B1:B2), 1, 1, 2)",
+      "AREAS((A1, B1, C1))", "((A1, A2), A3)",
+  };
+  for (const char* text : texts) {
+    Arena enc_arena;
+    parser::Parser p(text, enc_arena);
+    const parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << text;
+    auto encoded = encode_ptgs(*root, {}, SheetRangeTable{}, NameTable{}, PtgRootClass::kValue, std::nullopt,
+                               PtgEvaluation::kDynamicArray, NameShapes(), text);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << text;
+    const EncodedFormula& f = encoded.value();
+    Arena dec_arena;
+    parser::FormulaWhitespace whitespace;
+    auto ast = decode_ptgs(ByteSpan{f.rgce.data(), f.rgce.size()}, ByteSpan{f.rgcb.data(), f.rgcb.size()}, dec_arena,
+                           {}, {}, {}, {}, -1, std::nullopt, &whitespace);
+    ASSERT_TRUE(static_cast<bool>(ast)) << text << ": " << ast.error().message;
+    EXPECT_EQ(parser::format_formula(*ast.value(), &whitespace), text);
+  }
+}
+
 // A volatile formula keeps `PtgAttrSemi` unless a whitespace attr opens it.
 TEST(XlsbFormulaWhitespace, VolatileFlagRidesOnAnOpeningSpaceAttr) {
   EXPECT_EQ(Encode("NOW( )"), (std::vector<std::uint8_t>{0x19, 0x41, 0x04, 0x01, 0x41, 0x4A, 0x00}));
