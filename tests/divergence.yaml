@@ -382,26 +382,7 @@ entries:
   # now returns #VALUE! while omission keeps taking the documented default;
   # both cases are live goldens.
 
-  # Regression family residuals after array-aware oracle capture. Most
-  # LINEST/TREND/LOGEST/GROWTH/FREQUENCY spill cases are live now; these
-  # entries remain for numerically unstable perfect-fit statistics and an
-  # empty-array-literal read-back quirk.
-  - id: linest_univariate_stats_true
-    applies_to: all
-    cause: non-identifiable
-    reason: "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
-    prefer: mac-excel-365
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: logest_univariate_stats_true
-    applies_to: all
-    cause: non-identifiable
-    reason: "Perfect-fit LOGEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 and Formulon both return huge finite F statistics but differ by a numerically unstable factor. Other stats cells are covered by unit tests."
-    prefer: mac-excel-365
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
+  # Regression family residual: an empty-array-literal read-back quirk.
   - id: frequency_empty_bins
     applies_to: all
     cause: excel-no-value
