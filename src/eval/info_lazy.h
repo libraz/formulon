@@ -1,6 +1,6 @@
 //
 // Lazy impls for the context-aware information predicates:
-// ISFORMULA, ISREF, SHEET, SHEETS. Each inspects the un-evaluated AST
+// ISFORMULA, ISREF, SHEET, SHEETS, TYPE. Each inspects the un-evaluated AST
 // of its argument (and, for SHEET / SHEETS, the bound Workbook /
 // current Sheet on the EvalContext) rather than routing through a
 // flattened `Value`. The eager dispatch path would discard the
@@ -55,6 +55,13 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
 /// calls are evaluated because their result depends on runtime input.
 Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
+
+/// `TYPE(value)` — Excel's type code of the argument: 1 number (and
+/// blank), 2 text, 4 boolean, 16 error, 64 array (including a multi-cell
+/// range and a 1x1 array result), 128 function value. An array argument is
+/// classified as a whole rather than evaluated element-wise.
+Value eval_type_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx);
 
 /// `SHEET([value])` — returns the 1-based sheet number.
 ///   * 0 args: the currently-bound sheet's index + 1.

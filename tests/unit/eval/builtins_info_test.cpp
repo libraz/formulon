@@ -25,12 +25,14 @@
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // Invokes a registered function impl directly with a single argument.
 // Used for cases that cannot be expressed in formula syntax (notably the
@@ -763,9 +765,18 @@ TEST(BuiltinsType, ErrorIsSixteenNotPropagated) {
 
 TEST(BuiltinsType, BlankIsOne) {
   // Excel's documented behaviour: TYPE of an empty cell is 1 (Number).
-  const Value v = CallSingle("TYPE", Value::blank());
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=TYPE(A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsType, ArrayIsSixtyFourAsAWhole) {
+  for (const char* src : {"=TYPE({1,2;3,4})", "=TYPE(SEQUENCE(3))", "=TYPE({1})", "=TYPE({1,2}+1)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 64.0) << src;
+  }
 }
 
 // ISEVEN / ISODD follow the Analysis-ToolPak rule: a boolean is #VALUE!.

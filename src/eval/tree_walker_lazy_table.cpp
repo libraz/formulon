@@ -295,6 +295,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"TRIMRANGE", &eval_trimrange_lazy, LazyResultShape::kArray},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy, LazyResultShape::kReduce},
+    {"TYPE", &eval_type_lazy, LazyResultShape::kScalar},
     {"UNIQUE", &eval_unique_lazy, LazyResultShape::kArray},
     {"VALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"VLOOKUP", &eval_vlookup_lazy, LazyResultShape::kArray},

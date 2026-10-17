@@ -1,9 +1,9 @@
 //
 // Implementation of Formulon's info-style built-in functions:
 // ISNUMBER, ISTEXT, ISBLANK, ISLOGICAL, ISERROR, ISERR, ISNA, ISEVEN,
-// ISODD, ISNONTEXT, ERROR.TYPE, TYPE, N, T.
+// ISODD, ISNONTEXT, ERROR.TYPE, N, T.
 //
-// The IS* family, plus ERROR.TYPE and TYPE, must inspect error-typed
+// The IS* family, plus ERROR.TYPE, must inspect error-typed
 // arguments verbatim, so each is registered with
 // `propagate_errors = false` to opt out of the dispatcher's default
 // left-most-error short-circuit. `N` and `T` use the default (errors
@@ -326,44 +326,6 @@ Value Info(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(result));
 }
 
-// --- TYPE(value) --------------------------------------------------------
-//
-// Maps the argument's runtime kind to Excel's documented type code:
-//
-//   Number  -> 1
-//   Text    -> 2
-//   Bool    -> 4
-//   Error   -> 16
-//   Array   -> 64
-//   Lambda  -> 128 (a LAMBDA, or a built-in named as a value)
-//   Blank   -> 1 (Excel treats an empty cell as Number for TYPE purposes)
-//
-// Registered with `propagate_errors = false` so `TYPE(#DIV/0!) = 16`
-// rather than short-circuiting.
-Value Type(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  switch (args[0].kind()) {
-    case ValueKind::Number:
-    case ValueKind::Blank:
-      return Value::number(1.0);
-    case ValueKind::Text:
-      return Value::number(2.0);
-    case ValueKind::Bool:
-      return Value::number(4.0);
-    case ValueKind::Error:
-      return Value::number(16.0);
-    case ValueKind::Array:
-      return Value::number(64.0);
-    case ValueKind::Lambda:
-      return Value::number(128.0);
-    case ValueKind::Ref:
-      // Ref is not a user-visible scalar kind in Excel; fall through to
-      // `#VALUE!` so an unexpected shape surfaces rather than silently
-      // returning a misleading type code.
-      return Value::error(ErrorCode::Value);
-  }
-  return Value::error(ErrorCode::Value);
-}
-
 }  // namespace
 
 void register_info_builtins(FunctionRegistry& registry) {
@@ -386,7 +348,6 @@ void register_info_builtins(FunctionRegistry& registry) {
       builtins_detail::analysis_toolpak({"ISODD", 1u, 1u, &IsOdd}),
       {"ISNONTEXT", 1u, 1u, &IsNonText, false},
       {"ERROR.TYPE", 1u, 1u, &ErrorType, false},
-      {"TYPE", 1u, 1u, &Type, false},
       {"INFO", 1u, 1u, &Info},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));

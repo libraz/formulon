@@ -146,10 +146,10 @@ TEST(RegexTest, UnicodeWhitespaceIdeographic) {
   EXPECT_TRUE(v.as_boolean());
 }
 
-TEST(RegexTest, EmptyPatternIsValueError) {
+TEST(RegexTest, EmptyPatternMatchesEverywhere) {
   const Value v = EvalSource("=REGEXTEST(\"hello\", \"\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
 }
 
 TEST(RegexTest, EmptySubjectFalse) {
@@ -349,10 +349,25 @@ TEST(RegexExtract, NegativeModeIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(RegexExtract, EmptyPatternIsValueError) {
+TEST(RegexExtract, EmptyPatternExtractsEmptyText) {
   const Value v = EvalSource("=REGEXEXTRACT(\"abc\", \"\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
+  const Value all = EvalSource("=REGEXEXTRACT(\"abc\", \"\", 1)");
+  ASSERT_TRUE(all.is_array());
+  EXPECT_EQ(all.as_array_cols(), 4U);
+}
+
+TEST(RegexExtract, ModesOneAndTwoAlwaysReturnAnArray) {
+  for (const char* src : {"=TYPE(REGEXEXTRACT(\"abc\", \"b\", 1))", "=TYPE(REGEXEXTRACT(\"abc\", \"(b)\", 2))",
+                          "=TYPE(REGEXEXTRACT(\"abc\", \"(x*)\", 2))"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 64.0) << src;
+  }
+  const Value scalar = EvalSource("=TYPE(REGEXEXTRACT(\"abc\", \"b\", 0))");
+  ASSERT_TRUE(scalar.is_number());
+  EXPECT_EQ(scalar.as_number(), 2.0);
 }
 
 TEST(RegexExtract, InvalidPatternIsValueError) {
@@ -431,10 +446,10 @@ TEST(RegexReplace, EmptyReplacementDeletesMatches) {
   EXPECT_EQ(v.as_text(), "abc  def ");
 }
 
-TEST(RegexReplace, EmptyPatternIsValueError) {
-  const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"\", \"#\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+TEST(RegexReplace, EmptyPatternInsertsAtEveryPosition) {
+  const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"\", \"-\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "-a-b-c-");
 }
 
 TEST(RegexReplace, InvalidPatternIsValueError) {
@@ -727,77 +742,126 @@ TEST(RegexTest, ArrayBroadcastCompilesThePatternOncePerCall) {
 // ---------------------------------------------------------------------------
 // REGEXREPLACE — replacement dialect
 // ---------------------------------------------------------------------------
-//
-// Only `$n`, `${name}` and `$$` are special. Every other byte reaches the
-// output verbatim, and a `$` that begins none of those forms is a literal
-// dollar rather than an error.
 
-TEST(RegexReplace, TrailingDollarIsLiteral) {
-  const Value v = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"USD$\")");
-  ASSERT_TRUE(v.is_text()) << "a trailing dollar must not be a malformed reference";
-  EXPECT_EQ(v.as_text(), "USD$");
+// Evaluates REGEXREPLACE("abc", pattern, replacement) and expects text.
+std::string Replace(const std::string& pattern, const std::string& replacement) {
+  const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"" + pattern + "\", \"" + replacement + "\")");
+  EXPECT_TRUE(v.is_text()) << pattern << " / " << replacement << " " << v.debug_to_string();
+  return v.is_text() ? std::string(v.as_text()) : std::string("<not text>");
 }
 
-TEST(RegexReplace, BackslashesAreVerbatim) {
-  const Value v = EvalSource("=REGEXREPLACE(\"p\", \"p\", \"C:\\Users\\name\")");
+bool ReplaceIsValueError(const std::string& pattern, const std::string& replacement) {
+  const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"" + pattern + "\", \"" + replacement + "\")");
+  return v.is_error() && v.as_error() == ErrorCode::Value;
+}
+
+TEST(RegexReplace, DollarReferences) {
+  EXPECT_EQ(Replace("(b)", "$1x"), "abxc");
+  EXPECT_EQ(Replace("(b)", "${1}x"), "abxc");
+  EXPECT_EQ(Replace("(b)", "$01"), "abc");
+  EXPECT_EQ(Replace("(b)", "$0$0"), "abbc");
+  EXPECT_EQ(Replace("b", "[$&]"), "a[b]c");
+  EXPECT_EQ(Replace("b", "$`$'"), "aacc");
+  EXPECT_EQ(Replace("b", "$_"), "aabcc");
+  EXPECT_EQ(Replace("b", "$$"), "a$c");
+  EXPECT_EQ(Replace("(?<g>b)", "$g"), "abc");
+  EXPECT_EQ(Replace("(?<g>b)", "${g}"), "abc");
+  EXPECT_EQ(Replace("(?<g>b)", "$<g>"), "abc");
+}
+
+TEST(RegexReplace, DollarReferenceIsTwoDigitsGreedy) {
+  const Value eleven = EvalSource("=REGEXREPLACE(\"abcdefghijkl\", \"(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)\", \"$11\")");
+  ASSERT_TRUE(eleven.is_text());
+  EXPECT_EQ(eleven.as_text(), "kl");
+  EXPECT_TRUE(ReplaceIsValueError("(b)", "$11"));
+  EXPECT_TRUE(ReplaceIsValueError("(b)", "$2"));
+  EXPECT_TRUE(ReplaceIsValueError("(b)", "${2}"));
+}
+
+TEST(RegexReplace, MalformedDollarIsValueError) {
+  for (const char* rep : {"$", "$x", "x$", "$+", "$\\", "${}", "${a-b}", "${g"}) {
+    EXPECT_TRUE(ReplaceIsValueError("b", rep)) << rep;
+  }
+  EXPECT_TRUE(ReplaceIsValueError("(?<g>b)", "$gx"));
+  EXPECT_TRUE(ReplaceIsValueError("(?<g>b)", "$h"));
+}
+
+TEST(RegexReplace, UnmatchedGroupExpandsToNothing) {
+  EXPECT_EQ(Replace("(b)|(x)", "[$2]"), "a[]c");
+  EXPECT_EQ(Replace("(a)|(b)", "[$1$2]"), "[a][b]c");
+}
+
+TEST(RegexReplace, BackslashGroupReferences) {
+  EXPECT_EQ(Replace("(b)", "\\1\\1"), "abbc");
+  EXPECT_EQ(Replace("(b)", "\\g<1>"), "abc");
+  EXPECT_EQ(Replace("(?<g>b)", "\\g<g>"), "abc");
+  const Value ten = EvalSource("=REGEXREPLACE(\"abcdefghijkl\", \"(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)\", \"\\10\")");
+  ASSERT_TRUE(ten.is_text());
+  EXPECT_EQ(ten.as_text(), "jl");
+  EXPECT_TRUE(ReplaceIsValueError("(b)", "\\2"));
+  EXPECT_TRUE(ReplaceIsValueError("(b)", "\\10"));
+}
+
+TEST(RegexReplace, BackslashCharacters) {
+  EXPECT_EQ(Replace("b", "\\t"), "a\tc");
+  EXPECT_EQ(Replace("b", "\\n"), "a\nc");
+  EXPECT_EQ(Replace("b", "\\r"), "a\rc");
+  EXPECT_EQ(Replace("b", "\\e"),
+            "a\x1B"
+            "c");
+  EXPECT_EQ(Replace("b", "\\a"),
+            "a\x07"
+            "c");
+  EXPECT_EQ(Replace("b", "\\f"), "a\fc");
+  EXPECT_EQ(Replace("b", "\\v"), "a\vc");
+  EXPECT_EQ(Replace("b", "\\b"), "a\bc");
+  EXPECT_EQ(Replace("b", "\\x41"), "aAc");
+  EXPECT_EQ(Replace("b", "\\x{41}"), "aAc");
+  EXPECT_EQ(Replace("b", "\\101"), "aAc");
+  EXPECT_EQ(Replace("b", "\\\\"), "a\\c");
+  EXPECT_EQ(Replace("b", "\\$1"), "a$1c");
+  EXPECT_EQ(Replace("b", "\\&"), "a&c");
+  EXPECT_EQ(Replace("b", "\\\\n"), "a\\nc");
+}
+
+TEST(RegexReplace, NulEndsTheResult) {
+  EXPECT_EQ(Replace("b", "\\00"), "a");
+}
+
+TEST(RegexReplace, CaseForcingAndQuoting) {
+  EXPECT_EQ(Replace("(b)", "\\u\\1"), "aBc");
+  EXPECT_EQ(Replace("(b)", "\\U\\1\\E"), "aBc");
+  EXPECT_EQ(Replace("(b)", "\\Uxy\\Ez"), "aXYzc");
+  EXPECT_EQ(Replace("(b)", "\\Q\\1\\E"), "a\\1c");
+  EXPECT_EQ(Replace("b", "\\u00e9"), "a00e9c");
+}
+
+TEST(RegexReplace, InvalidBackslashIsValueError) {
+  for (const char* rep : {"\\0", "\\g1", "\\g{1}", "\\k<g>", "\\q", "x\\"}) {
+    EXPECT_TRUE(ReplaceIsValueError("(?<g>b)", rep)) << rep;
+  }
+}
+
+TEST(RegexReplace, ReplacementErrorsSurfaceOnlyWhenAMatchIsExpanded) {
+  const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"x\", \"$1\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "C:\\Users\\name");
+  EXPECT_EQ(v.as_text(), "abc");
 }
 
-TEST(RegexReplace, CaseForcingEscapesAreNotInterpreted) {
-  // `\U` / `\l` / `\Q...\E` are PCRE2 extended-dialect directives that Excel
-  // does not have; they must survive as text.
-  const Value upper = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"\\Uabc\")");
-  ASSERT_TRUE(upper.is_text());
-  EXPECT_EQ(upper.as_text(), "\\Uabc");
-
-  const Value quoted = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"\\Qa$b\\E\")");
-  ASSERT_TRUE(quoted.is_text());
-  EXPECT_EQ(quoted.as_text(), "\\Qa$b\\E");
-}
-
-TEST(RegexReplace, DollarBeforeNonReferenceIsLiteral) {
-  const Value spaced = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"$ 5\")");
-  ASSERT_TRUE(spaced.is_text());
-  EXPECT_EQ(spaced.as_text(), "$ 5");
-
-  const Value dashed = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"$-\")");
-  ASSERT_TRUE(dashed.is_text());
-  EXPECT_EQ(dashed.as_text(), "$-");
-}
-
-TEST(RegexReplace, UnbracedNameIsLiteral) {
-  // Excel spells a named reference `${name}`; the unbraced form PCRE2 would
-  // accept is not part of the dialect.
-  const Value v = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"$name\")");
+TEST(RegexReplace, BeforeAndAfterTextArePerOccurrence) {
+  const Value v = EvalSource("=REGEXREPLACE(\"abcb\", \"b\", \"[$`|$']\", 2)");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "$name");
-}
-
-TEST(RegexReplace, MalformedBraceIsLiteral) {
-  const Value unclosed = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"${abc\")");
-  ASSERT_TRUE(unclosed.is_text());
-  EXPECT_EQ(unclosed.as_text(), "${abc");
-
-  const Value empty_name = EvalSource("=REGEXREPLACE(\"x\", \"x\", \"${}\")");
-  ASSERT_TRUE(empty_name.is_text());
-  EXPECT_EQ(empty_name.as_text(), "${}");
-}
-
-TEST(RegexReplace, DollarZeroIsWholeMatch) {
-  const Value v = EvalSource("=REGEXREPLACE(\"abc\", \"b\", \"[$0]\")");
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "a[b]c");
+  EXPECT_EQ(v.as_text(), "abc[abc|]");
 }
 
 TEST(RegexReplace, NthOccurrenceUsesTheSameDialect) {
-  const Value v = EvalSource("=REGEXREPLACE(\"aa\", \"a\", \"$\", 2)");
+  const Value v = EvalSource("=REGEXREPLACE(\"aa\", \"a\", \"$$\", 2)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "a$");
 }
 
 TEST(RegexReplace, BroadcastUsesTheSameDialect) {
-  const Value v = EvalSource("=REGEXREPLACE({\"x\";\"y\"}, \"[xy]\", \"C:\\d$\")");
+  const Value v = EvalSource("=REGEXREPLACE({\"x\";\"y\"}, \"[xy]\", \"C:\\\\d$$\")");
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 2U);
   ASSERT_TRUE(v.as_array_cells()[0].is_text());

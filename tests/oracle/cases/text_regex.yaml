@@ -82,3 +82,195 @@ cases:
   - id: regexreplace_negative_occurrence
     description: "Negative occurrence -> #VALUE!"
     formula: '=REGEXREPLACE("abc", "a", "x", -1)'
+
+  - id: regextest_empty_pattern
+    description: "Empty pattern is valid and matches"
+    formula: '=REGEXTEST("abc","")'
+
+  - id: regexextract_empty_pattern
+    description: "Empty pattern extracts empty text"
+    formula: '=REGEXEXTRACT("abc","")'
+
+  - id: regexextract_empty_pattern_type
+    description: "Empty-pattern extract is text"
+    formula: '=TYPE(REGEXEXTRACT("abc",""))'
+
+  - id: regexextract_empty_pattern_all_columns
+    description: "Mode 1 yields one empty match per position"
+    formula: '=COLUMNS(REGEXEXTRACT("abc","",1))'
+
+  - id: regexreplace_empty_pattern
+    description: "Empty pattern inserts at every position"
+    formula: '=REGEXREPLACE("abc","","-")'
+
+  - id: regexextract_mode1_single_is_array
+    description: "Mode 1 with one match is still an array"
+    formula: '=TYPE(REGEXEXTRACT("abc","b",1))'
+
+  - id: regexextract_mode2_single_is_array
+    description: "Mode 2 with one group is still an array"
+    formula: '=TYPE(REGEXEXTRACT("abc","(b)",2))'
+
+  - id: regexextract_mode0_is_text
+    description: "Mode 0 stays scalar text"
+    formula: '=TYPE(REGEXEXTRACT("abc","b",0))'
+
+  - id: type_of_array_literal
+    description: "TYPE of an array is 64"
+    formula: '=TYPE({1,2;3,4})'
+
+  - id: type_of_sequence
+    description: "TYPE of a spilled array is 64"
+    formula: '=TYPE(SEQUENCE(3))'
+
+  - id: regexreplace_dollar_whole_match
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","$&")'
+
+  - id: regexreplace_dollar_before_after
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","$`$''")'
+
+  - id: regexreplace_dollar_subject
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","$_")'
+
+  - id: regexreplace_dollar_bare
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","$")'
+
+  - id: regexreplace_dollar_unknown
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","$x")'
+
+  - id: regexreplace_dollar_trailing
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","x$")'
+
+  - id: regexreplace_dollar_plus
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","$+")'
+
+  - id: regexreplace_dollar_zero_pair
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","$0$0")'
+
+  - id: regexreplace_backslash_tab_code
+    description: "Replacement grammar"
+    formula: '=CODE(MID(REGEXREPLACE("abc","b","\t"),2,1))'
+
+  - id: regexreplace_backslash_hex
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","\x41")'
+
+  - id: regexreplace_backslash_hex_braced
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","\x{41}")'
+
+  - id: regexreplace_backslash_octal
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","\101")'
+
+  - id: regexreplace_backslash_unknown
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","\q")'
+
+  - id: regexreplace_backslash_trailing
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","x\")'
+
+  - id: regexreplace_backslash_zero
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","\0")'
+
+  - id: regexreplace_backslash_escaped_backslash
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","\\n")'
+
+  - id: regexreplace_backslash_escaped_dollar
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","b","\$1")'
+
+  - id: regexreplace_group_ref_ok
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","$1x")'
+
+  - id: regexreplace_group_braced
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","${1}x")'
+
+  - id: regexreplace_group_two_digit_missing
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","$11")'
+
+  - id: regexreplace_group_missing
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","$2")'
+
+  - id: regexreplace_group_unmatched_empty
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)|(x)","[$2]")'
+
+  - id: regexreplace_group_named_unbraced
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(?<g>b)","$g")'
+
+  - id: regexreplace_group_named_longer
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(?<g>b)","$gx")'
+
+  - id: regexreplace_group_named_angle
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(?<g>b)","$<g>")'
+
+  - id: regexreplace_group_backslash_ref
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","\1\1")'
+
+  - id: regexreplace_group_backslash_g
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","\g<1>")'
+
+  - id: regexreplace_group_backslash_g_name
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(?<g>b)","\g<g>")'
+
+  - id: regexreplace_group_backslash_g_bare
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","\g1")'
+
+  - id: regexreplace_group_backslash_k
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(?<g>b)","\k<g>")'
+
+  - id: regexreplace_group_backslash_two_digit_missing
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","\10")'
+
+  - id: regexreplace_upper_next
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","\u\1")'
+
+  - id: regexreplace_upper_run
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","\U\1\E")'
+
+  - id: regexreplace_quote_span
+    description: "Replacement grammar"
+    formula: '=REGEXREPLACE("abc","(b)","\Q\1\E")'
+
+  - id: regexreplace_before_after_nth
+    description: "Before/after text per occurrence"
+    formula: '=REGEXREPLACE("abcb","b","[$`|$'']",2)'
+
+  - id: regexreplace_two_digit_group_ok
+    description: "Greedy two-digit group with eleven groups"
+    formula: '=REGEXREPLACE("abcdefghijkl","(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)","$11")'
+
+  - id: regexreplace_backslash_ten_ok
+    description: "Backslash two-digit group with eleven groups"
+    formula: '=REGEXREPLACE("abcdefghijkl","(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)","\10")'
+
+  - id: regexreplace_unicode_u_literal
+    description: "A u escape upper-cases the next character, not a Unicode escape"
+    formula: '=REGEXREPLACE("aéb","é","\u00e9")'

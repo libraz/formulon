@@ -279,6 +279,32 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   return Value::boolean(false);
 }
 
+Value eval_type_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value v = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  switch (v.kind()) {
+    case ValueKind::Number:
+    case ValueKind::Blank:
+      return Value::number(1.0);
+    case ValueKind::Text:
+      return Value::number(2.0);
+    case ValueKind::Bool:
+      return Value::number(4.0);
+    case ValueKind::Error:
+      return Value::number(16.0);
+    case ValueKind::Array:
+      return Value::number(64.0);
+    case ValueKind::Lambda:
+      return Value::number(128.0);
+    case ValueKind::Ref:
+      break;
+  }
+  return Value::error(ErrorCode::Value);
+}
+
 Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();

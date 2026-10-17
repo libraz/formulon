@@ -29,6 +29,7 @@
 
 #include "eval/regex_lazy.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -49,6 +50,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/resource_budget.h"
+#include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -179,7 +181,7 @@ class CompiledPattern {
   CompiledPattern(std::string_view pattern, bool case_insensitive) {
     // Pattern guards before pcre2_compile so pathological inputs cannot
     // burn time inside the regex compiler.
-    if (pattern.empty() || pattern.size() > kMaxPatternBytes) {
+    if (pattern.size() > kMaxPatternBytes) {
       return;
     }
 
@@ -190,8 +192,8 @@ class CompiledPattern {
 
     int err_code = 0;
     PCRE2_SIZE err_offset = 0;
-    code_ = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.data()), static_cast<PCRE2_SIZE>(pattern.size()),
-                          compile_flags, &err_code, &err_offset, nullptr);
+    code_ = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.empty() ? "" : pattern.data()),
+                          static_cast<PCRE2_SIZE>(pattern.size()), compile_flags, &err_code, &err_offset, nullptr);
     g_compile_count.fetch_add(1U, std::memory_order_relaxed);
     if (code_ == nullptr) {
       return;
@@ -246,17 +248,72 @@ class CompiledPattern {
   bool ok_ = false;
 };
 
+// How a `scan_matches` walk ended.
+enum class ScanEnd : std::uint8_t {
+  kExhausted,   // no further match
+  kStopped,     // the visitor declined to continue
+  kMatchLimit,  // the match limit was hit
+  kError,       // any other PCRE2 error (depth / heap limit, bad offset)
+};
+
+// Walks the matches of `program` over `subject` left to right, handing each
+// one's ovector to `on_match`; a visitor returning false stops the walk. With
+// `find_all` false the walk ends after the first match.
+template <typename OnMatch>
+ScanEnd scan_matches(const CompiledPattern& program, std::string_view subject, bool find_all, OnMatch&& on_match) {
+  PCRE2_SIZE start_offset = 0;
+  while (start_offset <= static_cast<PCRE2_SIZE>(subject.size())) {
+    const int rc =
+        pcre2_match(program.code(), reinterpret_cast<PCRE2_SPTR>(subject.data()),
+                    static_cast<PCRE2_SIZE>(subject.size()), start_offset, 0, program.match_data(), program.context());
+    if (rc == PCRE2_ERROR_NOMATCH) {
+      break;
+    }
+    if (rc == PCRE2_ERROR_MATCHLIMIT) {
+      return ScanEnd::kMatchLimit;
+    }
+    if (rc < 0) {
+      return ScanEnd::kError;
+    }
+    const PCRE2_SIZE* ovec = pcre2_get_ovector_pointer(program.match_data());
+    if (!on_match(ovec)) {
+      return ScanEnd::kStopped;
+    }
+    if (!find_all) {
+      break;
+    }
+
+    // Advance past the match. Zero-length matches at `start_offset` would
+    // loop forever; bump by one whole UTF-8 codepoint rather than one byte.
+    // Under PCRE2_UTF, `pcre2_match` rejects a `start_offset` that lands
+    // inside a multi-byte sequence with PCRE2_ERROR_BADUTFOFFSET, so a raw
+    // one-byte bump is only safe before an ASCII byte.
+    const std::size_t new_start = static_cast<std::size_t>(ovec[1]);
+    if (new_start <= start_offset) {
+      if (start_offset >= subject.size()) {
+        break;
+      }
+      std::size_t step = 0;
+      decode_utf8_step(subject, start_offset, &step);
+      start_offset = start_offset + static_cast<PCRE2_SIZE>(step == 0 ? 1 : step);
+    } else {
+      start_offset = new_start;
+    }
+  }
+  return ScanEnd::kExhausted;
+}
+
 // Single shared match pipeline.
 //
 // `subject` must remain valid for the duration of the call. `find_all`
 // decides whether the kernel iterates after the first match (REGEXTEST and
-// the occurrence-N variant of REGEXREPLACE only need the first hit;
-// everything else wants every hit).
+// REGEXEXTRACT modes 0 / 2 only need the first hit; everything else wants
+// every hit).
 //
 // `on_match_limit_returns_no_match`: when true (REGEXTEST), a hit on
 // depth_limit is converted to "no match" (kernel still returns ok=true with
 // matches empty). When false (the extract / replace pair), it surfaces as
-// #CALC!. Exhausting the match budget is #VALUE! either way.
+// #CALC!. Exhausting the match limit is #VALUE! either way.
 KernelResult regex_kernel(const CompiledPattern& program, std::string_view subject, bool find_all,
                           bool on_match_limit_returns_no_match) {
   KernelResult result;
@@ -275,47 +332,13 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
   // plus one per capture group so a many-group pattern over a long subject
   // cannot accumulate without bound.
   ResourceBudget match_slots(kMaxRegexMatchSlots);
+  bool budget_exhausted = false;
 
-  PCRE2_SIZE start_offset = 0;
-  while (start_offset <= static_cast<PCRE2_SIZE>(subject.size())) {
-    const int rc =
-        pcre2_match(program.code(), reinterpret_cast<PCRE2_SPTR>(subject.data()),
-                    static_cast<PCRE2_SIZE>(subject.size()), start_offset, 0, program.match_data(), program.context());
-    if (rc == PCRE2_ERROR_NOMATCH) {
-      break;
+  const ScanEnd end = scan_matches(program, subject, find_all, [&](const PCRE2_SIZE* ovec) {
+    if (!match_slots.consume(static_cast<std::uint64_t>(capture_count) + 1U)) {
+      budget_exhausted = true;
+      return false;
     }
-    if (rc >= 0 && !match_slots.consume(static_cast<std::uint64_t>(capture_count) + 1U)) {
-      // Same surface as a PCRE2 resource error: the scan cannot complete,
-      // so REGEXTEST degrades to "no match" and the extract / replace pair
-      // reports #CALC!.
-      if (on_match_limit_returns_no_match) {
-        break;
-      }
-      result.ok = false;
-      result.err = Value::error(ErrorCode::Calc);
-      return result;
-    }
-    if (rc == PCRE2_ERROR_MATCHLIMIT) {
-      result.ok = false;
-      result.err = Value::error(ErrorCode::Value);
-      return result;
-    }
-    if (rc < 0) {
-      // Resource exhaustion: PCRE2_ERROR_DEPTHLIMIT / HEAPLIMIT. Treat as a graceful no-match for REGEXTEST (the
-      // predicate semantics make a soft FALSE more useful than an
-      // error), and as #CALC! for the extract / replace pair.
-      if (on_match_limit_returns_no_match) {
-        break;
-      }
-      result.ok = false;
-      result.err = Value::error(ErrorCode::Calc);
-      return result;
-    }
-
-    // rc > 0: rc-1 capture groups participated in addition to the whole
-    // match. PCRE2's ovector layout: pairs of (start, end) for groups
-    // 0..capture_count.
-    const PCRE2_SIZE* ovec = pcre2_get_ovector_pointer(program.match_data());
     MatchSpan ms;
     ms.whole_start = static_cast<std::size_t>(ovec[0]);
     ms.whole_end = static_cast<std::size_t>(ovec[1]);
@@ -333,30 +356,22 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
       }
     }
     result.matches.push_back(std::move(ms));
+    return true;
+  });
 
-    if (!find_all) {
-      break;
-    }
-
-    // Advance past the match. Zero-length matches at `start_offset` would
-    // loop forever; bump by one whole UTF-8 codepoint rather than one byte.
-    // Under PCRE2_UTF, `pcre2_match` rejects a `start_offset` that lands
-    // inside a multi-byte sequence with PCRE2_ERROR_BADUTFOFFSET (a
-    // negative rc, mapped to #CALC! above) — a raw one-byte bump is only
-    // safe before an ASCII byte.
-    const std::size_t new_start = static_cast<std::size_t>(ovec[1]);
-    if (new_start <= start_offset) {
-      if (start_offset >= subject.size()) {
-        break;
-      }
-      std::size_t step = 0;
-      decode_utf8_step(subject, start_offset, &step);
-      start_offset = start_offset + static_cast<PCRE2_SIZE>(step == 0 ? 1 : step);
-    } else {
-      start_offset = new_start;
+  if (end == ScanEnd::kMatchLimit) {
+    result.ok = false;
+    result.err = Value::error(ErrorCode::Value);
+    return result;
+  }
+  if (budget_exhausted || end == ScanEnd::kError) {
+    // Resource exhaustion (match-slot budget, depth / heap limit): REGEXTEST
+    // degrades to "no match", the extract / replace pair reports #CALC!.
+    if (!on_match_limit_returns_no_match) {
+      result.ok = false;
+      result.err = Value::error(ErrorCode::Calc);
     }
   }
-
   return result;
 }
 
@@ -442,9 +457,8 @@ bool resolve_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
   return true;
 }
 
-// Resolves the pattern argument (scalar text, errors propagate). Empty
-// pattern is enforced inside `regex_kernel` so callers don't have to
-// duplicate the early guard.
+// Resolves the pattern argument (scalar text, errors propagate). An empty
+// pattern is valid and matches at every position.
 bool resolve_pattern(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, std::string& out, Value& out_err) {
   const Value v = eval_node(node, arena, registry, ctx);
@@ -535,164 +549,494 @@ Value extract_dispatch(const KernelResult& kr, std::string_view subject, long lo
 
 // --- REGEXREPLACE substitution -------------------------------------------
 //
-// pcre2_substitute does the heavy lifting. The dialect Excel accepts in a
-// replacement string is exactly three forms:
+// The replacement string is parsed once per call into a token list and
+// expanded per match. Two layers:
 //
-//   `$n` / `${name}`   insert capture group n / the named group
-//   `$$`               a literal `$`
+//   `$` layer       `$n` (one or two digits, greedy), `${n}`, `${name}`,
+//                   `$name`, `$<name>`, `$&` (whole match), `` $` `` / `$'` (text before /
+//                   after the match), `$_` (whole subject), `$$`.
+//   backslash layer `\1`..`\99` and `\g<n>` / `\g<name>` (group references),
+//                   `\n \t \r \e \a \f \v \b`, `\xHH`, `\x{H..}`, octal `\0HH`
+//                   / `\ooo`, `\\ \$ \&`, `\u` (upper-case the next
+//                   character), `\U`..`\E` (upper-case a run), `\Q`..`\E`
+//                   (literal span).
 //
-// Every other byte, backslashes included, appears in the output verbatim.
-//
-// That is pcre2_substitute's *base* behaviour, so no option selects it.
-// `PCRE2_SUBSTITUTE_EXTENDED` is deliberately NOT passed: it turns backslash
-// into an escape character (`\U` / `\L` / `\u` / `\l` case forcing, `\Q...\E`
-// literal spans, `\n` / `\t` / `\x`) and adds the `${name:-default}` and
-// `${name:+if:else}` conditional forms. None of those are Excel grammar, and
-// with the option on a Windows path replacement `C:\Users\name` is silently
-// rewritten to `C:SERS\nAME`.
-//
-// The one place the base behaviour is stricter than Excel is a `$` that
-// starts no reference at all: a trailing `$`, `$ `, or `$-` each yield
-// PCRE2_ERROR_BADREPLACEMENT, and an unbraced `$name` is read as a named
-// reference that then fails to resolve. `normalize_replacement` folds those
-// back to literal dollars before the string reaches PCRE2, so a legitimate
-// Excel replacement can never surface `#VALUE!`. A `$n` that names a group
-// the pattern does not have still errors — that is a malformed reference,
-// not literal text.
-//
-// We add PCRE2_SUBSTITUTE_GLOBAL only when occurrence == 0.
+// Anything else (a bare `$`, `$+`, `\0`, `\g1`, `\k<name>`, an
+// unknown escape, a trailing `\`) is `#VALUE!`, as is a reference to a group
+// the pattern lacks. Errors surface when a match is expanded, so a pattern
+// that matches nothing leaves the subject unchanged. A group that did not
+// participate expands to nothing.
 
-// True for the bytes pcre2_substitute accepts inside a group name.
-bool is_ascii_word_byte(char c) noexcept {
+enum class ReplTokenKind : std::uint8_t {
+  kLiteral,
+  kGroup,    // `number`
+  kNamed,    // `text` is the group name
+  kBefore,   // text before the match
+  kAfter,    // text after the match
+  kSubject,  // the whole subject
+  kUpperNext,
+  kUpperRun,
+  kCaseEnd,
+  kInvalid,
+};
+
+struct ReplToken {
+  ReplTokenKind kind = ReplTokenKind::kLiteral;
+  std::uint32_t number = 0;
+  std::string text;
+};
+
+bool is_name_byte(char c) noexcept {
   return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
 }
 
-// Longest group name pcre2_substitute will read; one byte more and the
-// reference is rejected outright rather than resolved.
-constexpr std::size_t kMaxGroupNameBytes = 32U;
-
-// Rewrites an Excel replacement string into the equivalent pcre2_substitute
-// replacement: every `$` that does not begin `$<digits>`, `${name}` or `$$`
-// is doubled, which is how the base dialect spells a literal dollar. The
-// three documented forms pass through untouched, so `$$$1` stays `$$$1`.
-std::string normalize_replacement(std::string_view replacement) {
-  std::string out;
-  out.reserve(replacement.size());
-  for (std::size_t i = 0; i < replacement.size();) {
-    const char c = replacement[i];
-    if (c != '$') {
-      out.push_back(c);
-      ++i;
-      continue;
-    }
-    if (i + 1U >= replacement.size()) {
-      out.append("$$");  // Trailing `$`: a literal dollar.
-      ++i;
-      continue;
-    }
-    const char next = replacement[i + 1U];
-    if (next == '$') {
-      out.append("$$");  // Already an escaped dollar; keep the spelling.
-      i += 2U;
-      continue;
-    }
-    if (next >= '0' && next <= '9') {
-      out.push_back('$');  // `$<digits>`: a numbered reference.
-      ++i;
-      continue;
-    }
-    if (next == '{') {
-      std::size_t end = i + 2U;
-      std::size_t name_bytes = 0;
-      while (end < replacement.size() && name_bytes <= kMaxGroupNameBytes && is_ascii_word_byte(replacement[end])) {
-        ++end;
-        ++name_bytes;
-      }
-      if (name_bytes > 0 && name_bytes <= kMaxGroupNameBytes && end < replacement.size() && replacement[end] == '}') {
-        out.append(replacement.substr(i, end + 1U - i));  // `${name}` reference.
-        i = end + 1U;
-        continue;
-      }
-    }
-    out.append("$$");  // Anything else after `$`: a literal dollar.
-    ++i;
-  }
-  return out;
+bool is_digit_byte(char c) noexcept {
+  return c >= '0' && c <= '9';
 }
 
-// Runs one pcre2_substitute call with caller-selected global/single flags,
-// reusing the caller's already-compiled program.
-Value substitute_with_flags(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
-                            std::size_t start_offset, std::uint32_t sub_flags, Arena& arena) {
+bool is_octal_byte(char c) noexcept {
+  return c >= '0' && c <= '7';
+}
+
+int hex_value(char c) noexcept {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return -1;
+}
+
+// Appends the UTF-8 encoding of `cp`; false for a surrogate or a value past
+// U+10FFFF.
+bool append_code_point(std::string& out, std::uint32_t cp) {
+  if (cp > 0x10FFFFU || (cp >= 0xD800U && cp <= 0xDFFFU)) {
+    return false;
+  }
+  if (cp < 0x80U) {
+    out.push_back(static_cast<char>(cp));
+  } else if (cp < 0x800U) {
+    out.push_back(static_cast<char>(0xC0U | (cp >> 6)));
+    out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+  } else if (cp < 0x10000U) {
+    out.push_back(static_cast<char>(0xE0U | (cp >> 12)));
+    out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
+    out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+  } else {
+    out.push_back(static_cast<char>(0xF0U | (cp >> 18)));
+    out.push_back(static_cast<char>(0x80U | ((cp >> 12) & 0x3FU)));
+    out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
+    out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+  }
+  return true;
+}
+
+// Reads `[0-9]{1,max_digits}` at `i`, advancing it.
+std::uint32_t read_digits(std::string_view s, std::size_t& i, std::size_t max_digits) {
+  std::uint32_t n = 0;
+  for (std::size_t k = 0; k < max_digits && i < s.size() && is_digit_byte(s[i]); ++k, ++i) {
+    n = n * 10U + static_cast<std::uint32_t>(s[i] - '0');
+  }
+  return n;
+}
+
+// A group reference spelled with a name or digits (`${..}`, `\g<..>`): all
+// digits is a number, otherwise a name. Empty or non-word text is invalid.
+ReplToken group_reference_token(std::string_view body) {
+  ReplToken tok;
+  tok.kind = ReplTokenKind::kInvalid;
+  if (body.empty() || body.size() > 32U) {
+    return tok;
+  }
+  bool all_digits = true;
+  for (const char c : body) {
+    if (!is_name_byte(c)) {
+      return tok;
+    }
+    all_digits = all_digits && is_digit_byte(c);
+  }
+  if (all_digits) {
+    std::size_t i = 0;
+    tok.kind = ReplTokenKind::kGroup;
+    tok.number = read_digits(body, i, body.size());
+    return tok;
+  }
+  tok.kind = ReplTokenKind::kNamed;
+  tok.text = std::string(body);
+  return tok;
+}
+
+// Parses the `$` token starting at `i` (pointing at the `$`), advancing past it.
+ReplToken parse_dollar(std::string_view r, std::size_t& i) {
+  ReplToken tok;
+  ++i;
+  if (i >= r.size()) {
+    tok.kind = ReplTokenKind::kInvalid;
+    return tok;
+  }
+  const char c = r[i];
+  if (is_digit_byte(c)) {
+    tok.kind = ReplTokenKind::kGroup;
+    tok.number = read_digits(r, i, 2U);
+    return tok;
+  }
+  if (c == '{') {
+    const std::size_t close = r.find('}', i);
+    if (close == std::string_view::npos) {
+      tok.kind = ReplTokenKind::kInvalid;
+      return tok;
+    }
+    tok = group_reference_token(r.substr(i + 1U, close - i - 1U));
+    i = close + 1U;
+    return tok;
+  }
+  if (c == '<') {
+    const std::size_t close = r.find('>', i);
+    if (close == std::string_view::npos) {
+      tok.kind = ReplTokenKind::kInvalid;
+      return tok;
+    }
+    tok = group_reference_token(r.substr(i + 1U, close - i - 1U));
+    i = close + 1U;
+    return tok;
+  }
+  if (c == '_' && !(i + 1U < r.size() && is_name_byte(r[i + 1U]))) {
+    ++i;
+    tok.kind = ReplTokenKind::kSubject;
+    return tok;
+  }
+  if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+    std::size_t end = i;
+    while (end < r.size() && is_name_byte(r[end])) {
+      ++end;
+    }
+    tok = group_reference_token(r.substr(i, end - i));
+    i = end;
+    return tok;
+  }
+  tok.kind = ReplTokenKind::kLiteral;
+  ++i;
+  switch (c) {
+    case '$':
+      tok.text = "$";
+      return tok;
+    case '&':
+      tok.kind = ReplTokenKind::kGroup;
+      return tok;
+    case '`':
+      tok.kind = ReplTokenKind::kBefore;
+      return tok;
+    case '\'':
+      tok.kind = ReplTokenKind::kAfter;
+      return tok;
+    default:
+      tok.kind = ReplTokenKind::kInvalid;
+      return tok;
+  }
+}
+
+// Parses the backslash token starting at `i` (pointing at the `\`), advancing
+// past it.
+ReplToken parse_backslash(std::string_view r, std::size_t& i) {
+  ReplToken tok;
+  ++i;
+  if (i >= r.size()) {
+    tok.kind = ReplTokenKind::kInvalid;
+    return tok;
+  }
+  const char c = r[i++];
+  const auto literal = [&tok](char ch) {
+    tok.kind = ReplTokenKind::kLiteral;
+    tok.text.assign(1U, ch);
+  };
+  switch (c) {
+    case '\\':
+    case '$':
+    case '&':
+      literal(c);
+      return tok;
+    case 'n':
+      literal('\n');
+      return tok;
+    case 't':
+      literal('\t');
+      return tok;
+    case 'r':
+      literal('\r');
+      return tok;
+    case 'e':
+      literal('\x1B');
+      return tok;
+    case 'a':
+      literal('\a');
+      return tok;
+    case 'f':
+      literal('\f');
+      return tok;
+    case 'v':
+      literal('\v');
+      return tok;
+    case 'b':
+      literal('\b');
+      return tok;
+    case 'u':
+      tok.kind = ReplTokenKind::kUpperNext;
+      return tok;
+    case 'U':
+      tok.kind = ReplTokenKind::kUpperRun;
+      return tok;
+    case 'E':
+      tok.kind = ReplTokenKind::kCaseEnd;
+      return tok;
+    case 'Q': {
+      const std::size_t end = r.find("\\E", i);
+      tok.kind = ReplTokenKind::kLiteral;
+      tok.text = std::string(r.substr(i, end == std::string_view::npos ? std::string_view::npos : end - i));
+      i = end == std::string_view::npos ? r.size() : end + 2U;
+      return tok;
+    }
+    case 'x': {
+      std::uint32_t cp = 0;
+      bool ok = false;
+      if (i < r.size() && r[i] == '{') {
+        std::size_t k = i + 1U;
+        std::size_t digits = 0;
+        while (k < r.size() && hex_value(r[k]) >= 0 && digits < 8U) {
+          cp = cp * 16U + static_cast<std::uint32_t>(hex_value(r[k]));
+          ++k;
+          ++digits;
+        }
+        ok = digits > 0U && k < r.size() && r[k] == '}';
+        i = ok ? k + 1U : i;
+      } else {
+        std::size_t digits = 0;
+        while (digits < 2U && i < r.size() && hex_value(r[i]) >= 0) {
+          cp = cp * 16U + static_cast<std::uint32_t>(hex_value(r[i]));
+          ++i;
+          ++digits;
+        }
+        ok = digits > 0U;
+      }
+      tok.kind = ReplTokenKind::kLiteral;
+      if (!ok || !append_code_point(tok.text, cp)) {
+        tok.kind = ReplTokenKind::kInvalid;
+      }
+      return tok;
+    }
+    case 'g': {
+      if (i < r.size() && r[i] == '<') {
+        const std::size_t close = r.find('>', i);
+        if (close != std::string_view::npos) {
+          tok = group_reference_token(r.substr(i + 1U, close - i - 1U));
+          i = close + 1U;
+          return tok;
+        }
+      }
+      tok.kind = ReplTokenKind::kInvalid;
+      return tok;
+    }
+    default:
+      break;
+  }
+  if (is_digit_byte(c)) {
+    --i;  // Back onto the first digit.
+    const bool octal3 = is_octal_byte(c) && i + 2U < r.size() && is_octal_byte(r[i + 1U]) && is_octal_byte(r[i + 2U]);
+    if (c == '0' || octal3) {
+      std::uint32_t cp = 0;
+      std::size_t digits = 0;
+      while (digits < 3U && i < r.size() && is_octal_byte(r[i])) {
+        cp = cp * 8U + static_cast<std::uint32_t>(r[i] - '0');
+        ++i;
+        ++digits;
+      }
+      tok.kind = ReplTokenKind::kLiteral;
+      if (digits < 2U || !append_code_point(tok.text, cp)) {
+        tok.kind = ReplTokenKind::kInvalid;  // `\0` alone is not a reference.
+      }
+      return tok;
+    }
+    tok.kind = ReplTokenKind::kGroup;
+    tok.number = read_digits(r, i, 2U);
+    return tok;
+  }
+  tok.kind = ReplTokenKind::kInvalid;
+  return tok;
+}
+
+std::vector<ReplToken> parse_replacement(std::string_view r) {
+  std::vector<ReplToken> tokens;
+  std::string pending;
+  const auto flush = [&] {
+    if (!pending.empty()) {
+      ReplToken lit;
+      lit.text = std::move(pending);
+      pending.clear();
+      tokens.push_back(std::move(lit));
+    }
+  };
+  for (std::size_t i = 0; i < r.size();) {
+    if (r[i] != '$' && r[i] != '\\') {
+      pending.push_back(r[i++]);
+      continue;
+    }
+    ReplToken tok = r[i] == '$' ? parse_dollar(r, i) : parse_backslash(r, i);
+    if (tok.kind == ReplTokenKind::kLiteral) {
+      pending += tok.text;
+      continue;
+    }
+    flush();
+    tokens.push_back(std::move(tok));
+  }
+  flush();
+  return tokens;
+}
+
+// Output of one expansion, with the `\u` / `\U` case state applied as text is
+// appended.
+class ReplacementWriter {
+ public:
+  explicit ReplacementWriter(std::string& out) : out_(out) {}
+
+  void append(std::string_view text) {
+    for (const char c : text) {
+      if (upper_run_ || upper_next_) {
+        out_.push_back(strings::ascii_to_upper(c));
+        // A multi-byte lead keeps the pending flag until its last byte; ASCII
+        // case mapping touches single bytes only, so clear on any byte.
+        upper_next_ = false;
+      } else {
+        out_.push_back(c);
+      }
+    }
+  }
+  void upper_next() { upper_next_ = true; }
+  void upper_run(bool on) { upper_run_ = on; }
+
+ private:
+  std::string& out_;
+  bool upper_run_ = false;
+  bool upper_next_ = false;
+};
+
+// Resolves a group number from a name; -1 when absent or ambiguous.
+long long group_number_for_name(const CompiledPattern& program, const std::string& name) {
+  const int n = pcre2_substring_number_from_name(program.code(), reinterpret_cast<PCRE2_SPTR>(name.c_str()));
+  return n < 0 ? -1 : n;
+}
+
+// Appends the expansion of `tokens` for one match to `out`. `ovec` is the
+// PCRE2 ovector of the match. False when a token is invalid or names a group
+// the pattern lacks.
+bool expand_replacement(const std::vector<ReplToken>& tokens, const CompiledPattern& program, std::string_view subject,
+                        const PCRE2_SIZE* ovec, std::string& out) {
+  ReplacementWriter writer(out);
+  const auto group_text = [&](std::size_t group) -> std::string_view {
+    if (ovec[2 * group] == PCRE2_UNSET) {
+      return {};
+    }
+    return subject.substr(static_cast<std::size_t>(ovec[2 * group]),
+                          static_cast<std::size_t>(ovec[2 * group + 1] - ovec[2 * group]));
+  };
+  for (const ReplToken& tok : tokens) {
+    switch (tok.kind) {
+      case ReplTokenKind::kLiteral:
+        writer.append(tok.text);
+        break;
+      case ReplTokenKind::kGroup:
+        if (tok.number > program.capture_count()) {
+          return false;
+        }
+        writer.append(group_text(tok.number));
+        break;
+      case ReplTokenKind::kNamed: {
+        const long long group = group_number_for_name(program, tok.text);
+        if (group < 0) {
+          return false;
+        }
+        writer.append(group_text(static_cast<std::size_t>(group)));
+        break;
+      }
+      case ReplTokenKind::kBefore:
+        writer.append(subject.substr(0, static_cast<std::size_t>(ovec[0])));
+        break;
+      case ReplTokenKind::kAfter:
+        writer.append(subject.substr(static_cast<std::size_t>(ovec[1])));
+        break;
+      case ReplTokenKind::kSubject:
+        writer.append(subject);
+        break;
+      case ReplTokenKind::kUpperNext:
+        writer.upper_next();
+        break;
+      case ReplTokenKind::kUpperRun:
+        writer.upper_run(true);
+        break;
+      case ReplTokenKind::kCaseEnd:
+        writer.upper_run(false);
+        break;
+      case ReplTokenKind::kInvalid:
+        return false;
+    }
+    if (out.size() > kMaxSubstituteOutputBytes) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Finishes a replacement result: the text ends at an embedded NUL, and a
+// result past the Excel text cap is `#VALUE!`.
+Value finish_replacement(std::string& out, Arena& arena) {
+  const std::size_t nul = out.find('\0');
+  if (nul != std::string::npos) {
+    out.resize(nul);
+  }
+  if (static_cast<std::uint64_t>(utf16_units_in(out)) > kExcelTextCapUnits) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(out));
+}
+
+// Replaces every match, streaming through the subject.
+Value substitute_global(const CompiledPattern& program, std::string_view subject, const std::vector<ReplToken>& tokens,
+                        Arena& arena) {
   if (!program.ok()) {
     return Value::error(ErrorCode::Value);
   }
-  pcre2_code* const code = program.code();
-  pcre2_match_context* const mctx = program.context();
-
-  // Sizing: start with subject + replacement * 2 as a guess. PCRE2 will
-  // tell us the required size via PCRE2_ERROR_NOMEMORY if the buffer
-  // is too small; we grow once on that signal.
-  std::size_t bufsize = subject.size() + replacement.size() * 2 + 16;
-  std::vector<unsigned char> buffer(bufsize);
-  PCRE2_SIZE outlen = bufsize;
-  const std::uint32_t effective_sub_flags = sub_flags | PCRE2_SUBSTITUTE_OVERFLOW_LENGTH;
-
-  int rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                            static_cast<PCRE2_SIZE>(start_offset), effective_sub_flags, nullptr, mctx,
-                            reinterpret_cast<PCRE2_SPTR>(replacement.data()),
-                            static_cast<PCRE2_SIZE>(replacement.size()), buffer.data(), &outlen);
-  if (rc == PCRE2_ERROR_NOMEMORY) {
-    // outlen now contains the required size. A required size past the Excel
-    // text cap can never yield a legal cell value, so reject it before
-    // growing the buffer instead of allocating an unbounded amount.
-    if (outlen > kMaxSubstituteOutputBytes) {
-      return Value::error(ErrorCode::Value);
+  std::string out;
+  std::size_t copied = 0;
+  bool expansion_failed = false;
+  const ScanEnd end = scan_matches(program, subject, /*find_all=*/true, [&](const PCRE2_SIZE* ovec) {
+    const std::size_t start = std::max(static_cast<std::size_t>(ovec[0]), copied);
+    const std::size_t stop = std::max(static_cast<std::size_t>(ovec[1]), start);
+    out.append(subject.substr(copied, start - copied));
+    if (!expand_replacement(tokens, program, subject, ovec, out)) {
+      expansion_failed = true;
+      return false;
     }
-    // Reallocate to the required size and retry.
-    buffer.resize(outlen);
-    bufsize = outlen;
-    outlen = bufsize;
-    rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                          static_cast<PCRE2_SIZE>(start_offset), effective_sub_flags, nullptr, mctx,
-                          reinterpret_cast<PCRE2_SPTR>(replacement.data()), static_cast<PCRE2_SIZE>(replacement.size()),
-                          buffer.data(), &outlen);
-  }
-
-  if (rc < 0) {
-    // Match-limit / depth-limit / malformed replacement.
-    if (rc == PCRE2_ERROR_MATCHLIMIT) {
-      return Value::error(ErrorCode::Value);
-    }
-    if (rc == PCRE2_ERROR_DEPTHLIMIT || rc == PCRE2_ERROR_HEAPLIMIT) {
-      return Value::error(ErrorCode::Calc);
-    }
+    copied = stop;
+    return true;
+  });
+  if (expansion_failed || end == ScanEnd::kMatchLimit) {
     return Value::error(ErrorCode::Value);
   }
-  // rc == 0 means no matches were found — return original text unchanged.
-  std::string_view out_view(reinterpret_cast<const char*>(buffer.data()), static_cast<std::size_t>(outlen));
-  // Exact cap check: the byte pre-check above is conservative, so an output
-  // that fit the buffer may still exceed 32,767 UTF-16 units.
-  if (static_cast<std::uint64_t>(utf16_units_in(out_view)) > kExcelTextCapUnits) {
-    return Value::error(ErrorCode::Value);
+  if (end == ScanEnd::kError) {
+    return Value::error(ErrorCode::Calc);
   }
-  return Value::text(arena.intern(out_view));
-}
-
-Value substitute_global(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
-                        Arena& arena) {
-  return substitute_with_flags(program, subject, replacement, /*start_offset=*/0U, PCRE2_SUBSTITUTE_GLOBAL, arena);
+  out.append(subject.substr(copied));
+  return finish_replacement(out, arena);
 }
 
 // Replaces only the N-th match (occurrence == N != 0). A positive N counts
 // matches from the start (1 = first); a negative N counts from the end
 // (-1 = last), matching Excel's documented REGEXREPLACE occurrence
-// semantics. Strategy: run the kernel with find_all = true (to know the
-// full match list either way), then substitute at exactly the chosen
-// match by passing `start_offset = match_start` and NOT setting GLOBAL.
-// Both steps run against the same compiled program, so an occurrence-N
-// replace costs no more compilation than a global one.
-Value substitute_nth(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
+// semantics. The kernel finds the matches; an occurrence beyond their count
+// leaves the text unchanged.
+Value substitute_nth(const CompiledPattern& program, std::string_view subject, const std::vector<ReplToken>& tokens,
                      long long occurrence, Arena& arena) {
   KernelResult kr = regex_kernel(program, subject, /*find_all=*/true,
                                  /*on_match_limit_returns_no_match=*/false);
@@ -700,18 +1044,26 @@ Value substitute_nth(const CompiledPattern& program, std::string_view subject, s
     return kr.err;
   }
   const std::size_t count = kr.matches.size();
-  // Positive: 1-based from the start (index = occurrence - 1). Negative:
-  // 1-based from the end (index = count - |occurrence|). Either way, an
-  // occurrence whose magnitude exceeds the match count leaves the text
-  // unchanged.
   const long long index = occurrence > 0 ? occurrence - 1 : static_cast<long long>(count) + occurrence;
   if (index < 0 || static_cast<std::size_t>(index) >= count) {
     return Value::text(arena.intern(subject));
   }
-
-  const std::size_t target_start = kr.matches[static_cast<std::size_t>(index)].whole_start;
-  // No GLOBAL: substituting from the N-th match's offset replaces just it.
-  return substitute_with_flags(program, subject, replacement, target_start, /*sub_flags=*/0U, arena);
+  const MatchSpan& m = kr.matches[static_cast<std::size_t>(index)];
+  std::vector<PCRE2_SIZE> ovec(2U * (static_cast<std::size_t>(kr.capture_count) + 1U), PCRE2_UNSET);
+  ovec[0] = m.whole_start;
+  ovec[1] = m.whole_end;
+  for (std::uint32_t g = 0; g < kr.capture_count; ++g) {
+    if (m.participated[g]) {
+      ovec[2U * (g + 1U)] = m.groups[g].first;
+      ovec[2U * (g + 1U) + 1U] = m.groups[g].second;
+    }
+  }
+  std::string out(subject.substr(0, m.whole_start));
+  if (!expand_replacement(tokens, program, subject, ovec.data(), out)) {
+    return Value::error(ErrorCode::Value);
+  }
+  out.append(subject.substr(std::max(m.whole_end, m.whole_start)));
+  return finish_replacement(out, arena);
 }
 
 // Array broadcast: runs `per_cell` once per text-coerced cell of `in`,
@@ -922,8 +1274,7 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (!resolve_pattern(call.as_call_arg(2), arena, registry, ctx, replacement, err)) {
     return err;
   }
-  // Excel's replacement dialect, spelled the way pcre2_substitute reads it.
-  const std::string pcre2_replacement = normalize_replacement(replacement);
+  const std::vector<ReplToken> replacement_tokens = parse_replacement(replacement);
 
   // occurrence (fourth arg, default 0). 0 replaces every match; a positive
   // N replaces only the N-th match counting from the start; a negative N
@@ -948,9 +1299,9 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
 
   auto run_one = [&](std::string_view subject) -> Value {
     if (occurrence == 0) {
-      return substitute_global(program, subject, pcre2_replacement, arena);
+      return substitute_global(program, subject, replacement_tokens, arena);
     }
-    return substitute_nth(program, subject, pcre2_replacement, occurrence, arena);
+    return substitute_nth(program, subject, replacement_tokens, occurrence, arena);
   };
 
   if (!text_arg.is_array) {
