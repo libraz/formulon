@@ -226,33 +226,16 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   rate      = ROUND(1 - POWER(salvage/cost, 1/life), 3)
 //   dep_1     = (cost * rate) * (month_int / 12)
 //   dep_i     = book * rate, book -= dep_i                 (2 <= i <= life)
-//   dep_L+1   = (12 - month_int) * ((book / 12) * rate)
-//                                                           (only when
-//                                                            month_int < 12)
+//   dep_L+1   = (12 - month_int) * (rate * (book / 12))     (partial last year)
+//
+// Life and period count whole years (truncated; 2^32 or more is #NUM!). A
+// period past the life is valid only one year past it, and only when
+// month_int < 12.
 //
 // Domain (checks use month_int, the floored value):
-//   - cost   <  0    ->  #NUM!
-//   - salvage<  0    ->  #NUM!
-//   - life  <= 0     ->  #NUM!
-//   - period<  1     ->  #NUM!
-//   - month_int <  1  or month_int > 12  ->  #NUM!
-//   - period == life+1 is only valid when month_int < 12 (the partial
-//     first year leaves a partial last year); otherwise #NUM!.
-//   - period >  life+1 -> #NUM! regardless of month.
-//
-// Edge cases:
-//   - `cost == 0`: short-circuits to 0 depreciation. Computing the rate
-//     as `pow(salvage/0, 1/life)` would go through `pow(inf, 1/life) =
-//     inf` and poison the result with #NUM!, so we return a zero charge
-//     directly — matching Mac Excel 365's observed behaviour for
-//     zero-cost assets (including boolean FALSE / numeric 0).
-//   - `salvage == 0`: `pow(0, 1/life) = 0`, so rate = round(1) = 1.000
-//     and the entire cost depreciates in the first period (prorated by
-//     `month_int / 12`). Subsequent periods charge nothing.
-//   - `salvage > cost`: the inner base is > 1, so the raw rate is
-//     negative; rounding then yields a negative rate and Excel returns
-//     a negative depreciation. No special-cased error path here — we
-//     let the math speak, matching observed Excel behaviour.
+//   - cost < 0, salvage < 0, life <= 0, period <= 0  ->  #NUM!
+//   - month_int < 1 or month_int > 12                ->  #NUM!
+//   - cost == 0 gives a zero charge.
 Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto parsed = read_depreciation_args4(args);
   if (!parsed) {
@@ -269,50 +252,41 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period <= 0.0 || month_int < 1.0 || month_int > 12.0) {
     return Value::error(ErrorCode::Num);
   }
-  // Zero-cost asset: salvage/cost would be +inf and pow(inf, 1/life) also
-  // +inf, poisoning the subsequent arithmetic with #NUM!. Mac Excel 365
-  // returns a zero depreciation here (verified via G30/G32/G33/G34 in
-  // the IronCalc DB oracle), so short-circuit before the rate formula.
+  // Life and period count whole years; either at 2^32 or beyond is #NUM!.
+  constexpr double kMaxWholeYears = 4294967296.0;
+  const double whole_life = std::trunc(life);
+  const double whole_period = std::trunc(period);
+  if (whole_life >= kMaxWholeYears || whole_period >= kMaxWholeYears) {
+    return Value::error(ErrorCode::Num);
+  }
+  // A period past the life exists only as the partial last year of a first year
+  // shorter than 12 months, and only one period past.
+  double last = whole_period;
+  const bool partial_last = whole_period > whole_life;
+  if (partial_last) {
+    if (month_int == 12.0 || whole_period > whole_life + 1.0) {
+      return Value::error(ErrorCode::Num);
+    }
+    last = whole_period - 1.0;
+  }
   if (cost == 0.0) {
     return Value::number(0.0);
   }
-  // Only valid period values: [1, life] for any month; life+1 only when
-  // month_int < 12 (partial-first-year case); anything beyond is #NUM!.
-  if (period > life + 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (std::floor(period) > life && month_int >= 12.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (period > kMaxDepreciationPeriods) {
-    return Value::error(ErrorCode::Num);
-  }
   // Rate: 1 - (salvage/cost)^(1/life) through POWER, rounded to 3 decimals.
   const double rate = builtins_detail::round_half_away_decimals(1.0 - excel_power(salvage / cost, 1.0 / life), 3);
-  // First period: prorated by (month_int/12).
-  const double dep_1 = (cost * rate) * (month_int / 12.0);
-  if (period < 2.0) {
-    return finalize(dep_1);
+  double dep = (cost * rate) * (month_int / 12.0);
+  double book = cost - dep;
+  for (double i = 2.0; i <= last; i += 1.0) {
+    dep = book * rate;
+    book = book - dep;
+    if (dep == 0.0) {
+      break;  // the book value no longer changes
+    }
   }
-  double book = cost - dep_1;
-  double dep_i = dep_1;
-  // Middle periods: i in [2, min(period, life)].
-  const auto last_full = static_cast<std::int64_t>(std::floor(std::min(period, life)));
-  for (std::int64_t i = 2; i <= last_full; ++i) {
-    dep_i = book * rate;
-    book = book - dep_i;
+  if (partial_last) {
+    return finalize((12.0 - month_int) * (rate * (book / 12.0)));
   }
-  // Partial-last-year formula fires only when `period` has crossed the
-  // life+1 threshold (i.e. is >= life + 1.0). Fractional periods strictly
-  // below life+1 (e.g. period=4.5 with life=4) are treated like period 4:
-  // Excel returns the integer-step schedule's last computed dep, without
-  // proration. Verified against IronCalc DB G39
-  // (`=DB(12, 10, 4, 4.5, 2)` -> 0.488800, matching dep_4 exactly).
-  if (period < life + 1.0) {
-    return finalize(dep_i);
-  }
-  // period >= life + 1 (partial last year). Guarded above so month_int < 12.
-  return finalize((12.0 - month_int) * ((book / 12.0) * rate));
+  return finalize(dep);
 }
 
 // --- VDB(cost, salvage, life, start_period, end_period, [factor=2],

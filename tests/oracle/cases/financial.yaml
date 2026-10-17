@@ -462,3 +462,191 @@ cases:
   - id: ddb_negative_factor
     formula: "=DDB(10000,1000,5,2,-1)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_01
+    formula: "=DB(135229.88,42371.69,5,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_02
+    formula: "=DB(135229.88,42371.69,5,1,5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_03
+    formula: "=DB(135229.88,42371.69,5,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_04
+    formula: "=DB(135229.88,42371.69,5,2,8)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_05
+    formula: "=DB(135229.88,42371.69,5,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_06
+    formula: "=DB(135229.88,42371.69,5,3,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_07
+    formula: "=DB(135229.88,42371.69,5,0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_08
+    formula: "=DB(135229.88,42371.69,5,0.5,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_09
+    formula: "=DB(135229.88,42371.69,5,1.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_10
+    formula: "=DB(135229.88,42371.69,5,1.5,4)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_11
+    formula: "=DB(135229.88,42371.69,5,10)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_12
+    formula: "=DB(135229.88,42371.69,5,10,6)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_13
+    formula: "=DB(135229.88,42371.69,5,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_14
+    formula: "=DB(135229.88,42371.69,5,0,11)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_15
+    formula: "=DB(973279.0,25039.99,0.5,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_16
+    formula: "=DB(973279.0,25039.99,0.5,1,9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_17
+    formula: "=DB(973279.0,25039.99,0.5,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_18
+    formula: "=DB(973279.0,25039.99,0.5,2,5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_19
+    formula: "=DB(973279.0,25039.99,0.5,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_20
+    formula: "=DB(973279.0,25039.99,0.5,3,8)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_21
+    formula: "=DB(973279.0,25039.99,0.5,0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_22
+    formula: "=DB(973279.0,25039.99,0.5,1.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_23
+    formula: "=DB(973279.0,25039.99,0.5,1.5,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_24
+    formula: "=DB(973279.0,25039.99,0.5,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_25
+    formula: "=DB(973279.0,25039.99,0.5,0,9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_26
+    formula: "=DB(944050.9,38976.99,1,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_27
+    formula: "=DB(944050.9,38976.99,1,2,6)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_28
+    formula: "=DB(944050.9,38976.99,1,1.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_29
+    formula: "=DB(944050.9,38976.99,1,1.5,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_30
+    formula: "=DB(571661.46,8813.79,12.5,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_31
+    formula: "=DB(571661.46,8813.79,12.5,1,7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_32
+    formula: "=DB(571661.46,8813.79,12.5,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_33
+    formula: "=DB(571661.46,8813.79,12.5,2,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_34
+    formula: "=DB(571661.46,8813.79,12.5,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_35
+    formula: "=DB(571661.46,8813.79,12.5,3,11)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_36
+    formula: "=DB(571661.46,8813.79,12.5,0.5,9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_37
+    formula: "=DB(571661.46,8813.79,12.5,1.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_38
+    formula: "=DB(571661.46,8813.79,12.5,1.5,11)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_39
+    formula: "=DB(579503.54,1540.42,10,11,9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_40
+    formula: "=DB(100000,10000,2.5,3,6)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_41
+    formula: "=DB(100000,10000,2.5,2.7,6)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_42
+    formula: "=DB(100000,10000,1.2,2,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_43
+    formula: "=DB(100000,10000,3,3.99,12)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_44
+    formula: "=DB(0,10000,3,1,12)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_45
+    formula: "=DB(100000,0,3,2,12)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_46
+    formula: "=DB(100000,10000,5,1,0.9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: db_whole_year_rule_47
+    formula: "=DB(100000,10000,4294967296,1,12)"
+    tolerance: { abs: 0, rel: 0 }

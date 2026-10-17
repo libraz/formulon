@@ -294,6 +294,47 @@ TEST(FinancialDb, ScheduleWithinTheCapStillComputes) {
   EXPECT_NEAR(v.as_number(), 1845.0, 1e-9);
 }
 
+TEST(FinancialDbWholeYears, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=DB(973279,25039.99,0.5,1,9)", 60951.41488518749},
+      {"=DB(973279,25039.99,0.5,1.9,9)", 60951.41488518749},
+      {"=DB(100000,10000,2.5,3,6)", 8373.880200000001},
+      {"=DB(100000,10000,2.5,2.7,6)", 42079.799999999996},
+      {"=DB(100000,10000,2.5,1,6)", 30100.0},
+      {"=DB(100000,10000,1.2,2,3)", 50332.331249999996},
+      {"=DB(100000,10000,1.9,2,3)", 43409.924999999996},
+      {"=DB(100000,10000,3,3.99,12)", 11539.8656},
+      {"=DB(100000,10000,3,4,11)", 489.1620807111111},
+      {"=DB(0,10000,3,1,12)", 0.0},
+      {"=DB(0,0,3,1,12)", 0.0},
+      {"=DB(100000,0,3,2,12)", 0.0},
+      {"=DB(100000,200000,3,2,12)", -32760.0},
+      {"=DB(100000,10000,0.3,1,6)", 25000.0},
+      {"=DB(100000,10000,3,0.5,12)", 53600.0},
+      {"=DB(100000,10000,5,1,12.9)", 36900.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(FinancialDbWholeYears, OutOfRangeIsNum) {
+  for (const char* formula :
+       {"=DB(973279,25039.99,0.5,1,12)", "=DB(973279,25039.99,0.5,2,9)", "=DB(100000,10000,2.5,3,12)",
+        "=DB(100000,10000,2.5,4,6)", "=DB(100000,10000,1.2,2,12)", "=DB(100000,10000,0.3,1,12)",
+        "=DB(100000,10000,5,1,0.9)", "=DB(100000,10000,4294967296,1,12)", "=DB(100000,10000,1E+300,1,12)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
