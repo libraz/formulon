@@ -42,13 +42,13 @@
     {
       "suite": "edit_format",
       "case_count": 61,
-      "sha256": "cdd1a5594bb611e47e3e4465b0a2f72249b9499227b7737add4c024e3b53476f",
+      "sha256": "b787dc73d191f41b5431ae5296595e89d052acd0f6d3814aac7f3f24c86b5fa6",
       "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z"
     },
     {
       "suite": "edit_type",
       "case_count": 8,
-      "sha256": "1167638ce07366b75ecc82249f364d1e17a88031b6a03e857b133bbcd33470d4",
+      "sha256": "277cf207b763c703f341bfd72e5ae2ef8a7429522af90b2fcb48677a955fcc14",
       "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.113.4:ja-JP:2026-10-14T11:11:27Z"
     },
     {

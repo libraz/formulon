@@ -1172,7 +1172,7 @@ entries:
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/chart/chart_xml_test.cpp]
-    reason: "A single-series chart with no c:title and autoTitleDeleted=0 shows the series name as its title in some files and no title in others with the same part structure (HasTitle read true for one, false for the other after it settled), so the part alone does not determine the title. Formulon reports such a chart's title as none and does not guess; chart_xml_test pins the reading of each Excel-saved fixture."
+    reason: "A chart with no c:title, autoTitleDeleted=0 and exactly one unfiltered series has an automatic title, and Formulon reads it as one (chart_xml_test pins the rule). Whether Excel writes that title into the part on re-save depends on state the file does not carry: charts that were laid out in the visible window gain a c:title, charts below it are saved without one, so the re-saved title kind is not determined by the workbook."
     prefer: formulon
     first_noted: 2026-10-14
     last_verified_excel_version: "16.113.4"

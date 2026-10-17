@@ -561,7 +561,7 @@
       },
       "format": {
        "title": {
-        "kind": "none",
+        "kind": "auto",
         "text": null,
         "ref": null
        },
@@ -1187,7 +1187,7 @@
       },
       "format": {
        "title": {
-        "kind": "none",
+        "kind": "auto",
         "text": null,
         "ref": null
        },
@@ -2631,7 +2631,7 @@
       },
       "format": {
        "title": {
-        "kind": "none",
+        "kind": "auto",
         "text": null,
         "ref": null
        },

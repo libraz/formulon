@@ -796,6 +796,19 @@ void read_drawingml_chart(const Workbook& wb, const xml_node& root, ChartModel& 
     }
   }
   model.category_filter = read_category_filter(plot_area);
+
+  // A single visible series with titles not deleted shows the series name as an automatic title.
+  if (model.title.kind == ChartTitleKind::kNone && model.auto_title_deleted == Tri::kFalse) {
+    std::size_t visible = 0;
+    for (const ChartPlot& plot : model.plots) {
+      for (const ChartSeries& series : plot.series) {
+        visible += series.filtered ? 0U : 1U;
+      }
+    }
+    if (visible == 1U) {
+      model.title.kind = ChartTitleKind::kAuto;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

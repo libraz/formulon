@@ -447,7 +447,7 @@ TEST(ChartXml, ColumnFixtureMatchesMeasuredModel) {
       BarPair("2 col_clustered|barChart|col|clustered|0|219|absent|absent|none|0|b|1/gap/1"),
       BarPair("3 col_stacked|barChart|col|stacked|0|219|100|absent|none|0|b|1/gap/1"),
       BarPair("4 col_percent|barChart|col|percentStacked|0|219|100|absent|none|0|b|1/gap/1"),
-      Join({"5 col_single|barChart|col|clustered|0|219|absent|absent|none|0|b|1/gap/1",
+      Join({"5 col_single|barChart|col|clustered|0|219|absent|absent|auto|0|b|1/gap/1",
             Row(0, "0/0", kNameS1, kCatAbcd, kValB, kAccent1, kBarLine)}),
   };
   ExpectFixture("chart_column.xlsx", expected);
@@ -542,13 +542,13 @@ TEST(ChartXml, FormatFixtureReadsLinesMarkersPointsAndLabels) {
             Row(0, "0/0", kNameS1, kCatAbcd, kValB, "FF008000 alpha=50000", "FF000000 w=25400 dash=sysDash", "absent",
                 "absent", "-", label),
             Row(0, "1/1", kNameS2, kCatAbcd, kValC, kAccent2, kBarLine, "absent", "absent", "2:fill=FF0000FF", label)}),
-       Join({"4 fmt_pie|pieChart|absent|absent|1|absent|absent|45|none|0|b|1/gap/1",
+       Join({"4 fmt_pie|pieChart|absent|absent|1|absent|absent|45|auto|0|b|1/gap/1",
              Row(0, "0/0", kNameS1, kCatAbcd, kValB, "absent", "absent", "absent", "absent",
                  "0:fill=FFFFC000; 1:fill=FFE97132; 2:fill=FF196B24; 3:fill=FF0F9ED5",
                  "show=Percent sz=900 color=FF404040")}),
-       Join({"5 fmt_vary|barChart|col|clustered|1|219|-27|absent|none|0|b|1/gap/1",
+       Join({"5 fmt_vary|barChart|col|clustered|1|219|-27|absent|auto|0|b|1/gap/1",
              Row(0, "0/0", kNameS1, kCatAbcd, kValB, "absent", "absent", "absent", "absent", kPieDots)}),
-       Join({"6 fmt_scatter|scatterChart|absent|absent|0|absent|absent|absent|none|0|b|1/gap/1",
+       Join({"6 fmt_scatter|scatterChart|absent|absent|0|absent|absent|absent|auto|0|b|1/gap/1",
              Row(0, "0/0", "strRef Sheet1!$F$1 n=1 0:Y1", "numRef Sheet1!$E$2:$E$5 fc=General n=4 0:1 1:2 2:3 3:5",
                  "numRef Sheet1!$F$2:$F$5 fc=General n=4 0:2 1:4 2:1 3:3", "absent", "FF000000 w=38100 dash=dashDot",
                  "symbol=square size=7 fill=FF156082 line=FF156082 w=9525 dash=dashDot", "0")})});
@@ -566,7 +566,7 @@ TEST(ChartXml, FilterFixtureReadsFilteredSeriesAndCategoryFilter) {
                        Row(0, "1/1", kNameS2, cat_visible,
                            "numRef (Sheet1!$C$2,Sheet1!$C$4:$C$5) fc=General n=3 0:4 1:6 2:8", kAccent2, kBarLine)}),
                  BarPair("4 col_percent|barChart|col|percentStacked|0|219|100|absent|none|0|b|1/gap/1"),
-                 Join({"5 col_single|barChart|col|clustered|0|219|absent|absent|none|0|b|1/gap/1",
+                 Join({"5 col_single|barChart|col|clustered|0|219|absent|absent|auto|0|b|1/gap/1",
                        Row(0, "0/0", kNameS1, kCatAbcd, kValB, kAccent1, kBarLine)})});
 }
 
@@ -707,7 +707,6 @@ TEST(ChartXml, ChartexPlainTextAndPointsKeepOoxmlLookingSpellings) {
 TEST(ChartXml, RefsFixtureReadsNamesUnionsAndWholeColumns) {
   const std::string name_v1 = "strRef Sheet1!$B$1 n=1 0:V1";
   const std::string bar_head = "|barChart|col|clustered|0|219|-27|absent|auto|0|b|1/gap/1";
-  const std::string bar_head_untitled = "|barChart|col|clustered|0|219|-27|absent|none|0|b|1/gap/1";
   const auto bar = [&](const std::string& id_name, const std::string& head, const std::string& name,
                        const std::string& cat, const std::string& val) {
     return Join({id_name + head, Row(0, "0/0", name, cat, val, kAccent1, kBarLine)});
@@ -718,7 +717,7 @@ TEST(ChartXml, RefsFixtureReadsNamesUnionsAndWholeColumns) {
        bar("3 sheet_name", bar_head, "strRef Sheet1!$C$1 n=1 0:V2", kCatAbcd,
            "numRef Sheet1!LocVals fc=General n=4 0:4 1:5 2:6 3:8"),
        bar("4 dyn_name", bar_head, name_v1, "absent", "numRef [0]!DynVals fc=General n=7 0:1 1:2 2:3 3:7 5:11 6:12"),
-       bar("5 table_ref", bar_head_untitled, "absent", "absent", "numRef Sheet1!$E$2:$E$4 fc=General n=3 0:1 1:3 2:5"),
+       bar("5 table_ref", bar_head, "absent", "absent", "numRef Sheet1!$E$2:$E$4 fc=General n=3 0:1 1:3 2:5"),
        bar("6 whole_col", bar_head, name_v1, "absent",
            "numRef Sheet1!$B:$B fc=General n=1048576 0:0 1:1 2:2 3:3 4:7 6:11 7:12 8:13"),
        bar("7 other_sheet", bar_head, "strRef 'My Data'!$B$1 n=1 0:OV", "strRef 'My Data'!$A$2:$A$4 n=3 0:p 1:q 2:r",
@@ -727,7 +726,7 @@ TEST(ChartXml, RefsFixtureReadsNamesUnionsAndWholeColumns) {
            "numRef Hid!$B$2:$B$3 fc=General n=2 0:100 1:200"),
        bar("9 merged_cat", bar_head, name_v1, "strRef Sheet1!$A$7:$A$9 n=3 0:m1 2:m3",
            "numRef Sheet1!$B$7:$B$9 fc=General n=3 0:11 1:12 2:13"),
-       bar("10 two_d_val", bar_head_untitled, "absent", "absent", "numRef Sheet1!$B$2:$B$3 fc=General n=2 0:1 1:2"),
+       bar("10 two_d_val", bar_head, "absent", "absent", "numRef Sheet1!$B$2:$B$3 fc=General n=2 0:1 1:2"),
        bar("11 multi_name", bar_head, "strRef Sheet1!$B$1:$C$1 n=1 0:V1 V2", kCatAbcd, kValB),
        bar("12 union", bar_head, name_v1, "strRef (Sheet1!$A$2:$A$3,Sheet1!$A$5) n=3 0:a 1:b 2:d",
            "numRef (Sheet1!$B$2:$B$3,Sheet1!$B$5) fc=General n=3 0:1 1:2 2:7")});
@@ -884,6 +883,25 @@ TEST(ChartXml, RejectsPartsThatAreNotChartSpaces) {
   const std::string empty_space = "<c:chartSpace xmlns:c=\"urn:c\"/>";
   EXPECT_TRUE(
       static_cast<bool>(parse_chart_part(std::vector<std::uint8_t>(empty_space.begin(), empty_space.end()), doc)));
+}
+
+TEST(ChartXml, SingleVisibleSeriesWithTitleNotDeletedHasAutomaticTitle) {
+  const Workbook wb = Workbook::create();
+  const std::string one =
+      "<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:barChart><c:ser><c:idx val=\"0\"/>"
+      "<c:order val=\"0\"/></c:ser></c:barChart></c:plotArea>";
+  EXPECT_EQ(Read(Wrap(one), wb).title.kind, ChartTitleKind::kAuto);
+
+  const std::string two =
+      "<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:barChart><c:ser><c:idx val=\"0\"/>"
+      "<c:order val=\"0\"/></c:ser><c:ser><c:idx val=\"1\"/><c:order val=\"1\"/></c:ser>"
+      "</c:barChart></c:plotArea>";
+  EXPECT_EQ(Read(Wrap(two), wb).title.kind, ChartTitleKind::kNone);
+
+  const std::string deleted =
+      "<c:autoTitleDeleted val=\"1\"/><c:plotArea><c:barChart><c:ser><c:idx val=\"0\"/>"
+      "<c:order val=\"0\"/></c:ser></c:barChart></c:plotArea>";
+  EXPECT_EQ(Read(Wrap(deleted), wb).title.kind, ChartTitleKind::kNone);
 }
 
 TEST(ChartXml, AbsentElementsStayAbsent) {
