@@ -254,6 +254,47 @@ TEST_F(WholeAxisShape, ArrayPastExcelsElementBoundMakesTheFormulaZero) {
   EXPECT_EQ(At(kH, 1U, kHCol).as_number(), 5.0);
 }
 
+TEST_F(WholeAxisShape, RowsAndColumnsSizeAnOperationWithoutBuildingIt) {
+  // A SEQUENCE under ROWS / COLUMNS is sized, not built, so a grid past the
+  // element bound still answers; an operation's broadcast past the bound
+  // abandons the formula even under ROWS. Both drivers agree.
+  const struct {
+    const char* formula;
+    double expected;
+  } cases[] = {{"=ROWS(SEQUENCE(4096,16384))", 4096.0},
+               {"=COLUMNS(SEQUENCE(4096,16384))", 16384.0},
+               {"=ROWS(L!A:A+L!1:1)", 0.0},
+               {"=COLUMNS(L!A:A+L!1:1)", 0.0},
+               {"=ROWS(L!A1:A3277+L!1:1)", 0.0},
+               {"=ROWS(SEQUENCE(3277,16384)+0)", 0.0},
+               {"=ROWS(L!A:AY+0)", static_cast<double>(Sheet::kMaxRows)},
+               {"=COLUMNS(L!A1:A3+{1,2})", 2.0}};
+  for (const auto& c : cases) {
+    Put(kH, 0U, kHCol, c.formula);
+    const Value v = At(kH, 0U, kHCol);
+    ASSERT_TRUE(v.is_number()) << c.formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+    const Value adhoc = Adhoc(c.formula);
+    ASSERT_TRUE(adhoc.is_number()) << c.formula << " " << adhoc.debug_to_string();
+    EXPECT_EQ(adhoc.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST_F(WholeAxisShape, RowsOfASequenceKeepsItsArgumentErrors) {
+  const struct {
+    const char* formula;
+    ErrorCode expected;
+  } cases[] = {{"=ROWS(SEQUENCE(0,16384))", ErrorCode::Calc},
+               {"=ROWS(SEQUENCE(-1,16384))", ErrorCode::Value},
+               {"=ROWS(SEQUENCE(4096,16384,\"x\"))", ErrorCode::Value},
+               {"=ROWS(SEQUENCE(1/0,16384))", ErrorCode::Div0}};
+  for (const auto& c : cases) {
+    const Value v = Adhoc(c.formula);
+    ASSERT_TRUE(v.is_error()) << c.formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), c.expected) << c.formula;
+  }
+}
+
 TEST_F(WholeAxisShape, ArrayAtExcelsElementBoundStillEvaluates) {
   // 51 whole columns is 53,477,376 elements, inside the bound.
   Put(kH, 0U, kHCol, "=ROWS(L!A:AY+0)");

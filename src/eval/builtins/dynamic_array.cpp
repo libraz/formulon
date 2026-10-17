@@ -101,35 +101,14 @@ Expected<GridShape, ErrorCode> validate_grid_shape(double rows_d, double cols_d,
 /// `cells` buffer are arena-allocated, matching the `Value::Text` lifetime
 /// rule (caller's arena must outlive the returned Value).
 Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto rows_c = coerce_to_number(args[0]);
-  if (!rows_c) {
-    return Value::error(rows_c.error());
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ErrorCode err = ErrorCode::Value;
+  if (!sequence_shape(args, arity, &rows, &cols, &err)) {
+    return Value::error(err);
   }
-  auto cols_c = read_optional_number_arg(args, arity, 1U, 1.0);
-  if (!cols_c) {
-    return Value::error(cols_c.error());
-  }
-  auto start_c = read_optional_number_arg(args, arity, 2U, 1.0);
-  if (!start_c) {
-    return Value::error(start_c.error());
-  }
-  auto step_c = read_optional_number_arg(args, arity, 3U, 1.0);
-  if (!step_c) {
-    return Value::error(step_c.error());
-  }
-  const double cols_d = cols_c.value();
-  const double start = start_c.value();
-  const double step = step_c.value();
-
-  // A value that truncates to zero yields #CALC!, while a strictly negative
-  // dimension yields #VALUE!. This distinction is observable for
-  // SEQUENCE(0) versus SEQUENCE(-1).
-  auto shape = validate_grid_shape(rows_c.value(), cols_d, /*zero_is_calc=*/true);
-  if (!shape) {
-    return Value::error(shape.error());
-  }
-  const std::uint32_t rows = shape.value().rows;
-  const std::uint32_t cols = shape.value().cols;
+  const double start = read_optional_number_arg(args, arity, 2U, 1.0).value();
+  const double step = read_optional_number_arg(args, arity, 3U, 1.0).value();
   Value* buffer = nullptr;
   ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
   if (arr == nullptr) {
@@ -288,6 +267,34 @@ Value MUnit(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 }  // namespace
+
+bool sequence_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                    ErrorCode* out_err) {
+  auto rows_c = coerce_to_number(args[0]);
+  if (!rows_c) {
+    *out_err = rows_c.error();
+    return false;
+  }
+  for (std::uint32_t index = 1U; index < 4U; ++index) {
+    auto number = read_optional_number_arg(args, arity, index, 1.0);
+    if (!number) {
+      *out_err = number.error();
+      return false;
+    }
+  }
+  // A value that truncates to zero yields #CALC!, while a strictly negative
+  // dimension yields #VALUE!. This distinction is observable for
+  // SEQUENCE(0) versus SEQUENCE(-1).
+  auto shape = validate_grid_shape(rows_c.value(), read_optional_number_arg(args, arity, 1U, 1.0).value(),
+                                   /*zero_is_calc=*/true);
+  if (!shape) {
+    *out_err = shape.error();
+    return false;
+  }
+  *out_rows = shape.value().rows;
+  *out_cols = shape.value().cols;
+  return true;
+}
 
 void register_dynamic_array_builtins(FunctionRegistry& registry) {
   // SEQUENCE: one required arg (rows) + three optional (cols, start, step).

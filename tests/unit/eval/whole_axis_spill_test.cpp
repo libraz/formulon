@@ -265,11 +265,14 @@ TEST(WholeAxisSpill, DerivedSelfReferenceIsZero) {
   }
 }
 
-TEST(WholeAxisSpill, RowsOfASelfReferenceKeepsTheDeclaredHeightInTheReadOnlyDriver) {
-  // `=ROWS(G:G+0)` at G1: the read-only driver reads G1 as 0 and sizes
-  // the column around it, which is Excel's 1048576.
+TEST(WholeAxisSpill, RowsOfASelfReferenceReadsOnlyTheShape) {
+  // `=ROWS(G:G+0)` in G1 sizes the operation from G:G's declared rectangle
+  // without reading any cell, so it is not circular in either driver.
   Workbook wb = Workbook::create();
   const Sheet& sheet = RecalcWith(wb, 0U, 6U, "=ROWS(G:G+0)");
+  const Value v = sheet.resolve_cell_value(0U, 6U);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), static_cast<double>(Sheet::kMaxRows));
   const Value adhoc = AdhocValue(wb, sheet, 0U, 6U, "=ROWS(G:G+0)");
   ASSERT_TRUE(adhoc.is_number()) << adhoc.debug_to_string();
   EXPECT_EQ(adhoc.as_number(), static_cast<double>(Sheet::kMaxRows));

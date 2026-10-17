@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/builtins/dynamic_array.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
@@ -29,6 +30,7 @@
 #include "eval/scalar_ops.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker/broadcast.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -40,6 +42,108 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+// The largest SEQUENCE an operation shape sizes without building it
+// (8193 x 8192 elements); a larger one is evaluated.
+constexpr std::uint64_t kMaxShapeOnlyGeneratorElements = 8193ULL * 8192ULL;
+
+enum class OperationShape : std::uint8_t {
+  kUnknown,  ///< Needs evaluation to be sized.
+  kSized,    ///< Sized without reading any cell value.
+  kError,    ///< The operation evaluates to an error, or abandons its formula.
+};
+
+// Sizes an elementwise operation over references, array constants and
+// SEQUENCE grids from its operands' shapes alone, so no cell value is read:
+// a reference contributes its declared rectangle, an operator the
+// broadcast of its operands. A broadcast past `kMaxEvaluatedArrayElements`
+// abandons the formula, as evaluating it would. Anything else is
+// `kUnknown`.
+OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                               Value* out_err) {
+  const parser::AstNode& node = resolve_range_binding(raw, ctx.name_env(), /*accept_ref=*/false);
+  switch (node.kind()) {
+    case parser::NodeKind::Literal:
+      *out_rows = 1U;
+      *out_cols = 1U;
+      return OperationShape::kSized;
+    case parser::NodeKind::ArrayLiteral:
+      *out_rows = node.as_array_rows();
+      *out_cols = node.as_array_cols();
+      return OperationShape::kSized;
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::RangeOp: {
+      parser::Reference lhs{};
+      parser::Reference rhs{};
+      if (is_three_d_reference(node) || !declared_rect_endpoint_pair(node, &lhs, &rhs)) {
+        return OperationShape::kUnknown;
+      }
+      const auto rect = ctx.declared_range_rect(lhs, rhs);
+      if (!rect) {
+        *out_err = Value::error(rect.error());
+        return OperationShape::kError;
+      }
+      *out_rows = rect.value().rows();
+      *out_cols = rect.value().cols();
+      return OperationShape::kSized;
+    }
+    case parser::NodeKind::UnaryOp:
+      return operation_shape(node.as_unary_operand(), arena, registry, ctx, out_rows, out_cols, out_err);
+    case parser::NodeKind::BinaryOp: {
+      std::uint32_t lhs_rows = 0;
+      std::uint32_t lhs_cols = 0;
+      std::uint32_t rhs_rows = 0;
+      std::uint32_t rhs_cols = 0;
+      const OperationShape lhs =
+          operation_shape(node.as_binary_lhs(), arena, registry, ctx, &lhs_rows, &lhs_cols, out_err);
+      if (lhs != OperationShape::kSized) {
+        return lhs;
+      }
+      const OperationShape rhs =
+          operation_shape(node.as_binary_rhs(), arena, registry, ctx, &rhs_rows, &rhs_cols, out_err);
+      if (rhs != OperationShape::kSized) {
+        return rhs;
+      }
+      *out_rows = std::max(lhs_rows, rhs_rows);
+      *out_cols = std::max(lhs_cols, rhs_cols);
+      if (abandons_formula(*out_rows, *out_cols)) {
+        *out_err = Value::error(ErrorCode::Num);
+        return OperationShape::kError;
+      }
+      return OperationShape::kSized;
+    }
+    case parser::NodeKind::Call: {
+      const std::uint32_t arity = node.as_call_arity();
+      if (!strings::case_insensitive_eq(strip_future_prefix(node.as_call_name()), "SEQUENCE") || arity < 1U ||
+          arity > 4U) {
+        return OperationShape::kUnknown;
+      }
+      Value args[4] = {Value::blank(), Value::blank(), Value::blank(), Value::blank()};
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        args[i] = eval_node(node.as_call_arg(i), arena, registry, ctx);
+        if (args[i].is_error()) {
+          *out_err = args[i];
+          return OperationShape::kError;
+        }
+        if (args[i].is_array()) {
+          return OperationShape::kUnknown;
+        }
+      }
+      ErrorCode err = ErrorCode::Value;
+      if (!sequence_shape(args, arity, out_rows, out_cols, &err)) {
+        *out_err = Value::error(err);
+        return OperationShape::kError;
+      }
+      if (static_cast<std::uint64_t>(*out_rows) * *out_cols > kMaxShapeOnlyGeneratorElements) {
+        return OperationShape::kUnknown;
+      }
+      return OperationShape::kSized;
+    }
+    default:
+      return OperationShape::kUnknown;
+  }
+}
 
 // Fills `out_rows` / `out_cols` with the rectangle shape implied by
 // `arg_node`. Returns `true` on success; on failure sets `*out_err` to
@@ -136,6 +240,26 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     }
     // Fall through to the scalar fallback below so subtree errors
     // propagate and non-reference calls degrade to 1x1.
+  }
+  // An array operation is sized from its operands' shapes, so reading only
+  // that shape reads no cell value: `=ROWS(G:G+0)` in G1 is not circular. A
+  // scalar result is evaluated below, so an error in it propagates.
+  if (k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp || k == parser::NodeKind::Call) {
+    std::uint32_t rows = 0;
+    std::uint32_t cols = 0;
+    switch (operation_shape(arg_node, arena, registry, ctx, &rows, &cols, out_err)) {
+      case OperationShape::kSized:
+        if (static_cast<std::uint64_t>(rows) * cols > 1U) {
+          *out_rows = rows;
+          *out_cols = cols;
+          return true;
+        }
+        break;
+      case OperationShape::kError:
+        return false;
+      case OperationShape::kUnknown:
+        break;
+    }
   }
   // Scalar fallback. We still evaluate so an error argument propagates
   // with the correct code instead of silently producing 1. A spill

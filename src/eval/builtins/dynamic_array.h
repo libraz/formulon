@@ -18,10 +18,21 @@
 #ifndef FORMULON_EVAL_BUILTINS_DYNAMIC_ARRAY_H_
 #define FORMULON_EVAL_BUILTINS_DYNAMIC_ARRAY_H_
 
+#include <cstdint>
+
+#include "value.h"
+
 namespace formulon {
 namespace eval {
 
 class FunctionRegistry;
+
+/// Validates the evaluated arguments of `SEQUENCE(rows, [cols], [start],
+/// [step])` and reports the `rows` x `cols` grid it returns, without
+/// building it. Returns false, setting `*out_err` to the error SEQUENCE
+/// returns instead, when an argument is rejected.
+bool sequence_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                    ErrorCode* out_err);
 
 /// Registers the dynamic-array (spilling) built-in functions into
 /// `registry`. Currently registers SEQUENCE; other dynamic-array functions
