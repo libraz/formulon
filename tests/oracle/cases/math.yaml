@@ -1391,3 +1391,112 @@ cases:
   - id: mod_exact_large_quotient
     formula: "=MOD(1E+15,7.45058059692383E+06)"
     tolerance: { abs: 0, rel: 0 }
+
+  # -- ROUND family on the 15-digit view, CEILING / FLOOR quotient view, MOD quotient cap ---
+  - id: round_digit_string_roundup_fraction
+    formula: "=ROUNDUP(0.285,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_roundup_cents
+    formula: "=ROUNDUP(2.675,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_roundup_large
+    formula: "=ROUNDUP(123456789012.345,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_round_at_1e15
+    formula: "=ROUND(1E+15,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_round_many_places
+    formula: "=ROUND(1234567.891,12)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_trunc_fifteen_digits
+    formula: "=TRUNC(123456789012.345,7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_rounddown_fifteen_digits
+    formula: "=ROUNDDOWN(123456789012.345,7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_round_carry
+    formula: "=ROUND(99.995,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_round_negative_half
+    formula: "=ROUND(-2.5,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_round_negative_places
+    formula: "=ROUND(1234.5,-2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_roundup_negative
+    formula: "=ROUNDUP(-0.285,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: round_digit_string_rounddown_below_unit
+    formula: "=ROUNDDOWN(0.0049,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ceiling_fifteen_digit_quotient_below
+    formula: "=CEILING(1E+15,0.3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: floor_fifteen_digit_quotient_above
+    formula: "=FLOOR(1E+15,0.07)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ceiling_fifteen_digit_quotient_wide
+    formula: "=CEILING(1.23456789012345E+15,0.07)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ceiling_small_significance
+    formula: "=CEILING(1E+12,1E-5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ceiling_math_fifteen_digit_quotient
+    formula: "=CEILING.MATH(1E+15,0.3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: floor_math_fifteen_digit_quotient
+    formula: "=FLOOR.MATH(1E+15,0.07)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ceiling_precise_fifteen_digit_quotient
+    formula: "=CEILING.PRECISE(1E+15,0.3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: floor_precise_fifteen_digit_quotient
+    formula: "=FLOOR.PRECISE(1E+15,0.07)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: iso_ceiling_fifteen_digit_quotient
+    formula: "=ISO.CEILING(1E+15,0.3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_below_quotient_cap
+    formula: "=MOD(1125899999999.5,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_at_quotient_cap
+    formula: "=MOD(1125900000000,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_below_quotient_cap_two
+    formula: "=MOD(2251799999999,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_above_quotient_cap_two
+    formula: "=MOD(2251800000001,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_negative_dividend_at_cap
+    formula: "=MOD(-1125900000000,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_negative_divisor_at_cap
+    formula: "=MOD(1125900000000,-1)"
+    tolerance: { abs: 0, rel: 0 }

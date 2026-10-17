@@ -597,6 +597,52 @@ TEST(ExactRemainderAndAngles, PercentKeepsEveryDigitAfterACarry) {
   EXPECT_EQ(w.as_text(), "1000000000000000000000000.0%");
 }
 
+TEST(RoundingFamily, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=ROUNDUP(0.285,1)", 0.30000000000000004},
+      {"=ROUNDUP(2.675,2)", 2.6799999999999997},
+      {"=ROUNDUP(123456789012.345,2)", 123456789012.34999},
+      {"=ROUNDUP(-0.285,1)", -0.30000000000000004},
+      {"=ROUND(1E+15,2)", 1000000000000000.0},
+      {"=ROUND(1234567.891,12)", 1234567.891},
+      {"=ROUND(99.995,2)", 100.0},
+      {"=ROUND(-2.5,0)", -3.0},
+      {"=ROUND(1234.5,-2)", 1200.0},
+      {"=TRUNC(123456789012.345,7)", 123456789012.345},
+      {"=ROUNDDOWN(123456789012.345,7)", 123456789012.345},
+      {"=ROUNDDOWN(0.0049,2)", 0.0},
+      {"=CEILING(1E+15,0.3)", 999999999999999.0},
+      {"=FLOOR(1E+15,0.07)", 1000000000000001.1},
+      {"=CEILING(1.23456789012345E+15,0.07)", 1234567890123449.0},
+      {"=CEILING(1E+12,1E-5)", 1000000000000.0001},
+      {"=CEILING.MATH(1E+15,0.3)", 999999999999999.0},
+      {"=FLOOR.MATH(1E+15,0.07)", 1000000000000001.1},
+      {"=CEILING.PRECISE(1E+15,0.3)", 999999999999999.0},
+      {"=FLOOR.PRECISE(1E+15,0.07)", 1000000000000001.1},
+      {"=ISO.CEILING(1E+15,0.3)", 999999999999999.0},
+      {"=MOD(1125899999999.5,1)", 0.5},
+      {"=MOD(2251799999999,2)", 1.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(RoundingFamily, ModBeyondTheQuotientCapIsNum) {
+  for (const char* formula :
+       {"=MOD(1125900000000,1)", "=MOD(2251800000001,2)", "=MOD(-1125900000000,1)", "=MOD(1125900000000,-1)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

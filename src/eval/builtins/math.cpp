@@ -26,8 +26,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-using builtins_detail::round_at_scale;
-using builtins_detail::snap_to_integer;
 using builtins_detail::to_finite_value;
 
 // --- Single-number transforms -------------------------------------------
@@ -96,13 +94,12 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
 }
 
 // Shared frame of TRUNC and the ROUND family: coerces `value`, reads
-// `digits`, and returns `scale(value, 10^digits)` for the in-range cases.
+// `digits`, and returns `round(value, digits)` for the in-range cases.
 //
-// Extreme `digits` are clamped so `10^digits` cannot overflow to +-Inf:
-// beyond ~308 places a double has no digits left to round (a no-op), and
+// Beyond ~308 places a double has no digits left to round (a no-op), and
 // below ~-308 every finite double rounds to a multiple of 10^|digits|, i.e. 0.
-template <typename Scale>
-Value round_to_digits(const Value* args, std::uint32_t arity, Scale scale, bool snap_digits = false) {
+template <typename RoundFn>
+Value round_to_digits(const Value* args, std::uint32_t arity, RoundFn round, bool snap_digits = false) {
   auto value = coerce_to_number(args[0]);
   if (!value) {
     return Value::error(value.error());
@@ -118,18 +115,12 @@ Value round_to_digits(const Value* args, std::uint32_t arity, Scale scale, bool 
   if (d <= -308) {
     return Value::number(0.0);
   }
-  const double factor = std::pow(10.0, d);
-  if (std::isnan(factor) || std::isinf(factor)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return scale(value.value(), factor);
+  return to_finite_value(round(value.value(), d));
 }
 
-// TRUNC(value, digits?) - truncate toward zero. With no second arg or
-// `digits = 0`, equivalent to `std::trunc(value)`. With `digits != 0`, the
-// value is scaled by `10^digits`, truncated, then rescaled. `digits` may be
-// negative (e.g. `TRUNC(1234.5, -1) = 1230`). A non-finite scale factor
-// (caused by very large `|digits|`) yields `#NUM!`.
+// TRUNC(value, digits?) - truncate toward zero at `digits` decimals (default
+// 0), on the digits of the value's 15-significant-digit view. `digits` may be
+// negative (e.g. `TRUNC(1234.5, -1) = 1230`).
 Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Empty-string arguments surface #VALUE! rather than coercing to 0, same
   // rule as CEILING / FLOOR / MROUND.
@@ -145,22 +136,7 @@ Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (is_empty(args[0]) || (arity >= 2 && is_empty(args[1]))) {
     return Value::error(ErrorCode::Value);
   }
-  return round_to_digits(args, arity, [](double x, double factor) {
-    // Overflow on `value * factor` would truncate a no-op operation into a
-    // spurious `#NUM!`. When the product overflows, the double's mantissa
-    // already has no precision left for a fractional tail at this scale, so
-    // truncation is a no-op and we return the input unchanged. Verified
-    // against IronCalc TRUNC C57: `TRUNC(9.99999e+307, 5)` → 9.99999e+307.
-    const double product = x * factor;
-    if (std::isinf(product)) {
-      return Value::number(x);
-    }
-    // `snap_to_integer` absorbs the same IEEE-754 near-integer noise ROUND /
-    // CEILING / FLOOR already compensate for (e.g. `9.99 * 100 ==
-    // 998.9999999999999`), so TRUNC/ROUNDDOWN/ROUNDUP don't lose the last
-    // decimal digit that ROUND/CEILING/FLOOR keep on the same input.
-    return to_finite_value(std::trunc(snap_to_integer(product)) / factor);
-  });
+  return round_to_digits(args, arity, &builtins_detail::round_down_decimals);
 }
 
 // SQRT(value) - square root. Negative input -> `#NUM!`.
@@ -182,6 +158,8 @@ Value Sqrt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // MOD(n, d) - Excel's modulo: the exact remainder of `n / d`, signed like the
 // divisor (not the C `%` sign of the dividend). So `MOD(-7, 3) = 2`,
 // `MOD(7, -3) = -2`. `MOD(n, 0)` -> `#DIV/0!`.
+constexpr double kModMaxQuotient = 1125900000000.0;
+
 Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto operands = builtins_detail::read_number_pair(args, 0, 1);
   if (!operands) {
@@ -191,6 +169,10 @@ Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // A subnormal divisor counts as zero, and a subnormal remainder is #NUM!.
   if (std::fabs(pair.second) < DBL_MIN) {
     return Value::error(ErrorCode::Div0);
+  }
+  // A quotient this large is beyond what MOD resolves.
+  if (std::fabs(pair.first / pair.second) >= kModMaxQuotient) {
+    return Value::error(ErrorCode::Num);
   }
   // The exact remainder, signed like the divisor.
   double r = std::fmod(pair.first, pair.second);
@@ -222,55 +204,27 @@ Value Power(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Rounding -----------------------------------------------------------
 //
-// All three take `(value, digits)`. `digits` may be negative. They share the
-// `round_to_digits` frame, but each keeps its own inline formula: the modes
-// behave differently and a visible formula keeps each impl auditable.
+// All three take `(value, digits)`, `digits` may be negative, and work on the
+// digit string of the value's 15-significant-digit view (never on
+// `value * 10^digits`): ROUNDDOWN keeps the leading digits, ROUND rounds that
+// string half away from zero, ROUNDUP is ROUNDDOWN plus one unit in the last
+// kept place when anything was dropped.
 
-// ROUND - round half away from zero. `std::round` matches this on every
-// supported platform (it is mandated by C++11). `ROUND(2.5, 0) = 3`,
-// `ROUND(-2.5, 0) = -3`.
-//
-// IEEE 754 arithmetic on decimal-input expressions often lands 1-2 ULPs
-// below the mathematical .5 boundary (e.g.
-// `1.05 * (0.0284 + 0.0046) - 0.0284` = 0.006249999999999999, so
-// `value * 10000 = 62.499999999999986`). Mac Excel 365 compensates by
-// snapping these near-half values back to the decimal-correct side.
-// We mirror that with a tiny relative nudge (`2 * 2^-52 * |scaled|`,
-// ~9e-16 per unit) — large enough to absorb the typical ULP-level error
-// but far below the distance between any two genuinely distinct decimal
-// halves at the same scale, so values that are truly off the boundary
-// are unaffected.
+// ROUND - round half away from zero. `ROUND(2.5, 0) = 3`, `ROUND(-2.5, 0) = -3`.
 Value Round(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return round_to_digits(
-      args, 2,
-      [](double x, double factor) {
-        // Ties at the 16th digit follow Excel's 15-digit decimal view (100000000000001.5 rounds to ...01).
-        return to_finite_value(round_at_scale(x, factor));
-      },
-      /*snap_digits=*/true);
+  return round_to_digits(args, 2, &builtins_detail::round_half_away_decimals, /*snap_digits=*/true);
 }
 
 // ROUNDDOWN - always toward zero. `ROUNDDOWN(2.99, 0) = 2`,
 // `ROUNDDOWN(-2.99, 0) = -2`.
 Value RoundDown(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return round_to_digits(args, 2, [](double x, double factor) {
-    // `snap_to_integer` absorbs binary-representation noise the same way
-    // TRUNC does (see its comment); without it, e.g. `0.29 * 100 ==
-    // 28.999999999999996` truncates to 28 instead of 29.
-    return to_finite_value(std::trunc(snap_to_integer(x * factor)) / factor);
-  });
+  return round_to_digits(args, 2, &builtins_detail::round_down_decimals);
 }
 
 // ROUNDUP - always away from zero. `ROUNDUP(2.01, 0) = 3`,
-// `ROUNDUP(-2.01, 0) = -3`. Positive inputs use `std::ceil`, negative
-// inputs use `std::floor`; zero round-trips through either branch.
+// `ROUNDUP(-2.01, 0) = -3`.
 Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return round_to_digits(args, 2, [](double x, double factor) {
-    // `snap_to_integer` absorbs binary-representation noise the same way
-    // TRUNC / ROUNDDOWN do (see TRUNC's comment above).
-    const double scaled = snap_to_integer(x * factor);
-    return to_finite_value((x > 0.0) ? std::ceil(scaled) / factor : std::floor(scaled) / factor);
-  });
+  return round_to_digits(args, 2, &builtins_detail::round_up_decimals);
 }
 
 // --- Significance-aware rounding (legacy CEILING / FLOOR / MROUND) ------
@@ -318,8 +272,8 @@ inline double signum(double x) {
 // for `significance == 0`; `round` is `ceil` or `floor` on the quotient.
 //
 // Matching signs round the magnitude, then restore the sign; mismatched signs
-// round the signed quotient. `snap_to_integer` absorbs the quotient's
-// floating-point noise (`FLOOR(7.1, 0.1)` is 7.1, not 7).
+// round the signed quotient. The quotient is read through its 15-digit view
+// (`FLOOR(7.1, 0.1)` is 7.1, not 7).
 template <typename RoundFn>
 Value legacy_significance_round(const Value* args, const Value& zero_significance, RoundFn round) {
   if (is_empty_text(args[0]) || is_empty_text(args[1])) {
@@ -345,8 +299,9 @@ Value legacy_significance_round(const Value* args, const Value& zero_significanc
     return zero_significance;
   }
   const double abs_s = std::fabs(s);
-  const double r = (signum(n) == signum(s)) ? signum(n) * round(snap_to_integer(std::fabs(n) / abs_s)) * abs_s
-                                            : round(snap_to_integer(n / abs_s)) * abs_s;
+  const double r = (signum(n) == signum(s))
+                       ? signum(n) * round(builtins_detail::significance_quotient(std::fabs(n) / abs_s)) * abs_s
+                       : round(builtins_detail::significance_quotient(n / abs_s)) * abs_s;
   return to_finite_value(r);
 }
 
@@ -470,11 +425,8 @@ Value math_mode_rounding(const Value* args, std::uint32_t arity, bool ceiling) {
     return Value::number(0.0);
   }
   const double abs_s = std::fabs(significance);
-  // `snap_to_integer` absorbs the IEEE-754 noise that would otherwise make
-  // e.g. `CEILING.MATH(7.1, 0.1)` return `7` instead of `7.1` (7.1 / 0.1 is
-  // 70.999... rather than exactly 71). Mirrors the legacy CEILING / FLOOR
-  // path so the modern variants snap exact multiples the same way.
-  const double scaled = snap_to_integer(n / abs_s);
+  // The 15-digit view of the quotient keeps `CEILING.MATH(7.1, 0.1)` at 7.1 (7.1 / 0.1 is 70.999...).
+  const double scaled = builtins_detail::significance_quotient(n / abs_s);
   const bool use_ceil = (n > 0.0 || !flip_negative) ? ceiling : !ceiling;
   const double rounded = use_ceil ? std::ceil(scaled) : std::floor(scaled);
   const double r = rounded * abs_s;

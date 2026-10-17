@@ -14,12 +14,18 @@
 #define FORMULON_EVAL_BUILTINS_NUMERIC_HELPERS_H_
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <limits>
+#include <string_view>
 
 #include "eval/coerce.h"
 #include "utils/double_format.h"
+#include "utils/double_parse.h"
 #include "utils/expected.h"
+#include "utils/number_text.h"
 #include "value.h"
 
 namespace formulon {
@@ -47,16 +53,11 @@ inline Value to_finite_value(double r) noexcept {
   return Value::number(r);
 }
 
-/// Snaps a quotient to its nearest integer only when it is within a few ULPs.
-/// This preserves decimal exact multiples such as `7.1 / 0.1`, which binary
-/// floating point can represent just below 71, without collapsing genuinely
-/// non-integer quotients near zero.
-inline double snap_to_integer(double quotient) noexcept {
-  const double nearest = std::round(quotient);
-  if (std::fabs(quotient - nearest) < 2e-15 * std::fabs(quotient)) {
-    return nearest;
-  }
-  return quotient;
+/// The 15-significant-digit decimal view of a quotient, applied before a
+/// CEILING / FLOOR style rounding step so that an exact multiple (7.1 / 0.1)
+/// and the noise just below or above it round the way Excel's displayed value does.
+inline double significance_quotient(double quotient) noexcept {
+  return excel_decimal_view(quotient, 15);
 }
 
 /// (a, b) pair returned by `read_number_pair`. Used by distribution
@@ -76,13 +77,119 @@ struct NumberTriple {
   double third;
 };
 
-/// ROUND's rounding of `x` at `factor` = 10^digits: half away from zero on the
-/// 15-significant-digit view, nudged by a relative 2 * epsilon so values a ULP
-/// or two below a decimal half land on the decimal-correct side.
-inline double round_at_scale(double x, double factor) noexcept {
-  const double scaled = excel_decimal_view(x, 15) * factor;
-  const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
-  return std::round(scaled + bias) / factor;
+/// Decimal digits of |x| rendered to 15 significant digits: value = 0.d1d2...dn * 10^exponent with
+/// trailing zeros dropped (`count == 0` for zero).
+struct DecimalView {
+  char digits[16];
+  int count;
+  int exponent;
+  bool negative;
+};
+
+inline DecimalView decimal_view15(double x) noexcept {
+  DecimalView view{};
+  view.negative = x < 0.0;
+  const double magnitude = std::fabs(x);
+  if (magnitude == 0.0 || !std::isfinite(magnitude)) {
+    return view;
+  }
+  char text[40];
+  format_exponential(text, sizeof(text), excel_decimal_view(magnitude, 15), 14);
+  // text is "d.dddddddddddddde[+-]XX".
+  const char* cursor = text;
+  int n = 0;
+  for (; *cursor != 'e'; ++cursor) {
+    if (*cursor != '.') {
+      view.digits[n++] = *cursor;
+    }
+  }
+  view.exponent = std::atoi(cursor + 1) + 1;
+  while (n > 1 && view.digits[n - 1] == '0') {
+    --n;
+  }
+  view.count = n;
+  return view;
+}
+
+/// The double nearest 0.`digits` * 10^`exponent` (a correctly rounded decimal conversion), signed.
+inline double decimal_to_double(const char* digits, int count, int exponent, bool negative) noexcept {
+  if (count == 0) {
+    return 0.0;
+  }
+  char literal[48];
+  std::memcpy(literal, digits, static_cast<std::size_t>(count));
+  literal[count] = 'e';
+  const std::size_t offset = static_cast<std::size_t>(count) + 1;
+  const int length =
+      format_signed(literal + offset, sizeof(literal) - offset, static_cast<long long>(exponent) - count);
+  double value = 0.0;
+  parse_double_exact(std::string_view(literal, offset + static_cast<std::size_t>(length)), &value);
+  return negative ? -value : value;
+}
+
+/// 10^n as a correctly rounded double.
+inline double power_of_ten_exact(int n) noexcept {
+  char literal[16] = {'1', 'e'};
+  const int length = format_signed(literal + 2, sizeof(literal) - 2, n);
+  double value = 1.0;
+  parse_double_exact(std::string_view(literal, static_cast<std::size_t>(2 + length)), &value);
+  return value;
+}
+
+/// ROUNDDOWN / TRUNC to `digits` decimals: keeps the first (digits + exponent) digits of the 15-digit
+/// view and rebuilds the double.
+inline double round_down_decimals(double x, int digits) noexcept {
+  const DecimalView view = decimal_view15(x);
+  const int keep = digits + view.exponent;
+  if (view.count == 0 || keep <= 0) {
+    return 0.0;
+  }
+  return decimal_to_double(view.digits, keep < view.count ? keep : view.count, view.exponent, view.negative);
+}
+
+/// ROUND to `digits` decimals: the digit string of the 15-digit view rounded half away from zero.
+inline double round_half_away_decimals(double x, int digits) noexcept {
+  DecimalView view = decimal_view15(x);
+  const int keep = digits + view.exponent;
+  if (view.count == 0 || keep < 0) {
+    return 0.0;
+  }
+  if (keep >= view.count) {
+    return decimal_to_double(view.digits, view.count, view.exponent, view.negative);
+  }
+  const bool round_up = view.digits[keep] >= '5';
+  if (!round_up) {
+    return keep == 0 ? 0.0 : decimal_to_double(view.digits, keep, view.exponent, view.negative);
+  }
+  if (keep == 0) {
+    view.digits[0] = '1';
+    return decimal_to_double(view.digits, 1, view.exponent + 1, view.negative);
+  }
+  int i = keep - 1;
+  while (i >= 0 && view.digits[i] == '9') {
+    view.digits[i--] = '0';
+  }
+  int count = keep;
+  int exponent = view.exponent;
+  if (i >= 0) {
+    ++view.digits[i];
+  } else {
+    // A carry out of the leading digit adds one: 99.7 -> 100.
+    view.digits[0] = '1';
+    count = 1;
+    ++exponent;
+  }
+  return decimal_to_double(view.digits, count, exponent, view.negative);
+}
+
+/// ROUNDUP: ROUNDDOWN, plus one unit in the last kept place (away from zero) when digits were dropped.
+inline double round_up_decimals(double x, int digits) noexcept {
+  const double down = round_down_decimals(x, digits);
+  if (down == x) {
+    return down;
+  }
+  const double step = power_of_ten_exact(-digits);
+  return x > 0.0 ? down + step : down - step;
 }
 
 /// Reads a required numeric argument from `args[index]`; a non-finite value

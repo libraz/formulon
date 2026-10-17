@@ -33,6 +33,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -333,15 +334,6 @@ bool resolve_unit(std::string_view text, bool forced, Resolved* out) noexcept {
   return false;
 }
 
-// Correctly rounded 10^n.
-double power_of_ten(int n) noexcept {
-  char digits[16];
-  format_signed(digits, sizeof(digits), n);
-  double value = 1.0;
-  parse_double_exact(std::string("1e") + digits, &value);
-  return value;
-}
-
 // Scalar arithmetic with the converter's error rules: an overflow or a divisor
 // below the normal range sets `error`, and a subnormal result flushes to 0.
 struct Arith {
@@ -370,8 +362,8 @@ bool convert_temperature(double v, const Resolved& from, const Resolved& to, dou
   Arith m;
   const std::uint8_t kf = from.unit->temperature;
   const std::uint8_t kt = to.unit->temperature;
-  const double from_power = power_of_ten(from.exponent);
-  const double to_power = power_of_ten(to.exponent);
+  const double from_power = builtins_detail::power_of_ten_exact(from.exponent);
+  const double to_power = builtins_detail::power_of_ten_exact(to.exponent);
   double r = 0.0;
   switch (kf) {
     case kKelvin: {
@@ -524,11 +516,11 @@ Value Convert(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   Arith m;
   double ratio = 0.0;
   if (from.is_power && to.is_power) {
-    ratio = power_of_ten(from.exponent - to.exponent);
+    ratio = builtins_detail::power_of_ten_exact(from.exponent - to.exponent);
   } else if (from.is_power) {
-    ratio = m.div(power_of_ten(from.exponent), to.multiplier);
+    ratio = m.div(builtins_detail::power_of_ten_exact(from.exponent), to.multiplier);
   } else if (to.is_power) {
-    ratio = m.div(from.multiplier, power_of_ten(to.exponent));
+    ratio = m.div(from.multiplier, builtins_detail::power_of_ten_exact(to.exponent));
   } else {
     ratio = m.div(from.multiplier, to.multiplier);
   }

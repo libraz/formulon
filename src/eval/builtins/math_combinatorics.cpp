@@ -36,7 +36,6 @@ namespace eval {
 namespace {
 
 using builtins_detail::kPi;
-using builtins_detail::snap_to_integer;
 using builtins_detail::to_finite_value;
 
 // Factorial table for n = 0..170 (double precision). 170! is the largest
@@ -741,7 +740,7 @@ inline Value precise_rounding(const Value* args, std::uint32_t arity, bool up) {
     return Value::number(0.0);
   }
   const double abs_s = std::fabs(sig);
-  const double scaled = snap_to_integer(n / abs_s);
+  const double scaled = builtins_detail::significance_quotient(n / abs_s);
   const double rounded = up ? std::ceil(scaled) : std::floor(scaled);
   const double r = rounded * abs_s;
   return to_finite_value(r);

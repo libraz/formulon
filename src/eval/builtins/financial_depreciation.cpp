@@ -384,7 +384,7 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   // Rate: 1 - (salvage/cost)^(1/life) through POWER, rounded to 3 decimals.
-  const double rate = builtins_detail::round_at_scale(1.0 - excel_power(salvage / cost, 1.0 / life), 1000.0);
+  const double rate = builtins_detail::round_half_away_decimals(1.0 - excel_power(salvage / cost, 1.0 / life), 3);
   // First period: prorated by (month_int/12).
   const double dep_1 = (cost * rate) * (month_int / 12.0);
   if (period < 2.0) {
