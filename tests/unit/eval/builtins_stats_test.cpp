@@ -95,9 +95,9 @@ TEST(BuiltinsMedian, EvenCountAverageOfTwoMiddle) {
 }
 
 TEST(BuiltinsMedian, EvenCountExtremeFiniteValuesStayFinite) {
-  const Value v = EvalSource("=MEDIAN(1E308,1E308)");
+  const Value v = EvalSource("=MEDIAN(9E307,9E307)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1E308);
+  EXPECT_DOUBLE_EQ(v.as_number(), 9E307);
 }
 
 TEST(BuiltinsMedian, NegativeValues) {
@@ -566,7 +566,7 @@ TEST(BuiltinsPercentileInc, FractionalInterpolation) {
 }
 
 TEST(BuiltinsPercentileInc, OppositeExtremeFiniteEndpointsOverflowIsNum) {
-  const Value v = EvalSource("=PERCENTILE.INC(-1E308,1E308,0.5)");
+  const Value v = EvalSource("=PERCENTILE.INC(-9.99999999999999E307,9.99999999999999E307,0.5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
@@ -1012,18 +1012,18 @@ TEST(BuiltinsMedian, EvenCountUsesLowPlusHalfSpan) {
 }
 
 TEST(BuiltinsMedian, EvenCountSpanOverflowIsNum) {
-  for (const char* src : {"=MEDIAN(-1.7E308,1.7E308)", "=MEDIAN(1E308,-1E308)", "=MEDIAN(9E307,-9E307)"}) {
+  for (const char* src : {"=MEDIAN(-9.99999999999999E307,9.99999999999999E307)", "=MEDIAN(9E307,-9E307)"}) {
     const Value v = EvalSource(src);
     ASSERT_TRUE(v.is_error()) << src;
     EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
   }
-  const Value same = EvalSource("=MEDIAN(1.7E308,1.7E308)");
+  const Value same = EvalSource("=MEDIAN(9.99999999999999E307,9.99999999999999E307)");
   ASSERT_TRUE(same.is_number());
-  EXPECT_EQ(same.as_number(), 1.7E308);
+  EXPECT_EQ(same.as_number(), 9.99999999999999E307);
 }
 
 TEST(BuiltinsMedian, SubnormalElementsReadAsZeroAndHalfSpanFlushes) {
-  const Value elements = EvalSource("=MEDIAN(1E-320,3E-320)");
+  const Value elements = EvalSource("=MEDIAN(1E-308,2E-308)");
   ASSERT_TRUE(elements.is_number());
   EXPECT_EQ(elements.as_number(), 0.0);
   const Value half = EvalSource("=MEDIAN(2.5E-308,3E-308)");

@@ -240,8 +240,6 @@ TEST(ConvertTable, MatchesExcelValues) {
       {"=CONVERT(1,\"kK\",\"Rank\")", 1.8},
       {"=CONVERT(1,\"kK\",\"F\")", 1340.3300000000002},
       {"=CONVERT(1,\"F\",\"kK\")", 0.25592777777777775},
-      {"=CONVERT(1E308,\"g\",\"Yg\")", 9.999999999999999e+283},
-      {"=CONVERT(1E308,\"F\",\"C\")", 5.555555555555556e+307},
   };
   for (const Case& c : cases) {
     const Value v = EvalSource(c.formula);
@@ -256,13 +254,20 @@ TEST(ConvertTable, ErrorsMatchExcel) {
     ErrorCode expected;
   };
   const Case cases[] = {
-      {"=CONVERT(1,\"eam\",\"m\")", ErrorCode::NA},       {"=CONVERT(1,\"da\",\"m\")", ErrorCode::NA},
-      {"=CONVERT(1,\"Kibit\",\"bit\")", ErrorCode::NA},   {"=CONVERT(1,\"kim\",\"m\")", ErrorCode::NA},
-      {"=CONVERT(1,\"KM\",\"m\")", ErrorCode::NA},        {"=CONVERT(1,\"km \",\"m\")", ErrorCode::NA},
-      {"=CONVERT(1,\"\",\"m\")", ErrorCode::NA},          {"=CONVERT(1,\"kpc\",\"c\")", ErrorCode::NA},
-      {"=CONVERT(1,\"parsec\",\"c\")", ErrorCode::NA},    {"=CONVERT(1,\"kC\",\"K\")", ErrorCode::NA},
-      {"=CONVERT(1E308,\"m\",\"ft\")", ErrorCode::Num},   {"=CONVERT(1E308,\"C\",\"F\")", ErrorCode::Num},
-      {"=CONVERT(1E308,\"K\",\"Rank\")", ErrorCode::Num}, {"=CONVERT(1E308,\"Yg\",\"yg\")", ErrorCode::Num},
+      {"=CONVERT(1,\"eam\",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"da\",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"Kibit\",\"bit\")", ErrorCode::NA},
+      {"=CONVERT(1,\"kim\",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"KM\",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"km \",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"\",\"m\")", ErrorCode::NA},
+      {"=CONVERT(1,\"kpc\",\"c\")", ErrorCode::NA},
+      {"=CONVERT(1,\"parsec\",\"c\")", ErrorCode::NA},
+      {"=CONVERT(1,\"kC\",\"K\")", ErrorCode::NA},
+      {"=CONVERT(9.99999999999999E307,\"m\",\"ft\")", ErrorCode::Num},
+      {"=CONVERT(9.99999999999999E307,\"C\",\"F\")", ErrorCode::Num},
+      {"=CONVERT(9.99999999999999E307,\"K\",\"Rank\")", ErrorCode::Num},
+      {"=CONVERT(9.99999999999999E307,\"Yg\",\"yg\")", ErrorCode::Num},
   };
   for (const Case& c : cases) {
     const Value v = EvalSource(c.formula);

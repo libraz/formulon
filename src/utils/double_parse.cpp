@@ -283,18 +283,39 @@ ParsedDouble parse_double_prefix(std::string_view text) noexcept {
   return out;
 }
 
-bool parse_excel_decimal(std::string_view text, double* out) noexcept {
-  constexpr int kExcelDigits = 15;
-  const ScannedDecimal scan = scan_decimal(text, kExcelDigits);
-  if (scan.consumed == 0 || scan.consumed != text.size()) {
-    return false;
-  }
+namespace {
+
+constexpr int kExcelDigits = 15;
+
+void store_excel_decimal(const ScannedDecimal& scan, double* out) noexcept {
   std::uint64_t n = 0;
   for (int i = 0; i < scan.count; ++i) {
     n = n * 10U + static_cast<std::uint64_t>(scan.digits[i] - '0');
   }
   const double magnitude = excel_scale_decimal(n, scan.exponent);
   *out = scan.negative ? -magnitude : magnitude;
+}
+
+}  // namespace
+
+bool parse_excel_decimal(std::string_view text, double* out) noexcept {
+  const ScannedDecimal scan = scan_decimal(text, kExcelDigits);
+  if (scan.consumed == 0 || scan.consumed != text.size()) {
+    return false;
+  }
+  store_excel_decimal(scan, out);
+  return true;
+}
+
+bool parse_excel_literal(std::string_view text, double* out) noexcept {
+  const ScannedDecimal scan = scan_decimal(text, kExcelDigits);
+  if (scan.consumed == 0 || scan.consumed != text.size()) {
+    return false;
+  }
+  if (scan.count > 0 && !excel_leading_exponent_in_range(static_cast<long long>(scan.exponent) + scan.count - 1)) {
+    return false;
+  }
+  store_excel_decimal(scan, out);
   return true;
 }
 

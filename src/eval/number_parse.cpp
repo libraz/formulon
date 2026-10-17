@@ -470,8 +470,7 @@ bool excel_text_number(std::string_view magnitude, bool negative, int percent_co
   scale -= 2LL * percent_count;
   // The check sits on the leading digit's decimal exponent; zero has none and
   // is judged with no digits.
-  const long long normalized = scale + kept;
-  if (normalized < -308 || normalized > 308) {
+  if (!excel_leading_exponent_in_range(scale + kept - 1)) {
     return false;
   }
   const double value = excel_scale_decimal(mantissa, scale);

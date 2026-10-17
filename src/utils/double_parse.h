@@ -51,6 +51,22 @@ double excel_scale_decimal(std::uint64_t n, long long e) noexcept;
 /// return convention as `parse_double_exact`.
 bool parse_excel_decimal(std::string_view text, double* out) noexcept;
 
+/// Smallest and largest decimal exponent of the leading significant digit of a
+/// nonzero number Excel accepts as text or as a formula literal.
+constexpr long long kExcelMinLeadingExponent = -309;
+constexpr long long kExcelMaxLeadingExponent = 307;
+
+/// True when a nonzero number whose leading significant digit has decimal
+/// exponent `leading_exponent` lies inside the range Excel accepts.
+constexpr bool excel_leading_exponent_in_range(long long leading_exponent) noexcept {
+  return leading_exponent >= kExcelMinLeadingExponent && leading_exponent <= kExcelMaxLeadingExponent;
+}
+
+/// Like `parse_excel_decimal`, but returns false when a nonzero number lies
+/// outside the range `excel_leading_exponent_in_range` accepts. Zero is always
+/// accepted.
+bool parse_excel_literal(std::string_view text, double* out) noexcept;
+
 /// Parses `text` as one decimal number with nothing after it. Returns false
 /// for empty text or trailing bytes; the value is written even when it is
 /// out of range, so callers that need a finite result check it themselves.

@@ -405,7 +405,7 @@ TEST(TreeWalkerErrors, ConcatPropagatesError) {
 // ---------------------------------------------------------------------------
 
 TEST(TreeWalkerNumeric, OverflowToNum) {
-  const Value v = EvalSource("=1E308*10");
+  const Value v = EvalSource("=9E307*10");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

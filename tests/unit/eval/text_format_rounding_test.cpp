@@ -62,8 +62,8 @@ TEST(DisplayRoundingTies, TextMatchesRoundOnTextifiedRound) {
 }
 
 TEST(DisplayRoundingSafety, LargeTextValuesAndScalingOverflow) {
-  // 309 characters exceed the 255-character limit on formatted numbers.
-  const Value wide = EvalSource("=TEXT(1E308,\"0\")");
+  // 308 characters exceed the 255-character limit on formatted numbers.
+  const Value wide = EvalSource("=TEXT(9E307,\"0\")");
   ASSERT_TRUE(wide.is_error());
   EXPECT_EQ(wide.as_error(), ErrorCode::Value);
   const Value value = EvalSource("=TEXT(1E307,\"0%\")");

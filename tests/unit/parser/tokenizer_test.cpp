@@ -129,39 +129,55 @@ TEST(TokenizerNumberLiterals, RejectDoubleDot) {
   EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidNumberLiteral);
 }
 
-TEST(TokenizerNumberLiterals, OverflowMagnitudeBecomesNumError) {
-  // `1E309` overflows the double range; strtod returns +inf. Rather than
-  // emitting a non-finite Number token, the tokenizer surfaces `#NUM!` so
-  // the formula evaluates to Excel's overflow error.
-  Tokenizer tz("1E309");
-  const auto& v = tz.tokens();
-  ASSERT_EQ(v.size(), 2u);  // ErrorLiteral + Eof
-  EXPECT_EQ(v[0].kind, TokenKind::ErrorLiteral);
-  EXPECT_EQ(v[0].error_code, ErrorCode::Num);
+namespace {
+
+void ExpectLiteralRejected(const char* lex) {
+  Tokenizer tz(lex);
+  (void)tz.tokens();
+  ASSERT_FALSE(tz.errors().empty()) << lex;
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidNumberLiteral) << lex;
 }
 
-TEST(TokenizerNumberLiterals, UnderflowMagnitudeRoundsToZero) {
-  // `1E-400` is well past even the smallest subnormal, so strtod itself
-  // already floors it to 0.0.
-  Tokenizer tz("1E-400");
+void ExpectLiteralValue(const std::string& lex, double expected) {
+  Tokenizer tz(lex);
   const auto& v = tz.tokens();
-  ASSERT_EQ(v.size(), 2u);  // Number + Eof
-  EXPECT_EQ(v[0].kind, TokenKind::Number);
-  EXPECT_EQ(v[0].number, 0.0);
+  ASSERT_EQ(v.size(), 2u) << lex;
+  EXPECT_EQ(v[0].kind, TokenKind::Number) << lex;
+  EXPECT_EQ(v[0].number, expected) << lex;
 }
 
-TEST(TokenizerNumberLiterals, SubnormalMagnitudeFlushesToZero) {
-  // Measured directly against Excel 365 (Mac, via xlwings): every literal
-  // below DBL_MIN (~2.2250738585072014E-308) -- the whole subnormal range,
-  // not just the underflow-to-zero tail strtod already floors -- evaluates
-  // to exactly 0 in Excel, which does not keep denormalized precision.
-  for (const char* lex : {"2.5E-310", "1E-320", "1E-310", "4.9E-324", "1E-308"}) {
-    Tokenizer tz(lex);
-    const auto& v = tz.tokens();
-    ASSERT_EQ(v.size(), 2u) << lex;
-    EXPECT_EQ(v[0].kind, TokenKind::Number) << lex;
-    EXPECT_EQ(v[0].number, 0.0) << lex;
+}  // namespace
+
+TEST(TokenizerNumberLiterals, LeadingDigitAboveRangeIsInvalid) {
+  for (const char* lex : {"1E309", "1E400", "1E308", "0.1E309", "1.79769313486231E308"}) {
+    ExpectLiteralRejected(lex);
   }
+}
+
+TEST(TokenizerNumberLiterals, LeadingDigitBelowRangeIsInvalid) {
+  for (const char* lex : {"1E-400", "2.5E-310", "1E-320", "1E-310", "4.9E-324"}) {
+    ExpectLiteralRejected(lex);
+  }
+}
+
+TEST(TokenizerNumberLiterals, LargestInRangeLiteralIsAccepted) {
+  ExpectLiteralValue("9.99999999999999E307", 9.99999999999999e307);
+}
+
+TEST(TokenizerNumberLiterals, MagnitudeBelowSmallestNormalIsZero) {
+  for (const char* lex : {"1E-308", "1E-309", "2.2250738585072014E-308", "0E-400", "0"}) {
+    ExpectLiteralValue(lex, 0.0);
+  }
+}
+
+TEST(TokenizerNumberLiterals, SmallestNormalIsKeptExactly) {
+  ExpectLiteralValue("2.22507385850721E-308", 2.22507385850721e-308);
+}
+
+TEST(TokenizerNumberLiterals, LongLiteralKeepsFifteenSignificantDigits) {
+  ExpectLiteralValue(std::string("1234567890123456789012345678901234567890123456789012345678901234567890"),
+                     1.23456789012345e69);
+  ExpectLiteralValue("0." + std::string(100, '0') + "1", 1e-101);
 }
 
 TEST(TokenizerNumberLiterals, MagnitudeAboveDblMinIsKeptExactly) {
@@ -187,27 +203,6 @@ TEST(TokenizerNumberLiterals, RejectBareDot) {
   Tokenizer tz(".");
   (void)tz.tokens();
   ASSERT_FALSE(tz.errors().empty());
-}
-
-TEST(TokenizerNumberLiterals, RejectsOverlongNumberLiteralAsInvalid) {
-  // 76 byte literal: `0.` + 75 zeros + `1`. Earlier bug silently truncated
-  // anything past 63 bytes, letting the surface lexeme and the parsed
-  // numeric value disagree. The fix surfaces overlong literals as Invalid
-  // with an `InvalidNumberLiteral` diagnostic so callers cannot rely on a
-  // mismatched semantic.
-  std::string overlong = "0.";
-  overlong.append(75, '0');
-  overlong.push_back('1');
-  ASSERT_GT(overlong.size(), 63u);
-
-  Tokenizer tz(overlong);
-  const auto& v = tz.tokens();
-  // Tokenizer emits at least one token for the literal plus the trailing
-  // Eof; the literal must be the Invalid kind, not Number.
-  ASSERT_GE(v.size(), 1u);
-  EXPECT_EQ(v[0].kind, TokenKind::Invalid);
-  ASSERT_FALSE(tz.errors().empty());
-  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidNumberLiteral);
 }
 
 TEST(TokenizerNumberLiterals, FifteenSignificantDigitTruncation) {

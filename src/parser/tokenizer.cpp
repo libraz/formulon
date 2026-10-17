@@ -18,10 +18,8 @@
 
 #include "parser/tokenizer.h"
 
-#include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <string>
 #include <string_view>
 
@@ -30,7 +28,6 @@
 #include "utils/a1_ref.h"
 #include "utils/double_parse.h"
 #include "utils/strings.h"
-#include "utils/subnormal_flush.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -887,17 +884,6 @@ void Tokenizer::scan_number() {
     return;
   }
 
-  // Refuse over-long literals rather than parse a prefix of them: a token
-  // whose semantic value diverges from its source spelling would let an
-  // attacker smuggle different numbers past callers that compare lexeme
-  // bytes. Excel only cares about the IEEE-754 representation, so any
-  // literal of 64 bytes or more is reported as an invalid token.
-  constexpr std::size_t kMaxNumberLiteralBytes = 64;
-  if (lex.size() >= kMaxNumberLiteralBytes) {
-    emit(TokenKind::Invalid, start);
-    record_error(LexerErrorCode::InvalidNumberLiteral, start);
-    return;
-  }
   // Apply Excel's 15-significant-digit rule before parsing. The original
   // lexeme is still recorded on the token for diagnostics.
   std::string invariant;
@@ -912,35 +898,12 @@ void Tokenizer::scan_number() {
     numeric_lex = invariant;
   }
   double value = 0.0;
-  if (!parse_excel_decimal(numeric_lex, &value)) {
+  // A nonzero literal whose leading digit lies outside Excel's range is a
+  // syntax error, so a literal never overflows.
+  if (!parse_excel_literal(numeric_lex, &value)) {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
     return;
-  }
-  // A literal below DBL_MIN is stored as 0.
-  value = flush_subnormal(value);
-  // A magnitude that overflows the double range (`1E309`) comes back from
-  // the parser as ±infinity. Excel surfaces such a literal as `#NUM!` rather
-  // than propagating a non-finite Number value, so emit the error literal
-  // directly.
-  if (std::isinf(value)) {
-    Token overflow;
-    overflow.kind = TokenKind::ErrorLiteral;
-    overflow.range = make_range();
-    overflow.lexeme = lex;
-    overflow.error_code = ErrorCode::Num;
-    tokens_.push_back(overflow);
-    return;
-  }
-  // Excel flushes any subnormal magnitude to zero rather than keeping
-  // denormalized precision: measured directly against Excel 365 (Mac, via
-  // xlwings), `=2.5E-310`, `=1E-320`, `=1E-310`, `=4.9E-324`, `=1E-308` all
-  // evaluate to exactly 0, while `=2.3E-308` (above `DBL_MIN`) evaluates to
-  // 2.3e-308. Parsing only floors to 0.0 below the smallest subnormal
-  // (~4.9E-324), so the whole subnormal range above that needs an explicit
-  // check.
-  if (value != 0.0 && std::fabs(value) < std::numeric_limits<double>::min()) {
-    value = std::copysign(0.0, value);
   }
 
   Token t;

@@ -138,7 +138,7 @@ TEST(BuiltinsFDistRt, SumsWithDistToOne) {
 }
 
 TEST(BuiltinsFDistRt, ExtremeFiniteXHasZeroRightTail) {
-  const Value v = EvalSource("=F.DIST.RT(1E308,5,10)");
+  const Value v = EvalSource("=F.DIST.RT(9.99999999999999E307,5,10)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }

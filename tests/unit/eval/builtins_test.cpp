@@ -76,7 +76,7 @@ TEST(BuiltinsSum, LeftMostErrorWins) {
 }
 
 TEST(BuiltinsSum, OverflowYieldsNum) {
-  const Value v = EvalSource("=SUM(1e308, 1e308)");
+  const Value v = EvalSource("=SUM(9e307, 9e307)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

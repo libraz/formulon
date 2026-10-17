@@ -14,7 +14,7 @@ namespace {
 // ---------------------------------------------------------------------------
 
 TEST(DateTimeTime, OverflowingComponentsReturnNumError) {
-  for (const char* formula : {"=TIME(1E308,0,0)", "=TIME(0,1E308,0)", "=TIME(1E308,-1E308,0)"}) {
+  for (const char* formula : {"=TIME(9E307,0,0)", "=TIME(0,9E307,0)", "=TIME(9E307,-9E307,0)"}) {
     SCOPED_TRACE(formula);
     const Value value = EvalSource(formula);
     ASSERT_TRUE(value.is_error());
@@ -26,7 +26,7 @@ TEST(DateTimeTime, OverflowingComponentsReturnNumError) {
 }
 
 TEST(DateTimeTime, ComponentUpperBoundsApplyBeforeDayWrapping) {
-  for (const char* formula : {"=TIME(32768,0,0)", "=TIME(0,32768,0)", "=TIME(0,0,32768)", "=TIME(0,0,1E308)"}) {
+  for (const char* formula : {"=TIME(32768,0,0)", "=TIME(0,32768,0)", "=TIME(0,0,32768)", "=TIME(0,0,9E307)"}) {
     SCOPED_TRACE(formula);
     const Value value = EvalSource(formula);
     ASSERT_TRUE(value.is_error());

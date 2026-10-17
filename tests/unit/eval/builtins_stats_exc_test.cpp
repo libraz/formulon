@@ -76,7 +76,7 @@ TEST(BuiltinsPercentileExc, MedianOnTenValues) {
 }
 
 TEST(BuiltinsPercentileExc, OppositeExtremeEndpointsOverflowTheSpan) {
-  const Value v = EvalSource("=PERCENTILE.EXC({-1E308,1E308},0.5)");
+  const Value v = EvalSource("=PERCENTILE.EXC({-9.99999999999999E307,9.99999999999999E307},0.5)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
