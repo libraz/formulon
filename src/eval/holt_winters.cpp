@@ -38,7 +38,8 @@ struct TrendCandidate {
   double beta;
 };
 
-// Smoothing parameter candidates for seasonal fits.
+// Smoothing parameter candidates for seasonal fits, ordered by gamma, then
+// beta ascending, then alpha descending.
 constexpr SeasonalCandidate kSeasonalCandidates[] = {
     {0.751, 0.001, 0.001},
     {0.501, 0.001, 0.001},
@@ -81,7 +82,8 @@ constexpr SeasonalCandidate kSeasonalCandidates[] = {
     {0.1, 0.099, 0.899},
 };
 
-// Smoothing parameter candidates for non-seasonal fits.
+// Smoothing parameter candidates for non-seasonal fits, ordered by beta
+// ascending, then alpha descending.
 constexpr TrendCandidate kTrendCandidates[] = {
     {0.9, 0.001},   {0.75, 0.001},  {0.5, 0.001},          {0.25, 0.001},         {0.126, 0.001},
     {0.1, 0.001},   {0.002, 0.001}, {0.833333, 0.0833333}, {0.166667, 0.0833333}, {0.998, 0.099},
@@ -89,6 +91,36 @@ constexpr TrendCandidate kTrendCandidates[] = {
     {0.25, 0.249},  {0.5, 0.25},    {0.998, 0.499},        {0.5, 0.499},          {0.666667, 0.5},
     {0.998, 0.749}, {0.75, 0.749},  {0.833333, 0.75},      {0.998, 0.899},        {0.9, 0.899},
 };
+
+constexpr bool precedes(const SeasonalCandidate& a, const SeasonalCandidate& b) noexcept {
+  if (a.gamma != b.gamma) {
+    return a.gamma < b.gamma;
+  }
+  if (a.beta != b.beta) {
+    return a.beta < b.beta;
+  }
+  return a.alpha > b.alpha;
+}
+
+constexpr bool precedes(const TrendCandidate& a, const TrendCandidate& b) noexcept {
+  if (a.beta != b.beta) {
+    return a.beta < b.beta;
+  }
+  return a.alpha > b.alpha;
+}
+
+template <typename T, std::size_t N>
+constexpr bool strictly_ordered(const T (&table)[N]) noexcept {
+  for (std::size_t i = 1; i < N; ++i) {
+    if (!precedes(table[i - 1], table[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(strictly_ordered(kSeasonalCandidates), "seasonal candidates out of order");
+static_assert(strictly_ordered(kTrendCandidates), "trend candidates out of order");
 
 // Forecasts below this magnitude may be snapped to zero.
 constexpr double kTinyResult = 3e-7;
