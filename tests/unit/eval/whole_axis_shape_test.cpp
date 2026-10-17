@@ -280,6 +280,62 @@ TEST_F(WholeAxisShape, RowsAndColumnsSizeAnOperationWithoutBuildingIt) {
   }
 }
 
+TEST_F(WholeAxisShape, GeneratorsUnderRowsAbandonPastTheirElementBound) {
+  // A generator sized under ROWS / COLUMNS answers up to 107,374,182
+  // elements and abandons the formula past it, whatever its shape; an
+  // operation keeps the 53,687,091-element bound. Both drivers agree.
+  const struct {
+    const char* formula;
+    double expected;
+  } cases[] = {{"=ROWS(SEQUENCE(6553,16384))", 6553.0},
+               {"=ROWS(SEQUENCE(6554,16384))", 0.0},
+               {"=ROWS(SEQUENCE(13107,8192))", 13107.0},
+               {"=ROWS(SEQUENCE(13108,8192))", 0.0},
+               {"=ROWS(SEQUENCE(107374,1000))", 107374.0},
+               {"=COLUMNS(SEQUENCE(107375,1000))", 0.0},
+               {"=ROWS(MAKEARRAY(4096,16384,LAMBDA(i,j,1)))", 4096.0},
+               {"=ROWS(MAKEARRAY(8193,16384,LAMBDA(i,j,1)))", 0.0},
+               {"=ROWS(RANDARRAY(4096,16384))", 4096.0},
+               {"=COLUMNS(RANDARRAY(8193,16384))", 0.0},
+               {"=ROWS(L!A1:A3276+L!A1:XFD1)", 3276.0},
+               {"=ROWS(L!A1:A3277+L!A1:XFD1)", 0.0},
+               {"=ROWS(SEQUENCE(3276,16384)+0)", 3276.0},
+               {"=ROWS(SEQUENCE(3277,16384)+0)", 0.0}};
+  for (const auto& c : cases) {
+    Put(kH, 0U, kHCol, c.formula);
+    const Value v = At(kH, 0U, kHCol);
+    ASSERT_TRUE(v.is_number()) << c.formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+    const Value adhoc = Adhoc(c.formula);
+    ASSERT_TRUE(adhoc.is_number()) << c.formula << " " << adhoc.debug_to_string();
+    EXPECT_EQ(adhoc.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST_F(WholeAxisShape, GeneratorsUnderRowsKeepTheirArgumentErrors) {
+  // The arguments are validated as the generator validates them, and
+  // MAKEARRAY's lambda is checked for two parameters without being called.
+  const struct {
+    const char* formula;
+    ErrorCode expected;
+  } cases[] = {{"=ROWS(MAKEARRAY(5,5,LAMBDA(i,1)))", ErrorCode::Value},
+               {"=ROWS(MAKEARRAY(8193,16384,LAMBDA(i,1)))", ErrorCode::Value},
+               {"=ROWS(MAKEARRAY(0,5,LAMBDA(i,j,1)))", ErrorCode::Value},
+               {"=ROWS(RANDARRAY(5,5,10,1))", ErrorCode::Value},
+               {"=ROWS(RANDARRAY(5,5,0.5,3,TRUE))", ErrorCode::Value},
+               {"=ROWS(RANDARRAY(-1,5))", ErrorCode::Value}};
+  for (const auto& c : cases) {
+    const Value v = Adhoc(c.formula);
+    ASSERT_TRUE(v.is_error()) << c.formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), c.expected) << c.formula;
+  }
+  // The lambda is never called: one that would fail for every cell still
+  // sizes the grid.
+  const Value sized = Adhoc("=ROWS(MAKEARRAY(4096,16384,LAMBDA(i,j,1/0)))");
+  ASSERT_TRUE(sized.is_number()) << sized.debug_to_string();
+  EXPECT_EQ(sized.as_number(), 4096.0);
+}
+
 TEST_F(WholeAxisShape, RowsOfASequenceKeepsItsArgumentErrors) {
   const struct {
     const char* formula;

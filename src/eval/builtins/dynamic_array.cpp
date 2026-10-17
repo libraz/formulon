@@ -151,54 +151,16 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
 /// RNG: shared per-thread Mersenne Twister via `thread_local_rng()` (same
 /// stream as RAND / RANDBETWEEN).
 Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto rows_c = read_optional_number_arg(args, arity, 0U, 1.0);
-  if (!rows_c) {
-    return Value::error(rows_c.error());
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ErrorCode err = ErrorCode::Value;
+  if (!randarray_shape(args, arity, &rows, &cols, &err)) {
+    return Value::error(err);
   }
-  auto cols_c = read_optional_number_arg(args, arity, 1U, 1.0);
-  if (!cols_c) {
-    return Value::error(cols_c.error());
-  }
-  auto min_c = read_optional_number_arg(args, arity, 2U, 0.0);
-  if (!min_c) {
-    return Value::error(min_c.error());
-  }
-  auto max_c = read_optional_number_arg(args, arity, 3U, 1.0);
-  if (!max_c) {
-    return Value::error(max_c.error());
-  }
-  auto whole_number_c = read_optional_bool_arg(args, arity, 4U, false);
-  if (!whole_number_c) {
-    return Value::error(whole_number_c.error());
-  }
-  const double rows_d = rows_c.value();
-  const double cols_d = cols_c.value();
-  const double min_v = min_c.value();
-  const double max_v = max_c.value();
-  const bool whole_number = whole_number_c.value();
-
-  // Shape validation. SEQUENCE precedent: truncate-toward-zero, reject
-  // <= 0 with #VALUE!, reject oversize with #NUM!.
-  auto shape = validate_grid_shape(rows_d, cols_d, /*zero_is_calc=*/false);
-  if (!shape) {
-    return Value::error(shape.error());
-  }
-  const std::uint32_t rows = shape.value().rows;
-  const std::uint32_t cols = shape.value().cols;
+  const double min_v = read_optional_number_arg(args, arity, 2U, 0.0).value();
+  const double max_v = read_optional_number_arg(args, arity, 3U, 1.0).value();
+  const bool whole_number = read_optional_bool_arg(args, arity, 4U, false).value();
   const auto n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-
-  // Bounds validation.
-  if (std::isnan(min_v) || std::isnan(max_v) || std::isinf(min_v) || std::isinf(max_v)) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (min_v > max_v) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (whole_number) {
-    if (std::trunc(min_v) != min_v || std::trunc(max_v) != max_v) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
 
   Value* buffer = nullptr;
   ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
@@ -289,6 +251,56 @@ bool sequence_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_r
                                    /*zero_is_calc=*/true);
   if (!shape) {
     *out_err = shape.error();
+    return false;
+  }
+  *out_rows = shape.value().rows;
+  *out_cols = shape.value().cols;
+  return true;
+}
+
+bool randarray_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                     ErrorCode* out_err) {
+  auto rows_c = read_optional_number_arg(args, arity, 0U, 1.0);
+  if (!rows_c) {
+    *out_err = rows_c.error();
+    return false;
+  }
+  auto cols_c = read_optional_number_arg(args, arity, 1U, 1.0);
+  if (!cols_c) {
+    *out_err = cols_c.error();
+    return false;
+  }
+  auto min_c = read_optional_number_arg(args, arity, 2U, 0.0);
+  if (!min_c) {
+    *out_err = min_c.error();
+    return false;
+  }
+  auto max_c = read_optional_number_arg(args, arity, 3U, 1.0);
+  if (!max_c) {
+    *out_err = max_c.error();
+    return false;
+  }
+  auto whole_number_c = read_optional_bool_arg(args, arity, 4U, false);
+  if (!whole_number_c) {
+    *out_err = whole_number_c.error();
+    return false;
+  }
+  // Shape validation. SEQUENCE precedent: truncate-toward-zero, reject
+  // <= 0 with #VALUE!, reject oversize with #NUM!.
+  auto shape = validate_grid_shape(rows_c.value(), cols_c.value(), /*zero_is_calc=*/false);
+  if (!shape) {
+    *out_err = shape.error();
+    return false;
+  }
+  // Bounds validation.
+  const double min_v = min_c.value();
+  const double max_v = max_c.value();
+  if (std::isnan(min_v) || std::isnan(max_v) || std::isinf(min_v) || std::isinf(max_v)) {
+    *out_err = ErrorCode::Num;
+    return false;
+  }
+  if (min_v > max_v || (whole_number_c.value() && (std::trunc(min_v) != min_v || std::trunc(max_v) != max_v))) {
+    *out_err = ErrorCode::Value;
     return false;
   }
   *out_rows = shape.value().rows;

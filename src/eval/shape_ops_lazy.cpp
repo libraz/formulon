@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "eval/array_alloc.h"
@@ -22,8 +23,10 @@
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
+#include "eval/lambda_helpers_lazy.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
@@ -43,9 +46,9 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// The largest SEQUENCE an operation shape sizes without building it
-// (8193 x 8192 elements); a larger one is evaluated.
-constexpr std::uint64_t kMaxShapeOnlyGeneratorElements = 8193ULL * 8192ULL;
+// Element count past which a generator (SEQUENCE, RANDARRAY, MAKEARRAY)
+// sized under ROWS / COLUMNS abandons the formula: floor(2^30 / 10).
+constexpr std::uint64_t kMaxShapeOnlyGeneratorElements = 107'374'182U;
 
 enum class OperationShape : std::uint8_t {
   kUnknown,  ///< Needs evaluation to be sized.
@@ -53,10 +56,58 @@ enum class OperationShape : std::uint8_t {
   kError,    ///< The operation evaluates to an error, or abandons its formula.
 };
 
+// Sizes a SEQUENCE, RANDARRAY or MAKEARRAY call from its validated
+// arguments without building the grid or invoking MAKEARRAY's lambda. An
+// argument error is the call's error; a grid past
+// `kMaxShapeOnlyGeneratorElements` abandons the formula. Any other call, or
+// an omitted or array-valued argument, is `kUnknown`.
+OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                               Value* out_err) {
+  const std::string_view name = strip_future_prefix(call.as_call_name());
+  const std::uint32_t arity = call.as_call_arity();
+  if (strings::case_insensitive_eq(name, "MAKEARRAY")) {
+    if (makearray_shape(call, arena, registry, ctx, out_rows, out_cols, out_err) == nullptr) {
+      return OperationShape::kError;
+    }
+  } else {
+    const bool sequence = strings::case_insensitive_eq(name, "SEQUENCE");
+    if ((!sequence && !strings::case_insensitive_eq(name, "RANDARRAY")) || arity < (sequence ? 1U : 0U) ||
+        arity > (sequence ? 4U : 5U)) {
+      return OperationShape::kUnknown;
+    }
+    Value args[5] = {Value::blank(), Value::blank(), Value::blank(), Value::blank(), Value::blank()};
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      if (is_omitted_arg(call.as_call_arg(i))) {
+        return OperationShape::kUnknown;
+      }
+      args[i] = eval_node(call.as_call_arg(i), arena, registry, ctx);
+      if (args[i].is_error()) {
+        *out_err = args[i];
+        return OperationShape::kError;
+      }
+      if (args[i].is_array()) {
+        return OperationShape::kUnknown;
+      }
+    }
+    ErrorCode err = ErrorCode::Value;
+    if (!(sequence ? sequence_shape : randarray_shape)(args, arity, out_rows, out_cols, &err)) {
+      *out_err = Value::error(err);
+      return OperationShape::kError;
+    }
+  }
+  if (static_cast<std::uint64_t>(*out_rows) * *out_cols > kMaxShapeOnlyGeneratorElements) {
+    abandon_formula();
+    *out_err = Value::error(ErrorCode::Num);
+    return OperationShape::kError;
+  }
+  return OperationShape::kSized;
+}
+
 // Sizes an elementwise operation over references, array constants and
-// SEQUENCE grids from its operands' shapes alone, so no cell value is read:
-// a reference contributes its declared rectangle, an operator the
-// broadcast of its operands. A broadcast past `kMaxEvaluatedArrayElements`
+// generator calls (`generator_shape`) from its operands' shapes alone, so no
+// cell value is read: a reference contributes its declared rectangle, an
+// operator the broadcast of its operands. A broadcast past `kMaxEvaluatedArrayElements`
 // abandons the formula, as evaluating it would. Anything else is
 // `kUnknown`.
 OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const FunctionRegistry& registry,
@@ -113,33 +164,8 @@ OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const F
       }
       return OperationShape::kSized;
     }
-    case parser::NodeKind::Call: {
-      const std::uint32_t arity = node.as_call_arity();
-      if (!strings::case_insensitive_eq(strip_future_prefix(node.as_call_name()), "SEQUENCE") || arity < 1U ||
-          arity > 4U) {
-        return OperationShape::kUnknown;
-      }
-      Value args[4] = {Value::blank(), Value::blank(), Value::blank(), Value::blank()};
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        args[i] = eval_node(node.as_call_arg(i), arena, registry, ctx);
-        if (args[i].is_error()) {
-          *out_err = args[i];
-          return OperationShape::kError;
-        }
-        if (args[i].is_array()) {
-          return OperationShape::kUnknown;
-        }
-      }
-      ErrorCode err = ErrorCode::Value;
-      if (!sequence_shape(args, arity, out_rows, out_cols, &err)) {
-        *out_err = Value::error(err);
-        return OperationShape::kError;
-      }
-      if (static_cast<std::uint64_t>(*out_rows) * *out_cols > kMaxShapeOnlyGeneratorElements) {
-        return OperationShape::kUnknown;
-      }
-      return OperationShape::kSized;
-    }
+    case parser::NodeKind::Call:
+      return generator_shape(node, arena, registry, ctx, out_rows, out_cols, out_err);
     default:
       return OperationShape::kUnknown;
   }

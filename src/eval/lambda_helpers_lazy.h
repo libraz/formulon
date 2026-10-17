@@ -42,6 +42,8 @@
 #ifndef FORMULON_EVAL_LAMBDA_HELPERS_LAZY_H_
 #define FORMULON_EVAL_LAMBDA_HELPERS_LAZY_H_
 
+#include <cstdint>
+
 #include "utils/arena.h"
 #include "value.h"
 
@@ -55,6 +57,7 @@ namespace eval {
 
 class EvalContext;
 class FunctionRegistry;
+struct LambdaValue;
 
 /// `BYROW(array, function)` — applies the 1-arg `function` to each row of
 /// `array`. Each call receives a horizontal `1 x cols` sub-array slice; the
@@ -98,6 +101,15 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
 /// `#VALUE!`. The first error returned by the lambda short-circuits the scan.
 Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx);
+
+/// Validates `MAKEARRAY(rows, cols, lambda)`'s arguments and reports the
+/// `rows` x `cols` grid it returns, without invoking the lambda. Returns the
+/// lambda the grid would be filled with, or nullptr with `*out_err` set to
+/// the error MAKEARRAY returns instead (`#VALUE!` for a lambda that cannot
+/// take 2 arguments).
+const LambdaValue* makearray_shape(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                   const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                                   Value* out_err);
 
 /// `MAKEARRAY(rows, cols, function)` — builds a `rows x cols` array where
 /// each cell `(r, c)` is the result of calling the 2-arg `function` with

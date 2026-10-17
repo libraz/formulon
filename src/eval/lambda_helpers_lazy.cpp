@@ -510,27 +510,32 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   return Value::array(out_arr);
 }
 
+const LambdaValue* makearray_shape(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                   const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                                   Value* out_err) {
+  if (call.as_call_arity() != 3U) {
+    *out_err = Value::error(ErrorCode::Value);
+    return nullptr;
+  }
+  if (!read_count_arg(call.as_call_arg(0), arena, registry, ctx, a1::kMaxRows, out_rows, out_err) ||
+      !read_count_arg(call.as_call_arg(1), arena, registry, ctx, a1::kMaxCols, out_cols, out_err)) {
+    return nullptr;
+  }
+  return resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, out_err);
+}
+
 Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {
-  if (call.as_call_arity() != 3U) {
-    return Value::error(ErrorCode::Value);
-  }
   Value err = Value::blank();
   std::uint32_t rows = 0;
-  if (!read_count_arg(call.as_call_arg(0), arena, registry, ctx, a1::kMaxRows, &rows, &err)) {
-    return err;
-  }
   std::uint32_t cols = 0;
-  if (!read_count_arg(call.as_call_arg(1), arena, registry, ctx, a1::kMaxCols, &cols, &err)) {
+  const LambdaValue* lv = makearray_shape(call, arena, registry, ctx, &rows, &cols, &err);
+  if (lv == nullptr) {
     return err;
   }
   if (abandons_formula(rows, cols) ||
       static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
     return Value::error(ErrorCode::Num);
-  }
-  const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
-  if (lv == nullptr) {
-    return err;
   }
 
   Value* out_cells = nullptr;

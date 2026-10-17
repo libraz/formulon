@@ -34,6 +34,13 @@ class FunctionRegistry;
 bool sequence_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
                     ErrorCode* out_err);
 
+/// Validates the evaluated arguments of `RANDARRAY([rows], [cols], [min],
+/// [max], [whole_number])` and reports the `rows` x `cols` grid it returns,
+/// without building it. Returns false, setting `*out_err` to the error
+/// RANDARRAY returns instead, when an argument is rejected.
+bool randarray_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
+                     ErrorCode* out_err);
+
 /// Registers the dynamic-array (spilling) built-in functions into
 /// `registry`. Currently registers SEQUENCE; other dynamic-array functions
 /// will follow as they are implemented. Intended to be invoked from
