@@ -44,6 +44,16 @@ bool append_range_sourced_value(const FunctionDef& def, const Value& value, std:
 bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
                                  std::vector<Value>* values, Value* out_err);
 
+/// Like `append_range_sourced_value`, for an element of an array value (an
+/// array constant or a computed array) rather than a reference: the A-family
+/// skips logical and text elements there instead of coercing them (AVERAGEA
+/// still counts a text element as zero).
+bool append_array_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values, Value* out_err);
+
+/// Applies `append_array_sourced_value` in source order to a contiguous array.
+bool append_array_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
+                                 std::vector<Value>* values, Value* out_err);
+
 /// Resolution result for a range-shaped argument: a flat row-major vector
 /// of cell `Value`s plus the rectangle's shape. A 1-cell `Ref` produces
 /// `rows = cols = 1`; a `RangeOp` produces the computed shape; a flattened

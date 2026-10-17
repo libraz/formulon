@@ -557,7 +557,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
         if (def->analysis_toolpak_args && value.is_boolean()) {
           return Value::error(ErrorCode::Value);
         }
-        if (!append_range_sourced_value(*def, value, &values, &propagated_err)) {
+        if (!append_array_sourced_value(*def, value, &values, &propagated_err)) {
           short_circuit = true;
           break;
         }
@@ -1036,7 +1036,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       const ArrayValue* arr = v.as_array();
       const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
       Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, arr->cells, n, &values, &range_err)) {
+      if (!append_array_sourced_values(*def, arr->cells, n, &values, &range_err)) {
         return range_err;
       }
       continue;

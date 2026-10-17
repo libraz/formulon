@@ -1005,6 +1005,57 @@ TEST(BuiltinsDispersion, MatchesExcelValues) {
   }
 }
 
+TEST(BuiltinsMedian, EvenCountUsesLowPlusHalfSpan) {
+  const Value v = EvalSource("=MEDIAN(3,-6.046)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), -1.5230000000000006);
+}
+
+TEST(BuiltinsMedian, EvenCountSpanOverflowIsNum) {
+  for (const char* src : {"=MEDIAN(-1.7E308,1.7E308)", "=MEDIAN(1E308,-1E308)", "=MEDIAN(9E307,-9E307)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+  const Value same = EvalSource("=MEDIAN(1.7E308,1.7E308)");
+  ASSERT_TRUE(same.is_number());
+  EXPECT_EQ(same.as_number(), 1.7E308);
+}
+
+TEST(BuiltinsMedian, SubnormalElementsReadAsZeroAndHalfSpanFlushes) {
+  const Value elements = EvalSource("=MEDIAN(1E-320,3E-320)");
+  ASSERT_TRUE(elements.is_number());
+  EXPECT_EQ(elements.as_number(), 0.0);
+  const Value half = EvalSource("=MEDIAN(2.5E-308,3E-308)");
+  ASSERT_TRUE(half.is_number());
+  EXPECT_EQ(half.as_number(), 2.5E-308);
+}
+
+TEST(BuiltinsAFamilyArrays, LogicalAndTextElementsOfAnArrayAreSkipped) {
+  const auto number = [](const char* src) {
+    const Value v = EvalSource(src);
+    EXPECT_TRUE(v.is_number()) << src;
+    return v.is_number() ? v.as_number() : -1.0;
+  };
+  EXPECT_DOUBLE_EQ(number("=AVERAGEA({TRUE;1;2})"), 1.5);
+  EXPECT_DOUBLE_EQ(number("=AVERAGEA({\"x\";1;2})"), 1.0);  // AVERAGEA counts text as zero
+  EXPECT_DOUBLE_EQ(number("=MINA({\"a\";1;2})"), 1.0);
+  EXPECT_DOUBLE_EQ(number("=MAXA({TRUE})"), 0.0);
+  EXPECT_DOUBLE_EQ(number("=STDEVA({TRUE;1;2})"), 0.7071067811865476);
+  EXPECT_DOUBLE_EQ(number("=VARPA({1;\"\";3})"), 1.0);
+}
+
+TEST(BuiltinsAFamilyArrays, ReferencesKeepCoercingNextToAnArray) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::boolean(true));
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+  sheet.set_cell_value(2, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=AVERAGEA(A1:A3,{TRUE;5})", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.25);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

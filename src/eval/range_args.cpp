@@ -547,6 +547,29 @@ bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std
   return true;
 }
 
+bool append_array_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values,
+                                Value* out_err) {
+  if (def.range_filter_a_coerce && !value.is_error() && !value.is_number()) {
+    // Logical elements are skipped; text elements are skipped too, except
+    // that AVERAGEA still counts a text element as zero.
+    if (value.is_text() && def.canonical_name == "AVERAGEA") {
+      values->push_back(Value::number(0.0));
+    }
+    return true;
+  }
+  return append_range_sourced_value(def, value, values, out_err);
+}
+
+bool append_array_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
+                                 std::vector<Value>* values, Value* out_err) {
+  for (std::size_t i = 0; i < count; ++i) {
+    if (!append_array_sourced_value(def, cells[i], values, out_err)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out) {
   const Workbook* wb = ctx.workbook();

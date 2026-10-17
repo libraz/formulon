@@ -583,3 +583,193 @@ cases:
   setup:
     A1: -1.0e+308
     A2: 1.0e+308
+- id: afam_array_0
+  formula: '=IFERROR(AVERAGEA({TRUE;1;2}),"#"&ERROR.TYPE(AVERAGEA({TRUE;1;2})))'
+- id: afam_array_1
+  formula: '=IFERROR(AVERAGEA({"x";1;2}),"#"&ERROR.TYPE(AVERAGEA({"x";1;2})))'
+- id: afam_array_2
+  formula: '=IFERROR(AVERAGEA({"1";2;3}),"#"&ERROR.TYPE(AVERAGEA({"1";2;3})))'
+- id: afam_array_3
+  formula: '=IFERROR(AVERAGEA({TRUE}),"#"&ERROR.TYPE(AVERAGEA({TRUE})))'
+- id: afam_array_4
+  formula: '=IFERROR(MAXA({TRUE}),"#"&ERROR.TYPE(MAXA({TRUE})))'
+- id: afam_array_5
+  formula: '=IFERROR(MINA({"a";1;2}),"#"&ERROR.TYPE(MINA({"a";1;2})))'
+- id: afam_array_6
+  formula: '=IFERROR(MINA({TRUE;FALSE;TRUE;3}),"#"&ERROR.TYPE(MINA({TRUE;FALSE;TRUE;3})))'
+- id: afam_array_7
+  formula: '=IFERROR(STDEVA({TRUE;1;2}),"#"&ERROR.TYPE(STDEVA({TRUE;1;2})))'
+- id: afam_array_8
+  formula: '=IFERROR(STDEVA({TRUE;FALSE;TRUE;3}),"#"&ERROR.TYPE(STDEVA({TRUE;FALSE;TRUE;3})))'
+- id: afam_array_9
+  formula: '=IFERROR(STDEVPA({"a";1;2}),"#"&ERROR.TYPE(STDEVPA({"a";1;2})))'
+- id: afam_array_10
+  formula: '=IFERROR(VARA({TRUE;1;2}),"#"&ERROR.TYPE(VARA({TRUE;1;2})))'
+- id: afam_array_11
+  formula: '=IFERROR(VARA({"1";2;3}),"#"&ERROR.TYPE(VARA({"1";2;3})))'
+- id: afam_array_12
+  formula: '=IFERROR(VARPA({TRUE;1;2}),"#"&ERROR.TYPE(VARPA({TRUE;1;2})))'
+- id: afam_array_13
+  formula: '=IFERROR(VARPA({1;"";3}),"#"&ERROR.TYPE(VARPA({1;"";3})))'
+- id: afam_array_14
+  formula: '=IFERROR(AVERAGEA(1,2,{TRUE;"x";3}),"#"&ERROR.TYPE(AVERAGEA(1,2,{TRUE;"x";3})))'
+- id: afam_array_15
+  formula: '=IFERROR(STDEVA(1,2,{TRUE;"x";3}),"#"&ERROR.TYPE(STDEVA(1,2,{TRUE;"x";3})))'
+- id: afam_ref_0
+  formula: '=IFERROR(AVERAGEA(A1:A3,{TRUE;5}),"#"&ERROR.TYPE(AVERAGEA(A1:A3,{TRUE;5})))'
+  setup:
+    A1: true
+    A2: 1
+    A3: 2
+- id: afam_ref_1
+  formula: '=IFERROR(STDEVA(A1:A3,{"x";5;7}),"#"&ERROR.TYPE(STDEVA(A1:A3,{"x";5;7})))'
+  setup:
+    A1: true
+    A2: 1
+    A3: 2
+- id: afam_ref_2
+  formula: '=IFERROR(VARPA(A1:A3,{TRUE;5}),"#"&ERROR.TYPE(VARPA(A1:A3,{TRUE;5})))'
+  setup:
+    A1: true
+    A2: 1
+    A3: 2
+- id: afam_ref_3
+  formula: '=IFERROR(MINA(A1:A3,{"x";5;7}),"#"&ERROR.TYPE(MINA(A1:A3,{"x";5;7})))'
+  setup:
+    A1: true
+    A2: 1
+    A3: 2
+- id: afam_ref_4
+  formula: '=IFERROR(AVERAGEA(A1:A3),"#"&ERROR.TYPE(AVERAGEA(A1:A3)))'
+  setup:
+    A1: true
+    A2: 1
+    A3: 2
+- id: afam_ref_5
+  formula: '=IFERROR(STDEVA(A1:A3),"#"&ERROR.TYPE(STDEVA(A1:A3)))'
+  setup:
+    A1: true
+    A2: 1
+    A3: 2
+- id: afam_ref_6
+  formula: '=IFERROR(AVERAGEA(A1:A3,{TRUE;5}),"#"&ERROR.TYPE(AVERAGEA(A1:A3,{TRUE;5})))'
+  setup:
+    A2: 1
+    A3: 3
+- id: afam_ref_7
+  formula: '=IFERROR(MINA(A1:A3,{"x";5;7}),"#"&ERROR.TYPE(MINA(A1:A3,{"x";5;7})))'
+  setup:
+    A2: 1
+    A3: 3
+- id: afam_ref_8
+  formula: '=IFERROR(VARA(A1:A3,{TRUE;5}),"#"&ERROR.TYPE(VARA(A1:A3,{TRUE;5})))'
+  setup:
+    A2: 1
+    A3: 3
+- id: afam_ref_9
+  formula: '=IFERROR(AVERAGEA(A1:A3,{TRUE;5}),"#"&ERROR.TYPE(AVERAGEA(A1:A3,{TRUE;5})))'
+  setup:
+    A1: "x"
+    A2: 1
+    A3: 2
+- id: afam_ref_10
+  formula: '=IFERROR(STDEVPA(A1:A3,{"x";5;7}),"#"&ERROR.TYPE(STDEVPA(A1:A3,{"x";5;7})))'
+  setup:
+    A1: "x"
+    A2: 1
+    A3: 2
+- id: afam_ref_11
+  formula: '=IFERROR(AVERAGEA(A1:A3),"#"&ERROR.TYPE(AVERAGEA(A1:A3)))'
+  setup:
+    A1: "x"
+    A2: 1
+    A3: 2
+- id: afam_ref_12
+  formula: '=IFERROR(AVERAGEA(J1:J3,{TRUE;5}),"#"&ERROR.TYPE(AVERAGEA(J1:J3,{TRUE;5})))'
+  setup:
+    A1: 1
+- id: afam_ref_13
+  formula: '=IFERROR(MINA(J1:J3,{TRUE;5}),"#"&ERROR.TYPE(MINA(J1:J3,{TRUE;5})))'
+  setup:
+    A1: 1
+- id: afam_ref_14
+  formula: '=IFERROR(STDEVA(J1:J3,{TRUE;5}),"#"&ERROR.TYPE(STDEVA(J1:J3,{TRUE;5})))'
+  setup:
+    A1: 1
+- id: afam_ref_15
+  formula: '=IFERROR(VARA(J1:J3,{"x";5;7}),"#"&ERROR.TYPE(VARA(J1:J3,{"x";5;7})))'
+  setup:
+    A1: 1
+- id: afam_ref_16
+  formula: '=IFERROR(VARPA(J1:J3,{TRUE;5}),"#"&ERROR.TYPE(VARPA(J1:J3,{TRUE;5})))'
+  setup:
+    A1: 1
+- id: median_even_0
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: -1e+308
+    B1: 1e+308
+- id: median_even_1
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 1e+308
+    B1: 1.5e+308
+- id: median_even_2
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 1.7e+308
+    B1: 1.7e+308
+- id: median_even_3
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 8.9e+307
+    B1: -8.9e+307
+- id: median_even_4
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 9e+307
+    B1: -9e+307
+- id: median_even_5
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 3
+    B1: -6.046
+- id: median_even_6
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 0.1
+    B1: 0.2
+- id: median_even_7
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 1e-320
+    B1: 2e-320
+- id: median_even_8
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 2.5e-308
+    B1: 3e-308
+- id: median_even_9
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: -3e-308
+    B1: 5e-308
+- id: median_even_10
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: -3e-308
+    B1: -5e-308
+- id: median_even_11
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 1e-320
+    B1: 3e-320
+- id: median_even_12
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 3e-320
+- id: median_even_13
+  formula: '=IFERROR(MEDIAN(A1:B1),"#"&ERROR.TYPE(MEDIAN(A1:B1)))'
+  setup:
+    A1: 1.79e+308
+    B1: 1.7e+308

@@ -22,15 +22,14 @@ namespace formulon {
 namespace numeric_aggregate_kernels {
 namespace {
 
-// Mean of the two middle elements, computed so that a pair whose sum
-// overflows still lands on a finite midpoint. Same-sign operands use
-// `low + (high - low) / 2` (the difference cannot overflow); opposite-sign
-// operands halve first, where no overflow is possible either.
-double midpoint_without_overflow(double low, double high) {
-  if (std::signbit(low) == std::signbit(high)) {
-    return low + (high - low) * 0.5;
+// Mean of the two middle elements as `low + (high - low) / 2`: a span that
+// overflows is `#NUM!`, and the halved span flushes a subnormal to zero.
+Expected<double, ErrorCode> median_midpoint(double low, double high) {
+  const double span = high - low;
+  if (!std::isfinite(span)) {
+    return ErrorCode::Num;
   }
-  return low * 0.5 + high * 0.5;
+  return low + flush_subnormal(span / 2.0);
 }
 
 // Collects the numeric elements of `view` in source order; `nullopt` elements
@@ -274,13 +273,15 @@ Expected<double, ErrorCode> run_median(std::vector<double> xs) {
   if (xs.empty()) {
     return ErrorCode::Num;
   }
+  for (double& x : xs) {
+    x = flush_subnormal(x);  // a subnormal element reads as zero
+  }
   std::sort(xs.begin(), xs.end());
   const std::size_t n = xs.size();
-  const double m = (n % 2U) == 1U ? xs[n / 2U] : midpoint_without_overflow(xs[n / 2U - 1U], xs[n / 2U]);
-  if (!std::isfinite(m)) {
-    return ErrorCode::Num;
+  if ((n % 2U) == 1U) {
+    return xs[n / 2U];
   }
-  return m;
+  return median_midpoint(xs[n / 2U - 1U], xs[n / 2U]);
 }
 
 std::vector<ValueRun> group_equal_values(const std::vector<double>& xs) {
