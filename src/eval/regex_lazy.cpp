@@ -49,6 +49,7 @@
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/case_map.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
@@ -907,31 +908,60 @@ std::vector<ReplToken> parse_replacement(std::string_view r) {
   return tokens;
 }
 
-// Output of one expansion, with the pending `\u` / `\l` and the `\U` / `\L`
-// run applied to text as it is appended; a one-shot mapping beats the run.
+// Output of one expansion. A pending `\u` / `\l` maps the next character on its
+// own; text appended under `\U` / `\L` is gathered and mapped as one span when
+// the run ends, so a sigma inside it sees its neighbours.
 class ReplacementWriter {
  public:
   explicit ReplacementWriter(std::string& out) : out_(out) {}
 
   void append(std::string_view text) {
-    for (const char c : text) {
-      CaseMode mode = run_;
-      if (next_ != CaseMode::kNone) {
-        mode = next_;
-        next_ = CaseMode::kNone;
-      }
-      out_.push_back(mode == CaseMode::kUpper   ? strings::ascii_to_upper(c)
-                     : mode == CaseMode::kLower ? strings::ascii_to_lower(c)
-                                                : c);
+    if (next_ != CaseMode::kNone && !text.empty()) {
+      std::size_t bytes = 0;
+      const std::uint32_t cp = decode_utf8_step(text, 0, &bytes);
+      const bool valid = cp != 0xFFFDU || bytes != 1U;
+      const std::uint32_t mapped = !valid                      ? cp
+                                   : next_ == CaseMode::kUpper ? case_map_upper(cp)
+                                                               : case_map_lower_isolated(cp);
+      emit(mapped == cp ? std::string(text.substr(0, bytes)) : encode_utf8_codepoint(mapped));
+      next_ = CaseMode::kNone;
+      text.remove_prefix(bytes);
+    }
+    if (run_ == CaseMode::kNone) {
+      out_.append(text);
+    } else {
+      span_.append(text);
     }
   }
   void next(bool upper) { next_ = upper ? CaseMode::kUpper : CaseMode::kLower; }
-  void run(bool upper) { run_ = upper ? CaseMode::kUpper : CaseMode::kLower; }
-  void end_run() { run_ = CaseMode::kNone; }
+  void run(bool upper) {
+    flush_span();
+    run_ = upper ? CaseMode::kUpper : CaseMode::kLower;
+  }
+  void end_run() {
+    flush_span();
+    run_ = CaseMode::kNone;
+  }
+  // Ends an unterminated run at the end of the replacement.
+  void finish() { end_run(); }
 
  private:
   enum class CaseMode : std::uint8_t { kNone, kUpper, kLower };
+
+  // A one-shot character sits outside the run, after the span gathered so far.
+  void emit(const std::string& piece) {
+    flush_span();
+    out_.append(piece);
+  }
+  void flush_span() {
+    if (run_ != CaseMode::kNone) {
+      out_ += run_ == CaseMode::kUpper ? case_map_to_upper(span_) : case_map_to_lower(span_);
+    }
+    span_.clear();
+  }
+
   std::string& out_;
+  std::string span_;
   CaseMode run_ = CaseMode::kNone;
   CaseMode next_ = CaseMode::kNone;
 };
@@ -1005,6 +1035,7 @@ bool expand_replacement(const std::vector<ReplToken>& tokens, const CompiledPatt
       return false;
     }
   }
+  writer.finish();
   return true;
 }
 

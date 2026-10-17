@@ -72,12 +72,16 @@ TEST(TextUpper, EmptyString) {
 }
 
 TEST(TextUpper, MultiBytePassesThrough) {
-  // ASCII-only fold: "café" (UTF-8 \xC3\xA9) -> "CAFé". Only ASCII bytes
-  // change. Excel uses Unicode case folding here, but the MVP intentionally
-  // covers ASCII only.
+  // Characters without a case mapping pass through: "caf\xE3\x81\x82" -> "CAF\xE3\x81\x82".
+  const Value v = EvalSource("=UPPER(\"caf\xE3\x81\x82\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "CAF\xE3\x81\x82");
+}
+
+TEST(TextUpper, AccentedLetterIsMapped) {
   const Value v = EvalSource("=UPPER(\"caf\xC3\xA9\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "CAF\xC3\xA9");
+  EXPECT_EQ(v.as_text(), "CAF\xC3\x89");
 }
 
 TEST(TextUpper, ErrorPropagates) {
@@ -103,7 +107,7 @@ TEST(TextLower, MixedCase) {
 }
 
 TEST(TextLower, MultiBytePassesThrough) {
-  const Value v = EvalSource("=LOWER(\"CAF\xC3\xA9\")");
+  const Value v = EvalSource("=LOWER(\"CAF\xC3\x89\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "caf\xC3\xA9");
 }

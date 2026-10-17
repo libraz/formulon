@@ -854,6 +854,29 @@ TEST(RegexReplace, LowerCaseEscapes) {
   EXPECT_EQ(flip.as_text(), "bC");
 }
 
+TEST(RegexReplace, CaseEscapesMapNonAsciiCharacters) {
+  EXPECT_EQ(Replace("b",
+                    "\\u\xC3\xA9"
+                    "a"),
+            "a\xC3\x89"
+            "ac");  // \u on é
+  EXPECT_EQ(Replace("b", "\\u\xC7\x85"),
+            "a\xC7\x84"
+            "c");  // titlecase digraph -> full uppercase
+  EXPECT_EQ(Replace("b", "\\U\xC3\x9F\\E"),
+            "a\xC3\x9F"
+            "c");  // sharp s is not expanded
+  EXPECT_EQ(Replace("b", "\\L\xCE\x91\xCE\xA3\\E"),
+            "a\xCE\xB1\xCF\x82"
+            "c");  // final sigma in the span
+  EXPECT_EQ(Replace("b", "\\L\xCE\xA3\xCE\x91\\E"),
+            "a\xCF\x83\xCE\xB1"
+            "c");  // medial sigma
+  EXPECT_EQ(Replace("b", "\\l\xCE\xA3\xCE\x91"),
+            "a\xCF\x82\xCE\x91"
+            "c");  // \l maps the first character alone
+}
+
 TEST(RegexReplace, UnderscoreDollarIsAlwaysTheSubject) {
   EXPECT_EQ(Replace("b", "$_x"), "aabcxc");
   EXPECT_EQ(Replace("b", "$_1"), "aabc1c");

@@ -336,3 +336,67 @@ cases:
   - id: regexreplace_malformed_missing_occurrence
     description: "Malformed replacement with a missing occurrence is not an error"
     formula: '=REGEXREPLACE("abc","b","$1",3)'
+
+  - id: regexreplace_upper_next_accented
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\uéa")'
+
+  - id: regexreplace_upper_run_greek
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\Uαςβ\E")'
+
+  - id: regexreplace_upper_next_digraph
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\uǆ")'
+
+  - id: regexreplace_upper_next_digraph_title
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\uǅ")'
+
+  - id: regexreplace_lower_next_digraph_title
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\lǲ")'
+
+  - id: regexreplace_upper_sharp_s_kept
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\Uß\E")'
+
+  - id: regexreplace_lower_span_final_sigma
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\LΑΣ\E")'
+
+  - id: regexreplace_lower_span_medial_sigma
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\LΣΑ\E")'
+
+  - id: regexreplace_lower_span_lone_sigma
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\LΣ\E")'
+
+  - id: regexreplace_lower_span_sigma_between
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\LΑΣΑ\E")'
+
+  - id: regexreplace_lower_next_sigma_first
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\lΣΑ")'
+
+  - id: regexreplace_lower_next_sigma_alone
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\lΣ")'
+
+  - id: regexreplace_upper_next_dotted
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\uı")'
+
+  - id: regexreplace_lower_dotted_capital
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\LΙ\E")'
+
+  - id: regexreplace_upper_fullwidth
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\Uａ\E")'
+
+  - id: regexreplace_upper_next_digit
+    description: "Case escapes map non-ASCII characters"
+    formula: '=REGEXREPLACE("abc","b","\u1x")'

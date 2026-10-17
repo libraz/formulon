@@ -28,6 +28,7 @@
 #include "excel_locale.h"
 #include "sbcs_codepage.h"
 #include "utils/arena.h"
+#include "utils/case_map.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -55,14 +56,14 @@ Expected<std::uint32_t, ErrorCode> read_first_codepoint(const Value& value) {
   return decoded.codepoint;
 }
 
-// UPPER(text) / LOWER(text) - ASCII case fold. Multi-byte UTF-8 bytes are
-// preserved verbatim (see `text_ops::to_upper_ascii` for the contract).
+// UPPER(text) / LOWER(text) - simple Unicode case mapping (`utils/case_map.h`);
+// no mapping changes a character's length.
 Value Upper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
   }
-  return Value::text(arena.intern(to_upper_ascii(text.value())));
+  return Value::text(arena.intern(case_map_to_upper(text.value())));
 }
 
 Value Lower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -70,7 +71,7 @@ Value Lower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  return Value::text(arena.intern(to_lower_ascii(text.value())));
+  return Value::text(arena.intern(case_map_to_lower(text.value())));
 }
 
 // TRIM(text) - removes leading and trailing ASCII spaces (0x20), plus the
@@ -514,38 +515,16 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(95.0);
 }
 
-// PROPER(text) - title-case `text`. ASCII letters that begin a "word" are
-// uppercased; ASCII letters that follow another ASCII letter are lowercased.
-// A "word boundary" is any byte that is NOT an ASCII letter, including
-// digits, punctuation, whitespace, and any byte >= 0x80 (so a Japanese
-// character followed by an ASCII letter starts a new word). Non-ASCII bytes
-// pass through unchanged - matching the existing UPPER / LOWER policy.
+// PROPER(text) - title-case `text`: a letter that follows a non-letter takes
+// its word-start form and a letter that follows a letter its lower-case form
+// (`utils/case_map.h`). Digits, punctuation and characters outside the BMP
+// start a new word.
 Value Proper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
     return Value::error(text.error());
   }
-  const std::string& src = text.value();
-  std::string out;
-  out.reserve(src.size());
-  bool start_of_word = true;
-  for (char c : src) {
-    const auto u = static_cast<unsigned char>(c);
-    const bool is_lower = (u >= 'a' && u <= 'z');
-    const bool is_upper = (u >= 'A' && u <= 'Z');
-    if (is_lower || is_upper) {
-      if (start_of_word) {
-        out.push_back(is_upper ? c : static_cast<char>(c - 32));
-      } else {
-        out.push_back(is_lower ? c : static_cast<char>(c + 32));
-      }
-      start_of_word = false;
-    } else {
-      out.push_back(c);
-      start_of_word = true;
-    }
-  }
-  return Value::text(arena.intern(out));
+  return Value::text(arena.intern(case_map_to_proper(text.value())));
 }
 
 // HYPERLINK(link_location, [friendly_name]) - Excel's hyperlink function

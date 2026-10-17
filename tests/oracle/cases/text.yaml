@@ -969,3 +969,141 @@ cases:
     formula: "=UNICODE(CHAR(144))"
   - id: char_157_unicode
     formula: "=UNICODE(CHAR(157))"
+
+  # -- Unicode case mapping (UPPER / LOWER / PROPER) ----------------------
+
+  - id: case_map_upper_latin
+    formula: '=UPPER("é")'
+
+  - id: case_map_upper_sharp_s
+    formula: '=UPPER("ß")'
+
+  - id: case_map_upper_final_sigma_forms
+    formula: '=UPPER("σς")'
+
+  - id: case_map_upper_titlecase_digraph
+    formula: '=UPPER("ǅ")'
+
+  - id: case_map_upper_dotless_i
+    formula: '=UPPER("ı")'
+
+  - id: case_map_upper_fullwidth
+    formula: '=UPPER("ａｂ")'
+
+  - id: case_map_upper_cyrillic
+    formula: '=UPPER("щ")'
+
+  - id: case_map_upper_greek
+    formula: '=UPPER("αβγ")'
+
+  - id: case_map_upper_greek_tonos
+    formula: '=UPPER("άέ")'
+
+  - id: case_map_upper_ligature
+    formula: '=UPPER("ﬁ")'
+
+  - id: case_map_upper_circled
+    formula: '=UPPER("ⓐ")'
+
+  - id: case_map_upper_georgian
+    formula: '=UPPER("ა")'
+
+  - id: case_map_upper_supplementary
+    formula: '=UPPER("𐐨")'
+
+  - id: case_map_lower_latin
+    formula: '=LOWER("É")'
+
+  - id: case_map_lower_dotted_capital_i
+    formula: '=LOWER("İ")'
+
+  - id: case_map_lower_sigma_alone
+    formula: '=LOWER("Σ")'
+
+  - id: case_map_lower_sigma_final
+    formula: '=LOWER("ΑΣ")'
+
+  - id: case_map_lower_sigma_initial
+    formula: '=LOWER("ΣΑ")'
+
+  - id: case_map_lower_sigma_before_period
+    formula: '=LOWER("ΑΣ.")'
+
+  - id: case_map_lower_sigma_before_paren
+    formula: '=LOWER("ΑΣ(Α")'
+
+  - id: case_map_lower_sigma_before_digit
+    formula: '=LOWER("ΑΣ1")'
+
+  - id: case_map_lower_sigma_before_space
+    formula: '=LOWER("ΑΣ Α")'
+
+  - id: case_map_lower_sigma_double
+    formula: '=LOWER("ΑΣΣ")'
+
+  - id: case_map_lower_sigma_word
+    formula: '=LOWER("ΟΔΥΣΣΕΥΣ")'
+
+  - id: case_map_lower_titlecase_digraph
+    formula: '=LOWER("ǅ")'
+
+  - id: case_map_lower_cyrillic
+    formula: '=LOWER("Щ")'
+
+  - id: case_map_lower_fullwidth
+    formula: '=LOWER("Ａ")'
+
+  - id: case_map_lower_circled
+    formula: '=LOWER("Ⓐ")'
+
+  - id: case_map_lower_sharp_s_capital
+    formula: '=LOWER("ẞ")'
+
+  - id: case_map_lower_supplementary
+    formula: '=LOWER("𐐀")'
+
+  - id: case_map_proper_accented
+    formula: '=PROPER("éa aé")'
+
+  - id: case_map_proper_digraph
+    formula: '=PROPER("ǆa")'
+
+  - id: case_map_proper_sharp_s
+    formula: '=PROPER("ßa")'
+
+  - id: case_map_proper_sigma_words
+    formula: '=PROPER("ΑΣ ΣΑ")'
+
+  - id: case_map_proper_tonos
+    formula: '=PROPER("άΑ")'
+
+  - id: case_map_proper_ideograph_then_latin
+    formula: '=PROPER("日a")'
+
+  - id: case_map_proper_digit_boundary
+    formula: '=PROPER("a1b")'
+
+  - id: case_map_proper_dotted_capital_i
+    formula: '=PROPER("İ")'
+
+  - id: case_map_proper_fullwidth
+    formula: '=PROPER("ａｂ ＡＢ")'
+
+  - id: case_map_proper_circled
+    formula: '=PROPER("Ⓐb")'
+
+  - id: case_map_proper_apostrophe
+    formula: '=PROPER("a''b")'
+
+  - id: case_map_proper_combining
+    formula: '=PROPER("éa")'
+
+  - id: case_map_len_upper_sharp_s
+    formula: '=LEN(UPPER("ß"))'
+
+  - id: case_map_len_upper_ligature
+    formula: '=LEN(UPPER("ﬁ"))'
+
+
+  - id: case_map_proper_hiragana_then_latin
+    formula: '=PROPER("あbc")'

@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T07:08:38Z"
+    "generated_at": "2026-10-17T07:31:44Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -745,6 +745,150 @@
       "expect": {
         "kind": "text",
         "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_accented",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uéa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aÉac"
+      }
+    },
+    {
+      "id": "regexreplace_upper_run_greek",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\Uαςβ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aΑΣΒc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_digraph",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uǆ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aǄc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_digraph_title",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uǅ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aǄc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next_digraph_title",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\lǲ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aǳc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_sharp_s_kept",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\Uß\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aßc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_final_sigma",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΑΣ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aαςc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_medial_sigma",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΣΑ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aσαc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_lone_sigma",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΣ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aςc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_sigma_between",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΑΣΑ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aασαc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next_sigma_first",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\lΣΑ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aςΑc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next_sigma_alone",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\lΣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aςc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_dotted",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uı\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aIc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_dotted_capital",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΙ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aιc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_fullwidth",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\Uａ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aＡc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_digit",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\u1x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a1xc"
       }
     }
   ]

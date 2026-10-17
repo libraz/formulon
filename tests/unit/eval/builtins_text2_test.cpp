@@ -590,14 +590,13 @@ TEST(BuiltinsText2Proper, AllPunctuation) {
   EXPECT_EQ(v.as_text(), "!@#$ %^&*");
 }
 
-TEST(BuiltinsText2Proper, AsciiAfterJapaneseStartsWord) {
-  // "あbc" - the 'b' follows non-ASCII-letter bytes (UTF-8 continuation),
-  // so it is treated as the start of a word.
+TEST(BuiltinsText2Proper, AsciiAfterJapaneseContinuesWord) {
+  // "あbc" - a hiragana letter is a word character, so 'b' does not start a word.
   const Value v = EvalSource("=PROPER(\"\xE3\x81\x82\x62\x63\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(),
             "\xE3\x81\x82"
-            "Bc");
+            "bc");
 }
 
 TEST(BuiltinsText2Proper, MultiByteOnlyPassesThrough) {
