@@ -741,6 +741,128 @@ TEST(ForecastEtsExact, PaddedShortSeries) {
   EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(12," + Args(s) + ",0.95," + s.season + ")"), 38.542350057256684);
 }
 
+// ---------------------------------------------------------------------------
+// Exact values with the seasonality chosen by the detector, and short series
+// ---------------------------------------------------------------------------
+
+const std::string kYnoisy12 = "{20.68;23.387;21.379;23.614;22.256;23.242;25.997;24.128;25.926;25.877;26.359;26.985}";
+const std::string kTnoisy12 = "{1;2;3;4;5;6;7;8;9;10;11;12}";
+const std::string kYrand30 =
+    "{87.8;13.5;76.4;9.8;69.0;70.2;95.0;84.3;50.4;19.8;15.0;52.9;51.0;7.1;90.3;50.7;70.1;22.0;24.4;1.2;34.3;26.7;42.3;"
+    "37.7;83.4;89.1;17.5;39.6;16.6;66.3}";
+const std::string kTrand30 = "{1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30}";
+const std::string kYrand9 = "{94.61;48.87;19.39;94.6;57.9;72.89;88.1;28.57;35.67}";
+const std::string kTrand9 = "{1;2;3;4;5;6;7;8;9}";
+
+TEST(ForecastEtsExact, NoisyAutoDetect) {
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYnoisy12 + "," + kTnoisy12 + ",1)"), 0.002);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYnoisy12 + "," + kTnoisy12 + ",4)"), 0.1301356352922273);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYnoisy12 + "," + kTnoisy12 + ",7)"), 0.41936220161199983);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(13," + kYnoisy12 + "," + kTnoisy12 + ")"), 27.29427295578445);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(13," + kYnoisy12 + "," + kTnoisy12 + ",0.95)"), 1.9047510699056267);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYnoisy12 + "," + kTnoisy12 + ",1,1)"), 0.002);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYnoisy12 + "," + kTnoisy12 + ",4,1)"), 0.1301356352922273);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYnoisy12 + "," + kTnoisy12 + ",7,1)"), 0.41936220161199983);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(13," + kYnoisy12 + "," + kTnoisy12 + ",1)"), 27.29427295578445);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(13," + kYnoisy12 + "," + kTnoisy12 + ",0.95,1)"), 1.9047510699056267);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.SEASONALITY(" + kYnoisy12 + "," + kTnoisy12 + ")"), 2.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand9 + "," + kTrand9 + ",1)"), 0.002);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand9 + "," + kTrand9 + ",4)"), 0.3136113631213259);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand9 + "," + kTrand9 + ",7)"), 19.664579855001158);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(10," + kYrand9 + "," + kTrand9 + ")"), 89.02829274003653);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(10," + kYrand9 + "," + kTrand9 + ",0.95)"), 38.54186828691414);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand9 + "," + kTrand9 + ",1,1)"), 0.002);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand9 + "," + kTrand9 + ",4,1)"), 0.3136113631213259);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand9 + "," + kTrand9 + ",7,1)"), 19.664579855001158);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(10," + kYrand9 + "," + kTrand9 + ",1)"), 89.02829274003653);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(10," + kYrand9 + "," + kTrand9 + ",0.95,1)"), 38.54186828691414);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.SEASONALITY(" + kYrand9 + "," + kTrand9 + ")"), 3.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand30 + "," + kTrand30 + ",1)"), 0.501);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand30 + "," + kTrand30 + ",4)"), 0.6834746824287844);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYrand30 + "," + kTrand30 + ",7)"), 37.05470096447273);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(31," + kYrand30 + "," + kTrand30 + ")"), 24.533673084551403);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(31," + kYrand30 + "," + kTrand30 + ",0.95)"), 64.5715935421549);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.SEASONALITY(" + kYrand30 + "," + kTrand30 + ")"), 10.0);
+}
+
+const std::string kYp7_28 =
+    "{49.225;56.546;59.162;55.085;44.201;43.854;43.843;52.649;60.164;63.224;56.97;49.659;44.543;46.637;53.714;63.522;"
+    "64.664;59.804;51.428;47.146;46.938;57.348;64.757;65.672;62.848;54.104;48.086;49.278}";
+const std::string kTp7_28 = "{1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28}";
+const std::string kYspike_30 =
+    "{0.0;0.0;0.0;0.0;0.0;10.0;0.0;0.0;0.0;0.0;0.0;0.0;10.0;0.0;0.0;0.0;0.0;0.0;0.0;10.0;0.0;0.0;0.0;0.0;0.0;0.0;10.0;"
+    "0.0;0.0;0.0}";
+const std::string kTspike_30 = "{1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30}";
+const std::string kYtwo_peaks_48 =
+    "{50.374;55.809;61.589;59.159;56.418;51.596;48.682;49.732;53.083;54.854;54.747;52.795;47.852;45.434;45.427;48.353;"
+    "54.909;60.608;63.877;64.177;61.354;56.261;54.51;54.57;57.126;59.529;60.164;57.214;53.434;50.373;50.204;53.561;59."
+    "173;65.135;69.881;68.713;66.205;61.962;58.973;60.332;61.243;64.511;64.629;61.881;57.915;54.373;54.385;58.358}";
+const std::string kTtwo_peaks_48 =
+    "{1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;21;22;23;24;25;26;27;28;29;30;31;32;33;34;35;36;37;38;39;40;"
+    "41;42;43;44;45;46;47;48}";
+
+TEST(ForecastEtsExact, DetectedPeriod) {
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.SEASONALITY(" + kYp7_28 + "," + kTp7_28 + ")"), 7.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(29," + kYp7_28 + "," + kTp7_28 + ")"), 58.49976744730409);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYp7_28 + "," + kTp7_28 + ",1)"), 0.126);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.SEASONALITY(" + kYspike_30 + "," + kTspike_30 + ")"), 7.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(31," + kYspike_30 + "," + kTspike_30 + ")"), 0.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYspike_30 + "," + kTspike_30 + ",1)"), 0.751);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.SEASONALITY(" + kYtwo_peaks_48 + "," + kTtwo_peaks_48 + ")"), 16.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(49," + kYtwo_peaks_48 + "," + kTtwo_peaks_48 + ")"), 64.28188450452633);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYtwo_peaks_48 + "," + kTtwo_peaks_48 + ",1)"), 0.002);
+}
+
+const std::string kYsh_3 = "{6.71;6.54;1.35}";
+const std::string kTsh_3 = "{1;2;3}";
+const std::string kYsh_7 = "{7.69;6.36;1.15;2.17;8.99;8.74;7.28}";
+const std::string kTsh_7 = "{1;2;3;4;5;6;7}";
+const std::string kYshort_5 = "{5.11;7.67;0.84;9.2;4.34}";
+const std::string kTshort_5 = "{1;2;3;4;5}";
+
+TEST(ForecastEtsExact, ShortSeries) {
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYshort_5 + "," + kTshort_5 + ",1,0)"), 0.002);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYshort_5 + "," + kTshort_5 + ",4,0)"), 0.4229819009585671);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYshort_5 + "," + kTshort_5 + ",6,0)"), 2.3909051951683002);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(6," + kYshort_5 + "," + kTshort_5 + ",0)"), 5.733417349250267);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(6," + kYshort_5 + "," + kTshort_5 + ",0.95,0)"), 5.672440470422527);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYshort_5 + "," + kTshort_5 + ",1,2)"), 0.501);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYshort_5 + "," + kTshort_5 + ",4,2)"), 0.28097426346041565);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYshort_5 + "," + kTshort_5 + ",6,2)"), 1.5882070242099995);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(6," + kYshort_5 + "," + kTshort_5 + ",2)"), 9.514455932931389);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(6," + kYshort_5 + "," + kTshort_5 + ",0.95,2)"), 4.170048436094756);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",1,0)"), 0.1);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",4,0)"), 0.37431467661691564);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",6,0)"), 1.0031633333333339);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(4," + kYsh_3 + "," + kTsh_3 + ",0)"), -0.6814185099999984);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(4," + kYsh_3 + "," + kTsh_3 + ",0.95,0)"), 2.8959731396425554);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",1,2)"), 0.1);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",4,2)"), 0.37431467661691564);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",6,2)"), 1.0031633333333339);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(4," + kYsh_3 + "," + kTsh_3 + ",2)"), -0.6814185099999984);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(4," + kYsh_3 + "," + kTsh_3 + ",0.95,2)"), 2.8959731396425554);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",1,3)"), 0.1);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",4,3)"), 0.37431467661691564);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_3 + "," + kTsh_3 + ",6,3)"), 1.0031633333333339);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(4," + kYsh_3 + "," + kTsh_3 + ",3)"), -0.6814185099999984);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(4," + kYsh_3 + "," + kTsh_3 + ",0.95,3)"), 2.8959731396425554);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",1,0)"), 0.9);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",4,0)"), 0.8454786991922306);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",6,0)"), 2.2672920450004983);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(8," + kYsh_7 + "," + kTsh_7 + ",0)"), 7.869761864231694);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(8," + kYsh_7 + "," + kTsh_7 + ",0.95,0)"), 6.67902896569191);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",1,2)"), 0.501);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",4,2)"), 1.1066441576936334);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",6,2)"), 2.9676507495484272);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(8," + kYsh_7 + "," + kTsh_7 + ",2)"), 9.52261072238843);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(8," + kYsh_7 + "," + kTsh_7 + ",0.95,2)"), 7.52462699197498);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",1,3)"), 0.501);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",4,3)"), 1.2048543075640552);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + kYsh_7 + "," + kTsh_7 + ",6,3)"), 3.231017634784275);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(8," + kYsh_7 + "," + kTsh_7 + ",3)"), 11.92090460974675);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(8," + kYsh_7 + "," + kTsh_7 + ",0.95,3)"), 7.193962107036191);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

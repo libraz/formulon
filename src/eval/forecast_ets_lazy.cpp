@@ -292,7 +292,7 @@ bool preprocess(const parser::AstNode& values_node, const parser::AstNode& timel
     m = detect_seasonality(resampled.y);
   } else if (seasonality >= 2 && seasonality <= static_cast<std::int64_t>(kMaxSeasonalityArg)) {
     // A period covering most of the series is treated as no seasonality.
-    const bool too_long = static_cast<double>(seasonality) >= 0.7 * static_cast<double>(resampled.y.size());
+    const bool too_long = static_cast<std::size_t>(seasonality) >= (70U * resampled.y.size()) / 100U;
     m = too_long ? 1U : static_cast<std::uint32_t>(seasonality);
   } else {
     *out_err = Value::error(ErrorCode::Num);

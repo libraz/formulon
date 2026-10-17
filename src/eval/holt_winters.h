@@ -27,12 +27,15 @@ struct HoltWintersFit {
   double smape = 0.0;
   /// Mean squared one-step error over the whole series.
   double sigma2 = 0.0;
+  /// Trend of the initial state.
+  double initial_trend = 0.0;
   /// Season length used by the recurrences (at least 2).
   std::size_t period = 2U;
   /// [level, trend, seasonal slots...]; the seasonal slots are a ring.
   std::vector<double> state;
 
-  /// Point forecast `h` steps after the last observation (`h` may be <= 0).
+  /// Point forecast `h` steps after the last observation (`h` may be <= 0);
+  /// a result that is negligible next to the initial trend is returned as 0.
   double forecast(std::int64_t h) const;
 
   /// Forecast error variance at horizon `h >= 1`.

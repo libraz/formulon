@@ -90,6 +90,11 @@ constexpr TrendCandidate kTrendCandidates[] = {
     {0.998, 0.749}, {0.75, 0.749},  {0.833333, 0.75},      {0.998, 0.899},        {0.9, 0.899},
 };
 
+// Forecasts below this magnitude may be snapped to zero.
+constexpr double kTinyResult = 3e-7;
+// Decades between the initial trend and a forecast beyond which it snaps.
+constexpr int kTinyResultDecades = 3;
+
 double mul(double a, double b) noexcept {
   return flush_subnormal(a * b);
 }
@@ -165,13 +170,15 @@ class Fitter {
     st[0] = st[0] - st[1];
 
     search(st);
+    initial_trend_ = st[1];
     final_pass(st);
   }
 
  private:
-  // A short seasonal series is extended phase-wise by linear extrapolation.
+  // A short series is extended by linear extrapolation, phase-wise when
+  // seasonal.
   void pad_short_series() {
-    if (!seasonal_ || 7U * mp_ < 2U * n_) {
+    if (7U * mp_ < 2U * n_) {
       return;
     }
     std::size_t extra = (7U * mp_ - 2U * n_ + 1U) / 2U;
@@ -182,7 +189,7 @@ class Fitter {
         yw_.push_back(yw_[n_ - 1U]);
       }
       extra = extra > rep ? extra - rep : 0U;
-    } else {
+    } else if (seasonal_) {
       double acc = 0.0;
       for (std::size_t p = 0; p < mp_; ++p) {
         double arr[3];
@@ -194,6 +201,8 @@ class Fitter {
       }
       slope = div(acc, dm_);
       slope = div(slope, dm_);
+    } else {
+      slope = ols_slope(yw_.data(), n_, nullptr, 0U);
     }
     double pos = static_cast<double>(n_);
     for (std::size_t k = 0; k < extra; ++k) {
@@ -378,6 +387,17 @@ class Fitter {
         }
       }
     }
+    // Rotate the seasonal slots so that the last slot is the next one used.
+    if (idx != size_ - 1U) {
+      const std::vector<double> old(st.begin() + 2, st.begin() + 2 + static_cast<std::ptrdiff_t>(mp_));
+      for (std::size_t i = 0; i < mp_; ++i) {
+        std::size_t k = size_ - idx + 1U + i;
+        if (k > size_ - 1U) {
+          k = k % size_ + 2U;
+        }
+        st[k] = old[i];
+      }
+    }
     const std::size_t cnt = n_ > 10U ? n_ >> 1U : n_;
     const double mean_b = div(sum_b, static_cast<double>(cnt));
     const double dn1 = static_cast<double>(cnt - 1U);
@@ -389,7 +409,7 @@ class Fitter {
     const double sd = std::sqrt(v);
     const double sdv = cnt > 1U ? sd : 0.0;
     const double cv = mean_b != 0.0 ? std::fabs(div(sdv, mean_b)) : 0.0;
-    if (mean_b == 0.0 || !(cv < 1.0)) {
+    if (mean_b == 0.0 || cv > 1.0) {
       st[0] = yw_[n_ - 1U] - st[2];
       st[1] = st0[1];
       beta_ = 0.001;
@@ -407,7 +427,8 @@ class Fitter {
     out_->mae = mae;
     out_->rmse = std::sqrt(div(s2, cnt2));
     out_->smape = div(smape, cnt2);
-    out_->mase = naive != 0.0 ? div(mae, naive) : mae;
+    out_->mase = naive != 0.0 ? div(mae, naive) : 0.0;
+    out_->initial_trend = initial_trend_;
     out_->period = mp_;
     out_->state = std::move(st);
   }
@@ -425,6 +446,7 @@ class Fitter {
   double alpha_ = 0.0;
   double beta_ = 0.0;
   double gamma_ = 0.0;
+  double initial_trend_ = 0.0;
 };
 
 }  // namespace
@@ -435,7 +457,19 @@ double HoltWintersFit::forecast(std::int64_t h) const {
   v = v + state[0];
   const std::int64_t k = h >= 1 ? h : h + m * ((-h) / m + 1);
   const std::size_t idx = state.size() - 1U - static_cast<std::size_t>((k - 1) % m);
-  return v + state[idx];
+  const double r = v + state[idx];
+  // A result that is rounding noise next to the initial trend is zero.
+  const double mag = std::fabs(r);
+  if (r != 0.0 && mag < kTinyResult && mag < std::fabs(initial_trend)) {
+    double ratio = std::fabs(initial_trend) / mag;
+    if (std::fabs(ratio) > DBL_MAX || std::fabs(ratio) < DBL_MIN) {
+      ratio = 0.0;
+    }
+    if (std::fabs(std::log10(ratio)) >= static_cast<double>(kTinyResultDecades)) {
+      return 0.0;
+    }
+  }
+  return r;
 }
 
 double HoltWintersFit::variance(std::int64_t h) const {
