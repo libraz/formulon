@@ -5,13 +5,8 @@
 // CUBERANKEDMEMBER, CUBESET, CUBESETCOUNT, CUBEVALUE) talks to an OLAP
 // data model through Excel's connection layer. Formulon is a standalone
 // calculation engine with no connection infrastructure, so every CUBE*
-// function returns `#NAME?`.
-//
-// Why #NAME? rather than #VALUE!: Mac Excel 365 itself surfaces `#NAME?`
-// for CUBE* formulas when no cube connection exists (the function name is
-// recognised, but the semantic runtime is missing). Matching Excel's
-// no-connection output keeps Formulon's behaviour deterministic and
-// oracle-friendly should a connectionless fixture ever be introduced.
+// function returns `#N/A`, which is what Excel 365 returns for a CUBE*
+// formula whose connection does not exist.
 //
 // Argument evaluation: each stub's `impl` simply returns the fixed error
 // once invoked. The dispatcher (`tree_walker.cpp`) pre-evaluates every
@@ -32,12 +27,12 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Single shared impl: every CUBE* function resolves to `#NAME?` once its
+// Single shared impl: every CUBE* function resolves to `#N/A` once its
 // arguments have all evaluated cleanly. Using one function pointer keeps
 // the catalog footprint minimal and makes the "stub" contract literal in
 // the source.
-Value CubeNameStub(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Name);
+Value CubeNoConnectionStub(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return Value::error(ErrorCode::NA);
 }
 
 }  // namespace
@@ -46,14 +41,14 @@ void register_cube_builtins(FunctionRegistry& registry) {
   // Arities as documented by Microsoft for Excel 365. Enforced by the
   // dispatcher's min/max arity check before the stub body runs.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"CUBEKPIMEMBER", 3u, 4u, &CubeNameStub},
-      {"CUBEMEMBER", 2u, 3u, &CubeNameStub},
-      {"CUBEMEMBERPROPERTY", 3u, 3u, &CubeNameStub},
-      {"CUBERANKEDMEMBER", 3u, 4u, &CubeNameStub},
-      {"CUBESET", 2u, 5u, &CubeNameStub},
-      {"CUBESETCOUNT", 1u, 1u, &CubeNameStub},
+      {"CUBEKPIMEMBER", 3u, 4u, &CubeNoConnectionStub},
+      {"CUBEMEMBER", 2u, 3u, &CubeNoConnectionStub},
+      {"CUBEMEMBERPROPERTY", 3u, 3u, &CubeNoConnectionStub},
+      {"CUBERANKEDMEMBER", 3u, 4u, &CubeNoConnectionStub},
+      {"CUBESET", 2u, 5u, &CubeNoConnectionStub},
+      {"CUBESETCOUNT", 1u, 1u, &CubeNoConnectionStub},
       // CUBEVALUE is variadic: connection plus 0..N member_expression tuples.
-      {"CUBEVALUE", 1u, kVariadic, &CubeNameStub},
+      {"CUBEVALUE", 1u, kVariadic, &CubeNoConnectionStub},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

@@ -2,7 +2,7 @@
 // Tests for the Web-category built-ins:
 //   * ENCODEURL   -- real impl (RFC 3986 percent-encoding, uppercase hex).
 //   * FILTERXML   -- real impl (pugixml + XPath 1.0).
-//   * WEBSERVICE  -- deterministic #VALUE! stub.
+//   * WEBSERVICE  -- deterministic #VALUE! stub (#NAME? on Mac).
 //   * PY          -- deterministic #NAME? stub.
 //
 // Stub arguments are evaluated for error-propagation side effects; the
@@ -10,6 +10,7 @@
 
 #include <string_view>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
@@ -18,12 +19,14 @@
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // ---------------------------------------------------------------------------
 // Registry pin
@@ -283,6 +286,16 @@ TEST(BuiltinsWebWebService, AlwaysReturnsValue) {
   const Value v = EvalSource("=WEBSERVICE(\"http://example.com\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsWebWebService, MacProfileReturnsName) {
+  const ExcelProfile mac{ExcelHost::kMac365, ExcelLocale::kJaJP};
+  ScopedEvalProfile scope(mac);
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac);
+  const Value v = EvalSourceIn("=WEBSERVICE(\"http://example.com\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
 TEST(BuiltinsWebWebService, PropagatesArgumentError) {

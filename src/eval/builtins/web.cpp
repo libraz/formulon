@@ -3,7 +3,8 @@
 //
 //   * ENCODEURL(text)        -- Excel-compatible percent-encoding.
 //   * FILTERXML(xml, xpath)  -- pugixml-backed XPath 1.0 evaluation.
-//   * WEBSERVICE(url)        -- fixed #VALUE! (no network I/O).
+//   * WEBSERVICE(url)        -- fixed #VALUE! (no network I/O); #NAME? on
+//                               Mac Excel, which has no WEBSERVICE.
 //   * PY(expression)         -- fixed #NAME? (no embedded Python).
 //
 // ENCODEURL and FILTERXML are real implementations. WEBSERVICE and PY are
@@ -27,7 +28,9 @@
 #include "eval/array_alloc.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "excel_profile.h"
 #include "pugixml.hpp"
 #include "utils/arena.h"
 #include "utils/double_parse.h"
@@ -300,12 +303,16 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // WEBSERVICE(url)
 // ---------------------------------------------------------------------------
 //
-// Always returns #VALUE!. Formulon is a pure calculation engine and does
-// not perform network I/O under any circumstances; there is no HTTP client
-// in the dependency set (see the strict dependency policy in CLAUDE.md).
-// The argument is still evaluated by the dispatcher so an error there
+// Returns #VALUE!. Formulon is a pure calculation engine and does not
+// perform network I/O under any circumstances; there is no HTTP client in
+// the dependency set (see the strict dependency policy in CLAUDE.md). Mac
+// Excel does not provide WEBSERVICE, so a Mac profile returns #NAME?. The
+// argument is still evaluated by the dispatcher so an error there
 // propagates normally.
 Value WebService(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  if (current_eval_profile().host == ExcelHost::kMac365) {
+    return Value::error(ErrorCode::Name);
+  }
   return Value::error(ErrorCode::Value);
 }
 

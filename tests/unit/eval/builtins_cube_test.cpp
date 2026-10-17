@@ -1,6 +1,6 @@
 //
 // Tests for the Cube-category built-in stubs. All seven CUBE* functions
-// return #NAME? (Formulon has no OLAP connection infrastructure) once
+// return #N/A (Formulon has no OLAP connection infrastructure) once
 // argument evaluation completes. An error in any argument short-circuits
 // to that error via the dispatcher's default propagate_errors behaviour.
 
@@ -37,67 +37,73 @@ TEST(BuiltinsCubeRegistry, NamesRegistered) {
 }
 
 // ---------------------------------------------------------------------------
-// Stub returns #NAME?
+// Stub returns #N/A
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsCube, CubeValueMinArityReturnsName) {
+TEST(BuiltinsCube, CubeValueMinArityReturnsNa) {
   const Value v = EvalSource("=CUBEVALUE(\"conn\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeValueVariadicReturnsName) {
+TEST(BuiltinsCube, CubeValueVariadicReturnsNa) {
   const Value v = EvalSource("=CUBEVALUE(\"conn\",\"a\",\"b\",\"c\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeMemberReturnsName) {
+TEST(BuiltinsCube, CubeMemberReturnsNa) {
   const Value v = EvalSource("=CUBEMEMBER(\"conn\",\"[Sales].[All]\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeMemberWithCaptionReturnsName) {
+TEST(BuiltinsCube, CubeMemberWithCaptionReturnsNa) {
   const Value v = EvalSource("=CUBEMEMBER(\"conn\",\"[Sales].[All]\",\"caption\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeMemberPropertyReturnsName) {
+TEST(BuiltinsCube, CubeMemberPropertyReturnsNa) {
   const Value v = EvalSource("=CUBEMEMBERPROPERTY(\"conn\",\"member\",\"prop\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeRankedMemberReturnsName) {
+TEST(BuiltinsCube, CubeRankedMemberReturnsNa) {
   const Value v = EvalSource("=CUBERANKEDMEMBER(\"conn\",\"set\",1)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeKpiMemberReturnsName) {
+TEST(BuiltinsCube, CubeKpiMemberReturnsNa) {
   const Value v = EvalSource("=CUBEKPIMEMBER(\"conn\",\"kpi\",1)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeSetReturnsName) {
+TEST(BuiltinsCube, CubeSetReturnsNa) {
   const Value v = EvalSource("=CUBESET(\"conn\",\"set\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeSetFullArityReturnsName) {
+TEST(BuiltinsCube, CubeSetFullArityReturnsNa) {
   const Value v = EvalSource("=CUBESET(\"conn\",\"set\",\"caption\",1,\"sort\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsCube, CubeSetCountReturnsName) {
+TEST(BuiltinsCube, CubeSetCountReturnsNa) {
   const Value v = EvalSource("=CUBESETCOUNT(\"set\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsCube, CubeSetCountOfCubeSetReturnsNa) {
+  const Value v = EvalSource("=CUBESETCOUNT(CUBESET(\"conn\",\"set\"))");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 // ---------------------------------------------------------------------------
