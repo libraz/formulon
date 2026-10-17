@@ -324,6 +324,38 @@ cases:
     formula: "=HYPGEOMDIST(1, 4, 8, 20)"
     tolerance: { abs: 0, rel: 0 }
 
+  - id: hypgeom_population_count_at_int32_limit_is_num
+    description: "HYPGEOM.DIST: a population count of 2^31 - 1 is rejected"
+    formula: "=HYPGEOM.DIST(5, 10, 50, 2147483647, TRUE)"
+
+  - id: hypgeom_population_count_pmf_at_int32_limit_is_num
+    description: "HYPGEOM.DIST: the count bound applies to the pmf too"
+    formula: "=HYPGEOM.DIST(5, 10, 50, 2147483647, FALSE)"
+
+  - id: hypgeom_sample_count_at_int32_limit_is_num
+    description: "HYPGEOM.DIST: a sample_s of 2^31 - 1 is rejected"
+    formula: "=HYPGEOM.DIST(2147483647, 10, 50, 100, TRUE)"
+
+  - id: hypgeom_population_count_below_int32_limit
+    description: "HYPGEOM.DIST: a population count of 2^31 - 2 evaluates"
+    formula: "=HYPGEOM.DIST(5, 10, 50, 2147483646, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hypgeom_sample_count_below_int32_limit
+    description: "HYPGEOM.DIST: a sample_s of 2^31 - 2 evaluates"
+    formula: "=HYPGEOM.DIST(2147483646, 10, 50, 100, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hypgeom_cdf_span_500k
+    description: "HYPGEOM.DIST cdf over a span of 5e5 terms"
+    formula: "=HYPGEOM.DIST(500000, 1000000, 5000000, 10000000, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hypgeom_cdf_span_5m
+    description: "HYPGEOM.DIST cdf over a span of 5e6 terms"
+    formula: "=HYPGEOM.DIST(5000000, 10000000, 50000000, 100000000, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
   # =========================================================================
   # Distributions-ext closure perspectives (appended 2026-04-29). Each
   # function in the post-2010 beta/gamma/lognormal/Weibull family needs at

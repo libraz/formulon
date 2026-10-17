@@ -619,6 +619,9 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //     and the CDF is 0 (below support) or 1 (above support). Excel
 //     treats the infeasible-but-non-negative branch as measure-zero
 //     rather than malformed input.
+// Exclusive upper bound of every floored HYPGEOM.DIST count.
+constexpr double kMaxCount = 2147483647.0;
+
 Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   double counts[4];
   for (std::uint32_t i = 0; i < 4U; ++i) {
@@ -642,7 +645,9 @@ Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   // surfaces `#NUM!`, even though k = -1 is trivially outside the
   // support. k < 0 is treated as a malformed argument, not an
   // infeasible support point.
-  if (k < 0.0 || n < 0.0 || big_k < 0.0 || big_n < 0.0 || n > big_n || big_k > big_n) {
+  // Every count must also floor below 2^31 - 1.
+  if (k < 0.0 || n < 0.0 || big_k < 0.0 || big_n < 0.0 || n > big_n || big_k > big_n || k >= kMaxCount ||
+      n >= kMaxCount || big_k >= kMaxCount || big_n >= kMaxCount) {
     return Value::error(ErrorCode::Num);
   }
   // Support window. k >= 0 here; the infeasible branch covers
@@ -656,10 +661,6 @@ Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     }
     if (k >= k_max) {
       return finalize(1.0);
-    }
-    // The cdf is a term-by-term recurrence: a span past the term cap is rejected rather than walked.
-    if (k - k_min >= stats_detail::kMaxCumulativeTerms) {
-      return Value::error(ErrorCode::Num);
     }
     return finalize(stats::hypgeom_cdf_excel(k, n, big_k, big_n));
   }

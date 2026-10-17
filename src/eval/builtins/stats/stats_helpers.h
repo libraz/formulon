@@ -213,14 +213,6 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k);
 // calling in.
 double InverseStandardNormal(double p);
 
-// Ceiling on how many probability-mass terms a term-by-term cumulative
-// builtin may add up. HYPGEOM.DIST's cdf steps once per unit of its argument,
-// so `=HYPGEOM.DIST(1E12, 1E12, 5E11, 2E12, TRUE)` would run for longer than
-// the process will live; a span at or past this ceiling is refused with
-// `#NUM!`. One Excel column's worth of terms is the same ceiling the
-// depreciation schedules use.
-inline constexpr double kMaxCumulativeTerms = 1048576.0;
-
 // Probability mass function of Binomial(n, p) at k (BINOM.DIST).
 double BinomPmf(double k, double n, double prob);
 

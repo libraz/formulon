@@ -733,6 +733,85 @@
       }
     },
     {
+      "id": "hypgeom_population_count_at_int32_limit_is_num",
+      "formula": "=HYPGEOM.DIST(5, 10, 50, 2147483647, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_population_count_pmf_at_int32_limit_is_num",
+      "formula": "=HYPGEOM.DIST(5, 10, 50, 2147483647, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_sample_count_at_int32_limit_is_num",
+      "formula": "=HYPGEOM.DIST(2147483647, 10, 50, 100, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_population_count_below_int32_limit",
+      "formula": "=HYPGEOM.DIST(5, 10, 50, 2147483646, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_sample_count_below_int32_limit",
+      "formula": "=HYPGEOM.DIST(2147483646, 10, 50, 100, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_cdf_span_500k",
+      "formula": "=HYPGEOM.DIST(500000, 1000000, 5000000, 10000000, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5004205219807027
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_cdf_span_5m",
+      "formula": "=HYPGEOM.DIST(5000000, 10000000, 50000000, 100000000, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5001329807567633
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
       "id": "gamma_inv_median",
       "formula": "=GAMMA.INV(0.5, 3, 2)",
       "setup": {},
