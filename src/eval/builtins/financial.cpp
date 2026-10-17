@@ -34,6 +34,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/rate_secant.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -360,84 +361,65 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // --- RATE(nper, pmt, pv, [fv=0], [type=0], [guess=0.1]) -----------------
 //
-// Solves f(r) = pv*q + pmt*(((q-1)/r)*(1+r*type)) + fv = 0 with q = (1+r)^nper
-// by the secant method, step for step as Excel does:
-//   - q is `financial_detail::excel_power(1+r, nper)`; f(0) is the linear form;
-//   - the second point is guess -/+ 0.001 against the sign of f(guess);
-//   - at most 200 secant steps, accepted when both |dx| and |f| are < 1e-7;
-//     after the cap the last iterate is kept only if |f| < 1e-4;
-//   - iterates are not domain-guarded; a repeated f, or a root with
-//     1 + r <= 1e-7, is #NUM!.
-double rate_residual(double r, double nper, double pmt, double pv, double fv, double type) {
-  if (r == 0.0) {
-    return pv + pmt * nper + fv;
+// Solves -(pmt * A + pv * q) - fv = 0 with q = (1+r)^nper and
+// A = ((q-1)/r), times (1+r) for a non-zero type, by the shared alternating
+// secant search (`rate_secant::search`): the second point is the guess
+// -/+ 0.001 by the sign of f(guess), a zero or NaN difference nudges the older
+// point by 0.001, and the search stops when |f| and the step are within 1e-7
+// (1e-4 after 100 passes). A failed power (0^0, a negative base to a
+// fractional power other than 0.5, overflow) is #NUM!, as is a root with
+// x - tol <= -1. A guess whose 1 + guess is not a positive normal number is
+// #VALUE!.
+class RateResidual {
+ public:
+  RateResidual(double nper, double pmt, double pv, double fv, double type) noexcept
+      : nper_(nper), pmt_(pmt), pv_(pv), fv_(fv), type_(type) {}
+
+  double operator()(double r) noexcept {
+    if (std::fabs(r) < rate_secant::kTiny) {
+      return -(nper_ * pmt_ + pv_) - fv_;
+    }
+    const double base = r + 1.0;
+    const auto power = apply_pow_ieee(base, nper_);
+    if (!power) {
+      failed_ = true;
+      return 0.0;
+    }
+    const double q = power.value();
+    double annuity = (q - 1.0) / r;
+    if (type_ != 0.0) {
+      annuity = annuity * base;
+    }
+    return -(annuity * pmt_ + pv_ * q) - fv_;
   }
-  const double q = financial_detail::excel_power(1.0 + r, nper);
-  return pv * q + pmt * (((q - 1.0) / r) * (1.0 + r * type)) + fv;
-}
+
+  bool failed() const noexcept { return failed_; }
+
+ private:
+  double nper_;
+  double pmt_;
+  double pv_;
+  double fv_;
+  double type_;
+  bool failed_ = false;
+};
 
 Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_rate_args(args, arity);
   if (!input) {
     return Value::error(input.error());
   }
-  const double nper = input.value().nper;
-  const double pmt = input.value().pmt;
-  const double pv = input.value().pv;
-  const double fv = input.value().fv;
-  const double type = input.value().type;
-
-  if (nper < 1.0) {
+  const double guess = input.value().guess;
+  const double base = 1.0 + guess;
+  if (std::isnan(base) || std::isinf(base) || !(base > rate_secant::kTiny)) {
+    return Value::error(ErrorCode::Value);
+  }
+  RateResidual residual(input.value().nper, input.value().pmt, input.value().pv, input.value().fv, input.value().type);
+  const rate_secant::Result found = rate_secant::search(residual, guess);
+  if (residual.failed() || !found.converged || !((found.x - found.tolerance) > -1.0)) {
     return Value::error(ErrorCode::Num);
   }
-
-  constexpr int kMaxSteps = 200;
-  constexpr double kConvergence = 1.0e-7;
-  constexpr double kCapResidual = 1.0e-4;
-  constexpr double kRateFloor = 1.0e-7;
-  constexpr double kSecondPointOffset = 1.0e-3;
-  const bool fractional = std::trunc(nper) != nper;
-  const auto residual = [&](double r) { return rate_residual(r, nper, pmt, pv, fv, type); };
-  const auto out_of_domain = [&](double r) { return fractional && !(1.0 + r > 0.0); };
-
-  double x0 = input.value().guess;
-  if (out_of_domain(x0)) {
-    return Value::error(ErrorCode::Num);
-  }
-  double f0 = residual(x0);
-  double x1 = f0 > 0.0 ? x0 - kSecondPointOffset : x0 + kSecondPointOffset;
-  if (out_of_domain(x1)) {
-    return Value::error(ErrorCode::Num);
-  }
-  double f1 = residual(x1);
-  double x2 = x1;
-  double f2 = f1;
-  bool converged = false;
-  for (int step = 0; step < kMaxSteps; ++step) {
-    if (f1 == f0) {
-      return Value::error(ErrorCode::Num);
-    }
-    x2 = x1 - f1 * (x1 - x0) / (f1 - f0);
-    if (out_of_domain(x2)) {
-      return Value::error(ErrorCode::Num);
-    }
-    f2 = residual(x2);
-    if (std::fabs(x2 - x1) < kConvergence && std::fabs(f2) < kConvergence) {
-      converged = true;
-      break;
-    }
-    x0 = x1;
-    f0 = f1;
-    x1 = x2;
-    f1 = f2;
-  }
-  if (!converged && !(std::fabs(f2) < kCapResidual)) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (!(1.0 + x2 > kRateFloor)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return finalize(x2);
+  return finalize(found.x);
 }
 
 // --- IPMT(rate, per, nper, pv, [fv=0], [type=0]) ------------------------

@@ -728,3 +728,79 @@ cases:
   - id: irr_secant_15
     description: "IRR secant search in u = g / (-1 - g), stopping at 1e-7 as Excel does"
     formula: "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},-1)"
+
+  - id: rate_secant_00
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(10,-100,800,,,0.1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_01
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(10,-100,800,0,-1,0.01)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_02
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(12,-50,500,100,,1E-9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_03
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(10,-100,1000,,,5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_04
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(10,100,-800,,,1E-9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_05
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(5,-200,1000,0,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_06
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(10,100,-800,,,5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_07
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(24,-500,10000,0,1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: rate_secant_08
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(20,-100,1000,-500,,-1)"
+
+  - id: rate_secant_09
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(6,-1000,5000,200,1,-2)"
+
+  - id: rate_secant_10
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(10,100,-800,,,-1)"
+
+  - id: rate_secant_11
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(3,-1000,2500,,,-0.5)"
+
+  - id: rate_secant_12
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(-5,-100,800,,,-0.9)"
+
+  - id: rate_secant_13
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(360,-1000,150000,,,0.5)"
+
+  - id: rate_secant_14
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(0.5,-60,100)"
+
+  - id: rate_secant_15
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(0.5,-60,100,,,0)"
+
+  - id: rate_secant_16
+    description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
+    formula: "=RATE(0.5,-60,100,,,0.01)"

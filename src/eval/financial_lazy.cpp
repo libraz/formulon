@@ -30,6 +30,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/rate_secant.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -115,18 +116,6 @@ bool has_opposite_cash_flow_signs(const std::vector<double>& flows) noexcept {
   return signs.has_positive && signs.has_negative;
 }
 
-// Magnitudes below this are zero to the solver's tests.
-constexpr double kIrrTiny = 0x1p-1026;
-
-bool irr_normal(double x) noexcept {
-  return !(std::fabs(x) < kIrrTiny || std::isinf(x) || std::isnan(x));
-}
-
-// Sign test of the solver: NaN, infinities and tiny values count as non-negative.
-bool irr_negative(double x) noexcept {
-  return x < 0.0 && !(std::fabs(x) < kIrrTiny) && !std::isnan(x);
-}
-
 // The residual IRR's secant search drives to zero, as a function of
 // u = g / (-1 - g): `S = S + v / F; F = F * B` with `B = 1 / (1 + u)`, the
 // first flow undiscounted. A division by zero marks the evaluation failed.
@@ -161,77 +150,6 @@ class IrrResidual {
   bool failed_ = false;
 };
 
-struct IrrSecant {
-  bool converged;
-  double x;
-  double tolerance;
-};
-
-// True while `quantity` still exceeds `tolerance` in the solver's sense.
-bool irr_exceeds(double quantity, double tolerance) noexcept {
-  const double excess = std::fabs(quantity) - tolerance;
-  return irr_normal(excess) && excess > 0.0;
-}
-
-// Alternating secant steps on `f` from `a`: the second point sits 0.001 away,
-// a zero difference nudges a point by 0.001, and the search stops when both the
-// residual and the step are within 1e-7. After 100 passes a last test at 1e-4.
-IrrSecant irr_secant(IrrResidual& f, double a) noexcept {
-  constexpr IrrSecant kFailed = {false, 0.0, 0.0};
-  double tol = 1.0e-7;
-  double fa = f(a);
-  double b = irr_negative(fa) ? a - 0.001 : 0.001 + a;
-  double fb = f(b);
-  if (f.failed()) {
-    return kFailed;
-  }
-  double x = fb;
-  for (int pass = 0; pass < 100; ++pass) {
-    double d = x - fa;
-    if (!irr_normal(d)) {
-      const double e = a - b;
-      a = (!irr_normal(e) || irr_negative(e)) ? 0.001 + a : a - 0.001;
-      fa = f(a);
-      d = fb - fa;
-      if (f.failed() || !irr_normal(d)) {
-        return kFailed;
-      }
-    }
-    a = b - ((b - a) * fb) / d;
-    fa = f(a);
-    if (f.failed()) {
-      return kFailed;
-    }
-    if (!irr_exceeds(fa, tol) && !irr_exceeds(a - b, tol)) {
-      return {true, a, tol};
-    }
-    d = fa - fb;
-    if (!irr_normal(d)) {
-      const double e = b - a;
-      b = (!irr_normal(e) || irr_negative(e)) ? 0.001 + b : b - 0.001;
-      fb = f(b);
-      d = fa - fb;
-      if (f.failed() || !irr_normal(d)) {
-        return kFailed;
-      }
-    }
-    b = a - ((a - b) * fa) / d;
-    fb = f(b);
-    if (f.failed()) {
-      return kFailed;
-    }
-    if (!irr_exceeds(fb, tol) && !irr_exceeds(a - b, tol)) {
-      return {true, b, tol};
-    }
-    x = fb;
-  }
-  tol = 1.0e-4;
-  if (irr_exceeds(fb, tol) || irr_exceeds(a - b, tol)) {
-    return kFailed;
-  }
-  return {true, b, tol};
-}
-
 // IRR from `guess`: the secant search in u, restarted from 0.1, -1/11 and 2
 // when it fails (the first restart is skipped when the guess is omitted).
 // A start whose 1 + u is not a positive normal number is #VALUE!; running out
@@ -246,10 +164,10 @@ Value irr_solve(const std::vector<double>& flows, double guess, bool guess_given
   IrrResidual residual(flows);
   while (true) {
     const double base = 1.0 + u;
-    if (std::isnan(base) || std::isinf(base) || !(base > kIrrTiny)) {
+    if (std::isnan(base) || std::isinf(base) || !(base > rate_secant::kTiny)) {
       return Value::error(ErrorCode::Value);
     }
-    const IrrSecant found = irr_secant(residual, u);
+    const rate_secant::Result found = rate_secant::search(residual, u);
     if (residual.failed()) {
       return Value::error(ErrorCode::Num);
     }

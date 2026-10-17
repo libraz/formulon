@@ -161,6 +161,10 @@ Expected<bool, ErrorCode> coerce_to_bool(const Value& v);
 /// unflushed for an exponent of 2.
 Expected<double, ErrorCode> apply_pow(double base, double exp, bool operator_form = false);
 
+/// `apply_pow` with the IEEE-double (Mac) evaluation whatever the active
+/// profile is, for kernels that follow one fixed evaluation order.
+Expected<double, ErrorCode> apply_pow_ieee(double base, double exp);
+
 // ---------------------------------------------------------------------------
 // Matrix-strict numeric coercion
 // ---------------------------------------------------------------------------

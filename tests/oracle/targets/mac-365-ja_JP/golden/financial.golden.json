@@ -1926,6 +1926,191 @@
         "kind": "error",
         "code": "#VALUE!"
       }
+    },
+    {
+      "id": "rate_secant_00",
+      "formula": "=RATE(10,-100,800,,,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.042774978035587
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_01",
+      "formula": "=RATE(10,-100,800,0,-1,0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.053446167391177954
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_02",
+      "formula": "=RATE(12,-50,500,100,,1E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.6721666757297297e-09
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_03",
+      "formula": "=RATE(10,-100,1000,,,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.1308422739320756e-09
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_04",
+      "formula": "=RATE(10,100,-800,,,1E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.042774978034258976
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_05",
+      "formula": "=RATE(5,-200,1000,0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.6302285183735498e-09
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_06",
+      "formula": "=RATE(10,100,-800,,,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04277497803511595
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_07",
+      "formula": "=RATE(24,-500,10000,0,1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.01655011906671201
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_08",
+      "formula": "=RATE(20,-100,1000,-500,,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rate_secant_09",
+      "formula": "=RATE(6,-1000,5000,200,1,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rate_secant_10",
+      "formula": "=RATE(10,100,-800,,,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rate_secant_11",
+      "formula": "=RATE(3,-1000,2500,,,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_12",
+      "formula": "=RATE(-5,-100,800,,,-0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_13",
+      "formula": "=RATE(360,-1000,150000,,,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_14",
+      "formula": "=RATE(0.5,-60,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_15",
+      "formula": "=RATE(0.5,-60,100,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_16",
+      "formula": "=RATE(0.5,-60,100,,,0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
     }
   ]
 }

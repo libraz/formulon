@@ -221,30 +221,11 @@ inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, 
   return yf;
 }
 
-// `base^exponent` as Excel's financial kernels evaluate it, on |exponent| and
-// reciprocated when the exponent is negative: a right-to-left
-// square-and-multiply for an integral magnitude, sqrt for 0.5,
-// exp(|exponent| * log(base)) otherwise (NaN when `base <= 0`).
+// `base^exponent` as Excel's financial kernels evaluate it: the shared IEEE
+// POWER evaluation, NaN where it reports an error.
 inline double excel_power(double base, double exponent) noexcept {
-  const double magnitude = std::fabs(exponent);
-  double result = 0.0;
-  if (std::trunc(magnitude) == magnitude && magnitude < 2147483648.0) {
-    std::uint64_t n = static_cast<std::uint64_t>(magnitude);
-    result = 1.0;
-    double b = base;
-    while (n != 0) {
-      if ((n & 1U) != 0) {
-        result *= b;
-      }
-      b *= b;
-      n >>= 1U;
-    }
-  } else if (magnitude == 0.5) {
-    result = std::sqrt(base);
-  } else {
-    result = std::exp(std::log(base) * magnitude);
-  }
-  return exponent < 0.0 ? 1.0 / result : result;
+  const auto r = apply_pow_ieee(base, exponent);
+  return r ? r.value() : std::numeric_limits<double>::quiet_NaN();
 }
 
 inline bool is_feb_end(const date_time::YMD& d) noexcept {
