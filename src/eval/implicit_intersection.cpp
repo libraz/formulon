@@ -125,7 +125,7 @@ bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const Func
       if (is_reference_call_name(name)) {
         return resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
       }
-      if (registry.lookup(name) != nullptr || find_lazy_impl(strip_future_prefix(name)) != nullptr) {
+      if (lookup_on_current_host(registry, name) != nullptr || find_lazy_impl(strip_future_prefix(name)) != nullptr) {
         return false;
       }
       // A call through a name bound to a LAMBDA.

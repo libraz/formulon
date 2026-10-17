@@ -195,6 +195,12 @@ class FunctionRegistry {
 /// reference has program lifetime; callers must not free or mutate it.
 const FunctionRegistry& default_registry();
 
+/// Returns the definition `name` calls under the current evaluation profile:
+/// `registry.lookup(name)`, or nullptr when the function is absent on the
+/// profile's host (`FunctionDef::absent_on_mac`), so that the name behaves as
+/// an unknown name wherever it would call or denote a built-in.
+const FunctionDef* lookup_on_current_host(const FunctionRegistry& registry, std::string_view name) noexcept;
+
 }  // namespace eval
 }  // namespace formulon
 

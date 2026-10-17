@@ -12,6 +12,8 @@
 #include <utility>
 
 #include "eval/builtins.h"
+#include "eval/eval_profile_scope.h"
+#include "excel_profile.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -111,6 +113,14 @@ const FunctionRegistry& default_registry() {
     return r;
   }();
   return instance;
+}
+
+const FunctionDef* lookup_on_current_host(const FunctionRegistry& registry, std::string_view name) noexcept {
+  const FunctionDef* def = registry.lookup(name);
+  if (def != nullptr && def->absent_on_mac && current_eval_profile().host == ExcelHost::kMac365) {
+    return nullptr;
+  }
+  return def;
 }
 
 }  // namespace eval

@@ -853,7 +853,7 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       }
       // An undefined built-in name is that function as a value (`=TYPE(SUM)`).
       if (find_defined_name(ctx, node.as_name()) == nullptr &&
-          (registry.lookup(node.as_name()) != nullptr ||
+          (lookup_on_current_host(registry, node.as_name()) != nullptr ||
            find_lazy_impl(strip_future_prefix(node.as_name())) != nullptr)) {
         auto* lv = arena.create<LambdaValue>();
         if (lv == nullptr) {

@@ -297,6 +297,22 @@ TEST(BuiltinsWebFilterXml, MacProfileReturnsNameWhateverTheArguments) {
   }
 }
 
+TEST(BuiltinsWebFilterXml, BareNameIsAFunctionValueOnlyWhereFilterXmlExists) {
+  // Passed as a function value, FILTERXML is an unknown name on Mac and the
+  // built-in on Windows.
+  const char* const src = "=MAP(\"<r><a>hello</a></r>\",\"//a\",FILTERXML)";
+  const Value mac = EvalOnHost(ExcelHost::kMac365, src);
+  ASSERT_TRUE(mac.is_error()) << mac.debug_to_string();
+  EXPECT_EQ(mac.as_error(), ErrorCode::Name);
+  const Value win = EvalOnHost(ExcelHost::kWin365, src);
+  ASSERT_TRUE(win.is_array()) << win.debug_to_string();
+  ASSERT_TRUE(win.as_array_cells()[0].is_text()) << win.as_array_cells()[0].debug_to_string();
+  EXPECT_EQ(win.as_array_cells()[0].as_text(), "hello");
+  const Value mac_web = EvalOnHost(ExcelHost::kMac365, "=MAP(\"x\",WEBSERVICE)");
+  ASSERT_TRUE(mac_web.is_error()) << mac_web.debug_to_string();
+  EXPECT_EQ(mac_web.as_error(), ErrorCode::Name);
+}
+
 TEST(BuiltinsWebFilterXml, WindowsProfileEvaluates) {
   const Value v = EvalOnHost(ExcelHost::kWin365, "=FILTERXML(\"<r><a>hello</a></r>\",\"//a\")");
   ASSERT_TRUE(v.is_text()) << v.debug_to_string();
