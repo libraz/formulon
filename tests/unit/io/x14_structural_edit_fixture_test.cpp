@@ -6,10 +6,8 @@
 // and after each edit, in both formats. Applying the same edit to the base
 // file and saving must move the legacy CF range, the x14 CF range and the
 // sparkline's location and source exactly as Excel's own save does.
-//
-// One Excel behaviour is not reproduced: inserting row 2 also gives the new
-// row a copy of the sparkline above it (G2 over `E2:E8`), as an insert
-// inherits the formatting of the row above. That copy is spelt out below.
+// Inserting row 2 also gives the new row a copy of the sparkline above it
+// (G2 over `E2:E8`), as an insert inherits the formatting of the row above.
 
 #include <cstdint>
 #include <cstdio>
@@ -158,20 +156,6 @@ std::vector<std::string> Coordinates(const std::vector<std::uint8_t>& package, b
   return xlsb ? XlsbCoordinates(package) : XlsxCoordinates(package);
 }
 
-/// Excel's coordinates without the sparkline an inserted row inherits.
-std::vector<std::string> WithoutInheritedSparkline(std::vector<std::string> coords, bool xlsb) {
-  std::vector<std::string> out;
-  for (const std::string& c : coords) {
-    const bool inherited =
-        xlsb ? c.rfind("1043 ", 0) == 0 && c.find(" 01 00 00 00 01 00 00 00 06 00 00 00") != std::string::npos
-             : c == "sqref G2" || c == "f Sheet1!E2:E8";
-    if (!inherited) {
-      out.push_back(c);
-    }
-  }
-  return out;
-}
-
 void CheckBook(const std::string& book, bool xlsb) {
   const char* ext = xlsb ? ".xlsb" : ".xlsx";
   const std::vector<std::uint8_t> base = ReadFixture(book + "_0_base" + ext);
@@ -180,14 +164,11 @@ void CheckBook(const std::string& book, bool xlsb) {
   for (const EditCase& edit : kEdits) {
     Workbook wb = Load(base, xlsb);
     ASSERT_TRUE(static_cast<bool>(edit.apply(wb))) << edit.state;
-    std::vector<std::string> excel = Coordinates(ReadFixture(book + "_" + edit.state + ext), xlsb);
-    if (std::string(edit.state) == "1_insert_row2") {
-      const std::size_t before = excel.size();
-      excel = WithoutInheritedSparkline(std::move(excel), xlsb);
-      EXPECT_EQ(excel.size() + (xlsb ? 1U : 2U), before) << book << ext << " inherited sparkline not found";
-    }
-    // Legacy CF, x14 CF, sparkline: one record each, or four xlsx strings.
-    EXPECT_EQ(excel.size(), xlsb ? 3U : 4U) << book << "_" << edit.state << ext;
+    const std::vector<std::string> excel = Coordinates(ReadFixture(book + "_" + edit.state + ext), xlsb);
+    // Legacy CF, x14 CF, sparkline: one record each, or four xlsx strings; the
+    // row insert adds the copied sparkline.
+    const bool inserted = std::string(edit.state) == "1_insert_row2";
+    EXPECT_EQ(excel.size(), (xlsb ? 3U : 4U) + (inserted ? (xlsb ? 1U : 2U) : 0U)) << book << "_" << edit.state << ext;
     EXPECT_EQ(Coordinates(Save(wb, xlsb), xlsb), excel) << book << "_" << edit.state << ext;
   }
 }

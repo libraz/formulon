@@ -1063,17 +1063,6 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-08-21
     last_verified_excel_version: "16.113.3"
-  - id: structural_insert_does_not_inherit_adjacent_formatting
-    applies_to: all
-    cause: engine-gap
-    mode: skip-oracle
-    scope: deferred-feature
-    evidence: [tests/unit/io/x14_structural_edit_fixture_test.cpp]
-    reason: "Excel gives an inserted row the formatting of the row above it, and that includes a sparkline: with a sparkline at G1 over E1:E6, `Rows(2).Insert` extends it to E1:E7 and adds a second one at G2 over E2:E8 (Windows Excel 365, both formats). Formulon moves and extends the existing sparkline the same way but copies nothing onto the inserted row -- neither cell formats nor sparklines -- so the new row stays unformatted."
-    prefer: win-excel-365
-    first_noted: 2026-09-30
-    last_verified_excel_version: "16.0.20228"
-
   # -- Bare whole-axis reference: geometry cases are live --------------
   # The five geometry cases (a declared rectangle that no longer fits from
   # the formula cell, and a blocker anywhere inside the footprint) were

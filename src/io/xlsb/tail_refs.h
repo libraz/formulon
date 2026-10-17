@@ -45,6 +45,12 @@ void remap_tail_child_refs(XlsbSheetTail& tail, const StructuralEdit& edit);
 /// walk cannot step over is left as it is.
 void remap_tail_formulas(XlsbSheetTail& tail, const parser::RefTransform& transform);
 
+/// Appends the copies `clone` describes after each retained BrtSparkline
+/// hosted next to an inserted band, translating the source formula as the
+/// `.xlsx` path does. A sparkline whose formula this walk cannot translate is
+/// not copied.
+void clone_tail_sparklines(XlsbSheetTail& tail, const SparklineClone& clone);
+
 }  // namespace formulon::io::xlsb
 
 #endif  // FORMULON_IO_XLSB_TAIL_REFS_H_

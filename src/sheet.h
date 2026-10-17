@@ -1564,6 +1564,12 @@ class Sheet {
   /// Caller must hold `spill_mutex_`.
   void finalize_structural_edit_locked(const StructuralEdit& edit);
 
+  /// Gives the rows or columns an insert opened the style of the row above or
+  /// the column to the left: the row / column style and every cell's XF. An
+  /// insert at the first row or column has no neighbour and inherits nothing.
+  /// Caller must hold `spill_mutex_`.
+  void inherit_inserted_formatting_locked(const StructuralEdit& edit);
+
   // ---------------------------------------------------------------------------
   // Non-locking spill/cell helpers (caller must already hold `spill_mutex_`).
   // ---------------------------------------------------------------------------

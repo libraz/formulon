@@ -488,6 +488,44 @@ void RemapSlotFormulas(std::vector<std::uint8_t>& buf, const std::vector<XlsbExt
   }
 }
 
+void CloneSlotSparklines(std::vector<std::uint8_t>& buf, const std::vector<XlsbExternSheetEntry>& sheets,
+                         const SparklineClone& clone) {
+  const Edit edit = Open(buf);
+  std::vector<std::uint8_t> out;
+  bool changed = false;
+  for (const FramedRecord& rec : edit.recs) {
+    append_record(out, buf, rec);
+    std::vector<MergeRange> host;
+    std::size_t rest = 0;
+    if (rec.type != kSparkline || !ParseRanges(rec, host, rest) || host.size() != 1U || !clone.hosted(host.front())) {
+      continue;
+    }
+    for (std::uint32_t step = 1; step <= clone.count; ++step) {
+      const std::optional<MergeRange> moved = clone.host_at(host.front(), step);
+      if (!moved) {
+        break;
+      }
+      std::vector<std::uint8_t> payload(rec.payload.data, rec.payload.data + kSqrefOffset);
+      emit_sqref(payload, {*moved});
+      payload.insert(payload.end(), rec.payload.data + rest, rec.payload.data + rec.payload.size);
+      std::vector<std::pair<std::size_t, std::size_t>> spans;
+      const TranslateTransform transform(clone.row_axis, step);
+      const RefContext ctx{sheets, transform, std::nullopt, std::nullopt};
+      bool ok = FormulaSpans(ByteSpan{payload.data(), payload.size()}, spans);
+      for (const auto& [offset, cce] : spans) {
+        ok = ok && RemapRgce(payload.data() + offset, cce, ctx);
+      }
+      if (ok) {
+        emit_record(out, kSparkline, payload);
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    buf = std::move(out);
+  }
+}
+
 // Worksheet-children records, measured against Excel's .xlsx twins (field
 // offsets in bytes).
 constexpr std::uint16_t kBeginScenMan = 500;  // u16 current, u16 show
@@ -907,6 +945,13 @@ void remap_tail_formulas(XlsbSheetTail& tail, const parser::RefTransform& transf
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     RemapSlotFormulas(*slot, tail.extern_sheets, transform);
+  }
+}
+
+void clone_tail_sparklines(XlsbSheetTail& tail, const SparklineClone& clone) {
+  for (std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    CloneSlotSparklines(*slot, tail.extern_sheets, clone);
   }
 }
 

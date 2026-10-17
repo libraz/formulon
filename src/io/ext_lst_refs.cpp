@@ -125,4 +125,46 @@ bool remap_ext_lst_formulas(std::string& xml, const FormulaRemap& remap) {
   return changed;
 }
 
+bool clone_ext_lst_sparklines(std::string& xml, const SparklineClone& clone, const FormulaTranslate& translate) {
+  if (xml.find("x14:sparkline>") == std::string::npos) {
+    return false;
+  }
+  pugi::xml_document doc;
+  if (!Load(doc, xml)) {
+    return false;
+  }
+  std::vector<pugi::xml_node> sparklines;
+  Collect(doc.document_element(), "x14:sparkline", sparklines);
+  bool changed = false;
+  for (const pugi::xml_node& node : sparklines) {
+    std::vector<MergeRange> host;
+    if (!parse_sqref_text(node.child("xm:sqref").text().get(), host) || host.size() != 1U ||
+        !clone.hosted(host.front())) {
+      continue;
+    }
+    pugi::xml_node after = node;
+    for (std::uint32_t step = 1; step <= clone.count; ++step) {
+      const std::optional<MergeRange> moved = clone.host_at(host.front(), step);
+      if (!moved) {
+        break;
+      }
+      pugi::xml_node copy = node.parent().insert_copy_after(node, after);
+      copy.child("xm:sqref").text().set(format_sqref_text({*moved}).c_str());
+      if (pugi::xml_node f = copy.child("xm:f")) {
+        if (const std::optional<std::string> text =
+                translate(f.text().get(), TranslateTransform(clone.row_axis, step))) {
+          f.text().set(text->c_str());
+        }
+      }
+      after = copy;
+      changed = true;
+    }
+    SyncCount(node.parent());
+  }
+  if (changed) {
+    Store(xml, doc);
+  }
+  return changed;
+}
+
 }  // namespace formulon::io

@@ -16,12 +16,14 @@
 #ifndef FORMULON_IO_EXT_LST_REFS_H_
 #define FORMULON_IO_EXT_LST_REFS_H_
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "parser/ast_shift.h"
 #include "sheet.h"
 
 namespace formulon::io {
@@ -45,6 +47,65 @@ bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap);
 /// Maps the text of every `<xm:f>` in `xml` through `remap`. Returns true
 /// when `xml` changed.
 bool remap_ext_lst_formulas(std::string& xml, const FormulaRemap& remap);
+
+/// The sparklines an insert copies: those hosted in row (or, with `row_axis`
+/// false, column) `source`, the cell next to the inserted band. The k-th of
+/// `count` copies is hosted k rows (columns) further on, with its source
+/// translated by the same distance.
+struct SparklineClone {
+  bool row_axis = true;
+  std::uint32_t source = 0;
+  std::uint32_t count = 0;
+
+  /// Whether a sparkline hosted at `host` is one to copy.
+  bool hosted(const MergeRange& host) const {
+    return row_axis ? host.first_row == source && host.last_row == source
+                    : host.first_col == source && host.last_col == source;
+  }
+
+  /// `host` moved `step` rows (columns) on, or nothing past the sheet edge.
+  std::optional<MergeRange> host_at(MergeRange host, std::uint32_t step) const {
+    (row_axis ? host.first_row : host.first_col) += step;
+    (row_axis ? host.last_row : host.last_col) += step;
+    if ((row_axis ? host.last_row : host.last_col) >= (row_axis ? Sheet::kMaxRows : Sheet::kMaxCols)) {
+      return std::nullopt;
+    }
+    return host;
+  }
+};
+
+/// Relative copy of a formula `steps` rows or columns further on; absolute
+/// coordinates stay put.
+class TranslateTransform final : public parser::RefTransform {
+ public:
+  TranslateTransform(bool row_axis, std::uint32_t steps) noexcept : row_axis_(row_axis), steps_(steps) {}
+
+  std::optional<parser::Reference> apply(const parser::Reference& ref) const override {
+    parser::Reference out = ref;
+    std::uint32_t& coord = row_axis_ ? out.row : out.col;
+    const bool absolute = row_axis_ ? ref.row_abs || ref.is_full_col : ref.col_abs || ref.is_full_row;
+    if (!absolute) {
+      coord += steps_;
+      if (coord >= (row_axis_ ? Sheet::kMaxRows : Sheet::kMaxCols)) {
+        return std::nullopt;
+      }
+    }
+    return out;
+  }
+
+ private:
+  bool row_axis_;
+  std::uint32_t steps_;
+};
+
+/// Returns the text of one formula translated through `transform`, or
+/// nothing when it is unchanged or cannot be translated.
+using FormulaTranslate = std::function<std::optional<std::string>(std::string_view, const parser::RefTransform&)>;
+
+/// Appends each copy `clone` describes after its sparkline, translating the
+/// source with `translate`. A container's `count` attribute is kept in step.
+/// Returns true when `xml` changed.
+bool clone_ext_lst_sparklines(std::string& xml, const SparklineClone& clone, const FormulaTranslate& translate);
 
 }  // namespace formulon::io
 

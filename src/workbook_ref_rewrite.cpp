@@ -353,12 +353,27 @@ void shift_retained_extension_ranges(Sheet& sheet, std::uint32_t index, std::uin
   if (io::remap_ext_lst_sqrefs(ext_lst, remap)) {
     sheet.set_ext_lst_xml(std::move(ext_lst));
   }
+  // An insert gives the new band a copy of each sparkline hosted next to it.
+  if (!is_delete && index > 0U) {
+    ext_lst = sheet.ext_lst_xml();
+    const io::SparklineClone clone{row_axis, index - 1U, count};
+    const io::FormulaTranslate translate = [](std::string_view text, const parser::RefTransform& transform) {
+      FormulaRewriteResult result = rewrite_formula(text, transform);
+      return result.changed ? std::optional<std::string>(std::move(result.text)) : std::nullopt;
+    };
+    if (io::clone_ext_lst_sparklines(ext_lst, clone, translate)) {
+      sheet.set_ext_lst_xml(std::move(ext_lst));
+    }
+  }
   const StructuralEdit edit{index, count, is_delete, row_axis};
   io::remap_worksheet_children(sheet.mutable_raw_extensions(), edit);
   if (!sheet.xlsb_tail().empty()) {
     XlsbSheetTail tail = sheet.xlsb_tail();
     io::xlsb::remap_tail_sqrefs(tail, remap);
     io::xlsb::remap_tail_child_refs(tail, edit);
+    if (!is_delete && index > 0U) {
+      io::xlsb::clone_tail_sparklines(tail, io::SparklineClone{row_axis, index - 1U, count});
+    }
     sheet.set_xlsb_tail(std::move(tail));
   }
 }

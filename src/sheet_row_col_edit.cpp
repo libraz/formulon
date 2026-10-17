@@ -15,6 +15,7 @@
 #include "cf/cf_types.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "sheet_layout_edit.h"
 #include "utils/index_sort.h"
 
 namespace formulon {
@@ -441,7 +442,73 @@ void Sheet::finalize_structural_edit_locked(const StructuralEdit& edit) {
   rebuild_formula_index_locked();
   shift_blocked_spills_locked(edit);
   shift_sheet_metadata(edit);
+  if (!edit.is_delete) {
+    inherit_inserted_formatting_locked(edit);
+  }
   cell_enumeration_revision_.bump();
+}
+
+void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
+  const std::uint32_t bound = edit.row_axis ? kMaxRows : kMaxCols;
+  if (edit.index == 0U || edit.index >= bound) {
+    return;
+  }
+  const std::uint32_t source = edit.index - 1U;
+  const std::uint32_t end =
+      static_cast<std::uint32_t>(std::min<std::uint64_t>(static_cast<std::uint64_t>(edit.index) + edit.count, bound));
+  const auto owns_xf = [](const Cell& cell) { return cell.has_explicit_xf || cell.xf_index != 0U; };
+  const auto copy_xf = [](Cell& to, std::uint32_t xf_index) {
+    to.xf_index = xf_index;
+    to.has_explicit_xf = true;
+  };
+  if (edit.row_axis) {
+    const RowLayout* styled = find_row_override(layout_, source);
+    if (styled != nullptr && styled->has_style) {
+      const std::uint32_t style_xf = styled->style_xf;
+      for (std::uint32_t row = edit.index; row < end; ++row) {
+        RowLayout entry;
+        entry.row = row;
+        entry.has_style = true;
+        entry.style_xf = style_xf;
+        insert_row_override(layout_, entry);
+      }
+    }
+    const auto it = rows_.find(source);
+    if (it == rows_.end()) {
+      return;
+    }
+    for (const auto& [col, cell] : it->second) {
+      if (!owns_xf(cell)) {
+        continue;
+      }
+      for (std::uint32_t row = edit.index; row < end; ++row) {
+        copy_xf(rows_[row].ensure(col), cell.xf_index);
+      }
+    }
+    return;
+  }
+  // A style span that reaches past the source column already covers the
+  // inserted ones; only a span ending there needs a new entry.
+  const auto span = std::find_if(layout_.columns.begin(), layout_.columns.end(),
+                                 [&](const ColumnLayout& c) { return c.first <= source && source <= c.last; });
+  if (span != layout_.columns.end() && span->has_style && span->last == source) {
+    ColumnLayout entry;
+    entry.first = edit.index;
+    entry.last = end - 1U;
+    entry.has_style = true;
+    entry.style_xf = span->style_xf;
+    layout_.columns.insert(span + 1, entry);
+  }
+  for (auto& kv : rows_) {
+    const Cell* from = kv.second.find(source);
+    if (from == nullptr || !owns_xf(*from)) {
+      continue;
+    }
+    const std::uint32_t xf_index = from->xf_index;
+    for (std::uint32_t col = edit.index; col < end; ++col) {
+      copy_xf(kv.second.ensure(col), xf_index);
+    }
+  }
 }
 
 void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
