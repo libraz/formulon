@@ -72,6 +72,19 @@ _DIVERGENCE = """entries:
 """
 
 
+SUITE_SKIP_REGISTRY = """\
+entries:
+  - suite: filterxml
+    cause: excel-no-value
+    applies_to: all
+    reason: "Suite-selected skip fixture."
+    prefer: formulon
+    first_noted: 2026-01-01
+    last_verified_excel_version: "16.113"
+    mode: skip-oracle
+"""
+
+
 class ReprobeSelectionTests(unittest.TestCase):
     def setUp(self) -> None:
         tmp = Path(tempfile.mkdtemp())
@@ -276,16 +289,18 @@ class SkipProjectionTests(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
         out = tmp / "skips.json"
-        emit_skip_list.emit(REPO_ROOT / "tests/divergence.yaml", "mac-365-ja_JP", out, track="formula")
+        registry_path = tmp / "divergence.yaml"
+        registry_path.write_text(SUITE_SKIP_REGISTRY, encoding="utf-8")
+        emit_skip_list.emit(registry_path, "mac-365-ja_JP", out, track="formula")
         skips = json.loads(out.read_text(encoding="utf-8"))["skips"]
         suites = {suite.name: suite for _, suite in case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")}
-        registry = yaml.safe_load((REPO_ROOT / "tests/divergence.yaml").read_text(encoding="utf-8"))
+        registry = yaml.safe_load(SUITE_SKIP_REGISTRY)
         selected = [
             entry["suite"]
             for entry in registry["entries"]
             if entry.get("mode") == "skip-oracle" and isinstance(entry.get("suite"), str)
         ]
-        self.assertTrue(selected, "registry has no suite-selected skip to exercise")
+        self.assertTrue(selected)
         for name in selected:
             for case in suites[name].cases:
                 self.assertIn(case.id, skips)

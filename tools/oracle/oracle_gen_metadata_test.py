@@ -14,6 +14,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VARIANT_DIVERGENCE = REPO_ROOT / "tests/oracle/targets/win-365-ja_JP/divergence.yaml"
 
 
+SUITE_SKIP_REGISTRY = """\
+entries:
+  - suite: filterxml
+    cause: excel-no-value
+    applies_to: all
+    reason: "Suite-selected skip fixture."
+    prefer: formulon
+    first_noted: 2026-01-01
+    last_verified_excel_version: "16.113"
+    mode: skip-oracle
+"""
+
+
 class OracleGeneratorMetadataTest(unittest.TestCase):
     def setUp(self) -> None:
         source_suites = case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
@@ -77,11 +90,10 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
 
     def test_primary_suite_skip_expands_to_every_case(self) -> None:
         source_suites = case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
-        skips = oracle_gen._load_divergence_skips(
-            REPO_ROOT / "tests/divergence.yaml",
-            "mac-365-ja_JP",
-            suites=source_suites,
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "divergence.yaml"
+            registry.write_text(SUITE_SKIP_REGISTRY, encoding="utf-8")
+            skips = oracle_gen._load_divergence_skips(registry, "mac-365-ja_JP", suites=source_suites)
         filterxml = next(suite for _, suite in source_suites if suite.name == "filterxml")
         self.assertTrue(filterxml.cases)
         self.assertTrue(all(case.id in skips for case in filterxml.cases))

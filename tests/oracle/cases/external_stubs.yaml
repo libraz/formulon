@@ -18,7 +18,7 @@ cases:
     formula: '=PY("import math")'
 
   - id: external_stub_rtd
-    description: "RTD() reads from a COM real-time data server; Formulon stubs to #N/A"
+    description: "RTD() reads from a COM real-time data server; with none registered, Excel and Formulon return #N/A"
     formula: '=RTD("server", "topic", "p1")'
 
   - id: external_stub_stockhistory
@@ -26,7 +26,7 @@ cases:
     formula: '=STOCKHISTORY("MSFT", DATE(2024,1,1))'
 
   - id: external_stub_webservice
-    description: "WEBSERVICE() makes an HTTP request; Formulon stubs to #VALUE!"
+    description: "WEBSERVICE() makes an HTTP request; Formulon returns #VALUE! on Windows profiles and #NAME? on Mac, where Excel lacks it"
     formula: '=WEBSERVICE("https://example.com")'
 
   - id: external_stub_copilot
@@ -42,29 +42,29 @@ cases:
     formula: '=TRANSLATE("hello", "en", "ja")'
 
   - id: external_stub_cubekpimember
-    description: "CUBEKPIMEMBER() requires a cube connection; Formulon has none, returns #NAME?"
+    description: "CUBEKPIMEMBER() requires a cube connection; with none, Excel and Formulon return #N/A"
     formula: '=CUBEKPIMEMBER("conn", "kpi", 1)'
 
   - id: external_stub_cubemember
-    description: "CUBEMEMBER() requires a cube connection; Formulon has none, returns #NAME?"
+    description: "CUBEMEMBER() requires a cube connection; with none, Excel and Formulon return #N/A"
     formula: '=CUBEMEMBER("conn", "[Measures].[Sales]")'
 
   - id: external_stub_cubememberproperty
-    description: "CUBEMEMBERPROPERTY() requires a cube connection; Formulon has none, returns #NAME?"
+    description: "CUBEMEMBERPROPERTY() requires a cube connection; with none, Excel and Formulon return #N/A"
     formula: '=CUBEMEMBERPROPERTY("conn", "[Measures].[Sales]", "Caption")'
 
   - id: external_stub_cuberankedmember
-    description: "CUBERANKEDMEMBER() requires a cube connection; Formulon has none, returns #NAME?"
+    description: "CUBERANKEDMEMBER() requires a cube connection; with none, Excel and Formulon return #N/A"
     formula: '=CUBERANKEDMEMBER("conn", "set", 1)'
 
   - id: external_stub_cubeset
-    description: "CUBESET() requires a cube connection; Formulon has none, returns #NAME?"
+    description: "CUBESET() requires a cube connection; with none, Excel and Formulon return #N/A"
     formula: '=CUBESET("conn", "{[A].[B]}")'
 
   - id: external_stub_cubesetcount
-    description: "CUBESETCOUNT() requires a cube set; Formulon has none, returns #NAME?"
+    description: "CUBESETCOUNT() requires a cube set; with none, Excel and Formulon return #N/A"
     formula: '=CUBESETCOUNT(A1)'
 
   - id: external_stub_cubevalue
-    description: "CUBEVALUE() requires a cube connection; Formulon has none, returns #NAME?"
+    description: "CUBEVALUE() requires a cube connection; with none, Excel and Formulon return #N/A"
     formula: '=CUBEVALUE("conn", "[Measures].[Sales]")'

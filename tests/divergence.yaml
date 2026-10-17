@@ -381,14 +381,6 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
-  - id: external_stub_rtd
-    applies_to: all
-    cause: accepted-divergence
-    reason: "RTD reads from a real-time data COM server; Formulon has no provider runtime and stubs to #N/A. Oracle parity requires a registered COM RTD server."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
   - id: external_stub_stockhistory
     applies_to: all
     cause: accepted-divergence
@@ -398,20 +390,20 @@ entries:
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
   - id: external_stub_webservice
-    applies_to: all
+    applies_to: [win-365-ja_JP]
     cause: accepted-divergence
-    reason: "WEBSERVICE makes an HTTP request; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an HTTP client."
+    reason: "WEBSERVICE makes an HTTP request; Formulon does no network I/O and returns #VALUE! on Windows profiles. Mac Excel does not provide WEBSERVICE (#NAME?), which Mac profiles return."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
+    last_verified_excel_version: "16.113.4"
     mode: skip-oracle
   - id: external_stub_copilot
-    applies_to: all
+    applies_to: [win-365-ja_JP]
     cause: accepted-divergence
-    reason: "COPILOT dispatches to an LLM backend; Formulon does not embed one and stubs to #NAME?. Oracle parity requires the Microsoft 365 Copilot service."
+    reason: "COPILOT dispatches to an LLM backend; Formulon does not embed one and returns #NAME?. Mac Excel 16.113 does not provide COPILOT either (#NAME?), so only Windows profiles diverge where the Microsoft 365 Copilot service is available."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
+    last_verified_excel_version: "16.113.4"
     mode: skip-oracle
   - id: external_stub_detectlanguage
     applies_to: all
@@ -429,26 +421,6 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
     mode: skip-oracle
-  # Mac Excel does not have FILTERXML at all: the function name does not
-  # resolve, which is a platform fact and not a property of how the oracle
-  # drives Excel. Established by probing each path separately rather than
-  # by inference -- see the reason below for the chain. An earlier version
-  # of this entry said Mac "does not evaluate FILTERXML through the
-  # formula2/xlwings oracle path", which pointed at our bridge and was
-  # wrong; tests/oracle/cases/filterxml.yaml had it right all along.
-  #
-  # The skip is scoped to the Mac targets because Windows does have the
-  # function: the win-365-ja_JP capture evaluates every case, and Formulon
-  # matches it. The XPath contract itself is also pinned by
-  # tests/unit/eval/builtins_web_test.cpp.
-  - suite: filterxml
-    cause: excel-no-value
-    applies_to: [mac]
-    reason: "Mac Excel 365 ja-JP does not register FILTERXML, so the primary target produces no value to compare against. Excel accepts and retains the formula verbatim, then evaluates it to #NAME?: its own ERROR.TYPE(FILTERXML(...)) returns 5 and ISERROR returns TRUE, both ordinary results carried back by the bridge. The saved workbook stores the bare name with the error cached (<f>FILTERXML(...)</f><v>#NAME?</v>, no _xlfn. prefix), and reopening that file and recalculating reproduces #NAME? with no AppleEvent involved. WEBSERVICE behaves identically, matching the documented Windows-only pairing. A control formula succeeds through every path used. Note that formula_local cannot be used to re-test this: that route is inert on the Mac xlwings bridge for every formula including controls (see tools/oracle/drivers/macos_excel.py), so a blank read from it is not an Excel observation."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.112"
-    mode: skip-oracle
 
   # Stale `external_stub_info` removed from external_stubs.yaml: INFO has
   # its own environment-bound suite (`info_function.yaml`) because it is
@@ -458,62 +430,6 @@ entries:
     cause: excel-no-value
     case_alias: info_system
     reason: "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: external_stub_cubekpimember
-    applies_to: all
-    cause: accepted-divergence
-    reason: "CUBEKPIMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: external_stub_cubemember
-    applies_to: all
-    cause: accepted-divergence
-    reason: "CUBEMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: external_stub_cubememberproperty
-    applies_to: all
-    cause: accepted-divergence
-    reason: "CUBEMEMBERPROPERTY requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: external_stub_cuberankedmember
-    applies_to: all
-    cause: accepted-divergence
-    reason: "CUBERANKEDMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: external_stub_cubeset
-    applies_to: all
-    cause: accepted-divergence
-    reason: "CUBESET requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: external_stub_cubesetcount
-    applies_to: all
-    cause: accepted-divergence
-    reason: "CUBESETCOUNT requires a live cube set; Formulon has no OLAP layer and stubs to #NAME?."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-  - id: external_stub_cubevalue
-    applies_to: all
-    cause: accepted-divergence
-    reason: "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -875,45 +791,23 @@ entries:
   # `skipped` field) all agree on #REF!; this is not a pending divergence.
 
   # -- Circular reference with iterative calculation OFF ------------------
-  # A formula cycle (e.g. A1 = =A2, A2 = =A1) with the workbook's iterative
-  # calculation option disabled is detected as a strongly-connected
-  # component by the recalc engine, and every member cell resolves to
-  # #REF!: on a re-entrant reference the resolver returns ErrorCode::Ref
-  # unless workbook.iterative_options().enabled (src/eval/eval_context.cpp),
-  # and RecalcEngine reports the members via its cycle_cells stat (see
-  # tests/unit/eval/recalc_engine_test.cpp DirectCycleProducesRefError).
-  # Excel, with iterative calc OFF, refuses to resolve the cycle: it seeds
-  # one member with 0 and lets the rest compute off that seed. Reprobed on
-  # 16.112 with the iteration flag read back rather than assumed:
-  # A1==B1+1 / B1==A1+1 gives A1=1 and B1=0; a three-cell cycle gives
-  # 2 / 1 / 0; a self-cycle A1==A1+1 gives 0. Cells downstream of the cycle
-  # are left uncomputed at 0 as well (ISERROR / ISNUMBER over a member both
-  # read 0 rather than a boolean). Two earlier claims here were wrong: the
-  # result is not 0 in every member cell, and it is not uncapturable --
-  # xlwings reads ordinary numbers. The divergence is genuine and
-  # accepted: Formulon's #REF! per member is the more useful signal for a
-  # headless engine, and with iterative calc ON both engines converge to
-  # the fixed point instead.
-  #
-  # Unpinned, recorded so it is not rediscovered as a surprise: the same
-  # reprobe showed Excel abandoning the whole dependency closure, not just
-  # the cycle. A cell merely *downstream* of a member is left uncomputed at
-  # 0 -- =ISERROR(<member>) and =ISNUMBER(<member>) both read back 0 rather
-  # than a boolean, and Excel renders them as `0` rather than `FALSE`, so
-  # the cell was never evaluated rather than evaluated to FALSE. Formulon
-  # propagates #REF! into those cells instead. That is a wider divergence
-  # than this entry describes and no case pins it; scoping it needs its own
-  # probe of how far the abandonment reaches.
+  # A cycle through several cells resolves to #REF! for every member
+  # (src/eval/cell_evaluator.cpp unresolved_cycle_value); a cell that is its
+  # own only cycle member holds 0, as in Excel. Excel computes a multi-cell
+  # cycle along the chain from the member whose entry closed it, so its
+  # values depend on entry order. Cells downstream of a member are left
+  # uncomputed at 0 in Excel (ISERROR over a member reads 0, not FALSE);
+  # Formulon propagates #REF! into them, and no case pins that.
   - id: circular_reference_iterative_off_returns_ref
     applies_to: all
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/eval/recalc_engine_test.cpp]
-    reason: "A formula cycle with iterative calc OFF resolves to #REF! for every cycle-member cell in Formulon (recalc-engine SCC detection; eval_context returns ErrorCode::Ref on a re-entrant reference). Excel instead seeds one member with 0 and computes the others from it -- A1==B1+1 / B1==A1+1 yields A1=1, B1=0, and a three-cell cycle yields 2 / 1 / 0 -- so there is no single expected value to compare a cycle member against. The values are plain numbers and the harness can read them; the divergence is a deliberate policy difference, not a capture gap."
+    reason: "A cycle through two or more cells with iterative calc OFF resolves to #REF! for every member in Formulon. Excel seeds the member whose entry closed the cycle with 0 and computes the others along the chain (A1=B1+1 / B1=A1+1 entered A then B gives 1, 0; entered B then A gives 0, 1), so member values depend on entry order, which a workbook does not record. A cell whose cycle runs through itself alone is deterministic and holds 0 as in Excel."
     prefer: formulon
     first_noted: 2026-07-02
-    last_verified_excel_version: "16.112"
+    last_verified_excel_version: "16.113.4"
 
   # -- XLSB-sourced pivot tables: GETPIVOTDATA unsupported ----------------
   # Pivot tables in a .xlsb workbook are not decoded into Formulon's
@@ -1069,67 +963,10 @@ entries:
   # skipped here while the `whole` branch collapsed a bare whole-axis
   # reference to a scalar instead of spilling. They are live goldens now:
   # the engine measures the rectangle and checks the footprint, so it
-  # reports #SPILL! for the same reason Excel does. What remains skipped
-  # below is only the self-reference family.
+  # reports #SPILL! for the same reason Excel does. A formula inside the
+  # axis it references is the sole member of its cycle and holds 0, as in
+  # Excel.
 
-  # The three self-reference cases are an accepted policy difference, not
-  # work owed: Formulon returns #REF! for a cycle member (see
-  # circular_reference_iterative_off_returns_ref for the policy and its
-  # `prefer: formulon` rationale) and Excel computes something else.
-  #
-  # Each entry states why *its own* formula cell is the one Excel seeds
-  # with 0, and none of them generalises that to other cycle members. The
-  # general shape is the opposite: Excel seeds a single member and computes
-  # the rest from it, so a multi-member cycle has no uniform value and
-  # cannot be recaused by pattern-matching this text.
-  - id: whole_col_cycle_decided_before_blocking
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: "=A:A at A1 with A2/A3 occupied: circular and blocked at once, and Excel answers 0 -- it decides the cycle before the blocking check. A2 and A3 hold literal data, not formulas, so the formula cell is the only member of this cycle and its 0 is a single readable value rather than one term of a cascade. Formulon returns #REF! per its cycle policy. The control case with the formula cell outside the referenced column is a live golden and reports #SPILL!, so the pair pins the ordering rather than the blocking."
-    prefer: formulon
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-  - id: whole_col_containing_its_own_formula_cell
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: "=A:A at A1 with column A otherwise empty: the rectangle fits and the runway is clear, so only the cycle stops the spill. Nothing else in column A holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
-    prefer: formulon
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-  - id: whole_row_containing_its_own_formula_cell
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: "=5:5 at A5 with row 5 otherwise empty: same isolation on the row axis. Nothing else in row 5 holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
-    prefer: formulon
-    first_noted: 2026-08-15
-    last_verified_excel_version: "16.112"
-  - id: axis_sum_col_plus_row_axis
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: "SUM(Sheet2!A:A+Sheet2!1:1): a whole column plus a whole row broadcasts to the full 1,048,576 x 16,384 grid. Excel answers 0 for it (measured; the rule behind the 0 is not identified). Formulon has no single repeated tail for a two-axis result, so it would have to expand ~1.7e10 cells and refuses with #NUM! at the derived-array ceiling, as for any other oversized array."
-    prefer: formulon
-    first_noted: 2026-10-08
-    last_verified_excel_version: "16.113.3"
-  - id: axis_self_ref_derived_col
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: "=A:A+0 at A1 with column A otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0, as for the bare =A:A. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
-    prefer: formulon
-    first_noted: 2026-10-08
-    last_verified_excel_version: "16.113.3"
-  - id: axis_self_ref_sum_derived_col
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: "=SUM(C:C*1) at C1 with column C otherwise empty: the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
-    prefer: formulon
-    first_noted: 2026-10-08
-    last_verified_excel_version: "16.113.3"
 
 
   # -- chart track: rules the chart oracle cannot observe -----------------

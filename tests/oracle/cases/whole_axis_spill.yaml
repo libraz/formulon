@@ -504,7 +504,7 @@ cases:
     setup: *axis_data
     expect: 1048576
   - id: axis_sum_col_plus_row_axis
-    description: "SUM(L!A:A+L!1:1); Excel answers 0 (reason unknown, measured)"
+    description: "SUM(L!A:A+L!1:1): the broadcast is the full grid, past the evaluated-array element bound, so the formula holds 0"
     formula: '=SUM(Sheet2!A:A+Sheet2!1:1)'
     formula_cell: Z1
     setup: *axis_data
