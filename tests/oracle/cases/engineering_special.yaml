@@ -55,45 +55,55 @@ cases:
   - id: besselj_zero_zero
     description: "J_0(0) = 1"
     formula: "=BESSELJ(0,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselj_one_zero
     description: "J_0(1)"
     formula: "=BESSELJ(1,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselj_one_one
     description: "J_1(1)"
     formula: "=BESSELJ(1,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BESSELY -------------------------------------------------------------
   - id: bessely_one_zero
     description: "Y_0(1)"
     formula: "=BESSELY(1,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: bessely_zero_singular
     description: "Y_n(0) is singular -> #NUM!"
     formula: "=BESSELY(0,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BESSELI -------------------------------------------------------------
   - id: besseli_one_zero
     description: "I_0(1)"
     formula: "=BESSELI(1,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besseli_two_one
     description: "I_1(2)"
     formula: "=BESSELI(2,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BESSELK -------------------------------------------------------------
   - id: besselk_one_zero
     description: "K_0(1)"
     formula: "=BESSELK(1,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselk_two_one
     description: "K_1(2)"
     formula: "=BESSELK(2,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselk_zero_singular
     description: "K_n(0) is singular -> #NUM!"
     formula: "=BESSELK(0,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # =========================================================================
   # Edge probes appended for engineering_special expansion.
@@ -152,68 +162,83 @@ cases:
   - id: besselj_fractional_order_truncates
     description: "Excel truncates n toward zero: J_1.7 -> J_1"
     formula: "=BESSELJ(1,1.7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselj_negative_order_rejected
     description: "Negative order -> #NUM! (Excel rejects negative orders)"
     formula: "=BESSELJ(1,-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselj_zero_higher_order
     description: "J_n(0) = 0 for n >= 1"
     formula: "=BESSELJ(0,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselj_large_x_oscillation
     description: "J_0(10) is in the oscillatory regime"
     formula: "=BESSELJ(10,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BESSELY -------------------------------------------------------------
   - id: bessely_negative_x_rejected
     description: "Y_n is undefined for x < 0 in Excel"
     formula: "=BESSELY(-1,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: bessely_large_order_decay
     description: "Y_5 at moderate x shows heavy growth in magnitude"
     formula: "=BESSELY(2,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BESSELI -------------------------------------------------------------
   - id: besseli_zero_zero
     description: "I_0(0) = 1"
     formula: "=BESSELI(0,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besseli_zero_higher_order
     description: "I_n(0) = 0 for n >= 1"
     formula: "=BESSELI(0,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besseli_large_x_growth
     description: "I_0(20) grows exponentially; verify against Excel cap"
     formula: "=BESSELI(20,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- BESSELK -------------------------------------------------------------
   - id: besselk_negative_x_rejected
     description: "K_n is undefined for x < 0 in Excel"
     formula: "=BESSELK(-1,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselk_small_x_log_asymptote
     description: "K_0(0.01) is large; -log(x/2) dominant"
     formula: "=BESSELK(0.01,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselk_large_x_decay
     description: "K_0(20) decays exponentially"
     formula: "=BESSELK(20,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Cross-family --------------------------------------------------------
   - id: besselj_order_via_cell_ref
     description: "Order argument resolved through a cell reference, with fractional truncation"
     setup: { A1: 2.9 }
     formula: "=BESSELJ(1,A1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besseli_text_x_coerces
     description: "Text x is parsed as a number for BESSELI"
     formula: "=BESSELI(\"1\",0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: besselk_blank_x_rejected
     description: "Blank x -> 0; K_n(0) -> #NUM!"
     setup: { A1: null }
     formula: "=BESSELK(A1,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # ========================================================================
   # Closure expansion (appended 2026-04-29) — bring BESSELY / ERFC /
@@ -224,6 +249,7 @@ cases:
   - id: bessely_one_one
     description: "Y_1(1)"
     formula: "=BESSELY(1,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- ERFC ----------------------------------------------------------------
   - id: erfc_negative_two
@@ -276,13 +302,16 @@ cases:
 
   - id: atp_besselj_bool
     formula: "=BESSELJ(TRUE,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: atp_besselj_omit
     formula: "=BESSELJ(,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: atp_besselj_boolcell
     setup: { A1: true }
     formula: "=BESSELJ(A1,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: a4_erfc_bool
@@ -290,21 +319,27 @@ cases:
 
   - id: a4_bessely_bool
     formula: "=BESSELY(TRUE,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: a4_bessely_omit
     formula: "=BESSELY(,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: a4_besseli_bool
     formula: "=BESSELI(TRUE,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: a4_besseli_omit
     formula: "=BESSELI(,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: a4_besselk_bool
     formula: "=BESSELK(TRUE,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: a4_besselk_omit
     formula: "=BESSELK(,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: a4_erf_precise_bool
     formula: "=ERF.PRECISE(TRUE)"
@@ -314,6 +349,71 @@ cases:
 
   - id: opt_besselj_omit_n
     formula: "=BESSELJ(1,)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: opt_erf_upper_omit
     formula: "=ERF(0.5,)"
+
+  - id: bessel_floor_neg_j
+    formula: "=BESSELJ(-100,-0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessel_floor_neg_y
+    formula: "=BESSELY(1,-0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessel_floor_neg_i
+    formula: "=BESSELI(-40,-0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessel_floor_neg_k
+    formula: "=BESSELK(1,-0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessely_phase_cap_at
+    formula: "=BESSELY(134217727,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessely_phase_cap_past
+    formula: "=BESSELY(134217728,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessely_phase_cap_far
+    formula: "=BESSELY(10000000000,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessely_small_x_order_9
+    formula: "=BESSELY(3.689,9)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessely_small_x_order_4
+    formula: "=BESSELY(1.593,4)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessely_small_x_order_2
+    formula: "=BESSELY(1.5,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: bessely_small_x_order_3
+    formula: "=BESSELY(1.5,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: besseli_renorm_flush_490
+    formula: "=BESSELI(100,490)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: besseli_renorm_flush_300
+    formula: "=BESSELI(10,300)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: besselk_asymptotic_flush_n0
+    formula: "=BESSELK(710,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: besselk_asymptotic_flush_n1
+    formula: "=BESSELK(710,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: besselk_asymptotic_flush_high_order
+    formula: "=BESSELK(710,1000000)"
+    tolerance: { abs: 0, rel: 0 }

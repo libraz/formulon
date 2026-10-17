@@ -49,9 +49,12 @@ cases:
   - id: besselk_recurrence_flush
     description: "BESSELK(700,2) equals BESSELK(700,0)"
     formula: "=IF(BESSELK(700,2)=BESSELK(700,0),1,2)"
+    tolerance: { abs: 0, rel: 0 }
   - id: besselk_700_5
     description: "BESSELK(700,5) with flushed recurrence"
     formula: "=BESSELK(700,5)*1E300"
+    tolerance: { abs: 0, rel: 0 }
   - id: besselk_700_100
     description: "BESSELK(700,100) with flushed recurrence"
     formula: "=BESSELK(700,100)*1E300"
+    tolerance: { abs: 0, rel: 0 }

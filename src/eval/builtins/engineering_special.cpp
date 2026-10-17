@@ -87,15 +87,19 @@ Expected<double, ErrorCode> coerce_real_arg(const Value& v) {
 // in all four functions (Mac Excel 365).
 constexpr double kMaxBesselOrder = 10000000.0;
 
-// Coerces a BESSEL order argument. Must lie in [0, kMaxBesselOrder] after
-// truncation toward zero; returns the integer order. Out of range or
-// non-finite -> #NUM!. Bool is rejected with #VALUE! to match Excel 365.
+// Coerces a BESSEL order argument. The order is floored and then must lie in
+// [0, kMaxBesselOrder], so every negative order is #NUM!; returns the integer
+// order. Out of range or non-finite -> #NUM!. Bool is rejected with #VALUE!.
 Expected<int, ErrorCode> coerce_bessel_order(const Value& v) {
-  auto t = builtins_detail::coerce_truncated_in_range(v, 0.0, kMaxBesselOrder, /*reject_bool=*/true);
+  auto t = coerce_real_arg(v);
   if (!t) {
     return std::move(t.error());
   }
-  return static_cast<int>(t.value());
+  const double order = std::floor(t.value());
+  if (!(order >= 0.0 && order <= kMaxBesselOrder)) {
+    return ErrorCode::Num;
+  }
+  return static_cast<int>(order);
 }
 
 // The `(x, n)` arguments of the BESSEL family, coerced left to right.
@@ -317,7 +321,7 @@ double bessy0(double x) {
                      y * (7062834065.0 + y * (-512359803.6 + y * (10879881.29 + y * (-86327.92757 + y * 228.4622733))));
     const double s =
         40076544269.0 + y * (745249964.8 + y * (7189466.438 + y * (47447.26470 + y * (226.1030244 + y * 1.0))));
-    return r / s + 0.636619772 * bessj0(x) * std::log(x);
+    return r / s + (std::log(x) * bessj0(x)) * 0.636619772;
   }
   const double z = 8.0 / x;
   const double y = z * z;
@@ -325,6 +329,9 @@ double bessy0(double x) {
   const double q =
       -0.1562499995e-1 + y * (0.1430488765e-3 + y * (-0.6911147651e-5 + y * (0.7621095161e-6 + y * (-0.934945152e-7))));
   const double xx = x - 0.785398164;
+  if (xx > kMaxBesselPhase) {
+    return std::nan("");
+  }
   return std::sqrt(0.636619772 / x) * (std::sin(xx) * p + z * std::cos(xx) * q);
 }
 
@@ -349,6 +356,9 @@ double bessy1(double x) {
   const double q =
       0.04687499995 + y * (-0.2002690873e-3 + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6)));
   const double xx = x - 2.356194491;
+  if (xx > kMaxBesselPhase) {
+    return std::nan("");
+  }
   return std::sqrt(0.636619772 / x) * (std::sin(xx) * p + z * std::cos(xx) * q);
 }
 
@@ -439,19 +449,19 @@ double bessi(int n, double x) {
   // Starting index well above n, per NR's stability heuristic.
   const int m = 2 * (n + static_cast<int>(std::sqrt(40.0 * static_cast<double>(n))));
   for (int j = m; j > 0; --j) {
-    const double bim = bip + static_cast<double>(j) * tox * bi;
+    const double bim = bip + flush_subnormal(static_cast<double>(j) * tox * bi);
     bip = bi;
     bi = bim;
     if (std::fabs(bi) > 1e10) {
-      ans *= 1e-10;
-      bip *= 1e-10;
-      bi *= 1e-10;
+      ans = flush_subnormal(ans * 1e-10);
+      bip = flush_subnormal(bip * 1e-10);
+      bi = flush_subnormal(bi * 1e-10);
     }
     if (j == n) {
       ans = bip;
     }
   }
-  ans *= bessi0(x) / bi;
+  ans = flush_subnormal(ans * flush_subnormal(bessi0(x) / bi));
   return (x < 0.0 && (n & 1) != 0) ? -ans : ans;
 }
 
@@ -466,10 +476,11 @@ double bessk0(double x) {
                  y * (0.23069756 + y * (0.3488590e-1 + y * (0.262698e-2 + y * (0.10750e-3 + y * 0.74e-5))))));
   }
   const double y = 2.0 / x;
-  return (std::exp(-x) / std::sqrt(x)) *
-         (1.25331414 +
-          y * (-0.7832358e-1 +
-               y * (0.2189568e-1 + y * (-0.1062446e-1 + y * (0.587872e-2 + y * (-0.251540e-2 + y * 0.53208e-3))))));
+  return flush_subnormal(
+      flush_subnormal(std::exp(-x) / std::sqrt(x)) *
+      (1.25331414 +
+       y * (-0.7832358e-1 +
+            y * (0.2189568e-1 + y * (-0.1062446e-1 + y * (0.587872e-2 + y * (-0.251540e-2 + y * 0.53208e-3)))))));
 }
 
 // K_1(x), x > 0. Polynomial approximation + I_1(x) ln(x/2) correction
@@ -484,10 +495,11 @@ double bessk1(double x) {
                                 y * (-0.18156897 + y * (-0.1919402e-1 + y * (-0.110404e-2 + y * (-0.4686e-4)))))));
   }
   const double y = 2.0 / x;
-  return (std::exp(-x) / std::sqrt(x)) *
-         (1.25331414 +
-          y * (0.23498619 +
-               y * (-0.3655620e-1 + y * (0.1504268e-1 + y * (-0.780353e-2 + y * (0.325614e-2 + y * (-0.68245e-3)))))));
+  return flush_subnormal(
+      flush_subnormal(std::exp(-x) / std::sqrt(x)) *
+      (1.25331414 +
+       y * (0.23498619 +
+            y * (-0.3655620e-1 + y * (0.1504268e-1 + y * (-0.780353e-2 + y * (0.325614e-2 + y * (-0.68245e-3))))))));
 }
 
 // K_n(x), x > 0, via forward recurrence K_{n+1} = (2n/x) K_n + K_{n-1}.

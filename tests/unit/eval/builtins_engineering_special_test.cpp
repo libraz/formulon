@@ -351,6 +351,38 @@ TEST(BuiltinsEngineeringSpecialStructure, ErfBeyondHalfIsOneMinusErfc) {
   EXPECT_EQ(erfc_s.as_number(), 1.0 - erf_s.as_number());
 }
 
+TEST(BesselRanges, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=BESSELY(3.689,9)", -80.6131965133635},
+      {"=BESSELY(1.593,4)", -5.947281953491971},
+      {"=BESSELY(1.5,2)", -0.9321937606262339},
+      {"=BESSELY(1.5,3)", -2.0735414014407203},
+      {"=BESSELY(134217727,0)", -3.2268202740407304e-05},
+      {"=BESSELI(100,490)", 0.0},
+      {"=BESSELI(10,300)", 0.0},
+      {"=BESSELK(710,0)", 0.0},
+      {"=BESSELK(710,1)", 0.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(BesselRanges, NegativeFractionalOrderIsNum) {
+  for (const char* formula : {"=BESSELJ(-100,-0.5)", "=BESSELY(1,-0.5)", "=BESSELI(-40,-0.5)", "=BESSELK(1,-0.5)",
+                              "=BESSELY(134217728,0)", "=BESSELY(10000000000,0)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

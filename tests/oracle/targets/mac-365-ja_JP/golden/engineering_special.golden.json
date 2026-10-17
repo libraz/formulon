@@ -129,6 +129,10 @@
       "expect": {
         "kind": "number",
         "value": 1.00000000283141
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -138,6 +142,10 @@
       "expect": {
         "kind": "number",
         "value": 0.7651976837548592
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -147,6 +155,10 @@
       "expect": {
         "kind": "number",
         "value": 0.4400505856771301
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -156,6 +168,10 @@
       "expect": {
         "kind": "number",
         "value": 0.08825697139770806
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -165,6 +181,10 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -176,8 +196,8 @@
         "value": 1.2660658480342601
       },
       "tolerance": {
-        "abs": 1e-06,
-        "rel": 1e-07
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -187,6 +207,10 @@
       "expect": {
         "kind": "number",
         "value": 1.5906368572633083
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -196,6 +220,10 @@
       "expect": {
         "kind": "number",
         "value": 0.421024421083418
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -205,6 +233,10 @@
       "expect": {
         "kind": "number",
         "value": 0.13986588
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -214,6 +246,10 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -331,6 +367,10 @@
       "expect": {
         "kind": "number",
         "value": 0.4400505856771301
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -340,6 +380,10 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -349,6 +393,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -358,6 +406,10 @@
       "expect": {
         "kind": "number",
         "value": -0.2459357644412996
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -367,6 +419,10 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -378,8 +434,8 @@
         "value": -9.935989022802502
       },
       "tolerance": {
-        "abs": 1e-06,
-        "rel": 1e-07
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -389,6 +445,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -398,6 +458,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -409,8 +473,8 @@
         "value": 43558285.787908286
       },
       "tolerance": {
-        "abs": 100.0,
-        "rel": 1e-06
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -420,6 +484,10 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -429,6 +497,10 @@
       "expect": {
         "kind": "number",
         "value": 4.721244734980139
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -438,6 +510,10 @@
       "expect": {
         "kind": "number",
         "value": 5.741238366607252e-10
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -452,6 +528,10 @@
       "expect": {
         "kind": "number",
         "value": 0.11490348499246938
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -463,8 +543,8 @@
         "value": 1.2660658480342601
       },
       "tolerance": {
-        "abs": 1e-06,
-        "rel": 1e-07
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -478,6 +558,10 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -487,6 +571,10 @@
       "expect": {
         "kind": "number",
         "value": -0.7812128209531197
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -605,6 +693,10 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -614,6 +706,10 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -628,6 +724,10 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -646,6 +746,10 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -655,6 +759,10 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -664,6 +772,10 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -673,6 +785,10 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -682,6 +798,10 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -691,6 +811,10 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -718,6 +842,10 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -727,6 +855,214 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "bessel_floor_neg_j",
+      "formula": "=BESSELJ(-100,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessel_floor_neg_y",
+      "formula": "=BESSELY(1,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessel_floor_neg_i",
+      "formula": "=BESSELI(-40,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessel_floor_neg_k",
+      "formula": "=BESSELK(1,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_phase_cap_at",
+      "formula": "=BESSELY(134217727,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.2268202740407304e-05
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_phase_cap_past",
+      "formula": "=BESSELY(134217728,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_phase_cap_far",
+      "formula": "=BESSELY(10000000000,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_9",
+      "formula": "=BESSELY(3.689,9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -80.6131965133635
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_4",
+      "formula": "=BESSELY(1.593,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.947281953491971
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_2",
+      "formula": "=BESSELY(1.5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.9321937606262339
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_3",
+      "formula": "=BESSELY(1.5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0735414014407203
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besseli_renorm_flush_490",
+      "formula": "=BESSELI(100,490)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besseli_renorm_flush_300",
+      "formula": "=BESSELI(10,300)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_asymptotic_flush_n0",
+      "formula": "=BESSELK(710,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_asymptotic_flush_n1",
+      "formula": "=BESSELK(710,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_asymptotic_flush_high_order",
+      "formula": "=BESSELK(710,1000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]
