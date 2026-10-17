@@ -22,6 +22,7 @@
 #include "excel_locale.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/text_ops.h"
 #include "value.h"
 
 namespace formulon {
@@ -45,9 +46,10 @@ Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min);
 Expected<int, ErrorCode> read_optional_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
                                                int default_value);
 
-// Unit a search family counts positions in: UTF-16 units for FIND and
-// SEARCH, DBCS bytes for FINDB and SEARCHB under a DBCS profile.
-enum class SearchUnit : std::uint8_t { Utf16, DbcsByte };
+// Unit a search family counts positions in: `text_index_unit` positions for
+// FIND and SEARCH, UTF-16 units for FINDB and SEARCHB outside a DBCS profile,
+// DBCS bytes for FINDB and SEARCHB under one.
+enum class SearchUnit : std::uint8_t { Positions, Utf16, DbcsByte };
 
 // The coerced `find_text` / `within_text` / `start_num` arguments the
 // four search builtins share.
@@ -55,6 +57,7 @@ struct SearchArgs {
   std::string needle;
   std::string haystack;
   int start;
+  TextIndexUnit index_unit = TextIndexUnit::kUtf16Units;
 };
 
 // Reads the argument prologue of FIND / SEARCH / FINDB / SEARCHB,
@@ -121,6 +124,9 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, DbcsCodepage 
 // fall back to them outside a DBCS profile.
 Value Mid(const Value* args, std::uint32_t arity, Arena& arena);
 Value Replace_(const Value* args, std::uint32_t arity, Arena& arena);
+// The same slices counted in UTF-16 units, for MIDB / REPLACEB outside a DBCS profile.
+Value MidUtf16(const Value* args, std::uint32_t arity, Arena& arena);
+Value ReplaceUtf16(const Value* args, std::uint32_t arity, Arena& arena);
 
 // Byte-oriented text family (DBCS) implementations. Defined in
 // `text_dbcs.cpp`. Exposed so `register_text_builtins()` in `text.cpp` can

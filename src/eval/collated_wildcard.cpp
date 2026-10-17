@@ -15,8 +15,13 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// One text code point under the `=` equivalence: `id` names its collation
-// class, `cp` / `byte` locate the source character.
+// Collation class of the second UTF-16 unit of a supplementary-plane
+// character; no pattern literal but that same second unit equals it.
+constexpr std::uint32_t kSecondUnitId = 0xFFFFFFFFU;
+
+// One text UTF-16 unit under the `=` equivalence: `id` names its collation
+// class, `cp` / `byte` locate the source character. A supplementary-plane
+// character is two tokens, so `?` matches half of it and `??` all of it.
 struct TextToken {
   std::uint32_t id;
   std::uint32_t cp;
@@ -73,6 +78,9 @@ std::vector<PatternItem> parse_pattern(std::string_view pattern, CharClasses& cl
       out.push_back({PatternKind::kAny, 0U});
     } else {
       out.push_back({PatternKind::kLiteral, classes.id_of(cp)});
+      if (cp > 0xFFFFU) {
+        out.push_back({PatternKind::kLiteral, kSecondUnitId});
+      }
     }
     escaped = false;
   }
@@ -85,6 +93,9 @@ void tokenize(std::string_view text, std::size_t start_byte, CharClasses& classe
     std::size_t step = 0;
     const std::uint32_t cp = decode_utf8_step(text, i, &step);
     out.push_back({classes.id_of(cp), cp, i});
+    if (cp > 0xFFFFU) {
+      out.push_back({kSecondUnitId, cp, i});
+    }
     i += step;
   }
 }
@@ -152,6 +163,9 @@ std::size_t CollatedWildcard::find(std::string_view text, std::size_t start_byte
   Impl& m = *impl_;
   tokenize(text, start_byte, m.classes, m.tokens);
   for (std::size_t start = 0; start <= m.tokens.size(); ++start) {
+    if (start < m.tokens.size() && m.tokens[start].id == kSecondUnitId) {
+      continue;  // a match never begins inside a character
+    }
     if (match_at(m.items, m.tokens, start, sbcs_question, /*whole=*/false)) {
       return start < m.tokens.size() ? m.tokens[start].byte : text.size();
     }

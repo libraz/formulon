@@ -56,6 +56,19 @@ std::size_t utf16_to_byte_offset_floor(std::string_view text, std::uint32_t unit
 /// start therefore never yields an empty result.
 std::string utf16_substring(std::string_view text, std::uint32_t start_units, std::uint32_t length_units);
 
+/// What a text position or length counts: UTF-16 code units, or whole code
+/// points (a supplementary-plane character is one position, never two).
+enum class TextIndexUnit : std::uint8_t { kUtf16Units, kCodePoints };
+
+/// Number of `unit`s in `text`.
+std::uint32_t text_index_length(std::string_view text, TextIndexUnit unit) noexcept;
+
+/// Byte offset of position `index` (0-based) in `text`, clamped to its length.
+std::size_t text_index_to_byte_offset(std::string_view text, std::uint32_t index, TextIndexUnit unit) noexcept;
+
+/// The `length` positions of `text` starting at position `start`, both clamped.
+std::string text_index_substring(std::string_view text, std::uint32_t start, std::uint32_t length, TextIndexUnit unit);
+
 /// In-place ASCII case folding. Bytes 'A'..'Z' map to 'a'..'z' (and vice versa
 /// for `to_upper_ascii`). All other bytes — including UTF-8 continuation bytes
 /// and non-ASCII leading bytes — are unchanged. This is the MVP behavior; Excel

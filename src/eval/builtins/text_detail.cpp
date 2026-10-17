@@ -14,6 +14,7 @@
 #include "eval/collated_wildcard.h"
 #include "eval/dbcs_table.h"
 #include "eval/eval_profile_scope.h"
+#include "eval/text_index_unit.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "utils/text_ops.h"
@@ -104,9 +105,10 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
     return false;
   }
   const int start = parsed.value();
+  const TextIndexUnit index_unit = unit == SearchUnit::Positions ? text_index_unit() : TextIndexUnit::kUtf16Units;
   const std::uint64_t total = (unit == SearchUnit::DbcsByte)
                                   ? dbcs_bytes_in(haystack.value(), locale_facts(current_eval_profile()).dbcs_codepage)
-                                  : static_cast<std::uint64_t>(utf16_units_in(haystack.value()));
+                                  : static_cast<std::uint64_t>(text_index_length(haystack.value(), index_unit));
   if (start < 1 || static_cast<std::uint64_t>(start) > total + 1) {
     *out_result = Value::error(ErrorCode::Value);
     return false;
@@ -118,6 +120,7 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
   out->needle = std::move(needle.value());
   out->haystack = std::move(haystack.value());
   out->start = start;
+  out->index_unit = index_unit;
   return true;
 }
 
@@ -130,22 +133,26 @@ std::size_t find_folded(const std::string& haystack, const std::string& needle, 
 }
 
 Value find_utf16_exact(const SearchArgs& args) {
-  const std::size_t start_byte = utf16_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1));
+  const TextIndexUnit unit = args.index_unit;
+  const std::size_t start_byte =
+      text_index_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1), unit);
   const std::size_t pos = args.haystack.find(args.needle, start_byte);
   if (pos == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }
-  const std::uint32_t units = utf16_units_in(std::string_view(args.haystack).substr(0, pos));
+  const std::uint32_t units = text_index_length(std::string_view(args.haystack).substr(0, pos), unit);
   return Value::number(static_cast<double>(units + 1));
 }
 
 Value find_utf16_folded(const SearchArgs& args) {
-  const std::size_t start_byte = utf16_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1));
+  const TextIndexUnit unit = args.index_unit;
+  const std::size_t start_byte =
+      text_index_to_byte_offset(args.haystack, static_cast<std::uint32_t>(args.start - 1), unit);
   const std::size_t pos = find_folded(args.haystack, args.needle, start_byte, SearchUnit::Utf16);
   if (pos == std::string::npos) {
     return Value::error(ErrorCode::Value);
   }
-  const std::uint32_t units = utf16_units_in(std::string_view(args.haystack).substr(0, pos));
+  const std::uint32_t units = text_index_length(std::string_view(args.haystack).substr(0, pos), unit);
   return Value::number(static_cast<double>(units + 1));
 }
 

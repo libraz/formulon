@@ -25,6 +25,7 @@
 #include "eval/dbcs_table.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "eval/text_index_unit.h"
 #include "excel_locale.h"
 #include "sbcs_codepage.h"
 #include "utils/arena.h"
@@ -155,7 +156,7 @@ Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::ui
   return TextAndCount{std::string(text.value()), parsed.value()};
 }
 
-// LEFT(text, [n]) - first `n` UTF-16 units. Default n=1. n<0 -> `#VALUE!`.
+// LEFT(text, [n]) - first `n` positions (`text_index_unit`). Default n=1. n<0 -> `#VALUE!`.
 Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
   auto in = read_text_and_count(args, arity);
   if (!in) {
@@ -166,10 +167,10 @@ Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
   if (n == 0) {
     return Value::text({});
   }
-  return Value::text(arena.intern(utf16_substring(text, 0u, static_cast<std::uint32_t>(n))));
+  return Value::text(arena.intern(text_index_substring(text, 0u, static_cast<std::uint32_t>(n), text_index_unit())));
 }
 
-// RIGHT(text, [n]) - last `n` UTF-16 units. Default n=1. n<0 -> `#VALUE!`.
+// RIGHT(text, [n]) - last `n` positions (`text_index_unit`). Default n=1. n<0 -> `#VALUE!`.
 Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
   auto in = read_text_and_count(args, arity);
   if (!in) {
@@ -180,10 +181,11 @@ Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
   if (n == 0) {
     return Value::text({});
   }
-  const std::uint32_t total = utf16_units_in(text);
+  const TextIndexUnit unit = text_index_unit();
+  const std::uint32_t total = text_index_length(text, unit);
   const auto take = static_cast<std::uint32_t>(n);
   const std::uint32_t start = take >= total ? 0u : total - take;
-  return Value::text(arena.intern(utf16_substring(text, start, take)));
+  return Value::text(arena.intern(text_index_substring(text, start, take, unit)));
 }
 
 // REPT(text, n) - repeat. n<0 -> `#VALUE!`. Excel caps the result length at
@@ -294,13 +296,13 @@ Value Substitute(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 // FIND(find_text, within_text, [start_num]) - case-sensitive, no wildcards.
-// 1-based UTF-16-unit position of the first occurrence at or after
+// 1-based position (`text_index_unit`) of the first occurrence at or after
 // `start_num` (default 1). Not found -> `#VALUE!`. Out-of-range `start_num`
 // -> `#VALUE!`. Empty `find_text` returns `start_num` (Excel quirk).
 Value Find(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   text_detail::SearchArgs sargs;
   Value early = Value::blank();
-  if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Utf16, &sargs, &early)) {
+  if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Positions, &sargs, &early)) {
     return early;
   }
   return text_detail::find_utf16_exact(sargs);
@@ -308,13 +310,13 @@ Value Find(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // SEARCH(find_text, within_text, [start_num]) - case-insensitive substring
 // search with DOS-style wildcards in `find_text`: `?` matches any single
-// UTF-16 unit, `*` matches zero or more units, and `~?` / `~*` match the
+// UTF-16 unit (half of a supplementary-plane character), `*` matches zero or more units, and `~?` / `~*` match the
 // literal metacharacter. Otherwise mirrors FIND (which is strictly literal
 // and retains that contract).
 Value Search(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   text_detail::SearchArgs sargs;
   Value early = Value::blank();
-  if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Utf16, &sargs, &early)) {
+  if (!text_detail::read_search_args(args, arity, text_detail::SearchUnit::Positions, &sargs, &early)) {
     return early;
   }
   return text_detail::find_utf16_folded(sargs);
@@ -560,10 +562,10 @@ Value Hyperlink(const Value* args, std::uint32_t arity, Arena& arena) {
 
 namespace text_detail {
 
-// MID(text, start_num, num_chars) - 1-based slice in UTF-16 units. Excel
+// MID(text, start_num, num_chars) - 1-based slice in `text_index_unit` positions. Excel
 // returns `""` when `start_num` is past the end. `start_num<1` or
 // `num_chars<0` -> `#VALUE!`.
-Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
+static Value mid_in(const Value* args, std::uint32_t arity, Arena& arena, TextIndexUnit unit) {
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -571,7 +573,7 @@ Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
   const std::string& text = parsed.value().text;
   const int start = parsed.value().start;
   const int length = parsed.value().count;
-  const std::uint32_t total = utf16_units_in(text);
+  const std::uint32_t total = text_index_length(text, unit);
   const auto start_unit = static_cast<std::uint32_t>(start - 1);
   if (start_unit >= total) {
     return Value::text({});
@@ -579,15 +581,15 @@ Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
   if (length == 0) {
     return Value::text({});
   }
-  return Value::text(arena.intern(utf16_substring(text, start_unit, static_cast<std::uint32_t>(length))));
+  return Value::text(arena.intern(text_index_substring(text, start_unit, static_cast<std::uint32_t>(length), unit)));
 }
 
-// REPLACE(old_text, start_num, num_chars, new_text) - UTF-16-unit replace.
-// Replaces `num_chars` UTF-16 units of `old_text` starting at 1-based
+// REPLACE(old_text, start_num, num_chars, new_text) - positional replace.
+// Replaces `num_chars` positions (`text_index_unit`) of `old_text` starting at 1-based
 // `start_num` with `new_text`. `start_num > total_units + 1` clamps to
 // append (the suffix is empty). `start_num < 1` or `num_chars < 0` surface
 // `#VALUE!`. The result is capped at Excel's 32,767-unit text limit.
-Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
+static Value replace_in(const Value* args, std::uint32_t arity, Arena& arena, TextIndexUnit unit) {
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
   if (!parsed) {
     return Value::error(parsed.error());
@@ -596,7 +598,7 @@ Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
   const int start = parsed.value().start;
   const int num_chars = parsed.value().count;
   const std::string& new_text = parsed.value().new_text;
-  const std::uint32_t total = utf16_units_in(old_text);
+  const std::uint32_t total = text_index_length(old_text, unit);
   auto start_unit = static_cast<std::uint32_t>(start - 1);
   if (start_unit > total) {
     start_unit = total;
@@ -604,8 +606,8 @@ Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
   const std::uint32_t remaining = total - start_unit;
   const auto delete_units =
       static_cast<std::uint32_t>(num_chars) > remaining ? remaining : static_cast<std::uint32_t>(num_chars);
-  const std::string prefix = utf16_substring(old_text, 0u, start_unit);
-  const std::string suffix = utf16_substring(old_text, start_unit + delete_units, remaining - delete_units);
+  const std::string prefix = text_index_substring(old_text, 0u, start_unit, unit);
+  const std::string suffix = text_index_substring(old_text, start_unit + delete_units, remaining - delete_units, unit);
   std::string out;
   out.reserve(prefix.size() + new_text.size() + suffix.size());
   out.append(prefix);
@@ -615,6 +617,22 @@ Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
     return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(out));
+}
+
+Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
+  return mid_in(args, arity, arena, text_index_unit());
+}
+
+Value MidUtf16(const Value* args, std::uint32_t arity, Arena& arena) {
+  return mid_in(args, arity, arena, TextIndexUnit::kUtf16Units);
+}
+
+Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
+  return replace_in(args, arity, arena, text_index_unit());
+}
+
+Value ReplaceUtf16(const Value* args, std::uint32_t arity, Arena& arena) {
+  return replace_in(args, arity, arena, TextIndexUnit::kUtf16Units);
 }
 
 }  // namespace text_detail

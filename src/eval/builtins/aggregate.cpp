@@ -24,6 +24,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "eval/text_index_unit.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/cancellation_snap.h"
@@ -90,15 +91,14 @@ Value Concatenate(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 // LEN(text) --------------------------------------------------------------
-// Excel reports length in UTF-16 code units, which differs from byte length
-// for any non-ASCII codepoint. We coerce the argument to text, then count
-// units via the standalone helper.
+// Length counts UTF-16 units, or code points under a Mac profile (see
+// `eval/text_index_unit.h`). The argument is coerced to text first.
 Value Len(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto coerced = coerce_to_text(args[0]);
   if (!coerced) {
     return Value::error(coerced.error());
   }
-  return Value::number(static_cast<double>(utf16_units_in(coerced.value())));
+  return Value::number(static_cast<double>(text_index_length(coerced.value(), text_index_unit())));
 }
 
 // --- Aggregates ---------------------------------------------------------

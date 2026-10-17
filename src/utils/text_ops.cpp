@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "utils/strings.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace {
@@ -99,6 +100,41 @@ std::string utf16_substring(std::string_view text, std::uint32_t start_units, st
     return std::string();
   }
   return std::string(text.substr(start_byte, end_byte - start_byte));
+}
+
+std::uint32_t text_index_length(std::string_view text, TextIndexUnit unit) noexcept {
+  if (unit == TextIndexUnit::kUtf16Units) {
+    return utf16_units_in(text);
+  }
+  std::uint32_t count = 0;
+  for (std::size_t i = 0; i < text.size(); ++count) {
+    std::size_t step = 0;
+    decode_utf8_step(text, i, &step);
+    i += step;
+  }
+  return count;
+}
+
+std::size_t text_index_to_byte_offset(std::string_view text, std::uint32_t index, TextIndexUnit unit) noexcept {
+  if (unit == TextIndexUnit::kUtf16Units) {
+    return utf16_to_byte_offset(text, index);
+  }
+  std::size_t i = 0;
+  for (std::uint32_t seen = 0; i < text.size() && seen < index; ++seen) {
+    std::size_t step = 0;
+    decode_utf8_step(text, i, &step);
+    i += step;
+  }
+  return i;
+}
+
+std::string text_index_substring(std::string_view text, std::uint32_t start, std::uint32_t length, TextIndexUnit unit) {
+  if (unit == TextIndexUnit::kUtf16Units) {
+    return utf16_substring(text, start, length);
+  }
+  const std::size_t begin = text_index_to_byte_offset(text, start, unit);
+  const std::size_t end = text_index_to_byte_offset(text.substr(begin), length, unit) + begin;
+  return std::string(text.substr(begin, end - begin));
 }
 
 std::string to_lower_ascii(std::string_view text) {

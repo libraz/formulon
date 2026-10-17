@@ -1107,3 +1107,94 @@ cases:
 
   - id: case_map_proper_hiragana_then_latin
     formula: '=PROPER("あbc")'
+
+  # -- Supplementary characters count as one position (Mac) ---------------
+  - id: supp_len_emoji
+    formula: '=LEN("😀")'
+
+  - id: supp_len_deseret
+    formula: '=LEN("𐐨")'
+
+  - id: supp_len_cjk_ext_b
+    formula: '=LEN("𠀀")'
+
+  - id: supp_len_mixed
+    formula: '=LEN("a😀b𐐨c𠀀d")'
+
+  - id: supp_len_two_emoji
+    formula: '=LEN("😀😀")'
+
+  - id: supp_left_mixed
+    formula: '=LEFT("a😀b𐐨c𠀀d",4)'
+
+  - id: supp_right_mixed
+    formula: '=RIGHT("a😀b𐐨c𠀀d",3)'
+
+  - id: supp_right_mixed_pair
+    formula: '=RIGHT("a😀b𐐨c𠀀d",2)'
+
+  - id: supp_mid_mixed
+    formula: '=MID("a😀b𐐨c𠀀d",2,3)'
+
+  - id: supp_mid_single_astral
+    formula: '=MID("a😀b𐐨c𠀀d",4,1)'
+
+  - id: supp_mid_past_end
+    formula: '=MID("a😀b𐐨c𠀀d",8,1)'
+
+  - id: supp_left_len
+    formula: '=LEN(LEFT("😀😀😀",2))'
+
+  - id: supp_find_after_astral
+    formula: '=FIND("b","a😀b𐐨c𠀀d")'
+
+  - id: supp_search_after_astral
+    formula: '=SEARCH("c","a😀b𐐨c𠀀d")'
+
+  - id: supp_find_astral
+    formula: '=FIND("𐐨","a😀b𐐨c𠀀d")'
+
+  - id: supp_find_start_num
+    formula: '=FIND("😀","😀😀😀",3)'
+
+  - id: supp_find_start_past_end
+    formula: '=IFERROR(FIND("😀","😀😀😀",4),"err")'
+
+  - id: supp_search_start_num
+    formula: '=SEARCH("c","a😀b𐐨c𠀀d",5)'
+
+  - id: supp_replace_astral
+    formula: '=REPLACE("a😀b𐐨c𠀀d",2,2,"X")'
+
+  - id: supp_replace_with_astral
+    formula: '=LEN(REPLACE("a😀b",2,1,"😀😀"))'
+
+  - id: supp_unicode_of_mid
+    formula: '=UNICODE(MID("a😀b𐐨c𠀀d",4,1))'
+
+  - id: supp_substitute_instance
+    formula: '=SUBSTITUTE("😀😀😀","😀","X",2)'
+
+  - id: supp_textbefore_len
+    formula: '=LEN(TEXTBEFORE("a😀b𐐨c𠀀d","c"))'
+
+  - id: supp_search_question_half
+    formula: '=IFERROR(SEARCH("a?b","a😀b"),"err")'
+
+  - id: supp_search_two_questions
+    formula: '=SEARCH("a??b","a😀b")'
+
+  - id: supp_search_question_alone
+    formula: '=SEARCH("?","😀")'
+
+  - id: supp_rept_at_cap
+    formula: '=LEN(REPT("😀",16383))'
+
+  - id: supp_rept_past_cap
+    formula: '=IFERROR(LEN(REPT("😀",16384)),"err")'
+
+  - id: supp_concat_at_cap
+    formula: '=LEN(CONCAT(REPT("😀",16383),"a"))'
+
+  - id: supp_lenb_mixed
+    formula: '=LENB("a😀b𐐨c𠀀d")'

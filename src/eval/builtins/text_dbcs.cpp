@@ -337,7 +337,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
 // the trailing edge with the same 1-byte-overflow rule as LEFTB.
 Value Midb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
-    return Mid(args, arity, arena);
+    return MidUtf16(args, arity, arena);
   }
   const DbcsCodepage codepage = dbcs_codepage();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/false);
@@ -450,7 +450,7 @@ std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, DbcsCodepage 
 // -> `#VALUE!`. Result capped at Excel's 32,767-unit text limit.
 Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!uses_dbcs_profile()) {
-    return Replace_(args, arity, arena);
+    return ReplaceUtf16(args, arity, arena);
   }
   const DbcsCodepage codepage = dbcs_codepage();
   auto parsed = read_text_window_args(args, arity, /*snap_start=*/true);
