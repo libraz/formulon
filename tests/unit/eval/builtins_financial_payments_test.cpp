@@ -393,15 +393,6 @@ TEST(FinancialSchedules, AmorlincBasisTwoIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(ComplexReciprocalTrig, MatchesExcelValues) {
-  const Value csc = EvalSource("=IMCSC(\"1+i\")");
-  ASSERT_TRUE(csc.is_text());
-  EXPECT_EQ(csc.as_text(), "0.621518017170428-0.303931001628427i");
-  const Value csc_conj = EvalSource("=IMCSC(\"1-i\")");
-  ASSERT_TRUE(csc_conj.is_text());
-  EXPECT_EQ(csc_conj.as_text(), "0.621518017170428+0.303931001628427i");
-}
-
 TEST(FinancialSolvers, MatchesExcelValues) {
   struct Case {
     const char* formula;
@@ -424,26 +415,6 @@ TEST(FinancialSolvers, MatchesExcelValues) {
     const Value v = EvalSource(c.formula);
     ASSERT_TRUE(v.is_number()) << c.formula;
     EXPECT_EQ(v.as_number(), c.expected) << c.formula;
-  }
-}
-
-TEST(ComplexText, MatchesExcelValues) {
-  struct Case {
-    const char* formula;
-    const char* expected;
-  };
-  const Case cases[] = {
-      {"=COMPLEX(0.0000001,0.0000002)", "0.0000001+0.0000002i"},
-      {"=COMPLEX(0.00001,0.000002)", "0.00001+0.000002i"},
-      {"=COMPLEX(0.001,123456789012345)", "0.001+123456789012345i"},
-      {"=COMPLEX(1E-20,1E20)", "1E-20+100000000000000000000i"},
-      {"=COMPLEX(1.23456789012345E-6,0)", "1.23456789012345E-06"},
-      {"=COMPLEX(0,1.23456789012345E-6)", "1.23456789012345E-06i"},
-  };
-  for (const Case& c : cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_text()) << c.formula;
-    EXPECT_EQ(v.as_text(), c.expected) << c.formula;
   }
 }
 
@@ -484,165 +455,6 @@ TEST(FinancialOddFirst, FirstCouponOffTheMaturityScheduleIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(ComplexTrigHyperbolic, MatchesExcelValues) {
-  struct Case {
-    const char* formula;
-    const char* expected;
-  };
-  const Case cases[] = {
-      {"=IMSIN(\"1+i\")", "1.29845758141598+0.634963914784736i"},
-      {"=IMCOS(\"1+i\")", "0.833730025131149-0.988897705762865i"},
-      {"=IMTAN(\"1+i\")", "0.271752585319512+1.08392332733869i"},
-      {"=IMCOT(\"1+i\")", "0.217621561854403-0.868014142895925i"},
-      {"=IMSINH(\"1+i\")", "0.634963914784736+1.29845758141598i"},
-      {"=IMCOSH(\"1+i\")", "0.833730025131149+0.988897705762865i"},
-      {"=IMCSCH(\"1+i\")", "0.303931001628426-0.621518017170429i"},
-      {"=IMSECH(\"1+i\")", "0.498337030555187-0.591083841721045i"},
-      {"=IMPRODUCT(IMCSCH(\"1+i\"),IMSINH(\"1+i\"))", "1-5.55111512312578E-17i"},
-  };
-  for (const Case& c : cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_text()) << c.formula;
-    EXPECT_EQ(v.as_text(), c.expected) << c.formula;
-  }
-}
-
-TEST(SpecialDistributions, MatchesExcelValues) {
-  struct Case {
-    const char* formula;
-    double expected;
-  };
-  const Case cases[] = {
-      {"=GAMMA(0.5)", 1.772453850905516},
-      {"=GAMMA(1.5)", 0.886226925452758},
-      {"=GAMMA(2.5)", 1.329340388179137},
-      {"=GAMMALN(0.5)", 0.5723649429247001},
-      {"=GAMMALN(1.5)", -0.12078223763524523},
-      {"=GAMMALN.PRECISE(0.5)", 0.5723649429247001},
-      {"=WEIBULL.DIST(105,20,100,TRUE)", 0.929581390069277},
-      {"=WEIBULL.DIST(105,20,100,FALSE)", 0.035588864024503564},
-      {"=LOGNORM.DIST(1,0,1,FALSE)", 0.39894228040143265},
-      {"=LOGNORM.DIST(2,0,1,FALSE)", 0.1568740192789811},
-      {"=LOGNORM.DIST(0.5,0,1,FALSE)", 0.6274960771159244},
-  };
-  for (const Case& c : cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_number()) << c.formula;
-    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
-  }
-}
-
-TEST(SpecialDistributions, GammaDomain) {
-  for (const char* formula : {"=GAMMA(0)", "=GAMMA(-3)", "=GAMMA(172)"}) {
-    const Value v = EvalSource(formula);
-    ASSERT_TRUE(v.is_error()) << formula;
-    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
-  }
-  const Value tiny = EvalSource("=GAMMA(-171.5)");
-  ASSERT_TRUE(tiny.is_number());
-  EXPECT_EQ(tiny.as_number(), 0.0);
-}
-
-TEST(ExactRemainderAndAngles, MatchesExcelValues) {
-  struct Case {
-    const char* formula;
-    double expected;
-  };
-  const Case cases[] = {
-      {"=MOD(-771618.708616,-22.69)", -22.56861599997459},
-      {"=MOD(931127,63.4079)", 45.39640000003038},
-      {"=MOD(-108663,8.9404)", 7.562000000004215},
-      {"=MOD(953952.3,-55.3608)", -25.00559999991151},
-      {"=MOD(751068.5,-85.85)", -33.14999999995027},
-      {"=MOD(0.7*134217727,0.7)", 0.6999999970197677},
-      {"=MOD(12345.678*134217727+12345.678/2,12345.678)", 6172.8391328125},
-      {"=ATAN2(-379273,48.77)", 3.141464065475872},
-      {"=ATAN2(-549252,-70.7077)", -3.141463919056993},
-      {"=ATAN2(881469.044,93.3196)", 0.00010586826648827292},
-      {"=ATAN2(697982.245,-66.96)", -9.593367205863957e-05},
-      {"=ATAN2(0,2)", 1.5707963267948966},
-      {"=ATAN2(0,-2)", -1.5707963267948966},
-      {"=ATAN2(-3,0)", 3.141592653589793},
-      {"=RRI(3,25232.91,976406.04)", 2.382369422704911},
-      {"=RRI(38.9,54123.17,821882.7)", 0.07243471583009375},
-      {"=XNPV(0.2036,{-6330.59;3480.01;1130.15;3587.31},{44205;45070;46123;46186})", -2348.615433109875},
-      {"=XNPV(0.263,{-2570.64;102.19;2936.41;1394.33;-117.67},{38615;38960;39138;39696;40565})", 277.26245335237104},
-      {"=WORKDAY(2958465.9,-30)", 2958423.0},
-      {"=WORKDAY(2958465.9,0)", 2958465.0},
-      {"=WORKDAY.INTL(2958465.9,-30,11)", 2958430.0},
-      {"=WORKDAY.INTL(2958465.9,-1,\"0101000\")", 2958463.0},
-      {"=DATE(1900,3,0)", 60.0},
-      {"=DAYS360(59,60)", 1.0},
-      {"=DAYS360(60,61)", 1.0},
-  };
-  for (const Case& c : cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_number()) << c.formula;
-    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
-  }
-}
-
-TEST(ExactRemainderAndAngles, EomonthBeforeTheCalendarStartIsNum) {
-  const Value v = EvalSource("=EOMONTH(1,-1)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(ExactRemainderAndAngles, PercentKeepsEveryDigitAfterACarry) {
-  const Value v = EvalSource("=TEXT(VALUE(\"1E+21\"),\"0%\")");
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "100000000000000000000000%");
-  const Value w = EvalSource("=TEXT(VALUE(\"1E+22\"),\"0.0%\")");
-  ASSERT_TRUE(w.is_text());
-  EXPECT_EQ(w.as_text(), "1000000000000000000000000.0%");
-}
-
-TEST(RoundingFamily, MatchesExcelValues) {
-  struct Case {
-    const char* formula;
-    double expected;
-  };
-  const Case cases[] = {
-      {"=ROUNDUP(0.285,1)", 0.30000000000000004},
-      {"=ROUNDUP(2.675,2)", 2.6799999999999997},
-      {"=ROUNDUP(123456789012.345,2)", 123456789012.34999},
-      {"=ROUNDUP(-0.285,1)", -0.30000000000000004},
-      {"=ROUND(1E+15,2)", 1000000000000000.0},
-      {"=ROUND(1234567.891,12)", 1234567.891},
-      {"=ROUND(99.995,2)", 100.0},
-      {"=ROUND(-2.5,0)", -3.0},
-      {"=ROUND(1234.5,-2)", 1200.0},
-      {"=TRUNC(123456789012.345,7)", 123456789012.345},
-      {"=ROUNDDOWN(123456789012.345,7)", 123456789012.345},
-      {"=ROUNDDOWN(0.0049,2)", 0.0},
-      {"=CEILING(1E+15,0.3)", 999999999999999.0},
-      {"=FLOOR(1E+15,0.07)", 1000000000000001.1},
-      {"=CEILING(1.23456789012345E+15,0.07)", 1234567890123449.0},
-      {"=CEILING(1E+12,1E-5)", 1000000000000.0001},
-      {"=CEILING.MATH(1E+15,0.3)", 999999999999999.0},
-      {"=FLOOR.MATH(1E+15,0.07)", 1000000000000001.1},
-      {"=CEILING.PRECISE(1E+15,0.3)", 999999999999999.0},
-      {"=FLOOR.PRECISE(1E+15,0.07)", 1000000000000001.1},
-      {"=ISO.CEILING(1E+15,0.3)", 999999999999999.0},
-      {"=MOD(1125899999999.5,1)", 0.5},
-      {"=MOD(2251799999999,2)", 1.0},
-  };
-  for (const Case& c : cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_number()) << c.formula;
-    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
-  }
-}
-
-TEST(RoundingFamily, ModBeyondTheQuotientCapIsNum) {
-  for (const char* formula :
-       {"=MOD(1125900000000,1)", "=MOD(2251800000001,2)", "=MOD(-1125900000000,1)", "=MOD(1125900000000,-1)"}) {
-    const Value v = EvalSource(formula);
-    ASSERT_TRUE(v.is_error()) << formula;
-    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
-  }
-}
-
 TEST(DecliningBalance, MatchesExcelValues) {
   struct Case {
     const char* formula;
@@ -673,41 +485,6 @@ TEST(DecliningBalance, OutOfDomainIsNum) {
     ASSERT_TRUE(v.is_error()) << formula;
     EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
   }
-}
-
-TEST(MatrixInverse, MatchesExcelValues) {
-  struct Case {
-    const char* formula;
-    double expected;
-  };
-  const Case cases[] = {
-      {"=INDEX(MINVERSE({-1.5,-1.5;-3.9,6.2}),1,1)", -0.40924092409240914},
-      {"=INDEX(MINVERSE({-1.5,-1.5;-3.9,6.2}),1,2)", -0.09900990099009901},
-      {"=INDEX(MINVERSE({3.0,8.0;-9.0,4.0}),1,1)", 0.047619047619047616},
-      {"=INDEX(MINVERSE({3.0,8.0;-9.0,4.0}),1,2)", -0.09523809523809525},
-      {"=INDEX(MINVERSE({8.41,-3.42,3.59,0.46;1.09,-7.85,5.66,8.58;-2.61,-3.27,8.88,-7.06;-7.63,-7.68,5.66,4.68}),1,1)",
-       0.0832233171932059},
-      {"=INDEX(MINVERSE({8.41,-3.42,3.59,0.46;1.09,-7.85,5.66,8.58;-2.61,-3.27,8.88,-7.06;-7.63,-7.68,5.66,4.68}),1,2)",
-       0.0029330707758825824},
-      {"=INDEX(MINVERSE({1.31,8.89,7.41,8.18,4.59;8.72,4.32,4.35,-5.17,0.59;-2.33,8.84,-3.67,-6.1,2.92;2.05,-0.64,-0.1,"
-       "-5.57,-5.18;-5.68,5.89,-5.0,-0.41,-8.27}),1,1)",
-       -0.12810748490468893},
-      {"=INDEX(MINVERSE({1.31,8.89,7.41,8.18,4.59;8.72,4.32,4.35,-5.17,0.59;-2.33,8.84,-3.67,-6.1,2.92;2.05,-0.64,-0.1,"
-       "-5.57,-5.18;-5.68,5.89,-5.0,-0.41,-8.27}),1,2)",
-       0.2608554990502396},
-  };
-  for (const Case& c : cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_number()) << c.formula;
-    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
-  }
-}
-
-TEST(MatrixInverse, ZeroPivotAfterEliminationIsNum) {
-  // The second pivot cancels to exactly zero.
-  const Value v = EvalSource("=INDEX(MINVERSE({0.001,1;1,1000.0}),1,1)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 }  // namespace

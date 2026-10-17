@@ -310,6 +310,12 @@ TEST(DateTimeRoundTrip, TimeExtractsItself) {
   EXPECT_EQ(s.as_number(), 30.0);
 }
 
+TEST(ExactRemainderAndAngles, EomonthBeforeTheCalendarStartIsNum) {
+  const Value v = EvalSource("=EOMONTH(1,-1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

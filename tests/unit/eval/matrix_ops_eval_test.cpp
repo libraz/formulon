@@ -15,6 +15,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -23,6 +24,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using formulon::test::EvalSource;
 
 Value EvalUnder(std::string_view src, Arena* parse_arena, Arena* eval_arena, const EvalContext& ctx) {
   parser::Parser p(src, *parse_arena);
@@ -458,6 +461,41 @@ TEST(BuiltinsMinverse, ScalarArgumentReturnsReciprocalAsOneByOne) {
   ASSERT_EQ(v.as_array_rows(), 1U);
   ASSERT_EQ(v.as_array_cols(), 1U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 0.25);
+}
+
+TEST(MatrixInverse, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=INDEX(MINVERSE({-1.5,-1.5;-3.9,6.2}),1,1)", -0.40924092409240914},
+      {"=INDEX(MINVERSE({-1.5,-1.5;-3.9,6.2}),1,2)", -0.09900990099009901},
+      {"=INDEX(MINVERSE({3.0,8.0;-9.0,4.0}),1,1)", 0.047619047619047616},
+      {"=INDEX(MINVERSE({3.0,8.0;-9.0,4.0}),1,2)", -0.09523809523809525},
+      {"=INDEX(MINVERSE({8.41,-3.42,3.59,0.46;1.09,-7.85,5.66,8.58;-2.61,-3.27,8.88,-7.06;-7.63,-7.68,5.66,4.68}),1,1)",
+       0.0832233171932059},
+      {"=INDEX(MINVERSE({8.41,-3.42,3.59,0.46;1.09,-7.85,5.66,8.58;-2.61,-3.27,8.88,-7.06;-7.63,-7.68,5.66,4.68}),1,2)",
+       0.0029330707758825824},
+      {"=INDEX(MINVERSE({1.31,8.89,7.41,8.18,4.59;8.72,4.32,4.35,-5.17,0.59;-2.33,8.84,-3.67,-6.1,2.92;2.05,-0.64,-0.1,"
+       "-5.57,-5.18;-5.68,5.89,-5.0,-0.41,-8.27}),1,1)",
+       -0.12810748490468893},
+      {"=INDEX(MINVERSE({1.31,8.89,7.41,8.18,4.59;8.72,4.32,4.35,-5.17,0.59;-2.33,8.84,-3.67,-6.1,2.92;2.05,-0.64,-0.1,"
+       "-5.57,-5.18;-5.68,5.89,-5.0,-0.41,-8.27}),1,2)",
+       0.2608554990502396},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(MatrixInverse, ZeroPivotAfterEliminationIsNum) {
+  // The second pivot cancels to exactly zero.
+  const Value v = EvalSource("=INDEX(MINVERSE({0.001,1;1,1000.0}),1,1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 }  // namespace

@@ -768,6 +768,58 @@ TEST(ComplexRules, ErrorsMatchExcel) {
   }
 }
 
+TEST(ComplexReciprocalTrig, MatchesExcelValues) {
+  const Value csc = EvalSource("=IMCSC(\"1+i\")");
+  ASSERT_TRUE(csc.is_text());
+  EXPECT_EQ(csc.as_text(), "0.621518017170428-0.303931001628427i");
+  const Value csc_conj = EvalSource("=IMCSC(\"1-i\")");
+  ASSERT_TRUE(csc_conj.is_text());
+  EXPECT_EQ(csc_conj.as_text(), "0.621518017170428+0.303931001628427i");
+}
+
+TEST(ComplexText, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {"=COMPLEX(0.0000001,0.0000002)", "0.0000001+0.0000002i"},
+      {"=COMPLEX(0.00001,0.000002)", "0.00001+0.000002i"},
+      {"=COMPLEX(0.001,123456789012345)", "0.001+123456789012345i"},
+      {"=COMPLEX(1E-20,1E20)", "1E-20+100000000000000000000i"},
+      {"=COMPLEX(1.23456789012345E-6,0)", "1.23456789012345E-06"},
+      {"=COMPLEX(0,1.23456789012345E-6)", "1.23456789012345E-06i"},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_text()) << c.formula;
+    EXPECT_EQ(v.as_text(), c.expected) << c.formula;
+  }
+}
+
+TEST(ComplexTrigHyperbolic, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {"=IMSIN(\"1+i\")", "1.29845758141598+0.634963914784736i"},
+      {"=IMCOS(\"1+i\")", "0.833730025131149-0.988897705762865i"},
+      {"=IMTAN(\"1+i\")", "0.271752585319512+1.08392332733869i"},
+      {"=IMCOT(\"1+i\")", "0.217621561854403-0.868014142895925i"},
+      {"=IMSINH(\"1+i\")", "0.634963914784736+1.29845758141598i"},
+      {"=IMCOSH(\"1+i\")", "0.833730025131149+0.988897705762865i"},
+      {"=IMCSCH(\"1+i\")", "0.303931001628426-0.621518017170429i"},
+      {"=IMSECH(\"1+i\")", "0.498337030555187-0.591083841721045i"},
+      {"=IMPRODUCT(IMCSCH(\"1+i\"),IMSINH(\"1+i\"))", "1-5.55111512312578E-17i"},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_text()) << c.formula;
+    EXPECT_EQ(v.as_text(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

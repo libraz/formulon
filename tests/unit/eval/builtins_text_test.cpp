@@ -999,6 +999,15 @@ TEST(BuiltinsTextSnap, TextAfterInstanceSnaps) {
   EXPECT_EQ(v.as_text(), "c");
 }
 
+TEST(ExactRemainderAndAngles, PercentKeepsEveryDigitAfterACarry) {
+  const Value v = EvalSource("=TEXT(VALUE(\"1E+21\"),\"0%\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "100000000000000000000000%");
+  const Value w = EvalSource("=TEXT(VALUE(\"1E+22\"),\"0.0%\")");
+  ASSERT_TRUE(w.is_text());
+  EXPECT_EQ(w.as_text(), "1000000000000000000000000.0%");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

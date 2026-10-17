@@ -805,6 +805,91 @@ TEST(MathAnalysisToolPak, GcdBoolInArrayLiteralIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(RoundingFamily, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=ROUNDUP(0.285,1)", 0.30000000000000004},
+      {"=ROUNDUP(2.675,2)", 2.6799999999999997},
+      {"=ROUNDUP(123456789012.345,2)", 123456789012.34999},
+      {"=ROUNDUP(-0.285,1)", -0.30000000000000004},
+      {"=ROUND(1E+15,2)", 1000000000000000.0},
+      {"=ROUND(1234567.891,12)", 1234567.891},
+      {"=ROUND(99.995,2)", 100.0},
+      {"=ROUND(-2.5,0)", -3.0},
+      {"=ROUND(1234.5,-2)", 1200.0},
+      {"=TRUNC(123456789012.345,7)", 123456789012.345},
+      {"=ROUNDDOWN(123456789012.345,7)", 123456789012.345},
+      {"=ROUNDDOWN(0.0049,2)", 0.0},
+      {"=CEILING(1E+15,0.3)", 999999999999999.0},
+      {"=FLOOR(1E+15,0.07)", 1000000000000001.1},
+      {"=CEILING(1.23456789012345E+15,0.07)", 1234567890123449.0},
+      {"=CEILING(1E+12,1E-5)", 1000000000000.0001},
+      {"=CEILING.MATH(1E+15,0.3)", 999999999999999.0},
+      {"=FLOOR.MATH(1E+15,0.07)", 1000000000000001.1},
+      {"=CEILING.PRECISE(1E+15,0.3)", 999999999999999.0},
+      {"=FLOOR.PRECISE(1E+15,0.07)", 1000000000000001.1},
+      {"=ISO.CEILING(1E+15,0.3)", 999999999999999.0},
+      {"=MOD(1125899999999.5,1)", 0.5},
+      {"=MOD(2251799999999,2)", 1.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(RoundingFamily, ModBeyondTheQuotientCapIsNum) {
+  for (const char* formula :
+       {"=MOD(1125900000000,1)", "=MOD(2251800000001,2)", "=MOD(-1125900000000,1)", "=MOD(1125900000000,-1)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
+TEST(ExactRemainderAndAngles, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=MOD(-771618.708616,-22.69)", -22.56861599997459},
+      {"=MOD(931127,63.4079)", 45.39640000003038},
+      {"=MOD(-108663,8.9404)", 7.562000000004215},
+      {"=MOD(953952.3,-55.3608)", -25.00559999991151},
+      {"=MOD(751068.5,-85.85)", -33.14999999995027},
+      {"=MOD(0.7*134217727,0.7)", 0.6999999970197677},
+      {"=MOD(12345.678*134217727+12345.678/2,12345.678)", 6172.8391328125},
+      {"=ATAN2(-379273,48.77)", 3.141464065475872},
+      {"=ATAN2(-549252,-70.7077)", -3.141463919056993},
+      {"=ATAN2(881469.044,93.3196)", 0.00010586826648827292},
+      {"=ATAN2(697982.245,-66.96)", -9.593367205863957e-05},
+      {"=ATAN2(0,2)", 1.5707963267948966},
+      {"=ATAN2(0,-2)", -1.5707963267948966},
+      {"=ATAN2(-3,0)", 3.141592653589793},
+      {"=RRI(3,25232.91,976406.04)", 2.382369422704911},
+      {"=RRI(38.9,54123.17,821882.7)", 0.07243471583009375},
+      {"=XNPV(0.2036,{-6330.59;3480.01;1130.15;3587.31},{44205;45070;46123;46186})", -2348.615433109875},
+      {"=XNPV(0.263,{-2570.64;102.19;2936.41;1394.33;-117.67},{38615;38960;39138;39696;40565})", 277.26245335237104},
+      {"=WORKDAY(2958465.9,-30)", 2958423.0},
+      {"=WORKDAY(2958465.9,0)", 2958465.0},
+      {"=WORKDAY.INTL(2958465.9,-30,11)", 2958430.0},
+      {"=WORKDAY.INTL(2958465.9,-1,\"0101000\")", 2958463.0},
+      {"=DATE(1900,3,0)", 60.0},
+      {"=DAYS360(59,60)", 1.0},
+      {"=DAYS360(60,61)", 1.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
