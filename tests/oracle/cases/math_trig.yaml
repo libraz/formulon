@@ -161,3 +161,32 @@ cases:
 
   - id: degrees_of_radians_roundtrip
     formula: "=DEGREES(RADIANS(45))"
+
+  # -- ATAN2 as atan(y/x) moved by +-pi for x < 0 ---
+  - id: atan2_quadrant_two
+    formula: "=ATAN2(-379273,48.77)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: atan2_quadrant_three
+    formula: "=ATAN2(-549252,-70.7077)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: atan2_quadrant_one_large_x
+    formula: "=ATAN2(881469.044,93.3196)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: atan2_quadrant_four_large_x
+    formula: "=ATAN2(697982.245,-66.96)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: atan2_positive_y_axis
+    formula: "=ATAN2(0,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: atan2_negative_y_axis
+    formula: "=ATAN2(0,-2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: atan2_negative_x_axis
+    formula: "=ATAN2(-3,0)"
+    tolerance: { abs: 0, rel: 0 }

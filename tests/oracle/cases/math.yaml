@@ -1358,3 +1358,36 @@ cases:
     description: "Power of ten through SERIESSUM"
     formula: "=SERIESSUM(10,100,100,{1;1;1})"
     tolerance: { abs: 0, rel: 0 }
+
+  # -- MOD as the exact remainder signed like the divisor ---
+  - id: mod_exact_negative_divisor
+    formula: "=MOD(-771618.708616,-22.69)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_exact_positive_both
+    formula: "=MOD(931127,63.4079)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_exact_negative_dividend
+    formula: "=MOD(-108663,8.9404)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_exact_mixed_signs
+    formula: "=MOD(953952.3,-55.3608)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_exact_fraction_dividend
+    formula: "=MOD(751068.5,-85.85)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_exact_near_two_pow_27
+    formula: "=MOD(0.7*134217727,0.7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_exact_half_step
+    formula: "=MOD(12345.678*134217727+12345.678/2,12345.678)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: mod_exact_large_quotient
+    formula: "=MOD(1E+15,7.45058059692383E+06)"
+    tolerance: { abs: 0, rel: 0 }

@@ -543,6 +543,60 @@ TEST(SpecialDistributions, GammaDomain) {
   EXPECT_EQ(tiny.as_number(), 0.0);
 }
 
+TEST(ExactRemainderAndAngles, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=MOD(-771618.708616,-22.69)", -22.56861599997459},
+      {"=MOD(931127,63.4079)", 45.39640000003038},
+      {"=MOD(-108663,8.9404)", 7.562000000004215},
+      {"=MOD(953952.3,-55.3608)", -25.00559999991151},
+      {"=MOD(751068.5,-85.85)", -33.14999999995027},
+      {"=MOD(0.7*134217727,0.7)", 0.6999999970197677},
+      {"=MOD(12345.678*134217727+12345.678/2,12345.678)", 6172.8391328125},
+      {"=ATAN2(-379273,48.77)", 3.141464065475872},
+      {"=ATAN2(-549252,-70.7077)", -3.141463919056993},
+      {"=ATAN2(881469.044,93.3196)", 0.00010586826648827292},
+      {"=ATAN2(697982.245,-66.96)", -9.593367205863957e-05},
+      {"=ATAN2(0,2)", 1.5707963267948966},
+      {"=ATAN2(0,-2)", -1.5707963267948966},
+      {"=ATAN2(-3,0)", 3.141592653589793},
+      {"=RRI(3,25232.91,976406.04)", 2.382369422704911},
+      {"=RRI(38.9,54123.17,821882.7)", 0.07243471583009375},
+      {"=XNPV(0.2036,{-6330.59;3480.01;1130.15;3587.31},{44205;45070;46123;46186})", -2348.615433109875},
+      {"=XNPV(0.263,{-2570.64;102.19;2936.41;1394.33;-117.67},{38615;38960;39138;39696;40565})", 277.26245335237104},
+      {"=WORKDAY(2958465.9,-30)", 2958423.0},
+      {"=WORKDAY(2958465.9,0)", 2958465.0},
+      {"=WORKDAY.INTL(2958465.9,-30,11)", 2958430.0},
+      {"=WORKDAY.INTL(2958465.9,-1,\"0101000\")", 2958463.0},
+      {"=DATE(1900,3,0)", 60.0},
+      {"=DAYS360(59,60)", 1.0},
+      {"=DAYS360(60,61)", 1.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(ExactRemainderAndAngles, EomonthBeforeTheCalendarStartIsNum) {
+  const Value v = EvalSource("=EOMONTH(1,-1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(ExactRemainderAndAngles, PercentKeepsEveryDigitAfterACarry) {
+  const Value v = EvalSource("=TEXT(VALUE(\"1E+21\"),\"0%\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "100000000000000000000000%");
+  const Value w = EvalSource("=TEXT(VALUE(\"1E+22\"),\"0.0%\")");
+  ASSERT_TRUE(w.is_text());
+  EXPECT_EQ(w.as_text(), "1000000000000000000000000.0%");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

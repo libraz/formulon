@@ -228,20 +228,27 @@ Value Atan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // ATAN2(x, y) - two-argument arctangent. Excel's argument order is
-// `(x, y)`, the OPPOSITE of C's `std::atan2(y, x)`. We pass them through
-// swapped so callers see Excel semantics. When BOTH x and y are zero,
-// Excel returns `#DIV/0!` even though `std::atan2(0, 0)` is defined as 0.
+// `(x, y)`, the OPPOSITE of C's `std::atan2(y, x)`. The angle is atan(y / x),
+// moved by +-pi (the sign of y) when x < 0, and +-pi/2 (the sign of y) at
+// x == 0. When BOTH x and y are zero, Excel returns `#DIV/0!`.
 // Result in (-pi, pi] radians.
 Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto coordinates = builtins_detail::read_number_pair(args, 0, 1);
   if (!coordinates) {
     return Value::error(coordinates.error());
   }
-  const auto& pair = coordinates.value();
-  if (pair.first == 0.0 && pair.second == 0.0) {
+  const double x = coordinates.value().first;
+  const double y = coordinates.value().second;
+  if (x == 0.0 && y == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double r = std::atan2(pair.second, pair.first);
+  if (x == 0.0) {
+    return Value::number(y < 0.0 ? -(kPi / 2.0) : kPi / 2.0);
+  }
+  double r = std::atan(y / x);
+  if (x < 0.0) {
+    r = r + (y < 0.0 ? -kPi : kPi);
+  }
   return to_finite_value(r);
 }
 

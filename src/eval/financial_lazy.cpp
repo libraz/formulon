@@ -604,7 +604,7 @@ double xnpv_sum(const std::vector<double>& values, const std::vector<double>& da
   double total = 0.0;
   for (std::size_t i = 0; i < values.size(); ++i) {
     const double t = (dates[i] - anchor) / 365.0;
-    total += values[i] / std::pow(base, t);
+    total = total + values[i] / std::exp(std::log(base) * t);
   }
   return total;
 }

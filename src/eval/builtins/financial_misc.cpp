@@ -232,7 +232,7 @@ Value PDuration(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Equivalent interest rate for the growth of `pv` -> `fv` over `nper`
 // periods:
 //
-//   RRI = (fv / pv)^(1 / nper) - 1
+//   RRI = exp(log(fv / pv) * (1 / nper)) - 1
 //
 // Domain per Microsoft docs:
 //   - nper <= 0, pv <= 0, fv <= 0  ->  #NUM!
@@ -245,7 +245,7 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (nper <= 0.0 || pv <= 0.0 || fv < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = std::pow(fv / pv, 1.0 / nper) - 1.0;
+  const double result = std::exp(std::log(fv / pv) * (1.0 / nper)) - 1.0;
   return finalize(result);
 }
 

@@ -179,10 +179,9 @@ Value Sqrt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Two-argument numeric -----------------------------------------------
 
-// MOD(n, d) - Excel's modulo. The result has the SIGN OF THE DIVISOR, not
-// the C `%` semantics. Formula: `n - d * floor(n / d)`. So `MOD(-7, 3) = 2`,
-// `MOD(7, -3) = -2`. `MOD(n, 0)` -> `#DIV/0!`. `std::fmod` is intentionally
-// avoided here because it inherits C semantics (sign of dividend).
+// MOD(n, d) - Excel's modulo: the exact remainder of `n / d`, signed like the
+// divisor (not the C `%` sign of the dividend). So `MOD(-7, 3) = 2`,
+// `MOD(7, -3) = -2`. `MOD(n, 0)` -> `#DIV/0!`.
 Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto operands = builtins_detail::read_number_pair(args, 0, 1);
   if (!operands) {
@@ -193,7 +192,12 @@ Value Mod(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (std::fabs(pair.second) < DBL_MIN) {
     return Value::error(ErrorCode::Div0);
   }
-  const double r = pair.first - pair.second * std::floor(pair.first / pair.second);
+  // The exact remainder, signed like the divisor.
+  double r = std::fmod(pair.first, pair.second);
+  if (r != 0.0 && (r < 0.0) != (pair.second < 0.0)) {
+    r += pair.second;
+  }
+  r += 0.0;  // -0 reads as 0
   if (r != 0.0 && std::fabs(r) < DBL_MIN) {
     return Value::error(ErrorCode::Num);
   }

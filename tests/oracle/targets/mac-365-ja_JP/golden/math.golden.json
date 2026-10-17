@@ -2,11 +2,11 @@
   "suite": "math",
   "description": "ABS / SIGN / INT / TRUNC / MOD / ROUND* / POWER / SQRT / EXP / LN / LOG / LOG10 / PI / VALUE",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T06:50:06Z"
+    "generated_at": "2026-10-17T08:53:22Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -4047,6 +4047,110 @@
       "expect": {
         "kind": "number",
         "value": 1e+300
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_negative_divisor",
+      "formula": "=MOD(-771618.708616,-22.69)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -22.56861599997459
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_positive_both",
+      "formula": "=MOD(931127,63.4079)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.39640000003038
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_negative_dividend",
+      "formula": "=MOD(-108663,8.9404)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.562000000004215
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_mixed_signs",
+      "formula": "=MOD(953952.3,-55.3608)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -25.00559999991151
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_fraction_dividend",
+      "formula": "=MOD(751068.5,-85.85)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -33.14999999995027
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_near_two_pow_27",
+      "formula": "=MOD(0.7*134217727,0.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6999999970197677
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_half_step",
+      "formula": "=MOD(12345.678*134217727+12345.678/2,12345.678)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6172.8391328125
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_large_quotient",
+      "formula": "=MOD(1E+15,7.45058059692383E+06)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7450580.34692383
       },
       "tolerance": {
         "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "math_trig",
   "description": "SIN / COS / TAN / ASIN / ACOS / ATAN / ATAN2 / DEGREES / RADIANS",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-10-17T08:56:59Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -430,6 +430,97 @@
       "expect": {
         "kind": "number",
         "value": 45.0
+      }
+    },
+    {
+      "id": "atan2_quadrant_two",
+      "formula": "=ATAN2(-379273,48.77)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141464065475872
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "atan2_quadrant_three",
+      "formula": "=ATAN2(-549252,-70.7077)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.141463919056993
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "atan2_quadrant_one_large_x",
+      "formula": "=ATAN2(881469.044,93.3196)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00010586826648827292
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "atan2_quadrant_four_large_x",
+      "formula": "=ATAN2(697982.245,-66.96)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.593367205863957e-05
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "atan2_positive_y_axis",
+      "formula": "=ATAN2(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5707963267948966
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "atan2_negative_y_axis",
+      "formula": "=ATAN2(0,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.5707963267948966
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "atan2_negative_x_axis",
+      "formula": "=ATAN2(-3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]
