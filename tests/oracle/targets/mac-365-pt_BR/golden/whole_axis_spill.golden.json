@@ -6,7 +6,7 @@
     "excel_locale": "pt-BR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-10T05:28:39Z"
+    "generated_at": "2026-10-17T17:48:47Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -191,7 +191,10 @@
       "formula": "=ROWS(G:G+0)",
       "setup": {},
       "formula_cell": "G1",
-      "skipped": "=ROWS(G:G+0) at G1: G:G+0 reads the formula cell, so the cell is in a cycle; Excel seeds it and ROWS reports the declared 1048576 rows. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
     },
     {
       "id": "whole_col_cycle_decided_before_blocking",

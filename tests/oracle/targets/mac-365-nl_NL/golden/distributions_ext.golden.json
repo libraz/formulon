@@ -2,11 +2,11 @@
   "suite": "distributions_ext",
   "description": "BETA / GAMMA / WEIBULL / LOGNORM / HYPGEOM extended distribution family",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "nl-NL",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T23:24:11Z"
+    "generated_at": "2026-10-17T18:09:54Z"
   },
   "tolerance": {
     "abs": 1e-06,
@@ -20,6 +20,10 @@
       "expect": {
         "kind": "number",
         "value": 0.3594923429330944
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -29,6 +33,10 @@
       "expect": {
         "kind": "number",
         "value": 1.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -38,6 +46,10 @@
       "expect": {
         "kind": "number",
         "value": 0.3594923429330944
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -56,6 +68,10 @@
       "expect": {
         "kind": "number",
         "value": 0.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -65,6 +81,10 @@
       "expect": {
         "kind": "number",
         "value": 0.4000000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -83,6 +103,10 @@
       "expect": {
         "kind": "number",
         "value": 24.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -92,6 +116,10 @@
       "expect": {
         "kind": "number",
         "value": 1.772453850905516
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -119,6 +147,10 @@
       "expect": {
         "kind": "number",
         "value": 12.80182748008147
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -128,6 +160,10 @@
       "expect": {
         "kind": "number",
         "value": 7.534364236758734
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -146,6 +182,10 @@
       "expect": {
         "kind": "number",
         "value": 0.08030139707139419
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -155,6 +195,10 @@
       "expect": {
         "kind": "number",
         "value": 0.09196986029286058
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -164,6 +208,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -182,6 +230,10 @@
       "expect": {
         "kind": "number",
         "value": 4.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -191,6 +243,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -209,6 +265,10 @@
       "expect": {
         "kind": "number",
         "value": 0.929581390069277
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -218,6 +278,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -227,6 +291,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -254,6 +322,10 @@
       "expect": {
         "kind": "number",
         "value": 0.03908355570680048
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -263,6 +335,10 @@
       "expect": {
         "kind": "number",
         "value": 0.39894228040143265
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -290,6 +366,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -299,6 +379,10 @@
       "expect": {
         "kind": "number",
         "value": 2.0000000000000004
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -317,6 +401,10 @@
       "expect": {
         "kind": "number",
         "value": 0.3632610939112486
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -326,6 +414,10 @@
       "expect": {
         "kind": "number",
         "value": 0.10216718266253864
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -335,6 +427,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -344,6 +440,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -380,6 +480,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -389,6 +493,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -407,6 +515,10 @@
       "expect": {
         "kind": "number",
         "value": 0.998057957914221
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -425,6 +537,10 @@
       "expect": {
         "kind": "number",
         "value": 1.8000000000000003
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -434,6 +550,10 @@
       "expect": {
         "kind": "number",
         "value": 0.3594923429330944
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -452,6 +572,10 @@
       "expect": {
         "kind": "number",
         "value": 0.886226925452758
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -461,6 +585,10 @@
       "expect": {
         "kind": "number",
         "value": 7.257415615308e+306
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -470,6 +598,10 @@
       "expect": {
         "kind": "number",
         "value": 0.3032653298563167
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -479,6 +611,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -506,6 +642,10 @@
       "expect": {
         "kind": "number",
         "value": 0.929581390069277
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -533,6 +673,10 @@
       "expect": {
         "kind": "number",
         "value": 0.03908355570680048
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -542,6 +686,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -569,6 +717,10 @@
       "expect": {
         "kind": "number",
         "value": 0.10216718266253864
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -578,6 +730,89 @@
       "expect": {
         "kind": "number",
         "value": 0.3632610939112486
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_population_count_at_int32_limit_is_num",
+      "formula": "=HYPGEOM.DIST(5, 10, 50, 2147483647, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_population_count_pmf_at_int32_limit_is_num",
+      "formula": "=HYPGEOM.DIST(5, 10, 50, 2147483647, FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_sample_count_at_int32_limit_is_num",
+      "formula": "=HYPGEOM.DIST(2147483647, 10, 50, 100, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hypgeom_population_count_below_int32_limit",
+      "formula": "=HYPGEOM.DIST(5, 10, 50, 2147483646, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_sample_count_below_int32_limit",
+      "formula": "=HYPGEOM.DIST(2147483646, 10, 50, 100, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_cdf_span_500k",
+      "formula": "=HYPGEOM.DIST(500000, 1000000, 5000000, 10000000, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5004205219807027
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hypgeom_cdf_span_5m",
+      "formula": "=HYPGEOM.DIST(5000000, 10000000, 50000000, 100000000, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5001329807567633
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -587,6 +822,10 @@
       "expect": {
         "kind": "number",
         "value": 5.348120627447122
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -596,6 +835,10 @@
       "expect": {
         "kind": "number",
         "value": 5.18025160223301
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -605,6 +848,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -614,6 +861,10 @@
       "expect": {
         "kind": "number",
         "value": 0.5723649429247001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -623,6 +874,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -632,6 +887,10 @@
       "expect": {
         "kind": "number",
         "value": 0.5723649429247001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -641,6 +900,10 @@
       "expect": {
         "kind": "number",
         "value": 12.80182748008147
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -686,6 +949,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -744,6 +1011,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -759,7 +1030,14 @@
       "id": "betainv_roundtrip",
       "formula": "=BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10)",
       "setup": {},
-      "skipped": "BETA.INV(BETA.DIST(0.9,0.1,10,TRUE),0.1,10): Mac Excel 365 returns 0.9000004941424153; Formulon returns 0.89999934430275 (difference about 1.15e-6). The CDF is within 1.44e-12 of 1 and its local density is about 1.45e-10, amplifying one probability ulp into about 7.7e-7 in x. Retain the general CDF/inverse calculation rather than bias its probability rounding to this Excel result."
+      "expect": {
+        "kind": "number",
+        "value": 0.9000004941424153
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "gd_0_15",
@@ -768,6 +1046,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -777,6 +1059,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -786,6 +1072,315 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_00",
+      "formula": "=WEIBULL.DIST(745,1,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_01",
+      "formula": "=WEIBULL.DIST(27.2946881279124,2,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_02",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+155\"),2,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_03",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+155\"),2,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_04",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+300\"),1.6,0.002,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_05",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+300\"),0.5,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_06",
+      "formula": "=WEIBULL.DIST(109.926651774131,35,91,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_07",
+      "formula": "=WEIBULL.DIST(502681,0.5,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_08",
+      "formula": "=EXPON.DIST(VALUE(\"1e+300\"),VALUE(\"1e+300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_09",
+      "formula": "=GAMMA.DIST(VALUE(\"1e+300\"),1,VALUE(\"1e-300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_10",
+      "formula": "=EXPON.DIST(VALUE(\"1e+300\"),VALUE(\"1e-300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_11",
+      "formula": "=GAMMA.DIST(VALUE(\"1e+300\"),1,VALUE(\"1e+300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_00",
+      "formula": "=BETA.INV(0.5,100000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999832167548567
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_01",
+      "formula": "=F.DIST(1,10000,10000,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5000000000000004
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_02",
+      "formula": "=F.DIST(1,10000,100000000,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5018803519601795
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_03",
+      "formula": "=F.DIST(2805.56718139,10000,10000,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_04",
+      "formula": "=BETA.DIST(1000000.32314775,1,0.5,FALSE,1000000,1000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6077473388437132
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_05",
+      "formula": "=BINOM.DIST(100000,100000,0.3,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_06",
+      "formula": "=BETA.DIST(1000000.50538874,1,1,TRUE,1000000,1000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5053887399844825
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_07",
+      "formula": "=BETA.INV(0.25,10000,10000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4976153023717551
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_08",
+      "formula": "=BETA.INV(0.001,100000,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999076705895216
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_09",
+      "formula": "=BETA.DIST(0.5870934,100000,100000,TRUE,0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_10",
+      "formula": "=F.DIST(0.83857431,2,100000000,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.432326443548872
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_11",
+      "formula": "=BETA.INV(0.99,10000,10000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5082244282031153
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "beta_large_params_12",
+      "formula": "=BETA.DIST(1340779.41556626,100000,0.5,TRUE,1000000,3000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

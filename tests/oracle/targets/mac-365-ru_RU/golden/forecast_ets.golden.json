@@ -2,11 +2,11 @@
   "suite": "forecast_ets",
   "description": "FORECAST.ETS — exponential triple smoothing closure against Mac Excel 365 (ja-JP).",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "ru-RU",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T18:57:55Z"
+    "generated_at": "2026-10-17T17:55:17Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -31,8 +31,8 @@
         "value": 18.0
       },
       "tolerance": {
-        "abs": 0.01,
-        "rel": 0.001
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -44,8 +44,8 @@
         "value": 18.0
       },
       "tolerance": {
-        "abs": 0.01,
-        "rel": 0.001
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -178,7 +178,14 @@
       "id": "forecast_ets_stat_alpha",
       "formula": "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 1)",
       "setup": {},
-      "skipped": "On cyclic period-4 data where joint optimisation drives RMSE -> 0, the alpha value is non-unique: any (alpha, beta, gamma, initial-state) combination with the same forecast manifold yields the same SSE. Mac selects alpha ~0.751 via its bias / regularisation; Formulon's bounded Nelder-Mead reaches RMSE = 0 at alpha ~0.09. The fit quality (RMSE / MASE) matches Mac; the smoothing weight is a non-identifiable parameter on this fixture."
+      "expect": {
+        "kind": "number",
+        "value": 0.751
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "forecast_ets_stat_rmse",
@@ -189,8 +196,8 @@
         "value": 0.0
       },
       "tolerance": {
-        "abs": 0.05,
-        "rel": 0.05
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -211,8 +218,8 @@
         "value": 0.0
       },
       "tolerance": {
-        "abs": 0.05,
-        "rel": 0.05
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -231,6 +238,266 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_date_timeline_monthly",
+      "formula": "=FORECAST.ETS(45292, {100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 122.06854734505528
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_date_timeline_mid_month_target",
+      "formula": "=FORECAST.ETS(45307, {100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 122.92389789279682
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_date_timeline_month_end",
+      "formula": "=FORECAST.ETS(45322, {100;104;109;103;108;114;107;113;119;111;118;125}, {44957;44985;45016;45046;45077;45107;45138;45169;45199;45230;45260;45291}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 122.06854734505528
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_date_timeline_confint",
+      "formula": "=FORECAST.ETS.CONFINT(45323, {100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 0.95, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.309925665120638
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_date_timeline_step_size",
+      "formula": "=FORECAST.ETS.STAT({100;104;109;103;108;114;107;113;119;111;118;125}, {44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261}, 8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_gap_interpolated",
+      "formula": "=FORECAST.ETS(13, {10;12;14;13;17;19;18;21;23;22}, {1;2;3;4;7;8;9;10;11;12}, 0, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 23.797998489528826
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_gap_zero_filled",
+      "formula": "=FORECAST.ETS(13, {10;12;14;13;17;19;18;21;23;22}, {1;2;3;4;7;8;9;10;11;12}, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 23.546862593009674
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_duplicates_average",
+      "formula": "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21.54142795852091
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_duplicates_median",
+      "formula": "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21.57703172041051
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_duplicates_sum",
+      "formula": "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.434583549355068
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_duplicates_max",
+      "formula": "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21.497995309190685
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_duplicates_min",
+      "formula": "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21.626440799021236
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_duplicates_count",
+      "formula": "=FORECAST.ETS(11, {14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5}, {5;3;1;2;3;4;3;6;7;8;9;10}, 0, 1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7544725192564488
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_fractional_target",
+      "formula": "=FORECAST.ETS(13.5, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 22.56794634344145
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_fractional_target_confint",
+      "formula": "=FORECAST.ETS.CONFINT(13.5, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0.95, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9490820308059253
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_target_inside_window",
+      "formula": "=FORECAST.ETS(3, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.003240904940714
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_aggregation_out_of_range",
+      "formula": "=FORECAST.ETS(13, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0, 1, 8)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_data_completion_out_of_range",
+      "formula": "=FORECAST.ETS(13, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {1;2;3;4;5;6;7;8;9;10;11;12}, 0, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_identical_timeline",
+      "formula": "=FORECAST.ETS(13, {10;12.5;11;14;13.5;16;15;18.5;17;20;19.5;22}, {5;5;5;5;5;5;5;5;5;5;5;5}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_auto_detect_noisy_series",
+      "formula": "=FORECAST.ETS(26, {20.68;23.387;21.379;23.614;22.256;23.242;25.997;24.128;25.926;25.877;26.359;26.985}, {1;2;3;4;5;6;7;8;9;10;11;12})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 33.8297434775792
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

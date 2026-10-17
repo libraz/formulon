@@ -2,11 +2,11 @@
   "suite": "regression_advanced",
   "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics.",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.113.4",
     "excel_locale": "es-MX",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T16:17:38Z"
+    "generated_at": "2026-10-17T17:45:46Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -27,13 +27,39 @@
           1,
           2
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
       "id": "linest_univariate_stats_true",
       "formula": "=LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE)",
       "setup": {},
-      "skipped": "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.9999999999999999,
+          4.440892098500626e-16,
+          9.288792252416251e-17,
+          3.0807438656824906e-16,
+          1.0,
+          2.9373740229761033e-16,
+          1.1589948344943812e+32,
+          3.0,
+          10.0,
+          2.588449845256445e-31
+        ],
+        "shape": [
+          5,
+          2
+        ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "linest_multivariate_basic",
@@ -50,6 +76,10 @@
           1,
           3
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -66,6 +96,10 @@
           1,
           2
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -118,6 +152,10 @@
           3,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -134,6 +172,10 @@
           2,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -152,6 +194,10 @@
           4,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -169,6 +215,10 @@
           3,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -221,13 +271,39 @@
           1,
           2
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
       "id": "logest_univariate_stats_true",
       "formula": "=LOGEST({2;4;8;16}, {1;2;3;4}, TRUE, TRUE)",
       "setup": {},
-      "skipped": "Perfect-fit LOGEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 and Formulon both return huge finite F statistics but differ by a numerically unstable factor. Other stats cells are covered by unit tests."
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          0.9999999999999998,
+          3.510833468576701e-17,
+          9.614813431917819e-17,
+          1.0,
+          7.850462293418876e-17,
+          3.8978979294391665e+32,
+          2.0,
+          2.4022650695910066,
+          1.232595164407831e-32
+        ],
+        "shape": [
+          5,
+          2
+        ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "logest_multivariate_basic",
@@ -244,6 +320,10 @@
           1,
           3
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -260,6 +340,10 @@
           1,
           2
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -305,6 +389,10 @@
           4,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -321,6 +409,10 @@
           2,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -339,6 +431,10 @@
           4,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -357,6 +453,10 @@
           4,
           1
         ]
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -408,7 +508,7 @@
       "id": "frequency_empty_bins",
       "formula": "=FREQUENCY({1;2;3}, {})",
       "setup": {},
-      "skipped": "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+      "skipped": "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon's parser rejects the empty array literal as well and returns #NAME?. Bins that hold no numeric value -- the 1x1 total-count spill -- are covered by tests/unit/eval/frequency_eval_test.cpp. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "frequency_text_in_data_skipped",
