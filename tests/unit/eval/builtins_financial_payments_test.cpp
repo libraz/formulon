@@ -507,6 +507,42 @@ TEST(ComplexTrigHyperbolic, MatchesExcelValues) {
   }
 }
 
+TEST(SpecialDistributions, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=GAMMA(0.5)", 1.772453850905516},
+      {"=GAMMA(1.5)", 0.886226925452758},
+      {"=GAMMA(2.5)", 1.329340388179137},
+      {"=GAMMALN(0.5)", 0.5723649429247001},
+      {"=GAMMALN(1.5)", -0.12078223763524523},
+      {"=GAMMALN.PRECISE(0.5)", 0.5723649429247001},
+      {"=WEIBULL.DIST(105,20,100,TRUE)", 0.929581390069277},
+      {"=WEIBULL.DIST(105,20,100,FALSE)", 0.035588864024503564},
+      {"=LOGNORM.DIST(1,0,1,FALSE)", 0.39894228040143265},
+      {"=LOGNORM.DIST(2,0,1,FALSE)", 0.1568740192789811},
+      {"=LOGNORM.DIST(0.5,0,1,FALSE)", 0.6274960771159244},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(SpecialDistributions, GammaDomain) {
+  for (const char* formula : {"=GAMMA(0)", "=GAMMA(-3)", "=GAMMA(172)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+  const Value tiny = EvalSource("=GAMMA(-171.5)");
+  ASSERT_TRUE(tiny.is_number());
+  EXPECT_EQ(tiny.as_number(), 0.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

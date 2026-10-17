@@ -49,10 +49,12 @@ cases:
   - id: gamma_integer
     description: "Γ(5) = 4! = 24"
     formula: "=GAMMA(5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gamma_half
     description: "Γ(0.5) = sqrt(pi) ~ 1.772454"
     formula: "=GAMMA(0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gamma_zero_is_num
     description: "Γ(0) is a pole; #NUM!"
@@ -66,10 +68,12 @@ cases:
   - id: gammaln_ten
     description: "ln Γ(10) = ln(9!) ~ 12.801827"
     formula: "=GAMMALN(10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammaln_precise_matches
     description: "GAMMALN.PRECISE(7.5) == GAMMALN(7.5); this verifies the PRECISE alias"
     formula: "=GAMMALN.PRECISE(7.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammaln_negative_is_num
     description: "ln Γ is undefined for x <= 0"
@@ -112,14 +116,17 @@ cases:
   - id: weibull_cdf_basic
     description: "WEIBULL(alpha=20, beta=100) CDF at 105 ~ 0.929581"
     formula: "=WEIBULL.DIST(105, 20, 100, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: weibull_pdf_exponential
     description: "Mac Excel returns 0 for Weibull PDF at x=0 regardless of alpha"
     formula: "=WEIBULL.DIST(0, 1, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: weibull_cdf_zero
     description: "WEIBULL CDF at x=0 is 0"
     formula: "=WEIBULL.DIST(0, 2, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: weibull_negative_x_is_num
     description: "x < 0 yields #NUM!"
@@ -138,6 +145,7 @@ cases:
   - id: lognorm_dist_pdf_standard
     description: "LOGNORM(mean=0, sd=1) PDF at 1 = 1/sqrt(2*pi) ~ 0.398942"
     formula: "=LOGNORM.DIST(1, 0, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: lognorm_dist_zero_x_is_num
     description: "x <= 0 yields #NUM!"
@@ -243,10 +251,12 @@ cases:
   - id: gamma_fractional
     description: "Γ(1.5) = sqrt(pi)/2 ~ 0.886227"
     formula: "=GAMMA(1.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gamma_large_overflow_is_num
     description: "Γ(171) overflows IEEE 754 double; yields #NUM!"
     formula: "=GAMMA(171)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gamma_dist_alpha_one_is_exponential_pdf
     description: "GAMMA(alpha=1, beta=2) PDF at 1 = exp(-0.5)/2 ~ 0.303265"
@@ -269,6 +279,7 @@ cases:
   - id: weibull_legacy_parity
     description: "Legacy WEIBULL matches WEIBULL.DIST CDF"
     formula: "=WEIBULL(105, 20, 100, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- LOGNORM edge probes -------------------------------------------------
   - id: lognorm_dist_negative_sd_is_num
@@ -332,23 +343,28 @@ cases:
   - id: gammaln_one_is_zero
     description: "ln Γ(1) = ln(0!) = 0"
     formula: "=GAMMALN(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammaln_half_is_log_sqrt_pi
     description: "ln Γ(0.5) = ln(sqrt(pi)) ~ 0.572365"
     formula: "=GAMMALN(0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- GAMMALN.PRECISE (need +4) ------------------------------------------
   - id: gammaln_precise_one_is_zero
     description: "ln Γ(1) = 0 via GAMMALN.PRECISE"
     formula: "=GAMMALN.PRECISE(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammaln_precise_half
     description: "ln Γ(0.5) = ln(sqrt(pi)) via GAMMALN.PRECISE"
     formula: "=GAMMALN.PRECISE(0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammaln_precise_ten
     description: "ln Γ(10) = ln(9!) via GAMMALN.PRECISE"
     formula: "=GAMMALN.PRECISE(10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammaln_precise_negative_is_num
     description: "GAMMALN.PRECISE rejects x <= 0; yields #NUM!"

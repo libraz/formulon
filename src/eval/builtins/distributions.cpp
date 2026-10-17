@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 
@@ -43,6 +44,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
+#include "eval/excel_math.h"
 #include "eval/function_registry.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
@@ -303,22 +305,143 @@ Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // GAMMA family
 // ---------------------------------------------------------------------------
 
-// GAMMA(x) - Γ(x). Non-positive integers are poles (std::tgamma returns
-// NaN or +Inf depending on platform); we reject them explicitly so the
-// Excel-visible error code is consistent. At x == 0 Excel also surfaces
-// #NUM! (pole from the left).
+// Coefficients of the GAMMA kernel: the Stirling series in 1/x for |x| > 10 and the
+// rational approximation (numerator over denominator) on [1, 2] for |x| <= 10.
+constexpr double kGammaStirling[] = {
+    -0.05905576189139824,   0.001080329535785209,   0.01280672566761614,   -0.00032503252556783166,
+    -0.003828876997130955,  0.00014409790832040022, 0.0016789974413441745, -0.00010343581816521184,
+    -0.0011843328747073879, 0.00013945627516731714, 0.0015680784434401332, -0.00045894418724279834,
+    -0.0053626543209876545, 0.006944444444444444,   0.16666666666666666,   2.0};
+constexpr double kGammaNumerator[] = {-41.32975575688121, -224.55734984993717, -1766.0581782060663, -11262.704073349521,
+                                      -39779.10693069725, -183439.1689740763,  -345373.8010894497,  -896026.3354389172};
+constexpr double kGammaDenominator[] = {
+    -319.17974684033175, 6642.776155506226,  -49294.268969809906, 118905.79578918342,
+    204704.893587802,    -862516.6292015722, -896037.449404572,   1.0};
+constexpr double kEulerGamma = 0.5772156649015329;
+constexpr double kSqrtPi = 1.772453850905516;
+constexpr double kSqrtHalfPi = 1.2533141373155003;
+
+template <std::size_t N>
+double horner_series(const double (&coefficients)[N], double t) noexcept {
+  double acc = coefficients[0];
+  for (std::size_t i = 1; i < N; ++i) {
+    acc = acc * t + coefficients[i];
+  }
+  return acc;
+}
+
+// base^e for a non-negative integer e: square-and-multiply with the product
+// taken as `base * result` on each set bit.
+double integer_power(double base, std::uint64_t e) noexcept {
+  double result = 1.0;
+  while (true) {
+    if ((e & 1U) != 0U) {
+      result = base * result;
+    }
+    if (e < 2U) {
+      return result;
+    }
+    e >>= 1U;
+    base = base * base;
+  }
+}
+
+// Gamma function. NaN marks the #NUM! domain (poles and overflow).
+double gamma_kernel(double x) noexcept {
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  if (x > 171.6243769563027) {
+    return nan;
+  }
+  const bool integral = std::trunc(x) - x == 0.0;
+  if (x < -171.03093456965283) {
+    return integral ? nan : 0.0;
+  }
+  if (integral) {
+    if (x <= 0.0) {
+      return nan;
+    }
+    if (!(x > 88.0)) {
+      double factorial = 1.0;
+      for (auto k = static_cast<std::int64_t>(x) - 1; k > 0; --k) {
+        factorial = static_cast<double>(k) * factorial;
+      }
+      return factorial;
+    }
+  }
+  const double ax = std::fabs(x);
+  const auto whole = static_cast<std::uint64_t>(std::trunc(ax));
+  const double frac = ax - static_cast<double>(whole);
+  if (frac == 0.5) {
+    // Half-integers: the product of i/2 over odd i below 2n, times sqrt(pi).
+    double result = 1.0;
+    double count = 1.0;
+    for (std::uint64_t i = 1; i < 2 * whole; ++i) {
+      if ((i & 1U) != 0U) {
+        result = (count / 2.0) * result;
+      }
+      count = count + 1.0;
+    }
+    result = result * kSqrtPi;
+    if (x < 0.0) {
+      result = (-kDistPi) / result;
+      result = result / ax;
+      if ((whole & 1U) != 0U) {
+        result = -result;
+      }
+    }
+    return result;
+  }
+  if (ax <= 2.220446049250313e-16) {
+    return 1.0 / x - kEulerGamma;
+  }
+  if (ax <= 10.0) {
+    double y = x;
+    double product = 1.0;
+    while (y > 2.0) {
+      y = y - 1.0;
+      product = product * y;
+    }
+    while (y < 1.0) {
+      product = product / y;
+      y = y + 1.0;
+    }
+    return (horner_series(kGammaNumerator, y) / horner_series(kGammaDenominator, y)) * product;
+  }
+  // Stirling: Gamma(|x|) = sqrt(pi/2) * exp(-|x|) * sqrt(1/|x|) * |x|^|x| * S(1/|x|),
+  // with |x|^|x| split as (|x|^(m + r))^2 for |x| / 2 = m + r.
+  const double t = 1.0 / ax;
+  const double series = horner_series(kGammaStirling, t);
+  const double root = std::sqrt(t);
+  const double e = std::exp(-ax) * root;
+  const double half = ax * 0.5;
+  const double m = std::trunc(half);
+  const double r = half - m;
+  double power = integer_power(ax, static_cast<std::uint64_t>(m));
+  power = std::exp(std::log(ax) * r) * power;
+  double v = e * power;
+  v = v * power;
+  v = v * kSqrtHalfPi;
+  double result = v * series;
+  if (x < 0.0) {
+    result = (-kDistPi) / result;
+    const double f = frac > 0.5 ? 1.0 - frac : frac;
+    double sine = std::sin(kDistPi * f);
+    sine = sine * ax;
+    result = result / sine;
+    if ((whole & 1U) != 0U) {
+      result = -result;
+    }
+  }
+  return result;
+}
+
+// GAMMA(x) - the gamma function; poles (non-positive integers) and overflow are #NUM!.
 Value Gamma(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto x_e = read_number(args, 0);
   if (!x_e) {
     return Value::error(x_e.error());
   }
-  const double x = x_e.value();
-  // Non-positive integers are poles; also catch x == 0.
-  if (x <= 0.0 && std::floor(x) == x) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = std::tgamma(x);
-  return finalize(r);
+  return finalize(gamma_kernel(x_e.value()));
 }
 
 // GAMMALN(x) / GAMMALN.PRECISE(x) - ln Γ(x). Both share this impl; the
@@ -333,7 +456,7 @@ Value Gammaln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(stats::log_gamma(x));
+  return finalize(stats::lgamma_excel(x));
 }
 
 // Gamma PDF at x > 0 with shape `alpha` and scale `beta`:
@@ -397,17 +520,10 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ---------------------------------------------------------------------------
 
 // WEIBULL.DIST(x, alpha, beta, cumulative). The Weibull distribution with
-// shape `alpha` and scale `beta`:
-//   CDF: 1 - exp(-(x/beta)^alpha)
-//   PDF: (alpha/beta) * (x/beta)^(alpha-1) * exp(-(x/beta)^alpha)
-// #NUM! on x < 0, alpha <= 0, beta <= 0.
-//
-// Boundary at x == 0: Mac Excel 365 returns exactly 0 for the PDF at
-// x == 0 regardless of alpha -- including the `alpha == 1` exponential
-// case (where the mathematical limit is 1/beta) and the `alpha < 1`
-// divergent case (where the mathematical limit is +Inf). Excel's
-// contract for this entry is "density at the boundary is zero"; verified
-// against the golden oracle. The CDF at x == 0 is 0 as expected.
+// shape `alpha` and scale `beta`, evaluated with a plain exp(log(b) * e) power:
+//   CDF: 0 - expm1(-(x/beta)^alpha)
+//   PDF: ((alpha / beta^alpha) * x^(alpha-1)) * exp(-(x/beta)^alpha)
+// #NUM! on x < 0, alpha <= 0, beta <= 0; the density at x == 0 is 0.
 Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto parsed = read_scaled_cumulative_triple(args);
   if (!parsed) {
@@ -416,18 +532,13 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   const double x = parsed.value().first;
   const double alpha = parsed.value().second;
   const double beta_scale = parsed.value().third;
-  const double t = x / beta_scale;
-  const double t_pow = std::pow(t, alpha);
+  const double scaled_power = std::exp(std::log(x / beta_scale) * alpha);
   if (parsed.value().cumulative) {
-    return finalize(1.0 - std::exp(-t_pow));
+    return finalize(0.0 - excel_expm1(-scaled_power));
   }
-  // PDF boundary: Mac Excel surfaces exactly 0 at x == 0 regardless of
-  // alpha, overriding the mathematical limits of 1/beta (alpha == 1)
-  // and +Inf (alpha < 1).
-  if (x == 0.0) {
-    return finalize(0.0);
-  }
-  const double r = (alpha / beta_scale) * std::pow(t, alpha - 1.0) * std::exp(-t_pow);
+  // At x == 0 the x^(alpha-1) factor is 0 for every alpha, so the density there is 0.
+  const double x_power = x != 0.0 ? std::exp(std::log(x) * (alpha - 1.0)) : 0.0;
+  const double r = ((alpha / std::exp(std::log(beta_scale) * alpha)) * x_power) * std::exp(-scaled_power);
   return finalize(r);
 }
 
@@ -435,10 +546,40 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 // LOGNORM family
 // ---------------------------------------------------------------------------
 
+// Error-free sum: `sum` is a + b rounded, `error` the exact remainder.
+struct TwoSum {
+  double sum;
+  double error;
+};
+
+inline TwoSum two_sum(double a, double b) noexcept {
+  const double sum = a + b;
+  const double bb = sum - a;
+  return TwoSum{sum, (a - (sum - bb)) + (b - bb)};
+}
+
+// Log-normal density exp(-(ln sigma + z + ln sqrt(2 pi) + ln x)) with
+// z = (ln x - mu)^2 / (2 sigma^2). The exponent is summed with error terms
+// kept, and the rounding errors re-enter as a second exp factor.
+double lognormal_pdf(double x, double mean, double sd) noexcept {
+  constexpr double kLogSqrt2Pi = 0.9189385332046728;
+  const double d = std::log(x) - mean;
+  const double z = (d * d) / (2.0 * (sd * sd));
+  const TwoSum first = two_sum(std::log(sd), z);
+  const TwoSum second = two_sum(first.sum, kLogSqrt2Pi);
+  const double log_x = std::log(x);
+  // The final sum swaps the roles of its operands in the error term.
+  const double total = log_x + second.sum;
+  const double bb = total - second.sum;
+  const double third_error = (second.sum - (total - bb)) + (log_x - bb);
+  const double error = (first.error + second.error) + third_error;
+  return std::exp(-total) * std::exp(error);
+}
+
 // LOGNORM.DIST(x, mean, sd, cumulative). The log-normal distribution
 // parameterised by (mean, sd) on the log scale:
 //   CDF: Phi((ln x - mean) / sd)
-//   PDF: 1 / (x * sd * sqrt(2*pi)) * exp(-(ln x - mean)^2 / (2 sd^2))
+//   PDF: see `lognormal_pdf`
 // #NUM! on x <= 0, sd <= 0.
 Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto parsed = read_triple_cumulative(args);
@@ -455,8 +596,7 @@ Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (parsed.value().cumulative) {
     return finalize(stats::normal_cdf(z));
   }
-  const double r = std::exp(-0.5 * z * z) / (x * sd * std::sqrt(2.0 * kDistPi));
-  return finalize(r);
+  return finalize(lognormal_pdf(x, mean, sd));
 }
 
 // LOGNORM.INV(p, mean, sd) - inverse log-normal CDF. Computed as
