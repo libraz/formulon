@@ -1156,16 +1156,6 @@ entries:
     prefer: formulon
     first_noted: 2026-10-14
     last_verified_excel_version: "16.113.4"
-  # A series filter that leaves one visible series on a chart with no
-  # `c:title` and autoTitleDeleted=0 lands in the same undetermined state.
-  - ids: [edit_format_08_scatter, edit_format_17_area, edit_format_57_bar]
-    applies_to: [mac-365-ja_JP]
-    cause: non-identifiable
-    mode: skip-oracle
-    reason: "Each case filters a chart down to one visible series while its title stays absent (no c:title, autoTitleDeleted=0). On re-save Excel adds an automatic c:title to some such charts and not to others with the same part structure (it does for line_standard, not for line_markers), so the re-saved title kind does not follow from the file. Every other formatting value in these cases reads back as Formulon wrote it. Same behaviour as chart_absent_title_display_undetermined."
-    prefer: formulon
-    first_noted: 2026-10-14
-    last_verified_excel_version: "16.113.4"
   - id: chart_absent_title_display_undetermined
     applies_to: [mac-365-ja_JP]
     cause: non-identifiable
