@@ -36,9 +36,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
 #include <limits>
 
+#include "eval/stats/horner.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -557,18 +557,6 @@ constexpr double kTailDenFar[] = {
     0x1.269bff1f8c190p-49, 0x1.31446f740b9e0p-23, 0x1.35c2c496374bfp-16, 0x1.9c8bc979dc5d7p-11,
     0x1.e76f93215462ap-7,  0x1.186eb183443fbp-3,  0x1.331d34fc7d77fp-1,  0x1.0000000000000p+0,
 };
-
-// Horner in `y` with separate multiply and add (no FMA); a multiply result
-// below DBL_MIN is flushed to zero like Excel's.
-template <std::size_t N>
-double horner(const double (&c)[N], double y) noexcept {
-  double acc = c[0];
-  for (std::size_t i = 1; i < N; ++i) {
-    acc = flush_subnormal(acc * y);
-    acc += c[i];
-  }
-  return acc;
-}
 
 double erfc_positive(double v) noexcept;
 

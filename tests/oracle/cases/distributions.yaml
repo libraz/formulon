@@ -79,6 +79,7 @@ cases:
   - id: binom_pmf_fair_coin
     description: "BINOM(10, 0.5) PMF at 5 = 252/1024 = 0.24609375"
     formula: "=BINOM.DIST(5, 10, 0.5, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_cdf_fair_coin
     description: "P(X<=5) for BINOM(10, 0.5) ~ 0.623047"
@@ -87,10 +88,12 @@ cases:
   - id: binom_edge_zero_success
     description: "P(X=0) for BINOM(10, 0.5) = 2^-10 ~ 0.000977"
     formula: "=BINOM.DIST(0, 10, 0.5, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_edge_all_success
     description: "P(X=10) for BINOM(10, 0.5) = 2^-10 ~ 0.000977"
     formula: "=BINOM.DIST(10, 10, 0.5, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_out_of_range_is_num
     description: "number_s > trials yields #NUM!"
@@ -100,14 +103,17 @@ cases:
   - id: poisson_pmf_mean3
     description: "Poisson(3) PMF at 2 ~ 0.224042"
     formula: "=POISSON.DIST(2, 3, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_cdf_mean3
     description: "Poisson(3) CDF at 2 ~ 0.423190"
     formula: "=POISSON.DIST(2, 3, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_zero_count
     description: "Poisson(3) PMF at 0 = e^-3 ~ 0.049787"
     formula: "=POISSON.DIST(0, 3, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_negative_x_is_num
     description: "x < 0 yields #NUM!"
@@ -189,6 +195,7 @@ cases:
   # -- GAUSS / PHI ---------------------------------------------------------
   - id: gauss_zero
     formula: "=GAUSS(0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gauss_one
     description: "NORM.S.DIST(1, TRUE) - 0.5 ~ 0.341345"
@@ -343,10 +350,12 @@ cases:
   - id: gauss_two
     description: "NORM.S.DIST(2, TRUE) - 0.5 ~ 0.477250"
     formula: "=GAUSS(2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gauss_large
     description: "Large z approaches 0.5 (upper tail vanishes)"
     formula: "=GAUSS(6)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- NEGBINOM.DIST (extra perspectives) ----------------------------------
   - id: negbinom_dist_zero_failures
@@ -415,6 +424,7 @@ cases:
   - id: poisson_dist_large_mean
     description: "Poisson(10) CDF at 5 ~ 0.067086"
     formula: "=POISSON.DIST(5, 10, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Measured edge cases ------------------------------------------------
   - id: binominv_p0
@@ -437,3 +447,4 @@ cases:
   - id: pf_binomdist
     description: "Excel 365: 0.49999999999999994"
     formula: "=BINOM.DIST(1,2.9999999,0.5,FALSE)"
+    tolerance: { abs: 0, rel: 0 }

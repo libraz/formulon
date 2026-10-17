@@ -47,6 +47,7 @@ cases:
   # -- BINOMDIST -----------------------------------------------------------
   - id: binomdist_pmf
     formula: "=BINOMDIST(5, 10, 0.5, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binomdist_cdf
     formula: "=BINOMDIST(5, 10, 0.5, TRUE)"
@@ -57,21 +58,26 @@ cases:
   # -- POISSON -------------------------------------------------------------
   - id: poisson_pmf
     formula: "=POISSON(3, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_cdf
     formula: "=POISSON(3, 2, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_mean_zero_pmf_at_positive_k
     description: "Mac Excel: mean=0 is a degenerate point mass at 0 — PMF(k>0) = 0"
     formula: "=POISSON(1, 0, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_mean_zero_pmf_at_zero
     description: "Mac Excel: PMF(0) at mean=0 is 1 (all mass concentrated at 0)"
     formula: "=POISSON(0, 0, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_mean_zero_cdf
     description: "Mac Excel: CDF at any k>=0 with mean=0 is 1"
     formula: "=POISSON(3, 0, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: poisson_mean_negative_is_num
     formula: "=POISSON(1, -1, FALSE)"
@@ -89,10 +95,12 @@ cases:
   # -- CHIDIST / CHIINV ----------------------------------------------------
   - id: chidist_right_tail
     formula: "=CHIDIST(5, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chidist_at_zero_is_one
     description: "Right-tail CDF at x=0 equals 1 (entire mass on the right)"
     formula: "=CHIDIST(0, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chidist_negative_x_is_num
     formula: "=CHIDIST(-1, 2)"
@@ -116,9 +124,11 @@ cases:
   # -- GAMMADIST / GAMMAINV -----------------------------------------------
   - id: gammadist_cdf
     formula: "=GAMMADIST(1, 2, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammadist_pdf
     formula: "=GAMMADIST(1, 2, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammainv_median
     formula: "=GAMMAINV(0.5, 2, 1)"
@@ -273,6 +283,7 @@ cases:
   - id: chidist_large_x
     description: "Right tail at x large -> near 0"
     formula: "=CHIDIST(20, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chidist_df_zero_is_num
     description: "df < 1 -> #NUM!"
@@ -319,6 +330,7 @@ cases:
   - id: gammadist_at_zero_cdf
     description: "CDF at x=0 with alpha>0 = 0"
     formula: "=GAMMADIST(0, 2, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammadist_negative_x_is_num
     formula: "=GAMMADIST(-1, 2, 1, TRUE)"

@@ -23,6 +23,7 @@
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -214,15 +215,18 @@ Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ---------------------------------------------------------------------------
 
 // GAUSS(x) - probability that a standard-normal variable falls in [0, x].
-// Equivalent to `NORM.S.DIST(x, TRUE) - 0.5`, i.e.
-// `normal_cdf(x) - 0.5`. Defined for all finite x.
+// `NORM.S.DIST(x, TRUE) - 0.5`, except that below 1e-15 the cancellation is
+// avoided with `erf(x * -sqrt(1/2)) * -0.5`. Defined for all finite x.
 Value Gauss(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto x_arg = read_number_arg(args, 0);
   if (!x_arg) {
     return Value::error(x_arg.error());
   }
   const double x = x_arg.value();
-  return finite_number_result(stats::normal_cdf(x) - 0.5);
+  const double r = std::fabs(x) > 1e-15
+                       ? stats::normal_cdf(x) - 0.5
+                       : flush_subnormal(stats::erf_excel(flush_subnormal(x * -0.7071067811865476)) * -0.5);
+  return finite_number_result(r);
 }
 
 // PHI(x) - standard-normal PDF: exp(-x^2 / 2) / sqrt(2 * pi). Defined for

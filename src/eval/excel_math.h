@@ -6,6 +6,8 @@
 //                   expansion below 2^-51, 2 * atanh(x / (x + 2)) in between.
 //   excel_expm1(x)  exp(x) - 1 for |x| > 1, x itself below 2^-52, otherwise the
 //                   error-compensated ((u - 1) + err) * x / log(u) with u = exp(x).
+//
+// Multiplies and divides flush a subnormal result to zero, as Excel's do.
 
 #ifndef FORMULON_EVAL_EXCEL_MATH_H_
 #define FORMULON_EVAL_EXCEL_MATH_H_
@@ -13,6 +15,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+
+#include "utils/subnormal_flush.h"
 
 namespace formulon {
 namespace eval {
@@ -29,21 +33,24 @@ inline std::uint64_t bits_of(double x) noexcept {
 inline double atanh_series(double u) noexcept {
   const double sign = u < 0.0 ? -1.0 : 1.0;
   const double a = std::fabs(u);
-  const double u2 = u * u;
+  if (a == 0.0) {
+    return 0.0;
+  }
+  const double u2 = flush_subnormal(u * u);
   constexpr double kEps = 2.220446049250313e-16;
   double k = 1.0;
   double term = a;
   double sum = 0.0;
   while (true) {
-    term = ((k / (k + 2.0)) * u2) * term;
+    term = flush_subnormal(flush_subnormal(flush_subnormal(k / (k + 2.0)) * u2) * term);
     sum = sum + term;
-    if (kEps * sum > term) {
+    if (flush_subnormal(kEps * sum) > term) {
       break;
     }
     k = k + 2.0;
   }
   sum = sum + a;
-  return sum * sign;
+  return flush_subnormal(sum * sign);
 }
 
 }  // namespace excel_math_detail
@@ -56,9 +63,9 @@ inline double excel_log1p(double x) noexcept {
     return std::log(x + 1.0);
   }
   if (std::fabs(x) <= 4.440892098500626e-16) {
-    return (x * -0.5 + 1.0) * x;
+    return flush_subnormal((flush_subnormal(x * -0.5) + 1.0) * x);
   }
-  return excel_math_detail::atanh_series(x / (x + 2.0)) * 2.0;
+  return flush_subnormal(excel_math_detail::atanh_series(flush_subnormal(x / (x + 2.0))) * 2.0);
 }
 
 inline double excel_expm1(double x) noexcept {
@@ -76,7 +83,7 @@ inline double excel_expm1(double x) noexcept {
   const double w3 = -1.0 - e1;
   const double c = (u - w2) + w3;
   const double y = v + c;
-  return (y * x) / std::log(u);
+  return flush_subnormal(flush_subnormal(y * x) / std::log(u));
 }
 
 }  // namespace eval

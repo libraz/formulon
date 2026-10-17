@@ -24,6 +24,7 @@
 
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
+#include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -103,24 +104,17 @@ Value NormSInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(InverseStandardNormal(p.value()));
 }
 
-// Log-PMF of Binomial(n, p) at k: computes
-//   lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1) + k*log(p) + (n-k)*log(1-p)
-// with explicit handling for the boundary probabilities p == 0 and
-// p == 1 where log(p) or log(1-p) would be -inf. Returns the PMF
-// itself (exponentiated) so callers do not need to re-exp for each k.
+// PMF of Binomial(n, p) at k: `stats::dbinom_raw`, with the boundary
+// probabilities p == 0 and p == 1 (where its deviance terms are undefined)
+// answered directly.
 double BinomPmf(double k, double n, double prob) {
-  // Boundary cases: the generic log-space formula would produce
-  // NaN from 0 * (-inf). Handle them directly so the formula stays
-  // correct at the endpoints.
   if (prob == 0.0) {
     return k == 0.0 ? 1.0 : 0.0;
   }
   if (prob == 1.0) {
     return k == n ? 1.0 : 0.0;
   }
-  const double log_pmf = stats::log_gamma(n + 1.0) - stats::log_gamma(k + 1.0) - stats::log_gamma(n - k + 1.0) +
-                         k * std::log(prob) + (n - k) * std::log(1.0 - prob);
-  return std::exp(log_pmf);
+  return stats::dbinom_raw(n, prob, k);
 }
 
 // Closed-form binomial CDF. See the declaration in `stats_helpers.h` for
@@ -171,17 +165,10 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(r);
 }
 
-// Log-space PMF of Poisson(mean) at k: exp(-mean + k*log(mean) - lgamma(k+1)).
-// Assumes `mean > 0` and `k >= 0`; callers enforce both.
-static double PoissonPmf(double k, double mean) {
-  const double log_pmf = -mean + k * std::log(mean) - stats::log_gamma(k + 1.0);
-  return std::exp(log_pmf);
-}
-
 // Closed-form Poisson CDF. See the declaration in `stats_helpers.h`; the
 // identity is `P(X <= k) = Q(k + 1, mean)`.
 double PoissonCdf(double k, double mean) noexcept {
-  return stats::q_gamma(k + 1.0, mean);
+  return stats::gamma_ratio_excel(k + 1.0, mean, true);
 }
 
 // POISSON.DIST(x, mean, cumulative) - Poisson distribution PMF or CDF.
@@ -203,35 +190,23 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   }
   if (mean == 0.0) {
     // Degenerate distribution: all mass at k = 0. CDF is 1 at any x >= 0;
-    // PMF is 1 at k == 0 and 0 elsewhere. Handled explicitly so the log-
-    // space PoissonPmf doesn't hit log(0) = -inf.
+    // PMF is 1 at k == 0 and 0 elsewhere. Handled explicitly so the density
+    // never sees log(0).
     if (input.value().cumulative) {
       return Value::number(1.0);
     }
     return Value::number(x == 0.0 ? 1.0 : 0.0);
   }
-  double r;
-  if (input.value().cumulative) {
-    if (x >= kMaxCumulativeTerms) {
-      r = PoissonCdf(x, mean);
-    } else {
-      r = sum_pmf(0.0, x, [&](double i) { return PoissonPmf(i, mean); });
-    }
-  } else {
-    r = PoissonPmf(x, mean);
-  }
+  const double r = input.value().cumulative ? PoissonCdf(x, mean) : stats::dpois_raw(mean, x);
   return finite_number_result(r);
 }
 
-// Chi-squared PDF at `x` with `df` degrees of freedom, evaluated in log
-// space to stay stable for large `df`:
-//   pdf(x) = exp(-x/2 + (df/2-1)*log(x) - (df/2)*log(2) - lgamma(df/2))
-// Callers must pre-reject `df < 1`, `x < 0`, and handle the `x == 0`
-// boundary (where `log(0) == -inf` would produce NaN). When `df == 2` the
-// `(df/2 - 1) * log(x)` term is `0 * log(x)`, which is 0 at x == 0 but
-// surfaces as NaN via IEEE-754; callers short-circuit the boundary.
+// Chi-squared PDF at `x > 0`: the gamma density with shape `df / 2` and
+// scale 2, `dpois_raw(x / 2, df / 2) * (df / 2) / x`. Callers pre-reject
+// `df < 1` and `x < 0` and handle the `x == 0` boundary.
 static double ChisqPdf(double x, double df) noexcept {
-  return std::exp(-0.5 * x + (0.5 * df - 1.0) * std::log(x) - 0.5 * df * std::log(2.0) - stats::log_gamma(0.5 * df));
+  const double a = 0.5 * df;
+  return flush_subnormal(stats::dpois_raw(flush_subnormal(x / 2.0), a) * flush_subnormal(a / x));
 }
 
 // Upper bound for `df` accepted by Excel 365's CHISQ.* family. Values above
@@ -269,11 +244,7 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   double r;
   if (input.value().cumulative) {
-    if (x == 0.0) {
-      r = 0.0;
-    } else {
-      r = stats::p_gamma(0.5 * df, 0.5 * x);
-    }
+    r = stats::gamma_ratio_excel(0.5 * df, flush_subnormal(x * 0.5), false);
   } else {
     // PDF with Excel-observed boundary handling at `x == 0`:
     //   df == 1: pdf diverges  -> #NUM!
@@ -305,7 +276,7 @@ Value ChisqDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (x < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = (x == 0.0) ? 1.0 : stats::q_gamma(0.5 * df, 0.5 * x);
+  const double r = stats::gamma_ratio_excel(0.5 * df, flush_subnormal(x * 0.5), true);
   return finite_number_result(r);
 }
 

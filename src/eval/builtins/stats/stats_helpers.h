@@ -223,8 +223,8 @@ double InverseStandardNormal(double p);
 //
 // A request that needs more terms than this is answered by a closed form
 // in constant time where one is accurate enough to stand behind, and
-// refused with `#NUM!` where it is not. The Poisson CDF goes through
-// `stats::q_gamma`; the binomial family goes through
+// refused with `#NUM!` where it is not. The Poisson CDF is a single
+// `stats::gamma_ratio_excel` call at any `k`; the binomial family goes through
 // `stats::regularized_incomplete_beta`, subject to
 // `beta_shapes_are_resolvable` below.
 //
@@ -290,7 +290,7 @@ double BinomCdf(double k, double n, double prob) noexcept;
 
 // Cumulative distribution function of Poisson(mean) at k, in closed form
 // via `P(X <= k) = Q(k + 1, mean)` (the regularized upper incomplete
-// gamma). Assumes `k >= 0` and `mean > 0`; the degenerate `mean == 0`
+// gamma, `stats::gamma_ratio_excel`). Assumes `k >= 0` and `mean > 0`; the degenerate `mean == 0`
 // point mass is handled by the caller. Constant time regardless of `k`,
 // and NaN when the underlying series cannot converge, which callers
 // surface as `#NUM!`.

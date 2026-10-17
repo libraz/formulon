@@ -9,8 +9,8 @@
 // Every entry is scalar-only (no range expansion). Arguments are coerced
 // via `coerce_to_number` / `coerce_to_bool`; error-typed arguments
 // short-circuit via the dispatcher before the impl runs. The CDF routines
-// lean on `stats::p_gamma` and `stats::regularized_incomplete_beta` from
-// `eval/stats/special_functions.h`; the inverses use a shared
+// lean on `stats::gamma_ratio_excel` and `stats::regularized_incomplete_beta` from
+// `eval/stats/incomplete_gamma.h` and `eval/stats/special_functions.h`; the inverses use a shared
 // bracket-then-Newton helper defined locally in this TU.
 //
 // Numerical notes:
@@ -44,9 +44,11 @@
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -346,14 +348,11 @@ Value Gammaln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finalize(stats::log_gamma(x));
 }
 
-// Gamma PDF at x >= 0 with shape `alpha` and scale `beta`:
-//   pdf(x) = 1 / (beta^alpha * Γ(alpha)) * x^(alpha-1) * exp(-x/beta)
-// Evaluated in log space for stability at large alpha; callers reject
-// x < 0, alpha <= 0, beta <= 0 up front.
+// Gamma PDF at x > 0 with shape `alpha` and scale `beta`:
+// `dpois_raw(x / beta, alpha) * (alpha / x)`. Callers reject x < 0,
+// alpha <= 0, beta <= 0 up front.
 double GammaPdf(double x, double alpha, double beta_scale) noexcept {
-  const double log_pdf =
-      -alpha * std::log(beta_scale) - stats::log_gamma(alpha) + (alpha - 1.0) * std::log(x) - x / beta_scale;
-  return std::exp(log_pdf);
+  return flush_subnormal(stats::dpois_raw(flush_subnormal(x / beta_scale), alpha) * flush_subnormal(alpha / x));
 }
 
 // GAMMA.DIST(x, alpha, beta, cumulative). #NUM! on x < 0, alpha <= 0,
@@ -370,10 +369,7 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double alpha = parsed.value().second;
   const double beta_scale = parsed.value().third;
   if (parsed.value().cumulative) {
-    if (x == 0.0) {
-      return finalize(0.0);
-    }
-    return finalize(stats::p_gamma(alpha, x / beta_scale));
+    return finalize(stats::gamma_ratio_excel(alpha, flush_subnormal(x / beta_scale), false));
   }
   if (x == 0.0) {
     if (alpha <= 1.0) {

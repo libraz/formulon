@@ -12,22 +12,27 @@ cases:
   - id: chisq_dist_cdf_5_4df
     description: "CDF of chi-squared(df=4) at x=5 ~ 0.712703"
     formula: "=CHISQ.DIST(5, 4, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_pdf_5_4df
     description: "PDF of chi-squared(df=4) at x=5 ~ 0.102626"
     formula: "=CHISQ.DIST(5, 4, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_cdf_0
     description: "CDF at x=0 is 0 for any df"
     formula: "=CHISQ.DIST(0, 4, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_pdf_df2_x0
     description: "PDF at x=0 with df=2 is exactly 0.5 (exponential rate 1/2)"
     formula: "=CHISQ.DIST(0, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_cdf_large_x
     description: "CDF at x=100 with df=10 ~ 1"
     formula: "=CHISQ.DIST(100, 10, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_negative_x_is_num
     description: "x < 0 yields #NUM!"
@@ -45,10 +50,12 @@ cases:
   - id: chisq_dist_rt_basic
     description: "Right-tailed CDF of chi-squared(df=4) at 5 ~ 0.287297"
     formula: "=CHISQ.DIST.RT(5, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_rt_plus_dist_is_1
     description: "CHISQ.DIST(..., TRUE) + CHISQ.DIST.RT == 1"
     formula: "=CHISQ.DIST(5, 4, TRUE) + CHISQ.DIST.RT(5, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- CHISQ.INV -----------------------------------------------------------
   - id: chisq_inv_95pct_4df
@@ -89,23 +96,28 @@ cases:
   - id: chisq_dist_df_one_pdf_at_one
     description: "df=1 PDF at x=1 — sharp peak"
     formula: "=CHISQ.DIST(1, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_df_huge_normal_like
     description: "df=10000 — by CLT, chi-sq approaches a shifted normal"
     formula: "=CHISQ.DIST(10000, 10000, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_fractional_df_truncates
     description: "df=4.7 truncates to 4 — Excel allows fractional df for chi-squared"
     formula: "=CHISQ.DIST(5, 4.7, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_fractional_df_at_1_5
     description: "df=1.5 — chi-squared accepts non-integer df"
     formula: "=CHISQ.DIST(2, 1.5, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- CHISQ.DIST.RT: edges -----------------------------------------------
   - id: chisq_dist_rt_at_zero
     description: "Right-tail at x=0 is 1.0"
     formula: "=CHISQ.DIST.RT(0, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_rt_negative_x_is_num
     formula: "=CHISQ.DIST.RT(-1, 4)"
@@ -113,6 +125,7 @@ cases:
   - id: chisq_dist_rt_huge_x
     description: "Right-tail at very large x — vanishingly small probability"
     formula: "=CHISQ.DIST.RT(100, 4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_rt_zero_df_is_num
     formula: "=CHISQ.DIST.RT(5, 0)"
@@ -163,10 +176,12 @@ cases:
   # -- PDF at boundary ---------------------------------------------------
   - id: chisq_dist_pdf_df_one_at_x_one
     formula: "=CHISQ.DIST(1, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_pdf_df3_x0
     description: "PDF at x=0 with df=3 — value is 0 (chi-squared with df>=2 has zero density at zero)"
     formula: "=CHISQ.DIST(0, 3, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_dist_rt_df_1e10
     description: "CHISQ.DIST.RT at the centre of df=1E10"
