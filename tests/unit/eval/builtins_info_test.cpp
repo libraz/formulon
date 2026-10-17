@@ -5,9 +5,9 @@
 // The IS* family is registered with `propagate_errors = false` so the
 // dispatcher in `tree_walker` hands them error-typed inputs verbatim;
 // these tests pin both the per-kind result table and the
-// error-passthrough behaviour. `N` and `T` use the default propagation
-// rule (errors short-circuit before the body runs); their tests confirm
-// that as well as the per-kind coercion table.
+// error-passthrough behaviour. `N` and `T` propagate errors; their tests
+// confirm that as well as the per-kind coercion table, and that `N` reads a
+// reference argument's first cell.
 //
 // Most cases are exercised end-to-end via `EvalSource` (parse + evaluate)
 // so the dispatcher path is in scope. ISBLANK's TRUE case is exercised by
@@ -423,9 +423,39 @@ TEST(BuiltinsN, EmptyTextIsZero) {
 }
 
 TEST(BuiltinsN, BlankIsZero) {
-  const Value v = CallSingle("N", Value::blank());
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=N(A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsN, ReferenceReadsItsFirstCell) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::boolean(true));
+  s.set_cell_value(1U, 0U, Value::number(2.0));
+  s.set_cell_value(0U, 1U, Value::number(3.0));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "Sheet1!$A$2:$B$3")));
+  const struct {
+    const char* src;
+    double expected;
+  } cases[] = {{"=N(A1:A3)", 1.0}, {"=N(A1:B2)", 1.0},       {"=N(A2:A3)", 2.0},
+               {"=N(Rng)", 2.0},   {"=N(A1:B2 B1:B2)", 3.0}, {"=N(OFFSET(A1,1,0,2,1))", 2.0},
+               {"=N(C1:C3)", 0.0}};
+  for (const auto& c : cases) {
+    const Value v = EvalSourceIn(c.src, wb, s);
+    ASSERT_TRUE(v.is_number()) << c.src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), c.expected) << c.src;
+  }
+}
+
+TEST(BuiltinsN, ArrayIsCoercedElementByElement) {
+  const Value v = EvalSource("=N({1,TRUE,\"a\"})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_EQ(v.as_array_cells()[1].as_number(), 1.0);
+  EXPECT_EQ(v.as_array_cells()[2].as_number(), 0.0);
 }
 
 TEST(BuiltinsN, ErrorPropagates) {

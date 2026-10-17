@@ -85,9 +85,9 @@ inline bool registration_name_in(std::string_view name, const std::array<std::st
 }
 
 inline FunctionDef::ResultShape infer_builtin_result_shape(std::string_view name, bool accepts_ranges) noexcept {
-  static constexpr std::array<std::string_view, 17> kBroadcast = {
-      "ABS",  "EXP",  "INT",   "LN",    "LOG", "N",        "ROUND",   "ROUNDDOWN", "ROUNDUP",
-      "SIGN", "SQRT", "VALUE", "POWER", "MOD", "QUOTIENT", "CEILING", "FLOOR"};
+  static constexpr std::array<std::string_view, 16> kBroadcast = {
+      "ABS",  "EXP",  "INT",   "LN",    "LOG", "ROUND",    "ROUNDDOWN", "ROUNDUP",
+      "SIGN", "SQRT", "VALUE", "POWER", "MOD", "QUOTIENT", "CEILING",   "FLOOR"};
   static constexpr std::array<std::string_view, 15> kReduce = {"SUM",     "SUMSQ", "PRODUCT", "AVERAGE", "MIN",
                                                                "MAX",     "COUNT", "COUNTA",  "CONCAT",  "ROWS",
                                                                "COLUMNS", "AREAS", "SHEETS",  "GCD",     "LCM"};

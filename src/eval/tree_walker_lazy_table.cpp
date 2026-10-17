@@ -213,6 +213,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar},
     {"MMULT", &eval_mmult_lazy, LazyResultShape::kArray},
     {"MONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast},
+    {"N", &eval_n_lazy, LazyResultShape::kBroadcast},
     {"NETWORKDAYS", &eval_networkdays_lazy, LazyResultShape::kScalar},
     {"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy, LazyResultShape::kScalar},
     {"NOW", &eval_datetime_lazy, LazyResultShape::kScalar},

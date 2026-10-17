@@ -96,39 +96,10 @@ Value Na(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Coercion-style info functions --------------------------------------
 //
-// `N` and `T` propagate errors via the dispatcher's default short-circuit
-// (no flag override needed). They differ from `VALUE` / generic
-// `coerce_to_*` in that they NEVER fail: any non-matching input maps to
-// the function's neutral element (0 for `N`, "" for `T`).
-
-// N(value) - coerce to a Number with Excel's narrow rules:
-//   - Number          -> the number unchanged
-//   - Bool            -> 1.0 for TRUE, 0.0 for FALSE
-//   - Text            -> 0.0 ALWAYS (N intentionally does not parse text;
-//                        contrast with VALUE, which does)
-//   - Blank           -> 0.0
-//   - Error           -> propagated by the dispatcher before this body runs
-Value N(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  const Value& v = args[0];
-  switch (v.kind()) {
-    case ValueKind::Number:
-      return v;
-    case ValueKind::Bool:
-      return Value::number(v.as_boolean() ? 1.0 : 0.0);
-    case ValueKind::Text:
-    case ValueKind::Blank:
-      return Value::number(0.0);
-    case ValueKind::Error:
-      // Unreachable in practice: dispatcher short-circuits errors. Defensive
-      // fall-through keeps the switch exhaustive.
-      return v;
-    case ValueKind::Array:
-    case ValueKind::Ref:
-    case ValueKind::Lambda:
-      return Value::error(ErrorCode::Value);
-  }
-  return Value::error(ErrorCode::Value);
-}
+// `T` propagates errors via the dispatcher's default short-circuit (no flag
+// override needed). It differs from `VALUE` / generic `coerce_to_*` in that
+// it NEVER fails: any non-matching input maps to "". `N`, which reads a
+// reference argument's first cell, is lazy (`eval_n_lazy`).
 
 // T(value) - coerce to Text with Excel's narrow rules:
 //   - Text            -> the text unchanged
@@ -331,8 +302,8 @@ Value Info(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 void register_info_builtins(FunctionRegistry& registry) {
   // The IS* family must inspect error-typed arguments verbatim, so each
   // entry clears `propagate_errors` to opt out of the dispatcher's default
-  // left-most-error short-circuit. `N` and `T` use the default (errors
-  // propagate before the body runs).
+  // left-most-error short-circuit. `T` uses the default (errors propagate
+  // before the body runs).
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"ISNUMBER", 1u, 1u, &IsNumber, false},
       {"ISTEXT", 1u, 1u, &IsText, false},
@@ -342,7 +313,6 @@ void register_info_builtins(FunctionRegistry& registry) {
       {"ISERR", 1u, 1u, &IsErr, false},
       {"ISNA", 1u, 1u, &IsNa, false},
       {"NA", 0u, 0u, &Na},
-      {"N", 1u, 1u, &N},
       {"T", 1u, 1u, &T},
       builtins_detail::analysis_toolpak({"ISEVEN", 1u, 1u, &IsEven}),
       builtins_detail::analysis_toolpak({"ISODD", 1u, 1u, &IsOdd}),

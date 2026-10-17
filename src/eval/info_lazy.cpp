@@ -82,6 +82,26 @@ bool is_static_reference_shape(const parser::AstNode& node) noexcept {
   }
 }
 
+// N's coercion of one value: a number as it is, TRUE / FALSE as 1 / 0, an
+// error as it is, and anything else (text, blank) as 0. Text is never parsed.
+Value number_of(const Value& v) {
+  switch (v.kind()) {
+    case ValueKind::Number:
+    case ValueKind::Error:
+      return v;
+    case ValueKind::Bool:
+      return Value::number(v.as_boolean() ? 1.0 : 0.0);
+    case ValueKind::Text:
+    case ValueKind::Blank:
+      return Value::number(0.0);
+    case ValueKind::Array:
+    case ValueKind::Ref:
+    case ValueKind::Lambda:
+      return Value::error(ErrorCode::Value);
+  }
+  return Value::error(ErrorCode::Value);
+}
+
 // Locates `sheet` inside `workbook` by pointer identity and returns
 // the 1-based sheet number on success, 0 on failure. Pointer identity
 // is sufficient because `EvalContext` holds a raw pointer into the
@@ -238,13 +258,60 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     stripped.push_back(c);
     ++i;
   }
-  const std::string shown = localize_formula_text(stripped, current_eval_profile());
+  std::string shown = localize_formula_text(stripped, current_eval_profile());
+  // A legacy array formula shows in braces.
+  if (cell->array_block_rows != 0U) {
+    shown.insert(shown.begin(), '{');
+    shown.push_back('}');
+  }
   char* buf = static_cast<char*>(arena.allocate(shown.size(), alignof(char)));
   if (buf == nullptr) {
     return Value::error(ErrorCode::Value);
   }
   std::copy(shown.begin(), shown.end(), buf);
   return Value::text(std::string_view(buf, shown.size()));
+}
+
+Value eval_n_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  // A reference reads its first cell rather than each of its cells.
+  const parser::AstNode& target = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  const parser::NodeKind kind = target.kind();
+  if (kind == parser::NodeKind::Ref || kind == parser::NodeKind::RangeOp || kind == parser::NodeKind::IntersectOp ||
+      kind == parser::NodeKind::NameRef ||
+      (kind == parser::NodeKind::Call && is_reference_call_name(target.as_call_name()))) {
+    std::string_view sheet;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
+    ErrorCode err = ErrorCode::Value;
+    if (resolve_reference_rect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+      parser::Reference first{};
+      first.sheet = sheet;
+      first.row = top;
+      first.col = left;
+      return number_of(ctx.resolve_ref(first, arena, registry));
+    }
+  }
+  const Value v = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (!v.is_array()) {
+    return number_of(v);
+  }
+  const std::uint32_t rows = v.as_array_rows();
+  const std::uint32_t cols = v.as_array_cols();
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const Value* cells = v.as_array_cells();
+  for (std::size_t i = 0; i < static_cast<std::size_t>(rows) * cols; ++i) {
+    buf[i] = number_of(cells[i]);
+  }
+  return Value::array(out);
 }
 
 Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
