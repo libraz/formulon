@@ -137,21 +137,17 @@ static Value large_small(const Value* args, std::uint32_t arity, bool want_large
   if (!k_raw) {
     return Value::error(k_raw.error());
   }
-  // LARGE snaps a near-integer k up; SMALL measured to truncate.
-  const double k = want_large ? snap_near_integer(k_raw.value()) : k_raw.value();
   auto xs_e = collect_direct_scalar_coerced(args, data_count);
   if (!xs_e) {
     return Value::error(xs_e.error());
   }
   std::vector<double>& xs = xs_e.value();
-  const auto n = static_cast<double>(xs.size());
-  if (xs.empty() || k_raw.value() < 1.0 || k > n) {
-    return Value::error(ErrorCode::Num);
+  const auto idx = builtins_detail::kth_ascending_position(k_raw.value(), xs.size(), want_large);
+  if (!idx) {
+    return Value::error(idx.error());
   }
-  const double idx_d = want_large ? std::trunc(n + 1.0 - k) : std::trunc(k);
-  const auto idx = static_cast<std::size_t>(idx_d);
-  numeric_aggregate_kernels::select_kth_preserving_sort_bits(xs, idx - 1u);
-  return Value::number(xs[idx - 1u]);
+  numeric_aggregate_kernels::select_kth_preserving_sort_bits(xs, idx.value() - 1u);
+  return Value::number(xs[idx.value() - 1u]);
 }
 
 Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {

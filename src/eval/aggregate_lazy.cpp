@@ -440,8 +440,9 @@ std::vector<bool> make_drop_mask(std::size_t n, bool use_hidden, const std::vect
 // Filters `cells` in place according to the options bit and the function
 // code's expected provenance:
 //
-//   * Errors: dropped silently when ignore_errors == true; the first error
-//     short-circuits the call and is written to `*out_err` otherwise.
+//   * Errors: dropped silently when ignore_errors == true. Otherwise COUNT
+//     skips them, COUNTA counts them, and for every other code the first
+//     error short-circuits the call and is written to `*out_err`.
 //   * COUNTA (code 3): keep every non-blank, plus blanks owned by a derived
 //     value array; raw-reference blanks are dropped.
 //   * Numeric modes (everything else): keep only Numbers; drop Bool / Text /
@@ -454,7 +455,11 @@ bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Valu
   kept.reserve(cells->size());
   for (const Value& v : *cells) {
     if (v.is_error()) {
-      if (ignore_errors) {
+      if (ignore_errors || code == kCodeCount) {
+        continue;
+      }
+      if (code == kCodeCountA) {
+        kept.push_back(v);  // an error cell is a non-blank cell
         continue;
       }
       *out_err = v;
@@ -523,21 +528,15 @@ Value run_counta(const std::vector<Value>& cells) {
   return Value::number(static_cast<double>(cells.size()));
 }
 
-// LARGE / SMALL — k must be a positive integer in [1, n]. k is truncated.
+// LARGE / SMALL share the standalone functions' k rule
+// (`builtins_detail::kth_ascending_position`).
 Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
+  const auto idx = builtins_detail::kth_ascending_position(k_raw, xs.size(), want_large);
+  if (!idx) {
+    return Value::error(idx.error());
   }
-  const double k_trunc = std::trunc(k_raw);
-  if (!std::isfinite(k_trunc) || k_trunc < 1.0 || k_trunc > static_cast<double>(xs.size())) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto k = static_cast<std::size_t>(k_trunc);
-  const auto target = want_large ? xs.size() - k : k - 1U;
-  numeric_aggregate_kernels::select_kth_preserving_sort_bits(xs, target);
-  // LARGE: k-th largest = xs[n - k]. SMALL: k-th smallest = xs[k - 1].
-  const double picked = want_large ? xs[xs.size() - k] : xs[k - 1];
-  return to_finite_value(picked);
+  numeric_aggregate_kernels::select_kth_preserving_sort_bits(xs, idx.value() - 1U);
+  return to_finite_value(xs[idx.value() - 1U]);
 }
 
 // PERCENTILE.INC. Domain / position-formula logic lives in
@@ -695,6 +694,11 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
     drop_hidden_cells(&cells, make_drop_mask(cells.size(), ignore_hidden, hidden, ignore_nested, nested));
     if (!apply_filters(&cells, code, ignore_errors, &err)) {
+      // An array k fails per element with the data error.
+      const Value k_for_error = eval_node(call.as_call_arg(3), arena, registry, ctx);
+      if (k_for_error.is_array()) {
+        return map_array(*k_for_error.as_array(), [&err](const Value&) { return err; }, arena);
+      }
       return err;
     }
     // k is a scalar metadata arg: errors propagate regardless of the

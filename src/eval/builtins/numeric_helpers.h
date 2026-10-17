@@ -192,6 +192,19 @@ inline double round_up_decimals(double x, int digits) noexcept {
   return x > 0.0 ? down + step : down - step;
 }
 
+/// 1-based ascending position of the k-th largest (`want_large`) or k-th
+/// smallest of `n` values: `#NUM!` when `k < 1` or the (near-integer-snapped
+/// for LARGE) k exceeds `n`. A fractional k picks LARGE's `trunc(n + 1 - k)`
+/// and SMALL's `trunc(k)`. Shared by LARGE / SMALL and AGGREGATE 14 / 15.
+inline Expected<std::size_t, ErrorCode> kth_ascending_position(double k_raw, std::size_t n, bool want_large) {
+  const double k = want_large ? snap_near_integer(k_raw) : k_raw;
+  const auto count = static_cast<double>(n);
+  if (n == 0U || k_raw < 1.0 || k > count) {
+    return ErrorCode::Num;
+  }
+  return static_cast<std::size_t>(want_large ? std::trunc(count + 1.0 - k) : std::trunc(k));
+}
+
 /// Reads a required numeric argument from `args[index]`; a non-finite value
 /// surfaces as `#NUM!` from `coerce_to_number`.
 inline Expected<double, ErrorCode> read_required_number(const Value* args, std::uint32_t index) {

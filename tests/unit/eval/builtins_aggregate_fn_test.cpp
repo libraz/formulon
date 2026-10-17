@@ -817,6 +817,40 @@ TEST(BuiltinsAggregate, AFamilyTextLiteralOutranksALaterError) {
   }
 }
 
+TEST(BuiltinsAggregateFn, FractionalKFollowsLargeAndSmall) {
+  Workbook wb = MakeOneToFive();
+  const Value large = EvalSourceIn("=AGGREGATE(14,0,A1:A5,1.5)", wb, wb.sheet(0));
+  ASSERT_TRUE(large.is_number());
+  EXPECT_DOUBLE_EQ(large.as_number(), 4.0);  // 1.5 selects the 2nd largest
+  const Value small = EvalSourceIn("=AGGREGATE(15,0,A1:A5,1.5)", wb, wb.sheet(0));
+  ASSERT_TRUE(small.is_number());
+  EXPECT_DOUBLE_EQ(small.as_number(), 1.0);
+  const Value below_one = EvalSourceIn("=AGGREGATE(14,0,A1:A5,0.5)", wb, wb.sheet(0));
+  ASSERT_TRUE(below_one.is_error());
+  EXPECT_EQ(below_one.as_error(), ErrorCode::Num);
+  const Value above_n = EvalSourceIn("=AGGREGATE(14,0,A1:A5,5.5)", wb, wb.sheet(0));
+  ASSERT_TRUE(above_n.is_error());
+  EXPECT_EQ(above_n.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsAggregateFn, CountSkipsAndCountaCountsErrorCells) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(3.0));
+  sheet.set_cell_value(1, 0, Value::error(ErrorCode::Div0));
+  sheet.set_cell_value(2, 0, Value::number(4.0));
+  sheet.set_cell_value(3, 0, Value::error(ErrorCode::NA));
+  const Value count = EvalSourceIn("=AGGREGATE(2,0,A1:A4)", wb, wb.sheet(0));
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+  const Value counta = EvalSourceIn("=AGGREGATE(3,0,A1:A4)", wb, wb.sheet(0));
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_DOUBLE_EQ(counta.as_number(), 4.0);
+  const Value counta_ignoring = EvalSourceIn("=AGGREGATE(3,2,A1:A4)", wb, wb.sheet(0));
+  ASSERT_TRUE(counta_ignoring.is_number());
+  EXPECT_DOUBLE_EQ(counta_ignoring.as_number(), 2.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
