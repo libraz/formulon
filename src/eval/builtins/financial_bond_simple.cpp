@@ -20,6 +20,7 @@
 
 #include "eval/builtins/financial_bond_simple.h"
 
+#include <cmath>
 #include <cstdint>
 
 #include "eval/builtins/financial_helpers.h"
@@ -75,6 +76,19 @@ struct MaturityYearFracs {
 };
 
 Expected<MaturityYearFracs, ErrorCode> maturity_year_fracs(const MaturityInterestArgs& in, bool date1904) {
+  if (in.basis == 1) {
+    // One year length, that of the issue-to-settlement span, divides all three
+    // serial differences.
+    auto year_span = day_count_span(in.issue, in.settlement, in.basis, date1904);
+    if (!year_span) {
+      return std::move(year_span.error());
+    }
+    const double year = year_span.value().year;
+    const double issue = std::trunc(in.issue);
+    const double settlement = std::trunc(in.settlement);
+    const double maturity = std::trunc(in.maturity);
+    return MaturityYearFracs{(settlement - issue) / year, (maturity - settlement) / year, (maturity - issue) / year};
+  }
   auto a_yf = yearfrac_for_basis(in.issue, in.settlement, in.basis, date1904);
   if (!a_yf) {
     return std::move(a_yf.error());
@@ -126,6 +140,9 @@ Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 //   DSM = YEARFRAC(settlement, maturity, basis)
 //   DIM = YEARFRAC(issue, maturity, basis)
 //   PRICEMAT = (100 + DIM * rate * 100) / (1 + DSM * yld) - A * rate * 100
+//
+// Under basis 1 the three terms are serial differences divided by one year
+// length B, that of the issue-to-settlement span (`maturity_year_fracs`).
 //
 // Domain per Microsoft docs:
 //   - issue >= settlement                 ->  #NUM!

@@ -238,10 +238,11 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
 //       TBILLEQ = (365 * discount) / (360 - discount * DSM)
 //
 //   if DSM > 182:
-//       a = DSM / 365
+//       a = DSM / Y            (Y = 366 when DSM == 366, else 365)
 //       price = 1 - discount * DSM / 360
 //       disc = a^2 - (2a - 1) * (1 - 1/price)
 //       TBILLEQ = (-a + sqrt(disc)) / (a - 0.5)
+//   evaluated in the operation order given at the long branch below.
 //
 // The long branch solves the quadratic arising from semi-annual
 // compounding on the bond-equivalent side; see Microsoft's TBILLEQ
@@ -270,30 +271,31 @@ Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool
     }
     return finalize((365.0 * rate) / denom);
   }
-  // Long branch: 182 < DSM. Semi-annual-compounding quadratic per the
-  // Microsoft TBILLEQ documentation:
+  // Long branch: 182 < DSM. The semi-annual-compounding quadratic, with
+  // Y = 366 only when DSM is exactly 366 and Excel's operation order:
   //
-  //   a = DSM / 365   (or DSM / 366 when DSM > 365, i.e. the span is
-  //                   exactly a one-year maturity across a leap-year
-  //                   anniversary — see D6 in the IronCalc oracle,
-  //                   14640 (1940-02-16) -> 15006 (1941-02-16))
-  //   price = 1 - rate * DSM / 360
-  //   disc = a^2 - (2a - 1) * (1 - 1/price)
-  //   TBILLEQ = (-a + sqrt(disc)) / (a - 0.5)
-  const double a = dsm / (dsm > 365.0 ? 366.0 : 365.0);
-  const double price = 1.0 - rate * dsm / 360.0;
-  if (price <= 0.0) {
+  //   p    = ((rate * 100) * DSM) / 360       P = (100 - p) / 100
+  //   A    = ((-2) * DSM) / Y                 Bq = ((2 * DSM) / Y - 1) * (1 - 1 / P)
+  //   disc = (DSM / Y)^2 - Bq
+  //   TBILLEQ = ((sqrt(disc) * 2) + A) / ((2 * DSM) / Y - 1)
+  const double year = dsm == 366.0 ? 366.0 : 365.0;
+  const double p = ((rate * 100.0) * dsm) / 360.0;
+  const double price_fraction = (100.0 - p) / 100.0;
+  if (price_fraction <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double disc = a * a - (2.0 * a - 1.0) * (1.0 - 1.0 / price);
+  const double a = ((-2.0) * dsm) / year;
+  const double bq = (((2.0 * dsm) / year) - 1.0) * (1.0 - 1.0 / price_fraction);
+  const double q = dsm / year;
+  const double disc = q * q - bq;
   if (disc < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double denom = a - 0.5;
+  const double denom = ((2.0 * dsm) / year) - 1.0;
   if (denom == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = (-a + std::sqrt(disc)) / denom;
+  const double result = ((std::sqrt(disc) * 2.0) + a) / denom;
   return finalize(result);
 }
 

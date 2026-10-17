@@ -324,3 +324,83 @@ cases:
   - id: pricemat_settle_eq_issue
     description: "Excel 365: #NUM!"
     formula: "=PRICEMAT(DATE(2008,2,15),DATE(2008,4,13),DATE(2008,2,15),0.061,0.061,0)"
+
+  - id: tbilleq_long_serial_37657_37893
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(37657,37893,0.007)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: tbilleq_long_serial_42162_42375
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(42162,42375,0.0227)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: tbilleq_long_serial_42497_42822
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(42497,42822,0.1412)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: tbilleq_long_serial_43298_43648
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(43298,43648,0.0273)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: tbilleq_long_serial_37131_37467
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(37131,37467,0.1955)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: tbilleq_long_serial_39174_39396
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(39174,39396,0.0887)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: tbilleq_long_serial_37492_37840
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(37492,37840,0.1158)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: tbilleq_long_serial_43791_44080
+    description: "TBILLEQ long branch in Excel operation order"
+    formula: "=TBILLEQ(43791,44080,0.0843)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_43983_44742_43845_0p05
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(43983,44742,43845,0.05,0.04,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_45350_45352_43889_0p0713
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(45350,45352,43889,0.0713,0.0291,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_43891_46813_43889_0p05
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(43891,46813,43889,0.05,0.04,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_43890_45715_43524_0p05
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(43890,45715,43524,0.05,0.04,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_43891_44256_43800_0p0713
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(43891,44256,43800,0.0713,0.0291,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_45350_46813_43524_0p05
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(45350,46813,43524,0.05,0.04,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_45352_46813_45351_0p0713
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(45352,46813,45351,0.0713,0.0291,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: pricemat_basis_1_serial_45350_45352_43524_0p05
+    description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=PRICEMAT(45350,45352,43524,0.05,0.04,1)"
+    tolerance: { abs: 0, rel: 0 }
