@@ -114,5 +114,47 @@ TEST(FormatDouble, FifteenSigDigitPrecision) {
   EXPECT_EQ(Format(2.0 / 3.0), "0.666666666666667");
 }
 
+std::string FormatLiteral(double v) {
+  std::string out;
+  format_formula_number(out, v);
+  return out;
+}
+
+TEST(FormatFormulaNumber, PositionalUpToTwentyOneCharacters) {
+  EXPECT_EQ(FormatLiteral(1e20), "100000000000000000000");
+  EXPECT_EQ(FormatLiteral(9.99999999999999e20), "999999999999999000000");
+  EXPECT_EQ(FormatLiteral(1.23456789012345e20), "123456789012345000000");
+  EXPECT_EQ(FormatLiteral(1e-19), "0.0000000000000000001");
+  EXPECT_EQ(FormatLiteral(2.5e-18), "0.0000000000000000025");
+  EXPECT_EQ(FormatLiteral(1.23456789012345e-5), "0.0000123456789012345");
+}
+
+TEST(FormatFormulaNumber, ScientificBeyondTwentyOneCharactersWithoutPadding) {
+  EXPECT_EQ(FormatLiteral(1e21), "1E+21");
+  EXPECT_EQ(FormatLiteral(1.5e21), "1.5E+21");
+  EXPECT_EQ(FormatLiteral(1.23456789012345e21), "1.23456789012345E+21");
+  EXPECT_EQ(FormatLiteral(1e-20), "1E-20");
+  EXPECT_EQ(FormatLiteral(2.5e-19), "2.5E-19");
+  EXPECT_EQ(FormatLiteral(1.2345e-18), "1.2345E-18");
+  EXPECT_EQ(FormatLiteral(1.23456789012345e-10), "1.23456789012345E-10");
+  EXPECT_EQ(FormatLiteral(1.23456789012345e-9), "1.23456789012345E-9");
+  EXPECT_EQ(FormatLiteral(1e307), "1E+307");
+  EXPECT_EQ(FormatLiteral(1e-100), "1E-100");
+}
+
+TEST(FormatFormulaNumber, SignIsOutsideTheWidthRule) {
+  EXPECT_EQ(FormatLiteral(-1e20), "-100000000000000000000");
+  EXPECT_EQ(FormatLiteral(-1e21), "-1E+21");
+  EXPECT_EQ(FormatLiteral(-0.0), "0");
+  EXPECT_EQ(FormatLiteral(-0.5), "-0.5");
+}
+
+TEST(FormatFormulaNumber, FifteenSignificantDigitsTrailingZerosDropped) {
+  EXPECT_EQ(FormatLiteral(1.5), "1.5");
+  EXPECT_EQ(FormatLiteral(1234567890123450.0), "1234567890123450");
+  EXPECT_EQ(FormatLiteral(0.30000000000000004), "0.3");
+  EXPECT_EQ(FormatLiteral(9.99999999999999e307), "9.99999999999999E+307");
+}
+
 }  // namespace
 }  // namespace formulon

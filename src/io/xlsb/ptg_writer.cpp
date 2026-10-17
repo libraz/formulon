@@ -862,11 +862,13 @@ class Encoder {
 
   Expected<void, Error> emit_unary(const parser::AstNode& node, Slot slot) {
     const parser::AstNode& operand = node.as_unary_operand();
-    // Excel stores a negated number literal as the number it is (measured:
-    // `-1` -> PtgNum -1.0, `-0` -> PtgInt 0).
+    // Excel stores a negated number literal as the number it is (`-1` ->
+    // PtgNum -1.0). Stored cell text has already absorbed such a sign into a
+    // zero (`=-0` is stored as `=0`), so a `-` left over a zero is an
+    // operator Excel kept (`=--0` is stored as `=-0`).
     if (measured_calls_ && node.as_unary_op() == parser::UnaryOp::Minus &&
         operand.kind() == parser::NodeKind::Literal && operand.as_literal().is_number() &&
-        parens_.count(&operand) == 0U) {
+        operand.as_literal().as_number() != 0.0 && parens_.count(&operand) == 0U) {
       return emit_literal(Value::number(-operand.as_literal().as_number()));
     }
     RETURN_IF_ERROR(emit_operand(operand, slot));

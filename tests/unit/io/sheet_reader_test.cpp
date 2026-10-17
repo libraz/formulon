@@ -243,6 +243,31 @@ TEST(SheetReader, SharedFormulaSlaveShiftsRelativeReferences) {
   EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 3U, 4U).as_number(), 50000.0);
 }
 
+TEST(SheetReader, FormulaLiteralsAreRespelledOnLoad) {
+  // Plain, shared (master and slave) and array formulas all store their
+  // number literals respelled; an already respelled formula is unchanged.
+  const char* xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\"><f>-1E-309+01.50</f></c>"
+      "<c r=\"B1\"><f t=\"shared\" si=\"0\" ref=\"B1:B2\">C1*1E3-+2</f></c>"
+      "<c r=\"D1\"><f t=\"array\" ref=\"D1:E1\">{+5,-0,1.50}</f></c>"
+      "<c r=\"F1\"><f>1E+21+ 5-0.0000000000000000025</f></c></row>"
+      "<row r=\"2\"><c r=\"B2\"><f t=\"shared\" si=\"0\"/></c></row>"
+      "</sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 0U), "=0+1.5");
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 1U), "=C1*1000-2");
+  EXPECT_EQ(StoredFormula(wb, 0U, 1U, 1U), "=C2*1000-2");
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 3U), "={5,0,1.5}");
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 5U), "=1E+21+ 5-0.0000000000000000025");
+}
+
 TEST(SheetReader, SharedFormulaSlaveWithoutMasterErrors) {
   const char* xml =
       "<worksheet><sheetData>"

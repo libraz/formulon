@@ -64,7 +64,7 @@ bool is_function_name_token(parser::TokenKind kind) noexcept {
 void append_number(const parser::Token& token, char decimal_separator, std::string& out) {
   if (token.lexeme.find_first_of("Ee") != std::string_view::npos) {
     const std::size_t from = out.size();
-    format_double(out, token.number);
+    format_formula_number(out, token.number);
     std::replace(out.begin() + static_cast<std::ptrdiff_t>(from), out.end(), '.', decimal_separator);
     return;
   }

@@ -157,6 +157,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/sheet_quoting_test.cpp
   unit/parser/external_ref_parse_test.cpp
   unit/parser/external_book_spelling_test.cpp
+  unit/parser/literal_spelling_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp
   unit/parser/ast_format_r1c1_test.cpp

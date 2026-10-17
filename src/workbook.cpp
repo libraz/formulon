@@ -41,6 +41,7 @@
 #include "parser/ast_format.h"
 #include "parser/external_book_spelling.h"
 #include "parser/formula_prefix.h"
+#include "parser/literal_spelling.h"
 #include "parser/parser.h"
 #include "parser/ref_transforms.h"
 #include "parser/reference.h"
@@ -1484,7 +1485,7 @@ std::string Workbook::ingest_stored_formula(std::string_view stored) {
 }
 
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
-                                                 std::string formula) {
+                                                 std::string formula, FormulaSource source) {
   RETURN_IF_ERROR(check_cell_target("set_cell_formula", sheet_index, sheets_.size(), row, col));
 
   // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
@@ -1499,6 +1500,9 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   // `SINGLE(x)` / `ANCHORARRAY(x)` calls read back as the `@x` / `x#` the
   // formula bar shows.
   formula = normalize_formula_text(std::move(formula));
+  if (source == FormulaSource::kEntered) {
+    formula = parser::spell_number_literals(formula);
+  }
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 

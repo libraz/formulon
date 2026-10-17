@@ -188,6 +188,16 @@ TEST(BuiltinsFormulaText, LetBoundReferenceReturnsTargetFormulaText) {
   EXPECT_EQ(v.as_text(), "=1+2");
 }
 
+TEST(BuiltinsFormulaText, EnteredFormulaShowsRespelledLiterals) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  ASSERT_TRUE(wb.set_cell_formula(0, 0, 0, "=+1.50+ -1E21*SUM(-0,1E-5)-+2"));
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=FORMULATEXT(A1)", ctx);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "=1.5+ -1E+21*SUM(0,0.00001)-2");
+}
+
 // ---------------------------------------------------------------------------
 // ISREF
 // ---------------------------------------------------------------------------

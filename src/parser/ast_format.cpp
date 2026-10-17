@@ -94,11 +94,11 @@ void FormatNumberLiteral(const Value& v, std::string& out, bool parenthesise_neg
   const double n = v.as_number();
   if (n < 0.0 && parenthesise_negative) {
     out.push_back('(');
-    format_double(out, n);
+    format_formula_number(out, n);
     out.push_back(')');
     return;
   }
-  format_double(out, n);
+  format_formula_number(out, n);
 }
 
 void FormatTextLiteral(std::string_view s, std::string& out) {

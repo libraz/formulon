@@ -30,6 +30,10 @@ namespace {
 //   1E+20 -> "1E+20"                  (sci, decimal would be 21 chars)
 constexpr std::size_t kGeneralDecimalMaxChars = 20;
 
+// A number literal in formula text stays positional up to 21 unsigned
+// characters (1E+20 and 1E-19 print in full) and its exponent is unpadded.
+constexpr std::size_t kFormulaLiteralDecimalMaxChars = 21;
+
 // Append `n` ASCII '0' characters to `out`.
 void append_zeros(std::string& out, int n) {
   for (int i = 0; i < n; ++i) {
@@ -39,20 +43,14 @@ void append_zeros(std::string& out, int n) {
 
 // Renders the Excel-style exponent suffix for scientific notation:
 //   "E+NN" / "E-NN"
-// where the exponent magnitude is zero-padded to at least two digits and
-// expands naturally to three or more digits for |exp| >= 100.
-void append_excel_exponent(std::string& out, int exp) {
+// where the exponent magnitude is zero-padded to at least `min_digits`
+// digits and expands naturally beyond that.
+void append_excel_exponent(std::string& out, int exp, int min_digits) {
   out.push_back('E');
   out.push_back(exp >= 0 ? '+' : '-');
-  int abs_exp = exp < 0 ? -exp : exp;
-  if (abs_exp < 10) {
-    out.push_back('0');
-    out.push_back(static_cast<char>('0' + abs_exp));
-  } else {
-    char tmp[16];
-    format_signed(tmp, sizeof(tmp), abs_exp);
-    out.append(tmp);
-  }
+  char tmp[16];
+  format_signed(tmp, sizeof(tmp), exp < 0 ? -exp : exp, min_digits);
+  out.append(tmp);
 }
 
 }  // namespace
@@ -107,7 +105,13 @@ double excel_decimal_view(double v, int significant_digits) noexcept {
   return std::isfinite(snapped) ? std::copysign(snapped, v) : v;
 }
 
-void format_double(std::string& out, double v, int significant_digits) {
+namespace {
+
+// Shared body of `format_double` and `format_formula_number`: decimal form
+// while the unsigned decimal text fits `decimal_max_chars`, otherwise
+// scientific with an exponent of at least `exponent_min_digits` digits.
+void append_shortest(std::string& out, double v, int significant_digits, std::size_t decimal_max_chars,
+                     int exponent_min_digits) {
   if (std::isnan(v)) {
     out.append("nan");
     return;
@@ -206,9 +210,9 @@ void format_double(std::string& out, double v, int significant_digits) {
     out.push_back('-');
   }
 
-  if (decimal_len <= kGeneralDecimalMaxChars) {
+  if (decimal_len <= decimal_max_chars) {
     // Decimal form. Negative sign (when present) is NOT counted against
-    // the 20-char ceiling, matching Mac Excel.
+    // the ceiling, matching Mac Excel.
     if (leading_exp >= 0) {
       const int int_chars = leading_exp + 1;
       const int digits_len = static_cast<int>(digits.size());
@@ -230,14 +234,24 @@ void format_double(std::string& out, double v, int significant_digits) {
     }
   } else {
     // Scientific form. Mantissa = digits[0] '.' digits[1..]; exponent in
-    // Excel style ("E+NN" / "E-NN", min 2-digit exponent).
+    // Excel style ("E+NN" / "E-NN").
     out.push_back(digits.front());
     if (digits.size() > 1) {
       out.push_back('.');
       out.append(digits, 1, std::string::npos);
     }
-    append_excel_exponent(out, leading_exp);
+    append_excel_exponent(out, leading_exp, exponent_min_digits);
   }
+}
+
+}  // namespace
+
+void format_double(std::string& out, double v, int significant_digits) {
+  append_shortest(out, v, significant_digits, kGeneralDecimalMaxChars, 2);
+}
+
+void format_formula_number(std::string& out, double v) {
+  append_shortest(out, v, 15, kFormulaLiteralDecimalMaxChars, 1);
 }
 
 }  // namespace formulon

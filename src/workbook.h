@@ -331,13 +331,28 @@ class Workbook {
   Expected<void, Error> set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                       std::string_view text);
 
+  /// Where the text handed to `set_cell_formula` comes from.
+  enum class FormulaSource : std::uint8_t {
+    /// Text Excel parses on entry, typed or read from an `.xlsx` `<f>`: its
+    /// number literals are respelled from their values and a unary sign
+    /// touching one is absorbed (`parser::spell_number_literals`).
+    kEntered,
+    /// Text rendered from an already-parsed formula (an `.xlsb` Ptg
+    /// stream), whose literals and signs are already stored as Excel keeps
+    /// them. Respelling it again would absorb a sign Excel kept (`=--0` is
+    /// stored as `=-0`).
+    kRendered,
+  };
+
   /// Stores a formula at `(row, col)` on `sheet_index` and registers its
   /// dependencies with the recalc engine.
   ///
   /// `formula` is the raw Excel-style formula text. Whether or not it begins
   /// with `=` is not checked here — the parser owns that contract — but
-  /// callers typically pass the leading `=`. The cell's `cached_value` is
-  /// reset to blank; a subsequent `recalc()` populates it.
+  /// callers typically pass the leading `=`. The stored text is
+  /// `normalize_formula_text(formula)`, with its number literals respelled
+  /// when `source` is `kEntered`. The cell's `cached_value` is reset to
+  /// blank; a subsequent `recalc()` populates it.
   ///
   /// Side effects:
   ///   * Parses the formula in a transient arena to extract its
@@ -349,13 +364,14 @@ class Workbook {
   ///
   /// Returns `kInvalidArgument` when `sheet_index >= sheet_count()`.
   Expected<void, Error> set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
-                                         std::string formula);
+                                         std::string formula, FormulaSource source = FormulaSource::kEntered);
 
   /// Canonical formula-bar spelling of stored formula text: Excel's
   /// `_xlfn.` / `_xlws.` / `_xlpm.` storage prefixes stripped and the stored
   /// `SINGLE` / `ANCHORARRAY` calls read back as `@x` / `x#`. This is the
-  /// normalization `set_cell_formula` applies, exposed so an entry check
-  /// judges exactly the text that would be stored.
+  /// normalization `set_cell_formula` applies ahead of the literal
+  /// respelling, which never changes whether text parses, exposed so an
+  /// entry check judges the text that would be stored.
   static std::string normalize_formula_text(std::string formula);
 
   /// Model spelling of a formula read from a file: `normalize_formula_text`,

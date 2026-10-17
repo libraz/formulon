@@ -407,6 +407,49 @@ TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
   EXPECT_EQ(c->formula_text, "=A1+B2*3");
 }
 
+TEST(XlsbWriter, RespelledLiteralsRoundTripWithIdenticalFormulaText) {
+  // Entered text stores its literals respelled; the Ptg stream reads back
+  // as that same text, including a sign the entry kept (`=++5` -> `=+5`,
+  // `=--0` -> `=-0`).
+  struct Case {
+    const char* typed;
+    const char* stored;
+  };
+  const Case kCases[] = {
+      {"=1.50+1E21*2.5E-18", "=1.5+1E+21*0.0000000000000000025"},
+      {"=1E20-1E-20", "=100000000000000000000-1E-20"},
+      {"=++5", "=+5"},
+      {"=--0", "=-0"},
+      {"=--5", "=--5"},
+      {"=+-5", "=+-5"},
+      {"=1-+5", "=1-5"},
+      {"=-5^2", "=-5^2"},
+      {"=SUM(-0,+1)", "=SUM(0,1)"},
+      {"={+5,-0,1.50}", "={5,0,1.5}"},
+  };
+  Workbook wb = Workbook::create_empty();
+  const std::size_t sheet = wb.add_sheet("F");
+  std::uint32_t row = 0U;
+  for (const Case& c : kCases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(sheet, row, 0U, c.typed)));
+    EXPECT_EQ(wb.sheet(sheet).cell_at(row, 0U)->formula_text, c.stored);
+    ++row;
+  }
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Sheet& rt = read_or.value().workbook.sheet(0);
+  row = 0U;
+  for (const Case& c : kCases) {
+    const Cell* cell = rt.cell_at(row, 0U);
+    ASSERT_NE(cell, nullptr) << c.typed;
+    EXPECT_EQ(cell->formula_text, c.stored) << c.typed;
+    ++row;
+  }
+}
+
 // Measured on Excel 365: it saves
 // `S!Name` that neither `S` nor the workbook defines against an empty stub
 // scoped to `S`, never against another sheet's definition, so `Sheet2!SVal`

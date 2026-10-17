@@ -46,6 +46,14 @@ double excel_decimal_view(double v, int significant_digits) noexcept;
 /// caps the mantissa precision (Excel's General text uses 15).
 void format_double(std::string& out, double v, int significant_digits = 15);
 
+/// Appends `v` spelled as a number literal in stored formula text: 15
+/// significant digits of `excel_decimal_view`, trailing zeros dropped,
+/// decimal form while the unsigned text is at most 21 characters
+/// (`100000000000000000000`, `0.0000000000000000001`), otherwise
+/// `<mantissa>E+<exp>` / `E-<exp>` with no exponent padding (`1E+21`,
+/// `1.2345E-18`). Negative zero prints as "0".
+void format_formula_number(std::string& out, double v);
+
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_DOUBLE_FORMAT_H_

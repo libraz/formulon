@@ -881,7 +881,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         // Register the real formula via the workbook-level entry so the
         // dep graph tracks it (matching the OOXML reader). The cached
         // value is preserved separately below.
-        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col.col, wb.ingest_stored_formula(formula_text));
+        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col.col, wb.ingest_stored_formula(formula_text),
+                                      Workbook::FormulaSource::kRendered);
         if (!wf) {
           return std::move(wf.error());
         }
@@ -955,7 +956,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       const Cell* shell = wb.sheet(sheet_index).cell_at(rw_first, col_first);
       Value cached = shell != nullptr ? shell->cached_value : Value::blank();
       const std::string cached_text = cached.is_text() ? std::string(cached.as_text()) : std::string();
-      auto wf = wb.set_cell_formula(sheet_index, rw_first, col_first, wb.ingest_stored_formula(formula_text));
+      auto wf = wb.set_cell_formula(sheet_index, rw_first, col_first, wb.ingest_stored_formula(formula_text),
+                                    Workbook::FormulaSource::kRendered);
       if (!wf) {
         return std::move(wf.error());
       }
