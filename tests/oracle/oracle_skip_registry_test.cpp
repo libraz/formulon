@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "tests/oracle/json_reader.h"
 #include "tests/oracle/oracle_runner.h"
 
 namespace formulon {
@@ -87,6 +88,21 @@ TEST(OracleSkipRegistry, BakedSkippedFieldIsHonouredOnItsOwn) {
   EXPECT_EQ(cases[0].skipped_reason, "captured with the skip already baked in");
 
   std::filesystem::remove_all(dir, ec);
+}
+
+TEST(OracleJsonReader, AcceptsSubnormalNumbers) {
+  auto parsed = parse_json("[5e-324, -5e-324, 2.2250738585072009e-308, 1e-400]");
+  ASSERT_TRUE(parsed) << parsed.error().message;
+  const auto& items = parsed.value().as_array();
+  ASSERT_EQ(items.size(), 4U);
+  EXPECT_EQ(items[0].as_number(), 4.9406564584124654e-324);
+  EXPECT_EQ(items[1].as_number(), -4.9406564584124654e-324);
+  EXPECT_GT(items[2].as_number(), 0.0);
+  EXPECT_EQ(items[3].as_number(), 0.0);
+}
+
+TEST(OracleJsonReader, RejectsOverflowingNumbers) {
+  EXPECT_FALSE(parse_json("[1e999]"));
 }
 
 }  // namespace

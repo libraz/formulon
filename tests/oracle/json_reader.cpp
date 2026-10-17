@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -385,7 +386,9 @@ class Parser {
     char* end = nullptr;
     errno = 0;
     double v = std::strtod(num.c_str(), &end);
-    if (end != num.c_str() + num.size() || errno == ERANGE) {
+    // Underflow to a subnormal or zero is a valid value; only an overflow to
+    // infinity is rejected.
+    if (end != num.c_str() + num.size() || std::isinf(v)) {
       return err("malformed number");
     }
     return JsonValue::make_number(v);

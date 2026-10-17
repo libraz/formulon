@@ -181,6 +181,58 @@
         "abs": 0.0,
         "rel": 0.0
       }
+    },
+    {
+      "id": "exp_subnormal_result_minus_744",
+      "formula": "=EXP(-744)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-323
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "exp_subnormal_result_minus_745",
+      "formula": "=EXP(-745)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5e-324
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "exp_subnormal_result_minus_745_13",
+      "formula": "=EXP(-745.13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5e-324
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "exp_underflow_minus_745_14",
+      "formula": "=EXP(-745.14)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     }
   ]
 }

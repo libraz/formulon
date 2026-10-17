@@ -58,3 +58,23 @@ cases:
     description: "BESSELK(700,100) with flushed recurrence"
     formula: "=BESSELK(700,100)*1E300"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: exp_subnormal_result_minus_744
+    description: "Subnormal results of EXP are kept; below the smallest subnormal the result is 0"
+    formula: "=EXP(-744)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: exp_subnormal_result_minus_745
+    description: "Subnormal results of EXP are kept; below the smallest subnormal the result is 0"
+    formula: "=EXP(-745)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: exp_subnormal_result_minus_745_13
+    description: "Subnormal results of EXP are kept; below the smallest subnormal the result is 0"
+    formula: "=EXP(-745.13)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: exp_underflow_minus_745_14
+    description: "Subnormal results of EXP are kept; below the smallest subnormal the result is 0"
+    formula: "=EXP(-745.14)"
+    tolerance: { abs: 0, rel: 0 }
