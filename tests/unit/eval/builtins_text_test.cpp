@@ -1008,6 +1008,36 @@ TEST(ExactRemainderAndAngles, PercentKeepsEveryDigitAfterACarry) {
   EXPECT_EQ(w.as_text(), "1000000000000000000000000.0%");
 }
 
+TEST(TextLengthLimits, FormattedNumberIsAtMost255Characters) {
+  const Value ok = EvalSource("=LEN(TEXT(VALUE(\"1E+254\"),\"0\"))");
+  ASSERT_TRUE(ok.is_number());
+  EXPECT_EQ(ok.as_number(), 255.0);
+  for (const char* formula :
+       {"=TEXT(VALUE(\"-1E+254\"),\"0\")", "=TEXT(VALUE(\"1E+255\"),\"0\")", "=TEXT(VALUE(\"1E+250\"),\"#,##0\")",
+        "=FIXED(VALUE(\"1E+250\"),0)", "=FIXED(VALUE(\"-1E+254\"),0,TRUE)", "=DOLLAR(VALUE(\"1E+250\"),0)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+  const Value fixed = EvalSource("=LEN(FIXED(VALUE(\"1E+254\"),0,TRUE))");
+  ASSERT_TRUE(fixed.is_number());
+  EXPECT_EQ(fixed.as_number(), 255.0);
+  const Value rept = EvalSource("=LEN(REPT(\"x\",309)&\"\")");
+  ASSERT_TRUE(rept.is_number());
+  EXPECT_EQ(rept.as_number(), 309.0);
+}
+
+TEST(TextLengthLimits, FormatWithMoreThan127DecimalPlacesIsValue) {
+  const Value ok = EvalSource("=LEN(TEXT(1,\"0.\"&REPT(\"0\",127)))");
+  ASSERT_TRUE(ok.is_number());
+  EXPECT_EQ(ok.as_number(), 129.0);
+  for (const char* formula : {"=TEXT(1,\"0.\"&REPT(\"0\",128))", "=TEXT(1,\"0.\"&REPT(\"#\",128))", "=FIXED(1,128)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

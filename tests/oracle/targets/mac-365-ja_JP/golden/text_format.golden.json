@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T08:58:05Z"
+    "generated_at": "2026-10-17T11:06:56Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1405,6 +1405,201 @@
       "expect": {
         "kind": "text",
         "value": "1000000000000000000000000%"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_length_255_ok",
+      "formula": "=TEXT(VALUE(\"1E+254\"),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_length_256_negative",
+      "formula": "=TEXT(VALUE(\"-1E+254\"),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_length_beyond_limit",
+      "formula": "=TEXT(VALUE(\"1E+255\"),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_length_decimals_pushes_over",
+      "formula": "=TEXT(VALUE(\"1E+250\"),\"0.0000000\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_length_grouping_pushes_over",
+      "formula": "=TEXT(VALUE(\"1E+250\"),\"#,##0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "fixed_length_255_ok",
+      "formula": "=FIXED(VALUE(\"1E+254\"),0,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "fixed_length_grouped_over",
+      "formula": "=FIXED(VALUE(\"1E+250\"),0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "fixed_length_negative_over",
+      "formula": "=FIXED(VALUE(\"-1E+254\"),0,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "dollar_length_over",
+      "formula": "=DOLLAR(VALUE(\"1E+250\"),0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "dollar_length_within",
+      "formula": "=DOLLAR(VALUE(\"1E+60\"),0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥1,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rept_not_limited",
+      "formula": "=LEN(REPT(\"x\",309)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 309.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_decimals_127_ok",
+      "formula": "=LEN(TEXT(1,\"0.\"&REPT(\"0\",127)))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 129.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_decimals_128_over",
+      "formula": "=TEXT(1,\"0.\"&REPT(\"0\",128))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "text_decimals_hash_128_over",
+      "formula": "=TEXT(1,\"0.\"&REPT(\"#\",128))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "fixed_decimals_128_over",
+      "formula": "=FIXED(1,128)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       },
       "tolerance": {
         "abs": 0.0,

@@ -515,3 +515,48 @@ cases:
   - id: text_percent_1e22
     formula: "=TEXT(VALUE(\"1E+22\"),\"0%\")"
     tolerance: { abs: 0, rel: 0 }
+  - id: text_length_255_ok
+    formula: "=TEXT(VALUE(\"1E+254\"),\"0\")"
+    tolerance: { abs: 0, rel: 0 }
+  - id: text_length_256_negative
+    formula: "=TEXT(VALUE(\"-1E+254\"),\"0\")"
+    tolerance: { abs: 0, rel: 0 }
+  - id: text_length_beyond_limit
+    formula: "=TEXT(VALUE(\"1E+255\"),\"0\")"
+    tolerance: { abs: 0, rel: 0 }
+  - id: text_length_decimals_pushes_over
+    formula: "=TEXT(VALUE(\"1E+250\"),\"0.0000000\")"
+    tolerance: { abs: 0, rel: 0 }
+  - id: text_length_grouping_pushes_over
+    formula: "=TEXT(VALUE(\"1E+250\"),\"#,##0\")"
+    tolerance: { abs: 0, rel: 0 }
+  - id: fixed_length_255_ok
+    formula: "=FIXED(VALUE(\"1E+254\"),0,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+  - id: fixed_length_grouped_over
+    formula: "=FIXED(VALUE(\"1E+250\"),0)"
+    tolerance: { abs: 0, rel: 0 }
+  - id: fixed_length_negative_over
+    formula: "=FIXED(VALUE(\"-1E+254\"),0,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+  - id: dollar_length_over
+    formula: "=DOLLAR(VALUE(\"1E+250\"),0)"
+    tolerance: { abs: 0, rel: 0 }
+  - id: dollar_length_within
+    formula: "=DOLLAR(VALUE(\"1E+60\"),0)"
+    tolerance: { abs: 0, rel: 0 }
+  - id: rept_not_limited
+    formula: "=LEN(REPT(\"x\",309)&\"\")"
+    tolerance: { abs: 0, rel: 0 }
+  - id: text_decimals_127_ok
+    formula: "=LEN(TEXT(1,\"0.\"&REPT(\"0\",127)))"
+    tolerance: { abs: 0, rel: 0 }
+  - id: text_decimals_128_over
+    formula: "=TEXT(1,\"0.\"&REPT(\"0\",128))"
+    tolerance: { abs: 0, rel: 0 }
+  - id: text_decimals_hash_128_over
+    formula: "=TEXT(1,\"0.\"&REPT(\"#\",128))"
+    tolerance: { abs: 0, rel: 0 }
+  - id: fixed_decimals_128_over
+    formula: "=FIXED(1,128)"
+    tolerance: { abs: 0, rel: 0 }

@@ -62,7 +62,10 @@ TEST(DisplayRoundingTies, TextMatchesRoundOnTextifiedRound) {
 }
 
 TEST(DisplayRoundingSafety, LargeTextValuesAndScalingOverflow) {
-  EXPECT_EQ(EvalText("=TEXT(1E308,\"0\")"), "1" + std::string(308, '0'));
+  // 309 characters exceed the 255-character limit on formatted numbers.
+  const Value wide = EvalSource("=TEXT(1E308,\"0\")");
+  ASSERT_TRUE(wide.is_error());
+  EXPECT_EQ(wide.as_error(), ErrorCode::Value);
   const Value value = EvalSource("=TEXT(1E307,\"0%\")");
   ASSERT_TRUE(value.is_error());
   EXPECT_EQ(value.as_error(), ErrorCode::Value);

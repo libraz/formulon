@@ -33,6 +33,7 @@
 #include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/expected.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {
@@ -47,6 +48,50 @@ Value apply_text_format_text(std::string_view value, std::string_view format_tex
     return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(out));
+}
+
+// A formatted number is at most this many characters (UTF-16 units), and a number
+// format asks for at most this many decimal places; beyond either is #VALUE!.
+constexpr std::uint32_t kMaxFormattedLength = 255;
+constexpr int kMaxFormatDecimalPlaces = 127;
+
+Value formatted_number_text(const std::string& text, Arena& arena) {
+  if (utf16_units_in(text) > kMaxFormattedLength) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::text(arena.intern(text));
+}
+
+// The most digit placeholders (`0`, `#`, `?`) following a decimal point in any section of `format`;
+// quoted text, escaped characters and bracketed parts are skipped.
+int format_decimal_places(std::string_view format) {
+  int most = 0;
+  int run = 0;
+  bool after_point = false;
+  for (std::size_t i = 0; i < format.size(); ++i) {
+    const char c = format[i];
+    if (c == '"') {
+      const std::size_t close = format.find('"', i + 1);
+      i = close == std::string_view::npos ? format.size() : close;
+    } else if (c == '\\') {
+      ++i;
+    } else if (c == '[') {
+      const std::size_t close = format.find(']', i + 1);
+      i = close == std::string_view::npos ? format.size() : close;
+    } else if (c == ';') {
+      after_point = false;
+      run = 0;
+    } else if (c == '.') {
+      after_point = true;
+      run = 0;
+    } else if (after_point && (c == '0' || c == '#' || c == '?')) {
+      most = std::max(most, ++run);
+    } else {
+      after_point = false;
+      run = 0;
+    }
+  }
+  return most;
 }
 
 }  // namespace
@@ -115,13 +160,16 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
     return Value::error(ErrorCode::Num);
   }
 
+  if (format_decimal_places(format_text) > kMaxFormatDecimalPlaces) {
+    return Value::error(ErrorCode::Value);
+  }
   std::string out;
   out.reserve(32);
   const auto status = ::formulon::text_format::apply_format(number, format_text, out, date1904);
   if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
-  return Value::text(arena.intern(out));
+  return formatted_number_text(out, arena);
 }
 
 namespace {
@@ -172,7 +220,7 @@ Value apply_text_number_format(double value, std::string_view format, Arena& are
   if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
-  return Value::text(arena.intern(out));
+  return formatted_number_text(out, arena);
 }
 
 std::string build_decimal_body(int decimals, bool no_commas) {
