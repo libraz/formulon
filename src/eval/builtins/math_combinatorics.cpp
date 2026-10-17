@@ -213,6 +213,34 @@ inline double combin_exact(std::uint64_t n, std::uint64_t k) {
   return std::exp(log_combin);
 }
 
+// nCk for COMBIN: the numerators max(k, n-k)+1..n and denominators
+// 2..min(k, n-k) are consumed pairwise as `prod = (N_t / D_t) * prod`, then the
+// leftover numerators multiply and the leftover denominators divide. Returns
+// +Inf on overflow; the caller maps that to #NUM!.
+inline double combin_pairwise(std::uint64_t n, std::uint64_t k) {
+  const std::uint64_t small = k < n - k ? k : n - k;
+  const std::uint64_t large = n - small;
+  double prod = 1.0;
+  std::uint64_t num = large + 1U;
+  std::uint64_t den = 2U;
+  for (; num <= n && den <= small; ++num, ++den) {
+    prod = (static_cast<double>(num) / static_cast<double>(den)) * prod;
+    if (!std::isfinite(prod)) {
+      return prod;
+    }
+  }
+  for (; num <= n; ++num) {
+    prod = static_cast<double>(num) * prod;
+    if (!std::isfinite(prod)) {
+      return prod;
+    }
+  }
+  for (; den <= small; ++den) {
+    prod = prod / static_cast<double>(den);
+  }
+  return prod;
+}
+
 // COMBIN(n, k) - n choose k. Fractional inputs truncated toward zero.
 // Negative n, negative k, or k > n yields #NUM!. Overflow yields #NUM!.
 Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
@@ -222,7 +250,7 @@ Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const std::uint64_t n = pair.value().first;
   const std::uint64_t k = pair.value().second;
-  return to_finite_value(combin_exact(n, k));
+  return to_finite_value(combin_pairwise(n, k));
 }
 
 // COMBINA(n, k) - multichoose = C(n+k-1, k). Same error conditions as

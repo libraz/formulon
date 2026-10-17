@@ -51,63 +51,77 @@ cases:
   setup: *id001
 - id: percentile_inc_k_blank
   formula: =PERCENTILE.INC(A1:A7,B1)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_inc_k_emptystr
   formula: =PERCENTILE.INC(A1:A7,B2)
   setup: *id001
 - id: percentile_inc_k_text_num
   formula: =PERCENTILE.INC(A1:A7,B3)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_inc_k_true
   formula: =PERCENTILE.INC(A1:A7,B4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_inc_k_num
   formula: =PERCENTILE.INC(A1:A7,B5)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_inc_k_text
   formula: =PERCENTILE.INC(A1:A7,B6)
   setup: *id001
 - id: percentile_inc_k_false
   formula: =PERCENTILE.INC(A1:A7,B7)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_inc_data_with_blank
   formula: =PERCENTILE.INC(A1:A8,0.4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_inc_data_blank_cell_arg
   formula: =PERCENTILE.INC(B1,0.4)
   setup: *id001
 - id: percentile_inc_data_mixed_col
   formula: =PERCENTILE.INC(A1:B7,0.4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_k_blank
   formula: =PERCENTILE(A1:A7,B1)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_k_emptystr
   formula: =PERCENTILE(A1:A7,B2)
   setup: *id001
 - id: percentile_k_text_num
   formula: =PERCENTILE(A1:A7,B3)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_k_true
   formula: =PERCENTILE(A1:A7,B4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_k_num
   formula: =PERCENTILE(A1:A7,B5)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_k_text
   formula: =PERCENTILE(A1:A7,B6)
   setup: *id001
 - id: percentile_k_false
   formula: =PERCENTILE(A1:A7,B7)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_data_with_blank
   formula: =PERCENTILE(A1:A8,0.4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: percentile_data_blank_cell_arg
   formula: =PERCENTILE(B1,0.4)
   setup: *id001
 - id: percentile_data_mixed_col
   formula: =PERCENTILE(A1:B7,0.4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_exc_k_blank
   formula: =QUARTILE.EXC(A1:A7,B1)
@@ -141,63 +155,77 @@ cases:
   setup: *id001
 - id: quartile_inc_k_blank
   formula: =QUARTILE.INC(A1:A7,B1)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_inc_k_emptystr
   formula: =QUARTILE.INC(A1:A7,B2)
   setup: *id001
 - id: quartile_inc_k_text_num
   formula: =QUARTILE.INC(A1:A7,B3)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_inc_k_true
   formula: =QUARTILE.INC(A1:A7,B4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_inc_k_num
   formula: =QUARTILE.INC(A1:A7,B5*5)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_inc_k_text
   formula: =QUARTILE.INC(A1:A7,B6)
   setup: *id001
 - id: quartile_inc_k_false
   formula: =QUARTILE.INC(A1:A7,B7)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_inc_data_with_blank
   formula: =QUARTILE.INC(A1:A8,2)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_inc_data_blank_cell_arg
   formula: =QUARTILE.INC(B1,2)
   setup: *id001
 - id: quartile_inc_data_mixed_col
   formula: =QUARTILE.INC(A1:B7,2)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_k_blank
   formula: =QUARTILE(A1:A7,B1)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_k_emptystr
   formula: =QUARTILE(A1:A7,B2)
   setup: *id001
 - id: quartile_k_text_num
   formula: =QUARTILE(A1:A7,B3)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_k_true
   formula: =QUARTILE(A1:A7,B4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_k_num
   formula: =QUARTILE(A1:A7,B5*5)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_k_text
   formula: =QUARTILE(A1:A7,B6)
   setup: *id001
 - id: quartile_k_false
   formula: =QUARTILE(A1:A7,B7)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_data_with_blank
   formula: =QUARTILE(A1:A8,2)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: quartile_data_blank_cell_arg
   formula: =QUARTILE(B1,2)
   setup: *id001
 - id: quartile_data_mixed_col
   formula: =QUARTILE(A1:B7,2)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: large_k_blank
   formula: =LARGE(A1:A7,B1)
@@ -602,18 +630,22 @@ cases:
   setup: *id002
 - id: percentile_inc_k_lit_text
   formula: =PERCENTILE.INC(A1:A7,"0.4")
+  tolerance: { abs: 0, rel: 0 }
   setup: *id002
 - id: percentile_inc_k_lit_true
   formula: =PERCENTILE.INC(A1:A7,TRUE)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id002
 - id: percentile_inc_k_ref_true
   formula: =PERCENTILE.INC(A1:A7,B2)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id002
 - id: percentile_inc_data_ref_text
   formula: =PERCENTILE.INC(B1,0.4)
   setup: *id002
 - id: percentile_inc_data_two_refs
   formula: =PERCENTILE.INC((A1,B1),0.4)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id002
 - id: percentile_inc_k_range2
   formula: =PERCENTILE.INC(A1:A7,B3:B4)

@@ -50,19 +50,23 @@ cases:
   # -- COMBIN --------------------------------------------------------------
   - id: combin_five_choose_two
     formula: "=COMBIN(5, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combin_n_choose_n
     formula: "=COMBIN(7, 7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combin_k_greater_is_num
     formula: "=COMBIN(3, 5)"
 
   - id: combin_fractional_truncates
     formula: "=COMBIN(5.9, 2.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combin_k_zero_is_one
     description: "C(n,0) = 1 for any n>=0."
     formula: "=COMBIN(7, 0)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- COMBINA -------------------------------------------------------------
   - id: combina_four_three
@@ -468,3 +472,4 @@ cases:
   - id: near_combin
     description: "Excel 365: 10"
     formula: "=COMBIN(5.9999999,2)"
+    tolerance: { abs: 0, rel: 0 }

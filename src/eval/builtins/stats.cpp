@@ -171,9 +171,7 @@ static Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool 
   if (sample ? xs.size() < 2u : xs.empty()) {
     return Value::error(ErrorCode::Div0);
   }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double divisor = sample ? static_cast<double>(xs.size() - 1u) : static_cast<double>(xs.size());
-  const double variance = ms.ss / divisor;
+  const double variance = numeric_aggregate_kernels::dispersion_variance(xs, sample);
   const double r = square_root ? std::sqrt(variance) : variance;
   return to_finite_value(r);
 }

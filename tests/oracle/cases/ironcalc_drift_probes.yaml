@@ -147,14 +147,17 @@ cases:
   - id: gamma_100
     description: "GAMMA(100) -- Mac=9.332621544394421e+155, Formulon=9.332621544394415e+155 (3 ULP libm drift)"
     formula: "=GAMMA(100)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gamma_23_4
     description: "GAMMA(23.4) -- Mac=3.91912153053999e+21, Formulon=3.9191215305399856e+21 (8 ULP libm drift)"
     formula: "=GAMMA(23.4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combin_1000_200
-    description: "COMBIN(1000,200) -- Mac=6.617155560659313e+215, Formulon=6.61715556065951e+215 (~258 ULP, lgamma fallback)"
+    description: "COMBIN(1000,200) -- Mac=6.617155560659313e+215, pairwise numerator/denominator product"
     formula: "=COMBIN(1000, 200)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: combina_1000_200
     description: "COMBINA(1000,200) -- Mac=1.6676833067813678e+233, Formulon=1.667683306781633e+233 (~1202 ULP, lgamma fallback)"

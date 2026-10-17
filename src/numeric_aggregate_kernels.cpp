@@ -197,6 +197,26 @@ Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample
   return std::sqrt(v);
 }
 
+double dispersion_variance(const std::vector<double>& xs, bool sample) {
+  double s1 = 0.0;
+  double s2 = 0.0;
+  for (double x : xs) {
+    s1 += x;
+    s2 += flush_subnormal(x * x);
+  }
+  const double n = static_cast<double>(xs.size());
+  if (s2 - (s1 * s1) / n < s2 * 0.01) {
+    const double mean = s1 / n;
+    double ss = 0.0;
+    for (double x : xs) {
+      const double d = x - mean;
+      ss += flush_subnormal(d * d);
+    }
+    return ss / (sample ? n - 1.0 : n);
+  }
+  return sample ? (s2 - (s1 * s1) / n) / (n - 1.0) : (n * s2 - s1 * s1) / (n * n);
+}
+
 namespace {
 
 /// Value `frac` of the way from `xs[lo_index]` to its successor. Weighted
@@ -223,13 +243,20 @@ Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_
   if (n == 1) {
     return xs_sorted[0];
   }
-  // 1-based position formula `pos = 1 + k*(n-1)`. Linear interpolation
-  // between `xs[floor(pos)-1]` and `xs[floor(pos)]` (both 0-based).
-  const double pos = 1.0 + k * static_cast<double>(n - 1);
-  const double floor_pos = std::floor(pos);
+  // 1-based rank `r = k*(n-1) + 1`, interpolated as `a + f*(b - a)`.
+  const double pos = k * static_cast<double>(n - 1) + 1.0;
+  const double floor_pos = std::trunc(pos);
   const auto lo_index = static_cast<std::size_t>(floor_pos) - 1U;
   const double frac = pos - floor_pos;
-  return interpolate_sorted(xs_sorted, lo_index, frac);
+  if (frac == 0.0 || lo_index + 1U >= n) {
+    return xs_sorted[lo_index];
+  }
+  const double a = xs_sorted[lo_index];
+  const double interpolated = a + frac * (xs_sorted[lo_index + 1U] - a);
+  if (!std::isfinite(interpolated)) {
+    return ErrorCode::Num;
+  }
+  return interpolated;
 }
 
 Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_sorted, double k) {

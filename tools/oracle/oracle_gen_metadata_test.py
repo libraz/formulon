@@ -42,7 +42,12 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
             "misc_sec_halfpi_minus_eps",
             "misc_sec_halfpi_plus_eps",
         }
-        self.assertEqual({case_id for case_id, case in probes.items() if case.tolerance is not None}, expected)
+        loosened = {
+            case_id
+            for case_id, case in probes.items()
+            if case.tolerance is not None and (case.tolerance.abs, case.tolerance.rel) != (0, 0)
+        }
+        self.assertEqual(loosened, expected)
         self.assertTrue(all(probes[case_id].tolerance.rel == 0.001 for case_id in expected))
         date_case = next(
             case for case in self.by_name["datevalue_timevalue"].cases if case.id == "datevalue_agrees_with_date"

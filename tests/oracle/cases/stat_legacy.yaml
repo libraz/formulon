@@ -10,18 +10,22 @@ cases:
   - id: percentile_legacy_alias_median
     description: "PERCENTILE({1;2;3;4;5}, 0.5) returns the median (3) — alias of PERCENTILE.INC"
     formula: '=PERCENTILE({1;2;3;4;5}, 0.5)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: percentile_legacy_alias_zero_k
     description: "PERCENTILE({10;20;30}, 0) returns the lower-boundary value (10)"
     formula: '=PERCENTILE({10;20;30}, 0)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: percentile_legacy_alias_one_k
     description: "PERCENTILE({10;20;30}, 1) returns the upper-boundary value (30)"
     formula: '=PERCENTILE({10;20;30}, 1)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: percentile_legacy_alias_interp
     description: "PERCENTILE({1;2;3;4}, 0.25) interpolates between ranks 0 and 1 -> 1.75"
     formula: '=PERCENTILE({1;2;3;4}, 0.25)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: percentile_legacy_alias_out_of_range
     description: "PERCENTILE({1;2;3}, 1.5) -> #NUM! (k must be in [0,1])"
@@ -34,18 +38,22 @@ cases:
   - id: quartile_legacy_alias_q0_min
     description: "QUARTILE({1;2;3;4;5}, 0) returns the minimum (1)"
     formula: '=QUARTILE({1;2;3;4;5}, 0)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: quartile_legacy_alias_q2_median
     description: "QUARTILE({1;2;3;4;5}, 2) returns the median (3)"
     formula: '=QUARTILE({1;2;3;4;5}, 2)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: quartile_legacy_alias_q3
     description: "QUARTILE({1;2;3;4;5;6;7;8;9}, 3) returns the third quartile (7)"
     formula: '=QUARTILE({1;2;3;4;5;6;7;8;9}, 3)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: quartile_legacy_alias_q4_max
     description: "QUARTILE({1;2;3;4;5}, 4) returns the maximum (5)"
     formula: '=QUARTILE({1;2;3;4;5}, 4)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: quartile_legacy_alias_invalid
     description: "QUARTILE({1;2;3}, 5) -> #NUM! (quart must be in {0,1,2,3,4})"
@@ -58,18 +66,22 @@ cases:
   - id: stdev_legacy_alias_basic
     description: "STDEV(1,2,3,4,5) sample sd = sqrt(2.5) ~ 1.5811388..."
     formula: '=STDEV(1,2,3,4,5)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdev_legacy_alias_array
     description: "STDEV({2;4;4;4;5;5;7;9}) sample sd ~ 2.1380899..."
     formula: '=STDEV({2;4;4;4;5;5;7;9})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdev_legacy_alias_two_values
     description: "STDEV(1, 3) sample sd = sqrt(2) ~ 1.4142136..."
     formula: '=STDEV(1, 3)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdev_legacy_alias_negative
     description: "STDEV(-1,-2,-3) sample sd = 1 (negative values are normal numbers)"
     formula: '=STDEV(-1,-2,-3)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdev_legacy_alias_singleton_div0
     description: "STDEV(5) -> #DIV/0! (sample sd needs >=2 values)"
@@ -82,18 +94,22 @@ cases:
   - id: var_legacy_alias_basic
     description: "VAR(1,2,3,4,5) sample variance = 2.5"
     formula: '=VAR(1,2,3,4,5)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: var_legacy_alias_array
     description: "VAR({2;4;4;4;5;5;7;9}) sample variance ~ 4.5714286..."
     formula: '=VAR({2;4;4;4;5;5;7;9})'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: var_legacy_alias_two_values
     description: "VAR(1, 3) sample variance = 2"
     formula: '=VAR(1, 3)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: var_legacy_alias_negative
     description: "VAR(-1,-2,-3) sample variance = 1"
     formula: '=VAR(-1,-2,-3)'
+    tolerance: { abs: 0, rel: 0 }
 
   - id: var_legacy_alias_singleton_div0
     description: "VAR(5) -> #DIV/0! (sample variance needs >=2 values)"
@@ -103,14 +119,17 @@ cases:
   - id: da_stdev_omit
     description: "Excel 365: 2.7386127875258306"
     formula: "=STDEV(3,4,,6,7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_stdev_bool
     description: "Excel 365: 9.322910847297997"
     formula: "=STDEV(10,20,TRUE,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_stdev_numtext
     description: "Excel 365: 8.80814017448254"
     formula: "=STDEV(1,2,\"10\",\"20\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_stdev_badtext
     description: "Excel 365: #VALUE!"
@@ -119,14 +138,17 @@ cases:
   - id: da_var_omit
     description: "Excel 365: 7.5"
     formula: "=VAR(3,4,,6,7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_var_bool
     description: "Excel 365: 86.91666666666667"
     formula: "=VAR(10,20,TRUE,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_var_numtext
     description: "Excel 365: 77.58333333333333"
     formula: "=VAR(1,2,\"10\",\"20\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_var_badtext
     description: "Excel 365: #VALUE!"
@@ -135,3 +157,4 @@ cases:
   - id: quartile_omit
     description: "Excel 365: 3"
     formula: "=QUARTILE({3,4,6,7},)"
+    tolerance: { abs: 0, rel: 0 }

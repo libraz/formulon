@@ -96,6 +96,7 @@ cases:
   - id: stdev_of_subset
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5 }
     formula: "=STDEV.S(A1:A5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: large_minus_small
     setup: { A1: 10, A2: 5, A3: 30, A4: 20 }

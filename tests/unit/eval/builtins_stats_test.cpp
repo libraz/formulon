@@ -565,10 +565,10 @@ TEST(BuiltinsPercentileInc, FractionalInterpolation) {
   EXPECT_DOUBLE_EQ(v.as_number(), 25.0);
 }
 
-TEST(BuiltinsPercentileInc, OppositeExtremeFiniteEndpointsInterpolate) {
+TEST(BuiltinsPercentileInc, OppositeExtremeFiniteEndpointsOverflowIsNum) {
   const Value v = EvalSource("=PERCENTILE.INC(-1E308,1E308,0.5)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsPercentileInc, KAbove1IsNum) {
@@ -957,6 +957,42 @@ TEST(BuiltinsStatsScalarArg, AverageASnapsCancellation) {
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 0.0);
   EXPECT_FALSE(std::signbit(v.as_number()));
+}
+
+TEST(BuiltinsDispersion, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=COMBIN(1000,200)", 6.617155560659313e+215},
+      {"=COMBIN(1000,500)", 2.7028824094543715e+299},
+      {"=COMBIN(100,50)", 1.0089134454556413e+29},
+      {"=VAR({100,200,50})", 5833.333333333332},
+      {"=VAR({1,2,10,20})", 77.58333333333333},
+      {"=VAR.S({100,200,50,80})", 4225.0},
+      {"=VARP({100,200,50})", 3888.8888888888887},
+      {"=VAR.P({1,2,10,20})", 58.1875},
+      {"=STDEV({100,200,50})", 76.37626158259732},
+      {"=STDEV({1,2,10,20})", 8.80814017448254},
+      {"=STDEVP({100,200,50})", 62.36095644623236},
+      {"=STDEVP({1,2,10,20})", 7.628073151196179},
+      {"=VAR({546.05,546.71,544.74,544.88,540.87})", 5.138249999999997},
+      {"=VAR({545.57,545.66,548.59,546.25,546.33})", 1.5070000000000208},
+      {"=KURT({100,200,50,80})", 2.3193865761002783},
+      {"=KURT({1,2,10,20})", -0.5639340025681765},
+      {"=PERCENTILE({10,20,30,40,50,60,70},0.4)", 34.0},
+      {"=PERCENTILE({1,2,3,4},0.4)", 2.2},
+      {"=PERCENTILE.INC({3.3,1.1,2.2,5.5,4.4},0.4)", 2.8600000000000003},
+      {"=QUARTILE({10,20,30,40,50,60,70},1)", 25.0},
+      {"=QUARTILE({1,2,3,4},1)", 1.75},
+      {"=QUARTILE({3.3,1.1,2.2,5.5,4.4},1)", 2.2},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
 }
 
 }  // namespace

@@ -79,6 +79,13 @@ Expected<double, ErrorCode> run_variance(const std::vector<double>& xs, bool sam
 Expected<double, ErrorCode> run_stdev(const NumericInputView& values, bool sample);
 Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample);
 
+/// Variance of a non-empty slice as the VAR / STDEV / D* family computes it.
+/// With S1 = sum x, S2 = sum x*x the one-pass forms are `(S2 - S1*S1/n) / (n-1)`
+/// (sample) and `(n*S2 - S1*S1) / (n*n)` (population); when `S2 - S1*S1/n` falls
+/// below 1% of S2 the two-pass form about the mean is used instead. The caller
+/// owns the minimum-count guard.
+double dispersion_variance(const std::vector<double>& xs, bool sample);
+
 /// PERCENTILE.INC at fractional rank `k` in [0, 1]. `xs_sorted` must be
 /// non-empty and sorted ascending. Out-of-range `k` -> `#NUM!`; non-
 /// finite interpolated result -> `#NUM!`. Implements Excel's position

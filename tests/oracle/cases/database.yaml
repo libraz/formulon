@@ -302,6 +302,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEV(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdevp_apple
     description: "Population SD of {100, 200} = 50"
@@ -324,6 +325,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEVP(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvar_apple
     description: "Sample variance of {100, 200} = 5000"
@@ -346,6 +348,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVAR(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvarp_apple
     description: "Population variance of {100, 200} = 2500"
@@ -368,6 +371,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVARP(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- DGET ---------------------------------------------------------------
   - id: dget_unique_match
@@ -1899,6 +1903,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEV(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdev_field_index_3
     description: "DSTDEV: field selected by 1-based index 3"
@@ -1921,6 +1926,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEV(A1:C5, 3, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdev_multi_row_or
     description: "DSTDEV: multi-row OR criterion: E1:E3 selects Apple or Pear records"
@@ -1944,6 +1950,7 @@ cases:
       E2: Apple
       E3: Pear
     formula: "=DSTDEV(A1:C5, \"Sales\", E1:E3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdev_multi_col_and
     description: "DSTDEV: multi-column AND criterion: Fruit=Apple AND Region=East"
@@ -1990,6 +1997,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEV(A1:C5, C1, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- DSTDEVP -----------------------------------------------------
   - id: dstdevp_basic_text_match
@@ -2013,6 +2021,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEVP(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdevp_field_index_3
     description: "DSTDEVP: field selected by 1-based index 3"
@@ -2035,6 +2044,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEVP(A1:C5, 3, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdevp_multi_row_or
     description: "DSTDEVP: multi-row OR criterion: E1:E3 selects Apple or Pear records"
@@ -2058,6 +2068,7 @@ cases:
       E2: Apple
       E3: Pear
     formula: "=DSTDEVP(A1:C5, \"Sales\", E1:E3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdevp_multi_col_and
     description: "DSTDEVP: multi-column AND criterion: Fruit=Apple AND Region=East"
@@ -2082,6 +2093,7 @@ cases:
       E2: Apple
       F2: East
     formula: "=DSTDEVP(A1:C5, \"Sales\", E1:F2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dstdevp_field_cell_ref
     description: "DSTDEVP: field selected via cell reference C1 (= Sales)"
@@ -2104,6 +2116,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DSTDEVP(A1:C5, C1, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- DVAR --------------------------------------------------------
   - id: dvar_basic_text_match
@@ -2127,6 +2140,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVAR(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvar_field_index_3
     description: "DVAR: field selected by 1-based index 3"
@@ -2149,6 +2163,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVAR(A1:C5, 3, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvar_multi_row_or
     description: "DVAR: multi-row OR criterion: E1:E3 selects Apple or Pear records"
@@ -2172,6 +2187,7 @@ cases:
       E2: Apple
       E3: Pear
     formula: "=DVAR(A1:C5, \"Sales\", E1:E3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvar_multi_col_and
     description: "DVAR: multi-column AND criterion: Fruit=Apple AND Region=East"
@@ -2218,6 +2234,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVAR(A1:C5, C1, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- DVARP -------------------------------------------------------
   - id: dvarp_basic_text_match
@@ -2241,6 +2258,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVARP(A1:C5, \"Sales\", E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvarp_field_index_3
     description: "DVARP: field selected by 1-based index 3"
@@ -2263,6 +2281,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVARP(A1:C5, 3, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvarp_multi_row_or
     description: "DVARP: multi-row OR criterion: E1:E3 selects Apple or Pear records"
@@ -2286,6 +2305,7 @@ cases:
       E2: Apple
       E3: Pear
     formula: "=DVARP(A1:C5, \"Sales\", E1:E3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvarp_multi_col_and
     description: "DVARP: multi-column AND criterion: Fruit=Apple AND Region=East"
@@ -2310,6 +2330,7 @@ cases:
       E2: Apple
       F2: East
     formula: "=DVARP(A1:C5, \"Sales\", E1:F2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: dvarp_field_cell_ref
     description: "DVARP: field selected via cell reference C1 (= Sales)"
@@ -2332,6 +2353,7 @@ cases:
       E1: Fruit
       E2: Apple
     formula: "=DVARP(A1:C5, C1, E1:E2)"
+    tolerance: { abs: 0, rel: 0 }
 
 
   # -- field number near-integer snap ---------------------------------------

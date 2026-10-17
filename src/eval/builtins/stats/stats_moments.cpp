@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "eval/builtins/stats/stats_helpers.h"
+#include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -210,18 +211,28 @@ Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Requires at least 4 numeric inputs (the cubic denominator collapses
 // otherwise) and non-zero sample variance; both failures yield `#DIV/0!`.
 Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto stat = centered_and_scaled(args, arity, 4u, 1.0);
-  if (!stat) {
-    return Value::error(stat.error());
+  auto collected = collect_direct_stats(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
   }
+  const std::vector<double>& xs = collected.value();
+  if (xs.size() < 4u) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double n = static_cast<double>(xs.size());
+  const double mean = mean_of(xs);
+  const double variance = numeric_aggregate_kernels::dispersion_variance(xs, true);
+  if (!(variance > 0.0)) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const double sd = std::sqrt(variance);
   double quartic_sum = 0.0;
-  for (double x : stat.value().xs) {
-    const double z = (x - stat.value().mean) / stat.value().scale;
-    quartic_sum += z * z * z * z;
+  for (double x : xs) {
+    const double q = (x - mean) / sd;
+    quartic_sum += (q * q) * (q * q);
   }
-  const double n = stat.value().n;
-  const double coeff_a = (n * (n + 1.0)) / ((n - 1.0) * (n - 2.0) * (n - 3.0));
-  const double coeff_b = (3.0 * (n - 1.0) * (n - 1.0)) / ((n - 2.0) * (n - 3.0));
+  const double coeff_a = (n * (n + 1.0)) / (((n - 1.0) * (n - 2.0)) * (n - 3.0));
+  const double coeff_b = (3.0 * ((n - 1.0) * (n - 1.0))) / ((n - 2.0) * (n - 3.0));
   return finite_number_result(coeff_a * quartic_sum - coeff_b);
 }
 

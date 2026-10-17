@@ -30,6 +30,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
 #include "excel_locale.h"
+#include "numeric_aggregate_kernels.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -547,15 +548,7 @@ bool compute_variance(const std::vector<double>& nums, bool sample, double* out_
       return false;
     }
   }
-  const double dn = static_cast<double>(n);
-  const double mean = sum_of(nums) / dn;
-  double ss = 0.0;
-  for (double x : nums) {
-    const double d = x - mean;
-    ss += d * d;
-  }
-  const double divisor = sample ? (dn - 1.0) : dn;
-  *out_var = ss / divisor;
+  *out_var = numeric_aggregate_kernels::dispersion_variance(nums, sample);
   return true;
 }
 

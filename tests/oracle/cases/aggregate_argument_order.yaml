@@ -186,6 +186,7 @@ cases:
     formula: =STDEV(IF(TRUE,"5",1))
   - id: stdev_if_bool
     formula: =STDEV(IF(TRUE,TRUE,1),2)
+    tolerance: { abs: 0, rel: 0 }
   - id: var_text_err
     formula: =VAR("abc",NA())
   - id: var_err_text
@@ -204,6 +205,7 @@ cases:
     formula: =VAR(IF(TRUE,"5",1))
   - id: var_if_bool
     formula: =VAR(IF(TRUE,TRUE,1),2)
+    tolerance: { abs: 0, rel: 0 }
   - id: sumproduct_text_err
     formula: =SUMPRODUCT("abc",NA())
   - id: sumproduct_err_text
