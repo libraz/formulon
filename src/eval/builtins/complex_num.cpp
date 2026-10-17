@@ -7,9 +7,7 @@
 //   * `parse_complex`  parses such text into (real, imag, suffix); accepts
 //     Number / Bool / Blank directly for Excel quirk compatibility.
 //   * `format_complex` renders (real, imag, suffix) back to a canonical
-//     Excel-compatible string. Uses `locale_number_text` (the same shortest-
-//     round-trip formatter as the text coerce) so output is stable across
-//     the engine.
+//     Excel-compatible string, each part rounded to 15 significant digits.
 //   * Individual IM* impls reuse those two helpers and a small `CplxOp`
 //     set (multiplication, reciprocal, exp, ln) for arithmetic.
 //
@@ -19,7 +17,9 @@
 #include "eval/builtins/complex_num.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -35,6 +35,8 @@
 #include "utils/arena.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
+#include "utils/number_text.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -250,35 +252,85 @@ Expected<Complex, ErrorCode> parse_complex_value(const Value& v) {
 // Formatting
 // ---------------------------------------------------------------------------
 
-// Normalises IEEE negative zero to plain zero so that format_double renders
-// "0" rather than "-0". This is the same collapse used internally by
-// `format_double` but we apply it up-front so that comparisons against 0
-// further down remain intuitive.
-double normalize_zero(double d) {
-  return d == 0.0 ? 0.0 : d;
+// Text of one complex part: the value rounded to 15 significant digits, in
+// fixed notation when that string (sign excluded) is at most 21 characters,
+// otherwise mantissa (trailing zeros stripped) + E+dd / E-dd.
+std::string complex_part_text(double v) {
+  constexpr std::size_t kMaxFixedLength = 21;
+  if (v == 0.0) {
+    return "0";
+  }
+  // A subnormal part reads as a signed zero.
+  if (flush_subnormal(v) == 0.0) {
+    return v < 0.0 ? "-0" : "0";
+  }
+  char buf[40];
+  format_exponential(buf, sizeof(buf), std::fabs(v), 14);
+  // buf is "d.dddddddddddddde[+-]XX".
+  std::string digits;
+  const char* cursor = buf;
+  for (; *cursor != 'e'; ++cursor) {
+    if (*cursor != '.') {
+      digits.push_back(*cursor);
+    }
+  }
+  const int exponent = std::atoi(cursor + 1);
+  while (digits.size() > 1 && digits.back() == '0') {
+    digits.pop_back();
+  }
+  const std::size_t point = exponent >= 0 ? static_cast<std::size_t>(exponent) + 1 : 0;
+  std::string fixed;
+  if (exponent >= 0) {
+    fixed = digits.substr(0, point);
+    fixed.append(point > fixed.size() ? point - fixed.size() : 0, '0');
+    if (digits.size() > point) {
+      fixed += '.' + digits.substr(point);
+    }
+  } else {
+    fixed = "0." + std::string(static_cast<std::size_t>(-exponent) - 1, '0') + digits;
+  }
+  std::string out = v < 0.0 ? "-" : "";
+  if (fixed.size() <= kMaxFixedLength) {
+    out += fixed;
+  } else {
+    out += digits.substr(0, 1);
+    if (digits.size() > 1) {
+      out += '.' + digits.substr(1);
+    }
+    out += exponent >= 0 ? "E+" : "E-";
+    char exp_text[16];
+    format_signed(exp_text, sizeof(exp_text), exponent >= 0 ? exponent : -exponent, 2);
+    out += exp_text;
+  }
+  const char separator = locale_decimal_separator();
+  if (separator != '.') {
+    for (char& c : out) {
+      if (c == '.') {
+        c = separator;
+      }
+    }
+  }
+  return out;
 }
 
-// Formats a complex triple into Excel's canonical string form.
+// Formats a complex triple into Excel's canonical string form: every IM*
+// text result goes through here. An imaginary part of +-1 prints as the bare
+// suffix and a zero real part is omitted.
 std::string format_complex(double re, double im, char suffix) {
-  re = normalize_zero(re);
-  im = normalize_zero(im);
-
   if (im == 0.0) {
-    return locale_number_text(re);
+    return complex_part_text(re);
   }
-
   std::string out;
   if (re != 0.0) {
-    out += locale_number_text(re);
+    out += complex_part_text(re);
     if (im > 0.0) {
       out.push_back('+');
     }
   }
-
   if (im == -1.0) {
     out.push_back('-');
   } else if (im != 1.0) {
-    out += locale_number_text(im);
+    out += complex_part_text(im);
   }
   out.push_back(suffix);
   return out;

@@ -56,7 +56,7 @@ Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::u
   if (settlement.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
-  CouponBondInputs out{tail.value(), CouponDates{}, 0.0, 0.0, 0.0};
+  CouponBondInputs out{tail.value(), CouponDates{}, 0.0, 0.0};
   if (!compute_coupon_dates(settlement.value(), maturity.value(), out.tail.frequency, out.tail.basis, date1904,
                             &out.cd)) {
     return ErrorCode::Num;
@@ -66,8 +66,20 @@ Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::u
   }
   out.freq_d = static_cast<double>(out.tail.frequency);
   out.cf = 100.0 * out.tail.rate / out.freq_d;
-  out.ai = 100.0 * out.tail.rate * out.cd.days_bs / (out.cd.period_days * out.freq_d);
   return out;
+}
+
+double bond_price_multi(double yld, double rate, double redemption, double freq, double e, double a,
+                        std::int32_t n) noexcept {
+  const double base = (yld / freq) + 1.0;
+  const double f = (e - a) / e;
+  const double cf = (100.0 * rate) / freq;
+  double coupons = 0.0;
+  for (std::int32_t k = 1; k <= n; ++k) {
+    coupons = (cf / excel_power(base, (static_cast<double>(k) - 1.0) + f)) + coupons;
+  }
+  const double redemption_term = redemption / excel_power(base, (static_cast<double>(n) - 1.0) + f);
+  return (redemption_term + coupons) - ((rate / freq) * (a / e)) * 100.0;
 }
 
 // Computes the clean price per 100 face. Returns `#NUM!` on any
@@ -80,7 +92,7 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   if (!in) {
     return std::move(in.error());
   }
-  const auto& [tail, cd, freq_d, cf, ai] = in.value();
+  const auto& [tail, cd, freq_d, cf] = in.value();
   const double yld = tail.amount;
   const double red = tail.redemption;
   if (yld < 0.0) {
@@ -104,16 +116,7 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
     }
     price = ((cf + red) / denom) - cf * (a / e);
   } else {
-    // Multi-period branch: the redemption term and the coupon sum are
-    // accumulated separately, then added; accrued interest is applied last.
-    const double base = yfreq + 1.0;
-    const double f = dsc / e;
-    double coupons = 0.0;
-    for (std::int32_t k = 1; k <= n; ++k) {
-      coupons = (cf / excel_power(base, (static_cast<double>(k) - 1.0) + f)) + coupons;
-    }
-    const double redemption_term = red / excel_power(base, (static_cast<double>(n) - 1.0) + f);
-    price = (redemption_term + coupons) - ((tail.rate / freq_d) * (a / e)) * 100.0;
+    price = bond_price_multi(yld, tail.rate, red, freq_d, e, a, n);
   }
   if (std::isnan(price) || std::isinf(price)) {
     return ErrorCode::Num;

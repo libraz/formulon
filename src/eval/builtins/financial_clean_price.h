@@ -54,14 +54,18 @@ namespace financial_detail {
 Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t arity, bool date1904);
 
 /// Argument prelude shared by PRICE and YIELD: the parsed tail plus the coupon schedule and the
-/// per-period coupon / accrued interest derived from it.
+/// per-period coupon derived from it.
 struct CouponBondInputs {
   CouponBondTail tail;
   CouponDates cd;
   double freq_d;
   double cf;
-  double ai;
 };
+
+/// Multi-period clean price (more than one coupon left) at yield `yld`: `e` is the coupon period
+/// length, `a` the accrued days, `n` the coupons remaining.
+double bond_price_multi(double yld, double rate, double redemption, double freq, double e, double a,
+                        std::int32_t n) noexcept;
 
 /// Reads args[0..6] and builds `CouponBondInputs`. `#NUM!` on date ordering, coupon-schedule failure or
 /// an exhausted schedule; the caller applies its own sign rule on `tail.amount`.

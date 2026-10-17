@@ -55,12 +55,15 @@ cases:
   # -- ASIN / ACOS / ATAN --------------------------------------------------
   - id: asin_of_zero
     formula: "=ASIN(0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: asin_of_one
     formula: "=ASIN(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: asin_of_neg_one
     formula: "=ASIN(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: asin_out_of_range_is_num
     description: "|x| > 1 yields #NUM!"
@@ -68,12 +71,15 @@ cases:
 
   - id: acos_of_zero
     formula: "=ACOS(0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: acos_of_one
     formula: "=ACOS(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: acos_of_neg_one
     formula: "=ACOS(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: acos_out_of_range_is_num
     formula: "=ACOS(-2)"
@@ -98,6 +104,7 @@ cases:
   - id: acos_roundtrip_cos
     description: "Round-trip COS(ACOS(x)) == x for |x| <= 1"
     formula: "=COS(ACOS(0.3))"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- ATAN2 ---------------------------------------------------------------
   # Note: Excel ATAN2(x, y) takes X FIRST then Y, unlike C's atan2(y, x).
@@ -150,6 +157,7 @@ cases:
   - id: sin_of_asin_halfway
     description: "SIN(ASIN(x)) == x for |x| <= 1"
     formula: "=SIN(ASIN(0.5))"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: degrees_of_radians_roundtrip
     formula: "=DEGREES(RADIANS(45))"

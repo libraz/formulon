@@ -13,30 +13,38 @@ cases:
   # -- COMPLEX: formatting table ------------------------------------------
   - id: complex_full_default_suffix
     formula: "=COMPLEX(3,4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_full_j_suffix
     formula: "=COMPLEX(3,4,\"j\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_pure_imag_plus_one
     description: "imag=+1 collapses to bare 'i'"
     formula: "=COMPLEX(0,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_pure_imag_minus_one
     description: "imag=-1 collapses to '-i'"
     formula: "=COMPLEX(0,-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_pure_imag_five
     formula: "=COMPLEX(0,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_pure_real
     formula: "=COMPLEX(3,0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_full_plus_one_imag
     description: "full form, imag=+1 drops the coefficient"
     formula: "=COMPLEX(3,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_full_minus_one_imag
     formula: "=COMPLEX(3,-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: complex_invalid_suffix_is_value
     description: "Suffix other than i/j -> #VALUE!"
@@ -54,6 +62,7 @@ cases:
 
   - id: imconjugate_three_four
     formula: "=IMCONJUGATE(\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imargument_three_four
     formula: "=IMARGUMENT(\"3+4i\")"
@@ -64,6 +73,7 @@ cases:
   # -- Arithmetic ----------------------------------------------------------
   - id: imsum_two_args
     formula: "=IMSUM(\"1+i\",\"2+3i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsum_mixed_suffix_is_value
     description: "Mixing i and j is rejected with #VALUE!"
@@ -71,28 +81,35 @@ cases:
 
   - id: imsub_basic
     formula: "=IMSUB(\"5+3i\",\"2+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: improduct_two_args
     description: "(2+i)(3+4i) = 2+11i"
     formula: "=IMPRODUCT(\"2+i\",\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imdiv_one_plus_i_over_one_minus_i
     description: "(1+i)/(1-i) = i; snap_zeros keeps the real part clean"
     formula: "=IMDIV(\"1+i\",\"1-i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: impower_square
     description: "(1+i)^2 = 2i"
     formula: "=IMPOWER(\"1+i\",2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Exponentials / logs / roots -----------------------------------------
   - id: imln_one_plus_i
     formula: "=IMLN(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsqrt_i
     formula: "=IMSQRT(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imexp_zero
     formula: "=IMEXP(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # =========================================================================
   # Expanded probes: trig/hyperbolic family, log variants, more arithmetic
@@ -103,19 +120,24 @@ cases:
   - id: imsin_one_plus_i
     description: "sin(1+i) = sin(1)cosh(1) + cos(1)sinh(1)i ≈ 1.298+0.635i"
     formula: "=IMSIN(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcos_one_plus_i
     description: "cos(1+i) ≈ 0.834-0.989i"
     formula: "=IMCOS(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imtan_one_plus_i
     formula: "=IMTAN(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsinh_one_plus_i
     formula: "=IMSINH(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcosh_one_plus_i
     formula: "=IMCOSH(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsec_one_plus_i
     description: "sec(z) = 1/cos(z) — Excel ja-JP locale check"
@@ -132,13 +154,16 @@ cases:
   - id: imlog2_two_plus_i
     description: "IMLOG2(2+i) — base-2 complex logarithm"
     formula: "=IMLOG2(\"2+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imlog10_two_plus_i
     formula: "=IMLOG10(\"2+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imln_negative_real
     description: "IMLN(-1) = pi*i — branch cut on the negative real axis"
     formula: "=IMLN(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imln_zero_is_num
     description: "IMLN(0) is undefined; Excel: #NUM!"
@@ -148,9 +173,11 @@ cases:
   - id: imsum_three_args
     description: "IMSUM accepts more than 2 args"
     formula: "=IMSUM(\"1+i\",\"2+2i\",\"3+3i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: improduct_three_args
     formula: "=IMPRODUCT(\"1+i\",\"1+i\",\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imdiv_by_zero_is_num
     formula: "=IMDIV(\"1+i\",\"0\")"
@@ -158,22 +185,27 @@ cases:
   - id: improduct_zero_factor
     description: "Zero factor collapses product to 0"
     formula: "=IMPRODUCT(\"3+4i\",\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsub_self_is_zero
     formula: "=IMSUB(\"3+4i\",\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMPOWER edges ------------------------------------------------------
   - id: impower_zero_exp
     description: "(any)^0 = 1"
     formula: "=IMPOWER(\"3+4i\",0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: impower_negative_exp
     description: "Negative exponent — (1+i)^-1 = 0.5 - 0.5i"
     formula: "=IMPOWER(\"1+i\",-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: impower_fractional_exp
     description: "(1+i)^0.5 = sqrt(z) on principal branch"
     formula: "=IMPOWER(\"1+i\",0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: impower_zero_base_zero_exp
     description: "0^0 — Excel: 1, but IMPOWER may differ"
@@ -186,13 +218,16 @@ cases:
   - id: imsqrt_negative_one
     description: "sqrt(-1) = i (principal branch)"
     formula: "=IMSQRT(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsqrt_negative_real
     description: "sqrt(-4) = 2i"
     formula: "=IMSQRT(\"-4\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsqrt_zero
     formula: "=IMSQRT(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Argument across quadrants ------------------------------------------
   - id: imargument_negative_real
@@ -221,10 +256,12 @@ cases:
   - id: imexp_pi_i
     description: "exp(pi*i) = -1 (Euler's identity)"
     formula: "=IMEXP(COMPLEX(0, PI()))"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imexp_one_plus_i
     description: "exp(1+i) = e*cos(1) + e*sin(1)*i"
     formula: "=IMEXP(\"1+i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Error / parse edges -----------------------------------------------
   - id: imreal_invalid_string_is_num
@@ -236,6 +273,7 @@ cases:
   - id: improduct_one_arg
     description: "IMPRODUCT with single arg returns that arg"
     formula: "=IMPRODUCT(\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- COMPLEX with text args ---------------------------------------------
   - id: complex_text_real_is_value
@@ -245,6 +283,7 @@ cases:
     description: "Blank real coerces to 0"
     setup: {}
     formula: "=COMPLEX(A1,4)"
+    tolerance: { abs: 0, rel: 0 }
 
   # =========================================================================
   # Closure expansion: per-function perspective coverage to satisfy the
@@ -279,52 +318,64 @@ cases:
   - id: imconjugate_pure_real
     description: "conj(3) = 3 — real has no flip"
     formula: "=IMCONJUGATE(\"3\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imconjugate_pure_imag
     description: "conj(5i) = -5i"
     formula: "=IMCONJUGATE(\"5i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imconjugate_negative_imag
     description: "conj(3-4i) = 3+4i"
     formula: "=IMCONJUGATE(\"3-4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imconjugate_double_is_identity
     description: "conj(conj(z)) = z"
     formula: "=IMCONJUGATE(IMCONJUGATE(\"3+4i\"))"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMCOS perspectives -------------------------------------------------
   - id: imcos_zero
     description: "cos(0) = 1+0i"
     formula: "=IMCOS(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcos_pure_real
     description: "cos(1) — pure real input matches scalar cos"
     formula: "=IMCOS(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcos_pure_imag
     description: "cos(i) = cosh(1)+0i"
     formula: "=IMCOS(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcos_negative_real
     description: "cos(-1) = cos(1) — even function"
     formula: "=IMCOS(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMCOSH perspectives ------------------------------------------------
   - id: imcosh_zero
     description: "cosh(0) = 1+0i"
     formula: "=IMCOSH(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcosh_pure_real
     description: "cosh(1) — matches scalar cosh"
     formula: "=IMCOSH(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcosh_pure_imag
     description: "cosh(i) = cos(1)+0i"
     formula: "=IMCOSH(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcosh_negative_real
     description: "cosh(-1) = cosh(1) — even function"
     formula: "=IMCOSH(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMCSC perspectives -------------------------------------------------
   - id: imcsc_pure_real
@@ -350,71 +401,87 @@ cases:
   - id: imdiv_by_real
     description: "(3+4i)/2 = 1.5+2i"
     formula: "=IMDIV(\"3+4i\",\"2\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imdiv_by_pure_imag
     description: "(3+4i)/i = 4-3i"
     formula: "=IMDIV(\"3+4i\",\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imdiv_self_is_one
     description: "z/z = 1+0i (real)"
     formula: "=IMDIV(\"3+4i\",\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMEXP perspectives -------------------------------------------------
   - id: imexp_pure_real
     description: "exp(1) = e+0i — matches scalar exp"
     formula: "=IMEXP(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imexp_negative_real
     description: "exp(-1) = 1/e+0i"
     formula: "=IMEXP(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMLN perspectives --------------------------------------------------
   - id: imln_one
     description: "ln(1) = 0+0i — unit"
     formula: "=IMLN(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imln_pure_imag
     description: "ln(i) = (pi/2)i"
     formula: "=IMLN(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMLOG10 perspectives -----------------------------------------------
   - id: imlog10_one
     description: "log10(1) = 0+0i"
     formula: "=IMLOG10(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imlog10_pure_real
     description: "log10(10) = 1+0i — matches scalar log10"
     formula: "=IMLOG10(\"10\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imlog10_pure_imag
     description: "log10(i) = (pi/(2*ln(10)))i"
     formula: "=IMLOG10(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imlog10_negative_real
     description: "log10(-1) = (pi/ln(10))i — branch cut"
     formula: "=IMLOG10(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMLOG2 perspectives ------------------------------------------------
   - id: imlog2_one
     description: "log2(1) = 0+0i"
     formula: "=IMLOG2(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imlog2_pure_real
     description: "log2(2) = 1+0i — matches scalar log2"
     formula: "=IMLOG2(\"2\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imlog2_pure_imag
     description: "log2(i) = (pi/(2*ln(2)))i"
     formula: "=IMLOG2(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imlog2_negative_real
     description: "log2(-1) = (pi/ln(2))i — branch cut"
     formula: "=IMLOG2(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMPRODUCT extra perspective ----------------------------------------
   - id: improduct_i_times_i
     description: "i*i = -1+0i — imaginary unit identity"
     formula: "=IMPRODUCT(\"i\",\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMREAL perspectives ------------------------------------------------
   - id: imreal_pure_imag
@@ -454,84 +521,103 @@ cases:
   - id: imsin_zero
     description: "sin(0) = 0+0i"
     formula: "=IMSIN(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsin_pure_real
     description: "sin(1) — matches scalar sin"
     formula: "=IMSIN(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsin_pure_imag
     description: "sin(i) = sinh(1)i"
     formula: "=IMSIN(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsin_negative_real
     description: "sin(-1) = -sin(1) — odd function"
     formula: "=IMSIN(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMSINH perspectives ------------------------------------------------
   - id: imsinh_zero
     description: "sinh(0) = 0+0i"
     formula: "=IMSINH(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsinh_pure_real
     description: "sinh(1) — matches scalar sinh"
     formula: "=IMSINH(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsinh_pure_imag
     description: "sinh(i) = sin(1)i"
     formula: "=IMSINH(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsinh_negative_real
     description: "sinh(-1) = -sinh(1) — odd function"
     formula: "=IMSINH(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMSQRT extra perspective -------------------------------------------
   - id: imsqrt_pure_real
     description: "sqrt(4) = 2+0i — matches scalar sqrt"
     formula: "=IMSQRT(\"4\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMSUB perspectives -------------------------------------------------
   - id: imsub_pure_real
     description: "(5)-(2) = 3+0i"
     formula: "=IMSUB(\"5\",\"2\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsub_pure_imag
     description: "(5i)-(2i) = 3i"
     formula: "=IMSUB(\"5i\",\"2i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsub_negative_result
     description: "(1+i)-(3+4i) = -2-3i"
     formula: "=IMSUB(\"1+i\",\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMSUM extra perspective --------------------------------------------
   - id: imsum_pure_imag_pair
     description: "(2i)+(3i) = 5i — pure imaginary sum"
     formula: "=IMSUM(\"2i\",\"3i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMTAN perspectives -------------------------------------------------
   - id: imtan_zero
     description: "tan(0) = 0+0i"
     formula: "=IMTAN(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imtan_pure_real
     description: "tan(1) — matches scalar tan"
     formula: "=IMTAN(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imtan_pure_imag
     description: "tan(i) = tanh(1)i"
     formula: "=IMTAN(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imtan_negative_real
     description: "tan(-1) = -tan(1) — odd function"
     formula: "=IMTAN(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMCOT perspectives -------------------------------------------------
   - id: imcot_pure_real
     description: "cot(1) — matches scalar cot (cos/sin)"
     formula: "=IMCOT(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcot_pure_imag
     description: "cot(i) = -i*coth(1) — pure imaginary axis"
     formula: "=IMCOT(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcot_zero_is_div0
     description: "cot(0) -> #NUM! (sin(0)=0 in denominator)"
@@ -540,21 +626,24 @@ cases:
   - id: imcot_identity_with_imtan
     description: "IMCOT(z) * IMTAN(z) = 1+0i — reciprocal identity (1-ULP libm drift on imag tail)"
     formula: "=IMPRODUCT(IMCOT(\"1+i\"),IMTAN(\"1+i\"))"
+    tolerance: { abs: 0, rel: 0 }
     compare_mode: complex_text
-    tolerance: { abs: 1e-14 }
 
   - id: imcot_negative_real
     description: "cot(-1) = -cot(1) — odd function"
     formula: "=IMCOT(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMCSCH perspectives ------------------------------------------------
   - id: imcsch_pure_real
     description: "csch(1) = 1/sinh(1) — matches scalar csch"
     formula: "=IMCSCH(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcsch_pure_imag
     description: "csch(i) = -i/sin(1) — pure imaginary axis"
     formula: "=IMCSCH(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imcsch_zero_is_div0
     description: "csch(0) -> #NUM! (sinh(0)=0 in denominator)"
@@ -569,29 +658,34 @@ cases:
   - id: imcsch_negative_real
     description: "csch(-1) = -csch(1) — odd function"
     formula: "=IMCSCH(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMSECH perspectives ------------------------------------------------
   - id: imsech_zero_is_one
     description: "sech(0) = 1/cosh(0) = 1+0i"
     formula: "=IMSECH(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsech_pure_real
     description: "sech(1) = 1/cosh(1) — matches scalar sech"
     formula: "=IMSECH(\"1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsech_pure_imag
     description: "sech(i) = 1/cos(1) — pure imaginary axis"
     formula: "=IMSECH(\"i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imsech_identity_with_imcosh
     description: "IMSECH(z) * IMCOSH(z) = 1+0i — reciprocal identity (1-ULP libm drift on imag tail)"
     formula: "=IMPRODUCT(IMSECH(\"1+i\"),IMCOSH(\"1+i\"))"
+    tolerance: { abs: 0, rel: 0 }
     compare_mode: complex_text
-    tolerance: { abs: 1e-14 }
 
   - id: imsech_negative_real
     description: "sech(-1) = sech(1) — even function"
     formula: "=IMSECH(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
@@ -678,3 +772,4 @@ cases:
 
   - id: opt_complex_suffix_omit
     formula: "=COMPLEX(1,1,)"
+    tolerance: { abs: 0, rel: 0 }

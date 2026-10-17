@@ -51,8 +51,11 @@ double years_to_maturity(double settlement, double maturity, int basis, bool dat
 // Excel's start for the yield Newton iteration, from the coupon rate, the
 // market price and the settlement-to-maturity span `ny` in years.
 inline double yield_initial_guess(double rate, double pr, double ny) noexcept {
-  const double denom = ny * (100.0 + pr) / 2.0 + (pr - 100.0) / 4.0;
-  return (100.0 * (rate * ny) + (100.0 - pr)) / denom;
+  const double d = pr - 100.0;
+  double denom = ny * 100.0;
+  denom = (ny * d) / 2.0 + denom;
+  denom = d / 4.0 + denom;
+  return (((rate * ny) * 100.0) - d) / denom;
 }
 
 // Newton shell shared by YIELD and ODDFYIELD. `step_at(yld)` returns the

@@ -110,24 +110,29 @@ cases:
   - id: npv_basic_scalars
     description: "NPV across flat scalar args"
     formula: "=NPV(0.1, 100, 200, 300)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: npv_from_range
     description: "NPV with a range argument (values flattened row-major)"
     setup: { A1: 100, A2: 200, A3: 300 }
     formula: "=NPV(0.1, A1:A3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: npv_mixed_scalar_and_range
     description: "NPV with mixed scalar and range args; positional index runs across concatenated sequence"
     setup: { A1: 100, A2: 200 }
     formula: "=NPV(0.1, 50, A1:A2, 300)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: npv_zero_rate
     description: "rate=0 reduces NPV to the sum"
     formula: "=NPV(0, 100, 200, 300)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: npv_high_rate
     description: "High discount rate (100%) collapses NPV toward the first cash flow / 2"
     formula: "=NPV(1.0, 100, 200, 300)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IRR -----------------------------------------------------------------
   - id: irr_basic

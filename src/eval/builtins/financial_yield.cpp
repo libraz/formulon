@@ -9,31 +9,21 @@
 // output back into PRICE (with the same settlement/maturity/rate/...
 // arguments) recovers `pr` to ~1e-9.
 //
-// The numerical strategy mirrors Microsoft's documented YIELD:
+// With A = accrued days, E = coupon period days, DSM = days settlement to maturity:
 //
-//   * n == 1 (only one coupon left -- settlement falls inside the final
-//     coupon period). PRICE in this branch uses simple-interest
-//     discounting on the single remaining cash flow, which inverts in
-//     closed form. Solving
+//   * n == 1 (settlement inside the final coupon period): closed form
 //
-//       pr = (redemption + cf) / (1 + t1*(yld/freq)) - AI
+//       YIELD = (((red/100 + rate/freq) - (pr/100 + (rate/freq) * (A/E))) / (pr/100 + (rate/freq) * (A/E)))
+//               * ((freq * E) / DSM)
 //
-//     for yld gives
+//     with E the actual days from the previous coupon date to maturity on
+//     bases 2 and 3. A zero denominator is `#NUM!`.
 //
-//       yld = ((redemption + cf - pr - AI) / (pr + AI)) * (E / DSC) * freq
-//
-//     where cf = 100*rate/freq, AI = 100*rate*A/(E*freq),
-//     t1 = DSC/E. (Notation: A = days_bs, E = period_days, DSC = days_nc.)
-//     A zero `pr + AI` denominator surfaces as `#NUM!`.
-//
-//   * n > 1. The PRICE branch has no analytic inverse; Newton-Raphson on
-//     the analytic derivative of PRICE starts from
-//
-//       y0 = (100*(rate*Ny) + (100-pr)) / (Ny*(100+pr)/2 + (pr-100)/4)
-//
-//     with Ny the settlement-to-maturity span in years, and stops when a
-//     step is smaller than 1e-10 -- that last step is not applied. Negative
-//     yields are allowed. Non-convergence in 100 steps is `#NUM!`.
+//   * n > 1: Newton's method on the multi-period PRICE with its analytic
+//     derivative, from y0 = (((rate * Y) * 100) - d) / (d/4 + ((Y * d)/2 + Y * 100)),
+//     d = pr - 100, Y the settlement-to-maturity span in years. A step below
+//     1e-10 ends the iteration and is not applied. Negative yields are
+//     allowed; no convergence in 100 steps is `#NUM!`.
 //
 // The clean-price kernel itself is shared with PRICE via
 // `financial_clean_price.h` -- both functions agree by construction.
@@ -59,41 +49,27 @@ double years_to_maturity(double settlement, double maturity, int basis, bool dat
   const double m = std::trunc(maturity);
   const date_time::YMD sd = date_time::ymd_from_serial(s, date1904);
   const date_time::YMD md = date_time::ymd_from_serial(m, date1904);
-  const std::int64_t s_days = date_time::days_from_civil(sd.y, sd.m, sd.d);
-  const auto anniversary = [&](int years) { return date_time::days_from_civil(sd.y + years, sd.m, sd.d); };
-  int years = md.y - sd.y;
-  if (anniversary(years) > date_time::days_from_civil(md.y, md.m, md.d)) {
-    --years;
+  const bool after_anniversary = md.m > sd.m || (md.m == sd.m && md.d >= sd.d);
+  double whole = static_cast<double>(md.y) - static_cast<double>(sd.y);
+  int anniversary_year = md.y;
+  if (!after_anniversary) {
+    whole = whole - 1.0;
+    anniversary_year = md.y - 1;
+  } else if (md.m == sd.m && md.d == sd.d) {
+    return whole;
   }
-  const double anniv = s + static_cast<double>(anniversary(years) - s_days);
-  const double remainder_actual = m - anniv;
-  double remainder = remainder_actual;
-  double year_len = 365.0;
-  switch (basis) {
-    case 0:
-    case 4:
-      remainder = date_time::basis_days_between(anniv, m, basis, date1904);
-      year_len = 360.0;
-      break;
-    case 2:
-      year_len = 360.0;
-      break;
-    case 1: {
-      const std::int64_t lo = anniversary(years);
-      const std::int64_t hi = anniversary(years + 1);
-      for (int y = sd.y + years; y <= sd.y + years + 1; ++y) {
-        const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-        const std::int64_t feb29 = leap ? date_time::days_from_civil(y, 2, 29) : -1;
-        if (leap && feb29 >= lo && feb29 < hi) {
-          year_len = 366.0;
-        }
-      }
-      break;
-    }
-    default:
-      break;
+  // The anniversary of settlement in the year before maturity, rolled over
+  // (a February 29 settlement lands on March 1 in a common year).
+  const double anniversary =
+      date_time::serial_from_ymd(anniversary_year, sd.m, 1u, date1904) + static_cast<double>(sd.d) - 1.0;
+  const double days = date_time::basis_days_between(anniversary, m, basis, date1904);
+  double year = 360.0;
+  if (basis == 3) {
+    year = 365.0;
+  } else if (basis == 1) {
+    year = date_time::days_in_month(md.y, 2u) == 29u ? 366.0 : 365.0;
   }
-  return static_cast<double>(years) + remainder / year_len;
+  return days / year + whole;
 }
 
 namespace {
@@ -105,7 +81,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   if (!in) {
     return std::move(in.error());
   }
-  const auto& [tail, cd, freq_d, cf, ai] = in.value();
+  const auto& [tail, cd, freq_d, cf] = in.value();
   const double rate = tail.rate;
   const double pr_v = tail.amount;
   const double red = tail.redemption;
@@ -114,55 +90,55 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
     return ErrorCode::Num;
   }
   const std::int32_t n = cd.coupons_remaining;
+  auto settlement = read_financial_date(args, 0);
+  auto maturity = read_financial_date(args, 1);
+  if (!settlement || !maturity) {
+    return ErrorCode::Num;
+  }
+  const double accrued_days = cd.days_bs;
+  double period_days = cd.period_days;
 
-  // --- n == 1: closed-form analytic inversion of the simple-interest
-  // discount branch. See the file-level comment for the derivation.
-  // We use `bond_dsc` (not the raw `days_nc`) because for bases 2 / 3
-  // the bond formula needs `days_bs + DSC == period_days`; see
-  // `coupon_schedule.h` for the rationale.
+  // --- n == 1: closed-form inversion of the simple-interest discount branch.
   if (n == 1) {
-    const double denom = pr_v + ai;
-    if (denom == 0.0) {
+    if (tail.basis == 2 || tail.basis == 3) {
+      period_days = std::trunc(maturity.value()) - cd.pcd;
+    }
+    const double dsm = date_time::basis_days_between(std::trunc(settlement.value()), std::trunc(maturity.value()),
+                                                     tail.basis, date1904);
+    const double coupon = rate / freq_d;
+    const double face = red / 100.0 + coupon;
+    const double paid = pr_v / 100.0 + coupon * (accrued_days / period_days);
+    if (paid == 0.0 || dsm <= 0.0) {
       return ErrorCode::Num;
     }
-    if (cd.bond_dsc <= 0.0) {
-      return ErrorCode::Num;
-    }
-    const double yld = ((red + cf - pr_v - ai) / denom) * (cd.period_days / cd.bond_dsc) * freq_d;
+    const double yld = ((face - paid) / paid) * ((freq_d * period_days) / dsm);
     if (std::isnan(yld) || std::isinf(yld)) {
       return ErrorCode::Num;
     }
     return yld;
   }
 
-  // --- n > 1: Newton-Raphson on the price kernel, see the file header.
-  auto settlement = read_financial_date(args, 0);
-  auto maturity = read_financial_date(args, 1);
-  if (!settlement || !maturity) {
-    return ErrorCode::Num;
-  }
+  // --- n > 1: Newton's method on the price kernel with its analytic derivative.
   const double ny = years_to_maturity(settlement.value(), maturity.value(), tail.basis, date1904);
   const double yld = yield_initial_guess(rate, pr_v, ny);
   // Plain locals: a lambda cannot capture structured bindings in C++17.
   const double freq = freq_d;
-  const double coupon = cf;
-  const double days_bs = cd.days_bs;
-  const double period_days = cd.period_days;
-  const double t1 = cd.bond_dsc / period_days;
+  const double e = period_days;
+  const double f = (period_days - accrued_days) / period_days;
+  const double dsc_over_e = f;
   return newton_yield_by_steps(yld, [&](double y) -> Expected<double, ErrorCode> {
-    const double b = 1.0 + y / freq;
-    const double t_n = static_cast<double>(n - 1) + t1;
-    double price = red / excel_power(b, t_n);
-    double coupons = 0.0;
+    const double price = bond_price_multi(y, rate, red, freq, e, accrued_days, n);
+    const double base = (y / freq) + 1.0;
+    const double weight = (rate / freq) * 100.0;
+    double slope = 0.0;
     for (std::int32_t k = 1; k <= n; ++k) {
-      coupons += coupon / excel_power(b, static_cast<double>(k - 1) + t1);
+      const double power = excel_power(base, static_cast<double>(k) + dsc_over_e);
+      const double t = dsc_over_e + (static_cast<double>(k) - 1.0);
+      slope = ((-weight * t) / (freq * power)) + slope;
     }
-    price = price + coupons - coupon * days_bs / period_days;
-    double d = -t_n * red / excel_power(b, static_cast<double>(n) + t1);
-    for (std::int32_t k = 1; k <= n; ++k) {
-      d += -(static_cast<double>(k - 1) + t1) * coupon / excel_power(b, static_cast<double>(k) + t1);
-    }
-    return (price - pr_v) / (d / freq);
+    const double last = (dsc_over_e + (static_cast<double>(n) - 1.0)) * red;
+    slope = slope - last / (freq * excel_power(base, dsc_over_e + static_cast<double>(n)));
+    return (price - pr_v) / slope;
   });
 }
 

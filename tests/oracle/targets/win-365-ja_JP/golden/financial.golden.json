@@ -213,7 +213,11 @@
         "kind": "text",
         "value": "481.5928"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "npv_from_range",
@@ -236,7 +240,11 @@
         "kind": "text",
         "value": "481.5928"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "npv_mixed_scalar_and_range",
@@ -255,7 +263,11 @@
         "kind": "text",
         "value": "483.2662"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "npv_zero_rate",
@@ -265,7 +277,11 @@
         "kind": "text",
         "value": "600"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "npv_high_rate",
@@ -275,7 +291,11 @@
         "kind": "text",
         "value": "137.5"
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "irr_basic",

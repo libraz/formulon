@@ -187,16 +187,38 @@ Value Tan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_math(&std::tan, args);
 }
 
+// asin / acos on [-1, 1] through atan: r = sqrt((2 - (1 - x)) * (1 - x)) is
+// sqrt(1 - x^2) without the cancellation, and r == 0 only at x = +-1.
+double excel_asin(double x) noexcept {
+  double r = 1.0 - x;
+  r = (2.0 - r) * r;
+  r = std::sqrt(r);
+  if (r == 0.0) {
+    return x < 0.0 ? -(kPi / 2.0) : kPi / 2.0;
+  }
+  return std::atan(x / r);
+}
+
+double excel_acos(double x) noexcept {
+  double r = 1.0 - x;
+  r = (2.0 - r) * r;
+  r = std::sqrt(r);
+  if (r == 0.0) {
+    return x < 0.0 ? kPi : 0.0;
+  }
+  return (kPi / 2.0) - std::atan(x / r);
+}
+
 // ASIN(x) - arcsine. Domain [-1, 1]; outside -> `#NUM!`. Result in
 // [-pi/2, pi/2] radians.
 Value Asin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_guarded_unary_math(&std::asin, &closed_unit_domain, args);
+  return apply_guarded_unary_math(&excel_asin, &closed_unit_domain, args);
 }
 
 // ACOS(x) - arccosine. Domain [-1, 1]; outside -> `#NUM!`. Result in
 // [0, pi] radians.
 Value Acos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_guarded_unary_math(&std::acos, &closed_unit_domain, args);
+  return apply_guarded_unary_math(&excel_acos, &closed_unit_domain, args);
 }
 
 // ATAN(x) - arctangent. No domain restriction. Result in (-pi/2, pi/2)

@@ -322,14 +322,15 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(rate_e.error());
   }
   const double rate = rate_e.value();
+  const double discount = 1.0 + rate;
   double total = 0.0;
-  double discount = 1.0 + rate;
   // Walk value1..valueN. Range-sourced bool/text/blank cells were already
   // dropped by the dispatcher's numeric-only filter; a direct scalar
   // logical / numeric-text argument is coerced and contributes at its
   // period (see the per-iteration comment). `period_discount` only steps
-  // forward when a cash flow is actually consumed.
-  double period_discount = discount;
+  // forward when a cash flow is actually consumed. Each flow is divided by the
+  // growth factor of the period before it; the sum is discounted once at the end.
+  double period_discount = 1.0;
   for (std::uint32_t i = 1; i < arity; ++i) {
     const Value& v = args[i];
     if (v.is_error()) {
@@ -351,13 +352,10 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       }
       cash = coerced.value();
     }
-    if (period_discount == 0.0) {
-      return Value::error(ErrorCode::Num);
-    }
-    total += cash / period_discount;
-    period_discount *= discount;
+    total = total + cash / period_discount;
+    period_discount = period_discount * discount;
   }
-  return finalize(total);
+  return finalize(total / discount);
 }
 
 // --- RATE(nper, pmt, pv, [fv=0], [type=0], [guess=0.1]) -----------------

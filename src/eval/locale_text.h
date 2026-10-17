@@ -16,6 +16,9 @@ namespace eval {
 /// Shortest round-trip text of `value` with the locale decimal separator.
 std::string locale_number_text(double value);
 
+/// Decimal separator of the active evaluation profile's locale.
+char locale_decimal_separator() noexcept;
+
 /// Locale name of a boolean (`TRUE` / `WAHR` / `VRAI`).
 std::string_view locale_bool_text(bool value) noexcept;
 

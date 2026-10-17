@@ -402,6 +402,51 @@ TEST(ComplexReciprocalTrig, MatchesExcelValues) {
   EXPECT_EQ(csc_conj.as_text(), "0.621518017170428+0.303931001628427i");
 }
 
+TEST(FinancialSolvers, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=NPV(0.1,{-10000,3000,4200,6800})", 1188.4434123352207},
+      {"=NPV(0.08,{-10000,3000,4200,6800})", 1645.055612946685},
+      {"=ASIN(0.5)", 0.5235987755982989},
+      {"=ACOS(0.5)", 1.0471975511965976},
+      {"=ASIN(0.25)", 0.25268025514207865},
+      {"=ACOS(0.25)", 1.318116071652818},
+      {"=YIELD(DATE(2014,2,28),DATE(2034,8,31),0.0575,88.3,100,4,2)", 0.0681335077911804},
+      {"=YIELD(DATE(2008,2,29),DATE(2026,1,1),0.0575,110.25,100,1,3)", 0.0487513713275858},
+      {"=YIELD(DATE(2008,1,1),DATE(2021,2,28),0.0575,101.5,1000,1,3)", 0.21522473374983334},
+      {"=YIELD(DATE(2008,1,1),DATE(2015,7,15),0.1,95.04287,100,2,2)", 0.1098339003443397},
+      {"=YIELD(DATE(2010,7,15),DATE(2015,7,15),0,120,100,4,0)", -0.036298609507787176},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(ComplexText, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {"=COMPLEX(0.0000001,0.0000002)", "0.0000001+0.0000002i"},
+      {"=COMPLEX(0.00001,0.000002)", "0.00001+0.000002i"},
+      {"=COMPLEX(0.001,123456789012345)", "0.001+123456789012345i"},
+      {"=COMPLEX(1E-20,1E20)", "1E-20+100000000000000000000i"},
+      {"=COMPLEX(1.23456789012345E-6,0)", "1.23456789012345E-06"},
+      {"=COMPLEX(0,1.23456789012345E-6)", "1.23456789012345E-06i"},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_text()) << c.formula;
+    EXPECT_EQ(v.as_text(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

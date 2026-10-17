@@ -12,6 +12,10 @@
 namespace formulon {
 namespace eval {
 
+char locale_decimal_separator() noexcept {
+  return locale_facts(current_eval_profile()).decimal_separator;
+}
+
 std::string locale_number_text(double value) {
   // A subnormal reads as a signed zero.
   if (value != 0.0 && flush_subnormal(value) == 0.0) {
@@ -27,7 +31,7 @@ std::string locale_number_text(double value) {
       format_double(out, value, 14);
     }
   }
-  const char separator = locale_facts(current_eval_profile()).decimal_separator;
+  const char separator = locale_decimal_separator();
   if (separator != '.') {
     for (char& c : out) {
       if (c == '.') {

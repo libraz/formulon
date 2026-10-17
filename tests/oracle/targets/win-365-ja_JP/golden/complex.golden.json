@@ -21,7 +21,11 @@
         "kind": "text",
         "value": "3+4i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_full_j_suffix",
@@ -31,7 +35,11 @@
         "kind": "text",
         "value": "3+4j"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_pure_imag_plus_one",
@@ -41,7 +49,11 @@
         "kind": "text",
         "value": "i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_pure_imag_minus_one",
@@ -51,7 +63,11 @@
         "kind": "text",
         "value": "-i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_pure_imag_five",
@@ -61,7 +77,11 @@
         "kind": "text",
         "value": "5i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_pure_real",
@@ -71,7 +91,11 @@
         "kind": "text",
         "value": "3"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_full_plus_one_imag",
@@ -81,7 +105,11 @@
         "kind": "text",
         "value": "3+i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_full_minus_one_imag",
@@ -91,7 +119,11 @@
         "kind": "text",
         "value": "3-i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_invalid_suffix_is_value",
@@ -141,7 +173,11 @@
         "kind": "text",
         "value": "3-4i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imargument_three_four",
@@ -171,7 +207,11 @@
         "kind": "text",
         "value": "3+4i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsum_mixed_suffix_is_value",
@@ -191,7 +231,11 @@
         "kind": "text",
         "value": "3+2i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "improduct_two_args",
@@ -201,7 +245,11 @@
         "kind": "text",
         "value": "2+11i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imdiv_one_plus_i_over_one_minus_i",
@@ -211,7 +259,11 @@
         "kind": "text",
         "value": "i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "impower_square",
@@ -221,7 +273,11 @@
         "kind": "text",
         "value": "1.22514845490862E-16+2i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imln_one_plus_i",
@@ -231,7 +287,11 @@
         "kind": "text",
         "value": "0.346573590279973+0.785398163397448i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsqrt_i",
@@ -241,7 +301,11 @@
         "kind": "text",
         "value": "0.707106781186548+0.707106781186547i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imexp_zero",
@@ -251,7 +315,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsin_one_plus_i",
@@ -261,7 +329,11 @@
         "kind": "text",
         "value": "1.29845758141598+0.634963914784736i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcos_one_plus_i",
@@ -271,7 +343,11 @@
         "kind": "text",
         "value": "0.833730025131149-0.988897705762865i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imtan_one_plus_i",
@@ -281,7 +357,11 @@
         "kind": "text",
         "value": "0.271752585319512+1.08392332733869i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsinh_one_plus_i",
@@ -291,7 +371,11 @@
         "kind": "text",
         "value": "0.634963914784736+1.29845758141598i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcosh_one_plus_i",
@@ -301,7 +385,11 @@
         "kind": "text",
         "value": "0.833730025131149+0.988897705762865i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsec_one_plus_i",
@@ -339,7 +427,11 @@
         "kind": "text",
         "value": "1.16096404744368+0.668902106225488i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog10_two_plus_i",
@@ -349,7 +441,11 @@
         "kind": "text",
         "value": "0.349485002168009+0.201359598136687i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imln_negative_real",
@@ -359,7 +455,11 @@
         "kind": "text",
         "value": "3.14159265358979i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imln_zero_is_num",
@@ -379,7 +479,11 @@
         "kind": "text",
         "value": "6+6i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "improduct_three_args",
@@ -389,7 +493,11 @@
         "kind": "text",
         "value": "-2+2i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imdiv_by_zero_is_num",
@@ -409,7 +517,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsub_self_is_zero",
@@ -419,7 +531,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "impower_zero_exp",
@@ -429,7 +545,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "impower_negative_exp",
@@ -439,7 +559,11 @@
         "kind": "text",
         "value": "0.5-0.5i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "impower_fractional_exp",
@@ -449,7 +573,11 @@
         "kind": "text",
         "value": "1.09868411346781+0.455089860562227i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "impower_zero_base_zero_exp",
@@ -479,7 +607,11 @@
         "kind": "text",
         "value": "6.1257422745431E-17+i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsqrt_negative_real",
@@ -489,7 +621,11 @@
         "kind": "text",
         "value": "1.22514845490862E-16+2i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsqrt_zero",
@@ -499,7 +635,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imargument_negative_real",
@@ -569,7 +709,11 @@
         "kind": "text",
         "value": "-1+3.2311393144413E-15i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imexp_one_plus_i",
@@ -579,7 +723,11 @@
         "kind": "text",
         "value": "1.46869393991589+2.28735528717884i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imreal_invalid_string_is_num",
@@ -609,7 +757,11 @@
         "kind": "text",
         "value": "3+4i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "complex_text_real_is_value",
@@ -629,7 +781,11 @@
         "kind": "text",
         "value": "4i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imabs_pure_real",
@@ -689,7 +845,11 @@
         "kind": "text",
         "value": "3"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imconjugate_pure_imag",
@@ -699,7 +859,11 @@
         "kind": "text",
         "value": "-5i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imconjugate_negative_imag",
@@ -709,7 +873,11 @@
         "kind": "text",
         "value": "3+4i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imconjugate_double_is_identity",
@@ -719,7 +887,11 @@
         "kind": "text",
         "value": "3+4i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcos_zero",
@@ -729,7 +901,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcos_pure_real",
@@ -739,7 +915,11 @@
         "kind": "text",
         "value": "0.54030230586814"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcos_pure_imag",
@@ -749,7 +929,11 @@
         "kind": "text",
         "value": "1.54308063481524"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcos_negative_real",
@@ -759,7 +943,11 @@
         "kind": "text",
         "value": "0.54030230586814"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcosh_zero",
@@ -769,7 +957,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcosh_pure_real",
@@ -779,7 +971,11 @@
         "kind": "text",
         "value": "1.54308063481524"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcosh_pure_imag",
@@ -789,7 +985,11 @@
         "kind": "text",
         "value": "0.54030230586814"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcosh_negative_real",
@@ -799,7 +999,11 @@
         "kind": "text",
         "value": "1.54308063481524"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsc_pure_real",
@@ -861,7 +1065,11 @@
         "kind": "text",
         "value": "1.5+2i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imdiv_by_pure_imag",
@@ -871,7 +1079,11 @@
         "kind": "text",
         "value": "4-3i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imdiv_self_is_one",
@@ -881,7 +1093,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imexp_pure_real",
@@ -891,7 +1107,11 @@
         "kind": "text",
         "value": "2.71828182845905"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imexp_negative_real",
@@ -901,7 +1121,11 @@
         "kind": "text",
         "value": "0.367879441171442"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imln_one",
@@ -911,7 +1135,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imln_pure_imag",
@@ -921,7 +1149,11 @@
         "kind": "text",
         "value": "1.5707963267949i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog10_one",
@@ -931,7 +1163,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog10_pure_real",
@@ -941,7 +1177,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog10_pure_imag",
@@ -951,7 +1191,11 @@
         "kind": "text",
         "value": "0.682188176920921i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog10_negative_real",
@@ -961,7 +1205,11 @@
         "kind": "text",
         "value": "1.36437635384184i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog2_one",
@@ -971,7 +1219,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog2_pure_real",
@@ -981,7 +1233,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog2_pure_imag",
@@ -991,7 +1247,11 @@
         "kind": "text",
         "value": "2.2661800709136i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imlog2_negative_real",
@@ -1001,7 +1261,11 @@
         "kind": "text",
         "value": "4.53236014182719i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "improduct_i_times_i",
@@ -1011,7 +1275,11 @@
         "kind": "text",
         "value": "-1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imreal_pure_imag",
@@ -1107,7 +1375,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsin_pure_real",
@@ -1117,7 +1389,11 @@
         "kind": "text",
         "value": "0.841470984807897"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsin_pure_imag",
@@ -1127,7 +1403,11 @@
         "kind": "text",
         "value": "1.1752011936438i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsin_negative_real",
@@ -1137,7 +1417,11 @@
         "kind": "text",
         "value": "-0.841470984807897"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsinh_zero",
@@ -1147,7 +1431,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsinh_pure_real",
@@ -1157,7 +1445,11 @@
         "kind": "text",
         "value": "1.1752011936438"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsinh_pure_imag",
@@ -1167,7 +1459,11 @@
         "kind": "text",
         "value": "0.841470984807897i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsinh_negative_real",
@@ -1177,7 +1473,11 @@
         "kind": "text",
         "value": "-1.1752011936438"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsqrt_pure_real",
@@ -1187,7 +1487,11 @@
         "kind": "text",
         "value": "2"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsub_pure_real",
@@ -1197,7 +1501,11 @@
         "kind": "text",
         "value": "3"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsub_pure_imag",
@@ -1207,7 +1515,11 @@
         "kind": "text",
         "value": "3i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsub_negative_result",
@@ -1217,7 +1529,11 @@
         "kind": "text",
         "value": "-2-3i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsum_pure_imag_pair",
@@ -1227,7 +1543,11 @@
         "kind": "text",
         "value": "5i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imtan_zero",
@@ -1237,7 +1557,11 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imtan_pure_real",
@@ -1247,7 +1571,11 @@
         "kind": "text",
         "value": "1.5574077246549"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imtan_pure_imag",
@@ -1257,7 +1585,11 @@
         "kind": "text",
         "value": "0.761594155955765i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imtan_negative_real",
@@ -1267,7 +1599,11 @@
         "kind": "text",
         "value": "-1.5574077246549"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcot_pure_real",
@@ -1277,7 +1613,11 @@
         "kind": "text",
         "value": "0.642092615934331"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcot_pure_imag",
@@ -1287,7 +1627,11 @@
         "kind": "text",
         "value": "-1.31303528549933i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcot_zero_is_div0",
@@ -1308,7 +1652,7 @@
         "value": "0.999999999999996-9.43689570931383E-16i"
       },
       "tolerance": {
-        "abs": 1e-14,
+        "abs": 0.0,
         "rel": 0.0
       },
       "compare_mode": "complex_text"
@@ -1321,7 +1665,11 @@
         "kind": "text",
         "value": "-0.642092615934331"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsch_pure_real",
@@ -1331,7 +1679,11 @@
         "kind": "text",
         "value": "0.850918128239322"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsch_pure_imag",
@@ -1341,7 +1693,11 @@
         "kind": "text",
         "value": "-1.18839510577812i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imcsch_zero_is_div0",
@@ -1375,7 +1731,11 @@
         "kind": "text",
         "value": "-0.850918128239322"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsech_zero_is_one",
@@ -1385,7 +1745,11 @@
         "kind": "text",
         "value": "1"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsech_pure_real",
@@ -1395,7 +1759,11 @@
         "kind": "text",
         "value": "0.648054273663885"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsech_pure_imag",
@@ -1405,7 +1773,11 @@
         "kind": "text",
         "value": "1.85081571768093"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "imsech_identity_with_imcosh",
@@ -1416,7 +1788,7 @@
         "value": "1+2.22044604925031E-16i"
       },
       "tolerance": {
-        "abs": 1e-14,
+        "abs": 0.0,
         "rel": 0.0
       },
       "compare_mode": "complex_text"
@@ -1429,7 +1801,11 @@
         "kind": "text",
         "value": "0.648054273663885"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "atp_imabs_bool",
@@ -1709,7 +2085,11 @@
         "kind": "text",
         "value": "1+i"
       },
-      "compare_mode": "complex_text"
+      "compare_mode": "complex_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     }
   ]
 }
