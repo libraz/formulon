@@ -32,6 +32,7 @@
 #include "eval/builtins/financial_bond_simple.h"
 #include "eval/builtins/financial_helpers.h"
 #include "eval/builtins/registration_helpers.h"
+#include "eval/checked_arith.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/rate_secant.h"
@@ -324,14 +325,17 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double rate = rate_e.value();
   const double discount = 1.0 + rate;
+  CheckedArith math;
   double total = 0.0;
   // Walk value1..valueN. Range-sourced bool/text/blank cells were already
   // dropped by the dispatcher's numeric-only filter; a direct scalar
   // logical / numeric-text argument is coerced and contributes at its
-  // period (see the per-iteration comment). `period_discount` only steps
-  // forward when a cash flow is actually consumed. Each flow is divided by the
-  // growth factor of the period before it; the sum is discounted once at the end.
+  // period (see the per-iteration comment). The growth factor only steps
+  // forward between consumed cash flows. Each flow is divided by the growth
+  // factor of the period before it; the sum is discounted once at the end
+  // unless the walk faulted.
   double period_discount = 1.0;
+  bool first = true;
   for (std::uint32_t i = 1; i < arity; ++i) {
     const Value& v = args[i];
     if (v.is_error()) {
@@ -353,10 +357,19 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       }
       cash = coerced.value();
     }
-    total = total + cash / period_discount;
-    period_discount = period_discount * discount;
+    if (!first) {
+      period_discount = math.mul(period_discount, discount);
+    }
+    first = false;
+    total = math.add(total, math.div(cash, period_discount));
   }
-  return finalize(total / discount);
+  if (!math.failed()) {
+    total = math.div(total, discount);
+  }
+  if (math.failed()) {
+    return Value::error(math.fault() == CheckedArith::kFaultDivide ? ErrorCode::Div0 : ErrorCode::Num);
+  }
+  return finalize(total);
 }
 
 // --- RATE(nper, pmt, pv, [fv=0], [type=0], [guess=0.1]) -----------------

@@ -25,6 +25,7 @@
 #include "eval/builtins/financial_price.h"
 #include "eval/builtins/financial_yield.h"
 #include "eval/builtins/numeric_helpers.h"
+#include "eval/checked_arith.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -118,58 +119,38 @@ bool has_opposite_cash_flow_signs(const std::vector<double>& flows) noexcept {
 }
 
 // The residual IRR's secant search drives to zero, as a function of
-// u = g / (-1 - g): `t = v / F; S = S + t; F = F * B` with `B = 1 / (1 + u)`,
-// the first flow undiscounted. Every operation is checked: an overflow or NaN
-// yields 0 with fault code 1, a divisor below the normal range yields 0 with
-// fault code 4, and a subnormal product or quotient flushes to 0. The walk
-// continues after a fault and the last code stays.
+// u = g / (-1 - g): `F = F * B; S = S + v / F` with `B = 1 / (1 + u)`, the
+// first flow undiscounted and no factor update after the last flow. The
+// arithmetic is checked (see CheckedArith).
 class IrrResidual {
  public:
-  static constexpr int kFaultOverflow = 1;
-  static constexpr int kFaultDivide = 4;
+  static constexpr int kFaultDivide = CheckedArith::kFaultDivide;
 
   explicit IrrResidual(const std::vector<double>& flows) noexcept : flows_(flows) {}
 
   double operator()(double u) noexcept {
-    const double b = checked_div(1.0, checked_add(1.0, u));
+    const double b = math_.div(1.0, math_.add(1.0, u));
     double sum = 0.0;
     double factor = 1.0;
+    bool first = true;
     for (const double v : flows_) {
-      const double t = checked_div(v, factor);
-      sum = checked_add(sum, t);
-      factor = checked_mul(factor, b);
+      if (!first) {
+        factor = math_.mul(factor, b);
+      }
+      first = false;
+      sum = math_.add(sum, math_.div(v, factor));
     }
     return sum;
   }
 
   /// Last fault code left by the evaluations so far, or 0.
-  int fault() const noexcept { return fault_; }
+  int fault() const noexcept { return math_.fault(); }
 
-  bool failed() const noexcept { return fault_ != 0; }
+  bool failed() const noexcept { return math_.failed(); }
 
  private:
-  double settle(double r) noexcept {
-    if (std::isnan(r) || std::fabs(r) > std::numeric_limits<double>::max()) {
-      fault_ = kFaultOverflow;
-      return 0.0;
-    }
-    return r;
-  }
-
-  double checked_add(double a, double b) noexcept { return settle(a + b); }
-
-  double checked_mul(double a, double b) noexcept { return flush_subnormal(settle(a * b)); }
-
-  double checked_div(double a, double b) noexcept {
-    if (std::fabs(b) < std::numeric_limits<double>::min()) {
-      fault_ = kFaultDivide;
-      return 0.0;
-    }
-    return flush_subnormal(settle(a / b));
-  }
-
   const std::vector<double>& flows_;
-  int fault_ = 0;
+  CheckedArith math_;
 };
 
 // IRR from `guess`: the secant search in u, restarted from 0.1, -1/11 and 2

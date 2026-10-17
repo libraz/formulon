@@ -259,6 +259,38 @@ TEST(FinancialNPV, BasicScalars) {
   EXPECT_NEAR(v.as_number(), 481.5928, 1e-3);
 }
 
+TEST(FinancialNPV, HugeRateFaultsAreDiv0) {
+  for (const char* src : {"=NPV(1E200,1,1,1)", "=NPV(-1,1)",
+                          "=NPV(1E10,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Div0) << src;
+  }
+}
+
+TEST(FinancialNPV, FactorUnderflowIsDiv0) {
+  std::string src = "=NPV(-0.9999999999";
+  for (int i = 0; i < 32; ++i) {
+    src += ",1";
+  }
+  src += ")";
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(FinancialNPV, FinalDiscountOverflowIsNum) {
+  const Value v = EvalSource("=NPV(-0.999999,1E+300*1,1E+300*1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialNPV, SingleFlowAtHugeRate) {
+  const Value v = EvalSource("=NPV(1E200,1,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1e-200);
+}
+
 TEST(FinancialNPV, ZeroRateIsSum) {
   // rate==0 reduces to sum since discount factor is 1.
   const Value v = EvalSource("=NPV(0, 100, 200, 300)");
@@ -432,13 +464,63 @@ TEST(FinancialIRR, OverflowedDiscountFactorIsDiv0) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(FinancialIRR, OverflowOnTrailingFactorIsNum) {
-  // Only the factor update after the last flow overflows, leaving the overflow fault.
+TEST(FinancialIRR, OverflowOnTrailingFactorOnlyKeepsValue) {
+  // The factor is not updated after the last flow, so that overflow never happens.
   std::string src = "=IRR({-1";
   for (int i = 0; i < 30; ++i) {
     src += ",1";
   }
   src += "}, 1E10)";
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.9999999990755244);
+}
+
+TEST(FinancialIRR, TrailingFactorOnlyOverflowAlternatingFlows) {
+  std::string src = "=IRR({1";
+  for (int i = 0; i < 30; ++i) {
+    src += ",-2";
+  }
+  src += "}, 1E10)";
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.9999999999999907);
+}
+
+TEST(FinancialIRR, TrailingFactorOnlyOverflowLargeGuess) {
+  std::string src = "=IRR({-1";
+  for (int i = 0; i < 20; ++i) {
+    src += ",1";
+  }
+  src += "}, 1E15)";
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.9999990462962693);
+}
+
+TEST(FinancialIRR, FactorOverflowBetweenFlowsIsDiv0) {
+  std::string src = "=IRR({-1";
+  for (int i = 0; i < 31; ++i) {
+    src += ",1";
+  }
+  src += "}, 1E10)";
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(FinancialIRR, SumOverflowIsNum) {
+  const Value v = EvalSource("=IRR({1E+307*10,1E+307*10,-1}, 0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialIRR, QuotientOverflowOnLastFlowIsNum) {
+  std::string src = "=IRR({-1";
+  for (int i = 0; i < 29; ++i) {
+    src += ",-1";
+  }
+  src += ",100000000000}, -0.9999999999)";
   const Value v = EvalSource(src);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
