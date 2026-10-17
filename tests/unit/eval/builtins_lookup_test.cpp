@@ -550,6 +550,38 @@ TEST(BuiltinsMatchCollation, ZhApproximateIsDirectional) {
   }
 }
 
+TEST(BuiltinsMatchApproximate, EqualProbeContinuesRight) {
+  const Value v = EvalSource("=MATCH(3,{3,3,3,3},1)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsMatchApproximate, ForeignTypeProbeFallsBackToLinearScan) {
+  const Value v = EvalSource("=MATCH(3,{1,\"b\",3,\"a\",5,TRUE,7},1)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsMatchApproximate, UnsortedNumbersCanMiss) {
+  const Value v = EvalSource("=MATCH(4,{5,3,9,1,7},1)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsMatchApproximate, BooleanLookupAmongMixedCells) {
+  const Value v = EvalSource("=MATCH(TRUE,{TRUE,FALSE,1,0,\"1\"},1)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsMatchApproximate, DescendingIsLinearScan) {
+  const Value miss = EvalSource("=MATCH(6,{5,3,9,1,7},-1)");
+  ASSERT_TRUE(miss.is_error()) << miss.debug_to_string();
+  const Value hit = EvalSource("=MATCH(3,{5,3,9,1,7},-1)");
+  ASSERT_TRUE(hit.is_number()) << hit.debug_to_string();
+  EXPECT_EQ(hit.as_number(), 2.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

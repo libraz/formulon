@@ -22,6 +22,7 @@
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
+#include "eval/lookups/binary_search.h"
 #include "eval/lookups/common.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
@@ -114,10 +115,52 @@ bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const Fu
   return true;
 }
 
-// Linear scan for VLOOKUP / HLOOKUP. Walks the first column (axis=Column) or
+// Orders a cell against the lookup value for the approximate searches: the
+// sign of (cell - lookup), or `kForeignType` for a cell of another type.
+// Only real numbers rank against a number (or blank) lookup; blank cells are
+// foreign. Wildcards are never honoured.
+class ApproxComparer {
+ public:
+  ApproxComparer(const Value& lookup, ExcelProfile profile)
+      : lookup_(lookup),
+        profile_(profile),
+        key_(lookup.is_text() ? collation_key(lookup.as_text(), profile, CollationStrength::kCompare) : std::string()) {
+  }
+
+  int operator()(const Value& cell) const {
+    if (lookup_.is_text()) {
+      if (!cell.is_text()) {
+        return kForeignType;
+      }
+      return collate_key_compare(collation_key(cell.as_text(), profile_, CollationStrength::kCompare), key_);
+    }
+    if (lookup_.is_number() || lookup_.is_blank()) {
+      if (!cell.is_number()) {
+        return kForeignType;
+      }
+      return sign(cell.as_number(), lookup_.is_blank() ? 0.0 : lookup_.as_number());
+    }
+    if (lookup_.is_boolean()) {
+      if (!cell.is_boolean()) {
+        return kForeignType;
+      }
+      return sign(cell.as_boolean() ? 1.0 : 0.0, lookup_.as_boolean() ? 1.0 : 0.0);
+    }
+    return kForeignType;
+  }
+
+ private:
+  static int sign(double x, double y) { return x < y ? -1 : (x > y ? 1 : 0); }
+
+  const Value& lookup_;
+  ExcelProfile profile_;
+  std::string key_;
+};
+
+// Lookup scan for VLOOKUP / HLOOKUP / LOOKUP. Walks the first column (axis=Column) or
 // the first row (axis=Row) of the `flat` rectangle (rows x cols, row-major)
-// for `lookup_value`, using approximate (largest <= value) or exact (first
-// hit) matching.
+// for `lookup_value`, using approximate (binary search) or exact (first hit)
+// matching.
 //
 // Returns the 0-based offset along the scanned axis on match, or `SIZE_MAX`
 // when no match was found.
@@ -126,9 +169,8 @@ bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const Fu
 // unescaped literal through the collator; otherwise it goes through
 // `wildcard_match` on the folded keys.
 //
-// Cross-type comparisons (Number vs Text, Bool vs anything else) produce "no
-// match" - the scanned cell is skipped. This is the same accepted divergence
-// MATCH documents for its approximate path.
+// Approximate mode follows `approximate_search`: a cell of another type than the
+// lookup value ends the binary search and the rest is scanned linearly.
 std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std::uint32_t cols, LookupAxis axis,
                         const Value& lookup_value, bool approximate, ExcelProfile profile) {
   const std::size_t n = axis == LookupAxis::Column ? rows : cols;
@@ -200,65 +242,10 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     return SIZE_MAX;
   }
 
-  // Approximate match: scan top-down (or left-right) recording the last
-  // position whose value is <= lookup_value. We do NOT short-circuit when
-  // a strictly-greater cell is seen — Mac Excel keeps scanning and
-  // returns the running last <= match even on unsorted data. For
-  // ascending-sorted input this produces the documented binary-search
-  // answer because every post-match cell is strictly greater (and
-  // skipped). Wildcards are NEVER honoured here (Excel treats them as
-  // literal text in approximate mode).
-  auto cmp_numeric = [](double x, double y) -> int {
-    if (x < y) {
-      return -1;
-    }
-    if (x > y) {
-      return 1;
-    }
-    return 0;
-  };
-  // Hoisted out of the scan loop below: `lookup_value` and `profile` are
-  // loop-invariant, so the text-mode branch normalises the lookup side
-  // once rather than once per scanned cell.
-  const std::string lookup_key = lookup_value.is_text()
-                                     ? collation_key(lookup_value.as_text(), profile, CollationStrength::kCompare)
-                                     : std::string();
-
-  std::size_t best = SIZE_MAX;
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = cell_at(i);
-    int cmp = 0;  // sign of (cell - lookup_value)
-    bool comparable = false;
-    if (lookup_value.is_text() && cell.is_text()) {
-      cmp = collate_key_compare(collation_key(cell.as_text(), profile, CollationStrength::kCompare), lookup_key);
-      comparable = true;
-    } else if ((lookup_value.is_number() || lookup_value.is_blank()) && cell.is_number()) {
-      // Blank cells in the scanned axis are NOT treated as numeric 0 in
-      // VLOOKUP/HLOOKUP approximate mode: Mac Excel returns `#N/A` for
-      // `=HLOOKUP(<blank>, $C$1:$G$6, 1)` even when the first row contains
-      // a blank cell at the matched offset, because blanks aren't part of
-      // the comparable ordering. Same rule when the lookup_value itself is
-      // blank — only real numeric cells participate in the approximate
-      // ranking, mirroring Mac Excel's empirical behaviour.
-      const double lv = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
-      const double cv = cell.as_number();
-      cmp = cmp_numeric(cv, lv);
-      comparable = true;
-    } else if (lookup_value.is_boolean() && cell.is_boolean()) {
-      const int lb = lookup_value.as_boolean() ? 1 : 0;
-      const int cb = cell.as_boolean() ? 1 : 0;
-      cmp = cmp_numeric(cb, lb);
-      comparable = true;
-    }
-    if (!comparable) {
-      // Cross-type: skip. Accepted divergence from Excel's full ordering.
-      continue;
-    }
-    if (cmp <= 0) {
-      best = i;
-    }
-  }
-  return best;
+  // Approximate match: binary search, falling back to a left-to-right scan at
+  // the first probe of another type.
+  const ApproxComparer order(lookup_value, profile);
+  return approximate_search(n, [&](std::size_t i) { return order(cell_at(i)); });
 }
 
 // Maps a scalar lookup result over the query array without routing through the
@@ -489,80 +476,14 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
     return Value::error(ErrorCode::NA);
   }
 
-  // Approximate match (match_type == 1 or -1). Linear scan; we do NOT
-  // honour wildcards here (Excel treats them as literals in approximate
-  // mode). Cross-type comparisons are skipped (treated as non-match).
-  auto cmp_numeric = [](double x, double y) -> int {
-    if (x < y) {
-      return -1;
-    }
-    if (x > y) {
-      return 1;
-    }
-    return 0;
-  };
-  // `lookup` and `profile` are loop-invariant; normalise the lookup side
-  // once rather than once per scanned cell (see classic.cpp::lookup_scan).
-  const std::string lookup_key =
-      lookup.is_text() ? collation_key(lookup.as_text(), profile, CollationStrength::kCompare) : std::string();
-  auto cmp_text = [&](std::string_view a) -> int {
-    return collate_key_compare(collation_key(a, profile, CollationStrength::kCompare), lookup_key);
-  };
-
-  // `last_valid_pos` is the running best position under the ordering rule.
-  // For type=+1 we want the largest position whose value is <= target; for
-  // type=-1 the largest position whose value is >= target.
-  std::size_t best_pos = 0;  // 1-based; 0 means "not found yet".
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = cells[i];
-    int cmp = 0;  // sign of (cell - lookup)
-    bool comparable = false;
-    if (lookup.is_text() && cell.is_text()) {
-      cmp = cmp_text(cell.as_text());
-      comparable = true;
-    } else if ((lookup.is_number() || lookup.is_blank()) && cell.is_number()) {
-      // Blank cells in the scanned axis are NOT treated as numeric 0 in MATCH
-      // approximate mode: only real numeric cells participate in the ordering,
-      // mirroring VLOOKUP/HLOOKUP's `lookup_scan` (see classic.cpp). A blank
-      // cell is skipped (non-comparable) so a blank slot inside an ascending
-      // range does not become a spurious 0 match.
-      const double lv = lookup.is_blank() ? 0.0 : lookup.as_number();
-      const double cv = cell.as_number();
-      cmp = cmp_numeric(cv, lv);
-      comparable = true;
-    } else if (lookup.is_boolean() && cell.is_boolean()) {
-      const int lb = lookup.as_boolean() ? 1 : 0;
-      const int cb = cell.as_boolean() ? 1 : 0;
-      cmp = cmp_numeric(cb, lb);
-      comparable = true;
-    }
-    if (!comparable) {
-      // Cross-type: skip. Accepted divergence from Excel's full ordering.
-      continue;
-    }
-    if (match_type == 1) {
-      // Ascending: record the last position whose cell is <= lookup. We
-      // do NOT short-circuit on a strictly-greater cell — Mac Excel's
-      // empirical behaviour on unsorted data is to keep scanning and
-      // simply return the running last <= match. For sorted ascending
-      // data this still produces the documented answer because every
-      // post-match cell is strictly greater (and skipped).
-      if (cmp <= 0) {
-        best_pos = i + 1;
-      }
-      continue;
-    }
-    // match_type == -1, descending: symmetric rule — record the last
-    // position whose cell is >= lookup, and keep scanning past strictly
-    // smaller cells without short-circuiting.
-    if (cmp >= 0) {
-      best_pos = i + 1;
-    }
-  }
-  if (best_pos == 0) {
+  // Approximate match. Wildcards are literal text here.
+  const ApproxComparer order(lookup, profile);
+  const auto cmp = [&](std::size_t i) { return order(cells[i]); };
+  const std::size_t pos = match_type == 1 ? approximate_search(n, cmp) : descending_scan(n, cmp);
+  if (pos == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }
-  return Value::number(static_cast<double>(best_pos));
+  return Value::number(static_cast<double>(pos + 1));
 }
 
 }  // namespace
@@ -575,17 +496,11 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
 // `#N/A`.
 //
 // match_type semantics:
-//   *  1 (default) - ascending array; returns the largest position whose
-//      value is <= lookup_value. Wildcards are NOT honoured.
+//   *  1 (default) - ascending array, binary search (`approximate_search`).
+//      Wildcards are NOT honoured.
 //   *  0           - exact match with DOS-style wildcards (`*`, `?`, `~`)
 //      for text targets; first hit wins. No match -> `#N/A`.
-//   * -1           - descending array; returns the largest position whose
-//      value is >= lookup_value.
-//
-// Cross-type comparison is not implemented beyond "same rank, ordered" for
-// approximate modes: a cell whose kind doesn't match the lookup_value rank
-// is treated as a non-match and never participates in the approximate
-// ranking. This is a documented accepted divergence.
+//   * -1           - descending array, linear scan (`descending_scan`).
 Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();

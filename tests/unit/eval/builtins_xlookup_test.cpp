@@ -1169,6 +1169,24 @@ TEST(BuiltinsXMatch, WildcardModeKeepsNonTextLookupKinds) {
   EXPECT_DOUBLE_EQ(boolean.as_number(), 3.0);
 }
 
+TEST(BuiltinsXLookup, BinarySearchOnDuplicateRunLandsOnProbedEqual) {
+  const Value v = EvalSource("=XMATCH(1,{5,5,5,1,1,1,9,9,9},0,2)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 5.0);
+}
+
+TEST(BuiltinsXLookup, BinarySearchOrdersNumberTextBoolean) {
+  const Value v = EvalSource("=XMATCH(\"b\",{1,\"a\",\"b\",\"c\",TRUE},0,2)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsXLookup, BinarySearchUnsortedNextSmallerTakesLowerBound) {
+  const Value v = EvalSource("=XMATCH(6,{5,3,9,1,7},-1,2)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

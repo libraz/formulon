@@ -20,6 +20,7 @@
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
+#include "eval/lookups/binary_search.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
@@ -50,8 +51,8 @@ enum class XMatchMode : std::int8_t { Exact = 0, Smaller = -1, Larger = 1, Wildc
 // Excel 365 search-mode codes for XLOOKUP / XMATCH. `FirstToLast` /
 // `LastToFirst` are linear scans in the obvious direction. `BinaryAsc` /
 // `BinaryDesc` assume the caller's array is already sorted (Excel does not
-// validate the sort order — neither do we) and drive an upper-bound
-// style search so duplicates resolve to the LAST matching index.
+// validate the sort order — neither do we) and probe the way Excel does, so
+// a duplicate run resolves to whichever equal the probing path reaches.
 enum class XSearchMode : std::int8_t { FirstToLast = 1, LastToFirst = -1, BinaryAsc = 2, BinaryDesc = -2 };
 
 // Three-way compare of (cell - lookup) honouring Excel 365's cross-type
@@ -307,93 +308,29 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     return best;
   }
 
-  // Binary search. The caller promises the array is sorted in the direction
-  // implied by `search_mode`. We run a single upper-bound pass in the
-  // effective (flipped-for-desc) view: `hi_eff` becomes the first index
-  // whose effective cell > target. Cells that are incomparable with the
-  // lookup (Error / Array / Ref / Lambda) are treated as > target so the
-  // search continues to narrow down; with all-clean arrays this is a
-  // no-op and with a foreign cell it keeps the upper-bound monotone.
+  // Binary search over the array as given: one comparison per probe, an equal
+  // probe is remembered and the search continues toward the start of the sorted
+  // order. A cell incomparable with the lookup (Error / Array / Ref / Lambda)
+  // counts as greater.
   const bool descending = search_mode == XSearchMode::BinaryDesc;
-  std::size_t hi_eff = 0;
-  {
-    std::size_t lo = 0;
-    std::size_t hi = n;  // half-open
-    while (lo < hi) {
-      const std::size_t mid = lo + ((hi - lo) / 2U);
-      int cmp = 0;
-      const bool cmp_ok = xlookup_cmp(cells[mid], lookup_value, profile, &cmp);
-      if (!cmp_ok) {
-        // Incomparable — treat as greater than target.
-        cmp = 1;
-      }
-      if (descending) {
-        cmp = -cmp;
-      }
-      // Upper-bound: advance `lo` while effective cell <= target.
-      if (cmp <= 0) {
-        lo = mid + 1U;
-      } else {
-        hi = mid;
-      }
-    }
-    hi_eff = lo;
-  }
-
-  // Exact / Wildcard: candidate is the last cell with effective value <=
-  // target, i.e. `hi_eff - 1`. Run the literal equality test; anything
-  // else is a miss.
-  if (match_mode == XMatchMode::Exact || match_mode == XMatchMode::Wildcard) {
-    if (hi_eff == 0) {
-      return SIZE_MAX;
-    }
-    if (xlookup_exact_eq(cells[hi_eff - 1U], lookup_value, wildcards, profile)) {
-      return hi_eff - 1U;
-    }
-    return SIZE_MAX;
-  }
-
-  // Smaller / Larger: short-circuit on an exact hit at `hi_eff - 1` so the
-  // LAST duplicate wins (matches Excel 365).
-  if (hi_eff > 0) {
+  const auto probe = [&](std::size_t i) -> int {
     int cmp = 0;
-    if (xlookup_cmp(cells[hi_eff - 1U], lookup_value, profile, &cmp) && cmp == 0) {
-      return hi_eff - 1U;
-    }
+    return xlookup_cmp(cells[i], lookup_value, profile, &cmp) ? cmp : 1;
+  };
+  const SortedSearchResult r = sorted_search(n, descending, /*prefer_last=*/descending, probe);
+  if (r.found != SIZE_MAX) {
+    return r.found;
   }
-
-  if (match_mode == XMatchMode::Smaller) {
-    if (!descending) {
-      // Ascending with no exact match: the largest cell < target sits at
-      // `hi_eff - 1` (lower_bound and upper_bound coincide in this case).
-      if (hi_eff == 0) {
-        return SIZE_MAX;
-      }
-      return hi_eff - 1U;
-    }
-    // Descending with no exact match: cells at `hi_eff..n-1` are < target
-    // (in real terms); values decrease with index, so the LARGEST of those
-    // sits at position `hi_eff`.
-    if (hi_eff >= n) {
-      return SIZE_MAX;
-    }
-    return hi_eff;
-  }
-
-  // Larger, no exact.
-  if (!descending) {
-    // Ascending: the smallest cell > target is at `hi_eff`.
-    if (hi_eff >= n) {
-      return SIZE_MAX;
-    }
-    return hi_eff;
-  }
-  // Descending: cells at `0..hi_eff-1` are > target (in real terms); values
-  // decrease with index, so the SMALLEST of those sits at `hi_eff - 1`.
-  if (hi_eff == 0) {
+  if (match_mode != XMatchMode::Smaller && match_mode != XMatchMode::Larger) {
     return SIZE_MAX;
   }
-  return hi_eff - 1U;
+  // No equal: the neighbours the search ended between, `hi` below and `lo` above
+  // in the sorted order (swapped when descending).
+  const bool take_hi = (match_mode == XMatchMode::Smaller) != descending;
+  if (take_hi) {
+    return r.hi >= 0 ? static_cast<std::size_t>(r.hi) : SIZE_MAX;
+  }
+  return r.lo < static_cast<std::ptrdiff_t>(n) ? static_cast<std::size_t>(r.lo) : SIZE_MAX;
 }
 
 // Coerce `v` to an int that must lie in the caller's whitelist. Narrows
