@@ -42,15 +42,18 @@ cases:
   - id: f_inv_95pct
     description: "95th percentile of F(5, 10) ~ 3.3258"
     formula: "=F.INV(0.95, 5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: f_inv_median
     description: "Median of F(5, 10) ~ 0.9319"
     formula: "=F.INV(0.5, 5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- F.INV.RT ------------------------------------------------------------
   - id: f_inv_rt_5pct
     description: "F.INV.RT(0.05, 5, 10) ~ 3.3258 (matches F.INV(0.95, ...))"
     formula: "=F.INV.RT(0.05, 5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: f_inv_round_trip
     description: "F.INV(F.DIST(2, 5, 10, TRUE), 5, 10) - 2 should be 0 to tolerance"
@@ -128,6 +131,7 @@ cases:
   - id: f_inv_p_zero
     description: "F.INV(0, ...) should be 0"
     formula: "=F.INV(0, 5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: f_inv_p_just_below_one
     description: "Tail quantile near 1 — F.INV(0.999, 5, 10)"
@@ -152,6 +156,7 @@ cases:
   - id: f_inv_rt_p_one
     description: "F.INV.RT(1, ...) -> 0"
     formula: "=F.INV.RT(1, 5, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Round-trip F.INV.RT with F.DIST.RT --------------------------------
   - id: f_inv_rt_round_trip
@@ -162,3 +167,4 @@ cases:
   - id: f_inv_complement
     description: "F.INV(0.95) == F.INV.RT(0.05)"
     formula: "=F.INV(0.95, 5, 10) - F.INV.RT(0.05, 5, 10)"
+    tolerance: { abs: 0, rel: 0 }

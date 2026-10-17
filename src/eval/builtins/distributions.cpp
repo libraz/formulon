@@ -48,6 +48,7 @@
 #include "eval/function_registry.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
+#include "eval/stats/inverse_distributions.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -284,21 +285,11 @@ Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (p <= 0.0 || p >= 1.0 || alpha <= 0.0 || beta_shape <= 0.0 || a >= b) {
     return Value::error(ErrorCode::Num);
   }
-  // Invert on the full [0, 1] support. Starting at 1e-12 silently clamps
-  // genuine extreme-tail roots (for example BETA.INV(5.77e-151, 1, 1)).
-  // A fixed, deep bisection converges uniformly for zero-tail and
-  // one-tail shapes, including cases where the PDF is singular or too
-  // small for a useful Newton update.
-  // Above the median the upper tail is solved instead: 1 - p is exact there,
-  // while I_y near 1 is flat across many doubles of y (I_y(a,b) = 1 - I_{1-y}(b,a)).
-  const bool upper = p > 0.5;
-  const double root =
-      upper ? stats::beta_inverse_tail(1.0 - p, beta_shape, alpha) : stats::beta_inverse_tail(p, alpha, beta_shape);
-  if (!std::isfinite(root)) {
+  const double r = stats::beta_inv_excel(p, alpha, beta_shape, a, b);
+  if (!std::isfinite(r)) {
     return Value::error(ErrorCode::Num);
   }
-  const double y = upper ? 1.0 - root : root;
-  return finalize(a + y * (b - a));
+  return finalize(r);
 }
 
 // ---------------------------------------------------------------------------
@@ -492,9 +483,7 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // GAMMA.INV(p, alpha, beta) - inverse of GAMMA.DIST's CDF, `beta` times the
-// unit-scale gamma quantile. The quantile is solved on the smaller of the two
-// tails (`stats::gamma_quantile`), which keeps a tiny `p` and a `p` near 1
-// equally accurate.
+// unit-scale gamma quantile (`stats::gamma_inv_excel`).
 Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto parsed = read_number_triple(args);
   if (!parsed) {
@@ -507,12 +496,11 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 0.0) {
     return finalize(0.0);
   }
-  const double x = p < 0.5 ? stats::gamma_quantile(alpha, p, /*upper=*/false)
-                           : stats::gamma_quantile(alpha, 1.0 - p, /*upper=*/true);
+  const double x = stats::gamma_inv_excel(p, alpha, beta_scale);
   if (std::isnan(x)) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(beta_scale * x);
+  return finalize(x);
 }
 
 // ---------------------------------------------------------------------------

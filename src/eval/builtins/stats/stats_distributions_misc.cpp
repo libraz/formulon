@@ -21,6 +21,7 @@
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/stats/incomplete_beta.h"
+#include "eval/stats/inverse_distributions.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -92,62 +93,10 @@ Value ConfidenceT(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 // BINOM.INV / CRITBINOM
 // ---------------------------------------------------------------------------
 
-// Bisection for the smallest integer k in [0, n] with CDF(k) >= alpha,
-// on the closed-form CDF. Used once a term-by-term walk would run past
-// its ceiling. Each step halves the bracket, so the step count is bounded
-// by the width of a double's exponent rather than by `n`.
-//
-// Maintains `CDF(lo) < alpha <= CDF(hi)`, with `hi` seeded at `n` because
-// `CDF(n) == 1` and the caller has already rejected `alpha >= 1`.
-//
-// The shape check uses the balanced midpoint, which is the least
-// resolvable pair the search can reach; refusing there keeps the answer
-// inside the family's tolerance rather than off by a step or more.
-static Value BinomInvBisect(double n, double p, double alpha) noexcept {
-  if (!beta_shapes_are_resolvable(0.5 * n, 0.5 * n)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double cdf_zero = BinomCdf(0.0, n, p);
-  if (std::isnan(cdf_zero)) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (cdf_zero >= alpha) {
-    return Value::number(0.0);
-  }
-  double lo = 0.0;
-  double hi = n;
-  while (hi - lo > 1.0) {
-    const double mid = std::floor(lo + 0.5 * (hi - lo));
-    if (!(mid > lo) || !(mid < hi)) {
-      // No integer strictly inside the bracket is representable at this
-      // magnitude; `hi` is the tightest answer available.
-      break;
-    }
-    const double cdf = BinomCdf(mid, n, p);
-    if (std::isnan(cdf)) {
-      return Value::error(ErrorCode::Num);
-    }
-    if (cdf >= alpha) {
-      hi = mid;
-    } else {
-      lo = mid;
-    }
-  }
-  return finite_number_result(hi);
-}
-
 // BINOM.INV(trials, probability_s, alpha) - smallest integer k in [0, trials]
-// with CDF(k) >= alpha. `trials` floors toward -inf. Domain:
-// trials >= 0, prob in (0, 1), alpha in (0, 1) -- Excel rejects both
-// endpoints of either probability with #NUM!. Alpha very close to 1 may saturate the
-// cumulative sum a hair below it due to floating-point roundoff; the correct
-// answer is then trials.
-//
-// The walk stops at `kMaxCumulativeTerms` terms; the bound is on the
-// terms actually consumed, not on `trials`, so a large-`trials` quantile
-// that still lands early (a small `probability_s`, say) is answered by
-// the walk. Past that the quantile is bisected on the closed-form CDF,
-// which costs one evaluation per halving of the bracket.
+// with CDF(k) >= alpha, found by bisection on the binomial CDF. `trials`
+// floors toward -inf. Domain: trials >= 0, prob in (0, 1), alpha in (0, 1) --
+// Excel rejects both endpoints of either probability with #NUM!.
 Value BinomInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_number_triple(args, 0, 1, 2);
   if (!input) {
@@ -159,23 +108,7 @@ Value BinomInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (n < 0.0 || p <= 0.0 || p >= 1.0 || alpha <= 0.0 || alpha >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  // Stepped as a double rather than an integer counter: `trials` is an
-  // unconstrained double, and a value past 2^64 would make the cast
-  // undefined. Increments are exact well beyond the term ceiling.
-  double cumulative = 0.0;
-  for (double k = 0.0; k <= n; k += 1.0) {
-    if (k >= kMaxCumulativeTerms) {
-      return BinomInvBisect(n, p, alpha);
-    }
-    cumulative += BinomPmf(k, n, p);
-    if (cumulative >= alpha) {
-      return Value::number(k);
-    }
-  }
-  // Only reachable when alpha is extremely close to 1 and floating-point
-  // roundoff keeps the cumulative sum a hair below it; the correct answer
-  // is trials.
-  return Value::number(n);
+  return finite_number_result(stats::binom_inv_excel(n, p, alpha));
 }
 
 // ---------------------------------------------------------------------------

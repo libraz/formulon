@@ -358,58 +358,6 @@ double q_gamma(double a, double x) noexcept {
   return q_gamma_cf(a, x).value;
 }
 
-double gamma_quantile(double a, double prob, bool upper) noexcept {
-  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
-  if (!(a > 0.0) || !(prob > 0.0 && prob < 1.0)) {
-    return kNaN;
-  }
-  // The smaller tail carries the information: `1 - prob` is exact once
-  // `prob > 0.5`, while a tail recovered as `1 - P` is not.
-  if (prob > 0.5) {
-    prob = 1.0 - prob;
-    upper = !upper;
-  }
-  // Newton on `ln tail(e^t) - ln prob`, a smooth near-linear function of
-  // `t = ln x` even when `prob` is far below double epsilon relative to 1.
-  // A bracket on the root keeps every step that Newton would throw outside it
-  // (or that a vanishing slope cannot define) on a bisection.
-  const double sign = upper ? -1.0 : 1.0;
-  constexpr double kMaxLogX = 700.0;
-  constexpr double kMaxStep = 4.0;
-  double lo = -kMaxLogX;
-  double hi = kMaxLogX;
-  double t = std::log(a);
-  for (int i = 0; i < 400; ++i) {
-    const double x = std::exp(t);
-    const double tail = upper ? q_gamma(a, x) : p_gamma(a, x);
-    if (std::isnan(tail)) {
-      return kNaN;
-    }
-    // A tail that underflowed lies below the target on the increasing side.
-    const double g = sign * (tail > 0.0 ? std::log(tail) - std::log(prob) : -kMaxLogX);
-    if (g < 0.0) {
-      lo = t;
-    } else {
-      hi = t;
-    }
-    const double slope = tail > 0.0 ? gamma_prefactor(a, x) / tail : 0.0;
-    double t_new;
-    if (slope > 0.0 && std::isfinite(slope)) {
-      t_new = t - std::clamp(g / slope, -kMaxStep, kMaxStep);
-    } else {
-      t_new = g < 0.0 ? t + kMaxStep : t - kMaxStep;
-    }
-    if (!(t_new > lo && t_new < hi)) {
-      t_new = (lo > -kMaxLogX && hi < kMaxLogX) ? 0.5 * (lo + hi) : std::clamp(t_new, lo, hi);
-    }
-    if (std::abs(t_new - t) <= 1e-15 * std::max(1.0, std::abs(t))) {
-      return std::exp(t_new);
-    }
-    t = t_new;
-  }
-  return kNaN;
-}
-
 double regularized_incomplete_beta(double a, double b, double x) noexcept {
   if (a <= 0.0 || b <= 0.0 || x < 0.0 || x > 1.0) {
     return std::numeric_limits<double>::quiet_NaN();
@@ -454,27 +402,6 @@ double regularized_incomplete_beta(double a, double b, double x) noexcept {
   }
   const CfResult cf = beta_cf(b, a, 1.0 - x);
   return cf.converged ? 1.0 - bt * cf.value / b : cf.value;
-}
-
-double beta_inverse_tail(double target, double shape1, double shape2) noexcept {
-  if (target == 0.5 && shape1 == shape2) {
-    return 0.5;
-  }
-  double lo = 0.0;
-  double hi = 1.0;
-  for (int i = 0; i < 600; ++i) {
-    const double mid = 0.5 * (lo + hi);
-    const double value = regularized_incomplete_beta(shape1, shape2, mid);
-    if (!std::isfinite(value)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    if (value < target) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-  return 0.5 * (lo + hi);
 }
 
 namespace {
@@ -600,7 +527,7 @@ double tail_quantile(double a, double b) noexcept {
 }
 
 // Inverse error function in three regions of |y|, tail form beyond 0.9375.
-double erfinv_excel(double y) noexcept {
+double erfinv_core(double y) noexcept {
   if (y == 0.0) {
     return 0.0;
   }
@@ -648,12 +575,16 @@ double normal_cdf(double z) noexcept {
   return flush_subnormal(erfc_excel(flush_subnormal(z * -0.7071067811865476)) * 0.5);
 }
 
+double erfinv_excel(double y) noexcept {
+  return erfinv_core(y);
+}
+
 double normal_quantile(double p) noexcept {
   if (p < 0.075 || p > 0.9375) {
     return tail_quantile(p, 1.0 - p);
   }
   const double y = flush_subnormal(p * 2.0) - 1.0;
-  return flush_subnormal(erfinv_excel(y) * 1.4142135623730951);
+  return flush_subnormal(erfinv_core(y) * 1.4142135623730951);
 }
 
 }  // namespace stats

@@ -52,15 +52,6 @@ double p_gamma(double a, double x) noexcept;
 /// Returns `NaN` if `a <= 0` or `x < 0`; `1` at `x == 0`.
 double q_gamma(double a, double x) noexcept;
 
-/// Inverse of the regularized incomplete gamma functions: the `x` with
-/// `P(a, x) == prob` (`upper == false`) or `Q(a, x) == prob` (`upper == true`).
-///
-/// Solved in `ln x` against `ln prob` on whichever tail is smaller, so a
-/// probability far below 1 (the lower tail of a large shape, say) keeps full
-/// relative accuracy. Returns `NaN`
-/// unless `a > 0` and `0 < prob < 1`, or when the iteration fails to converge.
-double gamma_quantile(double a, double prob, bool upper) noexcept;
-
 /// Regularized incomplete beta function
 /// `I_x(a, b) = B(x; a, b) / B(a, b)`, the CDF of the Beta(a, b) law.
 ///
@@ -88,12 +79,6 @@ double gamma_quantile(double a, double prob, bool upper) noexcept;
 /// caller translates NaN into `#NUM!`.
 double regularized_incomplete_beta(double a, double b, double x) noexcept;
 
-/// The `y` in (0, 1) with `I_y(shape1, shape2) == target`, found by a fixed
-/// 600-step bisection over the full support (exactly 0.5 for a symmetric
-/// shape at target 0.5). Returns NaN if the incomplete
-/// beta is not finite along the way.
-double beta_inverse_tail(double target, double shape1, double shape2) noexcept;
-
 /// Excel's ERF / ERF.PRECISE of one argument: odd; a rational in `x^2` below
 /// 0.5 and `1 - erfc` beyond, evaluated operation by operation as Excel does.
 /// NaN propagates.
@@ -107,6 +92,10 @@ double erfc_excel(double x) noexcept;
 /// Standard normal CDF as Excel's NORM.S.DIST(z, TRUE) evaluates it:
 /// `erfc_excel(z * -0.7071067811865476) * 0.5`.
 double normal_cdf(double z) noexcept;
+
+/// Inverse error function for `|y| < 1`: rationals in `y^2` and in
+/// `sqrt(-log(1 - |y|))`, with a tail form beyond 0.9375.
+double erfinv_excel(double y) noexcept;
 
 /// Standard normal quantile as Excel's NORM.S.INV evaluates it: tail
 /// rationals in `sqrt(-ln q)` for `p < 0.075` or `p > 0.9375`, `erfinv(2p - 1)

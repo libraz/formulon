@@ -368,13 +368,12 @@ TEST(BuiltinsDistributionBounds, BinomInvAnswersPastTheTermCeiling) {
   EXPECT_DOUBLE_EQ(v.as_number(), 5.0e7);
 }
 
-TEST(BuiltinsDistributionBounds, BinomInvUnresolvableShapeIsNum) {
-  // The bisection reads the CDF near the middle of the support, where the
-  // shapes are balanced and the closed form cannot hold the tolerance --
-  // there it would land a step or more away from the true quantile.
+TEST(BuiltinsDistributionBounds, BinomInvBalancedShapesAnswerPromptly) {
+  // The quantile is a bisection on the cdf, so a huge `trials` costs one
+  // evaluation per halving of the bracket.
   const Value v = EvalSource("=BINOM.INV(1E12, 0.5, 0.5)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 5e11, 1e7);
 }
 
 TEST(BuiltinsDistributionBounds, BinomInvBoundsTermsRatherThanTrials) {

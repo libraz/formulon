@@ -357,6 +357,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/text_format/render_fraction.cpp
   src/eval/stats/incomplete_beta.cpp
   src/eval/stats/incomplete_gamma.cpp
+  src/eval/stats/inverse_distributions.cpp
   src/eval/stats/special_functions.cpp
   src/eval/tree_walker/binding_source.cpp
   src/eval/tree_walker/broadcast.cpp

@@ -260,6 +260,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/stats/special_functions_test.cpp
   unit/eval/stats/incomplete_gamma_test.cpp
   unit/eval/stats/incomplete_beta_excel_test.cpp
+  unit/eval/stats/inverse_distributions_test.cpp
   unit/eval/stats/incomplete_beta_test.cpp
   unit/eval/coerce_test.cpp
   unit/eval/criteria_test.cpp

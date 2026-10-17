@@ -108,9 +108,11 @@ cases:
 
   - id: chiinv_upper_quantile
     formula: "=CHIINV(0.05, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chiinv_median
     formula: "=CHIINV(0.5, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- FDIST / FINV --------------------------------------------------------
   - id: fdist_right_tail
@@ -122,6 +124,7 @@ cases:
 
   - id: finv_upper_quantile
     formula: "=FINV(0.05, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- GAMMADIST / GAMMAINV -----------------------------------------------
   - id: gammadist_cdf
@@ -134,13 +137,16 @@ cases:
 
   - id: gammainv_median
     formula: "=GAMMAINV(0.5, 2, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- WEIBULL -------------------------------------------------------------
   - id: weibull_cdf
     formula: "=WEIBULL(1, 2, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: weibull_pdf
     formula: "=WEIBULL(1, 2, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- LOGNORMDIST / LOGINV -----------------------------------------------
   - id: lognormdist_legacy_is_cumulative
@@ -182,9 +188,11 @@ cases:
 
   - id: betainv_default_bounds
     formula: "=BETAINV(0.5, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: betainv_custom_bounds
     formula: "=BETAINV(0.5, 2, 3, 0, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- TDIST / TINV --------------------------------------------------------
   - id: tdist_right_tail
@@ -207,6 +215,7 @@ cases:
   - id: tinv_two_tail_legacy
     description: "Legacy TINV is the two-tailed inverse = T.INV.2T"
     formula: "=TINV(0.05, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- COVAR / PEARSON (aliases of COVARIANCE.P / CORREL) ------------------
   - id: covar_population
@@ -300,6 +309,7 @@ cases:
   - id: chiinv_p_one_is_num
     description: "Right-tail prob p=1 corresponds to x=0; Excel allows it"
     formula: "=CHIINV(1, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chiinv_p_zero_is_num
     description: "p=0 corresponds to +infty -> #NUM!"
@@ -330,6 +340,7 @@ cases:
 
   - id: finv_lower_tail
     formula: "=FINV(0.95, 5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Additional GAMMADIST / GAMMAINV perspectives -----------------------
   - id: gammadist_alpha_zero_is_num
@@ -347,6 +358,7 @@ cases:
   - id: gammainv_p_zero
     description: "p=0 -> 0 (lower bound of support)"
     formula: "=GAMMAINV(0, 2, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: gammainv_p_out_of_range_is_num
     formula: "=GAMMAINV(1.5, 2, 1)"
@@ -356,6 +368,7 @@ cases:
 
   - id: gammainv_upper_quantile
     formula: "=GAMMAINV(0.95, 2, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Additional WEIBULL perspectives ------------------------------------
   - id: weibull_alpha_zero_is_num
@@ -368,6 +381,7 @@ cases:
   - id: weibull_at_zero_cdf
     description: "CDF at x=0 = 0"
     formula: "=WEIBULL(0, 2, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Additional LOGNORMDIST / LOGINV perspectives -----------------------
   - id: lognormdist_negative_x_is_num
@@ -436,6 +450,7 @@ cases:
   - id: tinv_median_legacy
     description: "p=1 (TINV is two-tailed) -> 0"
     formula: "=TINV(1, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: tinv_p_zero_is_num
     description: "p=0 (two-tailed) corresponds to +infty -> #NUM!"
@@ -443,9 +458,11 @@ cases:
 
   - id: tinv_p_out_of_range_is_num
     formula: "=TINV(1.5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: tinv_small_quantile
     formula: "=TINV(0.5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Additional COVAR / PEARSON perspectives ----------------------------
   - id: covar_perfect_linear
@@ -481,6 +498,7 @@ cases:
 
   - id: betainv_upper_quantile
     formula: "=BETAINV(0.95, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: fdist_at_one
     description: "FDIST(1, df1, df2) is the right-tail at the symmetry point"
@@ -490,6 +508,7 @@ cases:
   - id: lognormdist_at_one
     description: "LOGNORMDIST(1, 0, 1) -> CDF at the median = 0.5"
     formula: "=LOGNORMDIST(1, 0, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsdist_lower_tail
     description: "Standard-normal CDF at -1.96 = 0.025"

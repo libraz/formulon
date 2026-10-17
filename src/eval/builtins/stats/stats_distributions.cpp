@@ -26,6 +26,7 @@
 #include "eval/coerce.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
+#include "eval/stats/inverse_distributions.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -266,14 +267,6 @@ Value ChisqDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   return finite_number_result(r);
 }
 
-// Shared inverter of CHISQ.INV / CHISQ.INV.RT: `2 * gamma_quantile(df / 2)`
-// on the requested tail probability, which must lie strictly in (0, 1). The
-// caller has already validated `df` and passes it floored. Returns NaN on
-// non-convergence so callers can surface `#NUM!`.
-static double ChisqInvCore(double tail, double df, bool upper) noexcept {
-  return 2.0 * stats::gamma_quantile(0.5 * df, tail, upper);
-}
-
 // CHISQ.INV(p, df) - inverse of the left-tailed chi-squared CDF. `p` must
 // lie in `[0, 1)`; `p == 1` and `p` outside the unit interval yield `#NUM!`.
 Value ChisqInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
@@ -289,8 +282,7 @@ Value ChisqInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 0.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(p < 0.5 ? ChisqInvCore(p, df, /*upper=*/false)
-                                      : ChisqInvCore(1.0 - p, df, /*upper=*/true));
+  return finite_number_result(stats::chisq_inv_excel(p, df, /*upper=*/false));
 }
 
 // CHISQ.INV.RT(p, df) - inverse of the right-tailed CDF. `p == 1` means
@@ -310,7 +302,7 @@ Value ChisqInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(ChisqInvCore(p, df, /*upper=*/true));
+  return finite_number_result(stats::chisq_inv_excel(p, df, /*upper=*/true));
 }
 
 // EXPON.DIST(x, lambda, cumulative) - exponential distribution PDF or CDF.
@@ -345,48 +337,6 @@ Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // (matches the CHISQ cap); keeping the constant in this block makes the
 // domain checks readable at each callsite.
 static constexpr double kTFdfMax = 1.0e10;
-
-// Degrees-of-freedom threshold above which the right tail switches to the
-// asymptotic formula below instead of the regularized incomplete beta.
-// regularized_incomplete_beta(df/2, 1/2, y) derives its log-space prefactor
-// from three log_gamma(~df/2) calls that individually run to a magnitude of
-// ~df*log(df)/2 and are expected to cancel down to a value near zero; past
-// this threshold the residual rounding error in that cancellation dominates
-// the result (verified against scipy.stats.t.cdf: the asymptotic below
-// already agrees with it to within 1e-9 at df=1e4 and to double-precision
-// noise by df=1e6, so switching here never trades away accuracy the exact
-// path still had).
-static constexpr double kTDistAsymptoticDfThreshold = 1.0e6;
-
-// Right tail of the standard normal, `1 - Phi(x)`, via `erfc` rather than
-// `1 - normal_cdf(x)` so it stays accurate for the large positive `x` the
-// asymptotic path below is evaluated at.
-static double NormalRightTail(double x) noexcept {
-  return stats::normal_cdf(-x);
-}
-
-// Two-term asymptotic expansion of the Student's t right tail for large df
-// (DLMF 26.7.8 / Cornish-Fisher): `Q(x) = 1 - Phi(x) + phi(x)*(x^3+x)/(4*df)
-// + O(1/df^2)`. Self-symmetric (`Q(-x) == 1 - Q(x)`) for every x, so unlike
-// the incomplete-beta path this needs no separate sign branch.
-static double TDistRtAsymptotic(double x, double df) noexcept {
-  const double phi = std::exp(-0.5 * x * x) / std::sqrt(2.0 * kStatsPi);
-  return NormalRightTail(x) + phi * (x * x * x + x) / (4.0 * df);
-}
-
-// Student's t right tail. Below the asymptotic threshold this is evaluated
-// directly through the regularized incomplete beta, keeping the probability
-// separate from 1 for large x, which is essential for inverse-tail
-// bracketing.
-static double TDistRtCore(double x, double df) noexcept {
-  if (df >= kTDistAsymptoticDfThreshold) {
-    return TDistRtAsymptotic(x, df);
-  }
-  const double t2 = x * x;
-  const double y = df / (df + t2);
-  const double half = 0.5 * stats::regularized_incomplete_beta(0.5 * df, 0.5, y);
-  return (x >= 0.0) ? half : 1.0 - half;
-}
 
 // T.DIST(x, deg_freedom, cumulative) - Student's t-distribution PDF or CDF.
 // `df` is floored toward -inf and must satisfy `df >= 1`, except that the
@@ -436,53 +386,9 @@ Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(stats::t_dist_tail_excel(input.value().first, input.value().second, true));
 }
 
-// Probability mass of Student's t between 0 and `x >= 0`. Evaluated from the
-// small-argument side of the incomplete beta so it stays relatively accurate
-// for an `x` near 0, where `0.5 - right_tail` would cancel.
-static double TDistCentralMass(double x, double df) noexcept {
-  if (df >= kTDistAsymptoticDfThreshold) {
-    return 0.5 - TDistRtAsymptotic(x, df);
-  }
-  const double t2 = x * x;
-  const double z = std::isinf(t2) ? 1.0 : t2 / (df + t2);
-  return 0.5 * stats::regularized_incomplete_beta(0.5, 0.5 * df, z);
-}
-
-// Solves for the `x >= 0` whose right tail equals `q`, `0 < q < 0.5`, by
-// bisection on a doubled bracket. A `q` above 0.25 is matched against the
-// central mass `0.5 - q` (exact in floating point) instead of the tail, so a
-// quantile near 0 keeps its relative accuracy. Returns NaN when no finite
-// bracket exists or the underlying beta evaluation refuses the shape.
-static double TInvTail(double q, double df) noexcept {
-  const bool use_central = q > 0.25;
-  const double central = 0.5 - q;
-  const auto reached = [&](double x) {
-    return use_central ? TDistCentralMass(x, df) >= central : TDistRtCore(x, df) <= q;
-  };
-  double lo = 0.0;
-  double hi = 1.0;
-  for (int i = 0; i < 1024 && !reached(hi); ++i) {
-    if (hi > std::numeric_limits<double>::max() * 0.5) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    lo = hi;
-    hi *= 2.0;
-  }
-  for (int i = 0; i < 200 && hi - lo > 4e-16 * hi; ++i) {
-    const double mid = lo + (hi - lo) * 0.5;
-    (reached(mid) ? hi : lo) = mid;
-  }
-  return lo + (hi - lo) * 0.5;
-}
-
-// Inverts the Student's t CDF through the smaller tail, so the probability
-// never passes through `1 - p`. A bracket that grows dynamically admits the
-// heavy df=1 Cauchy tails whose finite quantiles exceed any fixed limit.
+// Student's t quantile, `stats::t_inv_excel`.
 double TInvCore(double p, double df) noexcept {
-  if (p == 0.5) {
-    return 0.0;
-  }
-  return p < 0.5 ? -TInvTail(p, df) : TInvTail(1.0 - p, df);
+  return stats::t_inv_excel(p, df);
 }
 
 // T.INV(probability, deg_freedom) - inverse of Student's t CDF.
@@ -524,7 +430,7 @@ Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(p < 1.0 ? TInvTail(0.5 * p, df) : -TInvTail(1.0 - 0.5 * p, df));
+  return finite_number_result(stats::t_inv_2t_excel(p, df));
 }
 
 // F.DIST(x, d1, d2, cumulative) - Snedecor's F distribution PDF or CDF.
@@ -589,20 +495,6 @@ Value FDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(stats::f_dist_cdf_excel(x, d1, d2, true));
 }
 
-// Inverts Snedecor's F CDF through the inverse incomplete beta, on whichever
-// side keeps the target probability exact: `x = d2*y / (d1*(1-y))` with
-// `y = I^-1(p; d1/2, d2/2)`, or from the complementary root
-// `z = I^-1(1-p; d2/2, d1/2)` as `x = d2*(1-z) / (d1*z)` near `p -> 1`.
-static double FInvFromLowerProbability(double p, double d1, double d2) noexcept {
-  const double y = stats::beta_inverse_tail(p, d1 / 2.0, d2 / 2.0);
-  return d2 * y / (d1 * (1.0 - y));
-}
-
-static double FInvFromUpperProbability(double q, double d1, double d2) noexcept {
-  const double z = stats::beta_inverse_tail(q, d2 / 2.0, d1 / 2.0);
-  return d2 * (1.0 - z) / (d1 * z);
-}
-
 // F.INV(probability, d1, d2) - inverse of Snedecor's F CDF. `p` lies in
 // the closed-open interval `[0, 1)`: Mac Excel returns 0 at the lower
 // boundary (the F distribution's support starts at 0, so F.INV(0) = 0 is
@@ -623,8 +515,7 @@ Value FInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 0.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(p > 0.5 ? FInvFromUpperProbability(1.0 - p, d1, d2)
-                                      : FInvFromLowerProbability(p, d1, d2));
+  return finite_number_result(stats::f_inv_excel(p, d1, d2, /*upper=*/false));
 }
 
 // F.INV.RT(probability, d1, d2) - inverse of the right-tailed F CDF.
@@ -645,8 +536,7 @@ Value FInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  return finite_number_result(p <= 0.5 ? FInvFromUpperProbability(p, d1, d2)
-                                       : FInvFromLowerProbability(1.0 - p, d1, d2));
+  return finite_number_result(stats::f_inv_excel(p, d1, d2, /*upper=*/true));
 }
 
 // ---------------------------------------------------------------------------

@@ -163,14 +163,17 @@ cases:
   - id: binom_inv_median
     description: "Smallest k with P(X<=k) >= 0.5 under BINOM(100, 0.5) is 50"
     formula: "=BINOM.INV(100, 0.5, 0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_inv_three_quarter
     description: "Smallest k with P(X<=k) >= 0.75 under BINOM(100, 0.5) is 53"
     formula: "=BINOM.INV(100, 0.5, 0.75)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: critbinom_matches_binom_inv
     description: "CRITBINOM is the pre-2010 alias for BINOM.INV"
     formula: "=CRITBINOM(100, 0.5, 0.75)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_inv_alpha_zero
     formula: "=BINOM.INV(10, 0.3, 0)"
@@ -266,6 +269,7 @@ cases:
   - id: critbinom_basic_median
     description: "CRITBINOM(20, 0.4, 0.5) = 8 matches BINOM.INV"
     formula: "=CRITBINOM(20, 0.4, 0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: critbinom_alpha_out_of_range_is_num
     description: "alpha > 1 yields #NUM!"

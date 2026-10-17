@@ -11,6 +11,7 @@
 #include <limits>
 
 #include "eval/excel_math.h"
+#include "eval/stats/flushed_ops.h"
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/special_functions.h"
 #include "utils/subnormal_flush.h"
@@ -35,6 +36,15 @@ constexpr double kQuarterSqrtPi = 0x1.c5bf891b4ef6bp-2;
 constexpr double kTwoPowNeg1p5 = 0x1.6a09e667f3bcdp-2;
 constexpr std::uint64_t kBfracTolBits = 0x3ce4000000000001ULL;
 constexpr int kMaxTerms = 100000;
+
+using flushed::bits_of;
+using flushed::compensated_sum;
+using flushed::div;
+using flushed::mul;
+using flushed::neg;
+using flushed::power;
+using flushed::top16_clear;
+using flushed::two_sum;
 
 // Coefficients (in b) of the 16 correction terms of the small-b expansion.
 constexpr double kBgratPoly0[] = {
@@ -81,44 +91,9 @@ const double* const kBgratPolys[] = {kBgratPoly0, kBgratPoly1, kBgratPoly2, kBgr
                                      kBgratPoly5, kBgratPoly6, kBgratPoly7, kBgratPoly8};
 constexpr int kBgratPolyLen[] = {10, 9, 8, 7, 6, 5, 4, 3, 2};
 
-double mul(double a, double b) noexcept {
-  return flush_subnormal(a * b);
-}
-
-double div(double a, double b) noexcept {
-  return flush_subnormal(a / b);
-}
-
-std::uint64_t bits_of(double v) noexcept {
-  std::uint64_t b;
-  std::memcpy(&b, &v, sizeof b);
-  return b;
-}
-
-// True for +0 and tiny positive values (top 16 bits clear).
-bool top16_clear(double v) noexcept {
-  return (bits_of(v) >> 48) == 0;
-}
-
-// Negation that leaves +0 and tiny positive values unchanged.
-double neg(double v) noexcept {
-  return top16_clear(v) ? v : -v;
-}
-
-// x^y as exp(log(x) * y).
-double power(double x, double y) noexcept {
-  return std::exp(mul(std::log(x), y));
-}
-
 std::uint32_t to_uint32(double v) noexcept {
   const double av = std::fabs(v);
   return av < 4294967296.0 ? static_cast<std::uint32_t>(av) : 0xffffffffU;
-}
-
-void two_sum(double a, double b, double* s, double* e) noexcept {
-  *s = a + b;
-  const double bb = *s - a;
-  *e = (a - (*s - bb)) + (b - bb);
 }
 
 // asin(v) = atan(v / sqrt((2 - (1 - v)) * (1 - v))) for |v| <= 1.
@@ -485,16 +460,6 @@ double uniform_expansion_beta(double a, double b, double lam) noexcept {
   u = mul(u, s);
   u = mul(u, tt);
   return mul(u, kTwoOverSqrtPi);
-}
-
-// Compensated sum of a short list; returns the sum and its accumulated error.
-void compensated_sum(const double* v, int n, double* sum, double* err) noexcept {
-  two_sum(v[0], v[1], sum, err);
-  for (int i = 2; i < n; ++i) {
-    double e;
-    two_sum(*sum, v[i], sum, &e);
-    *err += e;
-  }
 }
 
 // Hypergeometric pmf with (A, B, C) = (sample, successes, population).
