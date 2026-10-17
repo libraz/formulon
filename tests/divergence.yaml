@@ -307,7 +307,7 @@ entries:
   - id: frequency_empty_bins
     applies_to: all
     cause: excel-no-value
-    reason: "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
+    reason: "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon's parser rejects the empty array literal as well and returns #NAME?. Bins that hold no numeric value -- the 1x1 total-count spill -- are covered by tests/unit/eval/frequency_eval_test.cpp. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     prefer: formulon
     first_noted: 2026-05-15
     last_verified_excel_version: "16.112"
@@ -376,7 +376,7 @@ entries:
   - id: external_stub_py
     applies_to: all
     cause: accepted-divergence
-    reason: "PY runs Python in the cloud; Formulon does not embed a Python runtime and stubs to #NAME!. Oracle parity requires the Microsoft 365 PY service."
+    reason: "PY runs Python in the cloud; Formulon does not embed a Python runtime and stubs to #NAME?. Oracle parity requires the Microsoft 365 PY service."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -408,7 +408,7 @@ entries:
   - id: external_stub_copilot
     applies_to: all
     cause: accepted-divergence
-    reason: "COPILOT dispatches to an LLM backend; Formulon does not embed one and stubs to #NAME!. Oracle parity requires the Microsoft 365 Copilot service."
+    reason: "COPILOT dispatches to an LLM backend; Formulon does not embed one and stubs to #NAME?. Oracle parity requires the Microsoft 365 Copilot service."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -416,7 +416,7 @@ entries:
   - id: external_stub_detectlanguage
     applies_to: all
     cause: accepted-divergence
-    reason: "DETECTLANGUAGE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
+    reason: "DETECTLANGUAGE calls a translation cloud; Formulon does no network I/O and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -424,7 +424,7 @@ entries:
   - id: external_stub_translate
     applies_to: all
     cause: accepted-divergence
-    reason: "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
+    reason: "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -437,13 +437,9 @@ entries:
   # formula2/xlwings oracle path", which pointed at our bridge and was
   # wrong; tests/oracle/cases/filterxml.yaml had it right all along.
   #
-  # The skip is scoped to the Mac target because Windows does have the
-  # function. `win-365-ja_JP` remains `status: wanted` / `active_ctest:
-  # false` in tools/oracle/targets.yaml and its goldens are reference-only
-  # (captured on a ProPlus2019Retail host, stamped `16.0`), so they are
-  # not promoted here -- but without the scoping this entry would silently
-  # suppress all 67 cases the moment a product-verified Windows target
-  # went active. The XPath contract itself is pinned by
+  # The skip is scoped to the Mac targets because Windows does have the
+  # function: the win-365-ja_JP capture evaluates every case, and Formulon
+  # matches it. The XPath contract itself is also pinned by
   # tests/unit/eval/builtins_web_test.cpp.
   - suite: filterxml
     cause: excel-no-value
@@ -469,7 +465,7 @@ entries:
   - id: external_stub_cubekpimember
     applies_to: all
     cause: accepted-divergence
-    reason: "CUBEKPIMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    reason: "CUBEKPIMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -477,7 +473,7 @@ entries:
   - id: external_stub_cubemember
     applies_to: all
     cause: accepted-divergence
-    reason: "CUBEMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    reason: "CUBEMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -485,7 +481,7 @@ entries:
   - id: external_stub_cubememberproperty
     applies_to: all
     cause: accepted-divergence
-    reason: "CUBEMEMBERPROPERTY requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    reason: "CUBEMEMBERPROPERTY requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -493,7 +489,7 @@ entries:
   - id: external_stub_cuberankedmember
     applies_to: all
     cause: accepted-divergence
-    reason: "CUBERANKEDMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    reason: "CUBERANKEDMEMBER requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -501,7 +497,7 @@ entries:
   - id: external_stub_cubeset
     applies_to: all
     cause: accepted-divergence
-    reason: "CUBESET requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    reason: "CUBESET requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -509,7 +505,7 @@ entries:
   - id: external_stub_cubesetcount
     applies_to: all
     cause: accepted-divergence
-    reason: "CUBESETCOUNT requires a live cube set; Formulon has no OLAP layer and stubs to #NAME!."
+    reason: "CUBESETCOUNT requires a live cube set; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -517,7 +513,7 @@ entries:
   - id: external_stub_cubevalue
     applies_to: all
     cause: accepted-divergence
-    reason: "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
+    reason: "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME?."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
@@ -600,21 +596,19 @@ entries:
   # reference. `anchorarray_hash_indirect_anchor` and its siblings cover the
   # shapes Excel accepts, including the two that resolve and still fail.
 
-  # -- ENCODEURL: not available in Mac Excel 365 ja-JP ----------------------
-  # Mac Excel 365 ja-JP returns #NAME? for every ENCODEURL invocation:
-  # the function is documented in the Microsoft 365 catalog but is not
-  # registered in this build/locale. `win-365-ja_JP` remains `status:
-  # wanted` / `active_ctest: false` in tools/oracle/targets.yaml
-  # (reference-only, unverified) -- its historical files are kept for
-  # comparison but do not pin anything here. These Mac skips only
-  # preserve the unavailable-function surface for the primary Mac
-  # target; Formulon's own encoding (uppercase hex, Excel's `~` ->
-  # `%7E`) is pinned by tests/unit/eval/builtins_web_test.cpp.
+  # -- ENCODEURL: not available in Mac Excel 365 -----------------------------
+  # Mac Excel 365 returns #NAME? for every ENCODEURL invocation: the
+  # function is documented in the Microsoft 365 catalog but is not
+  # registered on the Mac. Windows Excel 365 ja-JP has it, and its capture
+  # (tests/oracle/targets/win-365-ja_JP/golden/encodeurl.golden.json)
+  # matches Formulon on every case, so the skips are scoped to the Mac
+  # targets. Formulon's own encoding (uppercase hex, Excel's `~` -> `%7E`)
+  # is also pinned by tests/unit/eval/builtins_web_test.cpp.
   - id: encodeurl_space
     cause: excel-no-value
     applies_to: [mac]
     mode: skip-oracle
-    reason: "Mac Excel 365 ja-JP does not register ENCODEURL: the name resolves to #NAME? and Excel's own ERROR.TYPE(ENCODEURL(...)) returns 5, so the primary target produces no value to compare against. Scoped to the Mac target; a Windows host has the function and can capture these cases. Historical Windows files remain reference-only until a product-verified Microsoft 365 capture exists."
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL: the name resolves to #NAME? and Excel's own ERROR.TYPE(ENCODEURL(...)) returns 5, so the primary target produces no value to compare against. Scoped to the Mac targets: Windows Excel 365 ja-JP has the function, and its capture of these cases matches Formulon."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
@@ -630,7 +624,7 @@ entries:
     cause: excel-no-value
     applies_to: [mac]
     mode: skip-oracle
-    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: unreserved characters pass through and `~` encodes as %7E (Excel's documented tilde behavior; pinned by tests/unit/eval/builtins_web_test.cpp, not by win-365-ja_JP which is reference-only)."
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?; ERROR.TYPE = 5). Formulon: unreserved characters pass through and `~` encodes as %7E (Excel's documented tilde behavior; Windows Excel 365 ja-JP returns the same, and tests/unit/eval/builtins_web_test.cpp pins it)."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
@@ -702,7 +696,7 @@ entries:
     applies_to: all
     cause: excel-no-value
     mode: skip-oracle
-    reason: "INFO(\"recalc\") returns the host application's recalculation mode (\"Automatic\" / \"Manual\"); Formulon has no notion of recalc mode."
+    reason: "INFO(\"recalc\") returns the host application's recalculation mode (\"Automatic\" / \"Manual\"); Formulon has no recalculation mode setting and always returns \"Automatic\"."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112.1"
@@ -796,19 +790,6 @@ entries:
   # Mac Excel 16.111.3 ja-JP result (see builtins_pivotby_test.cpp). No
   # divergence entry is needed for these shapes.
 
-  # -- XLOOKUP / XMATCH binary search over dirty (non-sorted) data --------
-  # Binary search (search_mode = 2 / -2) requires the lookup vector to be
-  # sorted. When the vector also holds a cell that is incomparable with the
-  # lookup value (Error / Array / Ref / Lambda), Formulon treats that cell
-  # as "greater than the target" to keep the upper-bound pass monotone
-  # (src/eval/lookups/xlookup.cpp). On already-clean, properly sorted
-  # arrays this is a no-op. On dirty data the bisection can step over a
-  # value that a linear scan would have matched, so a near match may be
-  # missed. Excel's own binary search is documented as undefined on
-  # unsorted input and also returns implementation-defined results there;
-  # the exact cell each engine lands on differs. Both behaviours are
-  # "right" under the sorted-input contract — this entry records the
-  # accepted divergence on contract-violating input.
   - id: zoom_75_dense_fit_off
     cause: accepted-divergence
     mode: skip-oracle
@@ -857,8 +838,8 @@ entries:
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
-    evidence: [src/print/pagination.cpp, tests/unit/print/pagination_test.cpp]
-    reason: "Column width in points is the stored character-unit width times the Normal font's max digit width (MDW), which depends on that font's family and size -- but pagination's break math and the diagnostic `applied_geometry.column_widths_pt` field need different MDW figures. `Range.Width` (the display figure, swept over Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI at 8/9/10/11/12/14/16/18 pt: tests/fixtures/excel/win/column_width_dpi100/results.json at 100% scaling / 96 DPI, cross-checked against tests/fixtures/excel/win/column_width/results.json at 175% / 168 DPI) is DPI-dependent -- e.g. Calibri 11 resolves an 8.43-unit column to 48 pt at 100% and 51.43 pt at 175%. Print pagination cannot depend on the authoring screen's DPI, and indeed does not: the print-track captures' page-break positions for a 30-character Calibri-11 column are identical at both DPIs (171.0 pt worth of break, not either DPI's Range.Width figure of 161.25 pt / 171.0 pt happens to coincide for the 168-DPI capture only by chance). Formulon therefore uses two geometries (`ResolveColumnPrintGeometry` / `ResolveColumnDisplayGeometry`, src/print/pagination.cpp): Calibri 11's print-layout MDW/padding is the only one taken directly from a print capture; every other font/size's print-layout figure is inferred by scaling its measured 96-DPI display calibration by Calibri 11's print/display ratio, which is an approximation Excel's actual per-font print behavior has not been swept to confirm. The display calibration remains exact and still drives the diagnostic `applied_geometry` field. A Normal font or size outside the 4x8 sampled set falls back to the Calibri-11 figures in both geometries."
+    evidence: [src/print/sheet_geometry.cpp, tests/unit/print/pagination_test.cpp]
+    reason: "Column width in points is the stored character-unit width times the Normal font's max digit width (MDW), which depends on that font's family and size -- but pagination's break math and the diagnostic `applied_geometry.column_widths_pt` field need different MDW figures. `Range.Width` (the display figure, swept over Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI at 8/9/10/11/12/14/16/18 pt: tests/fixtures/excel/win/column_width_dpi100/results.json at 100% scaling / 96 DPI, cross-checked against tests/fixtures/excel/win/column_width/results.json at 175% / 168 DPI) is DPI-dependent -- e.g. Calibri 11 resolves an 8.43-unit column to 48 pt at 100% and 51.43 pt at 175%. Print pagination cannot depend on the authoring screen's DPI, and indeed does not: the print-track captures' page-break positions for a 30-character Calibri-11 column are identical at both DPIs (171.0 pt worth of break, not either DPI's Range.Width figure of 161.25 pt / 171.0 pt happens to coincide for the 168-DPI capture only by chance). Formulon therefore uses two geometries (`ResolveColumnPrintGeometry` / `ResolveColumnDisplayGeometry`, src/print/sheet_geometry.cpp): Calibri 11's print-layout MDW/padding is the only one taken directly from a print capture; every other font/size's print-layout figure is inferred by scaling its measured 96-DPI display calibration by Calibri 11's print/display ratio, which is an approximation Excel's actual per-font print behavior has not been swept to confirm. The display calibration remains exact and still drives the diagnostic `applied_geometry` field. A Normal font or size outside the 4x8 sampled set falls back to the Calibri-11 figures in both geometries."
     prefer: win-excel-365
     first_noted: 2026-08-22
     last_verified_excel_version: "16.0.20326"
@@ -1160,14 +1141,7 @@ entries:
     prefer: formulon
     first_noted: 2026-10-08
     last_verified_excel_version: "16.113.3"
-  - id: axis_self_ref_rows_derived_col
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    reason: "=ROWS(G:G+0) at G1: G:G+0 reads the formula cell, so the cell is in a cycle; Excel seeds it and ROWS reports the declared 1048576 rows. Formulon returns #REF! per its cycle policy (circular_reference_iterative_off_returns_ref)."
-    prefer: formulon
-    first_noted: 2026-10-08
-    last_verified_excel_version: "16.113.3"
+
 
   # -- chart track: rules the chart oracle cannot observe -----------------
   # The chart oracle compares what Excel saves (caches, references) and
@@ -1223,7 +1197,7 @@ entries:
 #    - a stable Excel quirk (e.g. "Mac Excel returns #NUM! where Win Excel
 #      returns #VALUE! for SQRT(-0)")
 #    - a ±1ulp transcendental drift noted on a specific build
-# 3. If the entry skips the case, pick its `cause` from the four above and
+# 3. If the entry skips the case, pick its `cause` from the six above and
 #    check the tally `divergence_check.py` prints: a growing
 #    harness-cannot-capture or engine-gap count is work owed, not a
 #    property of Excel.

@@ -41,10 +41,10 @@ entries:
     prefer: formulon
     first_noted: 2026-05-08
     last_verified_excel_version: "16.0.20228"
-  # Windows Excel can read this pre-1900 DATEVALUE result back as zero.
+  # The Windows golden records -1 for a date difference that is 0.
   - id: datevalue_agrees_with_date
     compare_mode: datevalue_roundtrip_readback
-    reason: "Win Excel 365's COM read-back turns the pre-1900 DATEVALUE serial -1 into 0; accept that bridge artifact while retaining normal date comparison."
+    reason: "DATEVALUE(\"2026-04-23\")-DATE(2026,4,23) is 0, which Formulon returns, but the Windows golden records -1. The compare mode accepts exactly that pair (golden -1, engine 0) and compares every other value normally. The -1 is consistent with the Range.Value read that date_year_snap_1900 records, which lands one day early below serial 61; the next capture through the Value2 driver replaces it."
     prefer: formulon
     first_noted: 2026-05-08
     last_verified_excel_version: "16.0.20228"
@@ -56,14 +56,6 @@ entries:
   # sort_order slot, outside Excel's signed-column-index domain. The cases
   # now pass an in-contract argument list, so nothing needs skipping on
   # that account; the rejection is pinned by its own live cases.
-  # Both Excels stop short of the fixed point 10 of `=Z1*0.9 + 1`, at
-  # different places, and the suite tolerance accepts either.
-  - id: iter_smoothing_fixed_point
-    tolerance: { abs: 0.001, rel: 0.001 }
-    reason: "Win Excel 365 stops iterating `=Z1*0.9 + 1` at 9.991405 where Mac Excel 365 stops at 9.999445 (tests/oracle/targets/mac-365-ja_JP/golden/iterative_calc.golden.json), a real difference in where the solver halts that the iterative suite's 1e-3 tolerance absorbs. Recorded so the tolerance is a stated policy for this target rather than an accident; the engine's own stopping point is checked against both."
-    prefer: formulon
-    first_noted: 2026-09-30
-    last_verified_excel_version: "16.0.20228"
   # A bounded range spilling over its own formula cell reads differently per
   # host, and the verifier's anchor projection accepts both readings.
   - id: bounded_rectangle_containing_its_own_formula_cell
@@ -86,7 +78,7 @@ entries:
   - id: weeknum_neg2
     applies_to: [win-365-ja_JP]
     mode: skip-oracle
-    cause: non-identifiable
+    cause: excel-no-value
     reason: "WEEKNUM(DATE(2025,3,1),-2): the golden records 9, but the same formula on the same Excel build returned #NUM! in a later session. Over 10 dates x 16 return types, the undocumented types (negative ones and 22) return either the Sunday-start or the Monday-start week number for some cells and #NUM! for others, with no rule in the type, the date or its weekday, which is consistent with an out-of-range table read in Excel. Documented and fractional types are stable and match Formulon. Formulon keeps the documented contract: only 1, 2, 11-17 and 21 (after truncation) are accepted, anything else is #NUM!."
     prefer: formulon
     first_noted: 2026-10-13
