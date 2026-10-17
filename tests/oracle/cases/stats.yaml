@@ -1191,3 +1191,12 @@ cases:
     description: "Excel 365: 0"
     formula: "=DEVSQ(,)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: steyx_range_12
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=STEYX({-0.0000173197305596877;-0.00000214182844105983;0.0000125663272194983},{-0.00000865986527984385;-0.00000107091422052992;0.00000628316360974913})"
+
+  - id: steyx_range_13
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=STEYX({-0.00000833332509353513;-0.277387098038446;-0.0000330149249329283},{-73990.8993634876;17344.755688668;-75511.9000054227})"
+    tolerance: { abs: 0, rel: 0 }

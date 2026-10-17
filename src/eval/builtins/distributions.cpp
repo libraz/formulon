@@ -469,6 +469,10 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double x = parsed.value().first;
   const double alpha = parsed.value().second;
   const double beta_scale = parsed.value().third;
+  // An overflowing x / beta is #NUM! for the cdf and the density alike.
+  if (std::isinf(x / beta_scale)) {
+    return Value::error(ErrorCode::Num);
+  }
   if (parsed.value().cumulative) {
     return finalize(stats::gamma_ratio_excel(alpha, flush_subnormal(x / beta_scale), false));
   }
@@ -520,12 +524,17 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   const double alpha = parsed.value().second;
   const double beta_scale = parsed.value().third;
   const double scaled_power = std::exp(std::log(x / beta_scale) * alpha);
+  // An overflowing (x / beta)^alpha is #NUM! for the cdf and the density alike.
+  if (!std::isfinite(scaled_power)) {
+    return Value::error(ErrorCode::Num);
+  }
   if (parsed.value().cumulative) {
     return finalize(0.0 - excel_expm1(-scaled_power));
   }
   // At x == 0 the x^(alpha-1) factor is 0 for every alpha, so the density there is 0.
   const double x_power = x != 0.0 ? std::exp(std::log(x) * (alpha - 1.0)) : 0.0;
-  const double r = ((alpha / std::exp(std::log(beta_scale) * alpha)) * x_power) * std::exp(-scaled_power);
+  const double r =
+      flush_subnormal(((alpha / std::exp(std::log(beta_scale) * alpha)) * x_power) * std::exp(-scaled_power));
   return finalize(r);
 }
 

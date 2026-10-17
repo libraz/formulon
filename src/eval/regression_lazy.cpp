@@ -263,9 +263,11 @@ Value eval_pair_stat(const parser::AstNode& call, Arena& arena, const FunctionRe
         return Value::error(ErrorCode::Div0);
       }
       const double residual_ss = s.sum_yy - (s.sum_xy * s.sum_xy) / s.sum_xx;
-      // Rounding can leave a tiny negative on an exact fit; clamp before the root.
-      const double clamped = residual_ss < 0.0 ? 0.0 : residual_ss;
-      return to_finite_value(std::sqrt(clamped / static_cast<double>(n - 2U)));
+      // A negative residual sum has no root.
+      if (residual_ss < 0.0) {
+        return Value::error(ErrorCode::Num);
+      }
+      return to_finite_value(std::sqrt(residual_ss / static_cast<double>(n - 2U)));
     }
   }
 }

@@ -475,3 +475,58 @@ cases:
     description: "Excel 365: 0"
     formula: "=GAMMA.DIST(0,0.5,1,TRUE)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: overflow_range_00
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(745,1,1,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: overflow_range_01
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(27.2946881279124,2,1,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: overflow_range_02
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(VALUE(\"1e+155\"),2,1,TRUE)"
+
+  - id: overflow_range_03
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(VALUE(\"1e+155\"),2,1,FALSE)"
+
+  - id: overflow_range_04
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(VALUE(\"1e+300\"),1.6,0.002,FALSE)"
+
+  - id: overflow_range_05
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(VALUE(\"1e+300\"),0.5,1,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: overflow_range_06
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(109.926651774131,35,91,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: overflow_range_07
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=WEIBULL.DIST(502681,0.5,1,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: overflow_range_08
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=EXPON.DIST(VALUE(\"1e+300\"),VALUE(\"1e+300\"),TRUE)"
+
+  - id: overflow_range_09
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=GAMMA.DIST(VALUE(\"1e+300\"),1,VALUE(\"1e-300\"),TRUE)"
+
+  - id: overflow_range_10
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=EXPON.DIST(VALUE(\"1e+300\"),VALUE(\"1e-300\"),TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: overflow_range_11
+    description: "range limits: overflowing power or product is #NUM!, sub-normal density is 0, a negative residual sum has no root"
+    formula: "=GAMMA.DIST(VALUE(\"1e+300\"),1,VALUE(\"1e+300\"),TRUE)"
+    tolerance: { abs: 0, rel: 0 }

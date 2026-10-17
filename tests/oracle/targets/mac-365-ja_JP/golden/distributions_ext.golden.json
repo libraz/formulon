@@ -1077,6 +1077,142 @@
         "abs": 0.0,
         "rel": 0.0
       }
+    },
+    {
+      "id": "overflow_range_00",
+      "formula": "=WEIBULL.DIST(745,1,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_01",
+      "formula": "=WEIBULL.DIST(27.2946881279124,2,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_02",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+155\"),2,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_03",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+155\"),2,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_04",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+300\"),1.6,0.002,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_05",
+      "formula": "=WEIBULL.DIST(VALUE(\"1e+300\"),0.5,1,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_06",
+      "formula": "=WEIBULL.DIST(109.926651774131,35,91,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_07",
+      "formula": "=WEIBULL.DIST(502681,0.5,1,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_08",
+      "formula": "=EXPON.DIST(VALUE(\"1e+300\"),VALUE(\"1e+300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_09",
+      "formula": "=GAMMA.DIST(VALUE(\"1e+300\"),1,VALUE(\"1e-300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "overflow_range_10",
+      "formula": "=EXPON.DIST(VALUE(\"1e+300\"),VALUE(\"1e-300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "overflow_range_11",
+      "formula": "=GAMMA.DIST(VALUE(\"1e+300\"),1,VALUE(\"1e+300\"),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6321205588285577
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     }
   ]
 }

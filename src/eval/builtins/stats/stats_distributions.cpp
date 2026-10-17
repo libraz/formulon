@@ -311,6 +311,10 @@ Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x < 0.0 || lambda <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
+  // An overflowing lambda * x is #NUM!.
+  if (std::isinf(lambda * x)) {
+    return Value::error(ErrorCode::Num);
+  }
   const double z = -flush_subnormal(lambda * x);
   const double r = input.value().cumulative ? 0.0 - excel_expm1(z) : flush_subnormal(std::exp(z) * lambda);
   return finite_number_result(r);
