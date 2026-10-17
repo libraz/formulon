@@ -47,12 +47,14 @@ cases:
   formula: =SUM({0.5,-0.4,-0.1})
 - id: subtotal109
   formula: =SUBTOTAL(109,A1:A3)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: subtotal1
   formula: =SUBTOTAL(1,A1:A3)
   setup: *id001
 - id: subtotal101
   formula: =SUBTOTAL(101,A1:A3)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id001
 - id: root_array_1x1
   formula: ={0.5}-0.4-0.1
@@ -98,6 +100,7 @@ cases:
   setup: *id002
 - id: sub109_ref_snap
   formula: =SUBTOTAL(109,B4:B6)
+  tolerance: { abs: 0, rel: 0 }
   setup: *id002
 - id: sub1_ref_snap
   formula: =SUBTOTAL(1,B4:B6)

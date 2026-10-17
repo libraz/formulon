@@ -110,24 +110,30 @@ cases:
     description: "{1, TRUE, 'x', 4}: n=4, values=[1,1,0,4], mean=1.5, var.s"
     setup: { A1: 1, A2: true, A3: "x", A4: 4 }
     formula: "=VARA(A1:A4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: varpa_pop_with_bool_and_text
     setup: { A1: 1, A2: true, A3: "x", A4: 4 }
     formula: "=VARPA(A1:A4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdeva_sample_with_bool_and_text
     setup: { A1: 1, A2: true, A3: "x", A4: 4 }
     formula: "=STDEVA(A1:A4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdevpa_pop_with_bool_and_text
     setup: { A1: 1, A2: true, A3: "x", A4: 4 }
     formula: "=STDEVPA(A1:A4)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vara_numeric_only_matches_var_s
     formula: "=VARA(1,2,3,4,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdeva_numeric_only_matches_stdev_s
     formula: "=STDEVA(1,2,3,4,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: averagea_direct_true
     description: "Direct TRUE coerces to 1"
@@ -163,9 +169,11 @@ cases:
   - id: devsq_basic
     description: "{2, 4, 6}: mean=4, SS = 4 + 0 + 4 = 8"
     formula: "=DEVSQ(2,4,6)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: devsq_single_value_is_zero
     formula: "=DEVSQ(42)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: avedev_basic
     description: "{4, 5, 6, 7, 8}: mean=6, mean|dev| = (2+1+0+1+2)/5 = 1.2"
@@ -193,16 +201,19 @@ cases:
   - id: skew_basic
     description: "SKEW of {1,2,3,4,5} is 0 (symmetric)"
     formula: "=SKEW(1,2,3,4,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: skew_positive
     description: "Right-skewed data yields positive SKEW"
     formula: "=SKEW(1,1,1,2,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: skew_too_few_is_div0
     formula: "=SKEW(1,2)"
 
   - id: skewp_basic
     formula: "=SKEW.P(1,2,3,4,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: skewp_constant_is_div0
     formula: "=SKEW.P(3,3,3)"
@@ -473,9 +484,11 @@ cases:
   # -- STDEVA (sample sd, *A coercion) --------------------------------------
   - id: stdeva_negatives
     formula: "=STDEVA(-1,-2,-3,-4,-5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdeva_two_numeric
     formula: "=STDEVA(1,3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdeva_single_value_is_div0
     formula: "=STDEVA(5)"
@@ -483,22 +496,28 @@ cases:
   # -- STDEVPA (population sd, *A coercion) ---------------------------------
   - id: stdevpa_numeric_only_matches_stdev_p
     formula: "=STDEVPA(1,2,3,4,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdevpa_two_numeric
     formula: "=STDEVPA(1,3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdevpa_single_value_is_zero
     formula: "=STDEVPA(5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: stdevpa_negatives
     formula: "=STDEVPA(-1,-2,-3)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- VARA (sample variance, *A coercion) ----------------------------------
   - id: vara_negatives
     formula: "=VARA(-1,-2,-3,-4,-5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vara_two_numeric
     formula: "=VARA(1,3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vara_single_value_is_div0
     formula: "=VARA(5)"
@@ -506,15 +525,19 @@ cases:
   # -- VARPA (population variance, *A coercion) -----------------------------
   - id: varpa_numeric_only_matches_var_p
     formula: "=VARPA(1,2,3,4,5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: varpa_two_numeric
     formula: "=VARPA(1,3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: varpa_single_value_is_zero
     formula: "=VARPA(5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: varpa_negatives
     formula: "=VARPA(-1,-2,-3)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- AVERAGEA (-> 0 for text, 1 for TRUE, blank skipped) ------------------
   - id: averagea_two_numeric
@@ -732,14 +755,17 @@ cases:
   - id: devsq_two_value
     description: "{1, 3}: mean=2, SS = 1 + 1 = 2"
     formula: "=DEVSQ(1,3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: devsq_negatives
     description: "{-2,-1,0,1,2}: mean=0, SS = 4+1+0+1+4 = 10"
     formula: "=DEVSQ(-2,-1,0,1,2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: devsq_range
     setup: { A1: 2, A2: 4, A3: 6 }
     formula: "=DEVSQ(A1:A3)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- TRIMMEAN -------------------------------------------------------------
   - id: trimmean_small_percent_no_trim
@@ -750,6 +776,7 @@ cases:
   - id: skew_negative_skew
     description: "Left-skewed data yields negative SKEW"
     formula: "=SKEW(1,9,9,9,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: skew_constant_is_div0
     description: "Zero spread: variance is 0 so SKEW is undefined -> #DIV/0!"
@@ -758,9 +785,11 @@ cases:
   # -- SKEW.P ---------------------------------------------------------------
   - id: skewp_positive_skew
     formula: "=SKEW.P(1,1,1,2,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: skewp_negative_skew
     formula: "=SKEW.P(1,9,9,9,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: skewp_too_few_is_div0
     description: "SKEW.P requires n>=3"
@@ -833,6 +862,7 @@ cases:
   - id: devsq_direct_numeric_text
     description: "DEVSQ counts direct numeric text"
     formula: "=DEVSQ(1,2,\"10\",\"20\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: kurt_direct_bool
     description: "KURT counts direct booleans"
@@ -842,10 +872,12 @@ cases:
   - id: skew_direct_numeric_text
     description: "SKEW counts direct numeric text"
     formula: "=SKEW(1,2,\"10\",\"20\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: skew_p_direct_bool
     description: "SKEW.P counts direct booleans"
     formula: "=SKEW.P(10,20,TRUE,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: geomean_direct_numeric_text
     description: "GEOMEAN counts direct numeric text"
@@ -883,10 +915,12 @@ cases:
   - id: devsq_omit
     description: "Excel 365: 30"
     formula: "=DEVSQ(3,4,,6,7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: devsq_bools
     description: "Excel 365: 260.75"
     formula: "=DEVSQ(10,20,TRUE,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_devsq_badtext
     description: "Excel 365: #VALUE!"
@@ -1023,10 +1057,12 @@ cases:
   - id: da_skew_omit
     description: "Excel 365: -0.6085806194501845"
     formula: "=SKEW(3,4,,6,7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_skew_bool
     description: "Excel 365: 0.885765187570455"
     formula: "=SKEW(10,20,TRUE,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_skew_badtext
     description: "Excel 365: #VALUE!"
@@ -1035,10 +1071,12 @@ cases:
   - id: da_skew_p_omit
     description: "Excel 365: -0.40824829046386313"
     formula: "=SKEW.P(3,4,,6,7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_skew_p_numtext
     description: "Excel 365: 0.5645802577591021"
     formula: "=SKEW.P(1,2,\"10\",\"20\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: da_skew_p_badtext
     description: "Excel 365: #VALUE!"
@@ -1120,10 +1158,12 @@ cases:
   - id: stdeva_omit
     description: "Excel 365: 2.7386127875258306"
     formula: "=STDEVA(3,4,,6,7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: vara_omit
     description: "Excel 365: 7.5"
     formula: "=VARA(3,4,,6,7)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mode_bool
     description: "Excel 365: 1"
@@ -1150,3 +1190,4 @@ cases:
   - id: devsq_omit_only
     description: "Excel 365: 0"
     formula: "=DEVSQ(,)"
+    tolerance: { abs: 0, rel: 0 }

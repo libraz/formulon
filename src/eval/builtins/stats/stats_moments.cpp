@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "eval/builtins/stats/stats_helpers.h"
-#include "numeric_aggregate_kernels.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -221,7 +220,7 @@ Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double n = static_cast<double>(xs.size());
   const double mean = mean_of(xs);
-  const double variance = numeric_aggregate_kernels::dispersion_variance(xs, true);
+  const double variance = compute_mean_ss(xs).ss / (n - 1.0);
   if (!(variance > 0.0)) {
     return Value::error(ErrorCode::Div0);
   }

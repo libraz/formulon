@@ -260,40 +260,48 @@ cases:
     formula: =STDEVA("abc",NA())
   - id: stdeva_numtext
     formula: =STDEVA("5",2)
+    tolerance: { abs: 0, rel: 0 }
   - id: stdeva_ref_text
     setup:
       A1: abc
     formula: =STDEVA(A1,2)
+    tolerance: { abs: 0, rel: 0 }
   - id: vara_text
     formula: =VARA("abc",2)
   - id: vara_text_err
     formula: =VARA("abc",NA())
   - id: vara_numtext
     formula: =VARA("5",2)
+    tolerance: { abs: 0, rel: 0 }
   - id: vara_ref_text
     setup:
       A1: abc
     formula: =VARA(A1,2)
+    tolerance: { abs: 0, rel: 0 }
   - id: stdevpa_text
     formula: =STDEVPA("abc",2)
   - id: stdevpa_text_err
     formula: =STDEVPA("abc",NA())
   - id: stdevpa_numtext
     formula: =STDEVPA("5",2)
+    tolerance: { abs: 0, rel: 0 }
   - id: stdevpa_ref_text
     setup:
       A1: abc
     formula: =STDEVPA(A1,2)
+    tolerance: { abs: 0, rel: 0 }
   - id: varpa_text
     formula: =VARPA("abc",2)
   - id: varpa_text_err
     formula: =VARPA("abc",NA())
   - id: varpa_numtext
     formula: =VARPA("5",2)
+    tolerance: { abs: 0, rel: 0 }
   - id: varpa_ref_text
     setup:
       A1: abc
     formula: =VARPA(A1,2)
+    tolerance: { abs: 0, rel: 0 }
   - id: counta_text
     formula: =COUNTA("abc",2)
   - id: counta_text_err

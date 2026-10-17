@@ -155,26 +155,10 @@ Expected<double, ErrorCode> run_variance(const NumericInputView& values, bool sa
 }
 
 Expected<double, ErrorCode> run_variance(const std::vector<double>& xs, bool sample) {
-  const std::size_t n = xs.size();
-  const std::size_t need = sample ? 2U : 1U;
-  if (n < need) {
+  if (xs.size() < (sample ? 2U : 1U)) {
     return ErrorCode::Div0;
   }
-  // Two-pass: compute the mean first, then accumulate squared
-  // deviations against the captured mean. Matches the SUBTOTAL /
-  // AGGREGATE pre-consolidation implementations.
-  double sum = 0.0;
-  for (double x : xs) {
-    sum += x;
-  }
-  const double mean = sum / static_cast<double>(n);
-  double sq = 0.0;
-  for (double x : xs) {
-    const double d = x - mean;
-    sq += flush_subnormal(d * d);
-  }
-  const double denom = sample ? static_cast<double>(n - 1) : static_cast<double>(n);
-  const double var = sq / denom;
+  const double var = dispersion_variance(xs, sample);
   if (!std::isfinite(var)) {
     return ErrorCode::Num;
   }
@@ -197,6 +181,15 @@ Expected<double, ErrorCode> run_stdev(const std::vector<double>& xs, bool sample
   return std::sqrt(v);
 }
 
+double squared_deviation_sum(const std::vector<double>& xs, double mean) {
+  double ss = 0.0;
+  for (double x : xs) {
+    const double d = x - mean;
+    ss += flush_subnormal(d * d);
+  }
+  return ss;
+}
+
 double dispersion_variance(const std::vector<double>& xs, bool sample) {
   double s1 = 0.0;
   double s2 = 0.0;
@@ -205,16 +198,16 @@ double dispersion_variance(const std::vector<double>& xs, bool sample) {
     s2 += flush_subnormal(x * x);
   }
   const double n = static_cast<double>(xs.size());
-  if (s2 - (s1 * s1) / n < s2 * 0.01) {
-    const double mean = s1 / n;
-    double ss = 0.0;
-    for (double x : xs) {
-      const double d = x - mean;
-      ss += flush_subnormal(d * d);
-    }
-    return ss / (sample ? n - 1.0 : n);
+  const double mean = s1 / n;
+  const double ss = sample ? s2 - (s1 * s1) / n : n * s2 - s1 * s1;
+  const double one_pass = sample ? ss / (n - 1.0) : ss / (n * n);
+  const double ratio = std::fabs(mean / one_pass) - 1000.0;
+  const bool second_pass = !std::isfinite(mean) || !(std::isfinite(ss) && ss > 0.0) || !(one_pass >= 0x1p-990) ||
+                           std::fabs((s1 * s1 / n) / s2 - 1.0) <= 0.01 || !std::isfinite(ratio) || ratio >= 0.0;
+  if (!second_pass) {
+    return one_pass;
   }
-  return sample ? (s2 - (s1 * s1) / n) / (n - 1.0) : (n * s2 - s1 * s1) / (n * n);
+  return squared_deviation_sum(xs, mean) / (sample ? n - 1.0 : n);
 }
 
 namespace {
