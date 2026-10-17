@@ -2209,6 +2209,134 @@
         "abs": 0.0,
         "rel": 0.0
       }
+    },
+    {
+      "id": "radix_b_00_decimal_rept_z_200_36",
+      "formula": "=DECIMAL(REPT(\"Z\",200),36)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_01_decimal_rept_9_255_10",
+      "formula": "=DECIMAL(REPT(\"9\",255),10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+255
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_02_decimal_rept_f_255_16",
+      "formula": "=DECIMAL(REPT(\"F\",255),16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1235582092889474e+307
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_03_decimal_rept_9_256_10",
+      "formula": "=DECIMAL(REPT(\"9\",256),10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_04_decimal_rept_f_256_16",
+      "formula": "=DECIMAL(REPT(\"F\",256),16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_05_decimal_rept_1_300_2",
+      "formula": "=DECIMAL(REPT(\"1\",300),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_06_decimal_10",
+      "formula": "=DECIMAL(\" \",10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_07_decimal_16",
+      "formula": "=DECIMAL(\"  \",16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_08_decimal_1_2",
+      "formula": "=DECIMAL(\" 1\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_09_decimal_1_10",
+      "formula": "=DECIMAL(\"1 \",10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_10_decimal_0_10",
+      "formula": "=DECIMAL(\"-0\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_11_decimal_0_16",
+      "formula": "=DECIMAL(\"+0\",16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
     }
   ]
 }

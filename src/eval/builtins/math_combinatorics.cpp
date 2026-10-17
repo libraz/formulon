@@ -670,8 +670,19 @@ Value Decimal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
-  // Leading blanks are skipped; a trailing blank is not a digit.
+  // The text may hold at most 255 characters (UTF-16 code units).
   std::string_view s = text.value();
+  std::size_t units = 0;
+  for (const char ch : s) {
+    const auto b = static_cast<unsigned char>(ch);
+    if ((b & 0xC0U) != 0x80U) {
+      units += b >= 0xF0U ? 2U : 1U;
+    }
+  }
+  if (units > 255U) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Leading blanks are skipped; a trailing blank is not a digit.
   while (!s.empty() && (s.front() == ' ' || s.front() == '\t')) {
     s.remove_prefix(1);
   }

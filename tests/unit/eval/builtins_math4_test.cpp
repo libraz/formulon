@@ -55,6 +55,18 @@ TEST(BuiltinsBaseDecimalRadix, DecimalTrailingBlankIsNumAndLeadingBlankIsKept) {
   EXPECT_EQ(leading.as_number(), 255.0);
 }
 
+TEST(BuiltinsBaseDecimalRadix, DecimalTextLengthLimit) {
+  const Value ok = EvalSource("=DECIMAL(REPT(\"F\", 255), 16)");
+  ASSERT_TRUE(ok.is_number());
+  EXPECT_EQ(ok.as_number(), 1.1235582092889474e307);
+  const Value too_long = EvalSource("=DECIMAL(REPT(\"F\", 256), 16)");
+  ASSERT_TRUE(too_long.is_error());
+  EXPECT_EQ(too_long.as_error(), ErrorCode::Value);
+  const Value overflow = EvalSource("=DECIMAL(REPT(\"Z\", 200), 36)");
+  ASSERT_TRUE(overflow.is_error());
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
 TEST(BuiltinsBaseDecimalRadix, DecimalHexPrefixAndLargeValues) {
   const Value prefixed = EvalSource("=DECIMAL(\"0x1F\", 16)");
   ASSERT_TRUE(prefixed.is_number());
