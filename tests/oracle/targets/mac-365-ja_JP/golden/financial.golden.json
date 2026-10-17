@@ -2111,6 +2111,136 @@
         "kind": "error",
         "code": "#NUM!"
       }
+    },
+    {
+      "id": "ispmt_op_order_00",
+      "formula": "=ISPMT(0.027,4,12,268742.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4837.356
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_01",
+      "formula": "=ISPMT(0.13516,15,29,492858.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -32158.814548965518
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_02",
+      "formula": "=ISPMT(0.1059,8,12,648554.6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -22893.977379999997
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_03",
+      "formula": "=ISPMT(0.10299,10,10,426665.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_04",
+      "formula": "=ISPMT(0.0771,20,37,994836.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -35241.39311351351
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_05",
+      "formula": "=ISPMT(0.1244,27,35,360063.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -10238.134217142857
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_06",
+      "formula": "=ISPMT(0.027,5,12,268742.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4232.6865
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_07",
+      "formula": "=ISPMT(0.146,1,3,291531.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -28375.683999999997
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_08",
+      "formula": "=ISPMT(0.0771,19,37,994836.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -37314.41623783784
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_09",
+      "formula": "=ISPMT(0.143,16,23,972381.41)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -42319.73006130435
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     }
   ]
 }

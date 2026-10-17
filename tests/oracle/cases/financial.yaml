@@ -804,3 +804,53 @@ cases:
   - id: rate_secant_16
     description: "RATE secant search as Excel runs it: guess domain, degenerate steps, tolerance"
     formula: "=RATE(0.5,-60,100,,,0.01)"
+
+  - id: ispmt_op_order_00
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.027,4,12,268742.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_01
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.13516,15,29,492858.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_02
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.1059,8,12,648554.6)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_03
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.10299,10,10,426665.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_04
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.0771,20,37,994836.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_05
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.1244,27,35,360063.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_06
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.027,5,12,268742.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_07
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.146,1,3,291531.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_08
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.0771,19,37,994836.0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ispmt_op_order_09
+    description: "ISPMT evaluates -(((nper - per) * pv) * rate) / nper"
+    formula: "=ISPMT(0.143,16,23,972381.41)"
+    tolerance: { abs: 0, rel: 0 }

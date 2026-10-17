@@ -255,7 +255,7 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // for period `per` when the principal is paid down linearly across
 // `nper` periods.
 //
-//   ISPMT = -pv * rate * (1 - per / nper)
+//   ISPMT = -(((nper - per) * pv) * rate) / nper
 //
 // Domain:
 //   - nper == 0  ->  #DIV/0!
@@ -275,7 +275,7 @@ Value IsPmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (nper == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double result = -pv * rate * (1.0 - per / nper);
+  const double result = -(((nper - per) * pv) * rate) / nper;
   return finalize(result);
 }
 
