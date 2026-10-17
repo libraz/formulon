@@ -635,6 +635,41 @@ TEST(ExcelExactTrigLog, MatchesExcelBitForBit) {
   }
 }
 
+TEST(TrigRules, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=SIN(134217727.5)", -0.9796209680098831},    {"=COS(134217727)", -0.2933884035556727},
+      {"=TAN(134217727)", 3.2584564256367834},       {"=SEC(134217727)", -3.408451008562928},
+      {"=CSC(134217727)", -1.0460324040996902},      {"=COT(134217727)", 0.30689377710631044},
+      {"=RADIANS(12345678900)", 215472745.19899178}, {"=RADIANS(0.123456)", 0.0021547136813421194},
+      {"=DEGREES(12345678900)", 707355296193.7126},  {"=DEGREES(0.123456)", 7.073507755567091},
+      {"=ACOSH(1.0001)", 0.014142017775249453},      {"=ACOSH(7.5)", 2.703575830931402},
+      {"=ACOSH(1E+100)", 230.95165647996453},        {"=CSCH(0.5)", 1.9190347513349437},
+      {"=CSCH(3.7)", 0.04947729607451755},           {"=SECH(0.5)", 0.886818883970074},
+      {"=SECH(3.7)", 0.04941684675665245},           {"=SECH(1000)", 0.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(TrigRules, ArgumentAtTheLimitIsNum) {
+  for (const char* formula : {"=SIN(134217728)", "=COS(-134217728)", "=TAN(201326592)", "=SEC(134217728)",
+                              "=CSC(134217728)", "=COT(134217728)", "=ACOSH(1E+200)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+  const Value zero = EvalSource("=CSCH(0)");
+  ASSERT_TRUE(zero.is_error());
+  EXPECT_EQ(zero.as_error(), ErrorCode::Div0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

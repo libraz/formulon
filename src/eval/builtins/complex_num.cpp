@@ -316,9 +316,6 @@ Value im_unary_number(double (*op)(Complex), const Value* args) {
 // Primitives
 // ---------------------------------------------------------------------------
 
-// sin / cos are taken only below this magnitude; beyond it the result is #NUM!.
-constexpr double kSinCosCap = 134217728.0;
-
 // A product with a subnormal result flushed to zero.
 double flushed_square(double x) noexcept {
   return flush_subnormal(x * x);
@@ -610,7 +607,7 @@ Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (c.im == 0.0) {
     return text_complex(Complex{std::exp(c.re), 0.0, c.suffix}, arena);
   }
-  if (std::fabs(c.im) >= kSinCosCap) {
+  if (!builtins_detail::trig_argument_in_range(c.im)) {
     return Value::error(ErrorCode::Num);
   }
   double mag = std::exp(c.re);
@@ -736,7 +733,7 @@ Value im_csc_sec(const Value* args, Arena& arena, bool sec) {
   if (c.im > 709.0 || c.im < -708.0) {
     return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
   }
-  if (std::fabs(c.re) >= kSinCosCap) {
+  if (!builtins_detail::trig_argument_in_range(c.re)) {
     return Value::error(ErrorCode::Num);
   }
   const double f1 = sec ? std::cos(c.re) : std::sin(c.re);
@@ -796,7 +793,7 @@ Value im_sin_cos(const Value* args, Arena& arena, bool cos) {
     return Value::error(z.error());
   }
   const Complex c = z.value();
-  if (std::fabs(c.re) >= kSinCosCap) {
+  if (!builtins_detail::trig_argument_in_range(c.re)) {
     return Value::error(ErrorCode::Num);
   }
   const double e = bounded_exp(c.im);
@@ -825,7 +822,7 @@ Value im_tan_cot(const Value* args, Arena& arena, bool cot) {
   }
   const Complex c = z.value();
   if (c.im == 0.0) {
-    if (std::fabs(c.re) >= kSinCosCap) {
+    if (!builtins_detail::trig_argument_in_range(c.re)) {
       return Value::error(ErrorCode::Num);
     }
     const double t = std::tan(c.re);
@@ -835,7 +832,7 @@ Value im_tan_cot(const Value* args, Arena& arena, bool cot) {
     const double direction = (c.im > 354.5 ? 1.0 : -1.0) * (cot ? -1.0 : 1.0);
     return text_complex(Complex{0.0, direction, c.suffix}, arena);
   }
-  if (std::fabs(c.re) >= kSinCosCap) {
+  if (!builtins_detail::trig_argument_in_range(c.re)) {
     return Value::error(ErrorCode::Num);
   }
   const double y2 = c.im * 2.0;
@@ -859,7 +856,7 @@ Value im_sinh_cosh(const Value* args, Arena& arena, bool cosh) {
     return Value::error(z.error());
   }
   const Complex c = z.value();
-  if (std::fabs(c.im) >= kSinCosCap) {
+  if (!builtins_detail::trig_argument_in_range(c.im)) {
     return Value::error(ErrorCode::Num);
   }
   const double neg_re = -c.re;
@@ -909,7 +906,7 @@ Value im_csch_sech(const Value* args, Arena& arena, bool sech) {
   if (c.im != 0.0 && (c.re > 709.0 || c.re < -708.0)) {
     return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
   }
-  if (std::fabs(c.im) >= kSinCosCap) {
+  if (!builtins_detail::trig_argument_in_range(c.im)) {
     return Value::error(ErrorCode::Num);
   }
   const double neg_re = -c.re;

@@ -47,6 +47,18 @@ inline Value apply_unary_math(DoubleFn fn, const Value* args) {
   return to_finite_value(fn(x.value()));
 }
 
+// sin / cos / tan: the argument must lie below 2^27 in magnitude.
+inline Value apply_trig_math(DoubleFn fn, const Value* args) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  if (!builtins_detail::trig_argument_in_range(x.value())) {
+    return Value::error(ErrorCode::Num);
+  }
+  return to_finite_value(fn(x.value()));
+}
+
 inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const Value* args) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
@@ -152,30 +164,27 @@ Value Pi(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(kPi);
 }
 
-// RADIANS(degrees) - degrees-to-radians conversion. RADIANS(0) == 0,
-// RADIANS(180) == pi.
+// RADIANS(degrees) - degrees-to-radians conversion, `x * (pi / 180)`.
+// RADIANS(0) == 0, RADIANS(180) == pi.
 Value Radians(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_value(args, [](double x) { return to_finite_value(x * kPi / 180.0); });
+  return apply_unary_value(args, [](double x) { return to_finite_value(x * (kPi / 180.0)); });
 }
 
 // DEGREES(radians) - radians-to-degrees conversion. DEGREES(pi) == 180.
-// Order of operations matches Mac Excel 365 / IronCalc: divide first, then
-// multiply. The mathematically equivalent `x * 180.0 / kPi` form differs by
-// 1 ULP for some inputs (e.g. 12345678900); see Mac probe 2026-05-02.
+// The constant is divided first and then multiplied in (`x * (180 / pi)`);
+// the equivalent `x * 180 / pi` differs by 1 ULP for some inputs.
 Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_value(args, [](double x) { return to_finite_value(x / kPi * 180.0); });
+  return apply_unary_value(args, [](double x) { return to_finite_value(x * (180.0 / kPi)); });
 }
 
-// SIN(x) - sine in radians. Excel imposes no domain restriction; only
-// non-finite results (essentially impossible for finite input) surface
-// `#NUM!`.
+// SIN(x) - sine in radians. |x| >= 2^27 is `#NUM!`.
 Value Sin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::sin, args);
+  return apply_trig_math(&std::sin, args);
 }
 
 // COS(x) - cosine in radians.
 Value Cos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::cos, args);
+  return apply_trig_math(&std::cos, args);
 }
 
 // TAN(x) - tangent in radians. Excel quirk pin: even at the pole
@@ -184,7 +193,7 @@ Value Cos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // so we do NOT pre-reject pole-adjacent inputs - only true Inf/NaN is
 // reported as `#NUM!`.
 Value Tan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::tan, args);
+  return apply_trig_math(&std::tan, args);
 }
 
 // asin / acos on [-1, 1] through atan: r = sqrt((2 - (1 - x)) * (1 - x)) is
@@ -336,7 +345,9 @@ Value Asinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // outside the domain and Excel reports `#NUM!`; this mirrors the ACOS
 // domain check above.
 Value Acosh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_guarded_unary_math(&std::acosh, &at_least_one_domain, args);
+  // log(x + sqrt(x*x - 1)); x*x overflowing (x > ~1.34e154) is #NUM!.
+  return apply_guarded_unary_math([](double x) { return std::log(x + std::sqrt(x * x - 1.0)); }, &at_least_one_domain,
+                                  args);
 }
 
 // ATANH(x) - inverse hyperbolic tangent. Domain: `(-1, 1)` EXCLUSIVE. At
@@ -359,6 +370,9 @@ Value Atanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // SEC(x) - secant, `1 / cos(x)`. `cos(x) == 0` -> `#DIV/0!`.
 Value Sec(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
+    if (!builtins_detail::trig_argument_in_range(x)) {
+      return Value::error(ErrorCode::Num);
+    }
     const double c = std::cos(x);
     if (c == 0.0) {
       return Value::error(ErrorCode::Div0);
@@ -370,6 +384,9 @@ Value Sec(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // CSC(x) - cosecant, `1 / sin(x)`. `sin(x) == 0` -> `#DIV/0!`.
 Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
+    if (!builtins_detail::trig_argument_in_range(x)) {
+      return Value::error(ErrorCode::Num);
+    }
     const double s = std::sin(x);
     if (s == 0.0) {
       return Value::error(ErrorCode::Div0);
@@ -383,6 +400,9 @@ Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // PI even when `sin(x)` is non-zero on the same argument.
 Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
+    if (!builtins_detail::trig_argument_in_range(x)) {
+      return Value::error(ErrorCode::Num);
+    }
     const double s = std::sin(x);
     if (s == 0.0) {
       return Value::error(ErrorCode::Div0);
@@ -401,12 +421,12 @@ Value Acot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   });
 }
 
-// SECH(x) - hyperbolic secant, `1 / cosh(x)`. `cosh` is always >= 1, so
+// SECH(x) - hyperbolic secant, `1 / cosh_excel(x)`. `cosh` is always >= 1, so
 // the divisor never hits zero; very large `|x|` drives the quotient to 0
 // (not Inf), which is a valid return - Excel yields 0 for `SECH(1000)`.
 Value Sech(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
-    const double c = std::cosh(x);
+    const double c = cosh_excel(x);
     if (std::isinf(c)) {
       // Overflow in cosh: 1 / Inf == 0 in IEEE arithmetic, but we would
       // rather surface an explicit zero to match Excel's observed output.
@@ -416,11 +436,11 @@ Value Sech(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   });
 }
 
-// CSCH(x) - hyperbolic cosecant, `1 / sinh(x)`. `sinh(0) == 0` -> `#DIV/0!`.
+// CSCH(x) - hyperbolic cosecant, `1 / sinh_excel(x)`. `sinh(0) == 0` -> `#DIV/0!`.
 // Large `|x|` drives sinh to +/-Inf, which yields 0 (matching Excel).
 Value Csch(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
-    const double s = std::sinh(x);
+    const double s = sinh_excel(x);
     if (s == 0.0) {
       return Value::error(ErrorCode::Div0);
     }

@@ -53,6 +53,14 @@ inline Value to_finite_value(double r) noexcept {
   return Value::number(r);
 }
 
+/// sin / cos / tan are taken only for |x| below 2^27; beyond it the Excel functions (and the IM*
+/// functions built on them) are #NUM!.
+inline constexpr double kTrigArgumentLimit = 134217728.0;
+
+inline bool trig_argument_in_range(double x) noexcept {
+  return std::fabs(x) < kTrigArgumentLimit;
+}
+
 /// The 15-significant-digit decimal view of a quotient, applied before a
 /// CEILING / FLOOR style rounding step so that an exact multiple (7.1 / 0.1)
 /// and the noise just below or above it round the way Excel's displayed value does.

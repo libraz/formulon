@@ -190,3 +190,116 @@ cases:
   - id: atan2_negative_x_axis
     formula: "=ATAN2(-3,0)"
     tolerance: { abs: 0, rel: 0 }
+
+  # -- Trig argument limit 2^27, RADIANS / DEGREES order, ACOSH log form, CSCH / SECH ---
+  - id: trig_rules_sin_below_limit
+    formula: "=SIN(134217727.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sin_at_limit
+    formula: "=SIN(134217728)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sin_above_limit
+    formula: "=SIN(201326592)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sin_negative_at_limit
+    formula: "=SIN(-134217728)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_cos_below_limit
+    formula: "=COS(134217727)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_cos_at_limit
+    formula: "=COS(134217728)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_tan_below_limit
+    formula: "=TAN(134217727)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_tan_at_limit
+    formula: "=TAN(134217728)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sec_below_limit
+    formula: "=SEC(134217727)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sec_at_limit
+    formula: "=SEC(134217728)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_csc_below_limit
+    formula: "=CSC(134217727)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_csc_at_limit
+    formula: "=CSC(134217728)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_cot_below_limit
+    formula: "=COT(134217727)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_cot_at_limit
+    formula: "=COT(134217728)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_radians_constant_first
+    formula: "=RADIANS(12345678900)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_radians_fraction
+    formula: "=RADIANS(0.123456)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_degrees_constant_first
+    formula: "=DEGREES(12345678900)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_degrees_fraction
+    formula: "=DEGREES(0.123456)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_acosh_log_form_small
+    formula: "=ACOSH(1.0001)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_acosh_log_form_medium
+    formula: "=ACOSH(7.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_acosh_log_form_large
+    formula: "=ACOSH(1E+100)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_acosh_square_overflow
+    formula: "=ACOSH(1E+200)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_csch_excel_sinh
+    formula: "=CSCH(0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_csch_excel_sinh_large
+    formula: "=CSCH(3.7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sech_excel_cosh
+    formula: "=SECH(0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sech_excel_cosh_large
+    formula: "=SECH(3.7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_csch_zero
+    formula: "=CSCH(0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: trig_rules_sech_overflow_to_zero
+    formula: "=SECH(1000)"
+    tolerance: { abs: 0, rel: 0 }
