@@ -139,7 +139,11 @@
         "kind": "number",
         "value": 776.0
       },
-      "compare_mode": "numeric_text"
+      "compare_mode": "numeric_text",
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "amorlinc_ms_doc",

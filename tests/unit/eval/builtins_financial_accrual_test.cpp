@@ -362,10 +362,16 @@ TEST(FinancialAmordegrc, CostLeZeroIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialAmordegrc, SalvageGeCostIsNum) {
-  const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 2400, 1, 0.15, 1)");
+TEST(FinancialAmordegrc, SalvageAboveCostIsNum) {
+  const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 2401, 1, 0.15, 1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialAmordegrc, SalvageEqualToCostIsZero) {
+  const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 2400, 1, 0.15, 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(FinancialAmordegrc, NegativePeriodIsNum) {
@@ -416,11 +422,32 @@ TEST(FinancialAmordegrc, InvalidBasisIsNum) {
 }
 
 TEST(FinancialAmordegrc, LifeBucketRejection) {
-  // life = 1/rate = 1/0.4 = 2.5, which is below the minimum bucket
-  // (life >= 3). Excel returns #NUM!.
-  const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.4, 1)");
+  // life = ceil(1/rate) = ceil(1/0.5) = 2, below the minimum of 3.
+  const Value v = EvalSource("=AMORDEGRC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.5, 1)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialAmordegrc, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=AMORDEGRC(10000,43831,44196,1000.00,3,0.05,0)", 837.0},
+      {"=AMORDEGRC(10000,43831,44196,1000.00,3,0.05,1)", 838.0},
+      {"=AMORDEGRC(10000,43831,44196,1000.00,3,0.05,3)", 837.0},
+      {"=AMORDEGRC(10000,43831,44196,1000,3,0.2,4)", 1082.0},
+      {"=AMORDEGRC(10000,43831,44196,1000.00,0,0.4,1)", 5984.0},
+      {"=AMORDEGRC(10000,43831,44196,1000.00,10,0.1,0)", 0.0},
+      {"=AMORDEGRC(973279,36484,36601,25039.99,0,0.397,1)", 185786.0},
+      {"=AMORDEGRC(374104.18,36134,36533,32721.06,3,0.319,1)", 46523.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
 }
 
 // ---------------------------------------------------------------------------

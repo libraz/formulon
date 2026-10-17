@@ -91,7 +91,8 @@ Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arit
 }
 
 // Reads the AMORDEGRC / AMORLINC arguments and applies their shared domain checks.
-Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t arity) {
+// `salvage_may_equal_cost` admits a salvage equal to the cost (AMORDEGRC returns 0 there).
+Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t arity, bool salvage_may_equal_cost) {
   double v[6];
   if (auto read = read_required_numbers(args, "nddnnn", v); !read) {
     return std::move(read.error());
@@ -104,58 +105,11 @@ Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t ar
   const double salvage = v[3];
   const double period = v[4];
   const double rate = v[5];
-  if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0 || period > kMaxDepreciationPeriods) {
+  if (cost <= 0.0 || rate <= 0.0 || (salvage_may_equal_cost ? salvage > cost : salvage >= cost) || period < 0.0 ||
+      period > kMaxDepreciationPeriods) {
     return ErrorCode::Num;
   }
   return AmorArgs{cost, v[1], v[2], salvage, period, rate, basis.value()};
-}
-
-// Walks periods 0..floor(period), capping each charge from `period_dep(i, book)`
-// at the remaining depreciable value, and returns the requested period's charge.
-template <typename PeriodDep>
-double run_amor_schedule(double cost, double salvage, double period, PeriodDep period_dep) {
-  const auto requested = static_cast<std::int64_t>(std::floor(period));
-  double book = cost;
-  double dep_i = 0.0;
-  for (std::int64_t i = 0; i <= requested; ++i) {
-    dep_i = period_dep(i, book);
-    // Cap against the remaining depreciable book value (book - salvage).
-    const double cap = book - salvage;
-    if (dep_i > cap) {
-      dep_i = cap;
-    }
-    if (dep_i < 0.0) {
-      dep_i = 0.0;
-    }
-    book -= dep_i;
-    if (book <= salvage && i < requested) {
-      // Asset is fully depreciated; every remaining period returns 0.
-      dep_i = 0.0;
-      break;
-    }
-  }
-  return dep_i;
-}
-
-// The AMORDEGRC depreciation coefficient (French accounting code). The
-// "life" used here is 1/rate — a proxy for the estimated useful life of
-// the asset. The three buckets match the official French tax rule:
-//   * life in [3, 4]    -> 1.5
-//   * life in [5, 6]    -> 2.0
-//   * life >  6         -> 2.5
-// Excel rejects life < 3 or life in (4, 5) via #NUM!; callers surface
-// a 0.0 coefficient as the sentinel for that rejection.
-double amordegrc_coefficient(double life) noexcept {
-  if (life >= 3.0 && life <= 4.0) {
-    return 1.5;
-  }
-  if (life >= 5.0 && life <= 6.0) {
-    return 2.0;
-  }
-  if (life > 6.0) {
-    return 2.5;
-  }
-  return 0.0;
 }
 
 // Declining-balance charge of a (possibly fractional) `period`:
@@ -482,78 +436,107 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // --- AMORDEGRC(cost, date_purchased, first_period, salvage, period,
 //               rate, [basis=0]) --------------------------------------------
 //
-// French degressive (declining-balance) depreciation. The algorithm
-// applies a life-dependent coefficient to `rate`:
+// French degressive depreciation. With life L = ceil(1/rate) (L < 3 is #NUM!),
+// the rate is multiplied by 1.5 (L of 3-4), 2 (5-6) or 2.5 (7 and up).
 //
-//   life          = 1 / rate
-//   coefficient   = 1.5 if 3 <= life <= 4
-//                 = 2.0 if 5 <= life <= 6
-//                 = 2.5 if life > 6
-//   applied_rate  = rate * coefficient
+//   first charge = min(((days / year) * r) * cost, cost - salvage), rounded;
+//                  a zero-length first period charges a full year and leaves L as is,
+//                  a nonzero one adds 1 to L
+//   later charges: unrounded `r * book`, the whole of the next charge being
+//                  half the book when L - n reaches 2, floored at the salvage
 //
-// Depreciation schedule (period index is 0-based):
+// The returned period's charge is rounded. A period beyond L, or a salvage equal
+// to the cost, is 0. Basis 2 and a salvage above the cost are #NUM!.
 //
-//   dep_0          = round(cost * applied_rate *
-//                          YEARFRAC(date_purchased, first_period, basis))
-//   dep_i (i>=1)   = round(book_i * applied_rate)
-//
-// The second-to-last full period's charge is forced to `book / 2` and
-// the final period zeros out the remainder — matching Excel's
-// observable behaviour for long asset lives.
-//
-// Domain:
-//   - cost <= 0 or salvage >= cost or rate <= 0  ->  #NUM!
-//   - period < 0                                 ->  #NUM!
-//   - basis not in {0, 1, 2, 3, 4}               ->  #NUM!
-//   - life (= 1/rate) in the rejected buckets    ->  #NUM!
+// The first-period day count is 30/360 (US with the February-end rule for
+// basis 0, European for basis 4), actual/365 (basis 3), or actual days over
+// 366 / 365 by whether the purchase year is a leap year (basis 1).
+double amordegrc_first_period_fraction(double purchased, double first_period, int basis, bool date1904) noexcept {
+  const date_time::YMD a = date_time::ymd_from_serial(purchased, date1904);
+  const date_time::YMD b = date_time::ymd_from_serial(first_period, date1904);
+  if (basis == 3) {
+    return (first_period - purchased) / 365.0;
+  }
+  if (basis == 1) {
+    return (first_period - purchased) / (date_time::days_in_month(a.y, 2u) == 29u ? 366.0 : 365.0);
+  }
+  unsigned d1 = a.d;
+  unsigned d2 = b.d;
+  if (basis == 0) {
+    if (is_feb_end(a) && is_feb_end(b)) {
+      d2 = 30u;
+    }
+    if (is_feb_end(a)) {
+      d1 = 30u;
+    }
+    if (d1 == 31u) {
+      d1 = 30u;
+    }
+    if (d2 == 31u && d1 >= 30u) {
+      d2 = 30u;
+    }
+  } else {
+    d1 = d1 == 31u ? 30u : d1;
+    d2 = d2 == 31u ? 30u : d2;
+  }
+  const double days = static_cast<double>(b.y - a.y) * 360.0 +
+                      (static_cast<double>(b.m) - static_cast<double>(a.m)) * 30.0 +
+                      (static_cast<double>(d2) - static_cast<double>(d1));
+  return days / 360.0;
+}
+
 Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto parsed = read_amor_args(args, arity);
+  auto parsed = read_amor_args(args, arity, /*salvage_may_equal_cost=*/true);
   if (!parsed) {
     return Value::error(parsed.error());
   }
   const double cost = parsed.value().cost;
   const double salvage = parsed.value().salvage;
-  const double period = parsed.value().period;
   const double rate = parsed.value().rate;
-  // Computed life drives the French coefficient table. A coefficient of
-  // 0 means the life bucket is invalid (Excel's #NUM! territory).
-  const double life = 1.0 / rate;
-  const double coef = amordegrc_coefficient(life);
-  if (coef == 0.0) {
+  const int basis = parsed.value().basis;
+  const double purchased = std::trunc(parsed.value().date_purchased);
+  const double first_period = std::trunc(parsed.value().first_period);
+  if (basis == 2 || first_period < purchased) {
     return Value::error(ErrorCode::Num);
   }
-  const double applied_rate = rate * coef;
-
-  // First-period year fraction (YEARFRAC from purchase to first period).
-  auto yf =
-      yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis, date1904);
-  if (!yf) {
-    return Value::error(yf.error());
+  double life = std::ceil(1.0 / rate);
+  if (life < 3.0) {
+    return Value::error(ErrorCode::Num);
   }
-
-  // Integer estimate of the asset's life (in periods) used by the
-  // two-step end-of-schedule rule. Excel rounds life to the nearest
-  // integer for this calculation.
-  // Kept in double: a tiny rate makes 1/rate exceed int64_t, and the schedule is capped anyway.
-  const double rounded_life = std::floor(life + 0.5);
-  // Each period's depreciation is rounded to the nearest integer (Excel's
-  // observed AMORDEGRC behaviour).
-  return finalize(run_amor_schedule(cost, salvage, period, [&](std::int64_t i, double book) {
-    // End-of-schedule rule: the penultimate full period depreciates
-    // half of the remaining book value; the last period finishes the
-    // remainder. rounded_life here is a conservative period proxy.
-    const double period_index = static_cast<double>(i);
-    if (period_index == rounded_life - 1.0) {
-      return std::floor(book * 0.5 + 0.5);
+  if (cost == salvage) {
+    return Value::number(0.0);
+  }
+  const double period = std::floor(parsed.value().period);
+  if (period > life) {
+    return Value::number(0.0);
+  }
+  const double coefficient = life <= 4.0 ? 1.5 : (life <= 6.0 ? 2.0 : 2.5);
+  double r = rate * coefficient;
+  double first = (amordegrc_first_period_fraction(purchased, first_period, basis, date1904) * r) * cost;
+  if (first != 0.0) {
+    life += 1.0;
+  } else {
+    first = cost * r;
+  }
+  first = builtins_detail::round_half_away_decimals(std::min(first, cost - salvage), 0);
+  if (period == 0.0) {
+    return finalize(first);
+  }
+  double book = cost - first;
+  double dep = 0.0;
+  for (double n = 1.0; n <= period;) {
+    dep = r * book;
+    n += 1.0;
+    if (life - n == 2.0) {
+      dep = book * 0.5;
+      r = 1.0;
     }
-    if (period_index >= rounded_life) {
-      return book;
+    if (book < salvage) {
+      dep = std::max(book - salvage, 0.0);
     }
-    if (i == 0) {
-      return std::floor(cost * applied_rate * yf.value() + 0.5);
-    }
-    return std::floor(book * applied_rate + 0.5);
-  }));
+    book -= dep;
+  }
+  return finalize(builtins_detail::round_half_away_decimals(dep, 0));
 }
 
 // --- AMORLINC(cost, date_purchased, first_period, salvage, period, rate,
@@ -575,7 +558,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 // Domain: same as AMORDEGRC minus the life-bucket rejection (AMORLINC
 // is valid for every positive rate); basis 2 and first_period < date_purchased are #NUM!.
 Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto parsed = read_amor_args(args, arity);
+  auto parsed = read_amor_args(args, arity, /*salvage_may_equal_cost=*/false);
   if (!parsed) {
     return Value::error(parsed.error());
   }
