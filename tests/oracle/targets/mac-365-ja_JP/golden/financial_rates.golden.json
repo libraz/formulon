@@ -271,6 +271,10 @@
       "expect": {
         "kind": "number",
         "value": 0.06095433369153867
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -280,6 +284,10 @@
       "expect": {
         "kind": "number",
         "value": 0.06095433369153867
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -499,6 +507,10 @@
       "expect": {
         "kind": "number",
         "value": 0.060948059155698044
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
