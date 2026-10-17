@@ -26,6 +26,7 @@
 // `tests/unit/eval/builtins_implicit_intersection_test.cpp` exercises
 // the bare evaluator. This file exercises the recalc pipeline.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <sstream>
@@ -39,6 +40,8 @@
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
 #include "support/ooxml_package_fixture.h"
@@ -554,9 +557,7 @@ std::string XmlEscaped(const char* text) {
 // Excel 365 (Mac, ja-JP) opening a legacy .xlsx: A1:A4 hold 1..4, Rng covers
 // Sheet1!$A$1:$A$3, and the formulas fill C2 downwards in this order, stored
 // as the file spells them; formula2 text and values as Excel showed them.
-// An empty value is volatile, or one the evaluator does not reproduce yet:
-// N over an area takes its first cell, and `@` over the area LET returns
-// intersects it with the formula cell (#VALUE! here).
+// An empty value is volatile.
 constexpr LegacyCase kLegacyOperandsAndCalls[] = {
     {"={1,2}", "=@{1,2}", "1"},
     {"=A1:A3", "=@A1:A3", "3"},
@@ -587,7 +588,7 @@ constexpr LegacyCase kLegacyOperandsAndCalls[] = {
     {"=INDEX(A1:A3,0,1)", "=@INDEX(A1:A3,0,1)", "#VALUE!"},
     {"=ABS(A1:A3)", "=ABS(@A1:A3)", "#VALUE!"},
     {"=LEN(A1:A3)", "=LEN(@A1:A3)", "#VALUE!"},
-    {"=N(A1:A3)", "=N(A1:A3)", ""},
+    {"=N(A1:A3)", "=N(A1:A3)", "1"},
     {"=TRANSPOSE(A1:A3)", "=@TRANSPOSE(@A1:A3)", "#VALUE!"},
     {"=A1:A3 A2:A4", "=@A1:A3 A2:A4", "#VALUE!"},
     {"=SUM((A1,A2))", "=SUM((A1,A2))", "3"},
@@ -602,7 +603,7 @@ constexpr LegacyCase kLegacyOperandsAndCalls[] = {
     {"=_xlfn.UNIQUE(A1:A3)", "=@UNIQUE(A1:A3)", "1"},
     {"=_xlfn.XLOOKUP(2,A1:A3,A1:A3)", "=XLOOKUP(2,A1:A3,A1:A3)", "2"},
     {"=_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)(2)", "=@LAMBDA(x,@x+1)(2)", "3"},
-    {"=_xlfn.LET(_xlpm.a,A1:A3,_xlpm.a)", "=@LET(a,A1:A3,a)", ""},
+    {"=_xlfn.LET(_xlpm.a,A1:A3,_xlpm.a)", "=@LET(a,A1:A3,a)", "#VALUE!"},
     {"=_xlfn.SINGLE(A1:A3)", "=@A1:A3", "#VALUE!"},
     {"=IFERROR(A1:A3,0)", "=IFERROR(@A1:A3,0)", "0"},
     {"=CHOOSE(1,A1:A3)", "=@CHOOSE(1,A1:A3)", "#VALUE!"},
@@ -704,10 +705,10 @@ TEST(LegacyAt, LegacyXlsxShowsImpliedAtAndSavesTheStoredText) {
   EXPECT_EQ(saved_xml.find(" cm=\""), std::string::npos) << saved_xml;
 }
 
-// '@' over a spill or over a LAMBDA returning a range intersects that range
-// with the formula cell, as over a static one (Excel 365: G1 = SEQUENCE(3),
-// Fn = LAMBDA(x,x); 2 on row 2, #VALUE! on row 5). A legacy cell holding a
-// spill reference reads with Excel's implied '@'.
+// '@' over a spill or over a LAMBDA or LET returning a range intersects that
+// range with the formula cell, as over a static one (Excel 365: G1 =
+// SEQUENCE(3), Fn = LAMBDA(x,x); 2 on row 2, #VALUE! on row 5). A legacy cell
+// holding a spill reference reads with Excel's implied '@'.
 TEST(LegacyAt, SpillAndLambdaResultsProjectOntoTheFormulaCell) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
@@ -721,11 +722,12 @@ TEST(LegacyAt, SpillAndLambdaResultsProjectOntoTheFormulaCell) {
     s.set_cell_dynamic_array(row, 7U, false);
     ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 8U, "=@Fn(A1:A3)")));
     ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 9U, "=@LAMBDA(x,x)(A1:A3)")));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 10U, "=@LET(a,A1:A3,a)")));
   }
   wb.apply_legacy_implicit_intersections();
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   EXPECT_EQ(s.cell_at(1U, 7U)->formula_text, "=@G1#");
-  for (const std::uint32_t col : {7U, 8U, 9U}) {
+  for (const std::uint32_t col : {7U, 8U, 9U, 10U}) {
     EXPECT_EQ(DisplayOf(s.cell_at(1U, col)->cached_value), "2") << col;
     EXPECT_EQ(DisplayOf(s.cell_at(4U, col)->cached_value), "#VALUE!") << col;
   }
@@ -737,10 +739,96 @@ TEST(LegacyAt, DynamicArrayAndCseFormulasKeepTheirText) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=A1:A2")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 4U, "=A1:A2*2")));
   s.set_cell_dynamic_array(1U, 4U, false);
-  ASSERT_TRUE(s.commit_spill(1U, 4U, 2U, 1U, {Value::number(2.0), Value::number(4.0)}));
+  s.set_cell_array_block(1U, 4U, 2U, 1U);
   wb.apply_legacy_implicit_intersections();
   EXPECT_EQ(s.cell_at(0U, 4U)->formula_text, "=A1:A2");
   EXPECT_EQ(s.cell_at(1U, 4U)->formula_text, "=A1:A2*2");
+}
+
+// A legacy array formula (CSE) fills exactly its own block: one cell takes
+// the result's top-left element (Excel 365: 1, 2, 12, 1 for C51:C54, with
+// FORMULATEXT in braces), a larger block repeats a one-cell axis and fills
+// what the result cannot supply with #N/A. It is saved with its own extent.
+TEST(LegacyAt, LegacyArrayFormulaFillsItsOwnBlock) {
+  std::string sheet_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>";
+  for (std::uint32_t r = 1; r <= 4U; ++r) {
+    const std::string ref = Decimal(r);
+    sheet_xml += "<row r=\"" + ref + "\"><c r=\"A" + ref + "\"><v>" + ref + "</v></c>";
+    if (r == 1U) {
+      sheet_xml +=
+          "<c r=\"E1\"><f t=\"array\" ref=\"E1:E4\">ROW(A1:A3)</f></c>"
+          "<c r=\"G1\"><f t=\"array\" ref=\"G1:H2\">{1,2}</f></c>"
+          "<c r=\"J1\"><f t=\"array\" ref=\"J1:J2\">1+1</f></c>";
+    }
+    sheet_xml += "</row>";
+  }
+  const char* const cse[] = {"{1,2}", "A1:A3+1", "SUM(A1:A3*2)", "ROW(A1:A3)"};
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    const std::string ref = Decimal(51U + i);
+    sheet_xml += "<row r=\"" + ref + "\"><c r=\"C" + ref + "\"><f t=\"array\" ref=\"C" + ref + "\">" + cse[i] +
+                 "</f></c><c r=\"D" + ref + "\"><f>_xlfn.FORMULATEXT(C" + ref + ")</f></c></row>";
+  }
+  sheet_xml += "</sheetData></worksheet>";
+  const std::vector<std::uint8_t> package =
+      test::BuildOoxmlPackage(test::OoxmlContentTypes(test::kXlsxWorkbookContentType), sheet_xml);
+  auto loaded = io::read_ooxml(SpanOf(package));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Sheet& s = wb.sheet(0);
+  const char* const values[] = {"1", "2", "12", "1"};
+  const char* const texts[] = {"{={1,2}}", "{=A1:A3+1}", "{=SUM(A1:A3*2)}", "{=ROW(A1:A3)}"};
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    EXPECT_EQ(s.cell_at(50U + i, 2U)->formula_text, std::string("=") + cse[i]);
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(50U + i, 2U)), values[i]) << cse[i];
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(50U + i, 3U)), texts[i]) << cse[i];
+  }
+  const char* const column_e[] = {"1", "2", "3", "#N/A"};
+  for (std::uint32_t r = 0; r < 4U; ++r) {
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 4U)), column_e[r]) << r;
+  }
+  EXPECT_EQ(DisplayOf(s.resolve_cell_value(4U, 4U)), "");
+  for (std::uint32_t r = 0; r < 2U; ++r) {
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 6U)), "1") << r;
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 7U)), "2") << r;
+    EXPECT_EQ(DisplayOf(s.resolve_cell_value(r, 9U)), "2") << r;
+  }
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(saved.value()))));
+  auto saved_sheet = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(saved_sheet));
+  const std::string saved_xml(saved_sheet.value().begin(), saved_sheet.value().end());
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    const std::string ref = Decimal(51U + i);
+    EXPECT_NE(saved_xml.find("<f t=\"array\" ref=\"C" + ref + "\">" + XmlEscaped(cse[i]) + "</f>"), std::string::npos)
+        << saved_xml;
+  }
+  EXPECT_NE(saved_xml.find("<f t=\"array\" ref=\"E1:E4\">ROW(A1:A3)</f>"), std::string::npos) << saved_xml;
+  EXPECT_NE(saved_xml.find("<f t=\"array\" ref=\"G1:H2\">{1,2}</f>"), std::string::npos) << saved_xml;
+  EXPECT_EQ(saved_xml.find(" cm=\""), std::string::npos) << saved_xml;
+
+  auto reread = io::read_ooxml(SpanOf(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto xlsb_read = io::xlsb::read_xlsb(SpanOf(xlsb.value()));
+  ASSERT_TRUE(static_cast<bool>(xlsb_read)) << xlsb_read.error().message;
+  for (const Workbook* round_tripped : {&reread.value().workbook, &xlsb_read.value().workbook}) {
+    const Sheet& rs = round_tripped->sheet(0);
+    for (const auto& [row, col, rows, cols] :
+         {std::array<std::uint32_t, 4>{0U, 4U, 4U, 1U}, {0U, 6U, 2U, 2U}, {0U, 9U, 2U, 1U}, {53U, 2U, 1U, 1U}}) {
+      const Cell* block = rs.cell_at(row, col);
+      ASSERT_NE(block, nullptr) << row << "," << col;
+      EXPECT_EQ(block->array_block_rows, rows) << row << "," << col;
+      EXPECT_EQ(block->array_block_cols, cols) << row << "," << col;
+      EXPECT_FALSE(block->dynamic_array) << row << "," << col;
+    }
+  }
 }
 
 TEST(LegacyAt, LegacyImpliedAtIsNotStored) {

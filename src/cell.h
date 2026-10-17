@@ -107,6 +107,12 @@ struct Cell {
   /// explicit blank cell distinct from a row-vector gap materialised while
   /// growing storage for a later column.
   bool has_explicit_xf = false;
+  /// Columns and rows of the legacy array formula (CSE) block anchored at
+  /// this cell: the fixed rectangle the formula fills, which it never spills
+  /// past. Zero rows for a cell that anchors none. Both fit the tail padding
+  /// after the flags.
+  std::uint16_t array_block_cols = 0;
+  std::uint32_t array_block_rows = 0;
 };
 
 }  // namespace formulon

@@ -1184,7 +1184,7 @@ void Workbook::apply_legacy_implicit_intersections() {
       const Cell* cell = sheet.cell_at(address.row, address.col);
       // A dynamic-array formula already says where it intersects, and a CSE
       // block evaluates as an array.
-      if (cell == nullptr || cell->dynamic_array || sheet.spill_region_at_anchor(address.row, address.col) != nullptr) {
+      if (cell == nullptr || cell->dynamic_array || cell->array_block_rows != 0U) {
         continue;
       }
       std::string text = cell->formula_text;
@@ -1545,6 +1545,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     // the file's own mark.
     sheets_[sheet_index].set_cell_dynamic_array(
         row, col, root != nullptr && io::entered_as_dynamic_array(*this, sheet_index, *root));
+    sheets_[sheet_index].set_cell_array_block(row, col, 0U, 0U);
 
     if (root != nullptr) {
       if (may_name_external_book) {

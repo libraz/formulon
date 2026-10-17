@@ -619,6 +619,11 @@ class Sheet {
     /// The view is backed by this object and stays valid for its lifetime.
     std::string_view formula_text() const noexcept { return formula_text_; }
 
+    /// The legacy array formula block the cell anchors (`Cell::array_block_rows`
+    /// / `array_block_cols`); zero rows when it anchors none.
+    std::uint32_t array_block_rows() const noexcept { return array_block_rows_; }
+    std::uint32_t array_block_cols() const noexcept { return array_block_cols_; }
+
     /// The coordinate's effective value, as `resolve_cell_value` defines
     /// it. A Text payload is re-pointed at this object's own copy of the
     /// bytes, so it never aliases sheet storage.
@@ -629,6 +634,8 @@ class Sheet {
 
     bool exists_ = false;
     bool is_text_ = false;
+    std::uint32_t array_block_rows_ = 0;
+    std::uint32_t array_block_cols_ = 0;
     std::string formula_text_;
     std::string text_payload_;
     Value value_ = Value::blank();
@@ -734,6 +741,12 @@ class Sheet {
   /// Marks the formula at `(row, col)` as a dynamic-array formula (see
   /// `Cell::dynamic_array`). No-op for a cell that holds no formula.
   void set_cell_dynamic_array(std::uint32_t row, std::uint32_t col, bool dynamic);
+
+  /// Makes the formula at `(row, col)` anchor a legacy array formula (CSE)
+  /// block of `rows` x `cols` cells (see `Cell::array_block_rows`); a zero
+  /// extent makes it an ordinary formula. No-op for a cell that holds no
+  /// formula.
+  void set_cell_array_block(std::uint32_t row, std::uint32_t col, std::uint32_t rows, std::uint32_t cols);
 
   /// Replaces the text of the formula at `(row, col)` with an equivalent
   /// spelling, keeping its cached value and marks. No-op for a cell that

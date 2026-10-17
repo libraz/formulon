@@ -513,12 +513,15 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
         const bool always = formula_cell_always_calculates(sheet, row, col, *cell, name_shapes);
         const SpillRegion* region = cell->formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, col);
         // A dynamic-array formula keeps that form (its `BrtCellMeta` naming
-        // the XLDAPR entry) even when it does not spill; a spill anchor that
-        // is not one (a loaded CSE block) keeps the array form alone.
+        // the XLDAPR entry) even when it does not spill; a legacy CSE block
+        // keeps the array form alone, over its own extent.
         const bool dynamic = dynamic_array_ifmd != 0U && is_dynamic_array_formula(*cell);
-        if (region != nullptr || dynamic) {
-          const std::uint32_t last_row = region != nullptr ? row + region->rows - 1U : row;
-          const std::uint32_t last_col = region != nullptr ? col + region->cols - 1U : col;
+        const bool cse = cell->array_block_rows != 0U;
+        if (region != nullptr || dynamic || cse) {
+          const std::uint32_t rows = cse ? cell->array_block_rows : region != nullptr ? region->rows : 1U;
+          const std::uint32_t cols = cse ? cell->array_block_cols : region != nullptr ? region->cols : 1U;
+          const std::uint32_t last_row = row + rows - 1U;
+          const std::uint32_t last_col = col + cols - 1U;
           const Value& anchor_value =
               region != nullptr && !region->cells.empty() ? region->cells.front() : cell->cached_value;
           bool downgraded_to_literal = false;

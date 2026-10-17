@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/array_alloc.h"
 #include "eval/builtin_names.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -18,6 +19,7 @@
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
+#include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -29,6 +31,31 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+// Fills a legacy array formula's `rows` x `cols` block from `result` by
+// Excel's array fill rule: a scalar or a one-cell axis repeats across the
+// block, and a position the result cannot supply is #N/A.
+Value fit_array_block(const Value& result, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
+  Value scalar_slot = Value::blank();
+  const ArrayView view = as_array_view(result, &scalar_slot);
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, buf);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::size_t i = 0;
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c, ++i) {
+      const Value* cell = broadcast_cell(view, r, c);
+      buf[i] = cell != nullptr ? *cell : Value::error(ErrorCode::NA);
+    }
+  }
+  return Value::array(out);
+}
+
+}  // namespace
+
 bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Cell& staged) {
   Sheet::CellRead read;
   sheet.read_formula_cell(row, col, read);
@@ -36,6 +63,8 @@ bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col
     return false;
   }
   staged.formula_text.assign(read.formula_text());
+  staged.array_block_rows = read.array_block_rows();
+  staged.array_block_cols = static_cast<std::uint16_t>(read.array_block_cols());
   return true;
 }
 
@@ -83,6 +112,13 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
     ctx = ctx.with_state(*opts.read_observer);
   }
 
+  // A legacy array formula fills its own block at a fixed size, never
+  // spilling past it.
+  if (cell_data.array_block_rows != 0U) {
+    const Value whole = evaluate_array_formula(*root, arena, registry, ctx);
+    return ctx.dispatch_array_result(
+        fit_array_block(whole, cell_data.array_block_rows, cell_data.array_block_cols, arena));
+  }
   Value result = evaluate(*root, arena, registry, ctx);
   // If the top-level evaluator produced an Array (e.g. a SEQUENCE() at the
   // anchor), commit the spill and return the anchor scalar. Mirrors the

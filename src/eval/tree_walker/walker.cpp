@@ -906,11 +906,18 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
 
 namespace {
 
-// The one top-level evaluation behind `evaluate` and `evaluate_first_element`.
-// The two differ only in what an array result becomes: `evaluate` hands it to
-// spill handling, `first_element_only` reduces it to its first element.
+// What the top-level evaluation makes of an array result.
+enum class TopResult : std::uint8_t {
+  kSpill,         // weighed against the anchor's spill footprint
+  kFirstElement,  // reduced to its first element
+  kWholeArray,    // returned whole, with no footprint check
+};
+
+// The one top-level evaluation behind `evaluate`, `evaluate_first_element` and
+// `evaluate_array_formula`. They differ only in what an array result becomes.
 Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   bool first_element_only) {
+                   TopResult mode) {
+  const bool first_element_only = mode == TopResult::kFirstElement;
   const ScopedEvalProfile profile_scope(ctx.excel_profile());
   const ScopedEvalClock clock_scope(ctx.pinned_now());
 
@@ -929,7 +936,7 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
   if (is_top_level) {
     ctx_with_counters = ctx_with_counters.with_depth_counters(&eval_depth, &lambda_depth);
   }
-  const bool spill_position = is_top_level && !first_element_only;
+  const bool spill_position = is_top_level && mode == TopResult::kSpill;
 
   // The value of the whole formula is produced by exactly one of four
   // branches: the bare-range spilling position, the intersect operator's
@@ -1064,7 +1071,8 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
       footprint_cols = sv.tail_array->cols;
       has_footprint = true;
     }
-    if (has_footprint && !footprint_probed && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
+    const bool spills = mode == TopResult::kSpill;
+    if (has_footprint && !footprint_probed && spills && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
       if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), footprint_rows,
                                                      footprint_cols) != Sheet::SpillAdmission::kAdmissible) {
         if (Sheet* target = ctx.mutable_sheet(); target == ctx.current_sheet()) {
@@ -1087,7 +1095,7 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
     // committed (ad-hoc evaluation, the oracle harness) so a blocked spill
     // still surfaces `#SPILL!` rather than the bare anchor scalar. A
     // footprint already measured above is not measured again.
-    if (v.is_array() && !footprint_probed && sv.tail_array == nullptr && ctx.mutable_sheet() == nullptr &&
+    if (v.is_array() && !footprint_probed && spills && sv.tail_array == nullptr && ctx.mutable_sheet() == nullptr &&
         ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
       const std::uint32_t rows = v.as_array_rows();
       const std::uint32_t cols = v.as_array_cols();
@@ -1175,12 +1183,17 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
 }
 
 Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
-  return evaluate_top(node, arena, registry, ctx, /*first_element_only=*/false);
+  return evaluate_top(node, arena, registry, ctx, TopResult::kSpill);
 }
 
 Value evaluate_first_element(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx) {
-  return evaluate_top(node, arena, registry, ctx, /*first_element_only=*/true);
+  return evaluate_top(node, arena, registry, ctx, TopResult::kFirstElement);
+}
+
+Value evaluate_array_formula(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx) {
+  return evaluate_top(node, arena, registry, ctx, TopResult::kWholeArray);
 }
 
 }  // namespace eval

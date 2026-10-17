@@ -73,8 +73,9 @@ enum class IntersectionProjection : std::uint8_t {
 IntersectionProjection project_implicit_intersection(const parser::AstNode& operand, std::uint32_t formula_row,
                                                      std::uint32_t formula_col, parser::Reference* out_target);
 
-/// Projects the reference a defined name, an intersection or a
-/// reference-returning call yields (`@Rng`, `@INDEX(A1:B2,0,1)`) onto the
+/// Projects the reference a defined name, an intersection, a
+/// reference-returning call, or a LET or lambda call yields (`@Rng`,
+/// `@INDEX(A1:B2,0,1)`, `@LET(a,A1:A3,a)`) onto the
 /// formula cell, as a static range projects: a 1x1 result is that cell, any
 /// other the projected one or `#VALUE!`. False when `operand` yields no
 /// reference here; the caller then reduces its value.

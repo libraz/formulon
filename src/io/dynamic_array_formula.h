@@ -5,7 +5,8 @@
 // a preceding `BrtCellMeta` in .xlsb). A writer stores a marked formula in
 // the dynamic-array form (`cm=` + `<f t="array">`, `BrtCellMeta` +
 // `BrtArrFmla`); an unmarked one keeps its legacy meaning, so a loaded
-// implicit-intersection formula or fixed-size CSE block is not upgraded.
+// implicit-intersection formula or fixed-size CSE block
+// (`Cell::array_block_rows`) is not upgraded.
 
 #ifndef FORMULON_IO_DYNAMIC_ARRAY_FORMULA_H_
 #define FORMULON_IO_DYNAMIC_ARRAY_FORMULA_H_
@@ -41,6 +42,8 @@ inline std::uint64_t dynamic_array_cell_key(std::uint32_t row, std::uint32_t col
 /// Sets every formula cell of `sheet` to be dynamic exactly when the file
 /// marked it (`marked` holds `dynamic_array_cell_key`s), replacing what
 /// formula entry inferred: a loaded formula keeps the meaning the file gives.
+/// An unmarked array formula, registered as a spill region beforehand, is a
+/// legacy CSE block of that region's extent (`Sheet::set_cell_array_block`).
 void apply_loaded_dynamic_array_marks(Sheet& sheet, const std::unordered_set<std::uint64_t>& marked);
 
 /// `xlsb::NameShape` of every defined name of `wb`, in `wb.defined_names()` order.

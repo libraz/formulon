@@ -307,9 +307,10 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     }
     // A dynamic-array formula keeps that form when it does not spill, or
     // Excel reads it with implicit intersection (`=@...`); it needs the
-    // XLDAPR entry `cm=` names, so without one the plain form stays. A spill
-    // anchor that is not one (a loaded CSE block) keeps `t="array"` alone.
+    // XLDAPR entry `cm=` names, so without one the plain form stays. A legacy
+    // CSE block keeps `t="array"` alone, with its own extent as `ref`.
     const bool dynamic = dynamic_array_cm_index != 0U && is_dynamic_array_formula(cell);
+    const bool cse = cell.array_block_rows != 0U;
     out.append("<c r=\"");
     out.append(addr);
     out.append("\"");
@@ -337,11 +338,11 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // dynamic-array formula whose spill is blocked; the array form adds
     // `aca="1"` (measured).
     const bool always_calculates = formula_cell_always_calculates(sheet, row, col, cell, name_shapes);
-    if (anchored != nullptr || dynamic) {
+    if (anchored != nullptr || dynamic || cse) {
       out.append(always_calculates ? "<f t=\"array\" aca=\"1\" ref=\"" : "<f t=\"array\" ref=\"");
       out.append(a1::encode_a1(row, col));
-      const std::uint32_t rows = anchored != nullptr ? anchored->rows : 1U;
-      const std::uint32_t cols = anchored != nullptr ? anchored->cols : 1U;
+      const std::uint32_t rows = cse ? cell.array_block_rows : anchored != nullptr ? anchored->rows : 1U;
+      const std::uint32_t cols = cse ? cell.array_block_cols : anchored != nullptr ? anchored->cols : 1U;
       const std::uint32_t last_row = row + (rows > 0U ? rows - 1U : 0U);
       const std::uint32_t last_col = col + (cols > 0U ? cols - 1U : 0U);
       if (last_row != row || last_col != col) {
@@ -365,7 +366,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       // A legacy formula stores no `@` where Excel's own implied one stands;
       // a CSE block intersects nothing.
       std::vector<const parser::AstNode*> implied_at;
-      if (!cell.dynamic_array && anchored == nullptr) {
+      if (!cell.dynamic_array && !cse && anchored == nullptr) {
         implied_at = xlsb::legacy_intersections(*formula_root, name_shapes);
       }
       const std::vector<const parser::AstNode*> function_values = xlsb::function_value_refs(*formula_root, name_shapes);

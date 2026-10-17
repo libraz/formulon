@@ -54,6 +54,8 @@ std::optional<CellAddress> spill_displaced_by_write(const SpillTable* table, std
 void reset_to_literal(Cell& slot) {
   slot.formula_text.clear();
   slot.dynamic_array = false;
+  slot.array_block_cols = 0U;
+  slot.array_block_rows = 0U;
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
 }
@@ -219,6 +221,14 @@ void Sheet::set_cell_dynamic_array(std::uint32_t row, std::uint32_t col, bool dy
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   if (Cell* cell = find_formula_cell(rows_, row, col); cell != nullptr) {
     cell->dynamic_array = dynamic;
+  }
+}
+
+void Sheet::set_cell_array_block(std::uint32_t row, std::uint32_t col, std::uint32_t rows, std::uint32_t cols) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  if (Cell* cell = find_formula_cell(rows_, row, col); cell != nullptr) {
+    cell->array_block_rows = cols == 0U ? 0U : rows;
+    cell->array_block_cols = static_cast<std::uint16_t>(rows == 0U ? 0U : cols);
   }
 }
 
@@ -783,6 +793,8 @@ void Sheet::read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& ou
   out.exists_ = false;
   out.is_text_ = false;
   out.formula_text_.clear();
+  out.array_block_rows_ = 0U;
+  out.array_block_cols_ = 0U;
   out.text_payload_.clear();
   out.value_ = Value::blank();
   if (!coord_in_grid(row, col)) {
@@ -801,6 +813,8 @@ void Sheet::read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& ou
     // an ordinary cell or a spill anchor, and `commit_spill` keeps an
     // anchor's `cached_value` equal to its region's first cell.
     out.formula_text_ = cell->formula_text;
+    out.array_block_rows_ = cell->array_block_rows;
+    out.array_block_cols_ = cell->array_block_cols;
     value = cell->cached_value;
   } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
     const std::size_t index = static_cast<std::size_t>(row - covering->anchor_row) * covering->cols +

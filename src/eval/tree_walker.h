@@ -72,6 +72,12 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
 Value evaluate_first_element(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
 
+/// Evaluates `node` as `evaluate` does, but returns an array result whole and
+/// performs no spill handling: the value of a legacy array formula (CSE),
+/// which its caller fits to the block the formula fills.
+Value evaluate_array_formula(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx);
+
 /// Returns a pointer to an array of canonical UPPERCASE names for the
 /// evaluator's lazy / special-form dispatch table (IF, IFERROR, IFS,
 /// CHOOSE, SUMIF, VLOOKUP, OFFSET, INDIRECT, ...). These are routed by the

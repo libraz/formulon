@@ -147,8 +147,11 @@ std::uint32_t xldapr_cell_metadata_index(const std::vector<std::uint8_t>& metada
 
 void apply_loaded_dynamic_array_marks(Sheet& sheet, const std::unordered_set<std::uint64_t>& marked) {
   for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
-    sheet.set_cell_dynamic_array(address.row, address.col,
-                                 marked.count(dynamic_array_cell_key(address.row, address.col)) != 0U);
+    const bool dynamic = marked.count(dynamic_array_cell_key(address.row, address.col)) != 0U;
+    sheet.set_cell_dynamic_array(address.row, address.col, dynamic);
+    const SpillRegion* block = dynamic ? nullptr : sheet.spill_region_at_anchor(address.row, address.col);
+    sheet.set_cell_array_block(address.row, address.col, block != nullptr ? block->rows : 0U,
+                               block != nullptr ? block->cols : 0U);
   }
 }
 

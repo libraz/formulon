@@ -14,6 +14,7 @@
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/spill_anchor.h"
@@ -94,8 +95,8 @@ IntersectionProjection project_implicit_intersection(const parser::AstNode& oper
 namespace {
 
 // The rectangle `target` names when it yields a reference: a defined name,
-// an intersection, a spill, a reference-returning call or a lambda call
-// returning one. False when it yields none here.
+// an intersection, a spill, a reference-returning call, or a LET or lambda
+// call returning one. False when it yields none here.
 bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::string_view* sheet, std::uint32_t* top, std::uint32_t* left,
                          std::uint32_t* bottom, std::uint32_t* right) {
@@ -135,6 +136,21 @@ bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const Func
           callee != nullptr ? resolve_callable(*callee, arity, arena, registry, ctx, &callee_err) : nullptr;
       return lv != nullptr && resolve_lambda_reference(lv, arity, target.as_call_args(), arena, registry, ctx, sheet,
                                                        top, left, bottom, right, &err);
+    }
+    case parser::NodeKind::LetBinding: {
+      // The bindings take the same values the evaluation gives them.
+      NameEnv env;
+      if (ctx.name_env() != nullptr) {
+        env = *ctx.name_env();
+      }
+      for (std::uint32_t i = 0; i < target.as_let_binding_count(); ++i) {
+        const parser::AstNode* bound_ast = nullptr;
+        const Value v =
+            eval_binding_source(target.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env), &bound_ast);
+        env = env.extend(target.as_let_binding_name(i), v, bound_ast, arena);
+      }
+      return resolve_reference_rect(target.as_let_body(), arena, registry, ctx.with_name_env(&env), sheet, top, left,
+                                    bottom, right, &err);
     }
     case parser::NodeKind::LambdaCall: {
       const Value callee = eval_node(target.as_lambda_call_callee(), arena, registry, ctx);
