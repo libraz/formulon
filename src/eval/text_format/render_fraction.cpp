@@ -38,18 +38,6 @@ std::uint64_t fraction_pow10(int n) noexcept {
   return r;
 }
 
-std::uint64_t rounded_product(double target, std::uint64_t denominator) noexcept {
-  const double product = target * static_cast<double>(denominator);
-  if (!(product > 0.0)) {
-    return 0;
-  }
-  const double rounded = std::floor(product + 0.5);
-  if (rounded >= static_cast<double>(denominator)) {
-    return denominator;
-  }
-  return static_cast<std::uint64_t>(rounded);
-}
-
 // Excel takes the last convergent of the binary64 continued-fraction expansion
 // whose denominator fits, never a semiconvergent, even a closer one: 0.5627
 // gives 4/7 rather than 5/9, and 0.6125 gives 3/5 rather than 5/8.
@@ -161,6 +149,13 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
   // Iterate placeholder kinds left-to-right. The first `pad` placeholders
   // are leading positions with no digit; the remaining `digits.size()`
   // placeholders consume the digit string in order.
+  // A trailing `0` after an optional `#` pads nothing.
+  bool zero_pad_silent = false;
+  if (trailing_pad) {
+    for (int k = 0; k < width; ++k) {
+      zero_pad_silent = zero_pad_silent || section.tokens[static_cast<std::size_t>(begin + k)].kind == Tok::DigitOpt;
+    }
+  }
   std::size_t digit_cursor = 0;
   for (int k = 0; k < width; ++k) {
     const Tok kind = section.tokens[static_cast<std::size_t>(begin + k)].kind;
@@ -168,7 +163,9 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
     if (is_padding) {
       // Leading-position behaviour by placeholder kind.
       if (kind == Tok::DigitZero) {
-        append_digit_dbnum(out, section.digit_style, '0');
+        if (!zero_pad_silent) {
+          append_digit_dbnum(out, section.digit_style, '0');
+        }
       } else if (kind == Tok::DigitPad) {
         out.push_back(' ');
       }
@@ -195,16 +192,16 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   // the fractional part, while an improper numerator is assembled as
   // `whole * denominator + fraction_numerator` below using decimal strings.
   // That preserves values whose whole part is wider than uint64_t.
-  double integer_part = 0.0;
-  double target = abs_v;
-  integer_part = std::floor(abs_v);
-  target = abs_v - integer_part;
+  double integer_part = std::floor(abs_v);
+  const double target = abs_v - integer_part;
 
   std::uint64_t fraction_num = 0;
   std::uint64_t den = 1;
   if (section.fraction_fixed_denominator) {
+    // A fixed denominator rounds `value * denominator` half away from zero.
     den = section.fraction_fixed_denominator_value;
-    fraction_num = rounded_product(target, den);
+    const double scaled = std::round(abs_v * static_cast<double>(den)) - integer_part * static_cast<double>(den);
+    fraction_num = scaled > 0.0 ? static_cast<std::uint64_t>(scaled) : 0U;
   } else {
     // The numerator is uncapped so improper forms such as `?/?` render `2469/2`.
     const std::uint64_t max_q = fraction_pow10(section.fraction_den_max_digits) - 1U;
@@ -222,10 +219,29 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     fraction_num = 0;
     den = 1;
   }
-  // A whole value shows no fraction, but keeps its width: the separator,
-  // numerator, slash and denominator each become blanks (`59    ` for
-  // `# ?/?`), and a zero integer is shown even under `#`.
-  const bool suppress_fraction = has_int_group && fraction_num == 0;
+  const int int_begin = section.fraction_int_begin;
+  const int int_end = section.fraction_int_end;
+  const int num_begin = section.fraction_num_begin;
+  const int num_end = section.fraction_num_end;
+  const int den_begin = section.fraction_den_begin;
+  const int den_end = section.fraction_den_end;
+  const int slash_index = section.fraction_slash_index;
+  const auto kind_at = [&](int index) { return section.tokens[static_cast<std::size_t>(index)].kind; };
+  const bool literal_numerator = kind_at(num_begin) == Tok::Literal;
+  bool zero_placeholder_numerator = false;
+  for (int k = num_begin; k < num_end; ++k) {
+    zero_placeholder_numerator = zero_placeholder_numerator || kind_at(k) == Tok::DigitZero;
+  }
+  bool pad_placeholder = false;
+  for (int k = has_int_group ? int_begin : num_begin; k < den_end; ++k) {
+    pad_placeholder = pad_placeholder || kind_at(k) == Tok::DigitPad;
+  }
+  // A whole value hides its fraction: with a `0` numerator placeholder it still
+  // reads `0/1`; with a `?` anywhere the group keeps its width in blanks; else
+  // the group, separator included, is dropped.
+  const bool whole_value = has_int_group && fraction_num == 0 && !zero_placeholder_numerator;
+  const bool blank_fraction = whole_value && pad_placeholder;
+  const bool drop_fraction = whole_value && !pad_placeholder;
   char int_buf[400];
   const int int_len = format_fixed(int_buf, sizeof(int_buf), integer_part, 0);
   if (int_len < 0 || static_cast<std::size_t>(int_len) >= sizeof(int_buf)) {
@@ -242,24 +258,14 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     result.push_back('-');
   }
 
-  // Walk the section's token stream. Tokens before `fraction_int_begin`
-  // (or before `fraction_num_begin` if no integer group) are emitted as
-  // literals; the integer group is rendered through `emit_fraction_digits`;
-  // the literal between integer and numerator (a single space) is emitted
-  // verbatim; numerator group, the slash, denominator group follow; any
-  // trailing literals after the denominator group emit verbatim.
+  // Walk the section's token stream: literals before the integer group (or the
+  // numerator when there is none), the integer group, the literals up to the
+  // numerator, the numerator group, the slash, the denominator group, then the
+  // trailing literals.
   const std::size_t n_tokens = section.tokens.size();
-  // Indices.
-  const int int_begin = section.fraction_int_begin;
-  const int int_end = section.fraction_int_end;
-  const int num_begin = section.fraction_num_begin;
-  const int num_end = section.fraction_num_end;
-  const int den_begin = section.fraction_den_begin;
-  const int den_end = section.fraction_den_end;
-  const int slash_index = section.fraction_slash_index;
 
-  // Helper to emit a single token verbatim (literals only; non-literal
-  // tokens encountered inside fraction sections are skipped).
+  // Emits a single token verbatim (literals only; other tokens inside a
+  // fraction section are skipped).
   auto emit_token_verbatim = [&](std::size_t idx) {
     const Token& tk = section.tokens[idx];
     if (tk.kind == Tok::Literal && tk.lit_end > tk.lit_begin) {
@@ -280,17 +286,14 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   }
   // 2) Integer group.
   if (has_int_group) {
-    // Excel suppresses the integer when it is zero AND the leading
-    // placeholder is `#`; otherwise the leading-pad behaviour from
-    // `emit_fraction_digits` handles `0` and `?` correctly.
-    const Tok lead_kind = section.tokens[static_cast<std::size_t>(int_begin)].kind;
-    if (integer_part == 0.0 && lead_kind == Tok::DigitOpt && !suppress_fraction) {
-      // Emit nothing for the integer group.
-    } else {
-      emit_fraction_digits(section, int_digits, int_begin, int_end, result);
-    }
+    // A zero integer under a visible fraction takes only the placeholders'
+    // padding (`0` -> '0', `?` -> blank, `#` -> nothing); a whole value shows
+    // its integer, zero included.
+    const bool fraction_visible = !blank_fraction && !drop_fraction;
+    const std::string_view shown_digits = integer_part == 0.0 && fraction_visible ? "" : std::string_view(int_digits);
+    emit_fraction_digits(section, shown_digits, int_begin, int_end, result);
     i = static_cast<std::size_t>(int_end);
-    if (suppress_fraction) {
+    if (blank_fraction) {
       for (; i < static_cast<std::size_t>(den_end); ++i) {
         const Token& tk = section.tokens[i];
         if (tk.kind == Tok::Literal) {
@@ -301,16 +304,26 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
           result.push_back(' ');
         }
       }
+    } else if (drop_fraction) {
+      i = static_cast<std::size_t>(den_end);
     } else {
-      // 3) Literals between integer group and numerator group (typically a
-      // single space).
+      // 3) Literals between the integer group and the numerator (typically a
+      // single space). An empty integer before an optional numerator digit
+      // takes no separator.
+      bool int_all_optional = true;
+      for (int k = int_begin; k < int_end; ++k) {
+        int_all_optional = int_all_optional && kind_at(k) == Tok::DigitOpt;
+      }
+      const bool skip_separator = integer_part == 0.0 && int_all_optional && kind_at(num_begin) == Tok::DigitOpt;
       while (i < static_cast<std::size_t>(num_begin)) {
-        emit_token_verbatim(i);
+        if (!skip_separator) {
+          emit_token_verbatim(i);
+        }
         ++i;
       }
     }
   }
-  if (suppress_fraction) {
+  if (blank_fraction || drop_fraction) {
     while (i < n_tokens) {
       emit_token_verbatim(i);
       ++i;
@@ -318,8 +331,14 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     out.append(result);
     return FormatStatus::kOk;
   }
-  // 4) Numerator group.
-  emit_fraction_digits(section, numerator_digits, num_begin, num_end, result);
+  // 4) Numerator group: literal digits print as written.
+  if (literal_numerator) {
+    for (int k = num_begin; k < num_end; ++k) {
+      emit_token_verbatim(static_cast<std::size_t>(k));
+    }
+  } else {
+    emit_fraction_digits(section, numerator_digits, num_begin, num_end, result);
+  }
   i = static_cast<std::size_t>(num_end);
   // 5) Literals up to the slash; the slash itself writes `/` even when spelled `／`.
   while (i < static_cast<std::size_t>(slash_index)) {

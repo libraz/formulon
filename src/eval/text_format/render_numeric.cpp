@@ -179,28 +179,41 @@ void format_general(std::string& out, double v) {
       return;
     }
   }
-  const int exp10 = static_cast<int>(std::floor(std::log10(abs_v)));
-  // Switch to scientific for large / very-small magnitudes. Mac Excel /
-  // IronCalc goldens flip to scientific at `>=1e11` and `<=1e-9`; anything
-  // between stays in fixed form even if it grows long (e.g. `0.00000001`).
-  const bool use_scientific = (exp10 >= 11 || exp10 <= -9);
-  if (use_scientific) {
-    // How wide is the `E+XX` / `E-YYY` tail? Excel budgets three exponent
-    // digits from |exp| >= 99 (`1.2346E+99`, against `1.23457E+98`).
-    int exp_abs = exp10 < 0 ? -exp10 : exp10;
-    int exp_digits = 1;
-    if (exp_abs >= 10) {
-      exp_digits = 2;
+  // Decimal exponent and trimmed digit count of the 15-significant-digit view.
+  int exp10 = 0;
+  int significant = 1;
+  {
+    char view[48];
+    const int n = format_exponential_tie_toward_zero(view, sizeof(view), abs_v, 14);
+    const char* e = view;
+    for (int i = 0; i < n; ++i) {
+      if (view[i] == 'e') {
+        e = view + i + 1;
+        break;
+      }
     }
-    if (exp_abs >= 99) {
-      exp_digits = 3;
+    const bool negative_exponent = *e == '-';
+    for (++e; e < view + n && *e >= '0' && *e <= '9'; ++e) {
+      exp10 = exp10 * 10 + (*e - '0');
     }
-    // Budget 11 chars total. Layout: `X.FFF...E+YY` with 1 int digit, a
-    // dot, `frac` fractional digits, an `E`, a sign, and `exp_digits`.
-    int frac = 11 - 4 - exp_digits;  // 4 = "X." + "E" + sign
-    if (frac < 0) {
-      frac = 0;
+    if (negative_exponent) {
+      exp10 = -exp10;
     }
+    // Digits are `d` then `.` then fourteen more; drop trailing zeros.
+    significant = 15;
+    while (significant > 1 && view[significant == 1 ? 0 : significant] == '0') {
+      --significant;
+    }
+  }
+
+  // Scientific form: as many mantissa digits as fit in 11 characters with the
+  // exponent's width counted (two digits, three from |exp| >= 99), rounded,
+  // trailing zeros trimmed.
+  const auto emit_scientific = [&]() {
+    const int exp_abs = exp10 < 0 ? -exp10 : exp10;
+    const int exp_digits = exp_abs >= 99 ? 3 : 2;
+    // Layout `X.FFF...E+YY`: one integer digit, a point, `frac` digits, `E`, a sign and the exponent.
+    const int frac = std::max(0, 11 - 4 - exp_digits);
     char buf[64];
     const int n = format_exponential(buf, sizeof(buf), v, frac);
     if (n <= 0) {
@@ -216,37 +229,42 @@ void format_general(std::string& out, double v) {
     }
     std::string_view mantissa = s.substr(0, epos);
     std::string_view exp_part = s.substr(epos + 1);
-    // Trim trailing zeros from the mantissa's fractional part. `2.50000`
-    // collapses to `2.5`; `1.00000` collapses to `1`.
     out.append(mantissa.data(), trimmed_fraction_length(mantissa));
     out.push_back('E');
-    // Exponent: always emit an explicit sign, and pad the exponent digits
-    // to at least two characters (e.g. `E+09`, not `E+9`). Mac Excel /
-    // IronCalc both zero-pad the exponent to two digits, matching the
-    // printf `%e` convention.
+    // An explicit sign and at least two exponent digits (`E+09`).
     char sign = '+';
     std::size_t pos = 0;
     if (!exp_part.empty() && (exp_part[0] == '+' || exp_part[0] == '-')) {
       sign = exp_part[0];
       pos = 1;
     }
-    // Strip leading zeros down to a minimum of two digits.
     while (exp_part.size() - pos > 2 && exp_part[pos] == '0') {
       ++pos;
     }
     out.push_back(sign);
     out.append(exp_part.data() + pos, exp_part.size() - pos);
+  };
+
+  // From 1e11 up the form is scientific. Below 1e-4 it is fixed only when the
+  // 15-digit value needs at most nine decimals, else scientific.
+  int fixed_decimals = -1;
+  if (exp10 >= 11) {
+    emit_scientific();
     return;
   }
-  // Fixed-point branch: size the fractional-digit count so the whole number
-  // (integer part + "." + fraction) spans up to 11 characters. Trailing
-  // zeros are trimmed afterwards, so e.g. `0.0001` collapses from the
-  // 11-char `0.000100000` down to `0.0001`.
-  const int integer_digits = (exp10 >= 0) ? (exp10 + 1) : 1;
-  int frac = 11 - integer_digits - 1;  // "1" covers the decimal point.
-  if (frac < 0) {
-    frac = 0;
+  if (exp10 < -4) {
+    const int needed = -exp10 + significant - 1;
+    if (needed > 9) {
+      emit_scientific();
+      return;
+    }
+    fixed_decimals = needed;
   }
+  // Fixed-point branch: the number (integer part, point, fraction) spans up to
+  // 11 characters, trailing zeros trimmed afterwards. A value that rounds up
+  // to a twelfth integer digit goes scientific.
+  const int integer_digits = (exp10 >= 0) ? (exp10 + 1) : 1;
+  const int frac = fixed_decimals >= 0 ? fixed_decimals : std::max(0, 11 - integer_digits - 1);
   char buf[64];
   const int n = format_fixed(buf, sizeof(buf), v, frac);
   if (n <= 0) {
@@ -254,7 +272,17 @@ void format_general(std::string& out, double v) {
     out.append(buf);
     return;
   }
-  out.append(buf, trimmed_fraction_length(std::string_view(buf, static_cast<std::size_t>(n))));
+  const std::string_view fixed(buf, static_cast<std::size_t>(n));
+  std::size_t integer_length = fixed.find('.');
+  if (integer_length == std::string_view::npos) {
+    integer_length = fixed.size();
+  }
+  if (integer_length > (fixed.front() == '-' ? 12U : 11U)) {
+    exp10 = static_cast<int>(integer_length) - (fixed.front() == '-' ? 1 : 0) - 1;
+    emit_scientific();
+    return;
+  }
+  out.append(buf, trimmed_fraction_length(fixed));
 }
 
 // `[DBNumN]General`: the integer part with place units, the fraction digit by

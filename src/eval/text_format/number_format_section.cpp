@@ -426,10 +426,18 @@ void classify(Section& section, std::string_view fmt) noexcept {
       }
     }
     if (slash_count == 1 && slash_idx > 0 && static_cast<std::size_t>(slash_idx) + 1 < section.tokens.size()) {
-      // Walk left from slash to find numerator group.
+      // Walk left from slash to find the numerator group: a run of digit placeholders, or a run of
+      // literal digits (printed as written).
+      const auto is_literal_digit = [&fmt](const Token& tk) {
+        return tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 &&
+               tk.lit_begin < fmt.size() && fmt[tk.lit_begin] >= '0' && fmt[tk.lit_begin] <= '9';
+      };
       int num_end = slash_idx - 1;
       int num_begin = num_end;
-      while (num_begin > 0 && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind)) {
+      const bool literal_numerator = is_literal_digit(section.tokens[static_cast<std::size_t>(num_end)]);
+      while (num_begin > 0 &&
+             (literal_numerator ? is_literal_digit(section.tokens[static_cast<std::size_t>(num_begin) - 1])
+                                : is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind))) {
         --num_begin;
       }
       // A raw run starting with 0 is variable only when all zeros (`/000`); `/08` is fixed.
@@ -497,42 +505,51 @@ void classify(Section& section, std::string_view fmt) noexcept {
 
       // Numerator and denominator both need to be at least one digit.
       const bool has_num =
-          num_end >= num_begin && is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind);
+          num_end >= num_begin &&
+          (literal_numerator || is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind));
       const bool has_den = fixed_denominator ? fixed_den_end > den_begin : den_end > den_begin;
       if (has_num && has_den) {
         // A group separator before the numerator is invalid (fr-FR `# ?/?`, text_format.text_fraction_with_integer).
         if (num_begin > 0 && section.tokens[static_cast<std::size_t>(num_begin) - 1].kind == Tok::Comma) {
           section.has_invalid_bracket = true;
         }
-        // Optional integer group: a literal-space immediately precedes the
-        // numerator group, and a digit-placeholder run precedes the space.
+        // Optional integer group: one or more literal spaces immediately precede the
+        // numerator group, and a digit-placeholder run precedes them.
         int int_begin = num_begin;
         int int_end = num_begin;
-        if (num_begin >= 2 && is_single_byte_literal(section.tokens[static_cast<std::size_t>(num_begin) - 1], ' ') &&
-            is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 2].kind)) {
-          int_end = num_begin - 1;  // exclusive: stops before the space.
+        int separator_begin = num_begin;
+        while (separator_begin > 0 &&
+               is_single_byte_literal(section.tokens[static_cast<std::size_t>(separator_begin) - 1], ' ')) {
+          --separator_begin;
+        }
+        if (separator_begin < num_begin && separator_begin >= 1 &&
+            is_digit_tok2(section.tokens[static_cast<std::size_t>(separator_begin) - 1].kind)) {
+          int_end = separator_begin;  // exclusive: stops before the spaces.
           int_begin = int_end;
           while (int_begin > 0 && is_digit_tok2(section.tokens[static_cast<std::size_t>(int_begin) - 1].kind)) {
             --int_begin;
           }
         }
-        section.is_fraction = true;
-        section.fraction_int_begin = int_begin;
-        section.fraction_int_end = int_end;
-        section.fraction_num_begin = num_begin;
-        section.fraction_num_end = num_end + 1;  // exclusive
-        section.fraction_den_begin = den_begin;
-        section.fraction_den_end = den_end;
-        section.fraction_slash_index = slash_idx;
-        section.fraction_int_max_digits = int_end - int_begin;
-        section.fraction_den_max_digits = fixed_denominator ? 0 : den_end - den_begin;
-        section.fraction_fixed_denominator = fixed_denominator;
-        section.fraction_fixed_denominator_value = fixed_denominator ? fixed_denominator_value : 1U;
-        // A trailing comma after a fraction denominator is invalid, not a scaling marker.
-        for (std::size_t i = static_cast<std::size_t>(den_end); i < section.tokens.size(); ++i) {
-          if (section.tokens[i].kind == Tok::Comma) {
-            section.has_invalid_bracket = true;
-            break;
+        // A literal numerator only forms a fraction after an integer group (`0 1/8`).
+        if (!(literal_numerator && int_end == int_begin)) {
+          section.is_fraction = true;
+          section.fraction_int_begin = int_begin;
+          section.fraction_int_end = int_end;
+          section.fraction_num_begin = num_begin;
+          section.fraction_num_end = num_end + 1;  // exclusive
+          section.fraction_den_begin = den_begin;
+          section.fraction_den_end = den_end;
+          section.fraction_slash_index = slash_idx;
+          section.fraction_int_max_digits = int_end - int_begin;
+          section.fraction_den_max_digits = fixed_denominator ? 0 : den_end - den_begin;
+          section.fraction_fixed_denominator = fixed_denominator;
+          section.fraction_fixed_denominator_value = fixed_denominator ? fixed_denominator_value : 1U;
+          // A trailing comma after a fraction denominator is invalid, not a scaling marker.
+          for (std::size_t i = static_cast<std::size_t>(den_end); i < section.tokens.size(); ++i) {
+            if (section.tokens[i].kind == Tok::Comma) {
+              section.has_invalid_bracket = true;
+              break;
+            }
           }
         }
       }
@@ -547,6 +564,16 @@ void classify(Section& section, std::string_view fmt) noexcept {
       continue;
     }
     if (i == 0 || i + 1 == section.tokens.size() || literal_letter_at(section.tokens[i - 1], fmt)) {
+      section.has_invalid_bracket = true;
+      break;
+    }
+    // A fraction cannot follow a decimal point (`0.0 ?/?`).
+    const auto digit_like = [&](const Token& tk) {
+      return is_digit_tok2(tk.kind) ||
+             (tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 &&
+              tk.lit_begin < fmt.size() && fmt[tk.lit_begin] >= '0' && fmt[tk.lit_begin] <= '9');
+    };
+    if (point_index >= 0 && !any_date && digit_like(section.tokens[i - 1]) && digit_like(section.tokens[i + 1])) {
       section.has_invalid_bracket = true;
       break;
     }

@@ -560,3 +560,417 @@ cases:
   - id: fixed_decimals_128_over
     formula: "=FIXED(1,128)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: tf_frac_rule_001
+    formula: "=TEXT(0.5,\"# #/#\")"
+
+  - id: tf_frac_rule_002
+    formula: "=TEXT(0.5,\"0 1/8\")"
+
+  - id: tf_frac_rule_003
+    formula: "=TEXT(0.5,\"# #/8\")"
+
+  - id: tf_frac_rule_004
+    formula: "=TEXT(0.5,\"0 #/#\")"
+
+  - id: tf_frac_rule_005
+    formula: "=TEXT(0.5,\"# 1/#\")"
+
+  - id: tf_frac_rule_006
+    formula: "=TEXT(0.5,\"0 2/4\")"
+
+  - id: tf_frac_rule_007
+    formula: "=TEXT(0.5,\"# ##/##\")"
+
+  - id: tf_frac_rule_008
+    formula: "=TEXT(0.5,\"? #/?\")"
+
+  - id: tf_frac_rule_009
+    formula: "=TEXT(0.5,\"# ?/8\")"
+
+  - id: tf_frac_rule_010
+    formula: "=TEXT(0.5,\"0 0/0\")"
+
+  - id: tf_frac_rule_011
+    formula: "=TEXT(0.5,\"#/#\")"
+
+  - id: tf_frac_rule_012
+    formula: "=TEXT(0.5,\"?/?\")"
+
+  - id: tf_frac_rule_013
+    formula: "=TEXT(0.5,\"# #/##\")"
+
+  - id: tf_frac_rule_014
+    formula: "=TEXT(0.5,\"0\"\" \"\"#/#\")"
+
+  - id: tf_frac_rule_015
+    formula: "=TEXT(0.5,\"# 1/2\")"
+
+  - id: tf_frac_rule_016
+    formula: "=TEXT(0.5,\"#  #/#\")"
+
+  - id: tf_frac_rule_017
+    formula: "=TEXT(0.5,\"0 1/8 x\")"
+
+  - id: tf_frac_rule_018
+    formula: "=TEXT(0.5,\"# ?/?;-# ?/?\")"
+
+  - id: tf_frac_rule_019
+    formula: "=TEXT(0.5,\"# ?/?\")"
+
+  - id: tf_frac_rule_020
+    formula: "=TEXT(0.5,\"# ??/??\")"
+
+  - id: tf_frac_rule_021
+    formula: "=TEXT(0.5,\"0 ?/16\")"
+
+  - id: tf_frac_rule_022
+    formula: "=TEXT(0.5,\"# ?/100\")"
+
+  - id: tf_frac_rule_023
+    formula: "=TEXT(0.5,\"?? ?/?\")"
+
+  - id: tf_frac_rule_024
+    formula: "=TEXT(0.5,\"# #/#%\")"
+
+  - id: tf_frac_rule_025
+    formula: "=TEXT(0.5,\"\"\"a\"\"# ?/?\"\"b\"\"\")"
+
+  - id: tf_frac_rule_026
+    formula: "=TEXT(0.5,\"0 12/34\")"
+
+  - id: tf_frac_rule_027
+    formula: "=TEXT(0.5,\"#\\ #/#\")"
+
+  - id: tf_frac_rule_028
+    formula: "=TEXT(0.5,\"# ##/#\")"
+
+  - id: tf_frac_rule_029
+    formula: "=TEXT(0.5,\"# #/##0\")"
+
+  - id: tf_frac_rule_030
+    formula: "=TEXT(0.5,\"00 00/00\")"
+
+  - id: tf_frac_rule_031
+    formula: "=TEXT(0,\"0 1/8\")"
+
+  - id: tf_frac_rule_032
+    formula: "=TEXT(0,\"# 1/#\")"
+
+  - id: tf_frac_rule_033
+    formula: "=TEXT(0,\"0\"\" \"\"#/#\")"
+
+  - id: tf_frac_rule_034
+    formula: "=TEXT(0,\"0 12/34\")"
+
+  - id: tf_frac_rule_035
+    formula: "=TEXT(1.5,\"0 1/8\")"
+
+  - id: tf_frac_rule_036
+    formula: "=TEXT(1.5,\"# ?/?;-# ?/?\")"
+
+  - id: tf_frac_rule_037
+    formula: "=TEXT(1.5,\"# ?/?\")"
+
+  - id: tf_frac_rule_038
+    formula: "=TEXT(0.7,\"0 2/4\")"
+
+  - id: tf_frac_rule_039
+    formula: "=TEXT(0.7,\"# ##/##\")"
+
+  - id: tf_frac_rule_040
+    formula: "=TEXT(0.7,\"# 1/2\")"
+
+  - id: tf_frac_rule_041
+    formula: "=TEXT(0.7,\"0 ?/16\")"
+
+  - id: tf_frac_rule_042
+    formula: "=TEXT(1.005,\"0 2/4\")"
+
+  - id: tf_frac_rule_043
+    formula: "=TEXT(1.005,\"# ##/##\")"
+
+  - id: tf_frac_rule_044
+    formula: "=TEXT(1.005,\"?/?\")"
+
+  - id: tf_frac_rule_045
+    formula: "=TEXT(1.005,\"#  #/#\")"
+
+  - id: tf_frac_rule_046
+    formula: "=TEXT(1.005,\"0 1/8 x\")"
+
+  - id: tf_frac_rule_047
+    formula: "=TEXT(1.005,\"0 ?/16\")"
+
+  - id: tf_frac_rule_048
+    formula: "=TEXT(2.675,\"# #/8\")"
+
+  - id: tf_frac_rule_049
+    formula: "=TEXT(2.675,\"# ?/8\")"
+
+  - id: tf_frac_rule_050
+    formula: "=TEXT(2.675,\"#  #/#\")"
+
+  - id: tf_frac_rule_051
+    formula: "=TEXT(2.675,\"0 12/34\")"
+
+  - id: tf_frac_rule_052
+    formula: "=TEXT(100,\"?/?\")"
+
+  - id: tf_frac_rule_053
+    formula: "=TEXT(100,\"#  #/#\")"
+
+  - id: tf_frac_rule_054
+    formula: "=TEXT(100,\"0 ?/16\")"
+
+  - id: tf_frac_rule_055
+    formula: "=TEXT(100,\"# ##/#\")"
+
+  - id: tf_frac_rule_056
+    formula: "=TEXT(100,\"00 00/00\")"
+
+  - id: tf_frac_rule_057
+    formula: "=TEXT(12345.6789,\"0 1/8\")"
+
+  - id: tf_frac_rule_058
+    formula: "=TEXT(12345.6789,\"# 1/2\")"
+
+  - id: tf_frac_rule_059
+    formula: "=TEXT(12345.6789,\"#  #/#\")"
+
+  - id: tf_frac_rule_060
+    formula: "=TEXT(12345.6789,\"\"\"a\"\"# ?/?\"\"b\"\"\")"
+
+  - id: tf_frac_rule_061
+    formula: "=TEXT(12345.6789,\"# ##/#\")"
+
+  - id: tf_frac_rule_062
+    formula: "=TEXT(0.045,\"0 2/4\")"
+
+  - id: tf_frac_rule_063
+    formula: "=TEXT(0.045,\"# ##/##\")"
+
+  - id: tf_frac_rule_064
+    formula: "=TEXT(0.045,\"0\"\" \"\"#/#\")"
+
+  - id: tf_frac_rule_065
+    formula: "=TEXT(0.045,\"00 00/00\")"
+
+  - id: tf_frac_rule_066
+    formula: "=TEXT(59.9999,\"0 2/4\")"
+
+  - id: tf_frac_rule_067
+    formula: "=TEXT(59.9999,\"# #/##0\")"
+
+  - id: tf_frac_rule_068
+    formula: "=TEXT(0.125,\"? #/?\")"
+
+  - id: tf_frac_rule_069
+    formula: "=TEXT(0.125,\"# 1/2\")"
+
+  - id: tf_frac_rule_070
+    formula: "=TEXT(0.125,\"#  #/#\")"
+
+  - id: tf_frac_rule_071
+    formula: "=TEXT(0.125,\"# #/##0\")"
+
+  - id: tf_frac_rule_072
+    formula: "=TEXT(3.75,\"# ?/100\")"
+
+  - id: tf_frac_rule_073
+    formula: "=TEXT(-2.5,\"# #/#\")"
+
+  - id: tf_frac_rule_074
+    formula: "=TEXT(-2.5,\"# ##/##\")"
+
+  - id: tf_frac_rule_075
+    formula: "=TEXT(-2.5,\"\"\"a\"\"# ?/?\"\"b\"\"\")"
+
+  - id: tf_frac_rule_076
+    formula: "=TEXT(-2.5,\"0 12/34\")"
+
+  - id: tf_frac_rule_077
+    formula: "=TEXT(-2.5,\"# #/##0\")"
+
+  - id: tf_frac_rule_078
+    formula: "=TEXT(-0.5,\"0 1/8 x\")"
+
+  - id: tf_frac_rule_079
+    formula: "=TEXT(-0.5,\"#\\ #/#\")"
+
+  - id: tf_frac_rule_080
+    formula: "=TEXT(-0.5,\"# #/##0\")"
+
+  - id: tf_frac_rule_081
+    formula: "=TEXT(7.0625,\"# ?/?\")"
+
+  - id: tf_frac_rule_082
+    formula: "=TEXT(7.0625,\"0 12/34\")"
+
+  - id: tf_frac_rule_083
+    formula: "=TEXT(0.99,\"# 1/2\")"
+
+  - id: tf_frac_rule_084
+    formula: "=TEXT(0.99,\"# ?/100\")"
+
+  - id: tf_frac_rule_085
+    formula: "=TEXT(0.99,\"0 12/34\")"
+
+  - id: tf_frac_rule_086
+    formula: "=TEXT(0.99,\"00 00/00\")"
+
+  - id: tf_frac_rule_087
+    formula: "=TEXT(0.0625,\"0 #/#\")"
+
+  - id: tf_frac_rule_088
+    formula: "=TEXT(0.0625,\"0 2/4\")"
+
+  - id: tf_frac_rule_089
+    formula: "=TEXT(0.0625,\"#  #/#\")"
+
+  - id: tf_frac_rule_090
+    formula: "=TEXT(0.0625,\"#\\ #/#\")"
+
+  - id: tf_frac_rule_091
+    formula: "=TEXT(10.03125,\"# ?/8\")"
+
+  - id: tf_frac_rule_092
+    formula: "=TEXT(10.03125,\"# 1/2\")"
+
+  - id: tf_frac_rule_093
+    formula: "=TEXT(10.03125,\"# ?/?;-# ?/?\")"
+
+  - id: tf_frac_rule_094
+    formula: "=TEXT(10.03125,\"# #/#%\")"
+
+  - id: tf_frac_rule_095
+    formula: "=TEXT(2.9999,\"# #/#\")"
+
+  - id: tf_frac_rule_096
+    formula: "=TEXT(2.9999,\"# ##/##\")"
+
+  - id: tf_frac_rule_097
+    formula: "=TEXT(2.9999,\"#/#\")"
+
+  - id: tf_frac_rule_098
+    formula: "=TEXT(2.9999,\"# 1/2\")"
+
+  - id: tf_frac_rule_099
+    formula: "=TEXT(2.9999,\"# ##/#\")"
+
+  - id: tf_frac_rule_err_001
+    formula: "=TEXT(0.5,\"0.0 ?/?\")"
+
+  - id: tf_general_rule_001
+    formula: "=TEXT(VALUE(\"1.23456e-05\"),\"@\")"
+
+  - id: tf_general_rule_002
+    formula: "=TEXT(VALUE(\"1.234567e-05\"),\"@\")"
+
+  - id: tf_general_rule_003
+    formula: "=TEXT(VALUE(\"1.234567e-05\"),\"@\")"
+
+  - id: tf_general_rule_004
+    formula: "=TEXT(VALUE(\"1.2345678e-05\"),\"@\")"
+
+  - id: tf_general_rule_005
+    formula: "=TEXT(VALUE(\"1.2345e-05\"),\"@\")"
+
+  - id: tf_general_rule_006
+    formula: "=TEXT(VALUE(\"9.9999e-05\"),\"@\")"
+
+  - id: tf_general_rule_007
+    formula: "=TEXT(VALUE(\"9.99999e-05\"),\"@\")"
+
+  - id: tf_general_rule_008
+    formula: "=TEXT(0.0001,\"@\")"
+
+  - id: tf_general_rule_009
+    formula: "=TEXT(0.0001000001,\"@\")"
+
+  - id: tf_general_rule_010
+    formula: "=TEXT(0.00010000001,\"@\")"
+
+  - id: tf_general_rule_011
+    formula: "=TEXT(0.00012345678,\"@\")"
+
+  - id: tf_general_rule_012
+    formula: "=TEXT(0.000123456,\"@\")"
+
+  - id: tf_general_rule_013
+    formula: "=TEXT(VALUE(\"9.999999e-05\"),\"@\")"
+
+  - id: tf_general_rule_014
+    formula: "=TEXT(VALUE(\"9.99999e-05\"),\"@\")"
+
+  - id: tf_general_rule_015
+    formula: "=TEXT(VALUE(\"1e-05\"),\"@\")"
+
+  - id: tf_general_rule_016
+    formula: "=TEXT(VALUE(\"1.0000001e-05\"),\"@\")"
+
+  - id: tf_general_rule_017
+    formula: "=TEXT(123456789.123,\"@\")"
+
+  - id: tf_general_rule_018
+    formula: "=TEXT(1234567890.12,\"@\")"
+
+  - id: tf_general_rule_019
+    formula: "=TEXT(12345678901.5,\"@\")"
+
+  - id: tf_general_rule_020
+    formula: "=TEXT(123456789012,\"@\")"
+
+  - id: tf_general_rule_021
+    formula: "=TEXT(99999999999.5,\"@\")"
+
+  - id: tf_general_rule_022
+    formula: "=TEXT(999999999999,\"@\")"
+
+  - id: tf_general_rule_023
+    formula: "=TEXT(VALUE(\"1.23456e-06\"),\"@\")"
+
+  - id: tf_general_rule_024
+    formula: "=TEXT(VALUE(\"1.234567e-06\"),\"@\")"
+
+  - id: tf_general_rule_025
+    formula: "=TEXT(VALUE(\"1.23456e-07\"),\"@\")"
+
+  - id: tf_general_rule_026
+    formula: "=TEXT(VALUE(\"1.234567e-07\"),\"@\")"
+
+  - id: tf_general_rule_027
+    formula: "=TEXT(VALUE(\"1e-09\"),\"@\")"
+
+  - id: tf_general_rule_028
+    formula: "=TEXT(VALUE(\"1.2345678e-09\"),\"@\")"
+
+  - id: tf_general_rule_029
+    formula: "=TEXT(VALUE(\"1.23456789012e-10\"),\"@\")"
+
+  - id: tf_general_rule_030
+    formula: "=TEXT(123.456789012345,\"@\")"
+
+  - id: tf_general_rule_031
+    formula: "=TEXT(1.23456789012345,\"@\")"
+
+  - id: tf_general_rule_032
+    formula: "=TEXT(0.123456789012345,\"@\")"
+
+  - id: tf_general_rule_033
+    formula: "=TEXT(0.0123456789012345,\"@\")"
+
+  - id: tf_general_rule_034
+    formula: "=TEXT(0.00123456789012345,\"@\")"
+
+  - id: tf_general_rule_035
+    formula: "=TEXT(0.000123456789012,\"@\")"
+
+  - id: tf_general_rule_036
+    formula: "=TEXT(VALUE(\"1.5e-100\"),\"@\")"
+
+  - id: tf_general_rule_037
+    formula: "=TEXT(VALUE(\"1.23456789e-100\"),\"@\")"
+
+  - id: tf_general_rule_038
+    formula: "=TEXT(VALUE(\"1.5e-308\"),\"@\")"
