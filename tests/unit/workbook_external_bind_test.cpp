@@ -215,12 +215,15 @@ TEST(WorkbookExternalBind, IngestSpellsALoadedIndexWithItsAbsolutePath) {
   links.push_back(LoadedLink(1, "Src.xlsx", "/Users/x/Src.xlsx"));
   links.push_back(LoadedLink(2, "Plain.xlsx", ""));
   wb.set_external_links(std::move(links));
-  EXPECT_EQ(wb.ingest_stored_formula("=[1]Data!A1"), "='/Users/x/[Src.xlsx]Data'!A1");
-  EXPECT_EQ(wb.ingest_stored_formula("=[1]!Total"), "='/Users/x/Src.xlsx'!Total");
-  EXPECT_EQ(wb.ingest_stored_formula("=SUM([2]Data!A1:B2)"), "=SUM([Plain.xlsx]Data!A1:B2)");
-  EXPECT_EQ(wb.ingest_stored_formula("=[2]!Total"), "=Plain.xlsx!Total");
+  EXPECT_EQ(wb.ingest_stored_formula("=[1]Data!A1", Workbook::FormulaSource::kEntered),
+            "='/Users/x/[Src.xlsx]Data'!A1");
+  EXPECT_EQ(wb.ingest_stored_formula("=[1]!Total", Workbook::FormulaSource::kEntered), "='/Users/x/Src.xlsx'!Total");
+  EXPECT_EQ(wb.ingest_stored_formula("=SUM([2]Data!A1:B2)", Workbook::FormulaSource::kEntered),
+            "=SUM([Plain.xlsx]Data!A1:B2)");
+  EXPECT_EQ(wb.ingest_stored_formula("=[2]!Total", Workbook::FormulaSource::kEntered), "=Plain.xlsx!Total");
   // Storage prefixes are stripped as before, and `[0]!Name` stays as is.
-  EXPECT_EQ(wb.ingest_stored_formula("=_xlfn.XLOOKUP([0]!Key,A:A,B:B)"), "=XLOOKUP([0]!Key,A:A,B:B)");
+  EXPECT_EQ(wb.ingest_stored_formula("=_xlfn.XLOOKUP([0]!Key,A:A,B:B)", Workbook::FormulaSource::kEntered),
+            "=XLOOKUP([0]!Key,A:A,B:B)");
   EXPECT_EQ(wb.external_links().size(), 2U);
 }
 
@@ -229,7 +232,7 @@ TEST(WorkbookExternalBind, IngestOfAnIndexWithNoLinkCreatesOne) {
   std::vector<ExternalLinkRecord> links;
   links.push_back(LoadedLink(1, "Src.xlsx", ""));
   wb.set_external_links(std::move(links));
-  EXPECT_EQ(wb.ingest_stored_formula("=[3]Data!A1"), "=[3]Data!A1");
+  EXPECT_EQ(wb.ingest_stored_formula("=[3]Data!A1", Workbook::FormulaSource::kEntered), "=[3]Data!A1");
   ASSERT_EQ(wb.external_links().size(), 2U);
   EXPECT_EQ(wb.external_links()[1].index, 2U);
   EXPECT_EQ(wb.external_links()[1].target, "3");

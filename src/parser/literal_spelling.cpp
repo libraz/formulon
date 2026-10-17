@@ -1,5 +1,5 @@
 //
-// Number-literal respelling of formula text. See `literal_spelling.h` for
+// Number-literal respelling and whitespace dropping of formula text. See `literal_spelling.h` for
 // the contract.
 
 #include "parser/literal_spelling.h"
@@ -126,6 +126,62 @@ std::string spell_number_literals(std::string_view formula) {
   }
   out.append(formula.substr(copied));
   return out;
+}
+
+std::string drop_unkept_whitespace(std::string_view formula) {
+  std::string_view body = formula;
+  if (!body.empty() && body.front() == '=') {
+    body.remove_prefix(1);
+  }
+  Tokenizer tokenizer(body);
+  const std::vector<Token>& tokens = tokenizer.tokens();
+  // Adjacency is checked by byte offset, since a run the tokenizer only
+  // records as an error has no token of its own.
+  const auto begin_of = [&formula](const Token& token) {
+    return static_cast<std::size_t>(token.lexeme.data() - formula.data());
+  };
+  const auto end_of = [&begin_of](const Token& token) { return begin_of(token) + token.lexeme.size(); };
+
+  std::string out;
+  out.reserve(formula.size());
+  std::size_t copied = 0;
+  int brackets = 0;
+  int braces = 0;
+  for (std::size_t i = 0; i < tokens.size(); ++i) {
+    const Token& token = tokens[i];
+    if (token.kind == TokenKind::Eof) {
+      break;
+    }
+    if (token.kind == TokenKind::LBracket) {
+      ++brackets;
+    } else if (token.kind == TokenKind::RBracket && brackets > 0) {
+      --brackets;
+    } else if (brackets == 0 && token.kind == TokenKind::LBrace) {
+      ++braces;
+    } else if (brackets == 0 && token.kind == TokenKind::RBrace && braces > 0) {
+      --braces;
+    }
+    if (token.kind != TokenKind::Whitespace || brackets > 0) {
+      continue;
+    }
+    const std::size_t from = begin_of(token);
+    const std::size_t to = end_of(token);
+    const Token& next = tokens[i + 1];
+    const bool before_separator =
+        (next.kind == TokenKind::Comma || next.kind == TokenKind::Colon) && begin_of(next) == to;
+    const bool after_colon = i > 0 && tokens[i - 1].kind == TokenKind::Colon && end_of(tokens[i - 1]) == from;
+    if (to != formula.size() && !before_separator && !after_colon && braces == 0) {
+      continue;
+    }
+    out.append(formula.substr(copied, from - copied));
+    copied = to;
+  }
+  out.append(formula.substr(copied));
+  return out;
+}
+
+std::string spell_entered_formula(std::string_view formula) {
+  return spell_number_literals(drop_unkept_whitespace(formula));
 }
 
 }  // namespace parser

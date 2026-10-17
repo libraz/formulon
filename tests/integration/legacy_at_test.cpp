@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cell.h"
@@ -40,6 +41,7 @@
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
+#include "support/ooxml_package_fixture.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -517,6 +519,189 @@ TEST(LegacyAt, LoadedLegacyFormulasReadAsExcelShowsThem) {
 
 TEST(LegacyAt, LoadedLegacyIndexAndOffsetReadAsExcelShowsThem) {
   ExpectExcelsFormula2AndValues(kLegacyIndexOffset, true);
+}
+
+std::string Decimal(std::uint32_t n) {
+  std::ostringstream out;
+  out << n;
+  return out.str();
+}
+
+// `text` escaped for an XML element body.
+std::string XmlEscaped(const char* text) {
+  std::string out;
+  for (const char* p = text; *p != '\0'; ++p) {
+    switch (*p) {
+      case '&':
+        out += "&amp;";
+        break;
+      case '<':
+        out += "&lt;";
+        break;
+      case '>':
+        out += "&gt;";
+        break;
+      case '"':
+        out += "&quot;";
+        break;
+      default:
+        out.push_back(*p);
+    }
+  }
+  return out;
+}
+
+// Excel 365 (Mac, ja-JP) opening a legacy .xlsx: A1:A4 hold 1..4, Rng covers
+// Sheet1!$A$1:$A$3, and the formulas fill C2 downwards in this order, stored
+// as the file spells them; formula2 text and values as Excel showed them.
+// An empty value is volatile, or one the evaluator does not reproduce yet:
+// N over an area takes its first cell, and `@` over the area LET returns
+// intersects it with the formula cell (#VALUE! here).
+constexpr LegacyCase kLegacyOperandsAndCalls[] = {
+    {"={1,2}", "=@{1,2}", "1"},
+    {"=A1:A3", "=@A1:A3", "3"},
+    {"=SUM(A1:A3)", "=SUM(A1:A3)", "6"},
+    {"=A1:A3+1", "=@A1:A3+1", "#VALUE!"},
+    {"=INDEX(A1:A3,1)", "=INDEX(A1:A3,1)", "1"},
+    {"={1,2}+1", "=@{1,2}+1", "2"},
+    {"=-{1,2}", "=-@{1,2}", "-1"},
+    {"=(A1:A3)", "=(@A1:A3)", "#VALUE!"},
+    {"=A1", "=A1", "1"},
+    {"=rng", "=@rng", "#VALUE!"},
+    {"=rng+0", "=@rng+0", "#VALUE!"},
+    {"=SUM(rng)", "=SUM(rng)", "6"},
+    {"=OFFSET(A1,0,0,2,1)", "=@OFFSET(A1,0,0,2,1)", ""},
+    {"=OFFSET(A1,0,0)", "=OFFSET(A1,0,0)", ""},
+    {"=INDIRECT(\"A1:A2\")", "=@INDIRECT(\"A1:A2\")", ""},
+    {"=INDIRECT(\"A1\")", "=@INDIRECT(\"A1\")", ""},
+    {"=A:A", "=@A:A", "0"},
+    {"=ROW(A1:A3)", "=@ROW(A1:A3)", "1"},
+    {"=ROWS(A1:A3)", "=ROWS(A1:A3)", "3"},
+    {"=SUMPRODUCT(A1:A3*1)", "=SUMPRODUCT(A1:A3*1)", "6"},
+    {"=IF(A1:A3>1,1,0)", "=IF(@A1:A3>1,1,0)", "#VALUE!"},
+    {"=A1:A3=1", "=@A1:A3=1", "#VALUE!"},
+    {"=VLOOKUP(2,A1:A3,1,0)", "=VLOOKUP(2,A1:A3,1,0)", "2"},
+    {"=MATCH(2,A1:A3,0)", "=MATCH(2,A1:A3,0)", "2"},
+    {"=SUM(A1:A3*2)", "=SUM(@A1:A3*2)", "#VALUE!"},
+    {"=INDEX(A1:A3,0)", "=@INDEX(A1:A3,0)", "#VALUE!"},
+    {"=INDEX(A1:A3,0,1)", "=@INDEX(A1:A3,0,1)", "#VALUE!"},
+    {"=ABS(A1:A3)", "=ABS(@A1:A3)", "#VALUE!"},
+    {"=LEN(A1:A3)", "=LEN(@A1:A3)", "#VALUE!"},
+    {"=N(A1:A3)", "=N(A1:A3)", ""},
+    {"=TRANSPOSE(A1:A3)", "=@TRANSPOSE(@A1:A3)", "#VALUE!"},
+    {"=A1:A3 A2:A4", "=@A1:A3 A2:A4", "#VALUE!"},
+    {"=SUM((A1,A2))", "=SUM((A1,A2))", "3"},
+    {"=(A1,A2)", "=(A1,A2)", "#VALUE!"},
+    {"=1+1", "=1+1", "2"},
+    {"=\"x\"", "=\"x\"", "x"},
+    {"=ISREF(A1:A3)", "=ISREF(A1:A3)", "TRUE"},
+    {"=COLUMN(A1:B1)", "=@COLUMN(A1:B1)", "1"},
+    {"=A1:A3&\"\"", "=@A1:A3&\"\"", "#VALUE!"},
+    {"=MAX(A1:A3)+A1:A3", "=MAX(A1:A3)+@A1:A3", "#VALUE!"},
+    {"=_xlfn.SEQUENCE(3)", "=@SEQUENCE(3)", "1"},
+    {"=_xlfn.UNIQUE(A1:A3)", "=@UNIQUE(A1:A3)", "1"},
+    {"=_xlfn.XLOOKUP(2,A1:A3,A1:A3)", "=XLOOKUP(2,A1:A3,A1:A3)", "2"},
+    {"=_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1)(2)", "=@LAMBDA(x,@x+1)(2)", "3"},
+    {"=_xlfn.LET(_xlpm.a,A1:A3,_xlpm.a)", "=@LET(a,A1:A3,a)", ""},
+    {"=_xlfn.SINGLE(A1:A3)", "=@A1:A3", "#VALUE!"},
+    {"=IFERROR(A1:A3,0)", "=IFERROR(@A1:A3,0)", "0"},
+    {"=CHOOSE(1,A1:A3)", "=@CHOOSE(1,A1:A3)", "#VALUE!"},
+    {"=INDEX(rng,2)", "=INDEX(rng,2)", "2"},
+};
+
+constexpr std::uint32_t kOperandsAndCallsFirstRow = 1U;
+
+TEST(LegacyAt, LoadedLegacyOperandsAndCallsReadAsExcelShowsThem) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 4U; ++r) {
+    s.set_cell_value(r, 0U, Value::number(r + 1.0));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rng", "Sheet1!$A$1:$A$3")));
+  constexpr std::size_t n = sizeof(kLegacyOperandsAndCalls) / sizeof(kLegacyOperandsAndCalls[0]);
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const std::uint32_t row = kOperandsAndCallsFirstRow + i;
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 2U, kLegacyOperandsAndCalls[i].stored)));
+    s.set_cell_dynamic_array(row, 2U, false);
+  }
+  wb.apply_legacy_implicit_intersections();
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const LegacyCase& c = kLegacyOperandsAndCalls[i];
+    const Cell* cell = s.cell_at(kOperandsAndCallsFirstRow + i, 2U);
+    ASSERT_NE(cell, nullptr) << c.stored;
+    EXPECT_EQ(cell->formula_text, c.formula2) << c.stored;
+    if (*c.value != '\0') {
+      EXPECT_EQ(DisplayOf(cell->cached_value), c.value) << c.stored << " " << cell->formula_text;
+    }
+  }
+}
+
+// The same formulas read from an .xlsx without dynamic-array marks show
+// Excel's '@', and are saved back as the file spelled them, an authored
+// `_xlfn.SINGLE` excepted, which Excel saves as its operand. A CSE block
+// shows none.
+TEST(LegacyAt, LegacyXlsxShowsImpliedAtAndSavesTheStoredText) {
+  std::string sheet_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>";
+  std::vector<std::uint32_t> rows;
+  constexpr std::size_t n = sizeof(kLegacyOperandsAndCalls) / sizeof(kLegacyOperandsAndCalls[0]);
+  for (std::uint32_t i = 0; i < n; ++i) {
+    // The fixture package carries no defined names.
+    if (std::string_view(kLegacyOperandsAndCalls[i].stored).find("rng") != std::string_view::npos) {
+      continue;
+    }
+    rows.push_back(i);
+  }
+  for (std::uint32_t r = 0; r < kOperandsAndCallsFirstRow + n + 1U; ++r) {
+    const std::string ref = Decimal(r + 1U);
+    sheet_xml += "<row r=\"" + ref + "\">";
+    if (r < 4U) {
+      sheet_xml += "<c r=\"A" + ref + "\"><v>" + ref + "</v></c>";
+    }
+    for (const std::uint32_t i : rows) {
+      if (kOperandsAndCallsFirstRow + i == r) {
+        sheet_xml += "<c r=\"C" + ref + "\"><f>" + XmlEscaped(kLegacyOperandsAndCalls[i].stored + 1) + "</f></c>";
+      }
+    }
+    if (r == kOperandsAndCallsFirstRow + n) {
+      sheet_xml += "<c r=\"C" + ref + "\"><f t=\"array\" ref=\"C" + ref + "\">A1:A3+1</f></c>";
+    }
+    sheet_xml += "</row>";
+  }
+  sheet_xml += "</sheetData></worksheet>";
+  const std::vector<std::uint8_t> package =
+      test::BuildOoxmlPackage(test::OoxmlContentTypes(test::kXlsxWorkbookContentType), sheet_xml);
+  auto loaded = io::read_ooxml(SpanOf(package));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const Sheet& s = loaded.value().workbook.sheet(0);
+  for (const std::uint32_t i : rows) {
+    const Cell* cell = s.cell_at(kOperandsAndCallsFirstRow + i, 2U);
+    ASSERT_NE(cell, nullptr) << kLegacyOperandsAndCalls[i].stored;
+    EXPECT_EQ(cell->formula_text, kLegacyOperandsAndCalls[i].formula2) << kLegacyOperandsAndCalls[i].stored;
+  }
+  const Cell* cse = s.cell_at(kOperandsAndCallsFirstRow + n, 2U);
+  ASSERT_NE(cse, nullptr);
+  EXPECT_EQ(cse->formula_text, "=A1:A3+1");
+
+  auto saved = loaded.value().workbook.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(saved.value()))));
+  auto saved_sheet = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(saved_sheet));
+  const std::string saved_xml(saved_sheet.value().begin(), saved_sheet.value().end());
+  for (const std::uint32_t i : rows) {
+    std::string stored = kLegacyOperandsAndCalls[i].stored + 1;
+    if (stored == "_xlfn.SINGLE(A1:A3)") {
+      stored = "A1:A3";
+    }
+    EXPECT_NE(saved_xml.find(">" + XmlEscaped(stored.c_str()) + "</f>"), std::string::npos) << stored;
+  }
+  EXPECT_EQ(saved_xml.find("_xlfn.SINGLE"), std::string::npos) << saved_xml;
+  EXPECT_EQ(saved_xml.find(" cm=\""), std::string::npos) << saved_xml;
 }
 
 // '@' over a spill or over a LAMBDA returning a range intersects that range

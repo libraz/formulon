@@ -161,6 +161,12 @@ enum class PtgAttrKind : std::uint8_t {
   SpaceSemi = 0x41,  ///< Whitespace + volatile.
 };
 
+/// `PtgAttrSpace` whitespace types ([MS-XLSB] PtgAttrSpaceType) the reader
+/// and writer carry. The attr precedes the token it applies to.
+inline constexpr std::uint8_t kPtgSpaceSpaces = 0x00;       ///< Spaces before the next token.
+inline constexpr std::uint8_t kPtgSpaceLineFeeds = 0x01;    ///< Line breaks (`\n`) before the next token.
+inline constexpr std::uint8_t kPtgSpaceBeforeClose = 0x04;  ///< Spaces before a close parenthesis.
+
 /// One row of the dispatch table.
 ///
 ///   * `kind`       — logical Ptg identity (class-marked variants
@@ -228,13 +234,10 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::MissArg, 0x16, "MissArg", PtgStatus::Full},
     {PtgKind::Str, 0x17, "Str", PtgStatus::Full},
     {PtgKind::ElfLel, 0x18, "ElfLel", PtgStatus::Unsupported},
-    // Reader-only: `decode_ptgs` handles every `PtgAttr` sub-kind
-    // (Sum/Space/SpaceSemi/If/Choose/Goto/Semi/Baxcel), but the writer
-    // never emits `0x19` -- it re-derives the semantically equivalent
-    // canonical form instead (a single-arg `SUM(x)` call node for
-    // `PtgAttrSum`; whitespace fidelity for `PtgAttrSpace` is not
-    // preserved on write). `Full` still holds because both directions
-    // of the round-trip are covered, just through different wire forms.
+    // `decode_ptgs` handles every `PtgAttr` sub-kind. The writer emits
+    // Semi, If, Choose, Goto, IfError and Sum where Excel does, and
+    // `PtgAttrSpace` for the whitespace the formula text carries in the
+    // positions `decode_ptgs` documents.
     {PtgKind::Attr, 0x19, "Attr", PtgStatus::Full},
     {PtgKind::Err, 0x1C, "Err", PtgStatus::Full},
     {PtgKind::Bool, 0x1D, "Bool", PtgStatus::Full},

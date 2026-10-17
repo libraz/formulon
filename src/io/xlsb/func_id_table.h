@@ -85,6 +85,12 @@ const XlsbFuncEntry* lookup_func_by_name(std::string_view name);
 /// Measured for every built-in the writer calls; `V` for a name with none.
 char xlsb_parameter_class(std::string_view name, std::uint32_t index);
 
+/// `xlsb_parameter_class` as a formula saved without the dynamic-array mark
+/// evaluates it: a few classic built-ins take one value where Excel 365's
+/// own class passes an area through (`IFERROR(A1:A3,0)` and
+/// `TRANSPOSE(A1:A3)` intersect their argument).
+char xlsb_legacy_parameter_class(std::string_view name, std::uint32_t index);
+
 /// True when Excel 365 takes the result of the built-in `name` as an array
 /// whatever its arguments: it marks a call with one-cell arguments as a
 /// dynamic-array formula. OFFSET, the other built-in so marked, depends on

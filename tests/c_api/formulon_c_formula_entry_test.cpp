@@ -279,6 +279,48 @@ TEST(FormulonCApiFormulaEntry, AddValidationAcceptsEveryListAndScalarShape) {
   EXPECT_EQ(count, 7U);
 }
 
+TEST(FormulonCApiFormulaEntry, EveryFormulaSetterStoresTheEnteredSpelling) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  // Cell, defined name, CF rule and DV rule all take the spelling a cell does.
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=SUM( +1.50 , 1E3 ) "), 0);
+  EXPECT_EQ(GetFormula(wb.handle, 0, 1), "=SUM( 1.5, 1000 )");
+
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "=Sheet1!$A$1+-0 "), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Local", " 1+ +5", 0), 0);
+  const char* name = nullptr;
+  const char* formula = nullptr;
+  int32_t scope = 0;
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &name, &formula, &scope), 0);
+  EXPECT_STREQ(formula, "Sheet1!$A$1+0");
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 1, &name, &formula, &scope), 0);
+  EXPECT_STREQ(formula, " 1+ 5");
+
+  const fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  std::size_t index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, MakeCfRule(&sqref, "=$A$1>+1.50", "{1, 2}"), &index), 0);
+  fm_cf_rule_t rule{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, index, &rule), 0);
+  EXPECT_STREQ(rule.formula1, "$A$1>1.5");
+  EXPECT_STREQ(rule.formula2, "{1,2}");
+
+  const fm_merge_range range{0, 0, 9, 0};
+  constexpr std::uint8_t kList = 3;
+  constexpr std::uint8_t kCustom = 7;
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, MakeValidation(&range, kList, "\"1.50,1E3,+5\"", nullptr)), 0);
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, MakeValidation(&range, kList, "+$A$1:$A$3", nullptr)), 0);
+  ASSERT_EQ(
+      fm_sheet_add_validation(wb.handle, 0, MakeValidation(&range, kList, "OFFSET($A$1,+0,-0,1E3/1E3+2,1)", nullptr)),
+      0);
+  ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, MakeValidation(&range, kCustom, "SUM(A1 : A2)>-1E-309", nullptr)), 0);
+  const char* const expected[] = {"\"1.50,1E3,+5\"", "+$A$1:$A$3", "OFFSET($A$1,0,0,1000/1000+2,1)", "SUM(A1:A2)>0"};
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    fm_data_validation v{};
+    ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, i, &v), 0);
+    EXPECT_STREQ(v.formula1, expected[i]);
+  }
+}
+
 TEST(FormulonCApiFormulaEntry, LoadedUnparseableFormulaIsKeptVerbatim) {
   WorkbookGuard source;
   MakeWorkbook(&source);

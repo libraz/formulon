@@ -296,7 +296,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<XlsbName>& name_table,
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
                                               const XlsbExternalBooks& external_books, std::int32_t host_itab,
-                                              std::optional<PtgBaseCell> base) {
+                                              std::optional<PtgBaseCell> base, parser::FormulaWhitespace* whitespace) {
   std::vector<parser::AstNode*> stack;
   // `PtgArray` stores only an 8-byte placeholder inline (see its case
   // below); the real dimensions + elements are consumed from this
@@ -568,8 +568,81 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     return n;
   };
 
+  // `PtgAttrSpace` runs waiting for the token they precede.
+  std::uint32_t pending_spaces = 0;
+  std::uint8_t pending_type = 0;
+  std::uint8_t pending_count = 0;
+
+  // Records the pending run against `node`, the result of a `kind` token.
+  auto record_space = [&](PtgKind kind, const parser::AstNode* node) {
+    if (whitespace == nullptr || node == nullptr || pending_count == 0) {
+      return;
+    }
+    const bool run = pending_type == kPtgSpaceSpaces || pending_type == kPtgSpaceLineFeeds;
+    const char ch = pending_type == kPtgSpaceLineFeeds ? '\n' : ' ';
+    switch (kind) {
+      case PtgKind::Int:
+      case PtgKind::Num:
+      case PtgKind::Str:
+      case PtgKind::Bool:
+      case PtgKind::Err:
+      case PtgKind::Array:
+      case PtgKind::Name:
+      case PtgKind::NameX:
+      case PtgKind::Ref:
+      case PtgKind::RefN:
+      case PtgKind::Area:
+      case PtgKind::AreaN:
+      case PtgKind::Ref3d:
+      case PtgKind::Area3d:
+      case PtgKind::RefErr:
+      case PtgKind::RefErr3d:
+      case PtgKind::AreaErr:
+      case PtgKind::AreaErr3d:
+        if (run) {
+          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeText, 0, ch, pending_count});
+        }
+        return;
+      case PtgKind::Add:
+      case PtgKind::Sub:
+      case PtgKind::Mul:
+      case PtgKind::Div:
+      case PtgKind::Power:
+      case PtgKind::Concat:
+      case PtgKind::Lt:
+      case PtgKind::Le:
+      case PtgKind::Eq:
+      case PtgKind::Ge:
+      case PtgKind::Gt:
+      case PtgKind::Ne:
+      case PtgKind::Isect:
+      case PtgKind::Percent:
+        if (run) {
+          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeOperator, 0, ch, pending_count});
+        }
+        return;
+      case PtgKind::Paren:
+        if (pending_type == kPtgSpaceBeforeClose) {
+          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeClose, node->paren_depth(), ' ', pending_count});
+        }
+        return;
+      case PtgKind::Func:
+      case PtgKind::FuncVar:
+      case PtgKind::Attr:
+        if (pending_type == kPtgSpaceBeforeClose && node->kind() == parser::NodeKind::Call &&
+            node->as_call_arity() != 0) {
+          whitespace->push_back({node, parser::WhitespaceSlot::kBeforeClose, 0, ' ', pending_count});
+        }
+        return;
+      default:
+        return;
+    }
+  };
+
   ByteSpan cursor = ptgs;
   while (cursor.size > 0) {
+    // Set by the tokens a pending `PtgAttrSpace` passes over.
+    bool keeps_pending_space = false;
     const std::uint8_t first_byte = cursor.data[0];
     const PtgInfo* info = lookup_ptg_from_wire(first_byte);
     if (info == nullptr) {
@@ -603,6 +676,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             return std::move(extra_check.error());
           }
         }
+        keeps_pending_space = true;
         break;
       }
       case PtgKind::MemErr: {
@@ -622,6 +696,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (!size_check) {
           return std::move(size_check.error());
         }
+        keeps_pending_space = true;
         break;
       }
       case PtgKind::MemFunc: {
@@ -629,6 +704,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (!size_check) {
           return std::move(size_check.error());
         }
+        keeps_pending_space = true;
         break;
       }
 
@@ -1343,14 +1419,18 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           }
           case PtgAttrKind::Space:
           case PtgAttrKind::SpaceSemi: {
-            // Whitespace attr: two bytes of (type, count) to skip. The
+            // Whitespace attr: (type, count), applied to the next token. The
             // operand stack is untouched.
             if (cursor.size < 2) {
               return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgAttrSpace payload truncated",
                                 "context=xlsb_ptg_reader");
             }
+            pending_type = cursor.data[0];
+            pending_count = cursor.data[1];
+            ++pending_spaces;
             cursor.data += 2;
             cursor.size -= 2;
+            keeps_pending_space = true;
             break;
           }
           case PtgAttrKind::If:
@@ -1384,6 +1464,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             }
             // These attrs are control-flow only; they do not consume or
             // produce operands.
+            keeps_pending_space = true;
             break;
           }
         }
@@ -1394,11 +1475,18 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::IfError: {
         // Treated as a no-op marker; the surrounding IFERROR call is
         // reconstructed from its PtgFuncVar. Nothing to read.
+        keeps_pending_space = true;
         break;
       }
 
       default:
         return unsupported_ptg(first_byte, info->name);
+    }
+    if (pending_spaces != 0 && !keeps_pending_space) {
+      if (pending_spaces == 1 && !stack.empty()) {
+        record_space(info->kind, stack.back());
+      }
+      pending_spaces = 0;
     }
   }
 

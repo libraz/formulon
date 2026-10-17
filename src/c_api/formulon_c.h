@@ -652,7 +652,8 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, c
  * entry is present. Use `fm_workbook_set_defined_name_scoped` for
  * sheet-scoped names. A non-empty `formula` that does not parse is
  * rejected and leaves the name list unchanged. One leading `=` is
- * accepted and dropped: the name stores the formula as files carry it.
+ * accepted and dropped: the name stores the formula as files carry it,
+ * spelled as `fm_workbook_set_formula` stores a cell formula.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -940,7 +941,11 @@ FM_API fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, 
  * changing the workbook: a syntax error, or a built-in called through a
  * sheet / workbook qualifier.
  * Every formula accepted here can be read back through
- * `fm_workbook_get_formula_r1c1`.
+ * `fm_workbook_get_formula_r1c1`. The text is stored the way Excel stores
+ * entered text: number literals respelled from their values (`1.50` reads
+ * back as `1.5`), a unary sign touching one absorbed (`+5` as `5`), and
+ * whitespace Excel drops (trailing, before `,`, around `:`, inside array
+ * constants) removed.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1855,7 +1860,8 @@ FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet,
  * `(first <= last)` rectangles. Every rectangle must lie within the
  * Excel grid; all ranges are validated before the rule is stored.
  * `v.formula1` / `v.formula2` may carry one leading `=`, which is dropped:
- * the rule stores them as files carry them.
+ * the rule stores them as files carry them, spelled as
+ * `fm_workbook_set_formula` stores a cell formula.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -3501,7 +3507,8 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  *
  * `rule.formula1` / `rule.formula2` and formula-typed `fm_cfvo_t` values
  * may carry one leading `=`, which is dropped: the rule stores them as
- * files carry them. For the text (7-10), blanks / errors (11-14) and
+ * files carry them, spelled as `fm_workbook_set_formula` stores a cell
+ * formula. For the text (7-10), blanks / errors (11-14) and
  * `TimePeriod` (15) types, a `NULL` or empty `rule.formula1` is filled
  * with the formula Excel stores for the rule, relative to the top-left
  * corner of the bounding box of `rule.sqref` (e.g. `NOT(ISERROR(SEARCH("ab",B1)))`).

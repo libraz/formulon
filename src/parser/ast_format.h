@@ -36,14 +36,43 @@
 namespace formulon {
 namespace parser {
 
+/// Where a run of whitespace kept with a formula sits relative to a node.
+enum class WhitespaceSlot : std::uint8_t {
+  /// Before the node's own text, inside any parentheses around it.
+  kBeforeText,
+  /// Before the operator of a binary operation or `%`; for an intersection,
+  /// the spaces beyond the one that is the operator.
+  kBeforeOperator,
+  /// Before a `)`: `index` 0 is a call's own, `index` i >= 1 the i-th pair
+  /// printed around the node, innermost first.
+  kBeforeClose,
+};
+
+/// One whitespace run: `count` repetitions of `ch` (a space or a line feed).
+struct WhitespaceRun {
+  const AstNode* node;
+  WhitespaceSlot slot;
+  std::uint8_t index;
+  char ch;
+  std::uint8_t count;
+};
+
+/// The whitespace a formula keeps between its tokens, keyed by node. The
+/// formatter prints nothing for a slot without an entry.
+using FormulaWhitespace = std::vector<WhitespaceRun>;
+
+/// The run at `slot` / `index` of `node`, or null.
+const WhitespaceRun* find_whitespace(const FormulaWhitespace& whitespace, const AstNode& node, WhitespaceSlot slot,
+                                     std::uint8_t index = 0);
+
 /// Returns an Excel-compatible textual rendering of `node`.
 ///
 /// The returned string never carries a leading `=` — callers that need one
 /// for cell-formula storage prepend it themselves. Output may contain
 /// redundant parentheses to preserve operator precedence; round-trip
 /// equivalence (parse → format → parse → equal AST) is the contract, not
-/// byte-exact stability.
-std::string format_formula(const AstNode& node);
+/// byte-exact stability. `whitespace`, when given, is printed at its slots.
+std::string format_formula(const AstNode& node, const FormulaWhitespace* whitespace = nullptr);
 
 /// Excel's spelling of a binary operator (`+`, `<>`, `&`, ...).
 const char* binop_token(BinOp op) noexcept;

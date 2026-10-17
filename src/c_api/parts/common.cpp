@@ -553,8 +553,10 @@ fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, con
                            std::string(field) + "=" + std::to_string(index) + " count=" + std::to_string(size));
 }
 
-fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context) {
-  const std::string normalized = formulon::Workbook::normalize_formula_text(std::string(formula));
+namespace {
+
+// Parse check of text already in stored spelling.
+fm_status_t check_normalized_formula_parses(const char* api, std::string_view normalized, std::string context) {
   std::string_view body = normalized;
   if (!body.empty() && body.front() == '=') {
     body.remove_prefix(1);
@@ -567,22 +569,34 @@ fm_status_t check_formula_parses(const char* api, std::string_view formula, std:
                            (std::string(api) + ": formula does not parse").c_str(), std::move(context));
 }
 
+}  // namespace
+
+fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context) {
+  return check_normalized_formula_parses(
+      api,
+      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered),
+      std::move(context));
+}
+
 fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string context, std::string* out) {
-  if (!formula.empty()) {
-    const bool marked = formula.front() == '=';
-    // The parser skips one '=' of its own, so a second one is refused here.
-    if (marked && formula.size() > 1U && formula[1] == '=') {
-      return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                               (std::string(api) + ": formula does not parse").c_str(), std::move(context));
-    }
-    if (auto rc = check_formula_parses(api, formula, std::move(context)); rc != 0) {
-      return rc;
-    }
-    if (marked) {
-      formula.remove_prefix(1);
-    }
+  if (formula.empty()) {
+    out->clear();
+    return 0;
   }
-  out->assign(formula.data(), formula.size());
+  // The parser skips one '=' of its own, so a second one is refused here.
+  if (formula.front() == '=' && formula.size() > 1U && formula[1] == '=') {
+    return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
+                             (std::string(api) + ": formula does not parse").c_str(), std::move(context));
+  }
+  std::string stored =
+      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
+  if (auto rc = check_normalized_formula_parses(api, stored, std::move(context)); rc != 0) {
+    return rc;
+  }
+  if (!stored.empty() && stored.front() == '=') {
+    stored.erase(0, 1);
+  }
+  *out = std::move(stored);
   return 0;
 }
 

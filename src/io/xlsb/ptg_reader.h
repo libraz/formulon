@@ -31,6 +31,7 @@
 #include "io/xlsb/ptg.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
+#include "parser/ast_format.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -164,6 +165,15 @@ using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 /// relative flag; an absolute axis stores the index itself. Without a base
 /// those tokens are `kIoXlsbUnsupportedPtg`.
 ///
+/// `whitespace`, when given, receives the formula text's whitespace that
+/// `PtgAttrSpace` tokens record, for `parser::format_formula` to print.
+/// An attr applies to the token after it (control attrs and memory tokens
+/// in between are transparent): spaces (type 0) or line feeds (type 1)
+/// before an operand token precede that operand's text, before an operator
+/// token the operator; spaces before a close parenthesis (type 4) precede
+/// the `)` of the `PtgParen` or of the call token that follows. Any other
+/// placement, type, or two attrs before one token is dropped.
+///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set
 ///     (PtgTbl/PtgNameX/PtgMemFunc materialisation/...), or a 3-D
@@ -178,7 +188,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<XlsbName>& name_table,
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
                                               const XlsbExternalBooks& external_books, std::int32_t host_itab = -1,
-                                              std::optional<PtgBaseCell> base = std::nullopt);
+                                              std::optional<PtgBaseCell> base = std::nullopt,
+                                              parser::FormulaWhitespace* whitespace = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

@@ -91,6 +91,10 @@ class Shapes {
 
   Shape of(const parser::AstNode& node);
 
+  /// Class of argument `index` of the built-in `name` in the formulas this
+  /// model describes: `xlsb_legacy_parameter_class` without lifting.
+  char parameter_class(std::string_view name, std::uint32_t index) const;
+
  private:
   const std::pair<std::string_view, Shape>* binding(const parser::AstNode& node) const;
 

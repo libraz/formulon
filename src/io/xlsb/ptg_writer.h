@@ -307,11 +307,21 @@ std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& 
 /// supported set (see header banner). The error context names the
 /// offending node kind. `names` feeds the shapes that decide a call's class
 /// and a legacy formula's `legacy_intersections`.
+///
+/// `source`, when given, is the text `node` was parsed from (without the
+/// `=`); its whitespace is stored as `PtgAttrSpace` where Excel keeps it:
+/// a run of spaces or of line feeds before an operand token (after an
+/// operator, `(`, a call's `,` or at the start), before a binary operator
+/// or `%`, and beyond the one space of an intersection; a run of spaces
+/// before a `)` that follows an operand. Whitespace around `:`, before a
+/// `,`, at the end and inside an array constant is dropped as Excel drops
+/// it; so is whitespace in any other position (before a `(`, a function
+/// name or a prefix operator token, inside LET / LAMBDA).
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt,
                                             PtgEvaluation evaluation = PtgEvaluation::kDynamicArray,
-                                            const NameShapes& names = NameShapes());
+                                            const NameShapes& names = NameShapes(), std::string_view source = {});
 
 }  // namespace xlsb
 }  // namespace io

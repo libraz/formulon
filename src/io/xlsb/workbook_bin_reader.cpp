@@ -425,7 +425,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     // The decoder names a hidden-name callee with its storage prefix and a
     // book by its link index; the text reads back in formula-bar spelling,
     // like a cell's.
-    dn.formula = wb.ingest_stored_formula(parser::format_formula(*ast_or.value()));
+    dn.formula = wb.ingest_stored_formula(parser::format_formula(*ast_or.value()), Workbook::FormulaSource::kRendered);
     dn.local_sheet_id = entry.itab;
     dn.hidden = entry.hidden;
     dn.comment = std::move(comment);

@@ -944,7 +944,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   // Conditional-format and data-validation formulas name other books
   // through the same `[N]` cell formulas do.
-  ingest_feature_formulas(wb);
+  ingest_feature_formulas(wb, Workbook::FormulaSource::kRendered);
 
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table

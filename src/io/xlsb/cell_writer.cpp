@@ -60,7 +60,8 @@ std::uint8_t ErrorWireCode(ErrorCode e) {
 /// when the formula cannot be parsed or lowered to the supported Ptg
 /// token set. The caller surfaces that error through `write_xlsb` rather
 /// than silently dropping the formula. `array_formula` marks the tokens of
-/// an array block's `BrtArrFmla`.
+/// an array block's `BrtArrFmla`. The body's whitespace is stored where
+/// Excel stores it (see `encode_ptgs`).
 Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::vector<std::string>& sheet_names,
                                                   const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                   bool array_formula, const NameShapes& name_shapes) {
@@ -80,7 +81,7 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
                      cell.dynamic_array ? PtgEvaluation::kDynamicArray
                      : array_formula    ? PtgEvaluation::kLegacyArray
                                         : PtgEvaluation::kLegacy,
-                     name_shapes);
+                     name_shapes, body);
 }
 
 /// Emits a `BrtFmla*` record matching `cached`'s kind, with the encoded

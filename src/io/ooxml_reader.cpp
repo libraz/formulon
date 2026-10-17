@@ -665,7 +665,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
 
   // 5b. Conditional-format and data-validation formulas name other books
   // through the same `[N]` cell formulas do.
-  ingest_feature_formulas(wb);
+  ingest_feature_formulas(wb, Workbook::FormulaSource::kEntered);
 
   // 6. Resolve every queued SST reference: replace each cell's
   // `Text("")` placeholder with a view into the SST entry. We use
@@ -758,7 +758,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // 7. Defined names, read from `wb_doc` after sheet construction and resolved lazily at evaluation time.
   ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc));
   for (DefinedName& entry : defined_names) {
-    entry.formula = wb.ingest_stored_formula(entry.formula);
+    entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered);
   }
   wb.set_defined_names(std::move(defined_names));
 

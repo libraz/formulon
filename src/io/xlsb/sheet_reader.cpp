@@ -77,8 +77,9 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
     return {};
   }
   Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
+  parser::FormulaWhitespace whitespace;
   auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books,
-                            static_cast<std::int32_t>(sheet_index));
+                            static_cast<std::int32_t>(sheet_index), std::nullopt, &whitespace);
   if (!ast_or) {
     StructuredLog("xlsb.formula.not_decoded")
         .field("sheet_index", static_cast<std::int64_t>(sheet_index))
@@ -93,7 +94,7 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
     return {};
   }
   std::string out("=");
-  out.append(parser::format_formula(*ast_or.value()));
+  out.append(parser::format_formula(*ast_or.value(), &whitespace));
   return out;
 }
 
@@ -881,7 +882,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
         // Register the real formula via the workbook-level entry so the
         // dep graph tracks it (matching the OOXML reader). The cached
         // value is preserved separately below.
-        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col.col, wb.ingest_stored_formula(formula_text),
+        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col.col,
+                                      wb.ingest_stored_formula(formula_text, Workbook::FormulaSource::kRendered),
                                       Workbook::FormulaSource::kRendered);
         if (!wf) {
           return std::move(wf.error());
@@ -956,7 +958,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       const Cell* shell = wb.sheet(sheet_index).cell_at(rw_first, col_first);
       Value cached = shell != nullptr ? shell->cached_value : Value::blank();
       const std::string cached_text = cached.is_text() ? std::string(cached.as_text()) : std::string();
-      auto wf = wb.set_cell_formula(sheet_index, rw_first, col_first, wb.ingest_stored_formula(formula_text),
+      auto wf = wb.set_cell_formula(sheet_index, rw_first, col_first,
+                                    wb.ingest_stored_formula(formula_text, Workbook::FormulaSource::kRendered),
                                     Workbook::FormulaSource::kRendered);
       if (!wf) {
         return std::move(wf.error());

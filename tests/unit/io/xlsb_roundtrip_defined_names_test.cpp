@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "cf/cf_types.h"
 #include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
@@ -423,6 +424,55 @@ TEST(XlsbRoundTripDefinedNames, BracketNameWithoutBangRoundTripsAsAnUndefinedNam
   auto from_xlsx = io::read_ooxml(test::span_of(saved_xlsx.value()));
   ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
   ExpectBracketNames(from_xlsx.value().workbook, "xlsx round trip");
+}
+
+// A book whose name, CF and DV formulas hold `formula` as stored text.
+Workbook BookWithFeatureFormula(const std::string& formula) {
+  Workbook wb = Workbook::create();
+  EXPECT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("Rate", formula, -1)));
+  cf::ConditionalFormat format;
+  format.sqref.push_back(cf::CFCellRange{{0U, 0U}, {9U, 0U}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::Expression;
+  rule.formula1 = formula;
+  format.rules.push_back(std::move(rule));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(format));
+  DataValidation validation;
+  validation.ranges.push_back(MergeRange{0U, 1U, 9U, 1U});
+  validation.type = 7;  // custom
+  validation.formula1 = formula;
+  wb.sheet(0).mutable_validations().push_back(std::move(validation));
+  return wb;
+}
+
+void ExpectFeatureFormula(const Workbook& wb, const std::string& expected, const char* context) {
+  SCOPED_TRACE(context);
+  ASSERT_EQ(wb.defined_names().size(), 1U);
+  EXPECT_EQ(wb.defined_names()[0].formula, expected);
+  ASSERT_EQ(wb.sheet(0).conditional_formats().size(), 1U);
+  ASSERT_EQ(wb.sheet(0).conditional_formats()[0].rules.size(), 1U);
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula1.value_or(""), expected);
+  ASSERT_EQ(wb.sheet(0).validations().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).validations()[0].formula1, expected);
+}
+
+TEST(FeatureFormulaSpelling, XlsxLoadRespellsNamesConditionalFormatsAndValidations) {
+  const Workbook wb = BookWithFeatureFormula("SUM( +1.50 , 1E3 )-0+ +5");
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto loaded = io::read_ooxml(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ExpectFeatureFormula(loaded.value().workbook, "SUM( 1.5, 1000 )-0+ 5", "xlsx");
+}
+
+TEST(FeatureFormulaSpelling, XlsbLoadKeepsTheRenderedSigns) {
+  // A sign Excel kept against a literal is not absorbed again on load.
+  const Workbook wb = BookWithFeatureFormula("-0+1");
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto loaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ExpectFeatureFormula(loaded.value().workbook, "-0+1", "xlsb");
 }
 
 }  // namespace

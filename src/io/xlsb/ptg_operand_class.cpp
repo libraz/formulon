@@ -110,7 +110,7 @@ Shape Shapes::of(const parser::AstNode& node) {
                  ? Shape::kScalar
                  : Shape::kArray;
     case NodeKind::ArrayLiteral:
-      return lifting_ ? Shape::kArray : Shape::kScalar;
+      return Shape::kArray;
     case NodeKind::LambdaCall:
       return Shape::kArray;
     case NodeKind::LetBinding: {
@@ -133,6 +133,10 @@ Shape Shapes::of(const parser::AstNode& node) {
       return Shape::kScalar;
   }
   return Shape::kReference;
+}
+
+char Shapes::parameter_class(std::string_view name, std::uint32_t index) const {
+  return lifting_ ? xlsb_parameter_class(name, index) : xlsb_legacy_parameter_class(name, index);
 }
 
 const std::pair<std::string_view, Shape>* Shapes::binding(const parser::AstNode& node) const {
@@ -214,7 +218,7 @@ Shape Shapes::call_shape(const parser::AstNode& node) {
   auto is = [&](std::string_view fn) { return strings::case_insensitive_eq(name, fn); };
   Shape passed = Shape::kScalar;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const char letter = xlsb_parameter_class(name, i);
+    const char letter = parameter_class(name, i);
     const Shape arg = of(node.as_call_arg(i));
     if (lifting_ && lifts_argument(name, i, letter, arg)) {
       return Shape::kArray;

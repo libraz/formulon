@@ -24,6 +24,8 @@
 #include "io/xlsb/record_writer.h"
 #include "parser/ast_format.h"
 #include "parser/reference.h"
+#include "parser/token.h"
+#include "parser/tokenizer.h"
 #include "sheet_name.h"
 #include "utils/a1_ref.h"
 #include "utils/status_macros.h"
@@ -193,6 +195,216 @@ Error unsupported_node(const char* kind) {
                     std::string("xlsb encoder cannot lower AST node kind: ") + kind, "context=xlsb_ptg_writer");
 }
 
+/// Finds, in the text a formula was parsed from, the whitespace runs Excel
+/// stores as `PtgAttrSpace` (see `encode_ptgs`), keyed by node.
+class SourceWhitespace {
+ public:
+  SourceWhitespace(std::string_view source, parser::FormulaWhitespace& out) : tokenizer_(source), out_(out) {}
+
+  void collect(const parser::AstNode& root) {
+    tokens_ = &tokenizer_.tokens();
+    visit(root, /*lead_allowed=*/true);
+  }
+
+ private:
+  static constexpr std::size_t kNone = static_cast<std::size_t>(-1);
+
+  void visit(const parser::AstNode& node, bool lead_allowed) {
+    // A node's own `(` opens a position whitespace may follow.
+    const bool inside = lead_allowed || node.paren_depth() != 0U;
+    switch (node.kind()) {
+      case parser::NodeKind::Literal:
+        if (!node.as_literal().is_blank()) {
+          lead(node, inside);
+        }
+        break;
+      case parser::NodeKind::Ref:
+      case parser::NodeKind::Ref3D:
+      case parser::NodeKind::ExternalRef:
+      case parser::NodeKind::NameRef:
+      case parser::NodeKind::ErrorLiteral:
+      case parser::NodeKind::ArrayLiteral:
+        lead(node, inside);
+        break;
+      case parser::NodeKind::UnaryOp:
+        if (node.as_unary_op() == parser::UnaryOp::Percent) {
+          visit(node.as_unary_operand(), inside);
+          before_operator(node, node.as_unary_operand(), parser::TokenKind::Percent);
+        } else {
+          lead(node, inside);
+          visit(node.as_unary_operand(), true);
+        }
+        break;
+      case parser::NodeKind::BinaryOp:
+        visit(node.as_binary_lhs(), inside);
+        before_operator(node, node.as_binary_lhs(), parser::TokenKind::Eof);
+        visit(node.as_binary_rhs(), true);
+        break;
+      case parser::NodeKind::RangeOp:
+        visit(node.as_range_lhs(), inside);
+        visit(node.as_range_rhs(), false);
+        break;
+      case parser::NodeKind::IntersectOp:
+        visit(node.as_intersect_lhs(), inside);
+        intersection(node);
+        visit(node.as_intersect_rhs(), false);
+        break;
+      case parser::NodeKind::UnionOp:
+        for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+          visit(node.as_union_child(i), i == 0U && inside);
+        }
+        break;
+      case parser::NodeKind::Call:
+        if (parser::trim_ref_call_mode(node) != parser::TrimRefMode::None) {
+          visit(node.as_call_arg(0), inside);
+          break;
+        }
+        for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+          visit(node.as_call_arg(i), true);
+        }
+        call_close(node);
+        break;
+      case parser::NodeKind::SpillRef:
+        if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+          visit(*anchor, inside);
+        }
+        break;
+      case parser::NodeKind::ImplicitIntersection:
+      case parser::NodeKind::Lambda:
+      case parser::NodeKind::LetBinding:
+      case parser::NodeKind::LambdaCall:
+      case parser::NodeKind::StructuredRef:
+      case parser::NodeKind::ErrorPlaceholder:
+        parser::any_child_node(node, [this](const parser::AstNode& child) {
+          visit(child, false);
+          return false;
+        });
+        break;
+    }
+    paren_closes(node);
+  }
+
+  // Index of the first token starting at or after `offset`.
+  std::size_t token_at(std::uint32_t offset) const {
+    const auto it = std::lower_bound(tokens_->begin(), tokens_->end(), offset,
+                                     [](const parser::Token& t, std::uint32_t at) { return t.range.start < at; });
+    return static_cast<std::size_t>(it - tokens_->begin());
+  }
+
+  bool is(std::size_t i, parser::TokenKind kind) const { return i < tokens_->size() && (*tokens_)[i].kind == kind; }
+
+  // Index of the token ending `node`'s text, its own parentheses included.
+  std::size_t last_token(const parser::AstNode& node) const {
+    const std::size_t next = token_at(node.range().end);
+    if (next == 0U || (*tokens_)[next - 1U].range.end != node.range().end) {
+      return kNone;
+    }
+    return next - 1U;
+  }
+
+  // Index of the first token of `node`'s text inside its own parentheses.
+  std::size_t first_bare_token(const parser::AstNode& node) const {
+    std::size_t i = token_at(node.range().start);
+    for (std::uint8_t d = 0; d < node.paren_depth(); ++d) {
+      if (!is(i, parser::TokenKind::LParen)) {
+        return kNone;
+      }
+      ++i;
+      if (is(i, parser::TokenKind::Whitespace)) {
+        ++i;
+      }
+    }
+    return i < tokens_->size() ? i : kNone;
+  }
+
+  // Records the whitespace token `i`, less `skip` characters, as `slot` of
+  // `node` when it is one run of spaces, or of line feeds if allowed.
+  void record(std::size_t i, const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint8_t index,
+              bool line_feeds_allowed, std::size_t skip = 0) {
+    if (!is(i, parser::TokenKind::Whitespace)) {
+      return;
+    }
+    const std::string_view run = (*tokens_)[i].lexeme;
+    if (run.size() <= skip || run.size() - skip > 0xFFU) {
+      return;
+    }
+    const char ch = run.front();
+    if ((ch != ' ' && !(line_feeds_allowed && ch == '\n')) || run.find_first_not_of(ch) != std::string_view::npos) {
+      return;
+    }
+    out_.push_back({&node, slot, index, ch, static_cast<std::uint8_t>(run.size() - skip)});
+  }
+
+  void lead(const parser::AstNode& node, bool allowed) {
+    const std::size_t first = first_bare_token(node);
+    if (!allowed || first == kNone || first == 0U) {
+      return;
+    }
+    record(first - 1U, node, parser::WhitespaceSlot::kBeforeText, 0, true);
+  }
+
+  // `op` is the operator token expected after the run (`Eof`: any binary one).
+  void before_operator(const parser::AstNode& node, const parser::AstNode& lhs, parser::TokenKind op) {
+    const std::size_t i = token_at(lhs.range().end);
+    if (op != parser::TokenKind::Eof && !is(i + 1U, op)) {
+      return;
+    }
+    record(i, node, parser::WhitespaceSlot::kBeforeOperator, 0, true);
+  }
+
+  void intersection(const parser::AstNode& node) {
+    const std::size_t i = token_at(node.as_intersect_lhs().range().end);
+    if (i + 1U >= tokens_->size() || (*tokens_)[i + 1U].range.start != node.as_intersect_rhs().range().start) {
+      return;
+    }
+    record(i, node, parser::WhitespaceSlot::kBeforeOperator, 0, false, /*skip=*/1);
+  }
+
+  // A run before a `)` closing after an operand, not after `(` or `,`.
+  void close_run(std::size_t rparen, const parser::AstNode& node, std::uint8_t index) {
+    if (rparen < 2U || !is(rparen - 1U, parser::TokenKind::Whitespace) || is(rparen - 2U, parser::TokenKind::Comma) ||
+        is(rparen - 2U, parser::TokenKind::LParen)) {
+      return;
+    }
+    record(rparen - 1U, node, parser::WhitespaceSlot::kBeforeClose, index, false);
+  }
+
+  void paren_closes(const parser::AstNode& node) {
+    std::size_t k = node.paren_depth() != 0U ? last_token(node) : kNone;
+    for (unsigned level = node.paren_depth(); level >= 1U && k != kNone; --level) {
+      if (!is(k, parser::TokenKind::RParen)) {
+        return;
+      }
+      close_run(k, node, static_cast<std::uint8_t>(level));
+      k = k >= 1U && is(k - 1U, parser::TokenKind::Whitespace) ? k - 1U : k;
+      k = k >= 1U ? k - 1U : kNone;
+    }
+  }
+
+  void call_close(const parser::AstNode& node) {
+    const std::uint32_t arity = node.as_call_arity();
+    if (arity == 0U) {
+      return;
+    }
+    const parser::AstNode& last = node.as_call_arg(arity - 1U);
+    if (last.kind() == parser::NodeKind::Literal && last.as_literal().is_blank()) {
+      return;
+    }
+    // The call's own `)` is the first token after its last argument.
+    std::size_t k = token_at(last.range().end);
+    if (is(k, parser::TokenKind::Whitespace)) {
+      ++k;
+    }
+    if (is(k, parser::TokenKind::RParen)) {
+      close_run(k, node, 0);
+    }
+  }
+
+  parser::Tokenizer tokenizer_;
+  const std::vector<parser::Token>* tokens_ = nullptr;
+  parser::FormulaWhitespace& out_;
+};
+
 /// One rectangle of a precomputed reference result (`PtgMemArea`'s cache).
 struct Rect {
   std::uint32_t row_first;
@@ -259,7 +471,7 @@ class Encoder {
  public:
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
           const NameTable& name_table, PtgRootClass root_class, std::optional<PtgBaseCell> base,
-          PtgEvaluation evaluation, const NameShapes& names)
+          PtgEvaluation evaluation, const NameShapes& names, parser::FormulaWhitespace whitespace)
       : sheet_names_(sheet_names),
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
@@ -267,7 +479,8 @@ class Encoder {
         evaluation_(evaluation),
         shapes_(names),
         promote_root_(root_class == PtgRootClass::kValue),
-        name_body_(root_class == PtgRootClass::kReference && !base) {
+        name_body_(root_class == PtgRootClass::kReference && !base),
+        whitespace_(std::move(whitespace)) {
     parser::collect_parenthesized_nodes(root, parens_);
     function_values_ = function_value_refs(root, names);
     if (evaluation == PtgEvaluation::kLegacy) {
@@ -290,7 +503,10 @@ class Encoder {
   Expected<void, Error> emit(const parser::AstNode& node) {
     RETURN_IF_ERROR(emit_node(node));
     if (const auto it = parens_.find(&node); it != parens_.end()) {
-      out_.insert(out_.end(), it->second, 0x15);  // PtgParen, one per pair
+      for (unsigned i = 1; i <= it->second; ++i) {
+        emit_space(node, parser::WhitespaceSlot::kBeforeClose, static_cast<std::uint8_t>(i));
+        emit_u8(out_, 0x15);  // PtgParen, one per pair
+      }
     }
     return Expected<void, Error>::Ok();
   }
@@ -304,6 +520,24 @@ class Encoder {
   }
 
  private:
+  /// True when the source kept whitespace at `slot` of `node`.
+  bool has_space(const parser::AstNode& node, parser::WhitespaceSlot slot) const {
+    return parser::find_whitespace(whitespace_, node, slot) != nullptr;
+  }
+
+  /// Emits the `PtgAttrSpace` for the whitespace kept at `slot` / `index`
+  /// of `node`, if any.
+  void emit_space(const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint8_t index = 0) {
+    const parser::WhitespaceRun* run = parser::find_whitespace(whitespace_, node, slot, index);
+    if (run == nullptr) {
+      return;
+    }
+    const std::uint8_t type = slot == parser::WhitespaceSlot::kBeforeClose ? kPtgSpaceBeforeClose
+                              : run->ch == '\n'                            ? kPtgSpaceLineFeeds
+                                                                           : kPtgSpaceSpaces;
+    emit_attr(static_cast<std::uint8_t>(PtgAttrKind::Space), static_cast<std::uint16_t>(type | (run->count << 8)));
+  }
+
   Expected<void, Error> emit_node(const parser::AstNode& node) {
     const bool root = std::exchange(is_root_, false);
     // Root promotion applies only to the single outermost node, and only when the caller wants it.
@@ -328,6 +562,20 @@ class Encoder {
     const bool reference_slot =
         !promote &&
         (root ? name_body_ : (promote_root_ || name_body_) && SlotClass(slot, true, evaluation_) == kPtgReferenceClass);
+    switch (node.kind()) {
+      case parser::NodeKind::Literal:
+      case parser::NodeKind::ErrorLiteral:
+      case parser::NodeKind::Ref:
+      case parser::NodeKind::Ref3D:
+      case parser::NodeKind::ArrayLiteral:
+      case parser::NodeKind::NameRef:
+      case parser::NodeKind::ExternalRef:
+        // A single operand token: the whitespace before its text precedes it.
+        emit_space(node, parser::WhitespaceSlot::kBeforeText);
+        break;
+      default:
+        break;
+    }
     switch (node.kind()) {
       case parser::NodeKind::Literal:
         return emit_literal(node.as_literal());
@@ -596,6 +844,7 @@ class Encoder {
     for (std::uint32_t i = 0; i < arity; ++i) {
       RETURN_IF_ERROR(emit(node.as_call_arg(i)));
     }
+    emit_space(node, parser::WhitespaceSlot::kBeforeClose);
     return emit_hidden_call_tail(arity + 1, "Call(arity>254, named LAMBDA)", cls);
   }
 
@@ -868,7 +1117,9 @@ class Encoder {
     // operator Excel kept (`=--0` is stored as `=-0`).
     if (measured_calls_ && node.as_unary_op() == parser::UnaryOp::Minus &&
         operand.kind() == parser::NodeKind::Literal && operand.as_literal().is_number() &&
-        operand.as_literal().as_number() != 0.0 && parens_.count(&operand) == 0U) {
+        operand.as_literal().as_number() != 0.0 && parens_.count(&operand) == 0U &&
+        !has_space(operand, parser::WhitespaceSlot::kBeforeText)) {
+      emit_space(node, parser::WhitespaceSlot::kBeforeText);
       return emit_literal(Value::number(-operand.as_literal().as_number()));
     }
     RETURN_IF_ERROR(emit_operand(operand, slot));
@@ -880,6 +1131,7 @@ class Encoder {
         emit_u8(out_, 0x13);  // PtgUminus
         break;
       case parser::UnaryOp::Percent:
+        emit_space(node, parser::WhitespaceSlot::kBeforeOperator);
         emit_u8(out_, 0x14);  // PtgPercent
         break;
     }
@@ -928,6 +1180,7 @@ class Encoder {
         byte = 0x0E;
         break;
     }
+    emit_space(node, parser::WhitespaceSlot::kBeforeOperator);
     emit_u8(out_, byte);
     return Expected<void, Error>::Ok();
   }
@@ -946,20 +1199,25 @@ class Encoder {
     if (lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
       const parser::Reference& a = lhs.as_ref();
       const parser::Reference& b = rhs.as_ref();
+      // The area token stands where the first endpoint's text starts.
+      const auto lead = [&]() { emit_space(lhs, parser::WhitespaceSlot::kBeforeText); };
       // Whole columns (`A:B`) or whole rows (`1:2`) are one area (measured).
       if (b.sheet.empty() && ((a.is_full_col && b.is_full_col) || (a.is_full_row && b.is_full_row))) {
         parser::Reference first = a;
         parser::Reference last = b;
         SpanGrid(first, last);
+        lead();
         return emit_area_ref(first, last, a.sheet, cls);
       }
       if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
         if (a.sheet.empty() && base_ && (IsRelative(a) || IsRelative(b))) {
+          lead();
           emit_u8(out_, ClassedPtg(0x2D, cls));  // PtgAreaN
           emit_area(out_, OffsetFrom(a, *base_), OffsetFrom(b, *base_));
           return Expected<void, Error>::Ok();
         }
         if (a.sheet.empty()) {
+          lead();
           emit_u8(out_, ClassedPtg(0x25, cls));  // PtgArea
           emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
@@ -967,6 +1225,7 @@ class Encoder {
         const int itab = resolve_ixti(sheet_names_, a.sheet);
         const int ixti = itab >= 0 ? try_resolve_range_ixti(itab, itab) : -1;
         if (ixti >= 0) {
+          lead();
           emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
           emit_u16(out_, static_cast<std::uint16_t>(ixti));
           emit_area(out_, a, b);
@@ -998,6 +1257,7 @@ class Encoder {
     if (node.kind() == parser::NodeKind::IntersectOp) {
       RETURN_IF_ERROR(emit(node.as_intersect_lhs()));
       RETURN_IF_ERROR(emit(node.as_intersect_rhs()));
+      emit_space(node, parser::WhitespaceSlot::kBeforeOperator);
       emit_u8(out_, 0x0F);  // PtgIsect
       return Expected<void, Error>::Ok();
     }
@@ -1181,9 +1441,15 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
+  /// Emits argument `i` of the call `node`; the spaces before the call's
+  /// `)` follow its last argument.
   Expected<void, Error> emit_call_arg(const parser::AstNode& node, std::string_view name, std::uint32_t i) {
     next_slot_ = Slot{xlsb_parameter_class(name, i), false};
-    return emit(node.as_call_arg(i));
+    RETURN_IF_ERROR(emit(node.as_call_arg(i)));
+    if (i + 1U == node.as_call_arity()) {
+      emit_space(node, parser::WhitespaceSlot::kBeforeClose);
+    }
+    return Expected<void, Error>::Ok();
   }
 
   /// Emits `PtgAttr` of kind `bits` with `data` and returns its offset.
@@ -1362,6 +1628,8 @@ class Encoder {
   const bool promote_root_;
   /// A defined name's body: reference-class root, array scope throughout.
   const bool name_body_;
+  /// Source whitespace stored as `PtgAttrSpace` (`SourceWhitespace`).
+  const parser::FormulaWhitespace whitespace_;
   std::vector<std::uint8_t> out_;
   /// `rgcb`: the array-constant extra-data area `emit_array` appends to.
   std::vector<std::uint8_t> extra_;
@@ -1376,8 +1644,13 @@ class Encoder {
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base,
-                                            PtgEvaluation evaluation, const NameShapes& names) {
-  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, names);
+                                            PtgEvaluation evaluation, const NameShapes& names,
+                                            std::string_view source) {
+  parser::FormulaWhitespace whitespace;
+  if (source.find_first_of(" \n") != std::string_view::npos) {
+    SourceWhitespace(source, whitespace).collect(node);
+  }
+  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, names, std::move(whitespace));
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
   // (measured for cells and name bodies; the u16 is unused).

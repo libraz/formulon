@@ -10,6 +10,9 @@
 // any sign before it, a binary operator, and a sign over a reference, a
 // parenthesis, a call, an array or any non-number literal stay as written.
 //
+// Entered text also loses the whitespace its parsed form has no place for
+// (`drop_unkept_whitespace`); `spell_entered_formula` applies both steps.
+//
 // The rewrite is not idempotent where Excel's is not either: a surviving
 // sign touching a literal (`=+5` stored for `=++5`) is absorbed when the
 // stored text is parsed again.
@@ -30,6 +33,18 @@ namespace parser {
 /// numbers of a `1:3` row range and runs the tokenizer rejects (`1E-310`)
 /// are left alone; nothing is validated.
 std::string spell_number_literals(std::string_view formula);
+
+/// Returns `formula` (a leading `=` optional) without the whitespace Excel
+/// drops when it parses entered text: the trailing run, a run before a `,`,
+/// a run on either side of a `:` and every run inside an array constant.
+/// Every other run is kept, the intersection operator, a leading run and
+/// line feeds among them. Text inside structured-reference brackets and
+/// string literals is left alone; nothing is validated.
+std::string drop_unkept_whitespace(std::string_view formula);
+
+/// Stored spelling of entered formula text: `drop_unkept_whitespace`, then
+/// `spell_number_literals`.
+std::string spell_entered_formula(std::string_view formula);
 
 }  // namespace parser
 }  // namespace formulon

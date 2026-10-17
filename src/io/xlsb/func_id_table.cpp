@@ -476,6 +476,10 @@ constexpr std::string_view kParameterClasses =
     // The trim-reference operators, TRIMRANGE's range parameter.
     "_TRO_ALL:X|_TRO_LEADING:X|_TRO_TRAILING:X|";
 
+/// The built-ins whose parameters a legacy formula evaluates as value
+/// class, in `kParameterClasses`' form; read by `xlsb_legacy_parameter_class`.
+constexpr std::string_view kLegacyParameterClasses = "|IFERROR:V|TRANSPOSE:V|";
+
 /// The built-ins `xlsb_returns_array` lists, as `|NAME|`: those Excel 365
 /// marks dynamic-array in the `classes-build --slot A1` probe of
 /// `tools/dev/xlsb_func_id_harvest.py` (every argument one cell), less OFFSET.
@@ -529,15 +533,19 @@ const XlsbFuncEntry* lookup_func_by_name(std::string_view name) {
   return nullptr;
 }
 
-char xlsb_parameter_class(std::string_view name, std::uint32_t index) {
+namespace {
+
+/// The letter `table` (in `kParameterClasses`' form) gives argument `index`
+/// of `name`, or 0 when it lists no entry for `name`.
+char ParameterClassIn(std::string_view table, std::string_view name, std::uint32_t index) {
   std::string needle = EntryPrefix(name);
   needle.push_back(':');
-  const std::size_t at = kParameterClasses.find(needle);
+  const std::size_t at = table.find(needle);
   if (at == std::string_view::npos) {
-    return 'V';
+    return 0;
   }
   const std::size_t begin = at + needle.size();
-  std::string_view letters = kParameterClasses.substr(begin, kParameterClasses.find('|', begin) - begin);
+  std::string_view letters = table.substr(begin, table.find('|', begin) - begin);
   std::size_t period = 1;
   if (letters.back() == '2') {
     period = 2;
@@ -548,6 +556,18 @@ char xlsb_parameter_class(std::string_view name, std::uint32_t index) {
   }
   const std::size_t tail = letters.size() - period;
   return letters[tail + (index - tail) % period];
+}
+
+}  // namespace
+
+char xlsb_parameter_class(std::string_view name, std::uint32_t index) {
+  const char letter = ParameterClassIn(kParameterClasses, name, index);
+  return letter != 0 ? letter : 'V';
+}
+
+char xlsb_legacy_parameter_class(std::string_view name, std::uint32_t index) {
+  const char letter = ParameterClassIn(kLegacyParameterClasses, name, index);
+  return letter != 0 ? letter : xlsb_parameter_class(name, index);
 }
 
 bool xlsb_returns_array(std::string_view name) {

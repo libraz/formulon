@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "eval/function_registry.h"
@@ -171,6 +172,54 @@ TEST(XlsbPtgCodec, LegacyFormulaStoresNoImpliedAt) {
   EXPECT_EQ(encode("@A1:A2", PtgEvaluation::kLegacy), encode("A1:A2", PtgEvaluation::kLegacy));
   EXPECT_NE(encode("SUM(@A1:A2)", PtgEvaluation::kLegacy), encode("SUM(A1:A2)", PtgEvaluation::kLegacy));
   EXPECT_NE(encode("@A1:A2", PtgEvaluation::kLegacyArray), encode("A1:A2", PtgEvaluation::kLegacyArray));
+  for (const auto& pair : {std::make_pair("@{1,2}", "{1,2}"), std::make_pair("(@A1:A3)", "(A1:A3)"),
+                           std::make_pair("IFERROR(@A1:A3,0)", "IFERROR(A1:A3,0)"),
+                           std::make_pair("@TRANSPOSE(@A1:A3)", "TRANSPOSE(A1:A3)")}) {
+    EXPECT_EQ(encode(pair.first, PtgEvaluation::kLegacy), encode(pair.second, PtgEvaluation::kLegacy)) << pair.first;
+  }
+}
+TEST(XlsbPtgCodec, LegacyIntersectionsFollowExcelsFormula2) {
+  // Each listed node's source text, in document order.
+  auto listed = [](const char* formula) {
+    Arena arena;
+    parser::Parser p(formula, arena);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << formula;
+    std::vector<std::string> out;
+    if (root != nullptr) {
+      for (const parser::AstNode* node : legacy_intersections(*root, NameShapes())) {
+        out.emplace_back(
+            std::string_view(formula).substr(node->range().start, node->range().end - node->range().start));
+      }
+    }
+    return out;
+  };
+  using Texts = std::vector<std::string>;
+  // An area or array constant in a value slot.
+  EXPECT_EQ(listed("{1,2}"), Texts{"{1,2}"});
+  EXPECT_EQ(listed("-{1,2}"), Texts{"{1,2}"});
+  EXPECT_EQ(listed("{1,2}+1"), Texts{"{1,2}"});
+  EXPECT_EQ(listed("(A1:A3)"), Texts{"(A1:A3)"});
+  EXPECT_EQ(listed("MAX(A1:A3)+A1:A3"), Texts{"A1:A3"});
+  EXPECT_EQ(listed("IFERROR(A1:A3,0)"), Texts{"A1:A3"});
+  EXPECT_EQ(listed("SUM(A1:A3*2)"), Texts{"A1:A3"});
+  // A call that may return several cells, and what it intersects itself.
+  EXPECT_EQ(listed("TRANSPOSE(A1:A3)"), (Texts{"TRANSPOSE(A1:A3)", "A1:A3"}));
+  EXPECT_EQ(listed("LET(a,A1:A3,a)"), Texts{"LET(a,A1:A3,a)"});
+  EXPECT_EQ(listed("LAMBDA(x,x+1)(2)"), (Texts{"LAMBDA(x,x+1)(2)", "x"}));
+  EXPECT_EQ(listed("LAMBDA(x,x)(1)"), Texts{"LAMBDA(x,x)(1)"});
+  EXPECT_EQ(listed("CHOOSE(1,A1:A3)"), Texts{"CHOOSE(1,A1:A3)"});
+  EXPECT_EQ(listed("INDEX(A1:A3,0)"), Texts{"INDEX(A1:A3,0)"});
+  EXPECT_EQ(listed("OFFSET(A1,0,0,2,1)"), Texts{"OFFSET(A1,0,0,2,1)"});
+  // Nothing to intersect.
+  for (const char* formula :
+       {"SUM(A1:A3)", "SUMPRODUCT(A1:A3*1)", "N(A1:A3)", "ISREF(A1:A3)", "SUM((A1,A2))", "(A1,A2)", "INDEX(A1:A3,1)",
+        "OFFSET(A1,0,0)", "XLOOKUP(2,A1:A3,A1:A3)", "IFERROR(A1,0)", "LET(x,1,x)", "SUM({1,2})"}) {
+    EXPECT_EQ(listed(formula), Texts{}) << formula;
+  }
+  // A written '@' is listed where Excel shows one, and not inside a body it covers.
+  EXPECT_EQ(listed("@LET(a,A1:A3,a)"), Texts{"@LET(a,A1:A3,a)"});
+  EXPECT_EQ(listed("@LET(a,A1:A3,@a)"), Texts{});
 }
 TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
   const std::vector<std::uint8_t> a1 = {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};

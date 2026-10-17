@@ -109,11 +109,14 @@ class LegacyIntersections {
   LegacyIntersections(const NameShapes& names, std::vector<const parser::AstNode*>& out)
       : shapes_(names, /*lifting=*/false), out_(out) {}
 
-  void walk(const parser::AstNode& node, Slot slot, bool root) {
+  /// `covered` when the value of `node` is already the value of an
+  /// intersected node, the body of an intersected LET or LAMBDA call: it
+  /// takes no second `@` (`@LET(a,A1:A3,a)`).
+  void walk(const parser::AstNode& node, Slot slot, bool root, bool covered = false) {
     // Everything under a forced-array parameter is evaluated as an array,
     // nested calls included (`SUMPRODUCT(ABS(A1:A2))` shows no `@`).
-    const bool value =
-        !in_forced_array_ && (root || SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) == kPtgValueClass);
+    const bool value = !covered && !in_forced_array_ &&
+                       (root || SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) == kPtgValueClass);
     if (node.kind() == parser::NodeKind::ImplicitIntersection) {
       // A written `@` is listed when it is the one Excel would show; its
       // operand never takes a second one.
@@ -121,17 +124,18 @@ class LegacyIntersections {
       if (value && shapes_.of(operand) != Shape::kScalar) {
         out_.push_back(&node);
       }
-      walk_children(operand, slot, root);
+      walk_children(operand, slot, root, /*covered=*/true);
       return;
     }
-    if (value && shapes_.of(node) != Shape::kScalar) {
+    const bool intersected = value && shapes_.of(node) != Shape::kScalar;
+    if (intersected) {
       out_.push_back(&node);
     }
-    walk_children(node, slot, root);
+    walk_children(node, slot, root, covered || intersected);
   }
 
  private:
-  void walk_children(const parser::AstNode& node, Slot slot, bool root) {
+  void walk_children(const parser::AstNode& node, Slot slot, bool root, bool covered) {
     using parser::NodeKind;
     switch (node.kind()) {
       case NodeKind::UnaryOp:
@@ -158,24 +162,36 @@ class LegacyIntersections {
         const std::string_view name = canonical_function_name(node.as_call_name());
         const bool builtin = !shapes_.bound(node.as_call_name()) && IsBuiltin(name);
         for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-          const Slot arg = builtin ? Slot{xlsb_parameter_class(name, i), false} : Slot{};
+          const Slot arg = builtin ? Slot{shapes_.parameter_class(name, i), false} : Slot{};
           const ArrayScope forced(in_forced_array_, arg.letter == 'F');
           walk(node.as_call_arg(i), arg, false);
         }
         return;
       }
-      case NodeKind::LambdaCall:
+      case NodeKind::LambdaCall: {
         for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
           walk(node.as_lambda_call_arg(i), Slot{}, false);
         }
+        // A LAMBDA called where it is written runs its body here, and a
+        // parameter may be bound to a range (`@LAMBDA(x,@x+1)(2)`).
+        const parser::AstNode& callee = node.as_lambda_call_callee();
+        if (callee.kind() == NodeKind::Lambda) {
+          const std::uint32_t n = callee.as_lambda_param_count();
+          for (std::uint32_t i = 0; i < n; ++i) {
+            shapes_.bind(callee.as_lambda_param(i), Shape::kReference);
+          }
+          walk(callee.as_lambda_body(), slot, root, covered);
+          shapes_.unbind(n);
+        }
         return;
+      }
       case NodeKind::LetBinding: {
         const std::uint32_t n = node.as_let_binding_count();
         for (std::uint32_t i = 0; i < n; ++i) {
           walk(node.as_let_binding_expr(i), Slot{}, false);
           shapes_.bind(node.as_let_binding_name(i), shapes_.of(node.as_let_binding_expr(i)));
         }
-        walk(node.as_let_body(), slot, root);
+        walk(node.as_let_body(), slot, root, covered);
         shapes_.unbind(n);
         return;
       }

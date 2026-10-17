@@ -603,10 +603,10 @@ std::string canonical_feature_formula(std::string_view stored) {
   return parser::spell_storage_operators(parser::strip_storage_prefixes(stored, &has_storage_prefix));
 }
 
-void ingest_feature_formulas(Workbook& wb) {
-  const auto ingest = [&wb](std::string& formula) {
+void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
+  const auto ingest = [&wb, source](std::string& formula) {
     if (!formula.empty()) {
-      formula = wb.ingest_stored_formula(formula);
+      formula = wb.ingest_stored_formula(formula, source);
     }
   };
   const auto ingest_cfvo = [&ingest](cf::CfValueObject& cfvo) {

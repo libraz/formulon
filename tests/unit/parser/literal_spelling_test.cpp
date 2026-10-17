@@ -342,6 +342,108 @@ TEST(SpellNumberLiterals, SurvivingTouchingSignIsAbsorbedOnReentry) {
   EXPECT_EQ(spell_number_literals(spell_number_literals("=--0")), "=0");
 }
 
+TEST(DropUnkeptWhitespace, MatchesStoredFormText) {
+  const std::vector<Case> cases = {
+      {"=SUM( 1 , 2 )", "=SUM( 1, 2 )"},
+      {"=IF( A1 >0 , 1 , 2 )", "=IF( A1 >0, 1, 2 )"},
+      {"=SUM(1 ,\n2)", "=SUM(1,\n2)"},
+      {"=SUM(A1 :A2)", "=SUM(A1:A2)"},
+      {"=SUM(A1: A2)", "=SUM(A1:A2)"},
+      {"=SUM(A1 : A2)", "=SUM(A1:A2)"},
+      {"=SUM(A:A , 1 : 3)", "=SUM(A:A, 1:3)"},
+      {"={1, 2}", "={1,2}"},
+      {"={ 1,2}", "={1,2}"},
+      {"={ 1 , 2 ; 3 , 4 }", "={1,2;3,4}"},
+      {"={\"a b\", \" c \"}", "={\"a b\",\" c \"}"},
+      {"=1+2 ", "=1+2"},
+      {"=1+2   ", "=1+2"},
+      {"=1+2\n", "=1+2"},
+      {"= 1+2 ", "= 1+2"},
+      {"=SUM(1, 2) \n ", "=SUM(1, 2)"},
+  };
+  for (const Case& c : cases) {
+    EXPECT_EQ(drop_unkept_whitespace(c.typed), c.stored) << c.typed;
+  }
+}
+
+TEST(DropUnkeptWhitespace, KeepsWhitespaceThatHasAPlaceInTheFormula) {
+  const std::vector<std::string_view> kept = {
+      "=- 5",
+      "=-  5",
+      "=1 +2",
+      "=1+ 2",
+      "=1  +   2",
+      "=SUM(1, 2)",
+      "=SUM(1,\n2)",
+      "=1+\n2",
+      "= 1",
+      "=  1+2",
+      "=\n1+2",
+      "=(1 )+2",
+      "=( 1+2 )",
+      "=1 + -5",
+      "=A1 A1",
+      "=A1  A1",
+      "=A1:A3 A2:A4",
+      "=1 &\"a\"",
+      "=-( 5)",
+      "=5 %",
+      "=SUM(\n1)",
+      "=A1 =1",
+      "=1 <> 2",
+      "=1 ^ 2",
+      "=\"a\" & \"b\"",
+      "=-\n5",
+      "=\"x , y : z \"",
+      "=Table1[[#This Row], [Col]]",
+  };
+  for (const std::string_view text : kept) {
+    EXPECT_EQ(drop_unkept_whitespace(text), text) << text;
+  }
+}
+
+TEST(DropUnkeptWhitespace, LeadingEqualSignIsOptional) {
+  EXPECT_EQ(drop_unkept_whitespace("SUM( 1 , 2 ) "), "SUM( 1, 2 )");
+  EXPECT_EQ(drop_unkept_whitespace(" 1+2 "), " 1+2");
+  EXPECT_EQ(drop_unkept_whitespace(""), "");
+  EXPECT_EQ(drop_unkept_whitespace("= "), "=");
+}
+
+TEST(SpellEnteredFormula, DropsWhitespaceAndRespellsLiterals) {
+  const std::vector<Case> cases = {
+      {"=SUM( +1.50 , 2 ) ", "=SUM( 1.5, 2 )"},
+      {"=1+ +5", "=1+ 5"},
+      {"={+5, -0, 1.50}", "={5,0,1.5}"},
+      {"=OFFSET($A$1,+0,-0,3,1)", "=OFFSET($A$1,0,0,3,1)"},
+      {"=OFFSET($A$1,0,0,1E3/1E3+2,1)", "=OFFSET($A$1,0,0,1000/1000+2,1)"},
+      {"=+$A$1:$A$3", "=+$A$1:$A$3"},
+      {"=\"1.50,1E3,+5\"", "=\"1.50,1E3,+5\""},
+      {"=S!$A$1+-0", "=S!$A$1+0"},
+      {"=- 5", "=- 5"},
+      {"=1E21 ", "=1E+21"},
+  };
+  for (const Case& c : cases) {
+    EXPECT_EQ(spell_entered_formula(c.typed), c.stored) << c.typed;
+  }
+}
+
+TEST(SpellEnteredFormula, IdempotentOnStoredText) {
+  const std::vector<std::string_view> stored = {
+      "=SUM( 1, 2 )", "=IF( A1 >0, 1, 2 )",
+      "=SUM(1,\n2)",  "=SUM(A1:A2)",
+      "={1,2}",       "= 1+2",
+      "=1+ 5",        "=- 5",
+      "=A1:A3 A2:A4", "=A1  A1",
+      "=5 %",         "=1E+21",
+      "=S!A1+1.5",    "=+$A$1:$A$3",
+      "=-( 5)",       "=\n1+2",
+      "=1 + -5",      "=0%",
+  };
+  for (const std::string_view text : stored) {
+    EXPECT_EQ(spell_entered_formula(text), text) << text;
+  }
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

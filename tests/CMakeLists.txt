@@ -38,6 +38,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/new_workbook_defaults_test.cpp
   unit/color_resolve_test.cpp
   unit/sheet_layout_edit_test.cpp
+  unit/insert_format_inheritance_test.cpp
   unit/style_resolve_test.cpp
   unit/num_fmt_locale_test.cpp
   unit/utils/checked_mul_test.cpp
@@ -130,6 +131,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/ptg_codec_function_classes_test.cpp
   unit/io/xlsb/ptg_codec_scalar_array_test.cpp
   unit/io/xlsb/ptg_codec_decoder_validation_test.cpp
+  unit/io/xlsb/formula_whitespace_test.cpp
   unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/reader_formula_test.cpp
   unit/io/xlsb/reader_validation_test.cpp

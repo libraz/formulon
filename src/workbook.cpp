@@ -1197,7 +1197,14 @@ void Workbook::apply_legacy_implicit_intersections() {
       std::vector<std::uint32_t> at;
       for (const parser::AstNode* node : io::xlsb::legacy_intersections(*root, name_shapes)) {
         if (node->kind() != parser::NodeKind::ImplicitIntersection) {
-          at.push_back(node->range().start);
+          // A parenthesised operand takes the `@` inside its parentheses: `(@A1:A3)`.
+          std::uint32_t start = node->range().start;
+          for (std::uint8_t pairs = node->paren_depth(); pairs > 0U && body_at + start < text.size(); ++start) {
+            if (text[body_at + start] == '(') {
+              --pairs;
+            }
+          }
+          at.push_back(start);
         }
       }
       if (at.empty()) {
@@ -1213,8 +1220,12 @@ void Workbook::apply_legacy_implicit_intersections() {
   }
 }
 
-std::string Workbook::normalize_formula_text(std::string formula) {
-  return parser::spell_storage_operators(parser::strip_storage_prefixes(formula, &io::has_storage_prefix));
+std::string Workbook::normalize_formula_text(std::string formula, FormulaSource source) {
+  std::string text = parser::spell_storage_operators(parser::strip_storage_prefixes(formula, &io::has_storage_prefix));
+  if (source == FormulaSource::kEntered) {
+    text = parser::spell_entered_formula(text);
+  }
+  return text;
 }
 
 namespace {
@@ -1466,8 +1477,8 @@ void Workbook::bind_external_books_unlocked(const parser::AstNode& root) {
   }
 }
 
-std::string Workbook::ingest_stored_formula(std::string_view stored) {
-  std::string text = normalize_formula_text(std::string(stored));
+std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSource source) {
+  std::string text = normalize_formula_text(std::string(stored), source);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (text.find('[') != std::string::npos) {
     // A link whose rels named no target is the book its index spells.
@@ -1498,11 +1509,9 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   // formula, so hand-authored / test formulas are unaffected. The writer
   // re-applies the prefixes on save for Excel readability. The stored
   // `SINGLE(x)` / `ANCHORARRAY(x)` calls read back as the `@x` / `x#` the
-  // formula bar shows.
-  formula = normalize_formula_text(std::move(formula));
-  if (source == FormulaSource::kEntered) {
-    formula = parser::spell_number_literals(formula);
-  }
+  // formula bar shows. Entered text also takes the whitespace and number
+  // literal spelling Excel stores.
+  formula = normalize_formula_text(std::move(formula), source);
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 
