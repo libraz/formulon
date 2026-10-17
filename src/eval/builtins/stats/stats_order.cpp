@@ -16,6 +16,7 @@
 // reference without owning their bodies.
 
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -250,22 +251,45 @@ Value TrimMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (percent < 0.0 || percent >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
+  const std::vector<double> listed = collect_numerics(args, data_count);
+  if (listed.empty()) {
     return Value::error(ErrorCode::Num);
   }
-  std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
-  const std::size_t trim_each = static_cast<std::size_t>(std::floor(static_cast<double>(n) * percent / 2.0));
-  const std::size_t kept = n - 2u * trim_each;
-  if (kept == 0) {
+  std::vector<double> sorted = listed;
+  std::sort(sorted.begin(), sorted.end());
+  const std::size_t n = sorted.size();
+  const std::size_t trim_each = static_cast<std::size_t>(std::floor(static_cast<double>(n) * percent)) / 2U;
+  if (n - 2U * trim_each == 0U) {
     return Value::error(ErrorCode::Num);
   }
+  // The kept range [low, high] is summed in listed order, ties with the cut
+  // values included; the cut copies are then taken off one by one.
+  const double low = sorted[trim_each];
+  const double high = sorted[n - trim_each - 1U];
   double sum = 0.0;
-  for (std::size_t i = trim_each; i < n - trim_each; ++i) {
-    sum += xs[i];
+  std::size_t count = 0;
+  for (const double x : listed) {
+    if (x >= low && x <= high) {
+      sum = sum + x;
+      ++count;
+    }
   }
-  const double r = sum / static_cast<double>(kept);
+  std::size_t low_copies = 0;
+  for (std::size_t i = 0; i < trim_each; ++i) {
+    low_copies += sorted[i] == low ? 1U : 0U;
+  }
+  std::size_t high_copies = 0;
+  for (std::size_t i = n - trim_each; i < n; ++i) {
+    high_copies += sorted[i] == high ? 1U : 0U;
+  }
+  for (std::size_t i = 0; i < low_copies; ++i) {
+    sum = sum - low;
+  }
+  for (std::size_t i = 0; i < high_copies; ++i) {
+    sum = sum - high;
+  }
+  const double remaining = static_cast<double>(count - low_copies - high_copies);
+  const double r = (std::fabs(remaining) < DBL_MIN) ? 0.0 : sum / remaining;
   return finite_number_result(r);
 }
 
