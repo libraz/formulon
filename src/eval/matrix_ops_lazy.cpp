@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "eval/array_alloc.h"
@@ -258,37 +259,6 @@ Value eval_mdeterm_lazy(const parser::AstNode& call, Arena& arena, const Functio
   return to_finite_value(det);
 }
 
-void gauss_jordan_eliminate(std::vector<double>& aug, std::uint32_t n, std::uint32_t w, std::uint32_t k,
-                            std::uint32_t pivot) {
-  if (pivot != k) {
-    for (std::uint32_t c = 0; c < w; ++c) {
-      const std::size_t a_idx = static_cast<std::size_t>(k) * w + c;
-      const std::size_t b_idx = static_cast<std::size_t>(pivot) * w + c;
-      const double tmp = aug[a_idx];
-      aug[a_idx] = aug[b_idx];
-      aug[b_idx] = tmp;
-    }
-  }
-  // Normalise the pivot row so the diagonal entry becomes 1.
-  const double diag = aug[static_cast<std::size_t>(k) * w + k];
-  for (std::uint32_t c = 0; c < w; ++c) {
-    aug[static_cast<std::size_t>(k) * w + c] /= diag;
-  }
-  // Eliminate column `k` in every other row.
-  for (std::uint32_t r = 0; r < n; ++r) {
-    if (r == k) {
-      continue;
-    }
-    const double f = aug[static_cast<std::size_t>(r) * w + k];
-    if (f == 0.0) {
-      continue;
-    }
-    for (std::uint32_t c = 0; c < w; ++c) {
-      aug[static_cast<std::size_t>(r) * w + c] -= f * aug[static_cast<std::size_t>(k) * w + c];
-    }
-  }
-}
-
 Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
   std::vector<double> m;
@@ -297,9 +267,8 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
   if (!resolve_square_matrix(call, arena, registry, ctx, &m, &n, &err)) {
     return err;
   }
-  // Hard cap to keep downstream `uint32_t` arithmetic from wrapping. The
-  // augmented system is `n x 2n`, so `2U * n` and the loop indices over
-  // `n * w` need to stay well below `UINT32_MAX`. Excel 365 itself caps
+  // Hard cap to keep downstream `uint32_t` arithmetic from wrapping: the loop
+  // indices over `n * n` need to stay well below `UINT32_MAX`. Excel 365 itself caps
   // worksheet width at 16384 columns, so any matrix the engine could
   // legitimately encounter from a workbook is comfortably under this
   // limit; values above it can only come from synthetic inputs.
@@ -307,45 +276,71 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return Value::error(ErrorCode::Num);
   }
 
-  // Gauss-Jordan elimination on the augmented `[m | I]` system. We work
-  // on a single 2n-wide buffer so the inverse falls out in the right
-  // half once the left half has been reduced to the identity. Partial
-  // pivoting keeps the algorithm stable for ill-conditioned but
-  // non-singular inputs.
-  const std::uint32_t w = 2U * n;
-  std::vector<double> aug(static_cast<std::size_t>(n) * w, 0.0);
+  // LU decomposition with partial pivoting (the first row holding the largest
+  // |a[i][k]| becomes the pivot row; whole rows are swapped), then one
+  // permuted unit column at a time is solved by row-oriented forward and
+  // backward substitution, accumulating `acc - a * y` for k ascending and
+  // dividing by the diagonal last. A zero pivot is singular (#NUM!).
+  const std::size_t un = n;
+  std::vector<double> a = m;
+  std::vector<std::uint32_t> source_row(n);
   for (std::uint32_t r = 0; r < n; ++r) {
-    for (std::uint32_t c = 0; c < n; ++c) {
-      aug[static_cast<std::size_t>(r) * w + c] = m[static_cast<std::size_t>(r) * n + c];
-    }
-    aug[static_cast<std::size_t>(r) * w + (n + r)] = 1.0;
+    source_row[r] = r;
   }
-
   for (std::uint32_t k = 0; k < n; ++k) {
-    // Partial pivot (same logic as `lu_decompose`).
     std::uint32_t pivot = k;
-    double pivot_abs = std::fabs(aug[static_cast<std::size_t>(k) * w + k]);
+    double pivot_abs = std::fabs(a[k * un + k]);
     for (std::uint32_t r = k + 1U; r < n; ++r) {
-      const double v = std::fabs(aug[static_cast<std::size_t>(r) * w + k]);
+      const double v = std::fabs(a[r * un + k]);
       if (v > pivot_abs) {
         pivot_abs = v;
         pivot = r;
       }
     }
-    if (pivot_abs == 0.0) {
+    if (pivot != k) {
+      for (std::uint32_t c = 0; c < n; ++c) {
+        std::swap(a[k * un + c], a[pivot * un + c]);
+      }
+      std::swap(source_row[k], source_row[pivot]);
+    }
+    const double diagonal = a[k * un + k];
+    if (diagonal == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    gauss_jordan_eliminate(aug, n, w, k, pivot);
+    for (std::uint32_t i = k + 1U; i < n; ++i) {
+      a[i * un + k] = a[i * un + k] / diagonal;
+      const double factor = a[i * un + k];
+      for (std::uint32_t j = k + 1U; j < n; ++j) {
+        const double product = factor * a[k * un + j];
+        a[i * un + j] = a[i * un + j] - product;
+      }
+    }
+  }
+  std::vector<double> inverse(un * un, 0.0);
+  std::vector<double> y(un);
+  for (std::uint32_t col = 0; col < n; ++col) {
+    for (std::uint32_t i = 0; i < n; ++i) {
+      double acc = source_row[i] == col ? 1.0 : 0.0;
+      for (std::uint32_t k = 0; k < i; ++k) {
+        const double product = a[i * un + k] * y[k];
+        acc = acc - product;
+      }
+      y[i] = acc;
+    }
+    for (std::uint32_t i = n; i-- > 0;) {
+      double acc = y[i];
+      for (std::uint32_t k = i + 1U; k < n; ++k) {
+        const double product = a[i * un + k] * inverse[k * un + col];
+        acc = acc - product;
+      }
+      inverse[i * un + col] = acc / a[i * un + i];
+    }
   }
 
-  std::vector<double> out(static_cast<std::size_t>(n) * static_cast<std::size_t>(n), 0.0);
-  for (std::uint32_t r = 0; r < n; ++r) {
-    for (std::uint32_t c = 0; c < n; ++c) {
-      const double v = aug[static_cast<std::size_t>(r) * w + (n + c)];
-      if (std::isnan(v) || std::isinf(v)) {
-        return Value::error(ErrorCode::Num);
-      }
-      out[static_cast<std::size_t>(r) * n + c] = v;
+  std::vector<double> out = std::move(inverse);
+  for (const double v : out) {
+    if (std::isnan(v) || std::isinf(v)) {
+      return Value::error(ErrorCode::Num);
     }
   }
   ArrayValue* arr = make_double_array(out, n, n, arena);
