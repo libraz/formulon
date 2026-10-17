@@ -84,6 +84,7 @@ constexpr double kStirlingSmall[] = {
     0x1.4c071bcda0a57p-4, 0x1.52a9b923ea63bp-5, 0x1.c579a268d80a8p-6,
     0x1.54a2662fd788ep-6, 0x1.10b4e513fcbd2p-6, 0x1.c6b167bebdf1ap-7,
 };
+// 1/Gamma(1+a) - 1 coefficients of GAM1, DiDonato & Morris, ACM TOMS 708 (1992).
 constexpr double kRecipGammaNumLow[] = {
     0x1.351e6d63b8846p-11, -0x1.51702b49eea17p-8, 0x1.f6a3e892940b3p-8, 0x1.e949b72333263p-5,
     -0x1.d9099ed7b807cp-3, -0x1.a2e564d1ddc83p-2, 0x1.2788cfc6fb61ap-1,

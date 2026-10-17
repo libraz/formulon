@@ -99,6 +99,7 @@ constexpr double kInvOuterDen[] = {
     -0x1.bb9141a0cb063p+12, 0x1.a1d6dc9f4d349p+12, -0x1.1a2a27132af74p+11, 0x1.76d842df4b9aap+8,
     -0x1.ec8f636f70044p+4,  0x1.0000000000000p+0,
 };
+// Tail coefficients of PPND16, Wichura, AS 241, Appl. Statist. 37 (1988).
 constexpr double kTailNumNear[] = {
     0x1.9615ac0b7ace9p-11, 0x1.744eb6c45ec67p-6, 0x1.ef2abb9b85c37p-3, 0x1.453cc085375b2p+0,
     0x1.d2ecb1a3d02c4p+1,  0x1.713f71462256ap+2, 0x1.2857748cab19bp+2, 0x1.6c665fde9526ap+0,
