@@ -3,8 +3,8 @@
 // result is below 8 ulps of its LEFT operand's binade reports exactly 0
 // (`=0.5-0.4-0.1` is 0, not -2.78E-17). Excel applies it to the root `+` / `-`
 // of a cell formula (element-wise on an array result), to the final addition
-// of SUM / AVERAGE / AVERAGEA, SUBTOTAL and AGGREGATE (scaled by the partial
-// sum before it), and to every step of a pivot SUM with the addend on the
+// of SUM / AVERAGE / AVERAGEA, SUBTOTAL, AGGREGATE and the Z.TEST mean
+// (scaled by the partial sum before it), and to every step of a pivot SUM with the addend on the
 // left. The *IF(S) family, D-functions and SUMPRODUCT keep the residue
 // (Mac Excel 365).
 

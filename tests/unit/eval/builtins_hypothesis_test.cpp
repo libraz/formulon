@@ -327,6 +327,15 @@ TEST(HypothesisZTest, SampleSigma) {
   EXPECT_NEAR(v.as_number(), 0.090574197, 1e-6);
 }
 
+TEST(HypothesisZTest, MeanSnapsCancellingPairs) {
+  // The left-to-right sum leaves 2.2e-8 after the last addition; the snapped mean is exactly 0.
+  const Value v = EvalSource(
+      "=Z.TEST({20749139.529,77794698.955,71101969.518,30405522.059,49634806.967,"
+      "-20749139.529,-77794698.955,-71101969.518,-30405522.059,-49634806.967}, 0, 0.001)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.5);
+}
+
 TEST(HypothesisZTest, KnownSigma) {
   // With supplied sigma = 2: z = 1.1 / (2/sqrt(10)) ~= 1.7393,
   //   p = 0.5 * erfc(z/sqrt(2)) ~= 0.040995...

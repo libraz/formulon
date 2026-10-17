@@ -32,6 +32,7 @@
 #include "eval/stats/special_functions.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/cancellation_snap.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -269,12 +270,12 @@ Value eval_z_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (samples.empty()) {
     return Value::error(ErrorCode::NA);
   }
-  double sum = 0.0;
+  FinalStepSnapSum total;
   for (double v : samples) {
-    sum += v;
+    total.add(v);
   }
   const double n = static_cast<double>(samples.size());
-  const double mean = sum / n;
+  const double mean = total.result() / n;
 
   double sigma = 0.0;
   if (arity == 3U) {

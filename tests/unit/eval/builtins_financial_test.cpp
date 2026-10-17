@@ -423,6 +423,27 @@ TEST(FinancialIRR, ScalarFirstArgIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(FinancialIRR, OverflowedDiscountFactorIsDiv0) {
+  // The walk zeroes the faulting terms and continues; a later zero divisor leaves the divide fault.
+  const Value v = EvalSource(
+      "=IRR({7.841457635267718e+294,5.8767136073778125e-99,-4.1486668365647185e-50,9.874625916964254e-298,"
+      "-5.502035976732474e-13,3.131997213316495e+291,-1.2444709471299764e-157,1.6168192997155828e+72})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(FinancialIRR, OverflowOnTrailingFactorIsNum) {
+  // Only the factor update after the last flow overflows, leaving the overflow fault.
+  std::string src = "=IRR({-1";
+  for (int i = 0; i < 30; ++i) {
+    src += ",1";
+  }
+  src += "}, 1E10)";
+  const Value v = EvalSource(src);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 TEST(FinancialIRR, RangeErrorPropagates) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(-1000.0));
