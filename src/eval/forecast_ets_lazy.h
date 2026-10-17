@@ -58,11 +58,10 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
 ///   [confidence=0.95], [seasonality=1], [data_completion=1],
 ///   [aggregation=1])` -- one-sided confidence-interval half-width.
 ///
-/// Returns `z * RMSE * sqrt(h)` where `z =
-/// stats_detail::InverseStandardNormal((1 + confidence) / 2)`, RMSE is
-/// the in-sample residual standard error from the fit, and `h` is the
-/// integer step count between the last training timeline entry and
-/// `target_date`. `confidence` outside `[0, 1)` -> `#NUM!` (0 is
+/// Returns `z * sqrt(variance(h))` where `z =
+/// stats_detail::InverseStandardNormal((1 + confidence) / 2)`, `variance`
+/// is the fit's forecast error variance, and `h` is the integer step count
+/// between the last training timeline entry and `target_date`. `confidence` outside `[0, 1)` -> `#NUM!` (0 is
 /// degenerate but accepted, returning 0). `target_date` inside or before
 /// the training window (`h < 1`) -> `#NUM!`. All other errors match
 /// `FORECAST.ETS`.

@@ -18,11 +18,10 @@
 //      onto an evenly spaced grid; gaps are interpolated linearly when
 //      `data_completion = 1` or filled with zero when `= 0`.
 //   5. Auto-detect or accept the user-provided seasonality length `m`.
-//   6. Initialise (L_0, B_0, S_0..S_{m-1}) from the first one or two
-//      seasons (the "two-season-means" method).
-//   7. Optimise (alpha, beta[, gamma]) by bounded Nelder-Mead on the
-//      in-sample one-step-ahead SSE.
-//   8. Read off the requested output: forecast, confidence half-width,
+//   6. Fit the additive Holt-Winters model: the initial state comes from a
+//      moving-average decomposition and (alpha, beta[, gamma]) from a fixed
+//      candidate table scored by a holdout-aware SSE.
+//   7. Read off the requested output: forecast, confidence half-width,
 //      detected seasonality, or one of eight diagnostic statistics.
 //
 // `coerce_to_number` follows the wider Mac Excel coercion contract; that
@@ -31,11 +30,6 @@
 // matching LINEST's strict-matrix rule rather than SUM's permissive
 // "skip non-numerics" rule. See `is_strictly_numeric` below.
 //
-// Oracle-pending calibration: every constant flagged with the comment
-// "ORACLE-PENDING" should be re-validated against the macOS Excel 365
-// golden corpus in a follow-up commit. The structural behaviour (error
-// codes, monotonicity in `h` / `confidence`, stability of the optimiser)
-// is locked in here; the exact numeric outputs are not.
 
 #include "eval/forecast_ets_lazy.h"
 
@@ -297,7 +291,9 @@ bool preprocess(const parser::AstNode& values_node, const parser::AstNode& timel
   } else if (seasonality == 1) {
     m = detect_seasonality(resampled.y);
   } else if (seasonality >= 2 && seasonality <= static_cast<std::int64_t>(kMaxSeasonalityArg)) {
-    m = static_cast<std::uint32_t>(seasonality);
+    // A period covering most of the series is treated as no seasonality.
+    const bool too_long = static_cast<double>(seasonality) >= 0.7 * static_cast<double>(resampled.y.size());
+    m = too_long ? 1U : static_cast<std::uint32_t>(seasonality);
   } else {
     *out_err = Value::error(ErrorCode::Num);
     return false;
@@ -405,27 +401,6 @@ std::int64_t target_step_index(double target_date, double t0, double step) noexc
   return static_cast<std::int64_t>(std::round((target_date - t0) / step));
 }
 
-// Computes the seasonal index correction for a forecast at grid offset
-// `k` relative to the first training point, given a training-series of
-// length `n` and seasonality `m`. The Holt-Winters formula uses
-// `S_{n - m + 1 + (h - 1) mod m}` where `h = k - (n - 1)` is the
-// forecast horizon counted from the last training point.
-double seasonal_correction(const std::vector<double>& season, std::uint32_t m, std::int64_t h) noexcept {
-  if (m <= 1U || season.empty()) {
-    return 0.0;
-  }
-  // Excel's formula: S_{n - m + 1 + (h - 1) mod m}, but our `season`
-  // vector is indexed by `t mod m` not by absolute position. Equivalent
-  // mapping: pick season slot `(n_minus_one + h) mod m` since the loop
-  // in `simulate` writes season[t % m] for each t; thus the next slot
-  // for t = n is `n % m` and we add `h - 1` to walk forward.
-  // To keep this self-consistent with `simulate`'s indexing we work
-  // directly in modular arithmetic over season-vector indices.
-  const std::int64_t mm = static_cast<std::int64_t>(m);
-  const std::int64_t shifted = ((h - 1) % mm + mm) % mm;
-  return season[static_cast<std::size_t>(shifted)];
-}
-
 // Shared tail of FORECAST.ETS and FORECAST.ETS.CONFINT: reads the options
 // from `first_optional`, preprocesses (values, timeline) from args 1-2,
 // rejects `target_date < t0` with #NUM!, fits Holt-Winters, and writes
@@ -488,12 +463,7 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return err;
   }
 
-  // Negative h (target_date inside the training window) returns an
-  // interpolated in-sample value computed as L + h*B + S correction.
-  const double level_term = fit.level + static_cast<double>(h) * fit.trend;
-  const double seasonal_term = seasonal_correction(fit.season, fit.m, h);
-  const double forecast = level_term + seasonal_term;
-  return to_finite_value(forecast);
+  return to_finite_value(fit.forecast(h));
 }
 
 Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -529,20 +499,18 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
     return err;
   }
   // Mac Excel 365 rejects target_date inside the training window with
-  // #NUM!. The half-width formula z * RMSE * sqrt(h) is only meaningful
-  // for strictly positive horizons.
+  // #NUM!.
   if (h < 1) {
     return Value::error(ErrorCode::Num);
   }
 
-  // Normal-approximation half-width:
-  //     hw = z * RMSE * sqrt(h)
-  // where z is the inverse standard-normal CDF at (1 + confidence) / 2.
-  // Bit-exact against the Mac oracle on the linear-trend fixtures.
-  const double tail_prob = (1.0 + confidence) * 0.5;
-  const double z = stats_detail::InverseStandardNormal(tail_prob);
-  const double hw = z * fit.rmse * std::sqrt(static_cast<double>(h));
-  return to_finite_value(hw);
+  // half-width = z * sqrt(variance(h)), z the normal quantile at (1 + confidence) / 2.
+  double p = 1.0 - confidence;
+  p = p / 2.0;
+  p = -p;
+  p = p + 1.0;
+  const double z = stats_detail::InverseStandardNormal(p);
+  return to_finite_value(z * std::sqrt(fit.variance(h)));
 }
 
 Value eval_forecast_ets_seasonality_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

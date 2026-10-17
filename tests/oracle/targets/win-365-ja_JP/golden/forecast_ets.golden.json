@@ -31,8 +31,8 @@
         "value": 18.0
       },
       "tolerance": {
-        "abs": 0.01,
-        "rel": 0.001
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -44,8 +44,8 @@
         "value": 18.0
       },
       "tolerance": {
-        "abs": 0.01,
-        "rel": 0.001
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -178,7 +178,14 @@
       "id": "forecast_ets_stat_alpha",
       "formula": "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 1)",
       "setup": {},
-      "skipped": "On cyclic period-4 data where joint optimisation drives RMSE -> 0, the alpha value is non-unique: any (alpha, beta, gamma, initial-state) combination with the same forecast manifold yields the same SSE. Mac selects alpha ~0.751 via its bias / regularisation; Formulon's bounded Nelder-Mead reaches RMSE = 0 at alpha ~0.09. The fit quality (RMSE / MASE) matches Mac; the smoothing weight is a non-identifiable parameter on this fixture."
+      "expect": {
+        "kind": "number",
+        "value": 0.751
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     },
     {
       "id": "forecast_ets_stat_rmse",
@@ -189,8 +196,8 @@
         "value": 0.0
       },
       "tolerance": {
-        "abs": 0.05,
-        "rel": 0.05
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -211,8 +218,8 @@
         "value": 0.0
       },
       "tolerance": {
-        "abs": 0.05,
-        "rel": 0.05
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {

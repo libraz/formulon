@@ -311,48 +311,6 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.112.1"
 
-  # FORECAST.ETS Holt-Winters fit is non-convex; Mac Excel converges to
-  # (alpha,beta,gamma) close to (1,1,1) on perfectly-periodic data and
-  # snaps the forecast to an exact integer (18.0). Formulon's bounded
-  # Nelder-Mead settles at a nearby local optimum (~4.3e-4 relative
-  # offset). Tightening convergence risks regressing other ETS cases;
-  # widen tolerance per case instead.
-  - id: forecast_ets_manual_seasonality_4
-    reason: "Holt-Winters Nelder-Mead converges to a different local optimum than Mac Excel on perfectly-periodic data; ~4.3e-4 relative drift on the point forecast."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    tolerance: { abs: 0.01, rel: 0.001 }
-  - id: forecast_ets_auto_detect_seasonality
-    reason: "Same Holt-Winters convergence drift as forecast_ets_manual_seasonality_4 but with auto-detected period (ACF picks the same period 4)."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    tolerance: { abs: 0.01, rel: 0.001 }
-
-  # FORECAST.ETS.CONFINT / .STAT — joint (alpha, beta, gamma, L_0, B_0,
-  # S_0..S_{m-1}) optimisation (added 2026-04-29) closes the basin gap
-  # against Mac Excel for fit-quality metrics: the optimiser now jointly
-  # tunes the smoothing parameters and the initial state vector, reaching
-  # RMSE / MASE values matching Mac on cyclic period-4 and linear data.
-  # Four entries that previously sat under `mode: skip-oracle`
-  # (forecast_ets_confint_default_confidence,
-  # forecast_ets_confint_higher_confidence, forecast_ets_stat_rmse,
-  # forecast_ets_stat_mase) now agree with Mac within case-level
-  # tolerance. The remaining stat=1 (alpha) divergence is documented
-  # below: when fit quality saturates (RMSE -> 0), multiple (alpha,
-  # beta, gamma, init-state) combinations achieve the same SSE and the
-  # alpha value becomes non-unique; Mac picks alpha ~0.751, Formulon
-  # picks alpha ~0.09 on the same data with the same RMSE.
-  - id: forecast_ets_stat_alpha
-    applies_to: all
-    cause: non-identifiable
-    reason: "On cyclic period-4 data where joint optimisation drives RMSE -> 0, the alpha value is non-unique: any (alpha, beta, gamma, initial-state) combination with the same forecast manifold yields the same SSE. Mac selects alpha ~0.751 via its bias / regularisation; Formulon's bounded Nelder-Mead reaches RMSE = 0 at alpha ~0.09. The fit quality (RMSE / MASE) matches Mac; the smoothing weight is a non-identifiable parameter on this fixture."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.112.1"
-    mode: skip-oracle
-
   # Stale `forecast_ets_seasonality_linear_no_period` removed: the
   # seasonality detector now removes the linear trend before computing the
   # autocorrelation, so a perfectly linear series reports no period (0) like

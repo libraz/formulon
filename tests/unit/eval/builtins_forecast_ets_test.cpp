@@ -9,15 +9,16 @@
 // triple-exponential smoothing core implemented in
 // `src/eval/forecast_ets_lazy.cpp`.
 //
-// SCOPE: this file asserts STRUCTURAL behaviour only -- error codes,
-// monotonicity (larger confidence -> larger half-width, larger horizon
-// -> larger half-width via sqrt(h) growth), finiteness of stats, and
-// that detection / resampling pipelines fire at all. The exact numeric
-// outputs are NOT asserted here; oracle calibration against macOS
-// Excel 365 will arrive in a follow-up commit. Tolerances on
-// `EXPECT_NEAR` are deliberately generous.
+// SCOPE: the ForecastEtsExact suite pins exact values; the remaining suites
+// assert structural behaviour -- error codes, monotonicity (larger confidence
+// -> larger half-width), finiteness of stats, and that detection /
+// resampling pipelines fire at all -- with generous `EXPECT_NEAR` tolerances.
 
+#include <cfloat>
 #include <cmath>
+#include <cstddef>
+#include <iostream>  // TMPINC
+#include <sstream>   // TMPINC
 #include <string>
 #include <string_view>
 
@@ -467,11 +468,11 @@ TEST(ForecastEtsStat, BetaIsFiniteInUnitInterval) {
   EXPECT_LT(v.as_number(), 1.0);
 }
 
-TEST(ForecastEtsStat, GammaZeroForNonSeasonal) {
+TEST(ForecastEtsStat, GammaIsMachineEpsilonForNonSeasonal) {
   const Workbook wb = MakeLinearWorkbook();
   const Value v = EvalSourceIn("=FORECAST.ETS.STAT(B1:B10, A1:A10, 3, 0)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  EXPECT_EQ(v.as_number(), DBL_EPSILON);
 }
 
 TEST(ForecastEtsStat, GammaInUnitIntervalForSeasonal) {
@@ -653,6 +654,91 @@ TEST(ForecastEtsCrossCut, DataCompletionNegativeIsValueError) {
   const Value v = EvalSourceIn("=FORECAST.ETS(11, B1:B10, A1:A10, 0, -1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Exact values: fixed candidate table, holdout scoring and short-series padding
+// ---------------------------------------------------------------------------
+
+double EvalExact(const std::string& formula) {
+  const Value v = EvalSource(formula);
+  EXPECT_TRUE(v.is_number()) << formula;
+  return v.is_number() ? v.as_number() : 0.0;
+}
+
+struct ExactSeries {
+  std::string values;
+  std::string timeline;
+  std::string season;
+  std::size_t n;
+};
+
+ExactSeries MakeExactSeries(const char* values, std::size_t n, int season) {
+  ExactSeries s;
+  s.values = values;
+  s.n = n;
+  s.season = std::to_string(season);
+  s.timeline = "{";
+  for (std::size_t i = 1; i <= n; ++i) {
+    s.timeline += (i == 1 ? "" : ";") + std::to_string(i);
+  }
+  s.timeline += "}";
+  return s;
+}
+
+std::string Args(const ExactSeries& s) {
+  return s.values + "," + s.timeline;
+}
+
+TEST(ForecastEtsExact, PeriodFourSeries) {
+  const ExactSeries s = MakeExactSeries("{10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}", 16, 4);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",1," + s.season + ")"), 0.751);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",2," + s.season + ")"), 0.001);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",3," + s.season + ")"), 0.001);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",4," + s.season + ")"), 0.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",5," + s.season + ")"), 0.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",6," + s.season + ")"), 0.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",7," + s.season + ")"), 0.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(17," + Args(s) + "," + s.season + ")"), 18.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(18," + Args(s) + "," + s.season + ")"), 20.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(21," + Args(s) + "," + s.season + ")"), 20.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(17," + Args(s) + ",0.95," + s.season + ")"), 0.0);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(19," + Args(s) + ",0.95," + s.season + ")"), 0.0);
+}
+
+TEST(ForecastEtsExact, SixPhaseSeries) {
+  const ExactSeries s = MakeExactSeries(
+      "{50.38;61.96;50.78;51.37;45.24;52.03;52.62;63.9;53.16;52.93;47.52;55.28;53.73;65.14;54.95;55.82;49.48;56.48;56."
+      "4;67.0;57.8;57.46;50.88;57.03}",
+      24, 6);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",1," + s.season + ")"), 0.126);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",2," + s.season + ")"), 0.001);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",3," + s.season + ")"), 0.001);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",4," + s.season + ")"), 0.0861558112623309);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",5," + s.season + ")"), 0.010308666468835702);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",6," + s.season + ")"), 0.5872749334831597);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",7," + s.season + ")"), 0.7355763696204374);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(25," + Args(s) + "," + s.season + ")"), 57.85321655080211);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(26," + Args(s) + "," + s.season + ")"), 69.19397936760204);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(29," + Args(s) + "," + s.season + ")"), 53.05027053900617);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(25," + Args(s) + ",0.95," + s.season + ")"), 1.0536375883485813);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(27," + Args(s) + ",0.95," + s.season + ")"), 1.070629041734613);
+}
+
+TEST(ForecastEtsExact, PaddedShortSeries) {
+  const ExactSeries s = MakeExactSeries("{94.61;48.87;19.39;94.6;57.9;72.89;88.1;28.57;35.67}", 9, 3);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",1," + s.season + ")"), 0.002);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",2," + s.season + ")"), 0.001);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",3," + s.season + ")"), 0.25);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",4," + s.season + ")"), 0.3136113631213259);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",5," + s.season + ")"), 0.25103157995311975);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",6," + s.season + ")"), 11.131635333991463);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.STAT(" + Args(s) + ",7," + s.season + ")"), 19.664579855001158);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(10," + Args(s) + "," + s.season + ")"), 89.02829274003653);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(11," + Args(s) + "," + s.season + ")"), 43.627416296623636);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS(14," + Args(s) + "," + s.season + ")"), 41.937864018855905);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(10," + Args(s) + ",0.95," + s.season + ")"), 38.54186828691414);
+  EXPECT_EQ(EvalExact("=FORECAST.ETS.CONFINT(12," + Args(s) + ",0.95," + s.season + ")"), 38.542350057256684);
 }
 
 }  // namespace

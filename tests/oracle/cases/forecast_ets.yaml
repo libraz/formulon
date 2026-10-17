@@ -9,17 +9,15 @@ cases:
     formula: "=FORECAST.ETS(11, {10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10}, 0)"
 
   # -- manual seasonality (period=4) --------------------------------------
-  # Holt-Winters Nelder-Mead drifts ~4.3e-4 from Mac on perfectly-periodic
-  # data; widen tolerance per divergence.yaml.
   - id: forecast_ets_manual_seasonality_4
     description: "Period-4 cyclic data with explicit seasonality=4"
-    tolerance: { abs: 0.01, rel: 0.001 }
+    tolerance: { abs: 0, rel: 0 }
     formula: "=FORECAST.ETS(17, {10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 4)"
 
   # -- auto-detected seasonality ------------------------------------------
   - id: forecast_ets_auto_detect_seasonality
     description: "Period-4 cyclic data, seasonality omitted — auto-detect via ACF"
-    tolerance: { abs: 0.01, rel: 0.001 }
+    tolerance: { abs: 0, rel: 0 }
     formula: "=FORECAST.ETS(17, {10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16})"
 
   # -- target before timeline (#NUM!) ------------------------------------
@@ -96,12 +94,12 @@ cases:
 
   - id: forecast_ets_stat_alpha
     description: "stat=1 (alpha — level smoothing parameter)"
-    tolerance: { abs: 0.05, rel: 0.05 }
+    tolerance: { abs: 0, rel: 0 }
     formula: "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 1)"
 
   - id: forecast_ets_stat_rmse
     description: "stat=7 (RMSE of in-sample fit)"
-    tolerance: { abs: 0.05, rel: 0.05 }
+    tolerance: { abs: 0, rel: 0 }
     formula: "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 7)"
 
   - id: forecast_ets_stat_step_size
@@ -110,7 +108,7 @@ cases:
 
   - id: forecast_ets_stat_mase
     description: "stat=4 (MASE — mean absolute scaled error)"
-    tolerance: { abs: 0.05, rel: 0.05 }
+    tolerance: { abs: 0, rel: 0 }
     formula: "=FORECAST.ETS.STAT({10;12;14;11;12;14;16;13;14;16;18;15;16;18;20;17}, {1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16}, 4)"
 
   - id: forecast_ets_stat_zero
