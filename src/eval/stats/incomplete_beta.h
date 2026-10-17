@@ -30,6 +30,10 @@ double beta_dist_pdf_excel(double x, double a, double b, double lo, double hi) n
 /// `P(X <= k)` of a binomial; `k` and `n` are truncated.
 double binom_cdf_excel(double k, double n, double p) noexcept;
 
+/// BINOM.DIST.RANGE: `P(s1 <= X <= s2)`; pass `s2 == s1` for the point mass.
+/// Requires `0 <= p <= 1` and `0 <= s1 <= s2 <= n`.
+double binom_range_excel(double n, double p, double s1, double s2) noexcept;
+
 /// Negative binomial pmf / cdf at `k` failures before `r` successes; both truncated.
 double negbinom_pmf_excel(double k, double r, double p) noexcept;
 double negbinom_cdf_excel(double k, double r, double p) noexcept;

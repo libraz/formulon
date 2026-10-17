@@ -396,14 +396,13 @@ TEST(BuiltinsDistributionBounds, BinomDistRangeFullSupportIsOne) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsDistributionBounds, BinomDistRangeUnresolvableEndpointIsNum) {
-  // The upper endpoint sits mid-support, where the shapes are balanced
-  // and the closed form cannot hold the family's tolerance. One
-  // unresolvable endpoint decides the difference, so the whole query is
-  // refused rather than answered from a term we cannot stand behind.
+TEST(BuiltinsDistributionBounds, BinomDistRangeMidSupportEndpointAnswers) {
+  // The range is the cdf at the upper endpoint, one incomplete-beta
+  // evaluation however balanced the shapes are.
   const Value v = EvalSource("=BINOM.DIST.RANGE(1E12, 0.5, 0, 5E11)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GE(v.as_number(), 0.0);
+  EXPECT_LE(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsDistributionBounds, BinomDistRangeNarrowSpanAtHugeTrialsAnswers) {

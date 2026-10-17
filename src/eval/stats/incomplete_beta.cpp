@@ -790,6 +790,32 @@ double binom_cdf_excel(double k, double n, double p) noexcept {
   return beta_ratio_excel(1.0 + kk, nn - kk, p, true);
 }
 
+double binom_range_excel(double n, double p, double s1, double s2) noexcept {
+  if (s2 == s1) {
+    if (p == 0.0) {
+      return s1 == 0.0 ? 1.0 : 0.0;
+    }
+    if (p == 1.0) {
+      return s1 == n ? 1.0 : 0.0;
+    }
+    return dbinom_raw(n, p, s1);
+  }
+  if (s1 == 0.0) {
+    return binom_cdf_excel(s2, n, p);
+  }
+  const double c1 = binom_cdf_excel(s1 - 1.0, n, p);
+  if (c1 > 0.9) {
+    const double yv = 1.0 + mul(p, -1.0);
+    const double upper_from_s1 = beta_ratio_excel(1.0 + (n - s1), s1, yv, true, p);
+    if (s2 == n) {
+      return upper_from_s1;
+    }
+    const double upper_to_s2 = beta_ratio_excel(n - s2, 1.0 + s2, yv, true, p);
+    return mul(upper_to_s2, -1.0) + upper_from_s1;
+  }
+  return mul(c1, -1.0) + binom_cdf_excel(s2, n, p);
+}
+
 double negbinom_pmf_excel(double k, double r, double p) noexcept {
   const double kk = std::trunc(k);
   const double rr = std::trunc(r);

@@ -154,6 +154,7 @@ cases:
   - id: confidence_t_basic
     description: "t_{0.975, 29} * 20 / sqrt(30) ~ 7.468123"
     formula: "=CONFIDENCE.T(0.05, 20, 30)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: confidence_t_size_one_is_div0
     description: "df = size - 1 = 0 collapses the distribution; Excel returns #DIV/0!"
@@ -237,10 +238,12 @@ cases:
   - id: binom_dist_range_basic
     description: "PMF(4)+PMF(5)+PMF(6) for BINOM(10, 0.5) = 672/1024 = 0.65625"
     formula: "=BINOM.DIST.RANGE(10, 0.5, 4, 6)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_dist_range_three_arg_matches_pmf
     description: "3-arg form is a single-point PMF query"
     formula: "=BINOM.DIST.RANGE(10, 0.5, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_dist_range_reversed_is_num
     formula: "=BINOM.DIST.RANGE(10, 0.5, 6, 4)"
@@ -248,6 +251,7 @@ cases:
   - id: binom_dist_range_full_support
     description: "Full-support sum over BINOM(10, 0.5) equals 1"
     formula: "=BINOM.DIST.RANGE(10, 0.5, 0, 10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: binom_dist_range_p_out_of_range_is_num
     description: "p > 1 yields #NUM!"
@@ -292,6 +296,7 @@ cases:
   - id: confidence_large_stddev
     description: "Linear in stddev: doubling stddev doubles half-width"
     formula: "=CONFIDENCE(0.05, 100, 100)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: confidence_norm_alpha_zero_is_num
     description: "CONFIDENCE.NORM with alpha <= 0 yields #NUM!"
@@ -305,6 +310,7 @@ cases:
   - id: confidence_norm_large_stddev
     description: "CONFIDENCE.NORM scales linearly with stddev"
     formula: "=CONFIDENCE.NORM(0.05, 100, 100)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: confidence_norm_alpha_one_is_num
     description: "CONFIDENCE.NORM with alpha >= 1 yields #NUM!"
@@ -322,6 +328,7 @@ cases:
   - id: confidence_t_large_sample
     description: "Large n converges toward the normal-z half-width"
     formula: "=CONFIDENCE.T(0.05, 20, 1000)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- EXPON.DIST (extra perspective) --------------------------------------
   - id: expon_pdf_lambda_two_at_one

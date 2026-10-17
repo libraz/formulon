@@ -66,7 +66,7 @@ Value eval_f_test_lazy(const parser::AstNode& call, Arena& arena, const Function
 /// clean contingency table). Any expected_i <= 0 -> `#NUM!`. For a
 /// rectangle `(r, c)` with r > 1 AND c > 1, `df = (r-1)(c-1)`; for a
 /// 1-D sequence (r == 1 OR c == 1), `df = n - 1`. `df < 1` -> `#NUM!`.
-/// p-value = `q_gamma(df/2, chi²/2)`. Registered under both `CHISQ.TEST`
+/// p-value = `gamma_ratio_excel(df/2, chi²/2, upper)`. Registered under both `CHISQ.TEST`
 /// (modern) and `CHITEST` (legacy).
 Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx);

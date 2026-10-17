@@ -12,37 +12,44 @@ cases:
     description: "Paired two-tailed t-test on a small sample"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 3, B2: 4, B3: 6, B4: 4, B5: 4 }
     formula: "=T.TEST(A1:A5, B1:B5, 2, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_equal_var_two_tailed
     description: "Equal-variance two-sample t-test, two-tailed"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
     formula: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_welch_two_tailed
     description: "Welch's unequal-variance t-test, two-tailed"
     setup: { A1: 3, A2: 4, A3: 5, A4: 9, A5: 10, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
     formula: "=T.TEST(A1:A5, B1:B5, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_one_tail_half_of_two_tail
     description: "Identity: 2 * one-tail(type=2) == two-tail(type=2)"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
     formula: "=T.TEST(A1:A5, B1:B5, 2, 2) - 2*T.TEST(A1:A5, B1:B5, 1, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ttest_legacy_matches_t_test
     description: "Legacy TTEST must match T.TEST exactly"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
     formula: "=TTEST(A1:A5, B1:B5, 2, 2) - T.TEST(A1:A5, B1:B5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- F.TEST --------------------------------------------------------------
   - id: f_test_basic
     description: "F-test of equal variances on two small samples"
     setup: { A1: 6, A2: 7, A3: 9, A4: 15, A5: 21, B1: 20, B2: 28, B3: 31, B4: 38, B5: 40 }
     formula: "=F.TEST(A1:A5, B1:B5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: f_test_legacy_matches
     description: "Legacy FTEST must match F.TEST exactly"
     setup: { A1: 6, A2: 7, A3: 9, A4: 15, A5: 21, B1: 20, B2: 28, B3: 31, B4: 38, B5: 40 }
     formula: "=FTEST(A1:A5, B1:B5) - F.TEST(A1:A5, B1:B5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- CHISQ.TEST ----------------------------------------------------------
   - id: chisq_test_2x2_table
@@ -57,6 +64,7 @@ cases:
       C2: 47.65
       D2: 24.85
     formula: "=CHISQ.TEST(A1:B2, C1:D2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chitest_legacy_matches
     description: "Legacy CHITEST must match CHISQ.TEST exactly"
@@ -70,11 +78,13 @@ cases:
       C2: 47.65
       D2: 24.85
     formula: "=CHITEST(A1:B2, C1:D2) - CHISQ.TEST(A1:B2, C1:D2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_test_one_dimensional
     description: "1-D chi-squared uses df = n - 1; perfect match -> 1"
     setup: { A1: 10, A2: 20, A3: 30, B1: 10, B2: 20, B3: 30 }
     formula: "=CHISQ.TEST(A1:A3, B1:B3)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Z.TEST --------------------------------------------------------------
   - id: z_test_known_sigma
@@ -140,6 +150,7 @@ cases:
     description: "Identical samples -> p ≈ 1.0 (no mean difference)"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
     formula: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_all_zeros_is_div0
     description: "Both samples constant zero -> variance=0 -> #DIV/0!"
@@ -160,6 +171,7 @@ cases:
     description: "T.TEST type=2.9 should truncate toward zero to 2 (Excel int-conversion rule)"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
     formula: "=T.TEST(A1:A5, B1:B5, 2, 2.9) - T.TEST(A1:A5, B1:B5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_tails_zero_is_num
     description: "T.TEST tails=0 -> #NUM! (only 1 or 2 are valid)"
@@ -175,11 +187,13 @@ cases:
     description: "T.TEST works on negative-valued samples (sanity)"
     setup: { A1: -5, A2: -4, A3: -3, A4: -2, A5: -1, B1: -10, B2: -9, B3: -8, B4: -7, B5: -6 }
     formula: "=T.TEST(A1:A5, B1:B5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_skips_text_and_bool
     description: "Range with text and TRUE — Excel skips non-numeric in range; effective n drops"
     setup: { A1: 1, A2: 2, A3: 3, A4: "x", A5: true, A6: 4, A7: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
     formula: "=T.TEST(A1:A7, B1:B5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_error_in_range_propagates
     description: "Range with #DIV/0! cell -> error propagates"
@@ -206,6 +220,7 @@ cases:
     description: "Identical samples -> ratio=1, p=1"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
     formula: "=F.TEST(A1:A5, B1:B5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: f_test_constant_input_is_div0
     description: "F.TEST with all-equal sample (variance=0) -> #DIV/0!"
@@ -216,11 +231,13 @@ cases:
     description: "F.TEST allows differing sample sizes (both n>=2)"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 10, B2: 12, B3: 14 }
     formula: "=F.TEST(A1:A5, B1:B3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: f_test_skips_text
     description: "F.TEST: text cells in range are skipped"
     setup: { A1: 1, A2: 2, A3: "x", A4: 3, A5: 4, A6: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
     formula: "=F.TEST(A1:A6, B1:B5)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- CHISQ.TEST edge cases -----------------------------------------------
   - id: chisq_test_1x1_is_na
@@ -242,6 +259,7 @@ cases:
     description: "CHISQ.TEST: 1xN horizontal range works (df = N-1)"
     setup: { A1: 10, B1: 20, C1: 30, A2: 12, B2: 18, C2: 30 }
     formula: "=CHISQ.TEST(A1:C1, A2:C2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Z.TEST edge cases ---------------------------------------------------
   - id: z_test_sigma_zero_is_div0
@@ -286,10 +304,12 @@ cases:
     description: "T.TEST is orientation-insensitive — horizontal vs vertical"
     setup: { A1: 1, B1: 2, C1: 3, D1: 4, E1: 5, A2: 6, B2: 7, C2: 8, D2: 9, E2: 10 }
     formula: "=T.TEST(A1:E1, A2:E2, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: t_test_array_literal
     description: "T.TEST accepts {1,2,3,4,5} array literals"
     formula: "=T.TEST({1,2,3,4,5}, {6,7,8,9,10}, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Legacy *TEST aliases: standalone perspective coverage ---------------
   # The pre-2010 spellings (CHITEST / FTEST / TTEST / ZTEST) delegate to
@@ -303,32 +323,38 @@ cases:
     description: "TTEST paired two-tailed on a small sample"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 3, B2: 4, B3: 6, B4: 4, B5: 4 }
     formula: "=TTEST(A1:A5, B1:B5, 2, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ttest_welch_two_tailed
     description: "TTEST Welch's unequal-variance, two-tailed"
     setup: { A1: 3, A2: 4, A3: 5, A4: 9, A5: 10, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
     formula: "=TTEST(A1:A5, B1:B5, 2, 3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ttest_identical_samples_p_one
     description: "TTEST identical samples -> p ~ 1.0"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
     formula: "=TTEST(A1:A5, B1:B5, 2, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ttest_one_tail_half_of_two_tail
     description: "TTEST identity: 2 * one-tail(type=2) == two-tail(type=2)"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 6, B2: 7, B3: 8, B4: 9, B5: 10 }
     formula: "=TTEST(A1:A5, B1:B5, 2, 2) - 2*TTEST(A1:A5, B1:B5, 1, 2)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- FTEST (legacy alias of F.TEST) -------------------------------------
   - id: ftest_basic
     description: "FTEST equal-variance test on two small samples"
     setup: { A1: 6, A2: 7, A3: 9, A4: 15, A5: 21, B1: 20, B2: 28, B3: 31, B4: 38, B5: 40 }
     formula: "=FTEST(A1:A5, B1:B5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ftest_identical_samples_p_one
     description: "FTEST identical samples -> ratio=1, p~1"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 1, B2: 2, B3: 3, B4: 4, B5: 5 }
     formula: "=FTEST(A1:A5, B1:B5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: ftest_constant_input_is_div0
     description: "FTEST all-equal sample -> #DIV/0!"
@@ -339,6 +365,7 @@ cases:
     description: "FTEST allows differing sample sizes (both n>=2)"
     setup: { A1: 1, A2: 2, A3: 3, A4: 4, A5: 5, B1: 10, B2: 12, B3: 14 }
     formula: "=FTEST(A1:A5, B1:B3)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- CHITEST (legacy alias of CHISQ.TEST) -------------------------------
   - id: chitest_2x2_table
@@ -353,11 +380,13 @@ cases:
       C2: 47.65
       D2: 24.85
     formula: "=CHITEST(A1:B2, C1:D2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chitest_one_dimensional
     description: "CHITEST 1-D table, perfect match -> p=1"
     setup: { A1: 10, A2: 20, A3: 30, B1: 10, B2: 20, B3: 30 }
     formula: "=CHITEST(A1:A3, B1:B3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chitest_dim_mismatch_is_na
     description: "CHITEST mismatched dimensions -> #N/A"
@@ -403,6 +432,7 @@ cases:
   - id: chisq_test_bool_pair_dropped_2d
     description: "CHISQ.TEST drops a boolean pair and keeps the 2-D degrees of freedom"
     formula: "=CHISQ.TEST({TRUE,2;3,4},{1,2;3,4})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisq_test_negative_values_allowed
     description: "CHISQ.TEST accepts negative values while the statistic stays non-negative"
@@ -436,6 +466,7 @@ cases:
     description: "Excel 365: 0.317310507862914"
     setup: { A1: true, B1: 2, C1: 3, D1: 4 }
     formula: "=CHISQ.TEST(A1:B1,C1:D1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisqtest_text_cells
     description: "Excel 365: #DIV/0!"
@@ -446,11 +477,14 @@ cases:
     description: "Excel 365: 0.317310507862914"
     setup: { A1: "a", B1: 2, C1: 3, D1: 4 }
     formula: "=CHISQ.TEST(A1:B1,C1:D1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chisqtest_neg_tiny
     description: "Excel 365: 0.08326246094552045"
     formula: "=CHISQ.TEST({-1E-5,-1E-5},{1,2})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: chitest_bool_lit
     description: "Excel 365: 0.317310507862914"
     formula: "=CHITEST({TRUE,2},{3,4})"
+    tolerance: { abs: 0, rel: 0 }

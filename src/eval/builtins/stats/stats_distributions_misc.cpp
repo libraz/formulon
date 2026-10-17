@@ -20,6 +20,7 @@
 
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
+#include "eval/stats/hypothesis_tests.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/inverse_distributions.h"
 #include "eval/stats/special_functions.h"
@@ -58,7 +59,7 @@ static Expected<NumberTriple, ErrorCode> read_confidence_args(const Value* args)
 
 // CONFIDENCE / CONFIDENCE.NORM(alpha, stdev, size) - half-width of the
 // (1 - alpha) confidence interval for a sample mean under the normal model:
-//   z_{1 - alpha/2} * stdev / sqrt(size).
+//   (stdev / sqrt(size)) * z_{1 - alpha/2}.
 // `size` is truncated toward zero (Excel floors positive inputs; negative
 // inputs are rejected outright). Domain: alpha in (0, 1), stdev > 0,
 // size >= 1; any violation surfaces `#NUM!`.
@@ -68,12 +69,11 @@ Value ConfidenceNorm(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*
     return Value::error(input.error());
   }
   const auto [alpha, sd, n] = input.value();
-  const double z = InverseStandardNormal(1.0 - 0.5 * alpha);
-  return finite_number_result(z * sd / std::sqrt(n));
+  return finite_number_result(stats::confidence_norm_excel(alpha, sd, n));
 }
 
 // CONFIDENCE.T(alpha, stdev, size) - t-based confidence half-width:
-//   t_{1 - alpha/2, size - 1} * stdev / sqrt(size).
+//   (stdev / sqrt(size)) * T.INV.2T(alpha, size - 1).
 // Domain matches CONFIDENCE.NORM plus `size >= 2` (df = size - 1 must be
 // >= 1). `size == 1` surfaces `#DIV/0!` per Excel because df collapses to 0.
 Value ConfidenceT(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
@@ -85,8 +85,7 @@ Value ConfidenceT(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (n == 1.0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double t = TInvCore(1.0 - 0.5 * alpha, n - 1.0);
-  return finite_number_result(t * sd / std::sqrt(n));
+  return finite_number_result(stats::confidence_t_excel(alpha, sd, n));
 }
 
 // ---------------------------------------------------------------------------
@@ -181,12 +180,8 @@ Value Phi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // NEGBINOM.DIST(number_f, number_s, probability_s, cumulative) - negative
 // binomial PMF or CDF. `number_f` and `number_s` floor toward -inf; Excel
 // requires f >= 0, s >= 1, and p strictly in (0, 1) -- both p == 0 and
-// p == 1 (which collapse the distribution) surface #NUM!. CDF sums PMFs
-// from 0 to f up to `kMaxCumulativeTerms` terms, then switches to the
-// closed form so the cost never tracks the value of `number_f`. The usual
-// shape here is a small `number_s` against a large `number_f`, which the
-// closed form resolves exactly at any magnitude; a large `number_s` makes
-// the pair balanced and is refused past the shape bound.
+// p == 1 (which collapse the distribution) surface #NUM!. The CDF is one
+// incomplete-beta evaluation.
 Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_triple_cumulative(args);
   if (!input) {
@@ -219,11 +214,8 @@ Value NegBinomDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& aren
 // With 3 args, `number_s2` defaults to `number_s` (single-point PMF query).
 // Domain: trials >= 0, prob in [0, 1], 0 <= number_s <= trials, and
 // (when supplied) number_s <= number_s2 <= trials. Any violation surfaces
-// `#NUM!`. Implementation sums PMFs from `number_s` to `number_s2`; once
-// the span would exceed `kMaxCumulativeTerms` terms it becomes the
-// difference of two closed-form CDFs, so the cost stops tracking the
-// width of the span. The summation is kept for short spans because a
-// single-point query has to stay bit-identical to the matching `BinomPmf`.
+// `#NUM!`. Evaluated by `stats::binom_range_excel` (the point mass, a CDF, or
+// a difference of two incomplete betas).
 Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto input = read_number_triple(args, 0, 1, 2);
   if (!input) {
@@ -243,19 +235,7 @@ Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (n < 0.0 || p < 0.0 || p > 1.0 || s1 < 0.0 || s1 > n || s2 < s1 || s2 > n) {
     return Value::error(ErrorCode::Num);
   }
-  if (s2 - s1 >= kMaxCumulativeTerms) {
-    // P(s1 <= X <= s2) = CDF(s2) - CDF(s1 - 1); at s1 == 0 the lower term
-    // is empty rather than CDF(-1), which is outside the support. Both
-    // shape pairs have to be resolvable, since either one alone would
-    // decide the difference.
-    if (!beta_shapes_are_resolvable(n - s2, s2 + 1.0) || (s1 > 0.0 && !beta_shapes_are_resolvable(n - s1 + 1.0, s1))) {
-      return Value::error(ErrorCode::Num);
-    }
-    const double upper = BinomCdf(s2, n, p);
-    const double lower = (s1 == 0.0) ? 0.0 : BinomCdf(s1 - 1.0, n, p);
-    return finite_number_result(upper - lower);
-  }
-  return finite_number_result(sum_pmf(s1, s2, [&](double k) { return BinomPmf(k, n, p); }));
+  return finite_number_result(stats::binom_range_excel(n, p, s1, s2));
 }
 
 }  // namespace stats_detail

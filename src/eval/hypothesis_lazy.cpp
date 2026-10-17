@@ -12,9 +12,8 @@
 // use `collect_single_array_numeric`, which does NOT shape-match and
 // silently drops non-numeric cells from whichever array it is handed.
 //
-// Distribution primitives come from `eval/stats/special_functions.h`
-// (`regularized_incomplete_beta`, `q_gamma`) and from `<cmath>`
-// (`std::erfc` for the standard-normal tail used by Z.TEST).
+// T.TEST, F.TEST and CHISQ.TEST evaluate through `eval/stats/hypothesis_tests.h`;
+// the standard-normal tail used by Z.TEST comes from `eval/stats/special_functions.h`.
 
 #include "eval/hypothesis_lazy.h"
 
@@ -29,6 +28,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/numeric_pairs.h"
 #include "eval/range_args.h"
+#include "eval/stats/hypothesis_tests.h"
 #include "eval/stats/special_functions.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -79,72 +79,14 @@ bool collect_single_array_numeric(const parser::AstNode& arg_node, Arena& arena,
   return true;
 }
 
-// Mean and sample variance (divisor `n - 1`). Returns `false` if
-// `samples.size() < 2` — the caller decides how to surface that (T.TEST
-// routes it to `#DIV/0!`; Z.TEST routes it to `#DIV/0!` only when sigma
-// is not supplied).
-// One sample reduced to what a two-sample test reads off it.
-struct SampleMoments {
-  double mean;
-  double variance;
-  double count;
-};
-
-bool mean_and_sample_variance(const std::vector<double>& samples, double* out_mean, double* out_var) noexcept {
-  const std::size_t n = samples.size();
-  if (n < 2U) {
-    return false;
-  }
-  double sum = 0.0;
-  for (double v : samples) {
-    sum += v;
-  }
-  const double dn = static_cast<double>(n);
-  const double mean = sum / dn;
-  double ss = 0.0;
-  for (double v : samples) {
-    const double d = v - mean;
-    ss += d * d;
-  }
-  *out_mean = mean;
-  *out_var = ss / (dn - 1.0);
-  return true;
-}
-
-// Collects the two independent samples T.TEST (types 2 and 3) and
-// F.TEST both take, and reduces each to its mean and sample variance.
-// Error propagation runs left to right, array1 first. A sample too
-// small for the unbiased variance estimator is `#DIV/0!`, which is what
-// both functions surface.
+// Collects the two independent samples T.TEST (types 2 and 3) and F.TEST
+// both take. Error propagation runs left to right, array1 first.
 //
 // Returns `false` with the propagating error in `*out_err`.
-bool two_sample_moments(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, SampleMoments* out_first, SampleMoments* out_second, Value* out_err) {
-  std::vector<double> first;
-  std::vector<double> second;
-  if (!collect_single_array_numeric(call.as_call_arg(0), arena, registry, ctx, &first, out_err)) {
-    return false;
-  }
-  if (!collect_single_array_numeric(call.as_call_arg(1), arena, registry, ctx, &second, out_err)) {
-    return false;
-  }
-  if (!mean_and_sample_variance(first, &out_first->mean, &out_first->variance) ||
-      !mean_and_sample_variance(second, &out_second->mean, &out_second->variance)) {
-    *out_err = Value::error(ErrorCode::Div0);
-    return false;
-  }
-  out_first->count = static_cast<double>(first.size());
-  out_second->count = static_cast<double>(second.size());
-  return true;
-}
-
-// Two-tailed half-probability for Student's t: given `t` and `df`, the
-// symmetric one-tailed area in the upper tail beyond |t| equals
-// `0.5 * I(df/2, 1/2, df/(df+t²))`. T.TEST multiplies this by 1 or 2
-// depending on `tails`.
-double t_half_tail(double t, double df) noexcept {
-  const double y = df / (df + t * t);
-  return 0.5 * stats::regularized_incomplete_beta(df / 2.0, 0.5, y);
+bool two_samples(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                 std::vector<double>* first, std::vector<double>* second, Value* out_err) {
+  return collect_single_array_numeric(call.as_call_arg(0), arena, registry, ctx, first, out_err) &&
+         collect_single_array_numeric(call.as_call_arg(1), arena, registry, ctx, second, out_err);
 }
 
 }  // namespace
@@ -184,79 +126,30 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   const int tails = static_cast<int>(tails_d);
   const int type = static_cast<int>(type_d);
 
-  double t = 0.0;
-  double df = 0.0;
-
+  stats::TestOutcome outcome{};
   if (type == 1) {
-    // Paired t-test: require shape match, then compute on pairwise
-    // differences for every (a, b) pair where both sides are numeric.
+    // Paired t-test: require shape match, then work on every (a, b) pair
+    // where both sides are numeric.
     auto prepared = collect_paired_samples(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
     if (std::holds_alternative<Value>(prepared)) {
       return std::get<Value>(prepared);
     }
     const NumericPairs& pairs = std::get<NumericPairs>(prepared);
-    std::vector<double> diffs;
-    diffs.reserve(pairs.first.size());
-    for (std::size_t i = 0; i < pairs.first.size(); ++i) {
-      diffs.push_back(pairs.first[i] - pairs.second[i]);
-    }
-    double mean_d = 0.0;
-    double var_d = 0.0;
-    if (!mean_and_sample_variance(diffs, &mean_d, &var_d)) {
-      return Value::error(ErrorCode::Div0);
-    }
-    if (var_d == 0.0) {
-      // Zero within-pair variance: the null hypothesis cannot be tested
-      // (either every difference is identical to the sample mean, so
-      // s_d == 0 and t is 0/0, or every pair is identical so mean_d == 0
-      // too). Excel surfaces this as `#DIV/0!`.
-      return Value::error(ErrorCode::Div0);
-    }
-    const double n = static_cast<double>(diffs.size());
-    t = mean_d / std::sqrt(var_d / n);
-    df = n - 1.0;
+    outcome = stats::t_test_paired_excel(pairs.first.data(), pairs.second.data(), pairs.first.size(), tails);
   } else {
     // Two-sample paths collect each array independently with no pairing.
-    SampleMoments first{};
-    SampleMoments second{};
+    std::vector<double> first;
+    std::vector<double> second;
     Value err = Value::blank();
-    if (!two_sample_moments(call, arena, registry, ctx, &first, &second, &err)) {
+    if (!two_samples(call, arena, registry, ctx, &first, &second, &err)) {
       return err;
     }
-    const double m1 = first.mean;
-    const double m2 = second.mean;
-    const double v1 = first.variance;
-    const double v2 = second.variance;
-    const double n1 = first.count;
-    const double n2 = second.count;
-    if (type == 2) {
-      // Pooled-variance equal-variance t-test.
-      const double sp2 = ((n1 - 1.0) * v1 + (n2 - 1.0) * v2) / (n1 + n2 - 2.0);
-      if (sp2 <= 0.0) {
-        return Value::error(ErrorCode::Div0);
-      }
-      t = (m1 - m2) / std::sqrt(sp2 * (1.0 / n1 + 1.0 / n2));
-      df = n1 + n2 - 2.0;
-    } else {
-      // Welch's t-test: separate per-sample variance estimates.
-      const double u1 = v1 / n1;
-      const double u2 = v2 / n2;
-      const double denom = u1 + u2;
-      if (denom <= 0.0) {
-        return Value::error(ErrorCode::Div0);
-      }
-      t = (m1 - m2) / std::sqrt(denom);
-      const double df_denom = (u1 * u1) / (n1 - 1.0) + (u2 * u2) / (n2 - 1.0);
-      if (df_denom <= 0.0) {
-        return Value::error(ErrorCode::Div0);
-      }
-      df = (denom * denom) / df_denom;
-    }
+    outcome = stats::t_test_two_sample_excel(first.data(), first.size(), second.data(), second.size(), tails, type);
   }
-
-  const double half = t_half_tail(t, df);
-  const double p = (tails == 1) ? half : 2.0 * half;
-  return to_finite_value(p);
+  if (outcome.div0) {
+    return Value::error(ErrorCode::Div0);
+  }
+  return to_finite_value(outcome.p);
 }
 
 Value eval_f_test_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -264,26 +157,17 @@ Value eval_f_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (call.as_call_arity() != 2U) {
     return Value::error(ErrorCode::Value);
   }
-  SampleMoments first{};
-  SampleMoments second{};
+  std::vector<double> first;
+  std::vector<double> second;
   Value err = Value::blank();
-  if (!two_sample_moments(call, arena, registry, ctx, &first, &second, &err)) {
+  if (!two_samples(call, arena, registry, ctx, &first, &second, &err)) {
     return err;
   }
-  if (first.variance == 0.0 || second.variance == 0.0) {
+  const stats::TestOutcome outcome = stats::f_test_excel(first.data(), first.size(), second.data(), second.size());
+  if (outcome.div0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double df1 = first.count - 1.0;
-  const double df2 = second.count - 1.0;
-  const double f = first.variance / second.variance;
-  // CDF of F(df1, df2) at `f` is `I(df1/2, df2/2, df1*f / (df1*f + df2))`.
-  const double x = (df1 * f) / (df1 * f + df2);
-  const double cdf = stats::regularized_incomplete_beta(df1 / 2.0, df2 / 2.0, x);
-  if (std::isnan(cdf)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double lo = cdf < (1.0 - cdf) ? cdf : (1.0 - cdf);
-  return to_finite_value(2.0 * lo);
+  return to_finite_value(outcome.p);
 }
 
 Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -344,8 +228,7 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
     if (e == 0.0) {
       return Value::error(ErrorCode::Div0);
     }
-    const double diff = actual.cells[i].as_number() - e;
-    chi2 += (diff * diff) / e;
+    chi2 = stats::chisq_accumulate_excel(chi2, actual.cells[i].as_number(), e);
     ++used;
   }
   if (used == 0U) {
@@ -354,7 +237,7 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
   if (chi2 < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double p = stats::q_gamma(df / 2.0, chi2 / 2.0);
+  const double p = stats::chisq_test_p_excel(chi2, df);
   if (std::isnan(p)) {
     return Value::error(ErrorCode::Num);
   }

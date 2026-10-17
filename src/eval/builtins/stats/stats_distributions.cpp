@@ -119,19 +119,11 @@ double BinomPmf(double k, double n, double prob) {
   return stats::dbinom_raw(n, prob, k);
 }
 
-// Binomial CDF `P(X <= k)`; see the declaration in `stats_helpers.h`.
-double BinomCdf(double k, double n, double prob) noexcept {
-  return stats::binom_cdf_excel(k, n, prob);
-}
-
 // BINOM.DIST(number_s, trials, probability_s, cumulative) - binomial
 // distribution PMF or CDF. `number_s` and `trials` are floored toward
 // negative infinity (Excel truncates non-integer inputs before the
 // domain check). Any negative count, `number_s > trials`, or probability
-// outside [0, 1] yields `#NUM!`. The CDF sums PMFs from 0 to number_s up
-// to `kMaxCumulativeTerms` terms, then switches to the closed form so the
-// cost never tracks the value of the input; shapes the closed form cannot
-// resolve to the family's tolerance are refused with `#NUM!`.
+// outside [0, 1] yields `#NUM!`. The CDF is one incomplete-beta evaluation.
 Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_triple_cumulative(args);
   if (!input) {
@@ -145,7 +137,7 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   double r;
   if (input.value().cumulative) {
-    r = BinomCdf(k, n, p);
+    r = stats::binom_cdf_excel(k, n, p);
   } else {
     r = BinomPmf(k, n, p);
   }
@@ -162,9 +154,7 @@ double PoissonCdf(double k, double mean) noexcept {
 // `x` is floored toward negative infinity. `x < 0` or `mean < 0` yields
 // `#NUM!`. `mean == 0` is the degenerate point mass at 0: PMF(0) = 1,
 // PMF(k) = 0 for k > 0, CDF(k) = 1 for k >= 0. Matches Mac Excel 365.
-// CDF is a partial sum of PMFs up to `kMaxCumulativeTerms` terms and the
-// closed form beyond it, so the cost never tracks the value of `x`. The
-// two agree to well within Excel's reported precision at the switch-over.
+// The CDF is one incomplete-gamma evaluation, so the cost never tracks `x`.
 Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_pair_cumulative(args);
   if (!input) {
@@ -327,11 +317,8 @@ Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ---------------------------------------------------------------------------
 //
 // All nine entries (T.DIST, T.DIST.2T, T.DIST.RT, T.INV, T.INV.2T, F.DIST,
-// F.DIST.RT, F.INV, F.INV.RT) share a single helper: Student's t CDF maps to
-// `regularized_incomplete_beta(df/2, 1/2, df/(df + x*x))` and Snedecor's F
-// CDF maps to `regularized_incomplete_beta(d1/2, d2/2, d1*x/(d1*x + d2))`.
-// The inverses are Newton-Raphson over the CDF with a distribution-specific
-// initial guess; bisection kicks in when the steep tails cause oscillation.
+// F.DIST.RT, F.INV, F.INV.RT) evaluate through the incomplete-beta kernels in
+// `eval/stats/incomplete_beta.h` and `eval/stats/inverse_distributions.h`.
 
 // Shared df cap. Excel 365 rejects df > 1e10 for the T and F families
 // (matches the CHISQ cap); keeping the constant in this block makes the
@@ -386,11 +373,6 @@ Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(stats::t_dist_tail_excel(input.value().first, input.value().second, true));
 }
 
-// Student's t quantile, `stats::t_inv_excel`.
-double TInvCore(double p, double df) noexcept {
-  return stats::t_inv_excel(p, df);
-}
-
 // T.INV(probability, deg_freedom) - inverse of Student's t CDF.
 // `p` must lie in the open unit interval; the median is returned exactly
 // at `p == 0.5`. `df` floors toward -inf and must satisfy `df >= 1`.
@@ -404,7 +386,7 @@ Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p <= 0.0 || p >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(TInvCore(p, df));
+  return finite_number_result(stats::t_inv_excel(p, df));
 }
 
 // T.INV.2T(probability, deg_freedom) - inverse of the two-tailed Student's
@@ -413,7 +395,7 @@ Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // formula to `1 < p < 2` (yielding negative quantiles since `1 - p/2`
 // then lies in (0, 0.5)). We mirror that behaviour for 1-bit parity:
 // the validation accepts `p < 2`, the `p == 1` fast path stays as the
-// symmetric centre, and `TInvCore(1 - p/2, df)` handles the extended
+// symmetric centre, and `stats::t_inv_2t_excel(p, df)` handles the extended
 // range naturally because `1 - p/2` remains strictly inside (0, 1). The
 // tail probability is formed directly (`p/2`, or `1 - p/2` for p > 1), never
 // as `1 - p/2` before inverting.

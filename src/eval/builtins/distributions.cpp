@@ -8,10 +8,9 @@
 //
 // Every entry is scalar-only (no range expansion). Arguments are coerced
 // via `coerce_to_number` / `coerce_to_bool`; error-typed arguments
-// short-circuit via the dispatcher before the impl runs. The CDF routines
-// lean on `stats::gamma_ratio_excel` and `stats::regularized_incomplete_beta` from
-// `eval/stats/incomplete_gamma.h` and `eval/stats/special_functions.h`; the inverses use a shared
-// bracket-then-Newton helper defined locally in this TU.
+// short-circuit via the dispatcher before the impl runs. The CDF and quantile
+// routines come from `eval/stats/incomplete_gamma.h`,
+// `eval/stats/incomplete_beta.h` and `eval/stats/inverse_distributions.h`.
 //
 // Numerical notes:
 //   * Gamma / log-gamma: std::tgamma / stats::log_gamma handle the generic
