@@ -48,13 +48,43 @@ formulon_apply_warnings(formulon_oracle_tests)
 # test inputs — when `make oracle-gen` writes a new suite, the test list
 # must update without requiring a relink.
 #
-# CMake 4.x parses the JSON test list in script, which takes ~20 s for this
-# binary's ~4.7k cases; the 5 s default would abort every `ctest` run.
-gtest_discover_tests(formulon_oracle_tests
-  DISCOVERY_MODE PRE_TEST
-  DISCOVERY_TIMEOUT 120
-  PROPERTIES LABELS "oracle"
-)
+# CMake 4.x parses the JSON test list in script, and the cost grows faster than
+# the case count (about 20 s at 4.7k cases, over 140 s at 9.4k), so one
+# discovery over the whole binary would overrun any fixed timeout. Discovery is
+# therefore sharded by the first character of the parameterized case name (its
+# suite name): each shard lists a few hundred to ~1.2k cases, and test names
+# are unchanged.
+set(FORMULON_ORACLE_SHARD_PREFIXES
+  "[a-b]" "c" "d" "[e-f]" "[g-l]" "m" "[n-r]" "s" "t" "[u-z]")
+
+# Registers every test of `target` through disjoint gtest_discover_tests calls.
+# Parameterized cases are split by `FORMULON_ORACLE_SHARD_PREFIXES`; everything
+# else (plain tests, names outside the prefixes) lands in a final catch-all.
+function(formulon_discover_oracle_shards target labels)
+  set(_excluded "")
+  foreach(_prefix IN LISTS FORMULON_ORACLE_SHARD_PREFIXES)
+    set(_pattern "Oracle/OracleTest.Matches/${_prefix}*")
+    gtest_discover_tests(${target}
+      TEST_FILTER "${_pattern}"
+      DISCOVERY_MODE PRE_TEST
+      DISCOVERY_TIMEOUT 120
+      PROPERTIES LABELS "${labels}"
+    )
+    if(_excluded)
+      set(_excluded "${_excluded}:${_pattern}")
+    else()
+      set(_excluded "${_pattern}")
+    endif()
+  endforeach()
+  gtest_discover_tests(${target}
+    TEST_FILTER "-${_excluded}"
+    DISCOVERY_MODE PRE_TEST
+    DISCOVERY_TIMEOUT 120
+    PROPERTIES LABELS "${labels}"
+  )
+endfunction()
+
+formulon_discover_oracle_shards(formulon_oracle_tests "oracle")
 
 # ---------------------------------------------------------------------------
 # Anchor helper unit test
@@ -467,10 +497,7 @@ if(FORMULON_ORACLE_VARIANTS)
 
   formulon_apply_warnings(formulon_oracle_variant_tests)
 
-  gtest_discover_tests(formulon_oracle_variant_tests
-    DISCOVERY_MODE PRE_TEST
-    PROPERTIES LABELS "VARIANT"
-  )
+  formulon_discover_oracle_shards(formulon_oracle_variant_tests "VARIANT")
 
   # -------------------------------------------------------------------------
   # Workbook variant oracle target (opt-in)
