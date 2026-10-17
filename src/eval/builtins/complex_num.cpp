@@ -11,8 +11,9 @@
 //   * Individual IM* impls reuse those two helpers and a small `CplxOp`
 //     set (multiplication, reciprocal, exp, ln) for arithmetic.
 //
-// Suffix propagation: binary / variadic ops take the suffix from the first
-// argument; mixing `i` and `j` is rejected with `#VALUE!`, matching Excel.
+// Suffix propagation: a pure-real operand takes the other operand's suffix;
+// mixing `i` and `j` is `#VALUE!` in IMSUM / IMPRODUCT and `#NUM!` in IMSUB /
+// IMDIV.
 
 #include "eval/builtins/complex_num.h"
 
@@ -29,12 +30,9 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
-#include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
 #include "eval/locale_text.h"
-#include "excel_locale.h"
 #include "utils/arena.h"
-#include "utils/double_parse.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
 #include "utils/subnormal_flush.h"
@@ -43,6 +41,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::kPi;
 
 // ---------------------------------------------------------------------------
 // Core data types
@@ -60,161 +60,115 @@ struct Complex {
 // Parsing
 // ---------------------------------------------------------------------------
 
-// Parses a decimal double from `s`. Accepts scientific notation; requires
-// that the entire view be consumed (no trailing characters) and the
-// parsed value to be finite (NaN / Inf are rejected so the IM* impls
-// can treat success as "usable as a number"). Delegates the raw parse
-// to the shared decimal parser in `utils/double_parse.h`.
-inline bool parse_double(std::string_view s, double* out) {
-  double v = 0.0;
-  if (!parse_double_exact(s, &v)) {
-    return false;
+// Text of one part to a number: the ordinary locale text-to-number conversion.
+// A boolean name is not a number.
+Expected<double, ErrorCode> part_to_number(std::string_view text) {
+  if (text == "TRUE" || text == "FALSE") {
+    return ErrorCode::Num;
   }
+  auto n = coerce_text_to_number(text);
+  if (!n) {
+    return ErrorCode::Num;
+  }
+  return n.value();
+}
+
+// A part must be zero or lie in [1e-309, 1e308).
+bool part_in_range(double v) {
   if (std::isnan(v) || std::isinf(v)) {
     return false;
   }
-  *out = v;
-  return true;
+  return v == 0.0 || (std::fabs(v) >= 1e-309 && std::fabs(v) < 1e308);
 }
 
 // Parses a complex-number text view. Returns `std::nullopt` on any
-// malformed input (caller should surface #NUM!). The accepted grammar:
+// malformed input (caller should surface #NUM!). Spaces are dropped anywhere
+// in the text. Accepted shapes:
 //
-//   Pure real:       [+-]?<number>
-//   Pure imaginary:  [+-]?(<number>)?[ij]   -- empty coef means 1
-//   Full:            [+-]?<number>[+-]<number>?[ij]
+//   Pure real:       <number>
+//   Pure imaginary:  [+-]?(<number>)?[ij]   -- empty coefficient means 1
+//   Full:            <number>[+-]<number>?[ij]
 //
-// `i`/`j` are lowercase only; an uppercase `I` or `J` is rejected.
+// Each part goes through the locale text-to-number conversion. The parts split
+// at the first `+`/`-` after position 0 that does not follow `e`/`E`; the
+// imaginary coefficient may carry a sign of its own (`3--4i` is 3+4i).
+// `i`/`j` are lowercase only.
 std::optional<Complex> parse_complex_text(std::string_view raw) {
-  if (raw.empty()) {
+  std::string src;
+  for (char c : raw) {
+    if (c != ' ') {
+      src.push_back(c);
+    }
+  }
+  if (src.empty()) {
     return std::nullopt;
   }
-  // The text carries the locale decimal separator; the numeric scan below
-  // works on the invariant `.` form.
-  const char decimal = locale_facts(current_eval_profile()).decimal_separator;
-  std::string invariant(raw);
-  // Reject any forbidden character up-front so we never fall into surprise
-  // parse behaviours (e.g. the leading whitespace the decimal parser skips).
-  for (char& c : invariant) {
-    const bool ok =
-        (c >= '0' && c <= '9') || c == '+' || c == '-' || c == decimal || c == 'e' || c == 'E' || c == 'i' || c == 'j';
-    if (!ok) {
-      return std::nullopt;
-    }
-    if (c == decimal) {
-      c = '.';
-    }
-  }
-  const std::string_view src = invariant;
-  // Find the suffix (last `i` or `j`, if any). Mixed i/j is rejected.
-  bool has_i = false;
-  bool has_j = false;
-  std::size_t suffix_pos = src.size();
-  for (std::size_t i = 0; i < src.size(); ++i) {
-    if (src[i] == 'i') {
-      has_i = true;
-      suffix_pos = i;
-    } else if (src[i] == 'j') {
-      has_j = true;
-      suffix_pos = i;
-    }
-  }
+  const bool has_i = src.find('i') != std::string::npos;
+  const bool has_j = src.find('j') != std::string::npos;
   if (has_i && has_j) {
     return std::nullopt;
   }
-  // The suffix (if any) must be the final character: e.g. "3i" not "3i4".
-  if (suffix_pos != src.size() && suffix_pos != src.size() - 1) {
-    return std::nullopt;
-  }
-
-  // Pure-real path: no suffix.
   if (!has_i && !has_j) {
-    double re = 0.0;
-    if (!parse_double(src, &re)) {
+    auto re = part_to_number(src);
+    if (!re || !part_in_range(re.value())) {
       return std::nullopt;
     }
-    return Complex{re, 0.0, 'i'};
+    return Complex{re.value(), 0.0, 'i'};
   }
-
   const char suffix = has_j ? 'j' : 'i';
-  // Strip the trailing suffix character.
-  std::string_view body = src.substr(0, suffix_pos);
-
-  // Bare-suffix cases: "i" -> +1i, "+i" -> +1i, "-i" -> -1i.
-  if (body.empty()) {
-    return Complex{0.0, 1.0, suffix};
+  std::size_t suffix_count = 0;
+  for (char c : src) {
+    suffix_count += c == suffix ? 1U : 0U;
   }
-  if (body == "+") {
+  if (src.back() != suffix || suffix_count != 1U) {
+    return std::nullopt;
+  }
+  const std::string_view body = std::string_view(src).substr(0, src.size() - 1);
+  if (body.empty() || body == "+") {
     return Complex{0.0, 1.0, suffix};
   }
   if (body == "-") {
     return Complex{0.0, -1.0, suffix};
   }
-
-  // Split `body` into (optional real part) + imaginary coefficient. The
-  // imaginary coefficient is the final signed number in `body`. Scientific
-  // notation means the split sign must not be part of an exponent, so we
-  // scan right-to-left looking for a `+`/`-` that is NOT immediately
-  // preceded by `e`/`E`.
   std::size_t split = std::string_view::npos;
-  for (std::size_t idx = body.size(); idx-- > 0;) {
-    const char c = body[idx];
-    if (c == '+' || c == '-') {
-      if (idx == 0) {
-        // Leading sign belongs to the imag coefficient; no split.
-        break;
-      }
-      const char prev = body[idx - 1];
-      if (prev == 'e' || prev == 'E') {
-        continue;
-      }
+  for (std::size_t idx = 1; idx < body.size(); ++idx) {
+    if ((body[idx] == '+' || body[idx] == '-') && body[idx - 1] != 'e' && body[idx - 1] != 'E') {
       split = idx;
       break;
     }
   }
-
   if (split == std::string_view::npos) {
-    // No split -> entire body is the imaginary coefficient (real part is 0).
-    std::string_view coef = body;
-    // Bare leading sign cases already handled above; strip a redundant `+`.
-    if (coef.size() >= 1 && coef.front() == '+') {
-      coef = coef.substr(1);
-    }
-    double im = 0.0;
-    if (!parse_double(coef, &im)) {
+    const std::string_view coef = body.front() == '+' ? body.substr(1) : body;
+    auto im = part_to_number(coef);
+    if (!im || !part_in_range(im.value())) {
       return std::nullopt;
     }
-    return Complex{0.0, im, suffix};
+    return Complex{0.0, im.value(), suffix};
   }
-
-  // Full form. `real_part = body[0..split)`, `imag_part = body[split..end)`.
   std::string_view real_part = body.substr(0, split);
-  std::string_view imag_part = body.substr(split);
-
-  // Leading `+` on the real part is allowed; strip it.
-  if (!real_part.empty() && real_part.front() == '+') {
+  if (real_part.front() == '+') {
     real_part = real_part.substr(1);
   }
-  double re = 0.0;
-  if (!parse_double(real_part, &re)) {
+  const std::string_view imag_part = body.substr(split);
+  const char sign = imag_part.front();
+  const std::string_view coef = imag_part.substr(1);
+  auto re = part_to_number(real_part);
+  if (!re) {
     return std::nullopt;
   }
-
-  // Imaginary part: `[+-]` then either empty (meaning 1) or a number.
-  const char sign = imag_part.front();
-  std::string_view coef = imag_part.substr(1);
-  double mag = 1.0;
+  double magnitude = 1.0;
   if (!coef.empty()) {
-    // Reject a double-sign prefix like "+-4".
-    if (coef.front() == '+' || coef.front() == '-') {
+    auto m = part_to_number(coef);
+    if (!m) {
       return std::nullopt;
     }
-    if (!parse_double(coef, &mag)) {
-      return std::nullopt;
-    }
+    magnitude = m.value();
   }
-  const double im = sign == '-' ? -mag : mag;
-  return Complex{re, im, suffix};
+  const double im = sign == '-' ? -magnitude : magnitude;
+  if (!part_in_range(re.value()) || !part_in_range(im)) {
+    return std::nullopt;
+  }
+  return Complex{re.value(), im, suffix};
 }
 
 // Front-door parser: accepts Text / Number / Bool / Blank / Error. Returns
@@ -337,25 +291,17 @@ std::string format_complex(double re, double im, char suffix) {
   return out;
 }
 
-// Interns and returns a Text value for the complex triple. We deliberately
-// do not snap tiny-but-nonzero components to zero: Mac Excel 365 surfaces
-// the IEEE residue from polar-form round-trips (e.g. IMSQRT("-1") renders
-// as "6.12E-17+i" rather than "i"), and 1-bit parity requires us to do the
-// same. Algebraic IM* impls that operate on direct real/imag arithmetic
-// (IMDIV, IMPRODUCT, IMSUM, ...) already produce exact zeros without help.
+// Interns and returns a Text value for the complex triple. A part that is not
+// finite is #NUM!, and a subnormal part flushes to zero before formatting (so
+// it is omitted like any zero part).
 Value text_complex(Complex z, Arena& arena) {
   if (!std::isfinite(z.re) || !std::isfinite(z.im)) {
     return Value::error(ErrorCode::Num);
   }
-  return Value::text(arena.intern(format_complex(z.re, z.im, z.suffix)));
-}
-
-Value im_unary_text(Complex (*op)(Complex), const Value* args, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return text_complex(op(z.value()), arena);
+  constexpr double kMin = std::numeric_limits<double>::min();
+  const double re = std::fabs(z.re) < kMin ? 0.0 : z.re;
+  const double im = std::fabs(z.im) < kMin ? 0.0 : z.im;
+  return Value::text(arena.intern(format_complex(re, im, z.suffix)));
 }
 
 Value im_unary_number(double (*op)(Complex), const Value* args) {
@@ -367,28 +313,62 @@ Value im_unary_number(double (*op)(Complex), const Value* args) {
 }
 
 // ---------------------------------------------------------------------------
-// Complex arithmetic primitives
+// Primitives
 // ---------------------------------------------------------------------------
 
-Complex cplx_mul(Complex a, Complex b) {
-  return Complex{a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re, a.suffix};
+// sin / cos are taken only below this magnitude; beyond it the result is #NUM!.
+constexpr double kSinCosCap = 134217728.0;
+
+// A product with a subnormal result flushed to zero.
+double flushed_square(double x) noexcept {
+  return flush_subnormal(x * x);
 }
 
-// e^z = e^a * (cos b + i sin b).
-Complex cplx_exp(Complex z) {
-  const double mag = std::exp(z.re);
-  return Complex{mag * std::cos(z.im), mag * std::sin(z.im), z.suffix};
+// a^2 + b^2 with flushed squares; NaN when the sum overflows.
+double square_sum(double a, double b) noexcept {
+  const double s = flushed_square(a) + flushed_square(b);
+  return std::isinf(s) ? std::numeric_limits<double>::quiet_NaN() : s;
 }
 
-// ln(z) = ln(r) + i*theta; caller must ensure z != 0.
-Complex cplx_ln(Complex z) {
-  const double r = std::hypot(z.re, z.im);
-  const double theta = std::atan2(z.im, z.re);
-  return Complex{std::log(r), theta, z.suffix};
+// |z|: a pure part is its own magnitude, otherwise sqrt of the square sum
+// (NaN on overflow).
+double naive_abs(Complex z) noexcept {
+  if (z.re == 0.0) {
+    return std::fabs(z.im);
+  }
+  if (z.im == 0.0) {
+    return std::fabs(z.re);
+  }
+  return std::sqrt(square_sum(z.re, z.im));
 }
 
+// Argument of a non-zero z: atan(b / a), moved by +-pi (the sign of b) when a < 0.
+double complex_argument(double a, double b) noexcept {
+  if (a > 0.0) {
+    return std::atan(b / a);
+  }
+  if (a < 0.0) {
+    return std::atan(b / a) + (b >= 0.0 ? kPi : -kPi);
+  }
+  return b < 0.0 ? -(kPi / 2.0) : kPi / 2.0;
+}
+
+// IMABS: scaled by the larger part, `|a| * sqrt(1 + (b/a)^2)`.
 double cplx_abs(Complex z) {
-  return std::hypot(z.re, z.im);
+  const double a = std::fabs(z.re);
+  const double b = std::fabs(z.im);
+  if (a == 0.0) {
+    return b;
+  }
+  if (b == 0.0) {
+    return a;
+  }
+  if (a >= b) {
+    const double r = b / a;
+    return a * std::sqrt(1.0 + r * r);
+  }
+  const double r = a / b;
+  return b * std::sqrt(1.0 + r * r);
 }
 
 double cplx_real(Complex z) {
@@ -399,24 +379,15 @@ double cplx_imaginary(Complex z) {
   return z.im;
 }
 
-// Reconciles the suffix on a binary op: both must agree when both inputs
-// contained an explicit imaginary part; a pure-real argument inherits the
-// other's suffix. Returns false if the two disagree (mixed i/j).
+// The suffix of a binary result: a pure-real operand takes the other
+// operand's suffix; two imaginary operands must agree (false otherwise).
 bool reconcile_suffix(Complex a, Complex b, char* out) {
-  // A Complex parsed from a pure-real input defaults to 'i'; there is no
-  // way to tell that apart from an explicit 'i'. Excel's observable rule
-  // is simpler than "explicit vs implicit": if both are non-zero-imag, the
-  // suffixes must match; otherwise the first operand's suffix wins.
   if (a.im != 0.0 && b.im != 0.0 && a.suffix != b.suffix) {
     return false;
   }
-  *out = a.suffix;
+  *out = a.im != 0.0 ? a.suffix : b.suffix;
   return true;
 }
-
-// ---------------------------------------------------------------------------
-// Constructor / inspectors
-// ---------------------------------------------------------------------------
 
 Value Complex_fn(const Value* args, std::uint32_t arity, Arena& arena) {
   auto real_imaginary = builtins_detail::read_number_pair(args, 0, 1);
@@ -480,16 +451,18 @@ Value ImArgument(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (c.re == 0.0 && c.im == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  return Value::number(std::atan2(c.im, c.re));
+  return Value::number(complex_argument(c.re, c.im));
 }
 
 // ---------------------------------------------------------------------------
 // Arithmetic
 // ---------------------------------------------------------------------------
 
-// Left fold of `combine` over every argument; the result's suffix is the
-// one reconciled across all operands.
-Value fold_complex(const Value* args, std::uint32_t arity, Arena& arena, Complex (*combine)(Complex, Complex)) {
+// Left fold over every argument; `mismatch` is the error for two operands with
+// different imaginary suffixes. The result's suffix is reconciled across the
+// operands. `product` selects IMPRODUCT (an infinite component is #VALUE!)
+// over IMSUM.
+Value fold_complex(const Value* args, std::uint32_t arity, Arena& arena, bool product) {
   auto first = parse_complex_value(args[0]);
   if (!first) {
     return Value::error(first.error());
@@ -504,22 +477,25 @@ Value fold_complex(const Value* args, std::uint32_t arity, Arena& arena, Complex
     if (!reconcile_suffix(acc, nxt.value(), &suffix)) {
       return Value::error(ErrorCode::Value);
     }
-    acc = combine(acc, nxt.value());
-    acc.suffix = suffix;
+    const Complex n = nxt.value();
+    if (product) {
+      acc = Complex{acc.re * n.re - acc.im * n.im, acc.re * n.im + acc.im * n.re, suffix};
+      if (std::isinf(acc.re) || std::isinf(acc.im) || std::isnan(acc.re) || std::isnan(acc.im)) {
+        return Value::error(ErrorCode::Value);
+      }
+    } else {
+      acc = Complex{acc.re + n.re, acc.im + n.im, suffix};
+    }
   }
   return text_complex(acc, arena);
 }
 
-Complex add_complex(Complex a, Complex b) {
-  return Complex{a.re + b.re, a.im + b.im, a.suffix};
-}
-
 Value ImSum(const Value* args, std::uint32_t arity, Arena& arena) {
-  return fold_complex(args, arity, arena, add_complex);
+  return fold_complex(args, arity, arena, /*product=*/false);
 }
 
 // Parses the two operands of a binary complex function and reconciles their
-// suffix into `*suffix`.
+// suffix into `*suffix`; a mismatch is #NUM!.
 Expected<std::pair<Complex, Complex>, ErrorCode> parse_complex_pair(const Value* args, char* suffix) {
   auto a = parse_complex_value(args[0]);
   if (!a) {
@@ -529,9 +505,8 @@ Expected<std::pair<Complex, Complex>, ErrorCode> parse_complex_pair(const Value*
   if (!b) {
     return std::move(b.error());
   }
-  *suffix = 'i';
   if (!reconcile_suffix(a.value(), b.value(), suffix)) {
-    return ErrorCode::Value;
+    return ErrorCode::Num;
   }
   return std::pair<Complex, Complex>{a.value(), b.value()};
 }
@@ -548,26 +523,41 @@ Value ImSub(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 Value ImProduct(const Value* args, std::uint32_t arity, Arena& arena) {
-  return fold_complex(args, arity, arena, cplx_mul);
+  return fold_complex(args, arity, arena, /*product=*/true);
 }
 
+// IMDIV: Smith's scaled division, scaled by the larger part of the divisor.
 Value ImDiv(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   char suffix;
   auto ab = parse_complex_pair(args, &suffix);
   if (!ab) {
     return Value::error(ab.error());
   }
-  const Complex z2 = ab.value().second;
-  const double denom = z2.re * z2.re + z2.im * z2.im;
-  if (denom == 0.0) {
+  const Complex a = ab.value().first;
+  const double c = ab.value().second.re;
+  const double d = ab.value().second.im;
+  if (c == 0.0 && d == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const Complex z1 = ab.value().first;
-  const double re = (z1.re * z2.re + z1.im * z2.im) / denom;
-  const double im = (z1.im * z2.re - z1.re * z2.im) / denom;
+  double re;
+  double im;
+  if (std::fabs(c) >= std::fabs(d)) {
+    const double r = d / c;
+    const double den = c + d * r;
+    re = (a.re + a.im * r) / den;
+    im = (a.im - a.re * r) / den;
+  } else {
+    const double r = c / d;
+    const double den = c * r + d;
+    re = (a.re * r + a.im) / den;
+    im = (a.im * r - a.re) / den;
+  }
   return text_complex(Complex{re, im, suffix}, arena);
 }
 
+// IMPOWER: polar form with the magnitude through POWER. A zero magnitude
+// (including an underflowed square sum) is 0 for a positive exponent and
+// #NUM! otherwise.
 Value ImPower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto z = parse_complex_value(args[0]);
   if (!z) {
@@ -585,13 +575,23 @@ Value ImPower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     }
     return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
   }
-  const double r = std::hypot(c.re, c.im);
-  const double theta = std::atan2(c.im, c.re);
-  const double mag = std::pow(r, exponent);
-  const double ang = exponent * theta;
-  if (std::isnan(mag) || std::isinf(mag)) {
+  const double r = naive_abs(c);
+  if (std::isnan(r)) {
     return Value::error(ErrorCode::Num);
   }
+  const double theta = complex_argument(c.re, c.im);
+  if (r == 0.0) {
+    if (exponent <= 0.0) {
+      return Value::error(ErrorCode::Num);
+    }
+    return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
+  }
+  auto power = apply_pow(r, exponent);
+  if (!power || std::isnan(power.value()) || std::isinf(power.value())) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double mag = power.value();
+  const double ang = exponent * theta;
   return text_complex(Complex{mag * std::cos(ang), mag * std::sin(ang), c.suffix}, arena);
 }
 
@@ -599,17 +599,31 @@ Value ImPower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // Exponentials / logarithms / roots
 // ---------------------------------------------------------------------------
 
+// IMEXP: a pure-real argument that overflows is #NUM!; with an imaginary part
+// the exponential clamps at the largest double. sin / cos are capped.
 Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_text(&cplx_exp, args, arena);
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  const Complex c = z.value();
+  if (c.im == 0.0) {
+    return text_complex(Complex{std::exp(c.re), 0.0, c.suffix}, arena);
+  }
+  if (std::fabs(c.im) >= kSinCosCap) {
+    return Value::error(ErrorCode::Num);
+  }
+  double mag = std::exp(c.re);
+  if (std::isinf(mag)) {
+    mag = std::numeric_limits<double>::max();
+  }
+  return text_complex(Complex{mag * std::cos(c.im), mag * std::sin(c.im), c.suffix}, arena);
 }
 
-// Shared kernel for IMLN / IMLOG10 / IMLOG2: computes
-// log_base(z) = ln(z) * inv_ln_base (IMLN passes 1, which scales exactly). Returns #NUM! when z == 0; otherwise
-// scales the real and imaginary components of ln(z) by `inv_ln_base`. The
-// caller passes the precomputed `1 / ln(base)` constant so we keep one body.
-// Marked `noinline` so the body is emitted exactly once — the wrappers are
-// short enough that O3+LTO would otherwise inline a separate copy per call
-// site, defeating the size-sharing this kernel exists to provide.
+// Shared kernel for IMLN / IMLOG10 / IMLOG2: ln|z| scaled by `inv_ln_base`
+// (IMLN passes 1) and the argument likewise. ln|z| is `log(a*a + b*b) / 2`
+// with flushed squares (#NUM! when the sum overflows or underflows to zero);
+// a pure part uses `log` of that part directly. z == 0 is #NUM!.
 [[gnu::noinline]] Value im_log_base(double inv_ln_base, const Value* args, Arena& arena) {
   auto z = parse_complex_value(args[0]);
   if (!z) {
@@ -619,8 +633,18 @@ Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (c.re == 0.0 && c.im == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const Complex ln_z = cplx_ln(c);
-  return text_complex(Complex{ln_z.re * inv_ln_base, ln_z.im * inv_ln_base, c.suffix}, arena);
+  double ln_r;
+  if (c.re == 0.0 || c.im == 0.0) {
+    ln_r = std::log(c.re == 0.0 ? std::fabs(c.im) : std::fabs(c.re));
+  } else {
+    const double sum = square_sum(c.re, c.im);
+    if (std::isnan(sum) || sum == 0.0) {
+      return Value::error(ErrorCode::Num);
+    }
+    ln_r = std::log(sum) / 2.0;
+  }
+  const double theta = complex_argument(c.re, c.im);
+  return text_complex(Complex{ln_r * inv_ln_base, theta * inv_ln_base, c.suffix}, arena);
 }
 
 Value ImLn(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -635,6 +659,7 @@ Value ImLog2(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return im_log_base(1.0 / std::log(2.0), args, arena);
 }
 
+// IMSQRT: the naive magnitude sqrt(a*a + b*b) (no pure-part shortcut), then the polar form.
 Value ImSqrt(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto z = parse_complex_value(args[0]);
   if (!z) {
@@ -644,9 +669,12 @@ Value ImSqrt(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (c.re == 0.0 && c.im == 0.0) {
     return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
   }
-  const double r = std::hypot(c.re, c.im);
-  const double theta = std::atan2(c.im, c.re);
-  const double sqrt_r = std::sqrt(r);
+  const double sum = square_sum(c.re, c.im);
+  if (std::isnan(sum)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double sqrt_r = std::sqrt(std::sqrt(sum));
+  const double theta = complex_argument(c.re, c.im);
   return text_complex(Complex{sqrt_r * std::cos(theta / 2.0), sqrt_r * std::sin(theta / 2.0), c.suffix}, arena);
 }
 
@@ -704,6 +732,13 @@ Value im_csc_sec(const Value* args, Arena& arena, bool sec) {
     return Value::error(z.error());
   }
   const Complex c = z.value();
+  // Far from the real axis the result is 0 before any sin / cos is taken.
+  if (c.im > 709.0 || c.im < -708.0) {
+    return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
+  }
+  if (std::fabs(c.re) >= kSinCosCap) {
+    return Value::error(ErrorCode::Num);
+  }
   const double f1 = sec ? std::cos(c.re) : std::sin(c.re);
   const double f2 = sec ? std::sin(c.re) : std::cos(c.re);
   const double sign2 = sec ? -2.0 : 2.0;
@@ -714,9 +749,6 @@ Value im_csc_sec(const Value* args, Arena& arena, bool sec) {
     return text_complex(Complex{1.0 / f1, 0.0, c.suffix}, arena);
   }
   if (c.im > 354.5 || c.im < -354.0) {
-    if (c.im > 709.0 || c.im < -708.0) {
-      return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
-    }
     const double a = f1 * 2.0;
     const double b = f2 * sign2;
     return text_complex(Complex{a / two_cosh(c.im), b / neg_two_sinh(c.im), c.suffix}, arena);
@@ -764,6 +796,9 @@ Value im_sin_cos(const Value* args, Arena& arena, bool cos) {
     return Value::error(z.error());
   }
   const Complex c = z.value();
+  if (std::fabs(c.re) >= kSinCosCap) {
+    return Value::error(ErrorCode::Num);
+  }
   const double e = bounded_exp(c.im);
   if (!(e > 0.0) || !(e < std::numeric_limits<double>::max())) {
     return Value::error(ErrorCode::Num);
@@ -790,12 +825,18 @@ Value im_tan_cot(const Value* args, Arena& arena, bool cot) {
   }
   const Complex c = z.value();
   if (c.im == 0.0) {
+    if (std::fabs(c.re) >= kSinCosCap) {
+      return Value::error(ErrorCode::Num);
+    }
     const double t = std::tan(c.re);
     return text_complex(Complex{cot ? 1.0 / t : t, 0.0, c.suffix}, arena);
   }
   if (c.im > 354.5 || c.im < -354.0) {
     const double direction = (c.im > 354.5 ? 1.0 : -1.0) * (cot ? -1.0 : 1.0);
     return text_complex(Complex{0.0, direction, c.suffix}, arena);
+  }
+  if (std::fabs(c.re) >= kSinCosCap) {
+    return Value::error(ErrorCode::Num);
   }
   const double y2 = c.im * 2.0;
   const double sinh_term = neg_two_sinh(y2);
@@ -818,6 +859,9 @@ Value im_sinh_cosh(const Value* args, Arena& arena, bool cosh) {
     return Value::error(z.error());
   }
   const Complex c = z.value();
+  if (std::fabs(c.im) >= kSinCosCap) {
+    return Value::error(ErrorCode::Num);
+  }
   const double neg_re = -c.re;
   if (c.im == 0.0) {
     const double v = cosh ? two_cosh(neg_re) : neg_two_sinh(neg_re);
@@ -862,15 +906,18 @@ Value im_csch_sech(const Value* args, Arena& arena, bool sech) {
     return Value::error(z.error());
   }
   const Complex c = z.value();
+  if (c.im != 0.0 && (c.re > 709.0 || c.re < -708.0)) {
+    return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
+  }
+  if (std::fabs(c.im) >= kSinCosCap) {
+    return Value::error(ErrorCode::Num);
+  }
   const double neg_re = -c.re;
   if (c.im == 0.0) {
     const double v = sech ? two_cosh(neg_re) : neg_two_sinh(neg_re);
     return text_complex(Complex{2.0 / v, 0.0, c.suffix}, arena);
   }
   if (c.re > 354.5 || c.re < -354.0) {
-    if (c.re > 709.0 || c.re < -708.0) {
-      return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
-    }
     const double sinh_term = neg_two_sinh(c.re);
     const double cosh_term = two_cosh(c.re);
     const double real = (std::cos(c.im) * 2.0) / (sech ? cosh_term : sinh_term);

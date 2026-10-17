@@ -53,12 +53,15 @@ cases:
   # -- Inspectors ----------------------------------------------------------
   - id: imabs_three_four
     formula: "=IMABS(\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imreal_three_four
     formula: "=IMREAL(\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imaginary_three_four
     formula: "=IMAGINARY(\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imconjugate_three_four
     formula: "=IMCONJUGATE(\"3+4i\")"
@@ -66,6 +69,7 @@ cases:
 
   - id: imargument_three_four
     formula: "=IMARGUMENT(\"3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imargument_zero_is_div0
     formula: "=IMARGUMENT(\"0\")"
@@ -233,24 +237,30 @@ cases:
   - id: imargument_negative_real
     description: "arg(-1) = pi"
     formula: "=IMARGUMENT(\"-1\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imargument_negative_imag
     description: "arg(-i) = -pi/2"
     formula: "=IMARGUMENT(\"-i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imargument_third_quadrant
     description: "arg(-1-i) = -3pi/4"
     formula: "=IMARGUMENT(\"-1-i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMABS edges -------------------------------------------------------
   - id: imabs_zero
     formula: "=IMABS(\"0\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imabs_pure_imag
     formula: "=IMABS(\"5i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imabs_negative
     formula: "=IMABS(\"-3-4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMEXP edges -------------------------------------------------------
   - id: imexp_pi_i
@@ -296,23 +306,28 @@ cases:
   - id: imabs_pure_real
     description: "|3+0i| = 3 — pure real magnitude"
     formula: "=IMABS(\"3\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMAGINARY perspectives ---------------------------------------------
   - id: imaginary_pure_real
     description: "Imaginary(3+0i) = 0"
     formula: "=IMAGINARY(\"3\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imaginary_pure_imag
     description: "Imaginary(5i) = 5"
     formula: "=IMAGINARY(\"5i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imaginary_negative_imag
     description: "Imaginary(2-3i) = -3"
     formula: "=IMAGINARY(\"2-3i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imaginary_j_suffix
     description: "Imaginary(3+4j) — j-suffix form"
     formula: "=IMAGINARY(\"3+4j\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMCONJUGATE perspectives ------------------------------------------
   - id: imconjugate_pure_real
@@ -487,14 +502,17 @@ cases:
   - id: imreal_pure_imag
     description: "Real(5i) = 0"
     formula: "=IMREAL(\"5i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imreal_pure_real
     description: "Real(7) = 7"
     formula: "=IMREAL(\"7\")"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: imreal_negative_real_part
     description: "Real(-3+4i) = -3"
     formula: "=IMREAL(\"-3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- IMSEC perspectives -------------------------------------------------
   - id: imsec_zero
@@ -772,4 +790,145 @@ cases:
 
   - id: opt_complex_suffix_omit
     formula: "=COMPLEX(1,1,)"
+    tolerance: { abs: 0, rel: 0 }
+
+  # -- Parsing, suffix, magnitude and range rules of the IM* family ---
+  - id: im_rules_space_leading
+    formula: "=IMABS(\" 3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_space_around_sign
+    formula: "=IMABS(\"3 + 4i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_space_before_suffix
+    formula: "=IMSQRT(\"3+4 i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_percent_part
+    formula: "=IMABS(\"3%+4i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_date_text_part
+    formula: "=IMABS(\"1/2+i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_leading_plus
+    formula: "=IMABS(\"+3+4i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_double_sign_negative
+    formula: "=IMCONJUGATE(\"3+-4i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_double_sign_positive
+    formula: "=IMCONJUGATE(\"3--4i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_uppercase_suffix
+    formula: "=IMABS(\"3+4I\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_suffix_not_last
+    formula: "=IMABS(\"3+i4\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_part_out_of_range
+    formula: "=IMABS(\"1E+308+1E+308i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_part_subnormal
+    formula: "=IMREAL(\"1e-320i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_sum_suffix_mismatch
+    formula: "=IMSUM(\"1+i\",\"1+j\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_product_suffix_mismatch
+    formula: "=IMPRODUCT(\"1+i\",\"1+j\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_sub_suffix_mismatch
+    formula: "=IMSUB(\"1+i\",\"1+j\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_div_suffix_mismatch
+    formula: "=IMDIV(\"1+i\",\"1-j\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_div_real_takes_suffix
+    formula: "=IMDIV(\"1\",\"3+4j\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_div_scaled_small_divisor
+    formula: "=IMDIV(\"1+i\",\"1E-300+1E-300i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_product_overflow
+    formula: "=IMPRODUCT(\"1E+200+1E+200i\",\"1E+200+1E+200i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_abs_scaled
+    formula: "=IMABS(\"1e3+2e-2i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_abs_pure_imaginary_large
+    formula: "=IMABS(\"1E+300i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_ln_pure_imaginary_large
+    formula: "=IMLN(\"1E+300i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_ln_square_overflow
+    formula: "=IMLN(\"1E+200+1E+200i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_ln_square_underflow
+    formula: "=IMLN(\"1e-160+1e-160i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_sqrt_pure_imaginary_large
+    formula: "=IMSQRT(\"1E+300i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_sqrt_square_underflow
+    formula: "=IMSQRT(\"1e-160+1e-160i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_power_negative_pure_imaginary
+    formula: "=IMPOWER(\"1E+300i\",-1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_power_square_underflow_negative
+    formula: "=IMPOWER(\"1e-160+1e-160i\",-1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_exp_clamped_magnitude
+    formula: "=IMEXP(\"1e3+1i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_exp_real_overflow
+    formula: "=IMEXP(\"1000\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_exp_sincos_cap
+    formula: "=IMEXP(\"1e10+1e10i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_sin_cap
+    formula: "=IMSIN(\"1e10+1i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_sec_far_branch
+    formula: "=IMSEC(\"1e10+1e10i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_tan_far_branch
+    formula: "=IMTAN(\"1E+300+1E+300i\")"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: im_rules_csch_far_branch
+    formula: "=IMCSCH(\"1e10+1e10i\")"
     tolerance: { abs: 0, rel: 0 }

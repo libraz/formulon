@@ -386,7 +386,7 @@ TEST(BuiltinsComplex, ImDivByZeroIsNum) {
 TEST(BuiltinsComplex, ImDivMixedSuffix) {
   const Value v = EvalSource("=IMDIV(\"1+i\",\"1-j\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsComplex, ImPowerSquare) {
@@ -634,10 +634,11 @@ TEST(BuiltinsComplex, ParseEmptyIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsComplex, ParseDoubleSignIsNum) {
+TEST(BuiltinsComplex, ParseSignedCoefficient) {
+  // The imaginary coefficient may carry a sign of its own: 3+-4i is 3-4i.
   const Value v = EvalSource("=IMABS(\"3+-4i\")");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 5.0);
 }
 
 TEST(BuiltinsComplex, ParseMixedSuffixIsNum) {
@@ -694,6 +695,77 @@ TEST(ComplexAnalysisToolPak, ImsinhBoolIsValue) {
   const Value v = EvalSource("=IMSINH(TRUE)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ComplexRules, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {"=IMCONJUGATE(\" 3+4i\")", "3-4i"},
+      {"=IMLN(\" 3+4i\")", "1.6094379124341+0.927295218001612i"},
+      {"=IMEXP(\" 3+4i\")", "-13.1287830814622-15.200784463068i"},
+      {"=IMSIN(\" 3+4i\")", "3.85373803791938-27.0168132580039i"},
+      {"=IMPOWER(\" 3+4i\",-1)", "0.12-0.16i"},
+      {"=IMDIV(\" 3+4i\",\"1-i\")", "-0.5+3.5i"},
+      {"=IMSUM(\" 3+4i\",\"1+i\",\"2\")", "6+5i"},
+      {"=IMPRODUCT(\" 3+4i\",\"1+i\",\"2\")", "-2+14i"},
+      {"=IMLN(\"1E+300i\")", "690.775527898214+1.5707963267949i"},
+      {"=IMPOWER(\"1E+300i\",-1)", "-1E-300i"},
+      {"=IMDIV(\"1\",\"3+4j\")", "0.12-0.16j"},
+      {"=IMEXP(\"1e3+1i\")", "9.71297746009434E+307+1.51270661257499E+308i"},
+      {"=IMSEC(\"1e10+1e10i\")", "0"},
+      {"=IMTAN(\"1E+300+1E+300i\")", "i"},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_text()) << c.formula;
+    EXPECT_EQ(v.as_text(), c.expected) << c.formula;
+  }
+}
+
+TEST(ComplexRules, NumbersMatchExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=IMABS(\"3 + 4i\")", 5.0},     {"=IMABS(\"1e3+2e-2i\")", 1000.0000002},
+      {"=IMABS(\"1E+300i\")", 1e+300}, {"=IMABS(\"1/2+i\")", 46024.0000108639},
+      {"=IMABS(\"+3+4i\")", 5.0},      {"=IMABS(\"3+-4i\")", 5.0},
+      {"=IMABS(\"3--4i\")", 5.0},      {"=IMARGUMENT(\" 3+4i\")", 0.9272952180016122},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(ComplexRules, ErrorsMatchExcel) {
+  struct Case {
+    const char* formula;
+    ErrorCode expected;
+  };
+  const Case cases[] = {
+      {"=IMABS(\"3+4I\")", ErrorCode::Num},
+      {"=IMABS(\"4i+3\")", ErrorCode::Num},
+      {"=IMABS(\"3+i4\")", ErrorCode::Num},
+      {"=IMABS(\"1E+308+1E+308i\")", ErrorCode::Num},
+      {"=IMREAL(\"1e-320i\")", ErrorCode::Num},
+      {"=IMSQRT(\"1E+300i\")", ErrorCode::Num},
+      {"=IMLN(\"1E+200+1E+200i\")", ErrorCode::Num},
+      {"=IMSUM(\"1+i\",\"1+j\")", ErrorCode::Value},
+      {"=IMPRODUCT(\"1+i\",\"1+j\")", ErrorCode::Value},
+      {"=IMSUB(\"1+i\",\"1+j\")", ErrorCode::Num},
+      {"=IMPRODUCT(\"1E+200+1E+200i\",\"1E+200+1E+200i\")", ErrorCode::Value},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_error()) << c.formula;
+    EXPECT_EQ(v.as_error(), c.expected) << c.formula;
+  }
 }
 
 }  // namespace
