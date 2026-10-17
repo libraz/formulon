@@ -211,7 +211,8 @@ Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 //   DIM = YEARFRAC(issue, maturity, basis)
 //   YIELDMAT = ((1 + DIM/B*rate) - (pr/100 + A/B*rate)) / (pr/100 + A/B*rate) * (B/DSM)
 //
-// with A / DSM / DIM as day counts and B the year length of the basis.
+// with A / DSM / DIM as day counts and B the year length of the basis (under
+// basis 1, the issue-to-settlement year length for all three terms).
 //
 // Domain per Microsoft docs:
 //   - issue >= settlement              ->  #NUM!
@@ -238,15 +239,20 @@ Value YieldMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   if (!a_span || !dsm_span || !dim_span) {
     return Value::error(ErrorCode::Num);
   }
-  if (dsm_span.value().days == 0.0) {
+  const double a_days = a_span.value().days;
+  const double a_year = a_span.value().year;
+  const double dsm_days = dsm_span.value().days;
+  // Under basis 1 one year length, that of the issue-to-settlement span, serves all three terms.
+  const double dim_year = in.basis == 1 ? a_year : dim_span.value().year;
+  const double dsm_year = in.basis == 1 ? a_year : dsm_span.value().year;
+  if (dsm_days == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double accrued = pr / 100.0 + a_span.value().days / a_span.value().year * rate;
+  const double accrued = pr / 100.0 + a_days / a_year * rate;
   if (accrued == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = ((1.0 + dim_span.value().days / dim_span.value().year * rate) - accrued) / accrued *
-                        (dsm_span.value().year / dsm_span.value().days);
+  const double result = ((1.0 + dim_span.value().days / dim_year * rate) - accrued) / accrued * (dsm_year / dsm_days);
   return finalize(result);
 }
 

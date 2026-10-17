@@ -404,3 +404,43 @@ cases:
     description: "PRICEMAT basis 1 divides all terms by the issue-to-settlement year length"
     formula: "=PRICEMAT(45350,45352,43524,0.05,0.04,1)"
     tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_44256_46813_43524_0p05_101p25
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(44256,46813,43524,0.05,101.25,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_43983_45351_43890_0p0713_98p4
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(43983,45351,43890,0.0713,98.4,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_44256_44742_43891_0p0713_98p4
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(44256,44742,43891,0.0713,98.4,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_43890_44256_43845_0p0713_98p4
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(43890,44256,43845,0.0713,98.4,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_43889_44742_43524_0p0713_98p4
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(43889,44742,43524,0.0713,98.4,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_43889_44742_43800_0p0713_98p4
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(43889,44742,43800,0.0713,98.4,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_43889_44196_43524_0p0713_98p4
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(43889,44196,43524,0.0713,98.4,1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: yieldmat_basis_1_serial_45350_46813_43524_0p0713_98p4
+    description: "YIELDMAT basis 1 divides all terms by the issue-to-settlement year length"
+    formula: "=YIELDMAT(45350,46813,43524,0.0713,98.4,1)"
+    tolerance: { abs: 0, rel: 0 }

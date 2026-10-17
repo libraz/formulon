@@ -957,6 +957,110 @@
         "abs": 0.0,
         "rel": 0.0
       }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_44256_46813_43524_0p05_101p25",
+      "formula": "=YIELDMAT(44256,46813,43524,0.05,101.25,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04333136695986958
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43983_45351_43890_0p0713_98p4",
+      "formula": "=YIELDMAT(43983,45351,43890,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0754210193830201
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_44256_44742_43891_0p0713_98p4",
+      "formula": "=YIELDMAT(44256,44742,43891,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07895049834677308
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43890_44256_43845_0p0713_98p4",
+      "formula": "=YIELDMAT(43890,44256,43845,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08793609511424837
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43889_44742_43524_0p0713_98p4",
+      "formula": "=YIELDMAT(43889,44742,43524,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07405138290962297
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43889_44742_43800_0p0713_98p4",
+      "formula": "=YIELDMAT(43889,44742,43800,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07803830391797356
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43889_44196_43524_0p0713_98p4",
+      "formula": "=YIELDMAT(43889,44196,43524,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08558969137016155
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_45350_46813_43524_0p0713_98p4",
+      "formula": "=YIELDMAT(45350,46813,43524,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.056175122767518536
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
     }
   ]
 }
