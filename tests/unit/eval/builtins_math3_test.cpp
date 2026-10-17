@@ -670,6 +670,45 @@ TEST(TrigRules, ArgumentAtTheLimitIsNum) {
   EXPECT_EQ(zero.as_error(), ErrorCode::Div0);
 }
 
+TEST(InverseHyperbolicRules, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=ATANH(0.00005)", 5.000000004166667e-05},
+      {"=ATANH(0.0001028)", 0.00010280000036212466},
+      {"=ATANH(0.0001029)", 0.00010290000036315035},
+      {"=ATANH(0.001234)", 0.0012340006263608266},
+      {"=ATANH(0.37)", 0.3884230997182962},
+      {"=ATANH(-0.8)", -1.0986122886681098},
+      {"=ATANH(0.999999)", 7.254328619247669},
+      {"=ATANH(-0.00007)", -7.000000011433333e-05},
+      {"=ACOTH(1.0001)", 4.951768775643139},
+      {"=ACOTH(2)", 0.5493061443340549},
+      {"=ACOTH(3.69)", 0.2779456944222201},
+      {"=ACOTH(3.7)", 0.27715536785286465},
+      {"=ACOTH(10)", 0.1003353477310756},
+      {"=ACOTH(12345.678)", 8.10000068191476e-05},
+      {"=ACOTH(1E+100)", 1e-100},
+      {"=ACOTH(-1.5)", -0.8047189562170501},
+      {"=ACOTH(-25)", -0.04002135383676821},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(InverseHyperbolicRules, OutOfDomainIsNum) {
+  for (const char* formula : {"=ATANH(1)", "=ATANH(-1.5)", "=ACOTH(1)", "=ACOTH(0.5)", "=ACOTH(-1)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

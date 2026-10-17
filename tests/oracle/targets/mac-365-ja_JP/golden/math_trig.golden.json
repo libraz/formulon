@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T10:57:58Z"
+    "generated_at": "2026-10-17T11:14:59Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -881,6 +881,305 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_cubic_tiny",
+      "formula": "=ATANH(1E-8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-08
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_cubic_small",
+      "formula": "=ATANH(0.00005)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.000000004166667e-05
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_cubic_below_limit",
+      "formula": "=ATANH(0.0001028)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00010280000036212466
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_log_above_limit",
+      "formula": "=ATANH(0.0001029)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00010290000036315035
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_log_small",
+      "formula": "=ATANH(0.001234)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0012340006263608266
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_log_medium",
+      "formula": "=ATANH(0.37)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3884230997182962
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_log_negative",
+      "formula": "=ATANH(-0.8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0986122886681098
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_log_near_one",
+      "formula": "=ATANH(0.999999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.254328619247669
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_cubic_negative",
+      "formula": "=ATANH(-0.00007)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -7.000000011433333e-05
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_zero",
+      "formula": "=ATANH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_one_is_num",
+      "formula": "=ATANH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_atanh_beyond_one_is_num",
+      "formula": "=ATANH(-1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_log_near_one",
+      "formula": "=ACOTH(1.0001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.951768775643139
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_log_two",
+      "formula": "=ACOTH(2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5493061443340549
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_log_below_switch",
+      "formula": "=ACOTH(3.69)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.2779456944222201
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_series_above_switch",
+      "formula": "=ACOTH(3.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.27715536785286465
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_series_ten",
+      "formula": "=ACOTH(10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1003353477310756
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_series_large",
+      "formula": "=ACOTH(12345.678)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.10000068191476e-05
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_series_huge",
+      "formula": "=ACOTH(1E+100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-100
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_negative_log",
+      "formula": "=ACOTH(-1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.8047189562170501
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_negative_series",
+      "formula": "=ACOTH(-25)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.04002135383676821
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_one_is_num",
+      "formula": "=ACOTH(1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "hyp_rules_acoth_inside_is_num",
+      "formula": "=ACOTH(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
       },
       "tolerance": {
         "abs": 0.0,

@@ -303,3 +303,96 @@ cases:
   - id: trig_rules_sech_overflow_to_zero
     formula: "=SECH(1000)"
     tolerance: { abs: 0, rel: 0 }
+
+  # -- ATANH cubic / log regimes and ACOTH log / series regimes ---
+  - id: hyp_rules_atanh_cubic_tiny
+    formula: "=ATANH(1E-8)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_cubic_small
+    formula: "=ATANH(0.00005)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_cubic_below_limit
+    formula: "=ATANH(0.0001028)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_log_above_limit
+    formula: "=ATANH(0.0001029)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_log_small
+    formula: "=ATANH(0.001234)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_log_medium
+    formula: "=ATANH(0.37)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_log_negative
+    formula: "=ATANH(-0.8)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_log_near_one
+    formula: "=ATANH(0.999999)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_cubic_negative
+    formula: "=ATANH(-0.00007)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_zero
+    formula: "=ATANH(0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_one_is_num
+    formula: "=ATANH(1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_atanh_beyond_one_is_num
+    formula: "=ATANH(-1.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_log_near_one
+    formula: "=ACOTH(1.0001)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_log_two
+    formula: "=ACOTH(2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_log_below_switch
+    formula: "=ACOTH(3.69)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_series_above_switch
+    formula: "=ACOTH(3.7)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_series_ten
+    formula: "=ACOTH(10)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_series_large
+    formula: "=ACOTH(12345.678)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_series_huge
+    formula: "=ACOTH(1E+100)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_negative_log
+    formula: "=ACOTH(-1.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_negative_series
+    formula: "=ACOTH(-25)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_one_is_num
+    formula: "=ACOTH(1)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: hyp_rules_acoth_inside_is_num
+    formula: "=ACOTH(0.5)"
+    tolerance: { abs: 0, rel: 0 }

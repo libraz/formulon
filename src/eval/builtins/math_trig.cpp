@@ -19,8 +19,10 @@
 #include "eval/coerce.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "eval/stats/flushed_ops.h"
 #include "eval/x87_arith.h"
 #include "utils/arena.h"
+#include "utils/subnormal_flush.h"
 #include "value.h"
 
 namespace formulon {
@@ -350,11 +352,56 @@ Value Acosh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
                                   args);
 }
 
-// ATANH(x) - inverse hyperbolic tangent. Domain: `(-1, 1)` EXCLUSIVE. At
-// `|x| == 1` the result is +/-Inf; `|x| > 1` produces NaN. Both are folded
-// to `#NUM!` - matching Excel, which rejects the closed endpoints as well.
+// atanh on (-1, 1): the cubic x + x * (x * (x * (1/3))) below 1.0288e-4, otherwise
+// 0.5 * log((x + 1) / (1 - x)).
+double excel_atanh(double x) noexcept {
+  constexpr double kSmall = 1.0288014587100072e-4;
+  constexpr double kThird = 0.3333333333333333;
+  if (std::fabs(x) < kSmall) {
+    double t = stats::flushed::mul(x, kThird);
+    t = stats::flushed::mul(x, t);
+    t = stats::flushed::mul(x, t);
+    return x + t;
+  }
+  return stats::flushed::mul(std::log(stats::flushed::guarded_div(x + 1.0, 1.0 - x)), 0.5);
+}
+
+// acoth on |x| > 1: log((1 + a) / (a - 1)) / 2 below a = 3.69662725; from there the series
+// 1/a + 1/(3a^3) + 1/(5a^5) + ... summed until it stops changing. The sign follows x.
+double excel_acoth(double x) noexcept {
+  constexpr double kSeriesFrom = 3.69662725;
+  const bool negative = x < 0.0;
+  const double a = std::fabs(x);
+  double result;
+  if (a < kSeriesFrom) {
+    result = stats::flushed::guarded_div(std::log(stats::flushed::guarded_div(1.0 + a, a - 1.0)), 2.0);
+  } else {
+    result = stats::flushed::guarded_div(1.0, a);
+    double k = 3.0;
+    const double square = stats::flushed::mul(a, a);
+    double power = a;
+    for (int i = 0; i < 15; ++i) {
+      power = stats::flushed::mul(power, square);
+      double term = stats::flushed::mul(power, k);
+      if (std::isinf(term)) {
+        break;
+      }
+      term = stats::flushed::guarded_div(1.0, term);
+      const double next = result + term;
+      if (next == result) {
+        break;
+      }
+      result = next;
+      k += 2.0;
+    }
+  }
+  return negative ? -result : result;
+}
+
+// ATANH(x) - inverse hyperbolic tangent. Domain: `(-1, 1)` EXCLUSIVE; `|x| >= 1`
+// is `#NUM!`, matching Excel, which rejects the closed endpoints as well.
 Value Atanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_guarded_unary_math(&std::atanh, &open_unit_domain, args);
+  return apply_guarded_unary_math(&excel_atanh, &open_unit_domain, args);
 }
 
 // --- Reciprocal trigonometric functions ---------------------------------
@@ -463,17 +510,10 @@ Value Coth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   });
 }
 
-// ACOTH(x) - inverse hyperbolic cotangent, `atanh(1 / x)`. Domain is
-// `|x| > 1` strictly; `|x| <= 1` yields `#NUM!`. `std::atanh(1/x)` returns
-// +/-Inf at the endpoints, so the explicit guard provides a cleaner
-// contract on the boundary.
+// ACOTH(x) - inverse hyperbolic cotangent. Domain is `|x| > 1` strictly;
+// `|x| <= 1` yields `#NUM!`. See `excel_acoth` for the two regimes.
 Value Acoth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_value(args, [](double x) {
-    if (!outside_closed_unit_domain(x)) {
-      return Value::error(ErrorCode::Num);
-    }
-    return to_finite_value(std::atanh(1.0 / x));
-  });
+  return apply_guarded_unary_math(&excel_acoth, &outside_closed_unit_domain, args);
 }
 
 }  // namespace
