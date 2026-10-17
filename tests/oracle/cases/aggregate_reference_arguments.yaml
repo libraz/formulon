@@ -540,3 +540,46 @@ cases:
 - id: agg3_o7_errors_g
   formula: '=AGGREGATE(3,7,A1:A8)'
   setup: *sup_G
+- id: percentile_exc_order_0
+  formula: '=PERCENTILE.EXC(A1:A8,0.333)'
+  setup:
+    A1: 100
+    A2: 200
+    A3: 300
+    A4: 400
+    A5: 500
+- id: percentile_exc_order_1
+  formula: '=PERCENTILE.EXC(A1:A8,0.333)'
+  setup:
+    A1: 1
+    A2: 2
+    A3: 3
+    A4: 4
+    A5: 5
+    A6: 6
+    A7: 7
+    A8: 8
+- id: percentile_exc_order_2
+  formula: '=AGGREGATE(18,0,A1:A8,0.333)'
+  setup:
+    A1: 100
+    A2: 200
+    A3: 300
+    A4: 400
+    A5: 500
+- id: percentile_exc_order_3
+  formula: '=AGGREGATE(18,0,A1:A8,0.333)'
+  setup:
+    A1: 1
+    A2: 2
+    A3: 3
+    A4: 4
+    A5: 5
+    A6: 6
+    A7: 7
+    A8: 8
+- id: percentile_exc_extreme_span
+  formula: '=IFERROR(PERCENTILE.EXC(A1:A2,0.5),"#"&ERROR.TYPE(PERCENTILE.EXC(A1:A2,0.5)))'
+  setup:
+    A1: -1.0e+308
+    A2: 1.0e+308

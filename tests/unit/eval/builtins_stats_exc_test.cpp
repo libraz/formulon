@@ -75,10 +75,10 @@ TEST(BuiltinsPercentileExc, MedianOnTenValues) {
   EXPECT_DOUBLE_EQ(v.as_number(), 5.5);
 }
 
-TEST(BuiltinsPercentileExc, OppositeExtremeFiniteEndpointsInterpolate) {
-  const Value v = EvalSource("=PERCENTILE.EXC(-1E308,1E308,0.5)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+TEST(BuiltinsPercentileExc, OppositeExtremeEndpointsOverflowTheSpan) {
+  const Value v = EvalSource("=PERCENTILE.EXC({-1E308,1E308},0.5)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsPercentileExc, Q3OnTenValues) {

@@ -212,14 +212,14 @@ double dispersion_variance(const std::vector<double>& xs, bool sample) {
 
 namespace {
 
-/// Value `frac` of the way from `xs[lo_index]` to its successor. Weighted
-/// endpoints avoid overflowing `high - low` for a legitimate extreme pair such
-/// as {-1E308, 1E308}.
+/// Value `frac` of the way from `xs[lo_index]` to its successor, as
+/// `a + frac * (b - a)`; a span that overflows is `#NUM!`.
 Expected<double, ErrorCode> interpolate_sorted(const std::vector<double>& xs, std::size_t lo_index, double frac) {
   if (frac == 0.0 || lo_index + 1U >= xs.size()) {
     return xs[lo_index];
   }
-  const double interpolated = (1.0 - frac) * xs[lo_index] + frac * xs[lo_index + 1U];
+  const double a = xs[lo_index];
+  const double interpolated = a + frac * (xs[lo_index + 1U] - a);
   if (!std::isfinite(interpolated)) {
     return ErrorCode::Num;
   }
