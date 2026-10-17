@@ -10,11 +10,9 @@
 //                  coupon period is irregular (the bond is issued at
 //                  `issue`, pays its first coupon at `first_coupon`,
 //                  and pays subsequent coupons on the regular grid up
-//                  to `maturity`). Generalises Microsoft's documented
-//                  short-first-period and long-first-period formulas
-//                  via a per-quasi-period schedule walk anchored on
-//                  `first_coupon`. See `financial_oddf_helpers.h` for
-//                  the kernel shared with ODDFYIELD.
+//                  to `maturity`), in its short- and long-first-period
+//                  forms. See `financial_oddf_helpers.h` for the kernel
+//                  shared with ODDFYIELD.
 
 #ifndef FORMULON_EVAL_BUILTINS_FINANCIAL_ODDFPRICE_H_
 #define FORMULON_EVAL_BUILTINS_FINANCIAL_ODDFPRICE_H_

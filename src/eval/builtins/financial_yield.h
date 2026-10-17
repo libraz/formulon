@@ -58,6 +58,11 @@ inline double yield_initial_guess(double rate, double pr, double ny) noexcept {
   return (((rate * ny) * 100.0) - d) / denom;
 }
 
+// Derivative of the multi-period bond price with respect to the yield, over `n`
+// coupons with `dsc_over_e` = DSC / E, accumulated forward with the redemption
+// term subtracted last. Shared by YIELD and ODDFYIELD.
+double bond_price_slope(double yld, double rate, double redemption, double freq, double dsc_over_e, std::int32_t n);
+
 // Newton shell shared by YIELD and ODDFYIELD. `step_at(yld)` returns the
 // Newton step `(price - pr) / slope` as an `Expected<double, ErrorCode>`.
 // A step below `1e-10` ends the iteration and is NOT applied; a non-finite

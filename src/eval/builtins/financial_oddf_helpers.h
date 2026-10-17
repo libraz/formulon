@@ -1,68 +1,36 @@
 //
 // Internal header -- do not include outside `src/eval/builtins/financial*`.
 //
-// Shared schedule walker + clean-price kernel used by both ODDFPRICE
-// (clean price per 100 face) and ODDFYIELD (yield-to-maturity inferred
-// by Newton's method on the price kernel). The "odd first" family
-// handles a bond whose initial coupon period does not align with the
-// regular `12/freq`-month grid: the issue date precedes the first
-// coupon date by an arbitrary span which may be shorter than, equal
-// to, or longer than a normal period. After `first_coupon` the bond
-// pays coupons on the regular schedule up to `maturity`.
+// Shared schedule and price kernel of ODDFPRICE and ODDFYIELD. The "odd
+// first" family prices a bond whose first coupon period is irregular: issued
+// at `issue`, first coupon at `first_coupon`, regular coupons to `maturity`.
 //
-// `compute_odd_first_schedule` walks the quasi-coupon dates BACKWARD
-// from `first_coupon` by `12/freq` months per step (preserving
-// `first_coupon`'s day-of-month and clamping to month-end as needed)
-// until the candidate date is at or before `issue`. It records a
-// vector of quasi-periods plus aggregate day counts:
+// The coupon schedule is anchored at maturity and keeps its end-of-month code
+// (1: last day of the month, 29 / 30: that fixed day, otherwise the plain day
+// clamped to short months); `first_coupon` must lie on it, else #NUM!.
 //
-//   * `nc`               -- number of quasi-periods covering the
-//                           irregular first span [issue, first_coupon].
-//   * `qp[0..nc-1]`      -- per-quasi-period start/end serials, sorted
-//                           oldest -> newest. `qp[0].start <= issue`,
-//                           `qp[nc-1].end == first_coupon`.
-//   * `nl[i]`            -- length of quasi-period i (actual days for
-//                           basis 1, nominal 360/freq or 365/freq else).
-//   * `dc[i]`            -- days within quasi-period i that contribute
-//                           to coupon income (issue-to-end on the
-//                           first; full nl[i] on subsequent ones).
-//   * `a[i]`             -- days within quasi-period i that contribute
-//                           to accrued interest (start-or-issue to
-//                           settlement when settlement falls in i; 0
-//                           for quasi-periods after the
-//                           settlement-bearing one; full nl[i] for
-//                           quasi-periods strictly before it). The
-//                           first quasi-period substitutes `issue` for
-//                           its start.
-//   * `dsc`              -- basis-adjusted days from settlement to the
-//                           next quasi-coupon date.
-//   * `nq`               -- whole quasi-periods between that date and
-//                           `first_coupon`.
-//   * `e`                -- normal coupon-period length in
-//                           basis-adjusted days (360/freq for basis
-//                           0/2/4, 365/freq for basis 3, the actual
-//                           length of the settlement-bearing
-//                           quasi-period for basis 1).
-//   * `n_regular`        -- number of regular coupon periods between
-//                           `first_coupon` and `maturity` (>= 1, from
-//                           `compute_coupon_dates(first_coupon,
-//                           maturity, ...)`).
+//   E   = length of the quasi period holding settlement, walking back from
+//         first_coupon (360/freq, 365/freq for basis 3, actual for basis 1)
+//   N   = coupons between settlement and maturity
+//   DFC = days(issue, first_coupon); DFC == E is #NUM!
 //
-// `compute_oddf_clean_price` evaluates Microsoft's documented
-// closed form:
+// Short first period (DFC < E), with DSC = days(settlement, first_coupon),
+// A = days(issue, settlement), t1 = DSC / E, cf = (100 * rate) / freq:
 //
-//   cf  = 100 * rate / freq
-//   b   = 1 + yld / freq
-//   t1  = nq + dsc / E
-//   ODDFPRICE = redemption / b^(n_regular + t1)
-//             + (sum_i cf * dc[i] / nl[i]) / b^t1
-//             + sum_{j=1..n_regular} cf / b^(j + t1)
-//             - sum_i cf * a[i] / nl[i]
+//   price = ((red / q^((N-1) + t1) + ((cf * DFC) / E) / q^t1)
+//            + sum_{k=2..N} cf / q^((k-1) + t1)) - ((A / E) * (rate / freq)) * 100
 //
-// `compute_oddf_yield` inverts the above for `yld` by Newton's method on
-// `ODDFPRICE(yld) - pr`, with YIELD's start and step shell but the derivative
-// of the regular PRICE formula (the odd first coupon taken as a full one),
-// which is how Excel's result comes to sit slightly off the true root.
+// Long first period (DFC > E): the quasi periods before first_coupon are
+// stepped back with plain month steps; each contributes DC / NL (every one but
+// the earliest counts in full) to `sum_dcnl` and A_i / NL to `sum_a`. With
+// t = DSC / E, Nq whole quasi periods between settlement's quasi date and
+// first_coupon and N2 coupons from first_coupon to maturity:
+//
+//   price = ((red / q^((t + Nq) + N2) + (cf * sum_dcnl) / q^(Nq + t))
+//            + sum_{k=1..N2} cf / q^((k + Nq) + t)) - cf * sum_a
+//
+// ODDFYIELD runs YIELD's Newton iteration (same start, derivative and
+// stopping rule) on this price.
 
 #ifndef FORMULON_EVAL_BUILTINS_FINANCIAL_ODDF_HELPERS_H_
 #define FORMULON_EVAL_BUILTINS_FINANCIAL_ODDF_HELPERS_H_
@@ -77,101 +45,50 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 
-/// Maximum number of quasi-periods we record for the irregular first
-/// span. A bond with semi-annual coupons would need NC = 200 to span a
-/// 100-year-old issue; that vastly exceeds Excel's documented bond
-/// horizon. The schedule walker surfaces `ErrorCode::Num` if the cap is
-/// exceeded, matching Excel's behaviour for pathological inputs.
-constexpr int kMaxOddFirstQuasiPeriods = 200;
-
-/// One quasi-coupon period in the irregular first span.
-struct OddFirstQuasiPeriod {
-  double start;  ///< Earliest serial of the quasi-period (oldest = i=0).
-  double end;    ///< Latest serial; equal to `first_coupon` for i=nc-1.
-  double nl;     ///< Basis-adjusted period length.
-  double dc;     ///< Basis-adjusted days contributing to coupon income.
-  double a;      ///< Basis-adjusted days contributing to accrued interest.
+/// A validated ODDFPRICE / ODDFYIELD call with every yield-independent schedule fact resolved.
+struct OddFirstBond {
+  double settlement;
+  double maturity;
+  double issue;
+  double first_coupon;
+  double rate;
+  double slot5;  ///< args[5]: yld for ODDFPRICE, pr for ODDFYIELD.
+  double redemption;
+  double freq_d;
+  int basis;
+  double e;          ///< Quasi-period length E.
+  std::int32_t n;    ///< Coupons between settlement and maturity.
+  double dsc_first;  ///< days(settlement, first_coupon).
+  bool long_first;   ///< DFC > E.
+  // Short first period.
+  double dfc;
+  double accrued_days;  ///< A.
+  // Long first period.
+  double sum_dcnl;
+  double sum_a;
+  double dsc;  ///< DSC of the long form.
+  double nq;
+  std::int32_t n2;
 };
 
-/// Schedule context for an ODDFPRICE / ODDFYIELD evaluation.
-struct OddFirstSchedule {
-  int nc;                                            ///< Number of quasi-periods in the irregular first span.
-  OddFirstQuasiPeriod qp[kMaxOddFirstQuasiPeriods];  ///< Per-quasi-period detail, oldest first.
-  double dsc;                                        ///< Days from settlement to the next quasi-coupon date.
-  int nq;                                            ///< Whole quasi-periods from that date to first_coupon.
-  double e;                                          ///< Normal coupon-period length in basis-adjusted days.
-  std::int32_t n_regular;                            ///< Regular coupon periods between first_coupon and maturity.
-};
+/// Reads and validates the nine-slot ODDF argument list (date ordering, frequency, basis, signs,
+/// first_coupon on the maturity schedule, DFC != E) and resolves the schedule. `slot5_must_be_positive`
+/// is the one difference between the two spellings: ODDFPRICE accepts a zero `yld`, ODDFYIELD rejects
+/// a non-positive `pr`. Any failure is `ErrorCode::Num`.
+Expected<OddFirstBond, ErrorCode> read_odd_first_bond(const Value* args, std::uint32_t arity,
+                                                      bool slot5_must_be_positive, bool date1904);
 
-/// Builds the OddFirstSchedule for `(settlement, maturity, issue,
-/// first_coupon, frequency, basis)`. Callers must have already
-/// validated `issue < settlement`, `settlement < first_coupon`,
-/// `first_coupon < maturity`, `frequency` in {1, 2, 4}, and `basis`
-/// in {0..4}.
+/// ODDFPRICE's closed form at yield `yld`; `bond.slot5` is not read. `ErrorCode::Num` on a non-finite result.
+Expected<double, ErrorCode> oddf_price_at(const OddFirstBond& bond, double yld);
+
+/// Computes the ODDFPRICE clean price per 100 face.
 ///
-/// Returns `ErrorCode::Num` on any internal failure (date
-/// decomposition, non-finite intermediate value, schedule walk that
-/// exceeds `kMaxOddFirstQuasiPeriods`, or `compute_coupon_dates`
-/// failure). Given valid pre-validated inputs the failure modes are
-/// pathological-input defenses.
-Expected<OddFirstSchedule, ErrorCode> compute_odd_first_schedule(double settlement, double maturity, double issue,
-                                                                 double first_coupon, int frequency, int basis,
-                                                                 bool date1904) noexcept;
-
-/// The scalar arguments ODDFPRICE and ODDFYIELD share. Slot 5 is the one
-/// argument whose meaning differs between the two — `yld` for the price
-/// spelling, `pr` for the yield spelling — so it is carried unnamed.
-struct OddFirstArgs {
-  double rate;        ///< args[4], annual coupon rate.
-  double slot5;       ///< args[5]: yld for ODDFPRICE, pr for ODDFYIELD.
-  double redemption;  ///< args[6], per 100 face.
-  double freq_d;      ///< args[7] as a double.
-};
-
-/// Reads and validates the nine-slot ODDF argument list and builds the coupon
-/// schedule into `sched_out`, leaving only the closed form or the iteration to
-/// the caller.
-///
-/// Validation order is PRICE's: date ordering -> frequency -> basis -> rate
-/// sign -> slot-5 sign -> redemption sign, plus the odd-first constraint
-/// `issue < settlement < first_coupon < maturity`.
-/// `slot5_must_be_positive` is the one difference between the two spellings:
-/// ODDFPRICE accepts a zero `yld`, while ODDFYIELD rejects a non-positive `pr`
-/// because a zero price implies an infinite yield. Any failure surfaces as
-/// `ErrorCode::Num`, and `sched_out` is untouched on failure.
-Expected<OddFirstArgs, ErrorCode> read_odd_first_inputs(const Value* args, std::uint32_t arity,
-                                                        bool slot5_must_be_positive, bool date1904,
-                                                        OddFirstSchedule& sched_out);
-
-/// ODDFPRICE's closed form at yield `yld` for an already validated schedule
-/// and argument set; `in.slot5` is not read. `ErrorCode::Num` on a non-finite
-/// result.
-Expected<double, ErrorCode> oddf_price_at(const OddFirstSchedule& sched, const OddFirstArgs& in, double yld);
-
-/// Computes the ODDFPRICE clean price per 100 face. Performs the same
-/// argument validation order as PRICE / ODDLPRICE (date ordering ->
-/// frequency domain -> basis domain -> rate / yld sign -> redemption
-/// sign), additionally requiring `issue < settlement < first_coupon <
-/// maturity`. Surfaces any failure as `ErrorCode::Num`.
-///
-/// `args` layout is ODDFPRICE's positional contract:
-///
-///   args[0] = settlement     (Excel serial)
-///   args[1] = maturity       (Excel serial)
-///   args[2] = issue          (Excel serial)
-///   args[3] = first_coupon   (Excel serial)
-///   args[4] = rate           (annual coupon rate, decimal)
-///   args[5] = yld            (annual yield to maturity, decimal)
-///   args[6] = redemption     (per 100 face, > 0)
-///   args[7] = frequency      (1, 2, or 4)
-///   args[8] = basis          (0..4, optional; only consulted when arity == 9)
+///   args[0] = settlement, args[1] = maturity, args[2] = issue, args[3] = first_coupon,
+///   args[4] = rate, args[5] = yld, args[6] = redemption, args[7] = frequency (1, 2, 4),
+///   args[8] = basis (0..4, optional)
 Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity, bool date1904);
 
-/// Computes the ODDFYIELD yield-to-maturity (decimal). Same arg layout
-/// as ODDFPRICE except slot 5 holds `pr` (clean market price, > 0)
-/// instead of `yld`. Returns `ErrorCode::Num` on any validation /
-/// numerical failure (degenerate derivative, iteration cap reached,
-/// non-finite intermediate).
+/// Computes the ODDFYIELD yield-to-maturity (decimal). Same layout as ODDFPRICE with `pr` in slot 5.
 Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity, bool date1904);
 
 }  // namespace financial_detail

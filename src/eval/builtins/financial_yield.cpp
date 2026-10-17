@@ -72,6 +72,19 @@ double years_to_maturity(double settlement, double maturity, int basis, bool dat
   return days / year + whole;
 }
 
+double bond_price_slope(double yld, double rate, double redemption, double freq, double dsc_over_e, std::int32_t n) {
+  const double base = (yld / freq) + 1.0;
+  const double weight = (rate / freq) * 100.0;
+  double slope = 0.0;
+  for (std::int32_t k = 1; k <= n; ++k) {
+    const double power = excel_power(base, static_cast<double>(k) + dsc_over_e);
+    const double t = dsc_over_e + (static_cast<double>(k) - 1.0);
+    slope = ((-weight * t) / (freq * power)) + slope;
+  }
+  const double last = (dsc_over_e + (static_cast<double>(n) - 1.0)) * redemption;
+  return slope - last / (freq * excel_power(base, dsc_over_e + static_cast<double>(n)));
+}
+
 namespace {
 
 // Computes the YIELD result. Returns the yield-to-maturity (decimal) on
@@ -128,16 +141,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   const double dsc_over_e = f;
   return newton_yield_by_steps(yld, [&](double y) -> Expected<double, ErrorCode> {
     const double price = bond_price_multi(y, rate, red, freq, e, accrued_days, n);
-    const double base = (y / freq) + 1.0;
-    const double weight = (rate / freq) * 100.0;
-    double slope = 0.0;
-    for (std::int32_t k = 1; k <= n; ++k) {
-      const double power = excel_power(base, static_cast<double>(k) + dsc_over_e);
-      const double t = dsc_over_e + (static_cast<double>(k) - 1.0);
-      slope = ((-weight * t) / (freq * power)) + slope;
-    }
-    const double last = (dsc_over_e + (static_cast<double>(n) - 1.0)) * red;
-    slope = slope - last / (freq * excel_power(base, dsc_over_e + static_cast<double>(n)));
+    const double slope = bond_price_slope(y, rate, red, freq, dsc_over_e, n);
     return (price - pr_v) / slope;
   });
 }

@@ -5,20 +5,10 @@
 //   * ODDFYIELD(settlement, maturity, issue, first_coupon, rate, pr,
 //               redemption, frequency, [basis=0])
 //
-// Returns the annual yield-to-maturity (decimal) implied by the given
-// clean market price `pr`. Excel runs YIELD's Newton iteration (same
-// start, same step shell) on ODDFPRICE, but divides by the derivative of
-// the REGULAR bond price, i.e. with the odd first coupon treated as a full
-// coupon:
-//
-//   D = ( -(N - 1 + t1) * red / b^(N + t1)
-//         - sum_{k=1..N} (k - 1 + t1) * cf / b^(k + t1) ) / freq
-//
-// with N = n_regular + 1 coupons from settlement, t1 = nq + dsc / E and
-// b = 1 + yld / freq. That derivative runs a few 1e-4 too large, so the last
-// steps converge linearly and the answer sits ~1e-12 off the exact root.
-//
-// An issue-to-first_coupon span of exactly one regular period is `#NUM!`.
+// Returns the annual yield-to-maturity (decimal) implied by the given clean
+// market price `pr`: YIELD's Newton iteration (same start from the year count,
+// same derivative over the `N` coupons with DSC = days(settlement,
+// first_coupon), same stopping rule) with ODDFPRICE as the price.
 
 #include "eval/builtins/financial_oddfyield.h"
 
@@ -35,51 +25,30 @@
 namespace formulon {
 namespace eval {
 namespace financial_detail {
-namespace {
-
-// Derivative of the regular PRICE formula at yield `yld`, in Excel's term order.
-double regular_price_derivative(const OddFirstSchedule& sched, const OddFirstArgs& in, double yld) {
-  const double cf = 100.0 * in.rate / in.freq_d;
-  const double b = 1.0 + yld / in.freq_d;
-  const double t1 = static_cast<double>(sched.nq) + sched.dsc / sched.e;
-  const double n = static_cast<double>(sched.n_regular) + 1.0;
-  double d = -(n - 1.0 + t1) * (in.redemption / excel_power(b, n + t1));
-  for (std::int32_t k = 1; k <= sched.n_regular + 1; ++k) {
-    d += -(static_cast<double>(k - 1) + t1) * (cf / excel_power(b, static_cast<double>(k) + t1));
-  }
-  return d / in.freq_d;
-}
-
-}  // namespace
 
 Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t arity, bool date1904) {
-  OddFirstSchedule sched{};
-  auto in = read_odd_first_inputs(args, arity, /*slot5_must_be_positive=*/true, date1904, sched);
-  if (!in) {
-    return std::move(in.error());
+  auto bond = read_odd_first_bond(args, arity, /*slot5_must_be_positive=*/true, date1904);
+  if (!bond) {
+    return std::move(bond.error());
   }
-  const double pr = in.value().slot5;
-  const double issue = std::trunc(read_financial_date(args, 2).value());
-  if (sched.nc == 1 && sched.qp[0].start == issue) {
-    return ErrorCode::Num;
-  }
-  const double ny = years_to_maturity(read_financial_date(args, 0).value(), read_financial_date(args, 1).value(),
-                                      read_day_count_basis(args, arity, 8).value(), date1904);
-  return newton_yield_by_steps(yield_initial_guess(in.value().rate, pr, ny),
-                               [&](double y) -> Expected<double, ErrorCode> {
-                                 auto price = oddf_price_at(sched, in.value(), y);
-                                 if (!price) {
-                                   return std::move(price.error());
-                                 }
-                                 return (price.value() - pr) / regular_price_derivative(sched, in.value(), y);
-                               });
+  const OddFirstBond& b = bond.value();
+  const double years = years_to_maturity(b.settlement, b.maturity, b.basis, date1904);
+  const double dsc_over_e = b.dsc_first / b.e;
+  return newton_yield_by_steps(
+      yield_initial_guess(b.rate, b.slot5, years), [&](double y) -> Expected<double, ErrorCode> {
+        auto price = oddf_price_at(b, y);
+        if (!price) {
+          return std::move(price.error());
+        }
+        return (price.value() - b.slot5) / bond_price_slope(y, b.rate, b.redemption, b.freq_d, dsc_over_e, b.n);
+      });
 }
 
 // --- ODDFYIELD(settlement, maturity, issue, first_coupon, rate, pr,
 //              redemption, frequency, [basis=0]) ----------------------------
 //
 // Annual yield-to-maturity (decimal) for a security whose first
-// coupon period is irregular. Numerically inverts ODDFPRICE.
+// coupon period is irregular.
 Value OddfYield(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto y = compute_oddf_yield(args, arity, date1904);
   if (!y) {

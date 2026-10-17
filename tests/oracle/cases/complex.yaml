@@ -652,8 +652,8 @@ cases:
   - id: imcsch_identity_with_imsinh
     description: "IMCSCH(z) * IMSINH(z) = 1+0i — reciprocal identity (1-ULP libm drift on imag tail)"
     formula: "=IMPRODUCT(IMCSCH(\"1+i\"),IMSINH(\"1+i\"))"
+    tolerance: { abs: 0, rel: 0 }
     compare_mode: complex_text
-    tolerance: { abs: 1e-14 }
 
   - id: imcsch_negative_real
     description: "csch(-1) = -csch(1) — odd function"

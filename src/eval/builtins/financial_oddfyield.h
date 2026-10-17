@@ -9,12 +9,7 @@
 // Functions declared here:
 //   * ODDFYIELD -- yield-to-maturity (decimal) for a security whose
 //                  first coupon period is irregular. Numerically
-//                  inverts the ODDFPRICE kernel by Newton's method with
-//                  YIELD's start and step shell and the derivative of
-//                  the regular PRICE formula. Unlike ODDLYIELD (which
-//                  has a closed-form analytic inverse because the
-//                  ODDLPRICE residual uses simple-interest
-//                  discounting), ODDFYIELD must iterate.
+//                  inverts ODDFPRICE with YIELD's Newton iteration.
 
 #ifndef FORMULON_EVAL_BUILTINS_FINANCIAL_ODDFYIELD_H_
 #define FORMULON_EVAL_BUILTINS_FINANCIAL_ODDFYIELD_H_

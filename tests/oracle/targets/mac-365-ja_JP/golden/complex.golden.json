@@ -1590,7 +1590,7 @@
         "value": "1-5.55111512312578E-17i"
       },
       "tolerance": {
-        "abs": 1e-14,
+        "abs": 0.0,
         "rel": 0.0
       },
       "compare_mode": "complex_text"

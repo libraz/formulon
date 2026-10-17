@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -373,12 +374,6 @@ Complex cplx_mul(Complex a, Complex b) {
   return Complex{a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re, a.suffix};
 }
 
-// Returns `1 / z`. Caller must ensure `|z| != 0`.
-Complex cplx_recip(Complex z) {
-  const double denom = z.re * z.re + z.im * z.im;
-  return Complex{z.re / denom, -z.im / denom, z.suffix};
-}
-
 // e^z = e^a * (cos b + i sin b).
 Complex cplx_exp(Complex z) {
   const double mag = std::exp(z.re);
@@ -659,63 +654,6 @@ Value ImSqrt(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // Trigonometric
 // ---------------------------------------------------------------------------
 
-Complex cplx_sin(Complex z) {
-  return Complex{std::sin(z.re) * std::cosh(z.im), std::cos(z.re) * std::sinh(z.im), z.suffix};
-}
-
-Complex cplx_cos(Complex z) {
-  return Complex{std::cos(z.re) * std::cosh(z.im), -std::sin(z.re) * std::sinh(z.im), z.suffix};
-}
-
-Value ImSin(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_text(&cplx_sin, args, arena);
-}
-
-Value ImCos(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_text(&cplx_cos, args, arena);
-}
-
-// Shared body of IMTAN (sin / cos) and IMCOT (cos / sin); #NUM! when the
-// divisor is 0.
-Value im_trig_ratio(const Value* args, Arena& arena, bool cot) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex s = cplx_sin(z.value());
-  const Complex c = cplx_cos(z.value());
-  const Complex& num = cot ? c : s;
-  const Complex& den = cot ? s : c;
-  const double denom = den.re * den.re + den.im * den.im;
-  if (denom == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return text_complex(cplx_mul(num, cplx_recip(den)), arena);
-}
-
-Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_trig_ratio(args, arena, /*cot=*/false);
-}
-
-// Shared kernel for IMSECH / IMCSCH: computes 1 / op(z),
-// where `op` is cplx_cosh / cplx_sinh. Returns
-// #NUM! when |op(z)| == 0 (avoids divide-by-zero). Marked `noinline` so the
-// body is emitted once and shared across both wrappers — without it,
-// O3+LTO would inline a separate specialization per call site and undo the
-// deduplication this kernel exists to provide.
-[[gnu::noinline]] Value im_unary_recip(Complex (*op)(Complex), const Value* args, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  const Complex w = op(z.value());
-  const double denom = w.re * w.re + w.im * w.im;
-  if (denom == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return text_complex(cplx_recip(w), arena);
-}
-
 // 2 * cosh(y) and -2 * sinh(y), each with its own large-|y| and small-|y| form.
 double two_cosh(double y) noexcept {
   const double ay = std::fabs(y);
@@ -803,36 +741,182 @@ Value ImCsc(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return im_csc_sec(args, arena, /*sec=*/false);
 }
 
+// ---------------------------------------------------------------------------
+// Trigonometric and hyperbolic kernels
+// ---------------------------------------------------------------------------
+//
+// Each is evaluated from the real and imaginary parts with the 2cosh / -2sinh
+// helpers above, so the large-argument branches (|y| or |x| beyond ~354, ~709)
+// and the order of the products follow one scheme.
+
+// exp(y) bounded to the range whose reciprocal is also finite; NaN outside it.
+double bounded_exp(double y) noexcept {
+  if (y > 709.782712893384 || y < -708.3964185322641) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return std::exp(y);
+}
+
+// IMSIN (sin x cosh y + i cos x sinh y) and IMCOS (cos x cosh y - i sin x sinh y).
+Value im_sin_cos(const Value* args, Arena& arena, bool cos) {
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  const Complex c = z.value();
+  const double e = bounded_exp(c.im);
+  if (!(e > 0.0) || !(e < std::numeric_limits<double>::max())) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double inv = 1.0 / e;
+  const double real_factor = cos ? std::cos(c.re) : std::sin(c.re);
+  const double imag_factor = cos ? -std::sin(c.re) : std::cos(c.re);
+  const double imag = ((e - inv) * imag_factor) * 0.5;
+  const double real = ((e + inv) * real_factor) * 0.5;
+  return text_complex(Complex{real, imag, c.suffix}, arena);
+}
+
+// IMTAN (cot == false) and IMCOT: sin / cos and cos / sin of z.
+//
+//   D = (2cosh(2y) + 2) - 4 t1^2,  t1 = sin x (tan) | cos x (cot)
+//   real = (t2 * (4 t1)) / D,  t2 = cos x | sin x
+//   imag = (2sinh(2y) | -2sinh(2y)) / D
+//
+// A real argument is tan x or 1 / tan x; |y| past ~354 saturates to +-i.
+Value im_tan_cot(const Value* args, Arena& arena, bool cot) {
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  const Complex c = z.value();
+  if (c.im == 0.0) {
+    const double t = std::tan(c.re);
+    return text_complex(Complex{cot ? 1.0 / t : t, 0.0, c.suffix}, arena);
+  }
+  if (c.im > 354.5 || c.im < -354.0) {
+    const double direction = (c.im > 354.5 ? 1.0 : -1.0) * (cot ? -1.0 : 1.0);
+    return text_complex(Complex{0.0, direction, c.suffix}, arena);
+  }
+  const double y2 = c.im * 2.0;
+  const double sinh_term = neg_two_sinh(y2);
+  const double cosh_term = two_cosh(y2);
+  const double t1 = cot ? std::cos(c.re) : std::sin(c.re);
+  const double a = t1 * 4.0;
+  const double d = (cosh_term + 2.0) - t1 * a;
+  const double t2 = cot ? std::sin(c.re) : std::cos(c.re);
+  const double real = t2 * a;
+  const double imag = cot ? sinh_term : -sinh_term;
+  return text_complex(Complex{real / d, imag / d, c.suffix}, arena);
+}
+
+// IMSINH (cosh == false) and IMCOSH: sinh x cos y + i cosh x sin y and
+// cosh x cos y + i sinh x sin y. Past |x| ~ 709 the products are formed
+// through logarithms; a negative factor there is #NUM!.
+Value im_sinh_cosh(const Value* args, Arena& arena, bool cosh) {
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  const Complex c = z.value();
+  const double neg_re = -c.re;
+  if (c.im == 0.0) {
+    const double v = cosh ? two_cosh(neg_re) : neg_two_sinh(neg_re);
+    return text_complex(Complex{v / 2.0, 0.0, c.suffix}, arena);
+  }
+  if (c.re > 709.0 || c.re < -708.0) {
+    const double magnitude = std::fabs(c.re);
+    const double a = std::cos(c.im) / 2.0;
+    const double b = std::sin(c.im) / 2.0;
+    if (!(a > 0.0) || !(b > 0.0)) {
+      return Value::error(ErrorCode::Num);
+    }
+    double real = std::exp(std::log(a) + magnitude);
+    double imag = std::exp(std::log(b) + magnitude);
+    if (c.re < 0.0) {
+      if (cosh) {
+        imag = -imag;
+      } else {
+        real = -real;
+      }
+    }
+    return text_complex(Complex{real, imag, c.suffix}, arena);
+  }
+  const double sinh_term = neg_two_sinh(neg_re);
+  const double cosh_term = two_cosh(neg_re);
+  const double real = (std::cos(c.im) / 2.0) * (cosh ? cosh_term : sinh_term);
+  const double imag = (std::sin(c.im) / 2.0) * (cosh ? sinh_term : cosh_term);
+  return text_complex(Complex{real, imag, c.suffix}, arena);
+}
+
+// IMCSCH (sech == false) and IMSECH: 1 / sinh z and 1 / cosh z.
+//
+//   D = (2sinh x)^2 + (-2 sin y)^2 | (2cos y)^2
+//   real = (2cos y) * (2sinh x | 2cosh x) / D
+//   imag = (-2 sin y) * (2cosh x | 2sinh x) / D
+//
+// For 354.5 < |x| <= 709 the quotient form is used, with the sinh helper
+// applied to x un-negated (so IMCSCH there carries the opposite sign).
+Value im_csch_sech(const Value* args, Arena& arena, bool sech) {
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  const Complex c = z.value();
+  const double neg_re = -c.re;
+  if (c.im == 0.0) {
+    const double v = sech ? two_cosh(neg_re) : neg_two_sinh(neg_re);
+    return text_complex(Complex{2.0 / v, 0.0, c.suffix}, arena);
+  }
+  if (c.re > 354.5 || c.re < -354.0) {
+    if (c.re > 709.0 || c.re < -708.0) {
+      return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
+    }
+    const double sinh_term = neg_two_sinh(c.re);
+    const double cosh_term = two_cosh(c.re);
+    const double real = (std::cos(c.im) * 2.0) / (sech ? cosh_term : sinh_term);
+    const double imag = (std::sin(c.im) * 2.0) / (sech ? sinh_term : cosh_term);
+    return text_complex(Complex{real, imag, c.suffix}, arena);
+  }
+  const double sinh_term = neg_two_sinh(neg_re);
+  const double cosh_term = two_cosh(neg_re);
+  const double a = std::cos(c.im) * 2.0;
+  const double b = std::sin(c.im) * -2.0;
+  const double real = a * (sech ? cosh_term : sinh_term);
+  const double imag = b * (sech ? sinh_term : cosh_term);
+  const double d = sinh_term * sinh_term + (sech ? a * a : b * b);
+  return text_complex(Complex{real / d, imag / d, c.suffix}, arena);
+}
+
+Value ImSin(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return im_sin_cos(args, arena, /*cos=*/false);
+}
+
+Value ImCos(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return im_sin_cos(args, arena, /*cos=*/true);
+}
+
+Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+  return im_tan_cot(args, arena, /*cot=*/false);
+}
+
 Value ImCot(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_trig_ratio(args, arena, /*cot=*/true);
-}
-
-// ---------------------------------------------------------------------------
-// Hyperbolic
-// ---------------------------------------------------------------------------
-
-Complex cplx_sinh(Complex z) {
-  return Complex{std::sinh(z.re) * std::cos(z.im), std::cosh(z.re) * std::sin(z.im), z.suffix};
-}
-
-Complex cplx_cosh(Complex z) {
-  return Complex{std::cosh(z.re) * std::cos(z.im), std::sinh(z.re) * std::sin(z.im), z.suffix};
+  return im_tan_cot(args, arena, /*cot=*/true);
 }
 
 Value ImSinh(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_text(&cplx_sinh, args, arena);
+  return im_sinh_cosh(args, arena, /*cosh=*/false);
 }
 
 Value ImCosh(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_text(&cplx_cosh, args, arena);
+  return im_sinh_cosh(args, arena, /*cosh=*/true);
 }
 
 Value ImSech(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_recip(&cplx_cosh, args, arena);
+  return im_csch_sech(args, arena, /*sech=*/true);
 }
 
 Value ImCsch(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_unary_recip(&cplx_sinh, args, arena);
+  return im_csch_sech(args, arena, /*sech=*/false);
 }
 
 }  // namespace

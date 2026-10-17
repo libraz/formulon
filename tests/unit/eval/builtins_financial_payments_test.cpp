@@ -447,6 +447,66 @@ TEST(ComplexText, MatchesExcelValues) {
   }
 }
 
+TEST(FinancialOddFirst, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=ODDFPRICE(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0785,0.065,100,2,0)",
+       111.31988204177658},
+      {"=ODDFPRICE(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,6,15),DATE(2009,3,1),0.0785,0.065,100,2,0)",
+       111.26923534442776},
+      {"=ODDFPRICE(DATE(2009,1,10),DATE(2021,3,1),DATE(2008,6,15),DATE(2009,3,1),0.0785,0.065,100,2,0)",
+       111.18886595243998},
+      {"=ODDFYIELD(DATE(2012,3,1),DATE(2022,2,28),DATE(2012,2,10),DATE(2012,8,31),0.0785,84.5,100,2,0)",
+       0.09649993958525949},
+      {"=ODDFYIELD(DATE(2010,1,15),DATE(2020,6,30),DATE(2009,10,1),DATE(2010,6,30),0.0785,84.5,100,2,1)",
+       0.09574388098247555},
+      {"=ODDFYIELD(DATE(2009,1,10),DATE(2021,3,1),DATE(2008,6,15),DATE(2009,3,1),0.0785,84.5,100,2,2)",
+       0.10082869870066025},
+      {"=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,99.74,100,2,0)",
+       0.05780093761027392},
+      {"=ODDFYIELD(DATE(2008,11,11),DATE(2009,9,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,105.5,100,2,0)",
+       -0.010321719871718392},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(FinancialOddFirst, FirstCouponOffTheMaturityScheduleIsNum) {
+  const Value v =
+      EvalSource("=ODDFPRICE(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,5),0.0785,0.065,100,2,0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(ComplexTrigHyperbolic, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    const char* expected;
+  };
+  const Case cases[] = {
+      {"=IMSIN(\"1+i\")", "1.29845758141598+0.634963914784736i"},
+      {"=IMCOS(\"1+i\")", "0.833730025131149-0.988897705762865i"},
+      {"=IMTAN(\"1+i\")", "0.271752585319512+1.08392332733869i"},
+      {"=IMCOT(\"1+i\")", "0.217621561854403-0.868014142895925i"},
+      {"=IMSINH(\"1+i\")", "0.634963914784736+1.29845758141598i"},
+      {"=IMCOSH(\"1+i\")", "0.833730025131149+0.988897705762865i"},
+      {"=IMCSCH(\"1+i\")", "0.303931001628426-0.621518017170429i"},
+      {"=IMSECH(\"1+i\")", "0.498337030555187-0.591083841721045i"},
+      {"=IMPRODUCT(IMCSCH(\"1+i\"),IMSINH(\"1+i\"))", "1-5.55111512312578E-17i"},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_text()) << c.formula;
+    EXPECT_EQ(v.as_text(), c.expected) << c.formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

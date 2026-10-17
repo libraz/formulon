@@ -213,25 +213,34 @@ TEST(FinancialOddf, RoundTripYieldFromPriceBasis4) {
 // ---------------------------------------------------------------------------
 
 TEST(FinancialOddf, ShortFirstPeriodSensiblePrice) {
-  // NC == 1 case: issue 2024-03-15, first_coupon 2024-09-15
-  // (semi-annual = 6 months apart -> exactly one normal period under
-  // 30/360, so NC=1 by definition). Settlement is in the middle.
-  // Coupon rate = yld -> price should be near par minus a small amount
-  // for the partial first-period accrual reduction (vs. a regular
-  // bond, ODDFPRICE accounts for the partial first coupon).
+  // Issue 2024-04-15, first_coupon 2024-09-15: a short first period (150 of
+  // 180 days). With rate == yld the price is close to par.
   const Value v = EvalSource(
-      "=ODDFPRICE(DATE(2024,6,1), DATE(2027,9,15), DATE(2024,3,15), DATE(2024,9,15), 0.05, 0.05, 100, 2, 0)");
+      "=ODDFPRICE(DATE(2024,6,1), DATE(2027,9,15), DATE(2024,4,15), DATE(2024,9,15), 0.05, 0.05, 100, 2, 0)");
   ASSERT_TRUE(v.is_number());
-  // For rate == yld and a non-trivial irregular first span, the price
-  // is close to par but not exactly par; sanity-check the range.
-  EXPECT_GT(v.as_number(), 80.0);
-  EXPECT_LT(v.as_number(), 110.0);
+  EXPECT_GT(v.as_number(), 95.0);
+  EXPECT_LT(v.as_number(), 105.0);
 
-  // Excel rejects the yield when issue -> first_coupon is exactly one regular period.
-  const Value yld_v =
+  char buf[64];
+  std::snprintf(buf, sizeof(buf), "%.17g", v.as_number());
+  const std::string yield_src =
+      std::string("=ODDFYIELD(DATE(2024,6,1), DATE(2027,9,15), DATE(2024,4,15), DATE(2024,9,15), 0.05, ") + buf +
+      ", 100, 2, 0)";
+  const Value yld_v = EvalSource(yield_src);
+  ASSERT_TRUE(yld_v.is_number());
+  EXPECT_NEAR(yld_v.as_number(), 0.05, 1e-9);
+}
+
+TEST(FinancialOddf, FirstPeriodOfExactlyOneRegularPeriodIsNum) {
+  // issue -> first_coupon spans exactly one regular period (DFC == E).
+  const Value price = EvalSource(
+      "=ODDFPRICE(DATE(2024,6,1), DATE(2027,9,15), DATE(2024,3,15), DATE(2024,9,15), 0.05, 0.05, 100, 2, 0)");
+  ASSERT_TRUE(price.is_error());
+  EXPECT_EQ(price.as_error(), ErrorCode::Num);
+  const Value yield =
       EvalSource("=ODDFYIELD(DATE(2024,6,1), DATE(2027,9,15), DATE(2024,3,15), DATE(2024,9,15), 0.05, 99, 100, 2, 0)");
-  ASSERT_TRUE(yld_v.is_error());
-  EXPECT_EQ(yld_v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(yield.is_error());
+  EXPECT_EQ(yield.as_error(), ErrorCode::Num);
 }
 
 // ---------------------------------------------------------------------------
