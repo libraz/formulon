@@ -162,7 +162,7 @@ Value Gauss(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finite_number_result(r);
 }
 
-// PHI(x) - standard-normal PDF: exp(-x^2 / 2) / sqrt(2 * pi). Defined for
+// PHI(x) - standard-normal PDF. Defined for
 // all finite x. Extreme |x| underflows to 0 without triggering `#NUM!`.
 Value Phi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto x_arg = read_number_arg(args, 0);
@@ -170,7 +170,7 @@ Value Phi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(x_arg.error());
   }
   const double x = x_arg.value();
-  return finite_number_result(std::exp(-0.5 * x * x) / std::sqrt(2.0 * kStatsPi));
+  return finite_number_result(normal_pdf_excel(x, 0.0, 1.0));
 }
 
 // ---------------------------------------------------------------------------

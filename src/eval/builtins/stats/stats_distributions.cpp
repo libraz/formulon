@@ -24,6 +24,7 @@
 
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
+#include "eval/excel_math.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/inverse_distributions.h"
@@ -40,15 +41,17 @@ namespace stats_detail {
 // Shared body of NORM.DIST / NORM.S.DIST. Returns the PDF or CDF of a
 // normal distribution with the given `mean` and `sd`. Assumes `sd > 0`;
 // callers must reject `sd <= 0` with `#NUM!` up front.
+double normal_pdf_excel(double x, double mean, double sd) {
+  double t = flush_subnormal((x - mean) / sd);
+  t = flush_subnormal(t * t);
+  t = flush_subnormal(t * -0.5);
+  t = std::exp(t);
+  t = flush_subnormal(t / sd);
+  return flush_subnormal(t * 0.3989422804014327);
+}
+
 static Value NormDistCompute(double x, double mean, double sd, bool cumulative) {
-  const double z = (x - mean) / sd;
-  double r;
-  if (cumulative) {
-    r = stats::normal_cdf(z);
-  } else {
-    r = std::exp(-0.5 * z * z) / (sd * std::sqrt(2.0 * kStatsPi));
-  }
-  return finite_number_result(r);
+  return finite_number_result(cumulative ? stats::normal_cdf((x - mean) / sd) : normal_pdf_excel(x, mean, sd));
 }
 
 // NORM.DIST(x, mean, sd, cumulative) - normal distribution PDF or CDF.
@@ -296,8 +299,8 @@ Value ChisqInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // EXPON.DIST(x, lambda, cumulative) - exponential distribution PDF or CDF.
-// `x < 0` or `lambda <= 0` yields `#NUM!`. PDF: lambda * exp(-lambda*x);
-// CDF: 1 - exp(-lambda*x).
+// `x < 0` or `lambda <= 0` yields `#NUM!`. With z = -lambda*x, PDF: exp(z) * lambda;
+// CDF: 0 - expm1(z).
 Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto input = read_pair_cumulative(args);
   if (!input) {
@@ -308,7 +311,8 @@ Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x < 0.0 || lambda <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = input.value().cumulative ? 1.0 - std::exp(-lambda * x) : lambda * std::exp(-lambda * x);
+  const double z = -flush_subnormal(lambda * x);
+  const double r = input.value().cumulative ? 0.0 - excel_expm1(z) : flush_subnormal(std::exp(z) * lambda);
   return finite_number_result(r);
 }
 

@@ -287,6 +287,10 @@ Value Fisher(const Value* args, std::uint32_t arity, Arena& arena);
 Value FisherInv(const Value* args, std::uint32_t arity, Arena& arena);
 Value Gauss(const Value* args, std::uint32_t arity, Arena& arena);
 Value Phi(const Value* args, std::uint32_t arity, Arena& arena);
+
+// Normal density of `x` for `mean` and `sd > 0`, evaluated operation by operation with
+// subnormal flushing; shared by NORM.DIST, NORM.S.DIST and PHI.
+double normal_pdf_excel(double x, double mean, double sd);
 Value NegBinomDist(const Value* args, std::uint32_t arity, Arena& arena);
 Value NegBinomDistLegacy(const Value* args, std::uint32_t arity, Arena& arena);
 Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& arena);

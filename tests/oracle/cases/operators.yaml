@@ -24,6 +24,7 @@ cases:
 
   - id: power_op
     formula: "=2^10"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: unary_negate
     formula: "=-5"
@@ -61,10 +62,12 @@ cases:
 
   - id: precedence_pow_over_mul
     formula: "=2*3^2"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: precedence_unary_over_pow
     description: "Excel: unary minus binds tighter than ^, so -2^2 = 4 (not -4)"
     formula: "=-2^2"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Comparison (returns BOOL) ------------------------------------------
   - id: cmp_eq_true
@@ -244,14 +247,17 @@ cases:
   - id: power_chain_left_assoc_2_3_2
     description: "Excel evaluates repeated ^ left-to-right: (2^3)^2 = 64, not 2^(3^2) = 512"
     formula: "=2^3^2"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: power_chain_left_assoc_4_3_2
     description: "Same left-associativity probe with a different base/exponent pair"
     formula: "=4^3^2"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: power_chain_left_assoc_triple
     description: "Three chained ^: ((2^3)^2)^2 = 4096"
     formula: "=2^3^2^2"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: power_negative_base_fractional_exp
     description: "(-2)^0.5 — non-real result; Excel: #NUM!"

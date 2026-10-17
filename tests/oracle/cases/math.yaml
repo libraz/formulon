@@ -141,12 +141,15 @@ cases:
   # -- POWER / SQRT -------------------------------------------------------
   - id: power_square
     formula: "=POWER(5,2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: power_fraction
     formula: "=POWER(2,0.5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: power_negative_base_int_exp
     formula: "=POWER(-2,3)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: power_zero_to_zero
     description: "Excel treats POWER(0,0) as indeterminate -> #NUM!, diverging from IEEE-754 pow (which returns 1)"
@@ -274,6 +277,7 @@ cases:
   - id: pi_squared
     description: "PI()^2 ~= 9.869604401089358"
     formula: "=PI()^2"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: pi_in_round
     description: "ROUND of PI to 5 digits exercises PI() inside another call"
@@ -402,84 +406,104 @@ cases:
   - id: mround_midpoint_offset_b0_d_2neg48
     description: "Midpoint offset fence: b=0, d=2^-48"
     formula: "=MROUND(0+0.5-2^-48,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b0_d_3x2neg49
     description: "Midpoint offset fence: b=0, d=3*2^-49"
     formula: "=MROUND(0+0.5-3*2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b0_d_2neg47
     description: "Midpoint offset fence: b=0, d=2^-47"
     formula: "=MROUND(0+0.5-2^-47,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b14_d_2neg48
     description: "Midpoint offset fence: b=14, d=2^-48"
     formula: "=MROUND(14+0.5-2^-48,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b14_d_3x2neg49
     description: "Midpoint offset fence: b=14, d=3*2^-49"
     formula: "=MROUND(14+0.5-3*2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b14_d_2neg47
     description: "Midpoint offset fence: b=14, d=2^-47"
     formula: "=MROUND(14+0.5-2^-47,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b60_d_2neg48
     description: "Midpoint offset fence: b=60, d=2^-48"
     formula: "=MROUND(60+0.5-2^-48,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b60_d_3x2neg49
     description: "Midpoint offset fence: b=60, d=3*2^-49"
     formula: "=MROUND(60+0.5-3*2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b60_d_2neg47
     description: "Midpoint offset fence: b=60, d=2^-47"
     formula: "=MROUND(60+0.5-2^-47,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b100_d_2neg48
     description: "Midpoint offset fence: b=100, d=2^-48"
     formula: "=MROUND(100+0.5-2^-48,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b100_d_3x2neg49
     description: "Midpoint offset fence: b=100, d=3*2^-49"
     formula: "=MROUND(100+0.5-3*2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_offset_b100_d_2neg47
     description: "Midpoint offset fence: b=100, d=2^-47"
     formula: "=MROUND(100+0.5-2^-47,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # Phase-2 threshold fence. Extend the below-half boundary at the same
   # b-values with smaller and larger offsets, plus exact-midpoint controls.
   - id: mround_midpoint_threshold_b0_d_2neg49
     description: "Below-half threshold fence: b=0, d=2^-49"
     formula: "=MROUND(0+0.5-2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_threshold_b0_d_2neg46
     description: "Below-half threshold fence: b=0, d=2^-46"
     formula: "=MROUND(0+0.5-2^-46,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_threshold_b14_d_2neg49
     description: "Below-half threshold fence: b=14, d=2^-49"
     formula: "=MROUND(14+0.5-2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_threshold_b14_d_2neg46
     description: "Below-half threshold fence: b=14, d=2^-46"
     formula: "=MROUND(14+0.5-2^-46,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_threshold_b60_d_2neg49
     description: "Below-half threshold fence: b=60, d=2^-49"
     formula: "=MROUND(60+0.5-2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_threshold_b60_d_2neg46
     description: "Below-half threshold fence: b=60, d=2^-46"
     formula: "=MROUND(60+0.5-2^-46,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_threshold_b100_d_2neg49
     description: "Below-half threshold fence: b=100, d=2^-49"
     formula: "=MROUND(100+0.5-2^-49,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_threshold_b100_d_2neg46
     description: "Below-half threshold fence: b=100, d=2^-46"
     formula: "=MROUND(100+0.5-2^-46,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_exact_b0
     description: "Exact midpoint control: b=0"
@@ -500,14 +524,17 @@ cases:
   - id: mround_midpoint_above_b14_d_2neg48
     description: "Above-half control: b=14, d=2^-48"
     formula: "=MROUND(14+0.5+2^-48,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_above_b60_d_2neg48
     description: "Above-half control: b=60, d=2^-48"
     formula: "=MROUND(60+0.5+2^-48,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_midpoint_above_b100_d_2neg48
     description: "Above-half control: b=100, d=2^-48"
     formula: "=MROUND(100+0.5+2^-48,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # Exact binary64 sweep through the remaining ambiguous below-half window.
   # k=64 and k=96 overlap earlier coarse fences intentionally: this contiguous
@@ -515,306 +542,445 @@ cases:
   # considered.  Do not infer a cutoff from the YAML source itself.
   - id: mround_midpoint_ulp_sweep_k063
     formula: "=MROUND(0.5-63*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k064
     formula: "=MROUND(0.5-64*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k065
     formula: "=MROUND(0.5-65*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k066
     formula: "=MROUND(0.5-66*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k067
     formula: "=MROUND(0.5-67*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k068
     formula: "=MROUND(0.5-68*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k069
     formula: "=MROUND(0.5-69*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k070
     formula: "=MROUND(0.5-70*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k071
     formula: "=MROUND(0.5-71*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k072
     formula: "=MROUND(0.5-72*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k073
     formula: "=MROUND(0.5-73*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k074
     formula: "=MROUND(0.5-74*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k075
     formula: "=MROUND(0.5-75*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k076
     formula: "=MROUND(0.5-76*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k077
     formula: "=MROUND(0.5-77*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k078
     formula: "=MROUND(0.5-78*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k079
     formula: "=MROUND(0.5-79*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k080
     formula: "=MROUND(0.5-80*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k081
     formula: "=MROUND(0.5-81*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k082
     formula: "=MROUND(0.5-82*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k083
     formula: "=MROUND(0.5-83*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k084
     formula: "=MROUND(0.5-84*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k085
     formula: "=MROUND(0.5-85*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k086
     formula: "=MROUND(0.5-86*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k087
     formula: "=MROUND(0.5-87*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k088
     formula: "=MROUND(0.5-88*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k089
     formula: "=MROUND(0.5-89*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k090
     formula: "=MROUND(0.5-90*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k091
     formula: "=MROUND(0.5-91*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k092
     formula: "=MROUND(0.5-92*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k093
     formula: "=MROUND(0.5-93*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k094
     formula: "=MROUND(0.5-94*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k095
     formula: "=MROUND(0.5-95*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k096
     formula: "=MROUND(0.5-96*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_ulp_sweep_k097
     formula: "=MROUND(0.5-97*2^-54,1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # Re-run the discovered adjacent cutoffs across base magnitude, multiple,
   # and sign. The quotient records preserve the exact payload used by each
   # decision, so a local rule is admitted only if this matrix agrees.
   - id: mround_midpoint_quotient_b0_m0p1_k090
     formula: "=ABS((0+0.5-90*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m0p1_pos_k090
     formula: "=MROUND((0+0.5-90*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m0p1_neg_k090
     formula: "=MROUND(-((0+0.5-90*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m0p1_k091
     formula: "=ABS((0+0.5-91*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m0p1_pos_k091
     formula: "=MROUND((0+0.5-91*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m0p1_neg_k091
     formula: "=MROUND(-((0+0.5-91*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m1_k090
     formula: "=ABS((0+0.5-90*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m1_pos_k090
     formula: "=MROUND((0+0.5-90*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m1_neg_k090
     formula: "=MROUND(-((0+0.5-90*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m1_k091
     formula: "=ABS((0+0.5-91*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m1_pos_k091
     formula: "=MROUND((0+0.5-91*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m1_neg_k091
     formula: "=MROUND(-((0+0.5-91*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m10_k090
     formula: "=ABS((0+0.5-90*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m10_pos_k090
     formula: "=MROUND((0+0.5-90*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m10_neg_k090
     formula: "=MROUND(-((0+0.5-90*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m10_k091
     formula: "=ABS((0+0.5-91*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m10_pos_k091
     formula: "=MROUND((0+0.5-91*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b0_m10_neg_k091
     formula: "=MROUND(-((0+0.5-91*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m0p1_k090
     formula: "=ABS((14+0.5-90*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m0p1_pos_k090
     formula: "=MROUND((14+0.5-90*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m0p1_neg_k090
     formula: "=MROUND(-((14+0.5-90*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m0p1_k091
     formula: "=ABS((14+0.5-91*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m0p1_pos_k091
     formula: "=MROUND((14+0.5-91*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m0p1_neg_k091
     formula: "=MROUND(-((14+0.5-91*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m1_k090
     formula: "=ABS((14+0.5-90*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m1_pos_k090
     formula: "=MROUND((14+0.5-90*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m1_neg_k090
     formula: "=MROUND(-((14+0.5-90*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m1_k091
     formula: "=ABS((14+0.5-91*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m1_pos_k091
     formula: "=MROUND((14+0.5-91*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m1_neg_k091
     formula: "=MROUND(-((14+0.5-91*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m10_k090
     formula: "=ABS((14+0.5-90*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m10_pos_k090
     formula: "=MROUND((14+0.5-90*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m10_neg_k090
     formula: "=MROUND(-((14+0.5-90*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m10_k091
     formula: "=ABS((14+0.5-91*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m10_pos_k091
     formula: "=MROUND((14+0.5-91*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b14_m10_neg_k091
     formula: "=MROUND(-((14+0.5-91*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m0p1_k090
     formula: "=ABS((60+0.5-90*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m0p1_pos_k090
     formula: "=MROUND((60+0.5-90*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m0p1_neg_k090
     formula: "=MROUND(-((60+0.5-90*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m0p1_k091
     formula: "=ABS((60+0.5-91*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m0p1_pos_k091
     formula: "=MROUND((60+0.5-91*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m0p1_neg_k091
     formula: "=MROUND(-((60+0.5-91*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m1_k090
     formula: "=ABS((60+0.5-90*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m1_pos_k090
     formula: "=MROUND((60+0.5-90*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m1_neg_k090
     formula: "=MROUND(-((60+0.5-90*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m1_k091
     formula: "=ABS((60+0.5-91*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m1_pos_k091
     formula: "=MROUND((60+0.5-91*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m1_neg_k091
     formula: "=MROUND(-((60+0.5-91*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m10_k090
     formula: "=ABS((60+0.5-90*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m10_pos_k090
     formula: "=MROUND((60+0.5-90*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m10_neg_k090
     formula: "=MROUND(-((60+0.5-90*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m10_k091
     formula: "=ABS((60+0.5-91*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m10_pos_k091
     formula: "=MROUND((60+0.5-91*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b60_m10_neg_k091
     formula: "=MROUND(-((60+0.5-91*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m0p1_k090
     formula: "=ABS((100+0.5-90*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m0p1_pos_k090
     formula: "=MROUND((100+0.5-90*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m0p1_neg_k090
     formula: "=MROUND(-((100+0.5-90*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m0p1_k091
     formula: "=ABS((100+0.5-91*2^-54)*0.1)/ABS(0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m0p1_pos_k091
     formula: "=MROUND((100+0.5-91*2^-54)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m0p1_neg_k091
     formula: "=MROUND(-((100+0.5-91*2^-54)*0.1),-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m1_k090
     formula: "=ABS((100+0.5-90*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m1_pos_k090
     formula: "=MROUND((100+0.5-90*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m1_neg_k090
     formula: "=MROUND(-((100+0.5-90*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m1_k091
     formula: "=ABS((100+0.5-91*2^-54)*1)/ABS(1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m1_pos_k091
     formula: "=MROUND((100+0.5-91*2^-54)*1,1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m1_neg_k091
     formula: "=MROUND(-((100+0.5-91*2^-54)*1),-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m10_k090
     formula: "=ABS((100+0.5-90*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m10_pos_k090
     formula: "=MROUND((100+0.5-90*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m10_neg_k090
     formula: "=MROUND(-((100+0.5-90*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m10_k091
     formula: "=ABS((100+0.5-91*2^-54)*10)/ABS(10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m10_pos_k091
     formula: "=MROUND((100+0.5-91*2^-54)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_scale_b100_m10_neg_k091
     formula: "=MROUND(-((100+0.5-91*2^-54)*10),-10)"
+    tolerance: { abs: 0, rel: 0 }
 
   # Negative-payload fingerprints are separate records so sign symmetry is
   # checked at the IEEE-754 payload boundary rather than inferred.
   - id: mround_midpoint_quotient_b0_m0p1_neg_k090
     formula: "=ABS(-((0+0.5-90*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m0p1_neg_k091
     formula: "=ABS(-((0+0.5-91*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m1_neg_k090
     formula: "=ABS(-((0+0.5-90*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m1_neg_k091
     formula: "=ABS(-((0+0.5-91*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m10_neg_k090
     formula: "=ABS(-((0+0.5-90*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b0_m10_neg_k091
     formula: "=ABS(-((0+0.5-91*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m0p1_neg_k090
     formula: "=ABS(-((14+0.5-90*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m0p1_neg_k091
     formula: "=ABS(-((14+0.5-91*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m1_neg_k090
     formula: "=ABS(-((14+0.5-90*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m1_neg_k091
     formula: "=ABS(-((14+0.5-91*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m10_neg_k090
     formula: "=ABS(-((14+0.5-90*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b14_m10_neg_k091
     formula: "=ABS(-((14+0.5-91*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m0p1_neg_k090
     formula: "=ABS(-((60+0.5-90*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m0p1_neg_k091
     formula: "=ABS(-((60+0.5-91*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m1_neg_k090
     formula: "=ABS(-((60+0.5-90*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m1_neg_k091
     formula: "=ABS(-((60+0.5-91*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m10_neg_k090
     formula: "=ABS(-((60+0.5-90*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b60_m10_neg_k091
     formula: "=ABS(-((60+0.5-91*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m0p1_neg_k090
     formula: "=ABS(-((100+0.5-90*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m0p1_neg_k091
     formula: "=ABS(-((100+0.5-91*2^-54)*0.1))/ABS(-0.1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m1_neg_k090
     formula: "=ABS(-((100+0.5-90*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m1_neg_k091
     formula: "=ABS(-((100+0.5-91*2^-54)*1))/ABS(-1)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m10_neg_k090
     formula: "=ABS(-((100+0.5-90*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   - id: mround_midpoint_quotient_b100_m10_neg_k091
     formula: "=ABS(-((100+0.5-91*2^-54)*10))/ABS(-10)"
+    tolerance: { abs: 0, rel: 0 }
   # Hold the quotient boundary constant while changing the original
   # magnitude, so a correction can be judged against both representations.
   - id: mround_quotient_boundary_b0_m01
     description: "Fixed quotient boundary with b=0 and multiple=0.1"
     formula: "=MROUND((0+0.5-2^-48)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_quotient_boundary_b0_m10
     description: "Fixed quotient boundary with b=0 and multiple=10"
     formula: "=MROUND((0+0.5-2^-48)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_quotient_boundary_b14_m01
     description: "Fixed quotient boundary with b=14 and multiple=0.1"
     formula: "=MROUND((14+0.5-2^-48)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_quotient_boundary_b14_m10
     description: "Fixed quotient boundary with b=14 and multiple=10"
     formula: "=MROUND((14+0.5-2^-48)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_quotient_boundary_b60_m01
     description: "Fixed quotient boundary with b=60 and multiple=0.1"
     formula: "=MROUND((60+0.5-2^-48)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_quotient_boundary_b60_m10
     description: "Fixed quotient boundary with b=60 and multiple=10"
     formula: "=MROUND((60+0.5-2^-48)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_quotient_boundary_b100_m01
     description: "Fixed quotient boundary with b=100 and multiple=0.1"
     formula: "=MROUND((100+0.5-2^-48)*0.1,0.1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: mround_quotient_boundary_b100_m10
     description: "Fixed quotient boundary with b=100 and multiple=10"
     formula: "=MROUND((100+0.5-2^-48)*10,10)"
+    tolerance: { abs: 0, rel: 0 }
 
   # The same decimal midpoint through distinct Excel input paths.
   - id: mround_provenance_arithmetic_6_05
@@ -1016,22 +1182,27 @@ cases:
   - id: seriessum_binary_polynomial
     description: "Σ xⁱ for i=0..3 with x=2 and unit coefficients -> 15"
     formula: "=SERIESSUM(2, 0, 1, {1;1;1;1})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_step_two
     description: "2² + 2⁴ = 20"
     formula: "=SERIESSUM(2, 2, 2, {1;1})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_x_equals_one
     description: "x=1 makes every power one: sum is just Σ coefficients"
     formula: "=SERIESSUM(1, 0, 1, {5;5;5})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_negative_x
     description: "x=-1 with unit coefficients alternates: 1 + (-1) + 1 + (-1) = 0"
     formula: "=SERIESSUM(-1, 0, 1, {1;1;1;1})"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_offset_initial_power
     description: "Initial power n=2 with x=3: 1*3^2 + 1*3^3 = 9 + 27 = 36"
     formula: "=SERIESSUM(3, 2, 1, {1;1})"
+    tolerance: { abs: 0, rel: 0 }
 
   # Every case above passes the coefficients as an array literal. The
   # argument is documented as a range or array, and what a bare scalar
@@ -1041,20 +1212,24 @@ cases:
   - id: seriessum_scalar_coefficient
     description: "A bare scalar coefficient: 1*2^0 read as a one-term series?"
     formula: "=SERIESSUM(2, 0, 1, 1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_scalar_coefficient_nonunit
     description: "A bare non-unit scalar coefficient with a non-zero initial power"
     formula: "=SERIESSUM(3, 2, 1, 5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_single_cell_range_coefficient
     description: "A one-cell range coefficient, the spelling between scalar and array"
     setup: { A1: 5 }
     formula: "=SERIESSUM(3, 2, 1, A1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_range_coefficients
     description: "A multi-cell range coefficient: the range spelling of {1;1}"
     setup: { A1: 1, A2: 1 }
     formula: "=SERIESSUM(3, 2, 1, A1:A2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: seriessum_scalar_text_coefficient
     description: "A text coefficient in the scalar position"
@@ -1138,3 +1313,48 @@ cases:
   - id: sumsq_omit
     description: "Excel 365: 25"
     formula: "=SUMSQ(3,,4)"
+
+  - id: power_ten_op_100
+    description: "10^100"
+    formula: "=10^100"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: power_ten_op_300
+    description: "10^300"
+    formula: "=10^300"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: power_ten_fn_200
+    description: "POWER(10,200)"
+    formula: "=POWER(10,200)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: power_ten_op_308
+    description: "10^308"
+    formula: "=10^308"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: seriessum_step_tenth
+    description: "Exponent advanced by repeated addition"
+    formula: "=SERIESSUM(1.5,0,0.1,{1;1;1;1;1;1;1;1;1;1;1;1})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: seriessum_step_tenth_offset
+    description: "Exponent advanced by repeated addition from 0.2"
+    formula: "=SERIESSUM(1.5,0.2,0.1,{1;1;1;1;1;1;1;1;1;1;1;1})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: seriessum_negative_base_half_step
+    description: "Negative base, non-integral exponents dropped"
+    formula: "=SERIESSUM(-2.2,0,0.5,{1;2})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: seriessum_negative_base_third
+    description: "Negative base, exponent 1/3 dropped"
+    formula: "=SERIESSUM(-8,1/3,1,{1})"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: seriessum_ten_large_exponents
+    description: "Power of ten through SERIESSUM"
+    formula: "=SERIESSUM(10,100,100,{1;1;1})"
+    tolerance: { abs: 0, rel: 0 }

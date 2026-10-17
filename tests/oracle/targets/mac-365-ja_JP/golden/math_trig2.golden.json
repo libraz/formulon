@@ -101,6 +101,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0000000000000009
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {

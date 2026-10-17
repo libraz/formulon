@@ -45,6 +45,7 @@ cases:
   - id: mul_back_to_normal
     description: "a subnormal scaled back into range survives"
     formula: "=SQRT(ABS(EXP(-720)*2^60))*1E200"
+    tolerance: { abs: 0, rel: 0 }
   - id: besselk_recurrence_flush
     description: "BESSELK(700,2) equals BESSELK(700,0)"
     formula: "=IF(BESSELK(700,2)=BESSELK(700,0),1,2)"

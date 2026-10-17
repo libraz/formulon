@@ -12,14 +12,17 @@ cases:
   - id: norm_dist_pdf_zero
     description: "PDF of N(0, 1) at 0 = 1/sqrt(2*pi) ~ 0.398942"
     formula: "=NORM.DIST(0, 0, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_dist_cdf_zero
     description: "CDF of N(0, 1) at 0 = 0.5"
     formula: "=NORM.DIST(0, 0, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_dist_cdf_one
     description: "CDF of N(0, 1) at 1 ~ 0.841345"
     formula: "=NORM.DIST(1, 0, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
     tolerance: { abs: 0, rel: 0 }
 
   - id: norm_dist_scaled
@@ -34,13 +37,16 @@ cases:
   # -- NORM.S.DIST ---------------------------------------------------------
   - id: norm_s_dist_zero_cdf
     formula: "=NORM.S.DIST(0, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_s_dist_z2_cdf
     description: "Standard-normal CDF at z=2 ~ 0.977250"
     formula: "=NORM.S.DIST(2, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_s_dist_z0_pdf
     formula: "=NORM.S.DIST(0, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- NORM.INV ------------------------------------------------------------
   - id: norm_inv_half
@@ -124,14 +130,17 @@ cases:
   - id: expon_pdf_zero
     description: "Exponential(1) PDF at 0 = lambda = 1"
     formula: "=EXPON.DIST(0, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: expon_cdf_zero
     description: "Exponential CDF at 0 = 0"
     formula: "=EXPON.DIST(0, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: expon_cdf_ln2
     description: "Exponential(1) CDF at ln(2) = 0.5 (median)"
     formula: "=EXPON.DIST(LN(2), 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: expon_negative_lambda_is_num
     description: "lambda <= 0 yields #NUM!"
@@ -210,10 +219,12 @@ cases:
   - id: phi_zero
     description: "1 / sqrt(2*pi) ~ 0.398942"
     formula: "=PHI(0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: phi_one
     description: "exp(-0.5) / sqrt(2*pi) ~ 0.241971"
     formula: "=PHI(1)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- NEGBINOM.DIST / NEGBINOMDIST ----------------------------------------
   - id: negbinom_dist_pmf
@@ -334,6 +345,7 @@ cases:
   - id: expon_pdf_lambda_two_at_one
     description: "Exponential(2) PDF at 1 = 2*exp(-2) ~ 0.270671"
     formula: "=EXPON.DIST(1, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- FISHER / FISHERINV (extra perspectives) -----------------------------
   - id: fisher_negative_half
@@ -406,10 +418,12 @@ cases:
     description: "Standard-normal CDF at z=-1 ~ 0.158655"
     formula: "=NORM.S.DIST(-1, TRUE)"
     tolerance: { abs: 0, rel: 0 }
+    tolerance: { abs: 0, rel: 0 }
 
   - id: norm_s_dist_z2_pdf
     description: "Standard-normal PDF at z=2 ~ 0.053991"
     formula: "=NORM.S.DIST(2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- NORM.S.INV (extra perspectives) -------------------------------------
   - id: norm_s_inv_lower_tail
@@ -429,14 +443,17 @@ cases:
   - id: phi_negative
     description: "PHI is symmetric: PHI(-1) = PHI(1)"
     formula: "=PHI(-1)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: phi_two
     description: "Standard-normal PDF at 2 ~ 0.053991"
     formula: "=PHI(2)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: phi_large
     description: "Large |x| drives the PDF to ~0"
     formula: "=PHI(6)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- POISSON.DIST (extra perspective) ------------------------------------
   - id: poisson_dist_large_mean
@@ -465,4 +482,69 @@ cases:
   - id: pf_binomdist
     description: "Excel 365: 0.49999999999999994"
     formula: "=BINOM.DIST(1,2.9999999,0.5,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: phi_far_tail_flushes
+    description: "PHI(38.5)"
+    formula: "=PHI(38.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: phi_midrange_a
+    description: "PHI(4.2697)"
+    formula: "=PHI(4.2697)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: phi_midrange_b
+    description: "PHI(-2.8921)"
+    formula: "=PHI(-2.8921)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: norm_dist_pdf_far_tail
+    description: "NORM.DIST pdf in the far tail"
+    formula: "=NORM.DIST(17.947,-3.482,1.962,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: norm_dist_pdf_flushed
+    description: "NORM.DIST pdf underflowing to zero"
+    formula: "=NORM.DIST(39,1,1,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: norm_dist_pdf_midrange
+    description: "NORM.DIST pdf near the mean"
+    formula: "=NORM.DIST(3.474,2.227,1.206,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: norm_s_dist_pdf_tail
+    description: "NORM.S.DIST pdf"
+    formula: "=NORM.S.DIST(4.493,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: norm_s_dist_pdf_negative
+    description: "NORM.S.DIST pdf at a negative argument"
+    formula: "=NORM.S.DIST(-3.1222,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: expon_dist_cdf_near_one
+    description: "EXPON.DIST cdf close to 1"
+    formula: "=EXPON.DIST(6.999,4.305,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: expon_dist_pdf_small
+    description: "EXPON.DIST pdf"
+    formula: "=EXPON.DIST(6.999,4.305,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: expon_dist_cdf_tiny_x
+    description: "EXPON.DIST cdf for tiny x"
+    formula: "=EXPON.DIST(1E-300,1,TRUE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: expon_dist_pdf_underflow
+    description: "EXPON.DIST pdf underflowing to zero"
+    formula: "=EXPON.DIST(745,1,FALSE)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: expondist_legacy_cdf
+    description: "EXPONDIST legacy spelling"
+    formula: "=EXPONDIST(19.898,1.523,TRUE)"
     tolerance: { abs: 0, rel: 0 }

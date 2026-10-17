@@ -14,12 +14,15 @@ cases:
   # -- NORMDIST / NORMINV / NORMSDIST / NORMSINV ---------------------------
   - id: normdist_cdf
     formula: "=NORMDIST(1.5, 0, 1, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normdist_pdf
     formula: "=NORMDIST(1.5, 0, 1, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normdist_nonstandard_cdf
     formula: "=NORMDIST(110, 100, 15, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normdist_sd_zero_is_num
     description: "sd <= 0 surfaces #NUM! just like NORM.DIST"
@@ -36,9 +39,11 @@ cases:
   - id: normsdist_legacy_is_cumulative
     description: "Legacy NORMSDIST has no cumulative flag — always CDF"
     formula: "=NORMSDIST(1.96)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsdist_at_zero_is_half
     formula: "=NORMSDIST(0)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsinv_upper_tail
     formula: "=NORMSINV(0.975)"
@@ -86,9 +91,11 @@ cases:
   # -- EXPONDIST -----------------------------------------------------------
   - id: expondist_cdf
     formula: "=EXPONDIST(1, 2, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: expondist_pdf
     formula: "=EXPONDIST(1, 2, FALSE)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: expondist_negative_x_is_num
     formula: "=EXPONDIST(-1, 2, TRUE)"
@@ -253,10 +260,12 @@ cases:
   - id: normsdist_large_positive
     description: "CDF saturates near 1 for large x"
     formula: "=NORMSDIST(5)"
+    tolerance: { abs: 0, rel: 0 }
 
   - id: normsdist_negative
     description: "Symmetry: NORMSDIST(-1) = 1 - NORMSDIST(1)"
     formula: "=NORMSDIST(-1)"
+    tolerance: { abs: 0, rel: 0 }
     tolerance: { abs: 0, rel: 0 }
 
   - id: normsinv_median
@@ -295,6 +304,7 @@ cases:
   - id: expondist_at_zero_cdf
     description: "EXPONDIST(0, lambda, TRUE) = 0"
     formula: "=EXPONDIST(0, 2, TRUE)"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- Additional CHIDIST / CHIINV perspectives ---------------------------
   - id: chidist_large_x
@@ -513,3 +523,4 @@ cases:
   - id: normsdist_lower_tail
     description: "Standard-normal CDF at -1.96 = 0.025"
     formula: "=NORMSDIST(-1.96)"
+    tolerance: { abs: 0, rel: 0 }

@@ -353,6 +353,10 @@
       "expect": {
         "kind": "number",
         "value": 25.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -362,6 +366,10 @@
       "expect": {
         "kind": "number",
         "value": 1.4142135623730951
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -371,6 +379,10 @@
       "expect": {
         "kind": "number",
         "value": -8.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -677,6 +689,10 @@
       "expect": {
         "kind": "number",
         "value": 9.869604401089358
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -956,6 +972,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -965,6 +985,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -974,6 +998,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -983,6 +1011,10 @@
       "expect": {
         "kind": "number",
         "value": 15.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -992,6 +1024,10 @@
       "expect": {
         "kind": "number",
         "value": 14.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1001,6 +1037,10 @@
       "expect": {
         "kind": "number",
         "value": 14.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1010,6 +1050,10 @@
       "expect": {
         "kind": "number",
         "value": 61.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1019,6 +1063,10 @@
       "expect": {
         "kind": "number",
         "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1028,6 +1076,10 @@
       "expect": {
         "kind": "number",
         "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1037,6 +1089,10 @@
       "expect": {
         "kind": "number",
         "value": 101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1046,6 +1102,10 @@
       "expect": {
         "kind": "number",
         "value": 101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1055,6 +1115,10 @@
       "expect": {
         "kind": "number",
         "value": 101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1064,6 +1128,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1073,6 +1141,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1082,6 +1154,10 @@
       "expect": {
         "kind": "number",
         "value": 15.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1091,6 +1167,10 @@
       "expect": {
         "kind": "number",
         "value": 14.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1100,6 +1180,10 @@
       "expect": {
         "kind": "number",
         "value": 61.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1109,6 +1193,10 @@
       "expect": {
         "kind": "number",
         "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1118,6 +1206,10 @@
       "expect": {
         "kind": "number",
         "value": 101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1127,6 +1219,10 @@
       "expect": {
         "kind": "number",
         "value": 100.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1172,6 +1268,10 @@
       "expect": {
         "kind": "number",
         "value": 15.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1181,6 +1281,10 @@
       "expect": {
         "kind": "number",
         "value": 61.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1190,6 +1294,10 @@
       "expect": {
         "kind": "number",
         "value": 101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1199,6 +1307,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1208,6 +1320,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1217,6 +1333,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1226,6 +1346,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1235,6 +1359,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1244,6 +1372,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1253,6 +1385,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1262,6 +1398,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1271,6 +1411,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1280,6 +1424,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1289,6 +1437,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1298,6 +1450,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1307,6 +1463,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1316,6 +1476,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1325,6 +1489,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1334,6 +1502,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1343,6 +1515,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1352,6 +1528,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1361,6 +1541,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1370,6 +1554,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1379,6 +1567,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1388,6 +1580,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1397,6 +1593,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1406,6 +1606,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1415,6 +1619,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1424,6 +1632,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1433,6 +1645,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1442,6 +1658,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1451,6 +1671,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1460,6 +1684,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1469,6 +1697,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1478,6 +1710,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1487,6 +1723,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1496,6 +1736,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1505,6 +1749,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1514,6 +1762,10 @@
       "expect": {
         "kind": "number",
         "value": 0.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1523,6 +1775,10 @@
       "expect": {
         "kind": "number",
         "value": 0.1
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1532,6 +1788,10 @@
       "expect": {
         "kind": "number",
         "value": -0.1
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1541,6 +1801,10 @@
       "expect": {
         "kind": "number",
         "value": 0.49999999999999495
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1550,6 +1814,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1559,6 +1827,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1568,6 +1840,10 @@
       "expect": {
         "kind": "number",
         "value": 0.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1577,6 +1853,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1586,6 +1866,10 @@
       "expect": {
         "kind": "number",
         "value": -1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1595,6 +1879,10 @@
       "expect": {
         "kind": "number",
         "value": 0.49999999999999495
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1604,6 +1892,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1613,6 +1905,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1622,6 +1918,10 @@
       "expect": {
         "kind": "number",
         "value": 0.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1631,6 +1931,10 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1640,6 +1944,10 @@
       "expect": {
         "kind": "number",
         "value": -10.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1649,6 +1957,10 @@
       "expect": {
         "kind": "number",
         "value": 0.49999999999999495
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1658,6 +1970,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1667,6 +1983,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1676,6 +1996,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1685,6 +2009,10 @@
       "expect": {
         "kind": "number",
         "value": 1.4000000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1694,6 +2022,10 @@
       "expect": {
         "kind": "number",
         "value": -1.4000000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1703,6 +2035,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1712,6 +2048,10 @@
       "expect": {
         "kind": "number",
         "value": 1.4000000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1721,6 +2061,10 @@
       "expect": {
         "kind": "number",
         "value": -1.4000000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1730,6 +2074,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1739,6 +2087,10 @@
       "expect": {
         "kind": "number",
         "value": 14.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1748,6 +2100,10 @@
       "expect": {
         "kind": "number",
         "value": -14.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1757,6 +2113,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1766,6 +2126,10 @@
       "expect": {
         "kind": "number",
         "value": 14.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1775,6 +2139,10 @@
       "expect": {
         "kind": "number",
         "value": -14.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1784,6 +2152,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1793,6 +2165,10 @@
       "expect": {
         "kind": "number",
         "value": 140.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1802,6 +2178,10 @@
       "expect": {
         "kind": "number",
         "value": -140.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1811,6 +2191,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1820,6 +2204,10 @@
       "expect": {
         "kind": "number",
         "value": 140.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1829,6 +2217,10 @@
       "expect": {
         "kind": "number",
         "value": -140.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1838,6 +2230,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1847,6 +2243,10 @@
       "expect": {
         "kind": "number",
         "value": 6.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1856,6 +2256,10 @@
       "expect": {
         "kind": "number",
         "value": -6.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1865,6 +2269,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1874,6 +2282,10 @@
       "expect": {
         "kind": "number",
         "value": 6.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1883,6 +2295,10 @@
       "expect": {
         "kind": "number",
         "value": -6.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1892,6 +2308,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1901,6 +2321,10 @@
       "expect": {
         "kind": "number",
         "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1910,6 +2334,10 @@
       "expect": {
         "kind": "number",
         "value": -60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1919,6 +2347,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1928,6 +2360,10 @@
       "expect": {
         "kind": "number",
         "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1937,6 +2373,10 @@
       "expect": {
         "kind": "number",
         "value": -60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1946,6 +2386,10 @@
       "expect": {
         "kind": "number",
         "value": 60.499999999999986
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1955,6 +2399,10 @@
       "expect": {
         "kind": "number",
         "value": 600.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1964,6 +2412,10 @@
       "expect": {
         "kind": "number",
         "value": -600.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1973,6 +2425,10 @@
       "expect": {
         "kind": "number",
         "value": 60.499999999999986
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1982,6 +2438,10 @@
       "expect": {
         "kind": "number",
         "value": 600.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -1991,6 +2451,10 @@
       "expect": {
         "kind": "number",
         "value": -600.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2000,6 +2464,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2009,6 +2477,10 @@
       "expect": {
         "kind": "number",
         "value": 10.100000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2018,6 +2490,10 @@
       "expect": {
         "kind": "number",
         "value": -10.100000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2027,6 +2503,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2036,6 +2516,10 @@
       "expect": {
         "kind": "number",
         "value": 10.100000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2045,6 +2529,10 @@
       "expect": {
         "kind": "number",
         "value": -10.100000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2054,6 +2542,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2063,6 +2555,10 @@
       "expect": {
         "kind": "number",
         "value": 101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2072,6 +2568,10 @@
       "expect": {
         "kind": "number",
         "value": -101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2081,6 +2581,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2090,6 +2594,10 @@
       "expect": {
         "kind": "number",
         "value": 101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2099,6 +2607,10 @@
       "expect": {
         "kind": "number",
         "value": -101.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2108,6 +2620,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2117,6 +2633,10 @@
       "expect": {
         "kind": "number",
         "value": 1010.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2126,6 +2646,10 @@
       "expect": {
         "kind": "number",
         "value": -1010.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2135,6 +2659,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2144,6 +2672,10 @@
       "expect": {
         "kind": "number",
         "value": 1010.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2153,6 +2685,10 @@
       "expect": {
         "kind": "number",
         "value": -1010.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2162,6 +2698,10 @@
       "expect": {
         "kind": "number",
         "value": 0.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2171,6 +2711,10 @@
       "expect": {
         "kind": "number",
         "value": 0.49999999999999495
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2180,6 +2724,10 @@
       "expect": {
         "kind": "number",
         "value": 0.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2189,6 +2737,10 @@
       "expect": {
         "kind": "number",
         "value": 0.49999999999999495
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2198,6 +2750,10 @@
       "expect": {
         "kind": "number",
         "value": 0.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2207,6 +2763,10 @@
       "expect": {
         "kind": "number",
         "value": 0.49999999999999495
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2216,6 +2776,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2225,6 +2789,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2234,6 +2802,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2243,6 +2815,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2252,6 +2828,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2261,6 +2841,10 @@
       "expect": {
         "kind": "number",
         "value": 14.499999999999995
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2270,6 +2854,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2279,6 +2867,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2288,6 +2880,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2297,6 +2893,10 @@
       "expect": {
         "kind": "number",
         "value": 60.49999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2306,6 +2906,10 @@
       "expect": {
         "kind": "number",
         "value": 60.499999999999986
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2315,6 +2919,10 @@
       "expect": {
         "kind": "number",
         "value": 60.499999999999986
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2324,6 +2932,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2333,6 +2945,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2342,6 +2958,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2351,6 +2971,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2360,6 +2984,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2369,6 +2997,10 @@
       "expect": {
         "kind": "number",
         "value": 100.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2378,6 +3010,10 @@
       "expect": {
         "kind": "number",
         "value": 0.1
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2387,6 +3023,10 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2396,6 +3036,10 @@
       "expect": {
         "kind": "number",
         "value": 1.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2405,6 +3049,10 @@
       "expect": {
         "kind": "number",
         "value": 150.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2414,6 +3062,10 @@
       "expect": {
         "kind": "number",
         "value": 6.1000000000000005
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2423,6 +3075,10 @@
       "expect": {
         "kind": "number",
         "value": 610.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2432,6 +3088,10 @@
       "expect": {
         "kind": "number",
         "value": 10.100000000000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2441,6 +3101,10 @@
       "expect": {
         "kind": "number",
         "value": 1010.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2926,6 +3590,10 @@
       "expect": {
         "kind": "number",
         "value": 15.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2935,6 +3603,10 @@
       "expect": {
         "kind": "number",
         "value": 20.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2944,6 +3616,10 @@
       "expect": {
         "kind": "number",
         "value": 15.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2953,6 +3629,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2962,6 +3642,10 @@
       "expect": {
         "kind": "number",
         "value": 36.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2971,6 +3655,10 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2980,6 +3668,10 @@
       "expect": {
         "kind": "number",
         "value": 45.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -2994,6 +3686,10 @@
       "expect": {
         "kind": "number",
         "value": 45.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -3012,6 +3708,10 @@
       "expect": {
         "kind": "number",
         "value": 36.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -3234,6 +3934,123 @@
       "expect": {
         "kind": "number",
         "value": 25.0
+      }
+    },
+    {
+      "id": "power_ten_op_100",
+      "formula": "=10^100",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+100
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "power_ten_op_300",
+      "formula": "=10^300",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+300
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "power_ten_fn_200",
+      "formula": "=POWER(10,200)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+200
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "power_ten_op_308",
+      "formula": "=10^308",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+308
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_step_tenth",
+      "formula": "=SERIESSUM(1.5,0,0.1,{1;1;1;1;1;1;1;1;1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.145276319531888
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_step_tenth_offset",
+      "formula": "=SERIESSUM(1.5,0.2,0.1,{1;1;1;1;1;1;1;1;1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.424624635521308
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_negative_base_half_step",
+      "formula": "=SERIESSUM(-2.2,0,0.5,{1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_negative_base_third",
+      "formula": "=SERIESSUM(-8,1/3,1,{1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_ten_large_exponents",
+      "formula": "=SERIESSUM(10,100,100,{1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+300
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

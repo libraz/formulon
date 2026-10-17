@@ -292,6 +292,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/address_sheet_quoting_test.cpp
   unit/eval/bessel_order_cap_test.cpp
   unit/eval/builtins_time_parts_1904_test.cpp
+  unit/eval/closed_form_values_test.cpp
   unit/eval/subnormal_flush_rules_test.cpp
   unit/eval/xirr_search_test.cpp
   unit/eval/builtins_datetime_test.cpp
@@ -502,6 +503,14 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     NAME DbcsTableDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
             tests/codegen/dbcs_generated_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # Embedded numeric tables recomputed from their definitions in exact
+  # arithmetic (stdlib only).
+  add_test(
+    NAME ConstantTableDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
+            tests/codegen/constant_tables_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

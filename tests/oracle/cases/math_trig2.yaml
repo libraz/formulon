@@ -45,6 +45,7 @@ cases:
   - id: cosh_identity_squared_minus_sinh_squared_is_one
     description: "COSH(x)^2 - SINH(x)^2 == 1."
     formula: "=COSH(1.5)^2-SINH(1.5)^2"
+    tolerance: { abs: 0, rel: 0 }
 
   # -- TANH ----------------------------------------------------------------
   - id: tanh_of_zero

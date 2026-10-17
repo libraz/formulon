@@ -100,6 +100,7 @@ cases:
   - id: text_bool_normdist_uppercase
     description: "NORM.DIST(0, 0, 1, \"TRUE\")"
     formula: "=NORM.DIST(0, 0, 1, \"TRUE\")"
+    tolerance: { abs: 0, rel: 0 }
 
   # ---------------------------------------------------------------------
   # G) Numeric-text in IF condition. Mac coerces numeric strings via the

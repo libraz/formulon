@@ -131,24 +131,29 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
     coefficients.front() = Value::number(coerced.value());
   }
 
-  // Accumulate Σᵢ coeff_i · x^(n + i·m) for i = 0..k-1. Range-sourced
-  // cells that are not numbers (Blank, Bool, Text) are skipped, matching
-  // Excel's tolerance of mixed columns; the power index still advances so
-  // the i-th coefficient is always paired with the i-th term, matching
-  // Excel's 1-based enumeration (first coefficient gets x^n). Each power
-  // follows the `^` operator, so 0^0 is #NUM! and 0^negative is #DIV/0!.
+  // Accumulate sum(coeff_i * x^e_i) with e_0 = n and e_{i+1} = e_i + m, so the
+  // exponent advances by repeated addition. Range-sourced cells that are not
+  // numbers (Blank, Bool, Text) are skipped, but the exponent still advances.
+  // A negative base with a non-integral exponent contributes 0 to the sum.
+  // Otherwise each power follows the `^` operator: 0^0 is #NUM! and 0^negative
+  // is #DIV/0!.
   double total = 0.0;
-  for (std::size_t i = 0; i < coefficients.size(); ++i) {
-    const Value& v = coefficients[i];
+  double e = n;
+  for (const Value& v : coefficients) {
+    const double power = e;
+    e += m;
     if (!v.is_number()) {
       continue;
     }
-    const double power = n + static_cast<double>(i) * m;
-    auto term = apply_pow(x, power);
-    if (!term) {
-      return Value::error(term.error());
+    double term_value = 0.0;
+    if (!(x < 0.0 && (power < 0.0 ? std::ceil(power) : std::floor(power)) != power)) {
+      auto term = apply_pow(x, power);
+      if (!term) {
+        return Value::error(term.error());
+      }
+      term_value = term.value();
     }
-    total += flush_subnormal(v.as_number() * term.value());
+    total += flush_subnormal(v.as_number() * term_value);
   }
   return to_finite_value(total);
 }
