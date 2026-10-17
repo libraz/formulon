@@ -683,6 +683,18 @@ double xirr_solve(const std::vector<double>& values, const std::vector<double>& 
   return std::numeric_limits<double>::quiet_NaN();
 }
 
+// A guess in (-1, 0) searches only below zero: when f(guess) is finite and
+// strictly opposite to f(0), [guess, 0] is bisected with the residual test;
+// NaN otherwise.
+double xirr_solve_negative(const std::vector<double>& values, const std::vector<double>& dates, double guess) noexcept {
+  const double f_zero = xirr_npv(values, dates, 0.0);
+  const double f_guess = xirr_npv(values, dates, guess);
+  if (std::isfinite(f_guess) && ((f_guess < 0.0 && f_zero > 0.0) || (f_guess > 0.0 && f_zero < 0.0))) {
+    return xirr_bisect(values, dates, guess, 0.0, /*check_residual=*/true);
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
 }  // namespace
 
 Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -720,11 +732,12 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       !read_optional_guess(call.as_call_arg(2), arena, registry, ctx, /*analysis_toolpak=*/true, &guess, &err)) {
     return err;
   }
-  // Mac Excel rejects any negative guess (e.g. =XIRR(v, d, -0.5) -> #NUM!).
-  if (guess < 0.0) {
+  // A guess of -1 or below is outside the rate domain.
+  if (guess <= -1.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double rate = xirr_solve(values, dates, guess == 0.0 ? 1.0e-5 : guess);
+  const double rate = guess < 0.0 ? xirr_solve_negative(values, dates, guess)
+                                  : xirr_solve(values, dates, guess == 0.0 ? 1.0e-5 : guess);
   if (std::isfinite(rate)) {
     return Value::number(rate);
   }
