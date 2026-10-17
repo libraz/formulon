@@ -158,6 +158,27 @@ double amordegrc_coefficient(double life) noexcept {
   return 0.0;
 }
 
+// Declining-balance charge of a (possibly fractional) `period`:
+//
+//   r = factor / life, q = 1 - r
+//   t = cost * q^(period - 1)  (t = cost for period <= 1; 0 when q < 0 and period > 1)
+//   charge = t * r, capped at t - salvage and floored at 0
+double ddb_charge(double cost, double salvage, double life, double period, double factor) noexcept {
+  const double r = factor / life;
+  const double q = 1.0 - r;
+  if (q < 0.0 && period > 1.0) {
+    return 0.0;
+  }
+  const double power = period <= 1.0 ? 1.0 : excel_power(q, period - 1.0);
+  const double book = cost * power;
+  const double charge = book * r;
+  const double remaining = book - salvage;
+  if (remaining - charge >= 0.0) {
+    return charge;
+  }
+  return remaining >= 0.0 ? remaining : 0.0;
+}
+
 }  // namespace
 
 // --- SLN(cost, salvage, life) -------------------------------------------
@@ -216,38 +237,11 @@ Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- DDB(cost, salvage, life, period, [factor=2]) -----------------------
 //
-// Declining-balance depreciation generalised to an arbitrary accelerator
-// `factor` (default 2 = double-declining balance).
+// Declining-balance depreciation with accelerator `factor` (default 2).
+// `period` may be fractional. See `ddb_charge` for the formula.
 //
-//   rate = factor / life       (clamped to 1 if rate >= 1 — everything
-//                               depreciates in period 1)
-//
-// Iterate from 1..period, maintaining a running book value. The salvage
-// floor prevents the charge in any period from pushing the book value
-// below `salvage`:
-//
-//   dep_i = max(0, min(book_value * rate, book_value - salvage))
-//   book_value -= dep_i
-//
-// Only the charge for the requested `period` is returned.
-//
-// Domain:
-//   - cost    <  0  ->  #NUM!
-//   - salvage <  0  ->  #NUM!
-//   - life   <= 0   ->  #NUM!
-//   - period <  1  or period > life  ->  #NUM!
-//   - factor <= 0   ->  #NUM!
-//
-// Period is expected to be a positive value; Excel 365 accepts fractional
-// `period`. For integer periods the formula matches the iterative
-// declining-balance schedule exactly (dep_p = cost * (1-rate)^(p-1) *
-// rate). Extending to fractional p by treating period as a continuous
-// variable preserves the same identity: dep(p) = cost * ((1-rate)^(p-1) -
-// (1-rate)^p). Integer iteration is kept for integer p to avoid any
-// floating-point drift in the existing regression corpus; fractional p
-// falls through to the closed-form expression. The salvage floor is
-// handled by clamping the cumulative depreciation at cost - salvage
-// before subtracting the previous-period total.
+// Domain: cost < 0, salvage < 0, life <= 0, period <= 0, period > life or
+// factor <= 0 is #NUM!.
 Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   auto parsed = read_depreciation_args4(args);
   if (!parsed) {
@@ -259,54 +253,10 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const auto [cost, salvage, life, period] = parsed.value();
   const double factor = factor_e.value();
-  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period < 1.0 || period > life || factor <= 0.0) {
+  if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period <= 0.0 || period > life || factor <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  double rate = factor / life;
-  if (rate >= 1.0) {
-    rate = 1.0;
-  }
-  // Fractional period: use the closed-form continuous declining-balance
-  // expression `dep(p) = cost * ((1-rate)^(p-1) - (1-rate)^p)` with the
-  // salvage floor applied via cumulative clamp. For integer periods the
-  // existing iterative schedule is preserved byte-for-byte, but only while
-  // the period count stays within the schedule cap: `period` is bounded
-  // only by `life`, so a huge life would otherwise step the loop for
-  // longer than the process will live. The closed form agrees with the
-  // iteration on integer periods, so beyond the cap it takes over rather
-  // than the call failing.
-  const bool is_integer_period = std::floor(period) == period;
-  if (!is_integer_period || period > kMaxDepreciationPeriods) {
-    const double bv_prev = cost * std::pow(1.0 - rate, period - 1.0);
-    const double bv_curr = cost * std::pow(1.0 - rate, period);
-    // Clamp to salvage: a period whose start already sits at/below
-    // salvage cannot depreciate further; a period that crosses the
-    // salvage floor depreciates only down to salvage.
-    const double bv_prev_c = bv_prev < salvage ? salvage : bv_prev;
-    const double bv_curr_c = bv_curr < salvage ? salvage : bv_curr;
-    double dep = bv_prev_c - bv_curr_c;
-    if (dep < 0.0) {
-      dep = 0.0;
-    }
-    return finalize(dep);
-  }
-  // Iterate integer periods up to (and including) the requested period.
-  const auto iter_count = static_cast<std::int64_t>(period);
-  double book_value = cost;
-  double depreciation = 0.0;
-  for (std::int64_t i = 1; i <= iter_count; ++i) {
-    double dep_i = book_value * rate;
-    const double floor_cap = book_value - salvage;
-    if (dep_i > floor_cap) {
-      dep_i = floor_cap;
-    }
-    if (dep_i < 0.0) {
-      dep_i = 0.0;
-    }
-    depreciation = dep_i;
-    book_value -= dep_i;
-  }
-  return finalize(depreciation);
+  return finalize(ddb_charge(cost, salvage, life, period, factor));
 }
 
 // --- DB(cost, salvage, life, period, [month=12]) ------------------------
@@ -464,21 +414,7 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
 
-  // Declining-balance charge of 1-based period `n`, floored at the salvage.
-  const auto ddb = [&](double n) {
-    const double r = factor / life_arg;
-    const double q = 1.0 - r;
-    if (!(q > 0.0) && n - 1.0 != 0.0) {
-      return 0.0;
-    }
-    const double book = cost * (n - 1.0 > 0.0 ? excel_power(q, n - 1.0) : 1.0);
-    const double charge = book * r;
-    const double remaining = book - salvage;
-    if (remaining - charge > 0.0) {
-      return charge;
-    }
-    return remaining > 0.0 ? remaining : 0.0;
-  };
+  const auto ddb = [&](double n) { return ddb_charge(cost, salvage, life_arg, n, factor); };
 
   if (no_switch) {
     double n = std::trunc(std::fabs(start_period)) + 1.0;

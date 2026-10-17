@@ -409,3 +409,56 @@ cases:
 
   - id: a4_cumprinc_omit
     formula: "=CUMPRINC(0.1,10,1000,1,1,)"
+
+  # -- DDB with fractional periods and the declining-balance cap ---
+  - id: ddb_period_half
+    formula: "=DDB(10000,1000,5,0.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_period_fraction_after_one
+    formula: "=DDB(10000,1000,5,1.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_period_fraction_late
+    formula: "=DDB(10000,1000,5,4.25)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_period_exactly_life
+    formula: "=DDB(973279,25039.99,4,4)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_product_order_integer
+    formula: "=DDB(135229.88,42371.69,7,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_salvage_cap
+    formula: "=DDB(2400,2000,10,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_factor_three
+    formula: "=DDB(5000,500,6,2,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_factor_above_life_first
+    formula: "=DDB(1000,100,1.5,1,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_factor_above_life_later
+    formula: "=DDB(1000,100,1.5,1.2,3)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_zero_period
+    formula: "=DDB(10000,1000,5,0)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_period_beyond_life
+    formula: "=DDB(10000,1000,5,5.5)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_zero_cost
+    formula: "=DDB(0,0,5,2)"
+    tolerance: { abs: 0, rel: 0 }
+
+  - id: ddb_negative_factor
+    formula: "=DDB(10000,1000,5,2,-1)"
+    tolerance: { abs: 0, rel: 0 }

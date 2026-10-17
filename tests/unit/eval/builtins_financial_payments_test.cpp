@@ -643,6 +643,38 @@ TEST(RoundingFamily, ModBeyondTheQuotientCapIsNum) {
   }
 }
 
+TEST(DecliningBalance, MatchesExcelValues) {
+  struct Case {
+    const char* formula;
+    double expected;
+  };
+  const Case cases[] = {
+      {"=DDB(10000,1000,5,0.5)", 4000.0},
+      {"=DDB(10000,1000,5,1.5)", 3098.386676965934},
+      {"=DDB(10000,1000,5,4.25)", 760.4165405894919},
+      {"=DDB(973279,25039.99,4,4)", 60829.9375},
+      {"=DDB(135229.88,42371.69,7,3)", 19712.81049562682},
+      {"=DDB(2400,2000,10,3)", 0.0},
+      {"=DDB(5000,500,6,2,3)", 1250.0},
+      {"=DDB(1000,100,1.5,1,3)", 900.0},
+      {"=DDB(1000,100,1.5,1.2,3)", 0.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
+TEST(DecliningBalance, OutOfDomainIsNum) {
+  for (const char* formula : {"=DDB(10000,1000,5,0)", "=DDB(10000,1000,5,5.5)", "=DDB(10000,1000,5,2,-1)",
+                              "=DDB(-1,0,5,1)", "=DDB(10000,-1,5,1)", "=DDB(10000,1000,0,1)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
