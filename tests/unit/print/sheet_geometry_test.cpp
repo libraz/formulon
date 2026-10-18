@@ -1,6 +1,8 @@
 #include "print/sheet_geometry.h"
 
+#include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -92,6 +94,47 @@ TEST(SheetGeometry, SampledFontSizesUseTheirOwnCalibration) {
   EXPECT_TRUE(model.calibrated);
   EXPECT_DOUBLE_EQ(model.points_per_char, 7.5);
   EXPECT_DOUBLE_EQ(model.padding_pt, 5.25);
+}
+
+TEST(SheetGeometry, UnsupportedFontSizesFallBackWithoutChangingReportedSize) {
+  Workbook wb = Workbook::create();
+  const GeometryMode modes[] = {GeometryMode::kDisplay, GeometryMode::kPrint};
+  const double unsupported_sizes[] = {std::numeric_limits<double>::quiet_NaN(),
+                                      std::numeric_limits<double>::infinity(),
+                                      -std::numeric_limits<double>::infinity(),
+                                      std::numeric_limits<double>::max(),
+                                      -std::numeric_limits<double>::max(),
+                                      11.5,
+                                      -1.0,
+                                      0.0,
+                                      13.0};
+
+  for (const GeometryMode mode : modes) {
+    const double fallback_mdw = mode == GeometryMode::kDisplay ? kDisplayMdw : kPrintMdw;
+    const double fallback_padding = mode == GeometryMode::kDisplay ? kDisplayPad : kPrintPad;
+    for (const double size : unsupported_sizes) {
+      SCOPED_TRACE(::testing::Message() << "mode=" << static_cast<int>(mode) << ", size=" << size);
+      SetNormalFont(&wb, "Calibri", size);
+
+      const ColumnWidthModel model = resolve_column_width_model(wb.styles(), mode);
+      EXPECT_FALSE(model.calibrated);
+      EXPECT_EQ(model.normal_font_name, "Calibri");
+      EXPECT_DOUBLE_EQ(model.points_per_char, fallback_mdw);
+      EXPECT_DOUBLE_EQ(model.padding_pt, fallback_padding);
+      if (std::isnan(size)) {
+        EXPECT_TRUE(std::isnan(model.normal_font_size));
+      } else {
+        EXPECT_DOUBLE_EQ(model.normal_font_size, size);
+      }
+    }
+
+    SetNormalFont(&wb, "Calibri", 11.0);
+    const ColumnWidthModel sampled = resolve_column_width_model(wb.styles(), mode);
+    EXPECT_TRUE(sampled.calibrated);
+    EXPECT_DOUBLE_EQ(sampled.normal_font_size, 11.0);
+    EXPECT_DOUBLE_EQ(sampled.points_per_char, mode == GeometryMode::kDisplay ? kDisplayMdw : kPrintMdw);
+    EXPECT_DOUBLE_EQ(sampled.padding_pt, mode == GeometryMode::kDisplay ? kDisplayPad : kPrintPad);
+  }
 }
 
 TEST(SheetGeometry, UncalibratedFontReportsExtrapolated) {

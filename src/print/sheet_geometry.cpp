@@ -109,17 +109,13 @@ struct ColumnWidthGeometry {
 
 /// Looks up the measured *display* calibration for `(family, size)` in
 /// `kColumnWidthCalibrations`. Falls back to the Calibri-11 display
-/// figure (with `calibrated == false`) for any family or integer size the
-/// table does not cover, and for any non-integer size -- interpolating
-/// between the sampled sizes would be inventing data the capture does not
-/// support.
+/// figure (with `calibrated == false`) for any `(family, size)` pair the
+/// table does not cover -- interpolating between sampled sizes would be
+/// inventing data the capture does not support.
 ColumnWidthGeometry ResolveColumnDisplayGeometry(const std::string& family, double size) {
-  const int size_int = static_cast<int>(size);
-  if (static_cast<double>(size_int) == size) {
-    for (const ColumnWidthCalibration& row : kColumnWidthCalibrations) {
-      if (row.size == size_int && family == row.family) {
-        return ColumnWidthGeometry{row.mdw_pt, row.pad_pt, true};
-      }
+  for (const ColumnWidthCalibration& row : kColumnWidthCalibrations) {
+    if (static_cast<double>(row.size) == size && family == row.family) {
+      return ColumnWidthGeometry{row.mdw_pt, row.pad_pt, true};
     }
   }
   return ColumnWidthGeometry{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11, false};
