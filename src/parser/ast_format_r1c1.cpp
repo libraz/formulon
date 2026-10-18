@@ -193,9 +193,11 @@ struct Emitter {
         }
         return;
       case NodeKind::BinaryOp:
-        emit(node.as_binary_lhs(), out);
-        out.append(binop_token(node.as_binary_op()));
-        emit(node.as_binary_rhs(), out);
+        emit(node.as_binary_operand(0), out);
+        for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+          out.append(binop_token(node.as_binary_op(i - 1U)));
+          emit(node.as_binary_operand(i), out);
+        }
         return;
       case NodeKind::RangeOp:
         emit(node.as_range_lhs(), out);

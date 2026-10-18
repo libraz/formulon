@@ -142,25 +142,25 @@ OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const F
     case parser::NodeKind::UnaryOp:
       return operation_shape(node.as_unary_operand(), arena, registry, ctx, out_rows, out_cols, out_err);
     case parser::NodeKind::BinaryOp: {
-      std::uint32_t lhs_rows = 0;
-      std::uint32_t lhs_cols = 0;
-      std::uint32_t rhs_rows = 0;
-      std::uint32_t rhs_cols = 0;
-      const OperationShape lhs =
-          operation_shape(node.as_binary_lhs(), arena, registry, ctx, &lhs_rows, &lhs_cols, out_err);
-      if (lhs != OperationShape::kSized) {
-        return lhs;
+      const OperationShape first =
+          operation_shape(node.as_binary_operand(0), arena, registry, ctx, out_rows, out_cols, out_err);
+      if (first != OperationShape::kSized) {
+        return first;
       }
-      const OperationShape rhs =
-          operation_shape(node.as_binary_rhs(), arena, registry, ctx, &rhs_rows, &rhs_cols, out_err);
-      if (rhs != OperationShape::kSized) {
-        return rhs;
-      }
-      *out_rows = std::max(lhs_rows, rhs_rows);
-      *out_cols = std::max(lhs_cols, rhs_cols);
-      if (abandons_formula(*out_rows, *out_cols)) {
-        *out_err = Value::error(ErrorCode::Num);
-        return OperationShape::kError;
+      for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+        std::uint32_t rhs_rows = 0;
+        std::uint32_t rhs_cols = 0;
+        const OperationShape rhs =
+            operation_shape(node.as_binary_operand(i), arena, registry, ctx, &rhs_rows, &rhs_cols, out_err);
+        if (rhs != OperationShape::kSized) {
+          return rhs;
+        }
+        *out_rows = std::max(*out_rows, rhs_rows);
+        *out_cols = std::max(*out_cols, rhs_cols);
+        if (abandons_formula(*out_rows, *out_cols)) {
+          *out_err = Value::error(ErrorCode::Num);
+          return OperationShape::kError;
+        }
       }
       return OperationShape::kSized;
     }
@@ -843,20 +843,24 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
 
 Value eval_binop_array_ctx(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx) {
-  const Value lhs = eval_node_as_array(node.as_binary_lhs(), arena, registry, ctx);
-  if (lhs.is_error()) {
-    return lhs;
+  // Folded left to right; a scalar error ends the chain before the next operand.
+  Value lhs = eval_node_as_array(node.as_binary_operand(0), arena, registry, ctx);
+  for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+    if (lhs.is_error()) {
+      return lhs;
+    }
+    const Value rhs = eval_node_as_array(node.as_binary_operand(i), arena, registry, ctx);
+    if (rhs.is_error()) {
+      return rhs;
+    }
+    // Both operands are guaranteed Array post the array-context contract.
+    // Delegate to the single Excel-broadcasting implementation shared with the
+    // top-level BinaryOp dispatch (`tree_walker/broadcast.cpp`), which handles
+    // size-1 broadcast, the outer product, RxC/Rx1/1xC combinations, and #N/A
+    // padding for mismatched non-1 axes.
+    lhs = broadcast_binop(node.as_binary_op(i - 1U), lhs, rhs, arena);
   }
-  const Value rhs = eval_node_as_array(node.as_binary_rhs(), arena, registry, ctx);
-  if (rhs.is_error()) {
-    return rhs;
-  }
-  // Both operands are guaranteed Array post the array-context contract.
-  // Delegate to the single Excel-broadcasting implementation shared with the
-  // top-level BinaryOp dispatch (`tree_walker/broadcast.cpp`), which handles
-  // size-1 broadcast, the outer product, RxC/Rx1/1xC combinations, and #N/A
-  // padding for mismatched non-1 axes.
-  return broadcast_binop(node.as_binary_op(), lhs, rhs, arena);
+  return lhs;
 }
 
 Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

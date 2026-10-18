@@ -932,8 +932,9 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::BinaryOp:
-      walk(node.as_binary_lhs(), state);
-      walk(node.as_binary_rhs(), state);
+      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+        walk(node.as_binary_operand(i), state);
+      }
       return;
 
     case parser::NodeKind::RangeOp:

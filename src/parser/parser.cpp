@@ -484,10 +484,11 @@ AstNode* Parser::parse() {
     return nullptr;
   }
 
-  // A left-associative chain such as `1+1+...` is assembled by the Pratt
-  // loop without adding parse_expression frames. Validate the completed tree
-  // as well, so this shape observes the same configured ceiling as nested
-  // calls and parentheses before any recursive consumer sees it.
+  // A left-associative chain of `%`, `:`, a space or a call suffix is
+  // assembled by the Pratt loop without adding parse_expression frames, one
+  // node per operator. Validate the completed tree as well, so those shapes
+  // observe the same configured ceiling as nested calls and parentheses
+  // before any recursive consumer sees it. A binary chain is one node.
   if (!ast_depth_within_limit(*root_, opts_.max_parse_depth)) {
     const TextRange range = root_->range();
     record_error(ParseErrorCode::NestedFormulaTooDeep, range);
@@ -622,12 +623,23 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     }
   }
 
+  // The binary chain `lhs` heads, if any: its further operators share
+  // `chain_bp` and live in `chain_operands_` / `chain_ops_` past these bases.
+  const std::size_t operand_base = chain_operands_.size();
+  const std::size_t op_base = chain_ops_.size();
+  int chain_bp = 0;
+
   while (true) {
+    const TokenKind kind = peek_kind();
+    int chain_right_bp = 0;
+    if (chain_ops_.size() != op_base && (bailed_ || kind == TokenKind::Colon || kind == TokenKind::Whitespace ||
+                                         InfixBindingPower(kind, &chain_right_bp) != chain_bp)) {
+      close_chain(lhs, operand_base, op_base);
+    }
     if (bailed_) {
       --depth_;
       return lhs;
     }
-    const TokenKind kind = peek_kind();
 
     // Postfix operators first (currently only `%`).
     if (kind == TokenKind::Percent) {
@@ -823,6 +835,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // Parse_expression always returns a node post-recovery; null means
       // hard failure (arena exhaustion). Surface the existing LHS to the
       // caller so they can salvage a partial tree.
+      close_chain(lhs, operand_base, op_base);
       --depth_;
       return lhs;
     }
@@ -866,7 +879,13 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       }
       node = make_intersect_op(arena_, lhs, rhs);
     } else {
-      node = make_binary_op(arena_, TokenToBinOp(kind), lhs, rhs);
+      if (chain_ops_.size() == op_base) {
+        chain_operands_.push_back(lhs);
+        chain_bp = bp;
+      }
+      chain_ops_.push_back(TokenToBinOp(kind));
+      chain_operands_.push_back(rhs);
+      continue;
     }
     if (node == nullptr) {
       bailed_ = true;
@@ -876,6 +895,24 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     node->set_range(SpanRange(lhs->range(), rhs->range()));
     lhs = node;
   }
+}
+
+void Parser::close_chain(AstNode*& lhs, std::size_t operand_base, std::size_t op_base) {
+  if (chain_ops_.size() == op_base) {
+    return;
+  }
+  const AstNode* first = chain_operands_[operand_base];
+  const TextRange span = SpanRange(first->range(), chain_operands_.back()->range());
+  AstNode* node = make_binary_chain(arena_, chain_operands_.data() + operand_base, chain_ops_.data() + op_base,
+                                    static_cast<std::uint32_t>(chain_operands_.size() - operand_base));
+  chain_operands_.resize(operand_base);
+  chain_ops_.resize(op_base);
+  if (node == nullptr) {
+    bailed_ = true;
+    return;
+  }
+  node->set_range(span);
+  lhs = node;
 }
 
 AstNode* Parser::wrap_trim_ref(AstNode* range, TrimRefMode mode) {

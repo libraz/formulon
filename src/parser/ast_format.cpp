@@ -28,44 +28,12 @@ namespace formulon {
 namespace parser {
 namespace {
 
-using detail::kBpAddSub;
 using detail::kBpAtPrefix;
-using detail::kBpComparison;
-using detail::kBpConcat;
 using detail::kBpIntersect;
-using detail::kBpMulDiv;
 using detail::kBpPostfixHash;
 using detail::kBpPostfixPercent;
-using detail::kBpPow;
 using detail::kBpRange;
 using detail::kBpUnaryPrefix;
-
-// Returns the binding-power slot for the given binary operator. Every
-// binary operator is left-associative (including `^`, matching Excel 365's
-// left-to-right evaluation of a chained power); the per-side `min_bp` calls
-// in `FormatBinary` / `StorageEmitter::emit_binary` encode that uniformly.
-int BinOpBp(BinOp op) noexcept {
-  switch (op) {
-    case BinOp::Pow:
-      return kBpPow;
-    case BinOp::Mul:
-    case BinOp::Div:
-      return kBpMulDiv;
-    case BinOp::Add:
-    case BinOp::Sub:
-      return kBpAddSub;
-    case BinOp::Concat:
-      return kBpConcat;
-    case BinOp::Eq:
-    case BinOp::NotEq:
-    case BinOp::Lt:
-    case BinOp::LtEq:
-    case BinOp::Gt:
-    case BinOp::GtEq:
-      return kBpComparison;
-  }
-  return kBpComparison;
-}
 
 // Parenthesis pairs to print around each node, decided once by
 // `CollectParens` for the formatters and the XLSB encoder alike.
@@ -83,7 +51,7 @@ struct Layout {
 };
 
 // Appends the whitespace runs kept at `slot` / `index` of `node`, if any.
-void AppendWhitespace(const Layout& layout, const AstNode& node, WhitespaceSlot slot, std::uint8_t index,
+void AppendWhitespace(const Layout& layout, const AstNode& node, WhitespaceSlot slot, std::uint16_t index,
                       std::string& out) {
   if (layout.whitespace == nullptr) {
     return;
@@ -401,10 +369,12 @@ void FormatUnary(const AstNode& node, std::string& out, const Layout& layout) {
 }
 
 void FormatBinary(const AstNode& node, std::string& out, const Layout& layout) {
-  FormatNode(node.as_binary_lhs(), out, layout);
-  AppendWhitespace(layout, node, WhitespaceSlot::kBeforeOperator, 0, out);
-  out.append(binop_token(node.as_binary_op()));
-  FormatNode(node.as_binary_rhs(), out, layout);
+  FormatNode(node.as_binary_operand(0), out, layout);
+  for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+    AppendWhitespace(layout, node, WhitespaceSlot::kBeforeOperator, static_cast<std::uint16_t>(i - 1U), out);
+    out.append(binop_token(node.as_binary_op(i - 1U)));
+    FormatNode(node.as_binary_operand(i), out, layout);
+  }
 }
 
 // True when `name` on its own is a bare column token -- one to three ASCII
@@ -796,10 +766,12 @@ void CollectParens(const AstNode& node, int min_bp, ParenCounts& out) {
       return;
     }
     case NodeKind::BinaryOp: {
-      const int bp = BinOpBp(node.as_binary_op());
+      const int bp = binop_binding_power(node.as_binary_op(0));
       wrap_if(bp);
-      CollectParens(node.as_binary_lhs(), bp, out);
-      CollectParens(node.as_binary_rhs(), bp + 1, out);
+      // Left-associative: only the leading operand may be a bare same-power chain.
+      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+        CollectParens(node.as_binary_operand(i), i == 0U ? bp : bp + 1, out);
+      }
       return;
     }
     case NodeKind::RangeOp: {
@@ -983,9 +955,11 @@ struct StorageEmitter {
         }
         return;
       case NodeKind::BinaryOp:
-        emit(node.as_binary_lhs(), out);
-        out.append(binop_token(node.as_binary_op()));
-        emit(node.as_binary_rhs(), out);
+        emit(node.as_binary_operand(0), out);
+        for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+          out.append(binop_token(node.as_binary_op(i - 1U)));
+          emit(node.as_binary_operand(i), out);
+        }
         return;
       case NodeKind::RangeOp:
         // A whole-axis pair has no function name inside it, so the shared
@@ -1204,7 +1178,7 @@ void collect_parenthesized_nodes(const AstNode& root, std::unordered_map<const A
 }
 
 const WhitespaceRun* find_whitespace(const FormulaWhitespace& whitespace, const AstNode& node, WhitespaceSlot slot,
-                                     std::uint8_t index) {
+                                     std::uint16_t index) {
   for (const WhitespaceRun& run : whitespace) {
     if (run.node == &node && run.slot == slot && run.index == index) {
       return &run;

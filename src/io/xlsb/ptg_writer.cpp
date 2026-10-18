@@ -236,9 +236,12 @@ class SourceWhitespace {
         }
         break;
       case parser::NodeKind::BinaryOp:
-        visit(node.as_binary_lhs(), inside);
-        before_operator(node, node.as_binary_lhs(), parser::TokenKind::Eof);
-        visit(node.as_binary_rhs(), true);
+        visit(node.as_binary_operand(0), inside);
+        for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+          before_operator(node, node.as_binary_operand(i - 1U), parser::TokenKind::Eof,
+                          static_cast<std::uint16_t>(i - 1U));
+          visit(node.as_binary_operand(i), true);
+        }
         break;
       case parser::NodeKind::RangeOp:
         visit(node.as_range_lhs(), inside);
@@ -327,7 +330,7 @@ class SourceWhitespace {
   // Records the whitespace token `i`, less `skip` characters, as `slot` of
   // `node` when it is a run of spaces or, if allowed, of line feeds, or line
   // feeds then spaces.
-  void record(std::size_t i, const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint8_t index,
+  void record(std::size_t i, const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint16_t index,
               bool line_feeds_allowed, std::size_t skip = 0) {
     if (!is(i, parser::TokenKind::Whitespace)) {
       return;
@@ -358,13 +361,15 @@ class SourceWhitespace {
     record(first - 1U, node, parser::WhitespaceSlot::kBeforeText, 0, true);
   }
 
-  // `op` is the operator token expected after the run (`Eof`: any binary one).
-  void before_operator(const parser::AstNode& node, const parser::AstNode& lhs, parser::TokenKind op) {
+  // `op` is the operator token expected after the run (`Eof`: any binary
+  // one); `index` is a binary operator's position in its chain.
+  void before_operator(const parser::AstNode& node, const parser::AstNode& lhs, parser::TokenKind op,
+                       std::uint16_t index = 0) {
     const std::size_t i = token_at(lhs.range().end);
     if (op != parser::TokenKind::Eof && !is(i + 1U, op)) {
       return;
     }
-    record(i, node, parser::WhitespaceSlot::kBeforeOperator, 0, true);
+    record(i, node, parser::WhitespaceSlot::kBeforeOperator, index, true);
   }
 
   void intersection(const parser::AstNode& node) {
@@ -575,7 +580,7 @@ class Encoder {
 
   /// Emits one `PtgAttrSpace` per whitespace run kept at `slot` / `index`
   /// of `node`, in order.
-  void emit_space(const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint8_t index = 0) {
+  void emit_space(const parser::AstNode& node, parser::WhitespaceSlot slot, std::uint16_t index = 0) {
     for (const parser::WhitespaceRun& run : whitespace_) {
       if (run.node != &node || run.slot != slot || run.index != index) {
         continue;
@@ -1192,10 +1197,18 @@ class Encoder {
   }
 
   Expected<void, Error> emit_binary(const parser::AstNode& node, Slot slot) {
-    RETURN_IF_ERROR(emit_operand(node.as_binary_lhs(), slot));
-    RETURN_IF_ERROR(emit_operand(node.as_binary_rhs(), slot));
+    RETURN_IF_ERROR(emit_operand(node.as_binary_operand(0), slot));
+    for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+      RETURN_IF_ERROR(emit_operand(node.as_binary_operand(i), slot));
+      emit_space(node, parser::WhitespaceSlot::kBeforeOperator, static_cast<std::uint16_t>(i - 1U));
+      emit_u8(out_, binop_ptg(node.as_binary_op(i - 1U)));
+    }
+    return Expected<void, Error>::Ok();
+  }
+
+  static std::uint8_t binop_ptg(parser::BinOp op) {
     std::uint8_t byte = 0x03;
-    switch (node.as_binary_op()) {
+    switch (op) {
       case parser::BinOp::Add:
         byte = 0x03;
         break;
@@ -1233,9 +1246,7 @@ class Encoder {
         byte = 0x0E;
         break;
     }
-    emit_space(node, parser::WhitespaceSlot::kBeforeOperator);
-    emit_u8(out_, byte);
-    return Expected<void, Error>::Ok();
+    return byte;
   }
 
   /// `cls`: the class of the fast-path Area/Area3d collapse (see

@@ -215,18 +215,22 @@ const AstNode* TransformUnary(const AstNode& node, Arena& arena, const RefTransf
 }
 
 const AstNode* TransformBinary(const AstNode& node, Arena& arena, const RefTransform& transform) {
-  const AstNode* lhs = TransformNode(node.as_binary_lhs(), arena, transform);
-  if (lhs == nullptr) {
+  const std::uint32_t n = node.as_binary_arity();
+  std::vector<const AstNode*> operands;
+  bool changed = false;
+  if (!TransformChildList(
+          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_binary_operand(i); }, &operands,
+          &changed)) {
     return nullptr;
   }
-  const AstNode* rhs = TransformNode(node.as_binary_rhs(), arena, transform);
-  if (rhs == nullptr) {
-    return nullptr;
-  }
-  if (lhs == &node.as_binary_lhs() && rhs == &node.as_binary_rhs()) {
+  if (!changed) {
     return &node;
   }
-  return make_binary_op(arena, node.as_binary_op(), const_cast<AstNode*>(lhs), const_cast<AstNode*>(rhs));
+  std::vector<BinOp> ops(n - 1U);
+  for (std::uint32_t i = 0; i + 1U < n; ++i) {
+    ops[i] = node.as_binary_op(i);
+  }
+  return make_binary_chain(arena, operands.data(), ops.data(), n);
 }
 
 const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransform& transform) {

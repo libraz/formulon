@@ -45,8 +45,9 @@ bool MarksDynamic(Shapes& shapes, const parser::AstNode& node, Slot slot, bool r
     case NodeKind::UnaryOp:
       return MarksDynamic(shapes, node.as_unary_operand(), Slot{slot.letter, true}, false);
     case NodeKind::BinaryOp:
-      return MarksDynamic(shapes, node.as_binary_lhs(), Slot{slot.letter, true}, false) ||
-             MarksDynamic(shapes, node.as_binary_rhs(), Slot{slot.letter, true}, false);
+      return parser::any_child_node(node, [&](const parser::AstNode& operand) {
+        return MarksDynamic(shapes, operand, Slot{slot.letter, true}, false);
+      });
     case NodeKind::RangeOp:
       return MarksDynamic(shapes, node.as_range_lhs(), Slot{'R', false}, false) ||
              MarksDynamic(shapes, node.as_range_rhs(), Slot{'R', false}, false);
@@ -142,8 +143,9 @@ class LegacyIntersections {
         walk(node.as_unary_operand(), Slot{slot.letter, true}, false);
         return;
       case NodeKind::BinaryOp:
-        walk(node.as_binary_lhs(), Slot{slot.letter, true}, false);
-        walk(node.as_binary_rhs(), Slot{slot.letter, true}, false);
+        for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+          walk(node.as_binary_operand(i), Slot{slot.letter, true}, false);
+        }
         return;
       case NodeKind::RangeOp:
         walk(node.as_range_lhs(), Slot{'R', false}, false);
@@ -236,7 +238,8 @@ bool ValueSetsCalcExp(const parser::AstNode& node,
     case NodeKind::UnaryOp:
       return ValueSetsCalcExp(node.as_unary_operand(), parens);
     case NodeKind::BinaryOp:
-      return ValueSetsCalcExp(node.as_binary_lhs(), parens) || ValueSetsCalcExp(node.as_binary_rhs(), parens);
+      return parser::any_child_node(node,
+                                    [&](const parser::AstNode& operand) { return ValueSetsCalcExp(operand, parens); });
     case NodeKind::RangeOp:
       return ValueSetsCalcExp(node.as_range_lhs(), parens) || ValueSetsCalcExp(node.as_range_rhs(), parens);
     default:

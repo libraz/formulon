@@ -250,9 +250,9 @@ TEST(AstNodeBinaryOp, StoresKindAndChildren) {
   AstNode* n = make_binary_op(a, BinOp::Add, lhs, rhs);
   ASSERT_NE(n, nullptr);
   EXPECT_EQ(n->kind(), NodeKind::BinaryOp);
-  EXPECT_EQ(n->as_binary_op(), BinOp::Add);
-  EXPECT_EQ(&n->as_binary_lhs(), lhs);
-  EXPECT_EQ(&n->as_binary_rhs(), rhs);
+  EXPECT_EQ(n->as_binary_op(0), BinOp::Add);
+  EXPECT_EQ(&n->as_binary_operand(0), lhs);
+  EXPECT_EQ(&n->as_binary_operand(1), rhs);
 }
 
 TEST(AstNodeRangeOp, AccessorRoundtrips) {

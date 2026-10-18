@@ -62,10 +62,9 @@ namespace parser {
 struct TokenizerOptions {
   /// Hard cap on input length measured in UTF-16 code units. Inputs longer
   /// than this are truncated and an `ExcessiveLength` error is recorded.
-  /// Excel's real per-formula ceiling is 8,192 characters (Microsoft 365
-  /// Excel specifications and limits; see `left_associative_chain_default_
-  /// depth_cap` in tests/divergence.yaml for the directly-measured Excel
-  /// observation this mirrors).
+  /// Excel's per-formula ceiling is 8,192 characters (Microsoft 365 Excel
+  /// specifications and limits), and it is the only bound on a flat
+  /// operator chain.
   std::uint32_t max_formula_length_utf16 = 8192;
 
   /// Lexes locale-spelled text (decimal point, list and array separators,

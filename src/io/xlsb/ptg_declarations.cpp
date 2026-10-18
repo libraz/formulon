@@ -152,8 +152,9 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       CollectNamesScoped(node.as_unary_operand(), names, seen, scope, mode, values);
       return;
     case parser::NodeKind::BinaryOp:
-      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope, mode, values);
-      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope, mode, values);
+      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+        CollectNamesScoped(node.as_binary_operand(i), names, seen, scope, mode, values);
+      }
       return;
     case parser::NodeKind::RangeOp:
       CollectNamesScoped(node.as_range_lhs(), names, seen, scope, mode, values);
@@ -377,8 +378,9 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       collect_ptg_sheet_ranges(node.as_unary_operand(), sheet_names, ranges, seen);
       return;
     case parser::NodeKind::BinaryOp:
-      collect_ptg_sheet_ranges(node.as_binary_lhs(), sheet_names, ranges, seen);
-      collect_ptg_sheet_ranges(node.as_binary_rhs(), sheet_names, ranges, seen);
+      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+        collect_ptg_sheet_ranges(node.as_binary_operand(i), sheet_names, ranges, seen);
+      }
       return;
     case parser::NodeKind::RangeOp:
       collect_ptg_sheet_ranges(node.as_range_lhs(), sheet_names, ranges, seen);

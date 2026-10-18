@@ -366,11 +366,11 @@ TEST(ParserErrors, NestedFormulaTooDeep) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::NestedFormulaTooDeep));
 }
 
-TEST(ParserErrors, LeftAssociativeChainTooDeep) {
+TEST(ParserErrors, PostfixPercentChainTooDeep) {
+  // `%` builds one node per operator, so a run of them nests like any other
+  // unary chain and observes the configured cap.
   std::string formula = "=1";
-  for (std::uint32_t i = 0; i < 8; ++i) {
-    formula.append("+1");
-  }
+  formula.append(8, '%');
   Arena arena;
   ParserOptions opts;
   opts.max_parse_depth = 5;
@@ -381,19 +381,9 @@ TEST(ParserErrors, LeftAssociativeChainTooDeep) {
   EXPECT_TRUE(HasErrorCode(parser.errors(), ParseErrorCode::NestedFormulaTooDeep));
 }
 
-// Documented divergence (tests/divergence.yaml:
-// left_associative_chain_default_depth_cap): Excel's real ceiling on a flat
-// operator chain is the 8192-character formula length, not a nesting-depth
-// count, so `=A1+A2+...+A150` (150 terms, well under the character limit)
-// evaluates fine in Excel. Formulon shares `kMaxFormulaAstDepth` between
-// true nesting and flat left-associative chains because the recursive
-// downstream consumers (`ast_format::FormatNode`, `ast_shift`, the XLSB
-// `ptg_reader` decode-time check) walk the same tree and must not overflow
-// the native stack; raising the shared cap would reopen that stack-safety
-// hole. This test pins the default-`ParserOptions` (128) rejection so a
-// future change to the cap is a deliberate, reviewed decision rather than
-// an accidental regression either way.
-TEST(ParserErrors, DefaultDepthCapRejectsLongLeftAssociativeChain) {
+// A flat operator chain is bounded only by the formula length, so
+// `=A1+A2+...+A150` parses under the default nesting cap.
+TEST(ParserErrors, DefaultDepthCapAcceptsLongLeftAssociativeChain) {
   std::string formula = "=A1";
   for (std::uint32_t i = 2; i <= 150; ++i) {
     formula.append("+A").append(std::to_string(i));
@@ -402,7 +392,9 @@ TEST(ParserErrors, DefaultDepthCapRejectsLongLeftAssociativeChain) {
   Parser parser(formula, arena);  // default ParserOptions: max_parse_depth == kMaxFormulaAstDepth (128).
   AstNode* root = parser.parse();
   ASSERT_NE(root, nullptr);
-  EXPECT_TRUE(HasErrorCode(parser.errors(), ParseErrorCode::NestedFormulaTooDeep));
+  EXPECT_TRUE(parser.errors().empty());
+  ASSERT_EQ(root->kind(), NodeKind::BinaryOp);
+  EXPECT_EQ(root->as_binary_arity(), 150U);
 }
 
 TEST(ParserErrors, TooManyErrorsAppendsSentinel) {

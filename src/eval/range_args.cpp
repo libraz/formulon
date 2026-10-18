@@ -734,8 +734,9 @@ void collect_axis_spans(const parser::AstNode& node, const EvalContext& ctx, std
   }
   switch (node.kind()) {
     case parser::NodeKind::BinaryOp:
-      collect_axis_spans(node.as_binary_lhs(), ctx, depth + 1U, out);
-      collect_axis_spans(node.as_binary_rhs(), ctx, depth + 1U, out);
+      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+        collect_axis_spans(node.as_binary_operand(i), ctx, depth + 1U, out);
+      }
       return;
     case parser::NodeKind::UnaryOp:
       collect_axis_spans(node.as_unary_operand(), ctx, depth + 1U, out);

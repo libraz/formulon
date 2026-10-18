@@ -40,8 +40,9 @@ namespace parser {
 enum class WhitespaceSlot : std::uint8_t {
   /// Before the node's own text, inside any parentheses around it.
   kBeforeText,
-  /// Before the operator of a binary operation or `%`; for an intersection,
-  /// the spaces beyond the one that is the operator.
+  /// Before the operator of a binary operation (`index` is the operator's
+  /// position in the chain) or `%`; for an intersection, the spaces beyond
+  /// the one that is the operator.
   kBeforeOperator,
   /// Before a `)`: `index` 0 is a call's own, `index` i >= 1 the i-th pair
   /// printed around the node, innermost first.
@@ -56,7 +57,7 @@ enum class WhitespaceSlot : std::uint8_t {
 struct WhitespaceRun {
   const AstNode* node;
   WhitespaceSlot slot;
-  std::uint8_t index;
+  std::uint16_t index;
   char ch;
   std::uint8_t count;
 };
@@ -67,7 +68,7 @@ using FormulaWhitespace = std::vector<WhitespaceRun>;
 
 /// The first run at `slot` / `index` of `node`, or null.
 const WhitespaceRun* find_whitespace(const FormulaWhitespace& whitespace, const AstNode& node, WhitespaceSlot slot,
-                                     std::uint8_t index = 0);
+                                     std::uint16_t index = 0);
 
 /// Returns an Excel-compatible textual rendering of `node`.
 ///

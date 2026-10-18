@@ -6,7 +6,9 @@
 // the same number before walking it. That bound is only a stack-safety
 // guarantee if the stack it is sized against is known, and under Emscripten
 // the stack is a link-time constant. This program measures what the bound
-// actually costs and fails if the two have drifted apart.
+// actually costs and fails if the two have drifted apart. A flat operator
+// chain is one node however long it is, so the probe also fails if any
+// walker's use grows with the chain's length.
 //
 // It exists as a separate executable rather than a case inside the Node
 // smoke suite because peak stack usage is not observable through the binding
@@ -105,6 +107,24 @@ __attribute__((noinline)) std::size_t peak_since_paint() {
   return static_cast<std::size_t>(emscripten_stack_get_base() - a);
 }
 
+// `A1+A1+...` with `terms` operands. A flat chain is one node however long it
+// is, so every walker must cost the same at 2,700 terms (the most an
+// 8,192-character formula holds) as at 150.
+std::string flat_chain(int terms) {
+  std::string s = "A1";
+  for (int i = 1; i < terms; ++i) {
+    s += "+A1";
+  }
+  return s;
+}
+
+constexpr int kShortChain = 150;
+constexpr int kLongChain = 2700;
+
+// The most a walker's peak may grow between the short and the long chain.
+// A walker that recursed per operand would grow by well over 100 KiB.
+constexpr std::size_t kChainGrowthAllowance = 4096;
+
 std::string nested_calls(int n) {
   std::string s;
   for (int i = 0; i < n; ++i) {
@@ -131,8 +151,7 @@ void fail(const char* what) {
   ++g_failures;
 }
 
-__attribute__((noinline)) std::size_t measure_parse(int depth, bool expect_clean) {
-  const std::string src = nested_calls(depth);
+__attribute__((noinline)) std::size_t measure_parse(const std::string& src, bool expect_clean) {
   Arena arena;
   paint_free_stack();
   Parser p(src, arena);
@@ -148,8 +167,7 @@ __attribute__((noinline)) std::size_t measure_parse(int depth, bool expect_clean
   return peak;
 }
 
-__attribute__((noinline)) std::size_t measure_shift(int depth) {
-  const std::string src = nested_calls(depth);
+__attribute__((noinline)) std::size_t measure_shift(const std::string& src) {
   Arena arena;
   Parser p(src, arena);
   const AstNode* root = p.parse();
@@ -165,8 +183,7 @@ __attribute__((noinline)) std::size_t measure_shift(int depth) {
   return peak;
 }
 
-__attribute__((noinline)) std::size_t measure_format(int depth) {
-  const std::string src = nested_calls(depth);
+__attribute__((noinline)) std::size_t measure_format(const std::string& src) {
   Arena arena;
   Parser p(src, arena);
   const AstNode* root = p.parse();
@@ -185,18 +202,16 @@ __attribute__((noinline)) std::size_t measure_format(int depth) {
 // The parse-and-evaluate path a host reaches through the binding surface.
 // Evaluation recurses over the tree the parse just built, so this covers the
 // consumer that no unit-level walker does.
-__attribute__((noinline)) std::size_t measure_evaluate(int depth, fm_workbook_t* wb, bool check_value) {
-  const std::string src = "=" + nested_calls(depth);
+// `expected` is the formula's value, checked when non-negative: a wrong
+// answer is how a stack that ran into the data segment below it shows up.
+__attribute__((noinline)) std::size_t measure_evaluate(const std::string& formula, fm_workbook_t* wb, double expected) {
+  const std::string src = "=" + formula;
   fm_value_t v{};
   paint_free_stack();
   const fm_status_t rc = fm_workbook_evaluate_formula(wb, 0, 1, 0, src.c_str(), &v);
   const std::size_t peak = peak_since_paint();
-  if (check_value) {
-    // Nested SUM over a single cell is the identity. A wrong answer here is
-    // how a stack that ran into the data segment below it shows up.
-    if (rc != 0 || v.kind != FM_VAL_NUMBER || v.u.number != 7.0) {
-      fail("the deepest accepted nesting did not evaluate to its input value");
-    }
+  if (expected >= 0.0 && (rc != 0 || v.kind != FM_VAL_NUMBER || v.u.number != expected)) {
+    fail("a formula at the walker bound did not evaluate to its value");
   }
   return peak;
 }
@@ -238,15 +253,32 @@ int main() {
       {"format_formula", kShallow, kDeepestAccepted, 0, 0},
   };
 
-  walkers[0].shallow_peak = measure_parse(kShallow, true);
-  walkers[0].deep_peak = measure_parse(kRejected, false);
-  measure_parse(kDeepestAccepted, true);
-  walkers[1].shallow_peak = measure_evaluate(kShallow, wb, false);
-  walkers[1].deep_peak = measure_evaluate(kDeepestAccepted, wb, true);
-  walkers[2].shallow_peak = measure_shift(kShallow);
-  walkers[2].deep_peak = measure_shift(kDeepestAccepted);
-  walkers[3].shallow_peak = measure_format(kShallow);
-  walkers[3].deep_peak = measure_format(kDeepestAccepted);
+  walkers[0].shallow_peak = measure_parse(nested_calls(kShallow), true);
+  walkers[0].deep_peak = measure_parse(nested_calls(kRejected), false);
+  measure_parse(nested_calls(kDeepestAccepted), true);
+  // Nested SUM over a single cell is the identity.
+  walkers[1].shallow_peak = measure_evaluate(nested_calls(kShallow), wb, -1.0);
+  walkers[1].deep_peak = measure_evaluate(nested_calls(kDeepestAccepted), wb, 7.0);
+  walkers[2].shallow_peak = measure_shift(nested_calls(kShallow));
+  walkers[2].deep_peak = measure_shift(nested_calls(kDeepestAccepted));
+  walkers[3].shallow_peak = measure_format(nested_calls(kShallow));
+  walkers[3].deep_peak = measure_format(nested_calls(kDeepestAccepted));
+
+  // The same walkers over a flat chain, where depth is the operand count.
+  Walker chain_walkers[] = {
+      {"chain parse", kShortChain, kLongChain, 0, 0},
+      {"chain parse + evaluate", kShortChain, kLongChain, 0, 0},
+      {"chain shift", kShortChain, kLongChain, 0, 0},
+      {"chain format", kShortChain, kLongChain, 0, 0},
+  };
+  chain_walkers[0].shallow_peak = measure_parse(flat_chain(kShortChain), true);
+  chain_walkers[0].deep_peak = measure_parse(flat_chain(kLongChain), true);
+  chain_walkers[1].shallow_peak = measure_evaluate(flat_chain(kShortChain), wb, 7.0 * kShortChain);
+  chain_walkers[1].deep_peak = measure_evaluate(flat_chain(kLongChain), wb, 7.0 * kLongChain);
+  chain_walkers[2].shallow_peak = measure_shift(flat_chain(kShortChain));
+  chain_walkers[2].deep_peak = measure_shift(flat_chain(kLongChain));
+  chain_walkers[3].shallow_peak = measure_format(flat_chain(kShortChain));
+  chain_walkers[3].deep_peak = measure_format(flat_chain(kLongChain));
 
   fm_workbook_destroy(wb);
 
@@ -258,6 +290,17 @@ int main() {
     if (w.deep_peak > worst) {
       worst = w.deep_peak;
       worst_label = w.label;
+    }
+  }
+
+  for (const Walker& w : chain_walkers) {
+    print_walker(w);
+    if (w.deep_peak > worst) {
+      worst = w.deep_peak;
+      worst_label = w.label;
+    }
+    if (w.deep_peak > w.shallow_peak + kChainGrowthAllowance) {
+      fail("a walker's stack use grows with the length of a flat operator chain");
     }
   }
 

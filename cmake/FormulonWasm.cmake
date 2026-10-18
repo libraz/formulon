@@ -200,14 +200,14 @@ endif()
 # -- the default is 64 KiB, small enough that the parser blows through it
 # well inside the depth the cap permits.
 #
-# The deepest tree the cap admits costs a little under 100 KiB to parse,
+# The deepest tree the cap admits costs about 155 KiB to parse,
 # which is the worst of the walkers -- parsing a nested call is several times
 # more expensive per level than formatting or shifting one, and evaluation
 # does not exceed it. tests/wasm/stack_probe.cpp measures all of them on
 # every WASM build and prints the current figures, so the numbers live there
 # rather than in this comment where they would rot.
 #
-# 320 KiB is a little over 3x that worst case. The margin matters more than
+# 320 KiB is about 2x that worst case. The margin matters more than
 # usual here: the engine is built -fno-exceptions, and a shadow-stack
 # overflow is not a C++-level failure in any case. Under the release link (`ASSERTIONS=0`, so
 # `STACK_OVERFLOW_CHECK` is 0) the stack pointer simply walks past the limit

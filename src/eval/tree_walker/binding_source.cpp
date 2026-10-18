@@ -38,7 +38,8 @@ bool is_scope_free(const parser::AstNode& node, const NameEnv* env) {
     case parser::NodeKind::UnaryOp:
       return is_scope_free(node.as_unary_operand(), env);
     case parser::NodeKind::BinaryOp:
-      return is_scope_free(node.as_binary_lhs(), env) && is_scope_free(node.as_binary_rhs(), env);
+      return !parser::any_child_node(node,
+                                     [&](const parser::AstNode& operand) { return !is_scope_free(operand, env); });
     case parser::NodeKind::RangeOp:
       return is_scope_free(node.as_range_lhs(), env) && is_scope_free(node.as_range_rhs(), env);
     case parser::NodeKind::IntersectOp:

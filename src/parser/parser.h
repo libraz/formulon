@@ -68,25 +68,18 @@ struct ParserOptions {
   /// the cap check in `parser.cpp`. After the sentinel is appended,
   /// further parsing is skipped (the parser short-circuits).
   std::uint32_t max_error_count = 50;
-  /// Maximum recursion depth of `parse_expression`, shared between true
-  /// nesting and a flat left-associative operator chain (`Parser::parse()`
-  /// validates the completed tree against the same cap once the Pratt loop
-  /// returns, since a chain never adds recursion frames of its own). This
-  /// is comfortably above what real nested-call / parenthesised formulas
-  /// need, but it is NOT above Excel's actual limit on a flat chain: Excel
-  /// bounds a chain by the 8,192-character formula length, not a term
-  /// count, so a `=A1+A2+...+A150`-shaped formula can exceed this cap while
-  /// still being well within Excel's own limit (see
-  /// `tests/divergence.yaml`'s `left_associative_chain_default_depth_cap`
-  /// entry). The cap stays shared because the recursive downstream
-  /// consumers (`ast_format::FormatNode`, `ast_shift`, the XLSB
-  /// `ptg_reader` decode-time check) walk the same tree, so raising it here
-  /// alone would reopen the stack-safety hole for all of them.
+  /// Maximum nesting depth: parentheses, calls, unary and postfix operator
+  /// runs, and a binary operator inside another's operand. A flat run of binary operators
+  /// sharing one binding power (`=A1+A2+...+An`) is a single node, so its
+  /// length is bounded by the formula-length limit (`TokenizerOptions::
+  /// max_formula_length_utf16`) rather than by this cap. Every recursive
+  /// consumer of the tree (`ast_format`, `ast_shift`, the XLSB `ptg_reader`
+  /// decode-time check, the evaluator) walks it under the same bound.
   ///
   /// Two different stacks have to hold. On native builds it is the thread
   /// stack, which is megabytes wide and never the binding constraint. On
   /// WASM it is the shadow stack, whose size is a link-time constant: the
-  /// deepest tree this cap admits costs a little under 100 KiB to parse, so
+  /// deepest tree this cap admits costs about 155 KiB to parse, so
   /// `cmake/FormulonWasm.cmake` pins `STACK_SIZE` from that measurement
   /// rather than inheriting Emscripten's 64 KiB default. Raising the cap
   /// means re-measuring and re-pinning that flag, not just editing this
@@ -166,6 +159,10 @@ class Parser {
   // error occurs inside this subexpression. Always returns a non-null node:
   // an unparseable subtree becomes an `ErrorPlaceholder`.
   AstNode* parse_expression(int min_bp, SyncContext ctx);
+  // Folds the binary chain a `parse_expression` frame gathered from
+  // `chain_operands_[operand_base]` / `chain_ops_[op_base]` on into one node
+  // and stores it in `lhs`; a no-op when the frame has no open chain.
+  void close_chain(AstNode*& lhs, std::size_t operand_base, std::size_t op_base);
 
   // Atom / null-denotation dispatch.
   AstNode* parse_atom(SyncContext ctx);
@@ -302,6 +299,11 @@ class Parser {
   // Current recursion depth of `parse_expression`, used to enforce
   // `ParserOptions::max_parse_depth`.
   std::uint32_t depth_ = 0;
+  // Operands and operators of the binary chains still open in the active
+  // `parse_expression` frames, innermost last. Kept here rather than in each
+  // frame so a deeply nested formula does not pay for them per level.
+  std::vector<const AstNode*> chain_operands_;
+  std::vector<BinOp> chain_ops_;
 
   // Byte offsets (relative to `source_.data()`) of each structured-ref
   // bracket payload the parser has consumed: `(payload_start, payload_end)`

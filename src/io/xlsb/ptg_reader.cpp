@@ -303,10 +303,51 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
   // cursor in encounter order.
   ByteSpan extra = rgcb;
 
-  auto pop = [&stack]() -> parser::AstNode* {
+  // A binary chain still open on the stack, held there by a stand-in node:
+  // `1 2 + 3 4 * +` keeps `1+2` open under `3*4` so the second `+` extends
+  // it. Anything other than a further operator of the same binding power
+  // that consumes the stand-in closes the chain into one `BinaryOp` node.
+  struct OpenChain {
+    parser::AstNode* stand_in;
+    std::vector<const parser::AstNode*> operands;
+    std::vector<parser::BinOp> ops;
+  };
+  std::vector<OpenChain> open_chains;
+  bool chain_out_of_memory = false;
+  auto find_open_chain = [&open_chains](const parser::AstNode* node) -> OpenChain* {
+    for (auto it = open_chains.rbegin(); it != open_chains.rend(); ++it) {
+      if (it->stand_in == node) {
+        return &*it;
+      }
+    }
+    return nullptr;
+  };
+  auto close_chain = [&](parser::AstNode* node) -> parser::AstNode* {
+    OpenChain* chain = find_open_chain(node);
+    if (chain == nullptr) {
+      return node;
+    }
+    parser::AstNode* closed = parser::make_binary_chain(arena, chain->operands.data(), chain->ops.data(),
+                                                        static_cast<std::uint32_t>(chain->operands.size()));
+    open_chains.erase(open_chains.begin() + (chain - open_chains.data()));
+    if (closed == nullptr) {
+      chain_out_of_memory = true;
+      return node;
+    }
+    if (whitespace != nullptr) {
+      for (parser::WhitespaceRun& run : *whitespace) {
+        if (run.node == node) {
+          run.node = closed;
+        }
+      }
+    }
+    return closed;
+  };
+
+  auto pop = [&stack, &close_chain]() -> parser::AstNode* {
     parser::AstNode* n = stack.back();
     stack.pop_back();
-    return n;
+    return close_chain(n);
   };
 
   // True when `ixti` names an ExternSheet entry belonging to a
@@ -585,7 +626,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       return;
     }
     parser::WhitespaceSlot slot = parser::WhitespaceSlot::kBeforeText;
-    std::uint8_t index = 0;
+    std::uint16_t index = 0;
     std::uint8_t spaces_type = kPtgSpaceSpaces;
     std::uint8_t feeds_type = kPtgSpaceLineFeeds;
     bool paren = false;
@@ -624,6 +665,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::Isect:
       case PtgKind::Percent:
         slot = parser::WhitespaceSlot::kBeforeOperator;
+        // A binary operator's run is keyed by its position in the chain.
+        if (const OpenChain* chain = find_open_chain(node); chain != nullptr) {
+          index = static_cast<std::uint16_t>(chain->ops.size() - 1U);
+        }
         break;
       case PtgKind::Paren:
         slot = parser::WhitespaceSlot::kBeforeClose;
@@ -1242,7 +1287,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           return corrupt_stack("binary operator");
         }
         parser::AstNode* rhs = pop();
-        parser::AstNode* lhs = pop();
+        parser::AstNode* lhs = stack.back();
+        stack.pop_back();
         parser::BinOp op = parser::BinOp::Add;
         switch (info->kind) {
           case PtgKind::Add:
@@ -1284,11 +1330,20 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           default:
             break;
         }
-        parser::AstNode* n = parser::make_binary_op(arena, op, lhs, rhs);
-        if (n == nullptr) {
+        OpenChain* chain = find_open_chain(lhs);
+        if (chain != nullptr && parser::binop_binding_power(chain->ops.front()) == parser::binop_binding_power(op)) {
+          chain->ops.push_back(op);
+          chain->operands.push_back(rhs);
+          stack.push_back(lhs);
+          break;
+        }
+        lhs = close_chain(lhs);
+        parser::AstNode* stand_in = parser::make_error_placeholder(arena);
+        if (stand_in == nullptr || chain_out_of_memory) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (binary op)", "context=xlsb_ptg_reader");
         }
-        stack.push_back(n);
+        open_chains.push_back(OpenChain{stand_in, {lhs, rhs}, {op}});
+        stack.push_back(stand_in);
         break;
       }
 
@@ -1373,6 +1428,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (stack.empty()) {
           return corrupt_stack("paren");
         }
+        stack.back() = close_chain(stack.back());
         stack.back()->add_paren();
         break;
       }
@@ -1536,6 +1592,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
 
   if (stack.size() != 1) {
     return corrupt_stack(stack.empty() ? "empty stack at end" : "multiple values at end");
+  }
+  stack.front() = close_chain(stack.front());
+  if (chain_out_of_memory) {
+    return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (binary op)", "context=xlsb_ptg_reader");
   }
   if (!parser::ast_depth_within_limit(*stack.front(), parser::kMaxFormulaAstDepth)) {
     return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb formula exceeds maximum AST depth",

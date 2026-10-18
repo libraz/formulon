@@ -42,6 +42,8 @@ namespace parser {
 /// Shared ceiling for AST consumers that receive a tree without parser
 /// diagnostics (notably the XLSB Ptg decoder). Keep this in lockstep with
 /// ParserOptions' default so every recursive AST walk has the same bound.
+/// A flat operator chain (`1+2+...+n`) is one `BinaryOp` node, so its length
+/// is bounded by the formula-length limit rather than by this depth.
 inline constexpr std::uint32_t kMaxFormulaAstDepth = 128;
 
 /// Discriminator tag for every AST variant.
@@ -139,7 +141,7 @@ enum class StructuredRefModifier : std::uint8_t {
 ///
 /// Construction is restricted to the `make_*` factories declared below. Each
 /// per-kind accessor (`as_*`) precondition-checks the discriminator via
-/// `FM_CHECK`: calling, e.g., `as_binary_op()` on a `Literal` aborts the
+/// `FM_CHECK`: calling, e.g., `as_binary_arity()` on a `Literal` aborts the
 /// process. Callers must branch on `kind()` first.
 class AstNode final {
  public:
@@ -229,9 +231,15 @@ class AstNode final {
   const AstNode& as_unary_operand() const;
 
   // --- BinaryOp ------------------------------------------------------------
-  BinOp as_binary_op() const;
-  const AstNode& as_binary_lhs() const;
-  const AstNode& as_binary_rhs() const;
+  // A left-associative run of operators sharing one binding power:
+  // operand(0) op(0) operand(1) ... op(arity-2) operand(arity-1). `1+2-3` is
+  // one node of arity 3; `1+2*3` nests the `*` node as operand 1, and a
+  // parenthesised operand is its own node. Consumers fold the operands left
+  // to right, so a chain costs one stack frame however long it is.
+  std::uint32_t as_binary_arity() const;
+  const AstNode& as_binary_operand(std::uint32_t i) const;
+  /// The operator between operand `i` and operand `i + 1`.
+  BinOp as_binary_op(std::uint32_t i) const;
 
   // --- RangeOp -------------------------------------------------------------
   const AstNode& as_range_lhs() const;
@@ -305,7 +313,7 @@ class AstNode final {
   friend AstNode* make_name_ref(Arena&, std::string_view);
   friend AstNode* make_sheet_name_ref(Arena&, std::string_view, std::string_view, bool);
   friend AstNode* make_unary_op(Arena&, UnaryOp, AstNode*);
-  friend AstNode* make_binary_op(Arena&, BinOp, AstNode*, AstNode*);
+  friend AstNode* make_binary_chain(Arena&, const AstNode* const*, const BinOp*, std::uint32_t);
   friend AstNode* make_range_op(Arena&, AstNode*, AstNode*);
   friend AstNode* make_union_op(Arena&, const AstNode* const*, std::uint32_t);
   friend AstNode* make_intersect_op(Arena&, AstNode*, AstNode*);
@@ -383,9 +391,9 @@ class AstNode final {
     const AstNode* operand;
   };
   struct BinaryPayload {
-    BinOp op;
-    const AstNode* lhs;
-    const AstNode* rhs;
+    const AstNode* const* operands;  // arity entries
+    const BinOp* ops;                // arity - 1 entries
+    std::uint32_t arity;
   };
   struct RangePayload {
     const AstNode* lhs;
@@ -558,7 +566,12 @@ bool any_child_node(const AstNode& node, Predicate&& predicate) {
     case NodeKind::UnaryOp:
       return predicate(node.as_unary_operand());
     case NodeKind::BinaryOp:
-      return predicate(node.as_binary_lhs()) || predicate(node.as_binary_rhs());
+      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+        if (predicate(node.as_binary_operand(i))) {
+          return true;
+        }
+      }
+      return false;
     case NodeKind::RangeOp:
       return predicate(node.as_range_lhs()) || predicate(node.as_range_rhs());
     case NodeKind::IntersectOp:
@@ -671,7 +684,17 @@ AstNode* make_sheet_name_ref(Arena& arena, std::string_view sheet, std::string_v
 /// Builds a `UnaryOp` node. `operand` must be non-null.
 AstNode* make_unary_op(Arena& arena, UnaryOp op, AstNode* operand);
 
-/// Builds a `BinaryOp` node. `lhs` and `rhs` must both be non-null.
+/// Binding power of `op`. Operators sharing one form a single `BinaryOp`
+/// chain; a higher value binds tighter.
+int binop_binding_power(BinOp op) noexcept;
+
+/// Builds a `BinaryOp` chain from `arity` operands and the `arity - 1`
+/// operators between them. Both arrays are deep-copied; `arity` must be
+/// `>= 2` and every operator must share one binding power.
+AstNode* make_binary_chain(Arena& arena, const AstNode* const* operands, const BinOp* ops, std::uint32_t arity);
+
+/// Builds a two-operand `BinaryOp` node. `lhs` and `rhs` must both be
+/// non-null.
 AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs);
 
 /// Builds a `RangeOp` node. `lhs` and `rhs` must both be non-null.

@@ -856,33 +856,6 @@ entries:
     first_noted: 2026-10-07
     last_verified_excel_version: "16.113.3"
 
-# -- Parser internal-safety limits ------------------------------------------
-  # `Parser::parse_expression`'s recursion-depth guard (`kMaxFormulaAstDepth`,
-  # 128) is shared between true nesting and a flat left-associative operator
-  # chain assembled without extra recursion frames (`Parser::parse()` still
-  # validates the completed tree with the same cap). Excel's real ceiling on
-  # a flat chain is the 8,192-character formula-length limit (Microsoft 365
-  # Excel specifications and limits), not a term-count / nesting-depth bound,
-  # so `=A1+A2+...+A150` (150 terms, ~640 characters) evaluates to a number
-  # in Excel but is rejected by Formulon with `NestedFormulaTooDeep`. The
-  # cap stays shared on purpose: `ast_format::FormatNode`, `ast_shift`, and
-  # the XLSB `ptg_reader` decode-time check all recurse over the same tree,
-  # so raising the constant alone would reopen the stack-safety hole for
-  # genuinely pathological (deeply nested, not merely long) input. The stack
-  # at risk is the native thread stack on native builds and the WASM shadow
-  # stack in the shipped binary; the latter is a link-time constant sized
-  # from the measured cost of this cap (see `cmake/FormulonWasm.cmake`), so
-  # raising the cap means re-measuring and re-pinning that flag too.
-  - id: left_associative_chain_default_depth_cap
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: unit-test
-    evidence: [tests/unit/parser/parser_error_test.cpp]
-    reason: "Excel's formula-length limit (8,192 characters) is the real ceiling on a flat operator chain; Formulon additionally rejects a flat chain past kMaxFormulaAstDepth (128) terms because the recursion-depth guard is shared with true nesting for stack safety across ast_format / ast_shift / the XLSB ptg_reader -- the native thread stack on native builds, the link-time-sized shadow stack under WASM. Not raised without also bounding those recursive consumers independently. Observed directly: a workbook carrying =A1+A2+...+A150 (642 characters, A1:A150 seeded 1..150) opens and evaluates to 11325, and a 1000-term chain (4,893 characters) opens and evaluates as well. The observation has to be made from a file: the AppleEvent formula setter the oracle driver uses truncates a long formula, so an in-place probe measures the bridge rather than Excel. See DefaultDepthCapRejectsLongLeftAssociativeChain."
-    prefer: formulon
-    first_noted: 2026-08-13
-    last_verified_excel_version: "16.112"
 
   # Retired the INDIRECT R1C1 entries (`indirect_r1c1_style_deferred`,
   # `indirect_r1c1_absolute`, `indirect_r1c1_from_address`): `a1 = FALSE`

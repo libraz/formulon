@@ -280,7 +280,7 @@ TEST(ExternalRefParse, BracketNameWithoutBangIsAName) {
     ASSERT_TRUE(p.errors().empty()) << row.entered;
     const AstNode* name = root;
     if (root->kind() == NodeKind::BinaryOp) {
-      name = &root->as_binary_lhs();
+      name = &root->as_binary_operand(0);
     } else if (root->kind() == NodeKind::Call) {
       name = &root->as_call_arg(0);
     }

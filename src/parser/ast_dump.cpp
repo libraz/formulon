@@ -251,12 +251,19 @@ void DumpInto(const AstNode& node, std::string& out) {
       return;
 
     case NodeKind::BinaryOp:
+      // `(binary + a b)`; each further chain operand follows its operator.
       out.append("(binary ");
-      out.append(BinOpToken(node.as_binary_op()));
+      out.append(BinOpToken(node.as_binary_op(0)));
       out.push_back(' ');
-      DumpInto(node.as_binary_lhs(), out);
-      out.push_back(' ');
-      DumpInto(node.as_binary_rhs(), out);
+      DumpInto(node.as_binary_operand(0), out);
+      for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
+        if (i >= 2U) {
+          out.push_back(' ');
+          out.append(BinOpToken(node.as_binary_op(i - 1U)));
+        }
+        out.push_back(' ');
+        DumpInto(node.as_binary_operand(i), out);
+      }
       out.push_back(')');
       return;
 

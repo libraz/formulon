@@ -11,6 +11,7 @@
 #include <string_view>
 #include <vector>
 
+#include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "parser/token.h"
 #include "utils/arena.h"
@@ -74,6 +75,7 @@ std::uint64_t ChildCount(const AstNode& node) {
     case NodeKind::Lambda:
       return 1;
     case NodeKind::BinaryOp:
+      return node.as_binary_arity();
     case NodeKind::RangeOp:
     case NodeKind::IntersectOp:
       return 2;
@@ -113,7 +115,7 @@ const AstNode& ChildAt(const AstNode& node, std::uint64_t index) {
     case NodeKind::Lambda:
       return node.as_lambda_body();
     case NodeKind::BinaryOp:
-      return index == 0 ? node.as_binary_lhs() : node.as_binary_rhs();
+      return node.as_binary_operand(static_cast<std::uint32_t>(index));
     case NodeKind::RangeOp:
       return index == 0 ? node.as_range_lhs() : node.as_range_rhs();
     case NodeKind::IntersectOp:
@@ -408,16 +410,62 @@ AstNode* make_unary_op(Arena& arena, UnaryOp op, AstNode* operand) {
   return n;
 }
 
-AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs) {
-  FM_CHECK(lhs != nullptr && rhs != nullptr, "make_binary_op: lhs/rhs must be non-null");
+int binop_binding_power(BinOp op) noexcept {
+  switch (op) {
+    case BinOp::Pow:
+      return detail::kBpPow;
+    case BinOp::Mul:
+    case BinOp::Div:
+      return detail::kBpMulDiv;
+    case BinOp::Add:
+    case BinOp::Sub:
+      return detail::kBpAddSub;
+    case BinOp::Concat:
+      return detail::kBpConcat;
+    case BinOp::Eq:
+    case BinOp::NotEq:
+    case BinOp::Lt:
+    case BinOp::LtEq:
+    case BinOp::Gt:
+    case BinOp::GtEq:
+      return detail::kBpComparison;
+  }
+  return detail::kBpComparison;
+}
+
+AstNode* make_binary_chain(Arena& arena, const AstNode* const* operands, const BinOp* ops, std::uint32_t arity) {
+  FM_CHECK(arity >= 2, "make_binary_chain: a chain requires at least 2 operands");
+  FM_CHECK(operands != nullptr && ops != nullptr, "make_binary_chain: operands/ops must be non-null");
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    FM_CHECK(operands[i] != nullptr, "make_binary_chain: operands must be non-null");
+  }
+  for (std::uint32_t i = 1; i + 1 < arity; ++i) {
+    FM_CHECK(binop_binding_power(ops[i]) == binop_binding_power(ops[0]),
+             "make_binary_chain: operators must share one binding power");
+  }
+  const AstNode* const* copied = CopyChildArray(arena, operands, arity);
+  if (copied == nullptr) {
+    return nullptr;
+  }
+  BinOp* copied_ops = arena.create_array<BinOp>(arity - 1U);
+  if (copied_ops == nullptr) {
+    return nullptr;
+  }
+  std::memcpy(copied_ops, ops, sizeof(BinOp) * (arity - 1U));
   AstNode* n = AstNode::make_node(arena, NodeKind::BinaryOp);
   if (n == nullptr) {
     return nullptr;
   }
-  n->data_.binary.op = op;
-  n->data_.binary.lhs = lhs;
-  n->data_.binary.rhs = rhs;
+  n->data_.binary.operands = copied;
+  n->data_.binary.ops = copied_ops;
+  n->data_.binary.arity = arity;
   return n;
+}
+
+AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs) {
+  FM_CHECK(lhs != nullptr && rhs != nullptr, "make_binary_op: lhs/rhs must be non-null");
+  const AstNode* operands[2] = {lhs, rhs};
+  return make_binary_chain(arena, operands, &op, 2U);
 }
 
 AstNode* make_range_op(Arena& arena, AstNode* lhs, AstNode* rhs) {
@@ -817,19 +865,21 @@ const AstNode& AstNode::as_unary_operand() const {
   return *data_.unary.operand;
 }
 
-BinOp AstNode::as_binary_op() const {
+std::uint32_t AstNode::as_binary_arity() const {
+  FM_CHECK(kind_ == NodeKind::BinaryOp, "AstNode::as_binary_arity on non-BinaryOp");
+  return data_.binary.arity;
+}
+
+const AstNode& AstNode::as_binary_operand(std::uint32_t i) const {
+  FM_CHECK(kind_ == NodeKind::BinaryOp, "AstNode::as_binary_operand on non-BinaryOp");
+  FM_CHECK(i < data_.binary.arity, "AstNode::as_binary_operand index out of range");
+  return *data_.binary.operands[i];
+}
+
+BinOp AstNode::as_binary_op(std::uint32_t i) const {
   FM_CHECK(kind_ == NodeKind::BinaryOp, "AstNode::as_binary_op on non-BinaryOp");
-  return data_.binary.op;
-}
-
-const AstNode& AstNode::as_binary_lhs() const {
-  FM_CHECK(kind_ == NodeKind::BinaryOp, "AstNode::as_binary_lhs on non-BinaryOp");
-  return *data_.binary.lhs;
-}
-
-const AstNode& AstNode::as_binary_rhs() const {
-  FM_CHECK(kind_ == NodeKind::BinaryOp, "AstNode::as_binary_rhs on non-BinaryOp");
-  return *data_.binary.rhs;
+  FM_CHECK(i + 1U < data_.binary.arity, "AstNode::as_binary_op index out of range");
+  return data_.binary.ops[i];
 }
 
 const AstNode& AstNode::as_range_lhs() const {

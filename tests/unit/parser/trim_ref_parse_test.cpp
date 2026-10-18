@@ -147,8 +147,8 @@ TEST(TrimRefParse, DotsOutsideTheOperatorKeepTheirMeaning) {
   const AstNode* decimal = ParseOk(arena, "=1.5+.5");
   ASSERT_NE(decimal, nullptr);
   ASSERT_EQ(decimal->kind(), NodeKind::BinaryOp);
-  EXPECT_DOUBLE_EQ(decimal->as_binary_lhs().as_literal().as_number(), 1.5);
-  EXPECT_DOUBLE_EQ(decimal->as_binary_rhs().as_literal().as_number(), 0.5);
+  EXPECT_DOUBLE_EQ(decimal->as_binary_operand(0).as_literal().as_number(), 1.5);
+  EXPECT_DOUBLE_EQ(decimal->as_binary_operand(1).as_literal().as_number(), 0.5);
 }
 
 TEST(TrimRefParse, TrimRefInsideLargerExpressions) {
@@ -192,7 +192,7 @@ TEST(FunctionValueParse, StorageFormSpellsListedNamesWithTheValuePrefix) {
   Arena arena;
   const AstNode* root = ParseOk(arena, "=LET(f,abs,f(-2))+TYPE(Rate)");
   ASSERT_NE(root, nullptr);
-  const AstNode& let = root->as_binary_lhs();
+  const AstNode& let = root->as_binary_operand(0);
   const std::vector<const AstNode*> values = {&let.as_let_binding_expr(0)};
   EXPECT_EQ(format_formula_storage(*root, &SpellForTest, nullptr, nullptr, &values),
             "LET(_xlpm.f,_xleta.ABS,_xlpm.f(-2))+TYPE(Rate)");

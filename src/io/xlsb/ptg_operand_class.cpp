@@ -106,7 +106,8 @@ Shape Shapes::of(const parser::AstNode& node) {
     case NodeKind::UnaryOp:
       return !lifting_ || of(node.as_unary_operand()) == Shape::kScalar ? Shape::kScalar : Shape::kArray;
     case NodeKind::BinaryOp:
-      return !lifting_ || (of(node.as_binary_lhs()) == Shape::kScalar && of(node.as_binary_rhs()) == Shape::kScalar)
+      return !lifting_ || !parser::any_child_node(
+                              node, [this](const parser::AstNode& operand) { return of(operand) != Shape::kScalar; })
                  ? Shape::kScalar
                  : Shape::kArray;
     case NodeKind::ArrayLiteral:

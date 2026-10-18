@@ -125,9 +125,13 @@ SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry*
       return SpillPotential::kNever;
     case NodeKind::UnaryOp:
       return spill_potential_impl(root.as_unary_operand(), registry, let_env);
-    case NodeKind::BinaryOp:
-      return combine_potential(spill_potential_impl(root.as_binary_lhs(), registry, let_env),
-                               spill_potential_impl(root.as_binary_rhs(), registry, let_env));
+    case NodeKind::BinaryOp: {
+      SpillPotential potential = spill_potential_impl(root.as_binary_operand(0), registry, let_env);
+      for (std::uint32_t i = 1; i < root.as_binary_arity(); ++i) {
+        potential = combine_potential(potential, spill_potential_impl(root.as_binary_operand(i), registry, let_env));
+      }
+      return potential;
+    }
     case NodeKind::IntersectOp:
       return combine_potential(spill_potential_impl(root.as_intersect_lhs(), registry, let_env),
                                spill_potential_impl(root.as_intersect_rhs(), registry, let_env));

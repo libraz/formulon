@@ -653,40 +653,42 @@ Value snap_array_result(const Value& out, const Value& lhs, const Value& rhs, Ar
   return Value::array(snapped);
 }
 
-// A binary operator node. `snap_cancellation_result` applies Excel's
-// near-zero cancellation snap to a `+` / `-` result, cell by cell when it is
-// an array.
+// A binary operator chain, folded left to right. `snap_cancellation_result`
+// applies Excel's near-zero cancellation snap to the last `+` / `-` result,
+// cell by cell when it is an array.
 Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, bool snap_cancellation_result) {
-  const parser::BinOp op = node.as_binary_op();
   // Evaluate left first so error propagation honours the documented
-  // left-most-wins rule.
-  const Shaped lhs = eval_node_shaped(node.as_binary_lhs(), arena, registry, ctx);
-  if (lhs.tail_array == nullptr && lhs.value.is_error()) {
-    return lhs;
-  }
-  const Shaped rhs = eval_node_shaped(node.as_binary_rhs(), arena, registry, ctx);
-  if (rhs.tail_array == nullptr && rhs.value.is_error()) {
-    return rhs;
-  }
-  // Cellwise broadcast when either operand is an array (SpillRef #,
-  // TRANSPOSE, SEQUENCE, a whole column / row, ...); two scalars take
-  // the per-cell fast path.
-  Shaped out = broadcast_binop(op, lhs, rhs, arena);
-  if (!snap_cancellation_result || out.tail_array != nullptr || lhs.tail_array != nullptr ||
-      rhs.tail_array != nullptr) {
-    return out;
-  }
-  if (out.value.is_array()) {
-    out.value = snap_array_result(out.value, lhs.value, rhs.value, arena);
-  } else if (out.value.is_number()) {
-    const std::optional<double> a = broadcast_operand_number(lhs.value, 0U, 0U);
-    const std::optional<double> b = broadcast_operand_number(rhs.value, 0U, 0U);
-    if (a && b) {
-      out.value = Value::number(snap_cancellation(*a, out.value.as_number()));
+  // left-most-wins rule: a scalar error ends the chain before the next operand.
+  Shaped lhs = eval_node_shaped(node.as_binary_operand(0), arena, registry, ctx);
+  const std::uint32_t arity = node.as_binary_arity();
+  for (std::uint32_t i = 1; i < arity; ++i) {
+    if (lhs.tail_array == nullptr && lhs.value.is_error()) {
+      return lhs;
     }
+    const Shaped rhs = eval_node_shaped(node.as_binary_operand(i), arena, registry, ctx);
+    if (rhs.tail_array == nullptr && rhs.value.is_error()) {
+      return rhs;
+    }
+    // Cellwise broadcast when either operand is an array (SpillRef #,
+    // TRANSPOSE, SEQUENCE, a whole column / row, ...); two scalars take
+    // the per-cell fast path.
+    Shaped out = broadcast_binop(node.as_binary_op(i - 1U), lhs, rhs, arena);
+    if (snap_cancellation_result && i + 1U == arity && out.tail_array == nullptr && lhs.tail_array == nullptr &&
+        rhs.tail_array == nullptr) {
+      if (out.value.is_array()) {
+        out.value = snap_array_result(out.value, lhs.value, rhs.value, arena);
+      } else if (out.value.is_number()) {
+        const std::optional<double> a = broadcast_operand_number(lhs.value, 0U, 0U);
+        const std::optional<double> b = broadcast_operand_number(rhs.value, 0U, 0U);
+        if (a && b) {
+          out.value = Value::number(snap_cancellation(*a, out.value.as_number()));
+        }
+      }
+    }
+    lhs = out;
   }
-  return out;
+  return lhs;
 }
 
 // The value of a formula's root node. An unparenthesised root `+` / `-` is
@@ -694,7 +696,7 @@ Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionR
 Shaped eval_root_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   if (node.kind() == parser::NodeKind::BinaryOp && node.paren_depth() == 0U &&
-      (node.as_binary_op() == parser::BinOp::Add || node.as_binary_op() == parser::BinOp::Sub)) {
+      (node.as_binary_op(0) == parser::BinOp::Add || node.as_binary_op(0) == parser::BinOp::Sub)) {
     EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
     if (depth_guard.exceeded()) {
       return Shaped{Value::error(ErrorCode::Calc), nullptr};
