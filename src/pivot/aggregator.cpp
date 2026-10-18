@@ -261,16 +261,23 @@ Value finite_number(double value) {
   return Value::number(value);
 }
 
-Value aggregate_sum(const ValueInputView& values) {
+Value aggregate_sum(const ValueInputView& values, bool blank_if_all_blank = false) {
   double sum = 0.0;
+  bool any_non_blank = false;
   for (std::size_t index = 0; index < values.size; ++index) {
     const Value value = values.at(index);
+    if (blank_if_all_blank && !value.is_blank()) {
+      any_non_blank = true;
+    }
     if (value.is_error()) {
       return value;
     }
     if (const std::optional<double> number = numeric_aggregate_value(value); number.has_value()) {
       sum = snapped_add(*number, sum);
     }
+  }
+  if (blank_if_all_blank && !any_non_blank) {
+    return Value::blank();
   }
   return finite_number(sum);
 }
@@ -284,25 +291,6 @@ Value apply_value_aggregation(Aggregation aggregation, const ValueInputView& val
     state.add(values.at(index));
   }
   return state.finish();
-}
-
-// ---------------------------------------------------------------------------
-// Result-side text reification.
-// ---------------------------------------------------------------------------
-//
-// `PivotResult::values` / `subtotals` / grand totals must outlive the
-// cache they were computed against (GETPIVOTDATA reads them outside of
-// any specific evaluation arena). Numbers, bools, errors, and blanks
-// are trivially copyable. Text is the only kind that needs storage —
-// we copy the bytes into `result.text_storage` and rebuild a `Value`
-// pointing into the deque entry. Pointer/iterator stability of
-// `std::deque` keeps the views valid across subsequent appends.
-Value reify(const Value& value, PivotResult& result) {
-  if (!value.is_text()) {
-    return value;
-  }
-  result.text_storage.emplace_back(value.as_text());
-  return Value::text(result.text_storage.back());
 }
 
 }  // namespace
@@ -387,6 +375,11 @@ Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cach
   if (records.empty()) {
     return Value::blank();
   }
+  if (aggregation == Aggregation::Sum && !result.sum_totals_as_state) {
+    RecordValueContext context;
+    const ValueInputView values = record_value_view(cache, records, field_index, context);
+    return aggregate_sum(values, /*blank_if_all_blank=*/true);
+  }
   AggregateState state(aggregation);
   for (std::size_t i = 0; i < records.size(); ++i) {
     state.add(record_cell(cache, records.record_at(i), field_index));
@@ -394,10 +387,7 @@ Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cach
   if (state.all_blank()) {
     return Value::blank();
   }
-  // Sum keeps its own snapped chain unless its totals follow the accumulator model.
-  return aggregation == Aggregation::Sum && !result.sum_totals_as_state
-             ? reify(apply_record_aggregation(aggregation, cache, records, field_index), result)
-             : state.finish();
+  return state.finish();
 }
 
 Value aggregate_records_or_blank(Aggregation aggregation, const PivotCache& cache,

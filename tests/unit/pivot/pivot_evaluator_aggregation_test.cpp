@@ -806,6 +806,7 @@ TEST(PivotAggregator, BorrowedRecordViewsPreserveFirstErrorsAndSparseBlankSemant
   add(Value::text("inline"), false);
   add(Value::blank(), false);
   add(Value::error(ErrorCode::NA), false);
+  add(Value::error(ErrorCode::Div0), false);
 
   const std::vector<std::size_t> direct_indices{0, 1, 2, 3, 4};
   RecordBuckets buckets(2, std::vector<std::vector<std::size_t>>(1));
@@ -843,6 +844,38 @@ TEST(PivotAggregator, BorrowedRecordViewsPreserveFirstErrorsAndSparseBlankSemant
   const Value text_result = aggregate_records_or_blank(Aggregation::Sum, cache, blank_and_text, 0, result);
   ASSERT_TRUE(text_result.is_number());
   EXPECT_DOUBLE_EQ(text_result.as_number(), 0.0);
+
+  const std::vector<std::size_t> boolean_only{1};
+  const Value boolean_result = aggregate_records_or_blank(Aggregation::Sum, cache, boolean_only, 0, result);
+  ASSERT_TRUE(boolean_result.is_number());
+  EXPECT_DOUBLE_EQ(boolean_result.as_number(), 0.0);
+
+  const std::vector<std::size_t> errors{4, 5};
+  const Value error_result = aggregate_records_or_blank(Aggregation::Sum, cache, errors, 0, result);
+  ASSERT_TRUE(error_result.is_error());
+  EXPECT_EQ(error_result.as_error(), ErrorCode::NA);
+
+  const std::vector<std::size_t> invalid_index{std::numeric_limits<std::size_t>::max()};
+  EXPECT_TRUE(aggregate_records_or_blank(Aggregation::Sum, cache, invalid_index, 0, result).is_blank());
+}
+
+TEST(PivotAggregator, SumResultModePreservesItsZeroSeed) {
+  PivotCache cache;
+  cache.mutable_fields().push_back(PivotCacheField{"Value", {}});
+  PivotCacheRecord record;
+  record.cells.push_back(Value::number(-0.0));
+  cache.mutable_records().push_back(std::move(record));
+  const std::vector<std::size_t> only_record{0};
+
+  PivotResult record_sum_result;
+  const Value record_sum = aggregate_records_or_blank(Aggregation::Sum, cache, only_record, 0, record_sum_result);
+  record_sum_result.sum_totals_as_state = true;
+  const Value state_sum = aggregate_records_or_blank(Aggregation::Sum, cache, only_record, 0, record_sum_result);
+
+  ASSERT_TRUE(record_sum.is_number());
+  ASSERT_TRUE(state_sum.is_number());
+  EXPECT_FALSE(std::signbit(record_sum.as_number()));  // The record sum begins at +0.
+  EXPECT_TRUE(std::signbit(state_sum.as_number()));    // The state path seeds from its first number.
 }
 
 }  // namespace
