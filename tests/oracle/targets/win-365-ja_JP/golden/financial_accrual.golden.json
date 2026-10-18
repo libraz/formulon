@@ -21,6 +21,10 @@
         "kind": "number",
         "value": 16.666666666666664
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -31,6 +35,10 @@
         "kind": "number",
         "value": 16.666666666666664
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -40,6 +48,10 @@
       "expect": {
         "kind": "number",
         "value": 50.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       },
       "compare_mode": "numeric_text"
     },
@@ -72,7 +84,7 @@
         "value": "1.3151"
       },
       "tolerance": {
-        "abs": 5e-05,
+        "abs": 0.0,
         "rel": 0.0
       },
       "compare_mode": "numeric_text"
@@ -85,6 +97,10 @@
         "kind": "text",
         "value": "315"
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -94,6 +110,10 @@
       "expect": {
         "kind": "text",
         "value": "2100"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       },
       "compare_mode": "numeric_text"
     },
@@ -105,6 +125,10 @@
         "kind": "text",
         "value": "2100"
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -114,6 +138,10 @@
       "expect": {
         "kind": "number",
         "value": 776.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       },
       "compare_mode": "numeric_text"
     },
@@ -125,6 +153,10 @@
         "kind": "number",
         "value": 360.0
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -134,6 +166,10 @@
       "expect": {
         "kind": "number",
         "value": 131.8032786885246
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       },
       "compare_mode": "numeric_text"
     },
@@ -255,6 +291,10 @@
         "kind": "number",
         "value": 16.666666666666664
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -295,6 +335,10 @@
         "kind": "text",
         "value": "240"
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -315,6 +359,10 @@
         "kind": "text",
         "value": "0"
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -325,6 +373,10 @@
         "kind": "text",
         "value": "1050"
       },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      },
       "compare_mode": "numeric_text"
     },
     {
@@ -334,6 +386,10 @@
       "expect": {
         "kind": "text",
         "value": "-2100"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       },
       "compare_mode": "numeric_text"
     },
@@ -449,6 +505,10 @@
       "expect": {
         "kind": "number",
         "value": 600.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       },
       "compare_mode": "numeric_text"
     }

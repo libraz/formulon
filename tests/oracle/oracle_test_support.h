@@ -25,6 +25,7 @@
 #include "tests/oracle/json_reader.h"
 #include "tests/oracle/oracle_anchor.h"
 #include "tests/oracle/oracle_runner.h"
+#include "tests/oracle/shown_precision.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -518,7 +519,9 @@ inline std::string compare_value(const JsonValue& expect, const Value& raw_actua
         return "expected numeric text but golden value is not numeric: \"" + want_text + "\"";
       }
       const double got = actual.as_number();
-      if (numbers_match(want_number, got, tol_abs, tol_rel)) {
+      // The golden text is Excel's displayed value, known to half a unit in
+      // its last shown digit; that is the least tolerance it is compared at.
+      if (numbers_match(want_number, got, std::max(tol_abs, shown_half_unit(want_text)), tol_rel)) {
         return {};
       }
       return "numeric text mismatch: expected \"" + want_text + "\", got " + std::to_string(got);

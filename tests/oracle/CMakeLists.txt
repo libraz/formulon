@@ -116,6 +116,20 @@ formulon_apply_warnings(formulon_oracle_anchor_test)
 
 gtest_discover_tests(formulon_oracle_anchor_test)
 
+# Shown-precision helper unit test
+#
+# Standalone gtest binary covering `shown_half_unit`, the displayed-text
+# precision the `numeric_text` comparison is bounded by.
+add_executable(formulon_oracle_shown_precision_test shown_precision_test.cpp)
+
+target_link_libraries(formulon_oracle_shown_precision_test PRIVATE gtest_main)
+
+target_include_directories(formulon_oracle_shown_precision_test PRIVATE ${CMAKE_SOURCE_DIR})
+
+formulon_apply_warnings(formulon_oracle_shown_precision_test)
+
+gtest_discover_tests(formulon_oracle_shown_precision_test DISCOVERY_TIMEOUT 120)
+
 # ---------------------------------------------------------------------------
 # IronCalc oracle target
 #
