@@ -209,5 +209,88 @@ class FormulaCellSchemaTest(unittest.TestCase):
         self.assertTrue(all("formula_cell" not in record for record in golden["cases"]))
 
 
+SUITE_TOLERANCE_REGISTRY = """\
+entries:
+  - suite: probe_suite
+    applies_to: [win-365-ja_JP]
+    tolerance: suite
+    reason: "Suite tolerance on Windows."
+    prefer: formulon
+    first_noted: 2026-01-01
+    last_verified_excel_version: "16.0"
+"""
+
+
+def _probe_suite() -> case_schema.Suite:
+    return case_schema.Suite(
+        name="probe_suite",
+        description="",
+        locale="ja-JP",
+        tolerance=case_schema.Tolerance(abs=1e-9, rel=1e-6),
+        options={},
+        cases=[
+            case_schema.Case(id="exact", formula="=1", tolerance=case_schema.Tolerance()),
+            case_schema.Case(id="display", formula="=2", tolerance=case_schema.Tolerance(abs=1e-4)),
+            case_schema.Case(id="plain", formula="=3"),
+        ],
+    )
+
+
+class SuiteToleranceOverlayTest(unittest.TestCase):
+    def _overlaid(self, target: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "divergence.yaml"
+            registry.write_text(SUITE_TOLERANCE_REGISTRY, encoding="utf-8")
+            metadata = oracle_gen._load_divergence_metadata(registry, target)
+        ((_, suite),) = oracle_gen._apply_divergence_metadata([(Path("probe.yaml"), _probe_suite())], metadata)
+        return {case.id: case.tolerance for case in suite.cases}
+
+    def test_suite_tolerance_widens_each_case_on_its_target_only(self) -> None:
+        win = self._overlaid("win-365-ja_JP")
+        self.assertIsNone(win["exact"])
+        self.assertEqual(win["display"], case_schema.Tolerance(abs=1e-4, rel=1e-6))
+        self.assertIsNone(win["plain"])
+        mac = self._overlaid("mac-365-ja_JP")
+        self.assertEqual(mac["exact"], case_schema.Tolerance())
+        self.assertEqual(mac["display"], case_schema.Tolerance(abs=1e-4))
+
+    def test_mac_targets_keep_exact_cases_exact(self) -> None:
+        source_suites = case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
+        mac = oracle_gen._apply_divergence_metadata(
+            source_suites, oracle_gen._load_divergence_metadata(REPO_ROOT / "tests/divergence.yaml", "mac-365-ja_JP")
+        )
+        by_name = {suite.name: suite for _, suite in mac}
+        for name in ("complex", "financial", "financial_accrual"):
+            exact = [case for case in by_name[name].cases if case.tolerance == case_schema.Tolerance()]
+            self.assertTrue(exact, name)
+
+    def test_metadata_refresh_keeps_expectations_and_skips(self) -> None:
+        suite = _probe_suite()
+        golden = {
+            "suite": "probe_suite",
+            "environment": {"excel_version": "16.0"},
+            "tolerance": {"abs": 1e-9, "rel": 1e-6},
+            "cases": [
+                {"id": "exact", "formula": "=1", "expect": {"kind": "number", "value": 1.0}},
+                {
+                    "id": "display",
+                    "formula": "=2",
+                    "expect": {"kind": "number", "value": 2.0},
+                    "tolerance": {"abs": 9.0, "rel": 9.0},
+                    "compare_mode": "numeric_text",
+                },
+                {"id": "plain", "formula": "=3", "skipped": "reason", "tolerance": {"abs": 0.0, "rel": 0.0}},
+            ],
+        }
+        refreshed = oracle_gen._refresh_golden_metadata(golden, suite)
+        cases = {case["id"]: case for case in refreshed["cases"]}
+        self.assertEqual(cases["exact"]["tolerance"], {"abs": 0.0, "rel": 0.0})
+        self.assertEqual(cases["display"]["tolerance"], {"abs": 1e-4, "rel": 0.0})
+        self.assertNotIn("compare_mode", cases["display"])
+        self.assertNotIn("tolerance", cases["plain"])
+        self.assertEqual(cases["display"]["expect"], {"kind": "number", "value": 2.0})
+        self.assertEqual(refreshed["environment"], golden["environment"])
+
+
 if __name__ == "__main__":
     unittest.main()

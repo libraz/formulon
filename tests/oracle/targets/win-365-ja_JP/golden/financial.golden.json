@@ -121,11 +121,7 @@
         "kind": "text",
         "value": "-471.7808"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pmt_zero_rate",
@@ -135,11 +131,7 @@
         "kind": "text",
         "value": "-416.6667"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pmt_type_1",
@@ -149,11 +141,7 @@
         "kind": "text",
         "value": "-469.8232"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "nper_basic",
@@ -213,11 +201,7 @@
         "kind": "text",
         "value": "481.5928"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_from_range",
@@ -240,11 +224,7 @@
         "kind": "text",
         "value": "481.5928"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_mixed_scalar_and_range",
@@ -263,11 +243,7 @@
         "kind": "text",
         "value": "483.2662"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_zero_rate",
@@ -277,11 +253,7 @@
         "kind": "text",
         "value": "600"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_high_rate",
@@ -291,11 +263,7 @@
         "kind": "text",
         "value": "137.5"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "irr_basic",
@@ -415,11 +383,7 @@
         "kind": "number",
         "value": 0.006183413161253767
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_zero_outcome",
@@ -429,11 +393,7 @@
         "kind": "number",
         "value": -1.963351707292562e-10
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_with_fv",
@@ -443,11 +403,7 @@
         "kind": "number",
         "value": 0.010297911087679853
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_type_1",
@@ -457,11 +413,7 @@
         "kind": "number",
         "value": 0.006407985777783673
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_guess_custom",
@@ -471,11 +423,7 @@
         "kind": "number",
         "value": 0.006183413161294531
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_no_solution_is_num",
@@ -495,11 +443,7 @@
         "kind": "text",
         "value": "-104.1667"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_last_period",
@@ -510,7 +454,7 @@
         "value": "-1.9576"
       },
       "tolerance": {
-        "abs": 0.0,
+        "abs": 5e-05,
         "rel": 0.0
       },
       "compare_mode": "numeric_text"
@@ -533,11 +477,7 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_zero_rate_is_zero",
@@ -547,11 +487,7 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_first_period",
@@ -561,11 +497,7 @@
         "kind": "text",
         "value": "-367.6142"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_last_period",
@@ -575,11 +507,7 @@
         "kind": "text",
         "value": "-469.8232"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_plus_ppmt_equals_pmt",
@@ -589,11 +517,7 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_zero_rate",
@@ -603,11 +527,7 @@
         "kind": "text",
         "value": "-416.6667"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_type_1_first_period",
@@ -617,11 +537,7 @@
         "kind": "text",
         "value": "-469.8232"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumipmt_full_range",
@@ -631,11 +547,7 @@
         "kind": "number",
         "value": -3306.8504660164035
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumipmt_first_year",
@@ -645,11 +557,7 @@
         "kind": "number",
         "value": -1147.4887686633192
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumipmt_start_out_of_range_is_num",
@@ -679,11 +587,7 @@
         "kind": "number",
         "value": -25000.0
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_plus_cumipmt_eq_total_payments",
@@ -693,11 +597,7 @@
         "kind": "number",
         "value": 0.0
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_first_year",
@@ -707,11 +607,7 @@
         "kind": "number",
         "value": -4513.8813245399615
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_type_1",
@@ -721,11 +617,7 @@
         "kind": "number",
         "value": -4598.88596634685
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_reversed_range_is_num",
@@ -895,11 +787,7 @@
         "kind": "text",
         "value": "3690"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_full_year_last_period",
@@ -909,11 +797,7 @@
         "kind": "text",
         "value": "584.9838"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_partial_first_year",
@@ -923,11 +807,7 @@
         "kind": "text",
         "value": "1845"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_period_life_plus_one_with_partial",
@@ -937,11 +817,7 @@
         "kind": "text",
         "value": "238.5271"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_invalid_month_is_num",

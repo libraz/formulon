@@ -21,11 +21,7 @@
         "kind": "number",
         "value": 16.666666666666664
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "accrint_calc_method_default",
@@ -35,11 +31,7 @@
         "kind": "number",
         "value": 16.666666666666664
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "accrint_calc_method_false_first_interest",
@@ -49,11 +41,7 @@
         "kind": "number",
         "value": 50.0
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "accrintm_ms_doc",
@@ -84,7 +72,7 @@
         "value": "1.3151"
       },
       "tolerance": {
-        "abs": 0.0,
+        "abs": 5e-05,
         "rel": 0.0
       },
       "compare_mode": "numeric_text"
@@ -97,11 +85,7 @@
         "kind": "text",
         "value": "315"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "vdb_full_life_sums_to_depreciable",
@@ -111,11 +95,7 @@
         "kind": "text",
         "value": "2100"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "vdb_no_switch_true",
@@ -125,11 +105,7 @@
         "kind": "text",
         "value": "2100"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "amordegrc_ms_doc",
@@ -139,11 +115,7 @@
         "kind": "number",
         "value": 776.0
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "amorlinc_ms_doc",
@@ -153,11 +125,7 @@
         "kind": "number",
         "value": 360.0
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "amorlinc_first_period_prorated",
@@ -167,11 +135,7 @@
         "kind": "number",
         "value": 131.8032786885246
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "accrintm_basis_0_us_30_360",
@@ -291,11 +255,7 @@
         "kind": "number",
         "value": 16.666666666666664
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "accrint_freq_12_monthly",
@@ -335,11 +295,7 @@
         "kind": "text",
         "value": "240"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "vdb_negative_period_is_num",
@@ -359,11 +315,7 @@
         "kind": "text",
         "value": "0"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "vdb_factor_zero_is_num",
@@ -373,11 +325,7 @@
         "kind": "text",
         "value": "1050"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "vdb_salvage_gt_cost_is_num",
@@ -387,11 +335,7 @@
         "kind": "text",
         "value": "-2100"
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     },
     {
       "id": "amordegrc_zero_rate_is_num",
@@ -506,11 +450,7 @@
         "kind": "number",
         "value": 600.0
       },
-      "compare_mode": "numeric_text",
-      "tolerance": {
-        "abs": 0.0,
-        "rel": 0.0
-      }
+      "compare_mode": "numeric_text"
     }
   ]
 }

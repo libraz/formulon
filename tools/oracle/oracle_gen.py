@@ -422,6 +422,11 @@ def _load_divergence_reprobes(
     return out
 
 
+# A metadata entry's `tolerance: suite` widens each case's own tolerance to at
+# least the suite default on that target, axis by axis.
+SUITE_TOLERANCE = "suite"
+
+
 @dataclass(frozen=True)
 class DivergenceMetadata:
     """One target-scoped metadata overlay sourced from divergence.yaml."""
@@ -432,6 +437,7 @@ class DivergenceMetadata:
     compare_mode: Optional[str]
     has_tolerance: bool
     has_compare_mode: bool
+    at_least_suite: bool = False
 
 
 def _selector_values(entry: Dict[str, Any], path: Path, index: int) -> tuple[frozenset[str], frozenset[str]]:
@@ -461,6 +467,9 @@ def _load_divergence_metadata(path: Path, target_name: str) -> List[DivergenceMe
     The divergence registry remains the reviewable source of every oracle
     exception. Metadata may target individual case IDs or entire suites;
     later entries (and the target-specific file) override earlier fields.
+    `tolerance: suite` widens a case's own tolerance to at least the suite
+    default on the target, axis by axis, while other targets keep the case's
+    value.
     """
 
     out: List[DivergenceMetadata] = []
@@ -476,7 +485,7 @@ def _load_divergence_metadata(path: Path, target_name: str) -> List[DivergenceMe
             continue
         ids, suites = _selector_values(entry, path, index)
         tolerance: Optional[case_schema.Tolerance] = None
-        if has_tolerance:
+        if has_tolerance and entry["tolerance"] != SUITE_TOLERANCE:
             try:
                 tolerance = case_schema._load_tolerance(entry["tolerance"], where=f"{path}: {label}")
             except (TypeError, ValueError) as exc:
@@ -498,9 +507,21 @@ def _load_divergence_metadata(path: Path, target_name: str) -> List[DivergenceMe
                 compare_mode=compare_mode,
                 has_tolerance=has_tolerance,
                 has_compare_mode=has_compare_mode,
+                at_least_suite=has_tolerance and entry["tolerance"] == SUITE_TOLERANCE,
             )
         )
     return out
+
+
+def _at_least_suite(case_tolerance: Optional[case_schema.Tolerance], suite_tolerance: case_schema.Tolerance):
+    """The case tolerance widened to the suite's on each axis; None when that is the suite's."""
+
+    if case_tolerance is None:
+        return None
+    widened = case_schema.Tolerance(
+        abs=max(case_tolerance.abs, suite_tolerance.abs), rel=max(case_tolerance.rel, suite_tolerance.rel)
+    )
+    return None if widened == suite_tolerance else widened
 
 
 def _apply_divergence_metadata(
@@ -518,7 +539,10 @@ def _apply_divergence_metadata(
             for overlay in metadata:
                 if case.id not in overlay.ids and suite.name not in overlay.suites:
                     continue
-                if overlay.has_tolerance:
+                if overlay.at_least_suite:
+                    tolerance = _at_least_suite(tolerance, suite.tolerance)
+                    changed = True
+                elif overlay.has_tolerance:
                     tolerance = overlay.tolerance
                     changed = True
                 if overlay.has_compare_mode:
@@ -526,6 +550,32 @@ def _apply_divergence_metadata(
                     changed = True
             cases.append(replace(case, tolerance=tolerance, compare_mode=compare_mode) if changed else case)
         out.append((path, replace(suite, cases=cases)))
+    return out
+
+
+def _refresh_golden_metadata(golden: Dict[str, Any], suite: case_schema.Suite) -> Dict[str, Any]:
+    """Return ``golden`` with each case's tolerance / compare_mode taken from ``suite``.
+
+    Only the comparison metadata changes: expectations, skips and the
+    environment stay as captured. A case the golden records with an
+    expectation carries the fields as `_write_golden` would emit them; a
+    skipped case carries neither.
+    """
+
+    by_id = {case.id: case for case in suite.cases}
+    cases_out: List[Dict[str, Any]] = []
+    for old in golden.get("cases", []):
+        record = {key: value for key, value in old.items() if key not in ("tolerance", "compare_mode")}
+        case = by_id.get(old.get("id"))
+        if case is not None and "expect" in record:
+            if case.tolerance is not None:
+                record["tolerance"] = case.tolerance.to_dict()
+            if case.compare_mode is not None and case.compare_mode != "exact":
+                record["compare_mode"] = case.compare_mode
+        cases_out.append(record)
+    out = dict(golden)
+    out["tolerance"] = suite.tolerance.to_dict()
+    out["cases"] = cases_out
     return out
 
 
@@ -693,6 +743,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             "Useful when Excel hangs on large dynamic-array batches."
         ),
     )
+    parser.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help=(
+            "Rewrite only the tolerance / compare_mode of the target's existing goldens from the "
+            "cases and divergence metadata; Excel is not driven and expectations are kept."
+        ),
+    )
     args = parser.parse_args(argv)
 
     # Resolve target metadata. Errors here are fatal — we'd rather refuse
@@ -771,6 +829,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     suites = _apply_divergence_metadata(suites, metadata)
+
+    if args.metadata_only:
+        for _, suite in suites:
+            golden_path = golden_dir / f"{suite.name}.golden.json"
+            if not golden_path.exists():
+                continue
+            golden = json.loads(golden_path.read_text(encoding="utf-8"))
+            refreshed = _refresh_golden_metadata(golden, suite)
+            if refreshed != golden:
+                golden_path.write_text(json.dumps(refreshed, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+                print(f"oracle-gen: refreshed metadata in {golden_path}")
+        return 0
 
     iso_now = _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 

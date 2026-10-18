@@ -12,19 +12,30 @@
 
 entries:
   # Windows formats these financial results as text while Formulon returns
-  # their numeric value. The verifier parses the documented numeric text.
+  # their numeric value. The verifier parses the documented numeric text, at
+  # the suite tolerance: the cases' exact tolerance holds on the Mac targets.
   - suites: [financial, financial_accrual]
     compare_mode: numeric_text
-    reason: "Win Excel 365 reads these financial result cells back as locale-formatted numeric text; Formulon returns equivalent numeric values."
+    tolerance: suite
+    reason: "Win Excel 365 reads these financial result cells back as locale-formatted numeric text, rounded to the format's decimals; Formulon returns equivalent numeric values, compared at the suite tolerance rather than the cases' exact one."
     prefer: formulon
     first_noted: 2026-05-08
     last_verified_excel_version: "16.0.20228"
   # Excel's complex-function text rounding differs by a final display digit.
   - suite: complex
     compare_mode: complex_text
-    reason: "Win Excel 365 rounds complex-number text differently at the final display digit; compare parsed real and imaginary components instead."
+    tolerance: suite
+    reason: "Win Excel 365 computes complex functions with x87 double rounding, so a component that is zero up to rounding (the real part of IMSQRT(-1)) and the final display digit differ from Formulon's; compare parsed real and imaginary components at the suite tolerance rather than the cases' exact one."
     prefer: formulon
     first_noted: 2026-05-08
+    last_verified_excel_version: "16.0.20228"
+  # A result under 10 shown with four decimals carries less precision than
+  # the suite's relative tolerance asks for.
+  - ids: [ipmt_last_period, vdb_single_day]
+    tolerance: { abs: 5.0e-5 }
+    reason: "Win Excel 365 reads these results back as text with four decimals (\"-1.9576\", \"1.3151\"); half a unit in the fourth decimal is the precision the text carries."
+    prefer: formulon
+    first_noted: 2026-10-18
     last_verified_excel_version: "16.0.20228"
   # Trigonometric values near poles are sensitive to the platform libm.
   - ids:
