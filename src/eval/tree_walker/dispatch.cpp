@@ -384,15 +384,15 @@ Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Va
 // carry the sheet `merge_range_endpoint_sheets` settles.
 //
 // Returns `false` with the endpoint's error code in `*out_err`.
-bool union_endpoint_refs(const parser::AstNode& lhs_ast, const parser::AstNode& rhs_ast, Arena& arena,
-                         const FunctionRegistry& registry, const EvalContext& ctx, parser::Reference* out_lhs,
-                         parser::Reference* out_rhs, ErrorCode* out_err) {
+bool union_endpoint_refs(const parser::AstNode& range, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, parser::Reference* out_lhs, parser::Reference* out_rhs,
+                         ErrorCode* out_err) {
   std::string_view sheet;
   std::uint32_t top = 0;
   std::uint32_t left = 0;
   std::uint32_t bottom = 0;
   std::uint32_t right = 0;
-  if (!resolve_range_endpoints(lhs_ast, rhs_ast, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, out_err)) {
+  if (!resolve_range_endpoints(range, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, out_err)) {
     return false;
   }
   out_lhs->sheet = sheet;
@@ -675,22 +675,23 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     }
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
       had_range_shaped_arg = true;
-      const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
-      const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+      const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
+      const parser::AstNode& rhs_ast = arg_node.as_range_operand(1);
       // Multi-column (`A:C`) / multi-row (`1:3`) whole references parse as a
       // RangeOp over two whole-column / whole-row Refs. `resolve_range_endpoint`
       // rejects whole references (no bounded rectangle on their own), so route
       // the pair straight to `expand_range`, which clamps the unbounded axis to
       // the sheet's used range.
       //
-      // A `:` chain of three or more endpoints nests, so neither side is a
-      // bare `Ref`; `declared_rect_endpoint_pair` reduces the whole chain
-      // to the endpoint pair that bounds it. Without it a chain falls into
-      // the endpoint union below, which rejects whole references and turns
-      // `=SUM(A:C:E:G)` into `#VALUE!` where Excel answers.
+      // A `:` chain of three or more endpoints is no bare pair;
+      // `declared_rect_endpoint_pair` reduces the whole chain to the endpoint
+      // pair that bounds it. Without it a chain falls into the endpoint union
+      // below, which rejects whole references and turns `=SUM(A:C:E:G)` into
+      // `#VALUE!` where Excel answers.
       parser::Reference chain_lhs{};
       parser::Reference chain_rhs{};
-      const bool is_bare_pair = lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref;
+      const bool is_bare_pair = arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
+                                rhs_ast.kind() == parser::NodeKind::Ref;
       const bool whole_axis_pair = is_bare_pair && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row ||
                                                     rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row);
       if (whole_axis_pair) {
@@ -700,7 +701,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
         // Union the two endpoints into one rectangle and let `expand_range`
         // validate sheet equality (mismatched qualifiers surface as #REF!).
         ErrorCode endpoint_err = ErrorCode::Ref;
-        if (!union_endpoint_refs(lhs_ast, rhs_ast, arena, registry, ctx, &chain_lhs, &chain_rhs, &endpoint_err)) {
+        if (!union_endpoint_refs(arg_node, arena, registry, ctx, &chain_lhs, &chain_rhs, &endpoint_err)) {
           const Value err = Value::error(endpoint_err);
           if (def->propagate_errors) {
             return err;
@@ -730,18 +731,21 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     // `eval_node_shaped`, which reads it at its declared size without
     // materialising the unused part.
     if (!def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
-      const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
-      const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+      const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
+      const parser::AstNode& rhs_ast = arg_node.as_range_operand(1);
       const bool whole =
-          (lhs_ast.kind() == parser::NodeKind::Ref && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row)) ||
-          (rhs_ast.kind() == parser::NodeKind::Ref && (rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row)) ||
-          (lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref &&
-           is_full_axis_range(lhs_ast.as_ref(), rhs_ast.as_ref()));
+          parser::any_child_node(arg_node,
+                                 [](const parser::AstNode& operand) {
+                                   return operand.kind() == parser::NodeKind::Ref &&
+                                          (operand.as_ref().is_full_col || operand.as_ref().is_full_row);
+                                 }) ||
+          (arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
+           rhs_ast.kind() == parser::NodeKind::Ref && is_full_axis_range(lhs_ast.as_ref(), rhs_ast.as_ref()));
       if (!whole) {
         parser::Reference union_lhs{};
         parser::Reference union_rhs{};
         ErrorCode endpoint_err = ErrorCode::Ref;
-        if (!union_endpoint_refs(lhs_ast, rhs_ast, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
+        if (!union_endpoint_refs(arg_node, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
           const Value err = Value::error(endpoint_err);
           if (def->propagate_errors) {
             return err;

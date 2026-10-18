@@ -236,15 +236,16 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
                                       out_rows, out_cols);
   }
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
-    const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+    const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
+    const parser::AstNode& rhs_ast = arg_node.as_range_operand(1);
     // Multi-column (`A:C`) / multi-row (`1:3`) whole references parse as a
     // RangeOp over two whole-column / whole-row Refs. `resolve_range_endpoint`
     // deliberately rejects whole references (they have no bounded rectangle
     // on their own), so route the pair straight to `expand_range`, which
     // clamps the unbounded axis to the sheet's used range and reports the
     // concrete shape.
-    if (lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref) {
+    if (arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
+        rhs_ast.kind() == parser::NodeKind::Ref) {
       const parser::Reference& lhs_ref = lhs_ast.as_ref();
       const parser::Reference& rhs_ref = rhs_ast.as_ref();
       const bool lhs_full = lhs_ref.is_full_col || lhs_ref.is_full_row;
@@ -267,8 +268,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
         return true;
       }
     } else {
-      // A `:` chain of three or more endpoints nests, so neither side is a
-      // bare `Ref` and the pair test above does not see it. The chain
+      // A `:` chain of three or more endpoints, or one with a non-`Ref`
+      // endpoint, is no bare pair and the test above does not see it. The chain
       // names one rectangle -- the bounding box of every endpoint -- and
       // the shared reduction spells it as the endpoint pair that
       // `expand_range` already knows how to enumerate. A chain containing
@@ -305,8 +306,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     std::uint32_t union_left = 0;
     std::uint32_t union_bottom = 0;
     std::uint32_t union_right = 0;
-    if (!resolve_range_endpoints(lhs_ast, rhs_ast, arena, registry, ctx, &union_sheet, &union_top, &union_left,
-                                 &union_bottom, &union_right, &endpoint_err)) {
+    if (!resolve_range_endpoints(arg_node, arena, registry, ctx, &union_sheet, &union_top, &union_left, &union_bottom,
+                                 &union_right, &endpoint_err)) {
       *out_err_code = endpoint_err;
       return false;
     }

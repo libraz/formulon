@@ -11,8 +11,10 @@
 
 #include "io/xlsb/ptg_reader.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -190,7 +192,7 @@ parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Refere
   }
   parser::AstNode* lhs = parser::make_ref(arena, first);
   parser::AstNode* rhs = parser::make_ref(arena, last);
-  return lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs);
+  return lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs, /*spliced=*/cols || rows);
 }
 
 // The external counterpart of `make_area`: whole columns and rows read back
@@ -303,14 +305,31 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
   // cursor in encounter order.
   ByteSpan extra = rgcb;
 
-  // A binary chain still open on the stack, held there by a stand-in node:
-  // `1 2 + 3 4 * +` keeps `1+2` open under `3*4` so the second `+` extends
-  // it. Anything other than a further operator of the same binding power
-  // that consumes the stand-in closes the chain into one `BinaryOp` node.
+  // A binary or `:` chain still open on the stack, held there by a stand-in
+  // node: `1 2 + 3 4 * +` keeps `1+2` open under `3*4` so the second `+`
+  // extends it, and `A1:B2 C3:D4 : E5 :` grows one range. Anything other
+  // than a further operator of the same kind that consumes the stand-in
+  // closes the chain into one `BinaryOp` or `RangeOp` node.
   struct OpenChain {
     parser::AstNode* stand_in;
     std::vector<const parser::AstNode*> operands;
-    std::vector<parser::BinOp> ops;
+    std::vector<parser::BinOp> ops;  // A binary chain's operators.
+    std::vector<bool> spliced;       // A `:` chain's splice flags.
+    bool range;
+    // Appends `node` to a `:` chain: an unparenthesised range joins
+    // endpoint by endpoint, keeping its splice flags.
+    void append_range(const parser::AstNode* node) {
+      if (node->kind() != parser::NodeKind::RangeOp || node->paren_depth() != 0U) {
+        operands.push_back(node);
+        return;
+      }
+      for (std::uint32_t i = 0; i < node->as_range_arity(); ++i) {
+        if (i > 0U) {
+          spliced.push_back(node->as_range_spliced(i - 1U));
+        }
+        operands.push_back(&node->as_range_operand(i));
+      }
+    }
   };
   std::vector<OpenChain> open_chains;
   bool chain_out_of_memory = false;
@@ -327,8 +346,15 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     if (chain == nullptr) {
       return node;
     }
-    parser::AstNode* closed = parser::make_binary_chain(arena, chain->operands.data(), chain->ops.data(),
-                                                        static_cast<std::uint32_t>(chain->operands.size()));
+    const auto arity = static_cast<std::uint32_t>(chain->operands.size());
+    parser::AstNode* closed = nullptr;
+    if (chain->range) {
+      std::unique_ptr<bool[]> spliced(new bool[arity - 1U]);
+      std::copy(chain->spliced.begin(), chain->spliced.end(), spliced.get());
+      closed = parser::make_range_chain(arena, chain->operands.data(), spliced.get(), arity);
+    } else {
+      closed = parser::make_binary_chain(arena, chain->operands.data(), chain->ops.data(), arity);
+    }
     open_chains.erase(open_chains.begin() + (chain - open_chains.data()));
     if (closed == nullptr) {
       chain_out_of_memory = true;
@@ -1331,7 +1357,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             break;
         }
         OpenChain* chain = find_open_chain(lhs);
-        if (chain != nullptr && parser::binop_binding_power(chain->ops.front()) == parser::binop_binding_power(op)) {
+        if (chain != nullptr && !chain->range &&
+            parser::binop_binding_power(chain->ops.front()) == parser::binop_binding_power(op)) {
           chain->ops.push_back(op);
           chain->operands.push_back(rhs);
           stack.push_back(lhs);
@@ -1342,7 +1369,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (stand_in == nullptr || chain_out_of_memory) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (binary op)", "context=xlsb_ptg_reader");
         }
-        open_chains.push_back(OpenChain{stand_in, {lhs, rhs}, {op}});
+        open_chains.push_back(OpenChain{stand_in, {lhs, rhs}, {op}, {}, false});
         stack.push_back(stand_in);
         break;
       }
@@ -1353,12 +1380,25 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           return corrupt_stack("range operator");
         }
         parser::AstNode* rhs = pop();
-        parser::AstNode* lhs = pop();
-        parser::AstNode* n = parser::make_range_op(arena, lhs, rhs);
-        if (n == nullptr) {
+        parser::AstNode* lhs = stack.back();
+        stack.pop_back();
+        if (OpenChain* chain = find_open_chain(lhs); chain != nullptr && chain->range) {
+          chain->spliced.push_back(false);
+          chain->append_range(rhs);
+          stack.push_back(lhs);
+          break;
+        }
+        lhs = close_chain(lhs);
+        parser::AstNode* stand_in = parser::make_error_placeholder(arena);
+        if (stand_in == nullptr || chain_out_of_memory) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (range op)", "context=xlsb_ptg_reader");
         }
-        stack.push_back(n);
+        OpenChain chain{stand_in, {}, {}, {}, true};
+        chain.append_range(lhs);
+        chain.spliced.push_back(false);
+        chain.append_range(rhs);
+        open_chains.push_back(std::move(chain));
+        stack.push_back(stand_in);
         break;
       }
       case PtgKind::Union: {

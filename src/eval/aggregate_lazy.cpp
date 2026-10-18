@@ -130,9 +130,9 @@ const Sheet* reference_arg_origin(const parser::AstNode& node, const EvalContext
   if (node.kind() == parser::NodeKind::Ref) {
     first = &node.as_ref();
   } else if (node.kind() == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs = node.as_range_lhs();
-    const parser::AstNode& rhs = node.as_range_rhs();
-    if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
+    const parser::AstNode& lhs = node.as_range_operand(0);
+    const parser::AstNode& rhs = node.as_range_operand(1);
+    if (node.as_range_arity() != 2U || lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
       return nullptr;  // OFFSET / INDIRECT endpoints: no static provenance.
     }
     first = &lhs.as_ref();
@@ -261,10 +261,11 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
   if (node.kind() == parser::NodeKind::Ref) {
     first = &node.as_ref();
     second = first;
-  } else if (node.kind() == parser::NodeKind::RangeOp && node.as_range_lhs().kind() == parser::NodeKind::Ref &&
-             node.as_range_rhs().kind() == parser::NodeKind::Ref) {
-    first = &node.as_range_lhs().as_ref();
-    second = &node.as_range_rhs().as_ref();
+  } else if (node.kind() == parser::NodeKind::RangeOp && node.as_range_arity() == 2U &&
+             node.as_range_operand(0).kind() == parser::NodeKind::Ref &&
+             node.as_range_operand(1).kind() == parser::NodeKind::Ref) {
+    first = &node.as_range_operand(0).as_ref();
+    second = &node.as_range_operand(1).as_ref();
   }
   if (first == nullptr || count == 0U) {
     return;

@@ -569,33 +569,16 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
 // A `:` whose endpoint is a reference-returning call (`A1:INDEX(...)`,
 // `A1:OFFSET(...)`) names its rectangle only once resolved; the union then
 // spills like any bounded range.
-Value eval_range_of_calls(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
-                          const FunctionRegistry& registry, const EvalContext& ctx) {
-  std::string_view lhs_sheet;
-  std::string_view rhs_sheet;
-  std::uint32_t lt = 0;
-  std::uint32_t ll = 0;
-  std::uint32_t lb = 0;
-  std::uint32_t lr = 0;
-  std::uint32_t rt = 0;
-  std::uint32_t rl = 0;
-  std::uint32_t rb = 0;
-  std::uint32_t rr = 0;
+Value eval_range_of_calls(const parser::AstNode& range, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
   ErrorCode err = ErrorCode::Value;
-  if (!resolve_range_endpoint(lhs, arena, registry, ctx, &lhs_sheet, &lt, &ll, &lb, &lr, &err) ||
-      !resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rt, &rl, &rb, &rr, &err)) {
-    return Value::error(err);
-  }
   parser::Reference top_left{};
-  if (!merge_range_endpoint_sheets(lhs, lhs_sheet, rhs, rhs_sheet, ctx, &top_left.sheet, &err)) {
+  parser::Reference bottom_right{};
+  if (!resolve_range_endpoints(range, arena, registry, ctx, &top_left.sheet, &top_left.row, &top_left.col,
+                               &bottom_right.row, &bottom_right.col, &err)) {
     return Value::error(err);
   }
-  top_left.row = std::min(lt, rt);
-  top_left.col = std::min(ll, rl);
-  parser::Reference bottom_right{};
   bottom_right.sheet = top_left.sheet;
-  bottom_right.row = std::max(lb, rb);
-  bottom_right.col = std::max(lr, rr);
   if (top_left.row == bottom_right.row && top_left.col == bottom_right.col) {
     return ctx.resolve_ref(top_left, arena, registry);
   }
@@ -744,10 +727,10 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       // (`A1:A1`) range degrades to the scalar.
       //
       // Verified Mac semantics: tests/oracle/cases/implicit_intersection.yaml.
-      const auto& lhs = node.as_range_lhs();
-      const auto& rhs = node.as_range_rhs();
-      if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
-        return Shaped{eval_range_of_calls(lhs, rhs, arena, registry, ctx), nullptr};
+      const auto& lhs = node.as_range_operand(0);
+      const auto& rhs = node.as_range_operand(1);
+      if (node.as_range_arity() != 2U || lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
+        return Shaped{eval_range_of_calls(node, arena, registry, ctx), nullptr};
       }
       const auto& lhs_ref = lhs.as_ref();
       const auto& rhs_ref = rhs.as_ref();

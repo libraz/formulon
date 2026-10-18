@@ -302,7 +302,7 @@ TEST(AstDumpRange, BasicA1B2) {
   Reference rb;
   rb.col = 1;
   rb.row = 1;
-  AstNode* n = make_range_op(a, make_ref(a, ra), make_ref(a, rb));
+  AstNode* n = make_range_op(a, make_ref(a, ra), make_ref(a, rb), /*spliced=*/false);
   EXPECT_EQ(dump_sexpr(*n), "(range (ref A1) (ref B2))");
 }
 
@@ -490,8 +490,8 @@ TEST(AstDumpComposite, RangeUnionInsideSum) {
   Reference d2;
   d2.col = 3;
   d2.row = 1;
-  AstNode* range1 = make_range_op(a, make_ref(a, a1), make_ref(a, b2));
-  AstNode* range2 = make_range_op(a, make_ref(a, c1), make_ref(a, d2));
+  AstNode* range1 = make_range_op(a, make_ref(a, a1), make_ref(a, b2), /*spliced=*/false);
+  AstNode* range2 = make_range_op(a, make_ref(a, c1), make_ref(a, d2), /*spliced=*/false);
   std::vector<const AstNode*> union_kids;
   union_kids.push_back(range1);
   union_kids.push_back(range2);

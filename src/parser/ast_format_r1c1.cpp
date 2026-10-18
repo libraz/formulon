@@ -200,9 +200,14 @@ struct Emitter {
         }
         return;
       case NodeKind::RangeOp:
-        emit(node.as_range_lhs(), out);
-        out.push_back(':');
-        emit(node.as_range_rhs(), out);
+        // A whole column or row is one token in R1C1 (`C8`), so a whole-axis
+        // token and two whole-axis operands both print as `C8:C5`.
+        for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+          if (i > 0U) {
+            out.push_back(':');
+          }
+          emit(node.as_range_operand(i), out);
+        }
         return;
       case NodeKind::UnionOp:
         emit_args(node.as_union_arity(), &AstNode::as_union_child, node, out);
@@ -222,9 +227,14 @@ struct Emitter {
         if (const TrimRefMode mode = trim_ref_call_mode(node); mode != TrimRefMode::None &&
                                                                node.as_call_arg(0).kind() == NodeKind::RangeOp &&
                                                                parens.count(&node.as_call_arg(0)) == 0U) {
-          emit(node.as_call_arg(0).as_range_lhs(), out);
-          out.append(trim_ref_operator(mode));
-          emit(node.as_call_arg(0).as_range_rhs(), out);
+          // The chain's last `:` takes the operator.
+          const AstNode& range = node.as_call_arg(0);
+          for (std::uint32_t i = 0; i < range.as_range_arity(); ++i) {
+            if (i > 0U) {
+              out.append(i + 1U == range.as_range_arity() ? trim_ref_operator(mode) : ":");
+            }
+            emit(range.as_range_operand(i), out);
+          }
           return;
         }
         out.append(node.as_call_name());

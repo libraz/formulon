@@ -52,9 +52,9 @@ xlsb::NameShape NameFormulaShape(std::string_view formula) {
       shape.scalar = !body->as_ref3d_is_range() && body->as_ref3d_sheet_begin() == body->as_ref3d_sheet_end();
       break;
     case parser::NodeKind::RangeOp:
-      if (body->as_range_lhs().kind() == parser::NodeKind::Ref &&
-          body->as_range_rhs().kind() == parser::NodeKind::Ref) {
-        extent(body->as_range_lhs().as_ref(), body->as_range_rhs().as_ref());
+      if (body->as_range_arity() == 2U && body->as_range_operand(0).kind() == parser::NodeKind::Ref &&
+          body->as_range_operand(1).kind() == parser::NodeKind::Ref) {
+        extent(body->as_range_operand(0).as_ref(), body->as_range_operand(1).as_ref());
       }
       break;
     default:

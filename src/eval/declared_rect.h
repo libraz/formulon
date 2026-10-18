@@ -123,8 +123,11 @@ inline bool declared_rect_endpoints(const parser::AstNode& node, const parser::R
   if (node.kind() != parser::NodeKind::RangeOp) {
     return false;
   }
-  const parser::AstNode& lhs = node.as_range_lhs();
-  const parser::AstNode& rhs = node.as_range_rhs();
+  if (node.as_range_arity() != 2U) {
+    return false;
+  }
+  const parser::AstNode& lhs = node.as_range_operand(0);
+  const parser::AstNode& rhs = node.as_range_operand(1);
   if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
     return false;
   }
@@ -195,7 +198,12 @@ inline bool fold_range_chain(const parser::AstNode& node, RangeChainFold* acc) {
   if (node.kind() != parser::NodeKind::RangeOp) {
     return false;
   }
-  return fold_range_chain(node.as_range_lhs(), acc) && fold_range_chain(node.as_range_rhs(), acc);
+  for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+    if (!fold_range_chain(node.as_range_operand(i), acc)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace detail

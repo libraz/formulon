@@ -77,6 +77,7 @@ std::uint64_t ChildCount(const AstNode& node) {
     case NodeKind::BinaryOp:
       return node.as_binary_arity();
     case NodeKind::RangeOp:
+      return node.as_range_arity();
     case NodeKind::IntersectOp:
       return 2;
     case NodeKind::UnionOp:
@@ -117,7 +118,7 @@ const AstNode& ChildAt(const AstNode& node, std::uint64_t index) {
     case NodeKind::BinaryOp:
       return node.as_binary_operand(static_cast<std::uint32_t>(index));
     case NodeKind::RangeOp:
-      return index == 0 ? node.as_range_lhs() : node.as_range_rhs();
+      return node.as_range_operand(static_cast<std::uint32_t>(index));
     case NodeKind::IntersectOp:
       return index == 0 ? node.as_intersect_lhs() : node.as_intersect_rhs();
     case NodeKind::UnionOp:
@@ -468,15 +469,55 @@ AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs) {
   return make_binary_chain(arena, operands, &op, 2U);
 }
 
-AstNode* make_range_op(Arena& arena, AstNode* lhs, AstNode* rhs) {
-  FM_CHECK(lhs != nullptr && rhs != nullptr, "make_range_op: lhs/rhs must be non-null");
+AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const bool* spliced, std::uint32_t arity) {
+  FM_CHECK(arity >= 2, "make_range_chain: a chain requires at least 2 operands");
+  FM_CHECK(operands != nullptr && spliced != nullptr, "make_range_chain: operands/spliced must be non-null");
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    FM_CHECK(operands[i] != nullptr, "make_range_chain: operands must be non-null");
+  }
+  const AstNode* const* copied = CopyChildArray(arena, operands, arity);
+  if (copied == nullptr) {
+    return nullptr;
+  }
+  bool* copied_spliced = arena.create_array<bool>(arity - 1U);
+  if (copied_spliced == nullptr) {
+    return nullptr;
+  }
+  std::memcpy(copied_spliced, spliced, sizeof(bool) * (arity - 1U));
   AstNode* n = AstNode::make_node(arena, NodeKind::RangeOp);
   if (n == nullptr) {
     return nullptr;
   }
-  n->data_.range.lhs = lhs;
-  n->data_.range.rhs = rhs;
+  n->data_.range_chain.operands = copied;
+  n->data_.range_chain.spliced = copied_spliced;
+  n->data_.range_chain.arity = arity;
   return n;
+}
+
+AstNode* make_range_op(Arena& arena, AstNode* lhs, AstNode* rhs, bool spliced) {
+  FM_CHECK(lhs != nullptr && rhs != nullptr, "make_range_op: lhs/rhs must be non-null");
+  const AstNode* operands[2] = {lhs, rhs};
+  return make_range_chain(arena, operands, &spliced, 2U);
+}
+
+std::uint32_t range_token_width(const AstNode& range, std::uint32_t i) noexcept {
+  if (i + 1U >= range.as_range_arity()) {
+    return 1U;
+  }
+  if (range.as_range_spliced(i)) {
+    return 2U;
+  }
+  const AstNode& first = range.as_range_operand(i);
+  const AstNode& second = range.as_range_operand(i + 1U);
+  // A corner written in parentheses stands alone.
+  if (first.kind() != NodeKind::Ref || second.kind() != NodeKind::Ref || first.paren_depth() != 0U ||
+      second.paren_depth() != 0U) {
+    return 1U;
+  }
+  const Reference& a = first.as_ref();
+  const Reference& b = second.as_ref();
+  const bool cells = !a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row;
+  return cells && b.sheet.empty() ? 2U : 1U;
 }
 
 AstNode* make_union_op(Arena& arena, const AstNode* const* children, std::uint32_t count) {
@@ -882,14 +923,21 @@ BinOp AstNode::as_binary_op(std::uint32_t i) const {
   return data_.binary.ops[i];
 }
 
-const AstNode& AstNode::as_range_lhs() const {
-  FM_CHECK(kind_ == NodeKind::RangeOp, "AstNode::as_range_lhs on non-RangeOp");
-  return *data_.range.lhs;
+std::uint32_t AstNode::as_range_arity() const {
+  FM_CHECK(kind_ == NodeKind::RangeOp, "AstNode::as_range_arity on non-RangeOp");
+  return data_.range_chain.arity;
 }
 
-const AstNode& AstNode::as_range_rhs() const {
-  FM_CHECK(kind_ == NodeKind::RangeOp, "AstNode::as_range_rhs on non-RangeOp");
-  return *data_.range.rhs;
+const AstNode& AstNode::as_range_operand(std::uint32_t i) const {
+  FM_CHECK(kind_ == NodeKind::RangeOp, "AstNode::as_range_operand on non-RangeOp");
+  FM_CHECK(i < data_.range_chain.arity, "AstNode::as_range_operand index out of range");
+  return *data_.range_chain.operands[i];
+}
+
+bool AstNode::as_range_spliced(std::uint32_t i) const {
+  FM_CHECK(kind_ == NodeKind::RangeOp, "AstNode::as_range_spliced on non-RangeOp");
+  FM_CHECK(i + 1U < data_.range_chain.arity, "AstNode::as_range_spliced index out of range");
+  return data_.range_chain.spliced[i];
 }
 
 std::uint32_t AstNode::as_union_arity() const {

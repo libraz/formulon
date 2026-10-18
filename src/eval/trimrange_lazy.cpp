@@ -235,7 +235,8 @@ Value eval_trim(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   bottom_right.col = right;
   parser::AstNode* lhs = parser::make_ref(arena, top_left);
   parser::AstNode* rhs = parser::make_ref(arena, bottom_right);
-  const parser::AstNode* rect = lhs != nullptr && rhs != nullptr ? parser::make_range_op(arena, lhs, rhs) : nullptr;
+  const parser::AstNode* rect =
+      lhs != nullptr && rhs != nullptr ? parser::make_range_op(arena, lhs, rhs, /*spliced=*/false) : nullptr;
   if (rect == nullptr) {
     return Value::error(ErrorCode::Num);
   }

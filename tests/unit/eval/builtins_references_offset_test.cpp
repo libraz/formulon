@@ -57,7 +57,7 @@ TEST(BuiltinsOffset, WholeAxisRangeBaseValidatesMismatchedSheetQualifiers) {
     parser::AstNode* rhs_node = parser::make_ref(ast_arena, rhs);
     ASSERT_NE(lhs_node, nullptr);
     ASSERT_NE(rhs_node, nullptr);
-    parser::AstNode* range = parser::make_range_op(ast_arena, lhs_node, rhs_node);
+    parser::AstNode* range = parser::make_range_op(ast_arena, lhs_node, rhs_node, /*spliced=*/false);
     ASSERT_NE(range, nullptr);
 
     refs_internal::OffsetBase base{};
@@ -94,7 +94,7 @@ TEST(BuiltinsOffset, WholeAxisRangeBaseAcceptsCaseInsensitiveMatchingQualifiers)
     parser::AstNode* rhs_node = parser::make_ref(ast_arena, rhs);
     ASSERT_NE(lhs_node, nullptr);
     ASSERT_NE(rhs_node, nullptr);
-    parser::AstNode* range = parser::make_range_op(ast_arena, lhs_node, rhs_node);
+    parser::AstNode* range = parser::make_range_op(ast_arena, lhs_node, rhs_node, /*spliced=*/false);
     ASSERT_NE(range, nullptr);
 
     refs_internal::OffsetBase base{};

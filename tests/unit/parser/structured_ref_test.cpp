@@ -101,10 +101,10 @@ TEST(ParserStructuredRef, ColumnRangeAcrossTable) {
   // are not added by the parser; the evaluator decides how to combine the
   // two rectangles when this shape lands.
   ASSERT_EQ(root->kind(), NodeKind::RangeOp);
-  EXPECT_EQ(root->as_range_lhs().kind(), NodeKind::StructuredRef);
-  EXPECT_EQ(root->as_range_rhs().kind(), NodeKind::StructuredRef);
-  EXPECT_EQ(root->as_range_lhs().as_structured_ref_column(), "Region");
-  EXPECT_EQ(root->as_range_rhs().as_structured_ref_column(), "Amount");
+  EXPECT_EQ(root->as_range_operand(0).kind(), NodeKind::StructuredRef);
+  EXPECT_EQ(root->as_range_operand(1).kind(), NodeKind::StructuredRef);
+  EXPECT_EQ(root->as_range_operand(0).as_structured_ref_column(), "Region");
+  EXPECT_EQ(root->as_range_operand(1).as_structured_ref_column(), "Amount");
 }
 
 TEST(ParserStructuredRef, MultiSpecifierForm) {

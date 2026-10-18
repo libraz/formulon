@@ -202,19 +202,19 @@ TEST(ParserAtoms, AbsoluteFullRowRef) {
 }
 
 TEST(ParserAtoms, AbsoluteMultiColumnFullRange) {
-  EXPECT_EQ(ParseToSexpr("=$A:$C"), "(range (ref $A:$A) (ref $C:$C))");
+  EXPECT_EQ(ParseToSexpr("=$A:$C"), "(range (ref $A:$A) spliced (ref $C:$C))");
 }
 
 TEST(ParserAtoms, AbsoluteMultiRowFullRange) {
-  EXPECT_EQ(ParseToSexpr("=$1:$3"), "(range (ref $1:$1) (ref $3:$3))");
+  EXPECT_EQ(ParseToSexpr("=$1:$3"), "(range (ref $1:$1) spliced (ref $3:$3))");
 }
 
 TEST(ParserAtoms, SheetQualifiedAbsoluteMultiColumn) {
-  EXPECT_EQ(ParseToSexpr("=Sheet1!$A:$C"), "(range (ref Sheet1!$A:$A) (ref $C:$C))");
+  EXPECT_EQ(ParseToSexpr("=Sheet1!$A:$C"), "(range (ref Sheet1!$A:$A) spliced (ref $C:$C))");
 }
 
 TEST(ParserAtoms, SheetQualifiedAbsoluteMultiRow) {
-  EXPECT_EQ(ParseToSexpr("=Sheet1!$1:$3"), "(range (ref Sheet1!$1:$1) (ref $3:$3))");
+  EXPECT_EQ(ParseToSexpr("=Sheet1!$1:$3"), "(range (ref Sheet1!$1:$1) spliced (ref $3:$3))");
 }
 
 TEST(ParserAtoms, ThreeDSingleCell) {
@@ -433,7 +433,7 @@ TEST(ParserRange, BasicCellPairRange) {
 }
 
 TEST(ParserRange, ChainedRangeIsLeftAssoc) {
-  EXPECT_EQ(ParseToSexpr("=A1:B2:C3"), "(range (range (ref A1) (ref B2)) (ref C3))");
+  EXPECT_EQ(ParseToSexpr("=A1:B2:C3"), "(range (ref A1) (ref B2) (ref C3))");
 }
 
 TEST(ParserRange, RangeInsideSum) {

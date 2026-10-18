@@ -100,15 +100,15 @@ bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lh
                                  std::string_view rhs_sheet, const EvalContext& ctx, std::string_view* out_sheet,
                                  ErrorCode* out_err);
 
-/// Resolves both bounded `:` endpoints, merges their sheet qualifiers, and
-/// writes the inclusive bounding rectangle. The left endpoint is resolved
-/// before the right endpoint; a failure short-circuits without evaluating the
-/// right side. Whole-column / whole-row endpoints are rejected by
+/// Resolves every bounded endpoint of the `:` chain `range` left to right,
+/// merges their sheet qualifiers, and writes the inclusive bounding
+/// rectangle. A failure short-circuits without evaluating the endpoints to
+/// its right. Whole-column / whole-row endpoints are rejected by
 /// `resolve_range_endpoint` as unbounded compositions.
-bool resolve_range_endpoints(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
-                             std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
-                             std::uint32_t* out_right_col, ErrorCode* out_err);
+bool resolve_range_endpoints(const parser::AstNode& range, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                             ErrorCode* out_err);
 
 /// Resolves any reference-shaped `node` into the rectangle it names: a `Ref`
 /// (including whole-column / whole-row ones, which span the full grid axis),

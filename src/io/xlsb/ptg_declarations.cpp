@@ -157,8 +157,9 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       }
       return;
     case parser::NodeKind::RangeOp:
-      CollectNamesScoped(node.as_range_lhs(), names, seen, scope, mode, values);
-      CollectNamesScoped(node.as_range_rhs(), names, seen, scope, mode, values);
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        CollectNamesScoped(node.as_range_operand(i), names, seen, scope, mode, values);
+      }
       return;
     case parser::NodeKind::IntersectOp:
       CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope, mode, values);
@@ -383,8 +384,9 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       }
       return;
     case parser::NodeKind::RangeOp:
-      collect_ptg_sheet_ranges(node.as_range_lhs(), sheet_names, ranges, seen);
-      collect_ptg_sheet_ranges(node.as_range_rhs(), sheet_names, ranges, seen);
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        collect_ptg_sheet_ranges(node.as_range_operand(i), sheet_names, ranges, seen);
+      }
       return;
     case parser::NodeKind::IntersectOp:
       collect_ptg_sheet_ranges(node.as_intersect_lhs(), sheet_names, ranges, seen);

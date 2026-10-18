@@ -184,8 +184,11 @@ std::optional<std::pair<std::uint32_t, std::uint32_t>> Shapes::extent(const pars
     case parser::NodeKind::Ref:
       return one(node.as_ref());
     case parser::NodeKind::RangeOp: {
-      const parser::AstNode& lhs = node.as_range_lhs();
-      const parser::AstNode& rhs = node.as_range_rhs();
+      if (node.as_range_arity() != 2U) {
+        return std::nullopt;
+      }
+      const parser::AstNode& lhs = node.as_range_operand(0);
+      const parser::AstNode& rhs = node.as_range_operand(1);
       if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
         return std::nullopt;
       }

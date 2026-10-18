@@ -132,6 +132,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/ptg_codec_scalar_array_test.cpp
   unit/io/xlsb/ptg_codec_decoder_validation_test.cpp
   unit/io/xlsb/ptg_codec_operator_chain_test.cpp
+  unit/io/xlsb/range_chain_fixture_test.cpp
   unit/io/xlsb/formula_whitespace_test.cpp
   unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/reader_formula_test.cpp
@@ -169,6 +170,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/parser_test.cpp
   unit/parser/parser_error_test.cpp
   unit/parser/operator_chain_test.cpp
+  unit/parser/range_chain_test.cpp
   unit/parser/let_test.cpp
   unit/parser/ref_transforms_test.cpp
   unit/eval/jp_kana_table_test.cpp
@@ -196,6 +198,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/range_dep_index_test.cpp
   unit/eval/dep_extractor_test.cpp
   unit/eval/operator_chain_eval_test.cpp
+  unit/eval/range_chain_eval_test.cpp
   unit/eval/dep_extractor_names_test.cpp
   unit/eval/dep_extractor_structured_refs_test.cpp
   unit/eval/dep_extractor_3d_dynamic_test.cpp

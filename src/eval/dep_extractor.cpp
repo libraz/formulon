@@ -561,9 +561,12 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
       if (declared_rect_endpoint_pair(node, &lhs, &rhs)) {
         return pair_footprint(lhs, rhs, state);
       }
-      const std::optional<Footprint> a = reference_footprint(node.as_range_lhs(), state);
-      const std::optional<Footprint> b = a ? reference_footprint(node.as_range_rhs(), state) : std::nullopt;
-      return b ? union_footprints(*a, *b) : std::nullopt;
+      std::optional<Footprint> acc = reference_footprint(node.as_range_operand(0), state);
+      for (std::uint32_t i = 1; acc && i < node.as_range_arity(); ++i) {
+        const std::optional<Footprint> part = reference_footprint(node.as_range_operand(i), state);
+        acc = part ? union_footprints(*acc, *part) : std::nullopt;
+      }
+      return acc;
     }
 
     case parser::NodeKind::UnionOp: {
@@ -765,21 +768,22 @@ int callback_source_arg(std::string_view call_name, std::uint32_t arity, std::ui
 // Handles `NodeKind::RangeOp` specifically so the inner Ref endpoints are
 // not double-counted as scalar reads.
 void walk_range_op(const parser::AstNode& node, WalkState& state) {
-  const parser::AstNode& lhs = node.as_range_lhs();
-  const parser::AstNode& rhs = node.as_range_rhs();
+  const parser::AstNode& lhs = node.as_range_operand(0);
+  const parser::AstNode& rhs = node.as_range_operand(1);
 
-  if (lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
+  if (node.as_range_arity() == 2U && lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
     emit_range_cells(state, lhs.as_ref(), rhs.as_ref());
     return;
   }
 
-  // Otherwise descend into both sides so any nested `Ref` / `Call` is still
+  // Otherwise descend into every endpoint so any nested `Ref` / `Call` is still
   // visited, then register the bounding box the `:` reads. An endpoint that
   // is a reference-returning call contributes every reference it could
   // return (`A1:INDEX(C1:C10,n)` reads within A1:C10); OFFSET / INDIRECT
   // endpoints have no static footprint and rely on their volatility.
-  walk(lhs, state);
-  walk(rhs, state);
+  for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+    walk(node.as_range_operand(i), state);
+  }
   if (const std::optional<Footprint> footprint = reference_footprint(node, state)) {
     emit_rect(state, footprint->sheet_id, footprint->rect);
   }

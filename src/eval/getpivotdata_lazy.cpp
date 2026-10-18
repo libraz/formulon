@@ -102,7 +102,7 @@ constexpr ErrorCode kPivotRefError = ErrorCode::Ref;
 const parser::Reference* anchor_ref_of(const parser::AstNode& node) noexcept {
   const parser::AstNode* cur = &node;
   while (cur->kind() == parser::NodeKind::RangeOp) {
-    cur = &cur->as_range_lhs();
+    cur = &cur->as_range_operand(0);
   }
   if (cur->kind() != parser::NodeKind::Ref) {
     return nullptr;

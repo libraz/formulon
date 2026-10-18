@@ -481,35 +481,45 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
   return false;
 }
 
-bool resolve_range_endpoints(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
-                             std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
-                             std::uint32_t* out_right_col, ErrorCode* out_err) {
-  std::string_view lhs_sheet;
-  std::string_view rhs_sheet;
-  std::uint32_t lhs_top = 0;
-  std::uint32_t lhs_left = 0;
-  std::uint32_t lhs_bottom = 0;
-  std::uint32_t lhs_right = 0;
-  std::uint32_t rhs_top = 0;
-  std::uint32_t rhs_left = 0;
-  std::uint32_t rhs_bottom = 0;
-  std::uint32_t rhs_right = 0;
-  if (!resolve_range_endpoint(lhs, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom, &lhs_right,
+bool resolve_range_endpoints(const parser::AstNode& range, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                             ErrorCode* out_err) {
+  std::string_view sheet;
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  if (!resolve_range_endpoint(range.as_range_operand(0), arena, registry, ctx, &sheet, &top, &left, &bottom, &right,
                               out_err)) {
     return false;
   }
-  if (!resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
-                              out_err)) {
-    return false;
+  for (std::uint32_t i = 1; i < range.as_range_arity(); ++i) {
+    const parser::AstNode& rhs = range.as_range_operand(i);
+    std::string_view rhs_sheet;
+    std::uint32_t rhs_top = 0;
+    std::uint32_t rhs_left = 0;
+    std::uint32_t rhs_bottom = 0;
+    std::uint32_t rhs_right = 0;
+    if (!resolve_range_endpoint(rhs, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom, &rhs_right,
+                                out_err)) {
+      return false;
+    }
+    // Past the first link the left side is the chain written so far.
+    const parser::AstNode& lhs = i == 1U ? range.as_range_operand(0) : range;
+    if (!merge_range_endpoint_sheets(lhs, sheet, rhs, rhs_sheet, ctx, &sheet, out_err)) {
+      return false;
+    }
+    top = std::min(top, rhs_top);
+    left = std::min(left, rhs_left);
+    bottom = std::max(bottom, rhs_bottom);
+    right = std::max(right, rhs_right);
   }
-  if (!merge_range_endpoint_sheets(lhs, lhs_sheet, rhs, rhs_sheet, ctx, out_sheet, out_err)) {
-    return false;
-  }
-  *out_top_row = std::min(lhs_top, rhs_top);
-  *out_left_col = std::min(lhs_left, rhs_left);
-  *out_bottom_row = std::max(lhs_bottom, rhs_bottom);
-  *out_right_col = std::max(lhs_right, rhs_right);
+  *out_sheet = sheet;
+  *out_top_row = top;
+  *out_left_col = left;
+  *out_bottom_row = bottom;
+  *out_right_col = right;
   return true;
 }
 
@@ -519,8 +529,8 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                            ErrorCode* out_err) {
-  return resolve_range_endpoints(node.as_range_lhs(), node.as_range_rhs(), arena, registry, ctx, out_sheet, out_top_row,
-                                 out_left_col, out_bottom_row, out_right_col, out_err);
+  return resolve_range_endpoints(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                 out_right_col, out_err);
 }
 
 // Resolves an `IntersectOp` operand AST into a rectangle. Accepts the

@@ -283,7 +283,7 @@ TEST(ParserErrors, SelfBookNameParses) {
     ASSERT_NE(root, nullptr);
     EXPECT_TRUE(p.errors().empty());
     ASSERT_EQ(root->kind(), NodeKind::RangeOp);
-    EXPECT_TRUE(is_self_book_name_ref(root->as_range_rhs()));
+    EXPECT_TRUE(is_self_book_name_ref(root->as_range_operand(1)));
   }
 }
 

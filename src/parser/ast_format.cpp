@@ -425,60 +425,57 @@ bool ColonEndpointsWouldFold(const AstNode& lhs, const AstNode& rhs) noexcept {
          IsBareColumnToken(LeadingIdentifier(rhs));
 }
 
-// Renders a `RangeOp` over two whole-axis `Ref`s as the compact `A:C` /
-// `1:3` form and reports whether it did.
+// True when operands `i` and `i + 1` of `range` print as one whole-axis
+// token (`A:C`, `1:3`): a spliced pair of whole-column or whole-row Refs.
 //
-// Multi-column (`A:C`) / multi-row (`1:3`) whole references are stored as a
-// RangeOp over two whole-column / whole-row Refs. Each endpoint's
-// `format_a1` output duplicates its own axis (`A:A`, `C:C`), so a naive
-// `<lhs>:<rhs>` join emits `A:A:C:C`. That names the same rectangle, so no
-// evaluated value changes, but it is not the spelling Excel stores and it
-// is not a fixpoint of the formatter.
-//
-// Both emitters call this. Living in only one of them is what let the
-// storage form drift from the canonical form while every value-level test
-// stayed green.
-//
-// Two endpoints sitting on the same axis are the one case the splice must
-// not touch. `RangeOp(A:A, A:A)` would splice to `A:A`, and `A:A` reads
-// back as the single whole-column Ref rather than as the pair it came
-// from. Anchoring does not rescue it -- `$A:A` is likewise one token, not
-// two -- so the test is on the axis index, not on the rendered text. The
-// parser only builds this shape from text that already spelled the pair
-// out (`=A:A:A:A`, `=$A:$A:A:A`), so compacting it discards what was
-// written; left unspliced the pair joins to text that reads back as
-// itself.
-bool TrySpliceWholeAxisPair(const AstNode& lhs, const AstNode& rhs, std::string& out) {
+// Two endpoints on the same axis index never print spliced: `A:A` reads
+// back as the single whole-column Ref rather than as a pair, so such a pair
+// prints in full (`A:A:A:A`), which reads back as itself.
+bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept {
+  if (!range.as_range_spliced(i)) {
+    return false;
+  }
+  const AstNode& lhs = range.as_range_operand(i);
+  const AstNode& rhs = range.as_range_operand(i + 1U);
   if (lhs.kind() != NodeKind::Ref || rhs.kind() != NodeKind::Ref) {
     return false;
   }
   const Reference& lr = lhs.as_ref();
   const Reference& rr = rhs.as_ref();
-  const bool both_full_col = lr.is_full_col && rr.is_full_col;
-  const bool both_full_row = lr.is_full_row && rr.is_full_row;
-  if (!both_full_col && !both_full_row) {
-    return false;
+  if (lr.is_full_col && rr.is_full_col) {
+    return lr.col != rr.col;
   }
-  if ((both_full_col && lr.col == rr.col) || (both_full_row && lr.row == rr.row)) {
-    return false;
+  return lr.is_full_row && rr.is_full_row && lr.row != rr.row;
+}
+
+// Prints a `:` chain with `emit` printing each operand. The two halves of a
+// whole-axis token print as one (`A:C`, each half cut at its own `:`);
+// every other operand prints in full, so `H:H:E:E` keeps both of its
+// tokens. Both A1 emitters share this so the spelling cannot drift
+// between them. Returns the offset of the last `:` written.
+template <typename Emit>
+std::size_t EmitRangeChain(const AstNode& node, std::string& out, Emit&& emit) {
+  std::size_t last_colon = std::string::npos;
+  const std::uint32_t n = node.as_range_arity();
+  for (std::uint32_t i = 0; i < n; ++i) {
+    if (i > 0U) {
+      last_colon = out.size();
+      out.push_back(':');
+    }
+    const AstNode& operand = node.as_range_operand(i);
+    if ((i > 0U && PrintsSpliced(node, i - 1U)) || (i + 1U < n && PrintsSpliced(node, i))) {
+      std::string text;
+      emit(operand, text);
+      out.append(text, 0, text.find(':'));
+    } else {
+      emit(operand, out);
+    }
   }
-  const std::string lhs_str = format_a1(lr);
-  const std::string rhs_str = format_a1(rr);
-  out.append(lhs_str, 0, lhs_str.find(':'));
-  out.push_back(':');
-  out.append(rhs_str, 0, rhs_str.find(':'));
-  return true;
+  return last_colon;
 }
 
 void FormatRangeOp(const AstNode& node, std::string& out, const Layout& layout) {
-  const AstNode& lhs = node.as_range_lhs();
-  const AstNode& rhs = node.as_range_rhs();
-  if (TrySpliceWholeAxisPair(lhs, rhs, out)) {
-    return;
-  }
-  FormatNode(lhs, out, layout);
-  out.push_back(':');
-  FormatNode(rhs, out, layout);
+  EmitRangeChain(node, out, [&](const AstNode& operand, std::string& dst) { FormatNode(operand, dst, layout); });
 }
 
 void FormatIntersect(const AstNode& node, std::string& out, const Layout& layout) {
@@ -505,17 +502,13 @@ bool FormatTrimRef(const AstNode& node, TrimRefMode mode, std::string& out, cons
   const AstNode& arg = node.as_call_arg(0);
   std::string text;
   std::size_t colon = std::string::npos;
-  if (arg.kind() == NodeKind::RangeOp && ParenCount(layout.parens, arg) == 0U &&
-      !TrySpliceWholeAxisPair(arg.as_range_lhs(), arg.as_range_rhs(), text)) {
-    FormatNode(arg.as_range_lhs(), text, layout);
-    colon = text.size();
-    text.push_back(':');
-    FormatNode(arg.as_range_rhs(), text, layout);
-  } else if ((arg.kind() == NodeKind::Ref || arg.kind() == NodeKind::RangeOp) && ParenCount(layout.parens, arg) == 0U) {
+  if (arg.kind() == NodeKind::RangeOp && ParenCount(layout.parens, arg) == 0U) {
+    // The operator respelled is the chain's last `:`.
+    colon =
+        EmitRangeChain(arg, text, [&](const AstNode& operand, std::string& dst) { FormatNode(operand, dst, layout); });
+  } else if (arg.kind() == NodeKind::Ref && ParenCount(layout.parens, arg) == 0U) {
     // A whole column or row prints as one token; sheet names hold no `:`.
-    if (text.empty()) {
-      FormatBare(arg, text, layout);
-    }
+    FormatBare(arg, text, layout);
     colon = text.rfind(':');
   }
   if (colon == std::string::npos) {
@@ -776,15 +769,14 @@ void CollectParens(const AstNode& node, int min_bp, ParenCounts& out) {
     }
     case NodeKind::RangeOp: {
       wrap_if(kBpRange);
-      const AstNode& lhs = node.as_range_lhs();
-      const AstNode& rhs = node.as_range_rhs();
-      std::string scratch;
-      if (TrySpliceWholeAxisPair(lhs, rhs, scratch)) {
-        return;
+      const std::uint32_t n = node.as_range_arity();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        const AstNode& operand = node.as_range_operand(i);
+        if (i + 1U < n && !PrintsSpliced(node, i)) {
+          Parenthesize(operand, ColonEndpointsWouldFold(operand, node.as_range_operand(i + 1U)), out);
+        }
+        CollectParens(operand, i == 0U ? kBpRange : kBpRange + 1, out);
       }
-      Parenthesize(lhs, ColonEndpointsWouldFold(lhs, rhs), out);
-      CollectParens(lhs, kBpRange, out);
-      CollectParens(rhs, kBpRange + 1, out);
       return;
     }
     case NodeKind::UnionOp:
@@ -962,13 +954,7 @@ struct StorageEmitter {
         }
         return;
       case NodeKind::RangeOp:
-        // A whole-axis pair has no function name inside it, so the shared
-        // splice renders both forms.
-        if (!TrySpliceWholeAxisPair(node.as_range_lhs(), node.as_range_rhs(), out)) {
-          emit(node.as_range_lhs(), out);
-          out.push_back(':');
-          emit(node.as_range_rhs(), out);
-        }
+        EmitRangeChain(node, out, [this](const AstNode& operand, std::string& dst) { emit(operand, dst); });
         return;
       case NodeKind::UnionOp:
         for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {

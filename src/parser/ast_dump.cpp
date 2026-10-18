@@ -268,10 +268,15 @@ void DumpInto(const AstNode& node, std::string& out) {
       return;
 
     case NodeKind::RangeOp:
-      out.append("(range ");
-      DumpInto(node.as_range_lhs(), out);
-      out.push_back(' ');
-      DumpInto(node.as_range_rhs(), out);
+      // `(range a b c)`; the halves of one whole-axis token are joined by `spliced`.
+      out.append("(range");
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        if (i > 0U && node.as_range_spliced(i - 1U)) {
+          out.append(" spliced");
+        }
+        out.push_back(' ');
+        DumpInto(node.as_range_operand(i), out);
+      }
       out.push_back(')');
       return;
 

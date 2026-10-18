@@ -41,6 +41,7 @@
 #include "parser/parser.h"
 
 #include <cstdint>
+#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -484,11 +485,11 @@ AstNode* Parser::parse() {
     return nullptr;
   }
 
-  // A left-associative chain of `%`, `:`, a space or a call suffix is
-  // assembled by the Pratt loop without adding parse_expression frames, one
-  // node per operator. Validate the completed tree as well, so those shapes
-  // observe the same configured ceiling as nested calls and parentheses
-  // before any recursive consumer sees it. A binary chain is one node.
+  // A left-associative chain of `%`, a space or a call suffix is assembled
+  // by the Pratt loop without adding parse_expression frames, one node per
+  // operator. Validate the completed tree as well, so those shapes observe
+  // the same configured ceiling as nested calls and parentheses before any
+  // recursive consumer sees it. A binary or `:` chain is one node.
   if (!ast_depth_within_limit(*root_, opts_.max_parse_depth)) {
     const TextRange range = root_->range();
     record_error(ParseErrorCode::NestedFormulaTooDeep, range);
@@ -623,18 +624,20 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     }
   }
 
-  // The binary chain `lhs` heads, if any: its further operators share
-  // `chain_bp` and live in `chain_operands_` / `chain_ops_` past these bases.
+  // The binary or `:` chain `lhs` heads, if any: its further operators share
+  // `chain_bp`, and its operands, operators and splice flags live in
+  // `chain_operands_` / `chain_ops_` / `chain_spliced_` past these bases.
   const std::size_t operand_base = chain_operands_.size();
   const std::size_t op_base = chain_ops_.size();
+  const std::size_t spliced_base = chain_spliced_.size();
   int chain_bp = 0;
 
   while (true) {
     const TokenKind kind = peek_kind();
     int chain_right_bp = 0;
-    if (chain_ops_.size() != op_base && (bailed_ || kind == TokenKind::Colon || kind == TokenKind::Whitespace ||
-                                         InfixBindingPower(kind, &chain_right_bp) != chain_bp)) {
-      close_chain(lhs, operand_base, op_base);
+    if (chain_operands_.size() != operand_base &&
+        (bailed_ || kind == TokenKind::Whitespace || InfixBindingPower(kind, &chain_right_bp) != chain_bp)) {
+      close_chain(lhs, operand_base, op_base, spliced_base);
     }
     if (bailed_) {
       --depth_;
@@ -692,9 +695,9 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       auto is_cell = [](const AstNode& n) {
         return n.kind() == NodeKind::Ref && !n.as_ref().is_full_col && !n.as_ref().is_full_row;
       };
-      const bool cell_callee =
-          is_cell(*lhs) || lk == NodeKind::UnionOp || lk == NodeKind::IntersectOp ||
-          (lk == NodeKind::RangeOp && is_cell(lhs->as_range_lhs()) && is_cell(lhs->as_range_rhs()));
+      const bool cell_callee = is_cell(*lhs) || lk == NodeKind::UnionOp || lk == NodeKind::IntersectOp ||
+                               (lk == NodeKind::RangeOp && lhs->as_range_arity() == 2U &&
+                                is_cell(lhs->as_range_operand(0)) && is_cell(lhs->as_range_operand(1)));
       if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall && lk != NodeKind::Call && !sheet_name && !cell_callee) {
         // Special-case: a *Bool* literal LHS followed by an empty `()` is
         // treated as a no-op so the surrounding Pratt loop can continue and
@@ -835,7 +838,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // Parse_expression always returns a node post-recovery; null means
       // hard failure (arena exhaustion). Surface the existing LHS to the
       // caller so they can salvage a partial tree.
-      close_chain(lhs, operand_base, op_base);
+      close_chain(lhs, operand_base, op_base, spliced_base);
       --depth_;
       return lhs;
     }
@@ -851,7 +854,9 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // surface as `#VALUE!` at eval time via `resolve_reference_call`).
       // SpillRef is rejected on both sides: `A1#:B2` and `A1:B2#` are not
       // legal Excel range expressions (the spill operator is terminal).
-      const NodeKind lk = lhs->kind();
+      // A chain already open validated its left endpoint when it started.
+      const bool chain_open = chain_operands_.size() != operand_base;
+      const NodeKind lk = chain_open ? NodeKind::RangeOp : lhs->kind();
       const NodeKind rk = rhs->kind();
       if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
@@ -859,11 +864,22 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
                  !(is_range_endpoint_kind(rk) || is_self_book_name_ref(*rhs))) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
-      node = make_range_op(arena_, lhs, rhs);
-      if (node != nullptr && op_tok.trim != TrimRefMode::None) {
-        node->set_range(SpanRange(lhs->range(), rhs->range()));
-        node = wrap_trim_ref(node, op_tok.trim);
+      if (!chain_open) {
+        chain_bp = bp;
+        append_range_operands(*lhs);
       }
+      chain_spliced_.push_back(0U);
+      append_range_operands(*rhs);
+      if (op_tok.trim == TrimRefMode::None) {
+        continue;
+      }
+      // A trim operator applies to the whole chain written before it.
+      close_chain(lhs, operand_base, op_base, spliced_base);
+      if (bailed_) {
+        --depth_;
+        return lhs;
+      }
+      node = wrap_trim_ref(lhs, op_tok.trim);
     } else if (kind == TokenKind::Whitespace) {
       // Space-as-intersection. The LHS shape was already validated above.
       // Validate the RHS shape with the same rules used for `:`, widened by
@@ -879,7 +895,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       }
       node = make_intersect_op(arena_, lhs, rhs);
     } else {
-      if (chain_ops_.size() == op_base) {
+      if (chain_operands_.size() == operand_base) {
         chain_operands_.push_back(lhs);
         chain_bp = bp;
       }
@@ -897,16 +913,40 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
   }
 }
 
-void Parser::close_chain(AstNode*& lhs, std::size_t operand_base, std::size_t op_base) {
-  if (chain_ops_.size() == op_base) {
+void Parser::append_range_operands(const AstNode& node) {
+  // An unparenthesised range (a whole-axis token such as `A:C`) joins the
+  // chain endpoint by endpoint, keeping its splice flags.
+  if (node.kind() != NodeKind::RangeOp || node.paren_depth() != 0U) {
+    chain_operands_.push_back(&node);
     return;
   }
-  const AstNode* first = chain_operands_[operand_base];
-  const TextRange span = SpanRange(first->range(), chain_operands_.back()->range());
-  AstNode* node = make_binary_chain(arena_, chain_operands_.data() + operand_base, chain_ops_.data() + op_base,
-                                    static_cast<std::uint32_t>(chain_operands_.size() - operand_base));
+  for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+    if (i > 0U) {
+      chain_spliced_.push_back(node.as_range_spliced(i - 1U) ? 1U : 0U);
+    }
+    chain_operands_.push_back(&node.as_range_operand(i));
+  }
+}
+
+void Parser::close_chain(AstNode*& lhs, std::size_t operand_base, std::size_t op_base, std::size_t spliced_base) {
+  if (chain_operands_.size() == operand_base) {
+    return;
+  }
+  const std::uint32_t arity = static_cast<std::uint32_t>(chain_operands_.size() - operand_base);
+  const TextRange span = SpanRange(chain_operands_[operand_base]->range(), chain_operands_.back()->range());
+  AstNode* node = nullptr;
+  if (chain_spliced_.size() != spliced_base) {
+    std::unique_ptr<bool[]> spliced(new bool[arity - 1U]);
+    for (std::uint32_t i = 0; i + 1U < arity; ++i) {
+      spliced[i] = chain_spliced_[spliced_base + i] != 0U;
+    }
+    node = make_range_chain(arena_, chain_operands_.data() + operand_base, spliced.get(), arity);
+  } else {
+    node = make_binary_chain(arena_, chain_operands_.data() + operand_base, chain_ops_.data() + op_base, arity);
+  }
   chain_operands_.resize(operand_base);
   chain_ops_.resize(op_base);
+  chain_spliced_.resize(spliced_base);
   if (node == nullptr) {
     bailed_ = true;
     return;

@@ -171,7 +171,7 @@ std::string_view area_sheet(const parser::AstNode& area) {
     case parser::NodeKind::Ref:
       return area.as_ref().sheet;
     case parser::NodeKind::RangeOp:
-      return area_sheet(area.as_range_lhs());
+      return area_sheet(area.as_range_operand(0));
     case parser::NodeKind::NameRef:
       return area.as_name_sheet();
     default:
@@ -186,12 +186,13 @@ bool area_span(const parser::AstNode& area, std::uint32_t& cols, std::uint32_t& 
     cols = rows = 1U;
     return !ref.is_full_col && !ref.is_full_row;
   }
-  if (area.kind() != parser::NodeKind::RangeOp || area.as_range_lhs().kind() != parser::NodeKind::Ref ||
-      area.as_range_rhs().kind() != parser::NodeKind::Ref) {
+  if (area.kind() != parser::NodeKind::RangeOp || area.as_range_arity() != 2U ||
+      area.as_range_operand(0).kind() != parser::NodeKind::Ref ||
+      area.as_range_operand(1).kind() != parser::NodeKind::Ref) {
     return false;
   }
-  const parser::Reference& lhs = area.as_range_lhs().as_ref();
-  const parser::Reference& rhs = area.as_range_rhs().as_ref();
+  const parser::Reference& lhs = area.as_range_operand(0).as_ref();
+  const parser::Reference& rhs = area.as_range_operand(1).as_ref();
   if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
     return false;
   }

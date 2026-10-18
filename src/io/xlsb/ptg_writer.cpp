@@ -244,8 +244,9 @@ class SourceWhitespace {
         }
         break;
       case parser::NodeKind::RangeOp:
-        visit(node.as_range_lhs(), inside);
-        visit(node.as_range_rhs(), false);
+        for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+          visit(node.as_range_operand(i), i == 0U ? inside : false);
+        }
         break;
       case parser::NodeKind::IntersectOp:
         visit(node.as_intersect_lhs(), inside);
@@ -473,15 +474,34 @@ bool StaticRects(const parser::AstNode& node, std::vector<Rect>& out) {
       out.push_back(Rect{node.as_ref().row, node.as_ref().row, node.as_ref().col, node.as_ref().col});
       return true;
     case parser::NodeKind::RangeOp: {
-      const parser::AstNode& lhs = node.as_range_lhs();
-      const parser::AstNode& rhs = node.as_range_rhs();
-      if (!plain(lhs) || !plain(rhs)) {
-        return false;
+      // One area token keeps the cell-only rule; a longer chain names the
+      // bounding box of its endpoints, where a whole column spans every row
+      // and a whole row every column.
+      const bool area = node.as_range_arity() == 2U && parser::range_token_width(node, 0) == 2U;
+      bool seen = false;
+      Rect box{};
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        const parser::AstNode& operand = node.as_range_operand(i);
+        Rect r{};
+        if (operand.kind() == parser::NodeKind::Ref && (plain(operand) || (!area && operand.as_ref().sheet.empty()))) {
+          const parser::Reference& ref = operand.as_ref();
+          r = Rect{ref.is_full_col ? 0U : ref.row, ref.is_full_col ? a1::kMaxRows - 1U : ref.row,
+                   ref.is_full_row ? 0U : ref.col, ref.is_full_row ? a1::kMaxCols - 1U : ref.col};
+        } else if (operand.kind() == parser::NodeKind::RangeOp && !area) {
+          std::vector<Rect> inner;
+          if (!StaticRects(operand, inner) || inner.size() != 1U) {
+            return false;
+          }
+          r = inner[0];
+        } else {
+          return false;
+        }
+        box = seen ? Rect{std::min(box.row_first, r.row_first), std::max(box.row_last, r.row_last),
+                          std::min(box.col_first, r.col_first), std::max(box.col_last, r.col_last)}
+                   : r;
+        seen = true;
       }
-      const parser::Reference& a = lhs.as_ref();
-      const parser::Reference& b = rhs.as_ref();
-      out.push_back(
-          Rect{std::min(a.row, b.row), std::max(a.row, b.row), std::min(a.col, b.col), std::max(a.col, b.col)});
+      out.push_back(box);
       return true;
     }
     case parser::NodeKind::UnionOp:
@@ -1254,66 +1274,124 @@ class Encoder {
   /// in a value-class `PtgMemFunc` instead (`promote`; both measured, real
   /// Excel 365).
   Expected<void, Error> emit_range(const parser::AstNode& node, bool promote, std::uint8_t cls) {
-    // Fast path: a range whose endpoints are both plain cell refs maps
-    // to PtgArea / PtgArea3d (a single operand) rather than two refs +
-    // the `:` operator. The decoder produces a RangeOp of two refs, so
-    // either form round-trips; we emit the compact Area form.
-    const parser::AstNode& lhs = node.as_range_lhs();
-    const parser::AstNode& rhs = node.as_range_rhs();
-    if (lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
-      const parser::Reference& a = lhs.as_ref();
-      const parser::Reference& b = rhs.as_ref();
-      // The area token stands where the first endpoint's text starts.
-      const auto lead = [&]() { emit_space(lhs, parser::WhitespaceSlot::kBeforeText); };
-      // Whole columns (`A:B`) or whole rows (`1:2`) are one area (measured).
-      if (b.sheet.empty() && ((a.is_full_col && b.is_full_col) || (a.is_full_row && b.is_full_row))) {
-        parser::Reference first = a;
-        parser::Reference last = b;
-        SpanGrid(first, last);
+    // One area token (`A1:B2`, `A:C`) is a single operand.
+    if (node.as_range_arity() == 2U && parser::range_token_width(node, 0) == 2U) {
+      bool emitted = false;
+      RETURN_IF_ERROR(emit_area_token(node, 0, cls, &emitted));
+      if (emitted) {
+        return Expected<void, Error>::Ok();
+      }
+    }
+    // Anything else: its tokens joined by `PtgRange`, behind a memory token
+    // -- PtgMemArea with the bounding rectangle when that is static, else
+    // PtgMemFunc. Only the outermost reference operation carries one.
+    std::vector<Rect> rects;
+    const bool cached = !in_memory_token_ && promote_root_ && !base_;
+    if (cached && StaticRects(node, rects) && rects.size() == 1U) {
+      emit_u8(out_, promote ? ValueClassPtg(0x26) : 0x26);  // PtgMemArea
+      emit_u32(out_, 0);                                    // unused
+      emit_u32(extra_, 1U);
+      emit_u32(extra_, rects[0].row_first);
+      emit_u32(extra_, rects[0].row_last);
+      emit_u32(extra_, rects[0].col_first);
+      emit_u32(extra_, rects[0].col_last);
+      return emit_wrapped_range(node);
+    }
+    if (!promote && !cached) {
+      return emit_range_tokens(node);
+    }
+    emit_u8(out_, promote ? ValueClassPtg(0x29) : 0x29);  // PtgMemFunc
+    return emit_wrapped_range(node);
+  }
+
+  /// Emits `node` after the memory token just written, back-filling the
+  /// token's trailing `cce`.
+  Expected<void, Error> emit_wrapped_range(const parser::AstNode& node) {
+    const std::size_t cce_at = out_.size();
+    emit_u16(out_, 0);
+    const bool outer = std::exchange(in_memory_token_, true);
+    const auto status = emit_range_tokens(node);
+    in_memory_token_ = outer;
+    RETURN_IF_ERROR(status);
+    const std::size_t cce = out_.size() - cce_at - 2U;
+    if (cce > 0xFFFFU) {
+      return unsupported_node("memory token (cce>65535)");
+    }
+    out_[cce_at] = static_cast<std::uint8_t>(cce & 0xFFU);
+    out_[cce_at + 1U] = static_cast<std::uint8_t>(cce >> 8);
+    return Expected<void, Error>::Ok();
+  }
+
+  /// Emits a `:` chain token by token, as Excel tokenises it: each area
+  /// token as one reference-class operand (`A1:B2:C3:D4` is two areas),
+  /// every other operand on its own, and a `PtgRange` after each token but
+  /// the first.
+  Expected<void, Error> emit_range_tokens(const parser::AstNode& node) {
+    const std::uint32_t n = node.as_range_arity();
+    for (std::uint32_t i = 0; i < n;) {
+      const std::uint32_t width = parser::range_token_width(node, i);
+      bool emitted = false;
+      if (width == 2U) {
+        RETURN_IF_ERROR(emit_area_token(node, i, kPtgReferenceClass, &emitted));
+      }
+      if (!emitted) {
+        // An area that has no area encoding is its two corners joined by `:`.
+        RETURN_IF_ERROR(emit(node.as_range_operand(i)));
+        if (width == 2U) {
+          RETURN_IF_ERROR(emit(node.as_range_operand(i + 1U)));
+          emit_u8(out_, 0x11);  // PtgRange
+        }
+      }
+      if (i > 0U) {
+        emit_u8(out_, 0x11);  // PtgRange
+      }
+      i += width;
+    }
+    return Expected<void, Error>::Ok();
+  }
+
+  /// Emits operands `i` and `i + 1` of `node`, an area token, as one
+  /// PtgArea / PtgAreaN / PtgArea3d; sets `*emitted` false, writing nothing,
+  /// when the pair has no area encoding.
+  Expected<void, Error> emit_area_token(const parser::AstNode& node, std::uint32_t i, std::uint8_t cls, bool* emitted) {
+    *emitted = true;
+    const parser::AstNode& lhs = node.as_range_operand(i);
+    const parser::Reference& a = lhs.as_ref();
+    const parser::Reference& b = node.as_range_operand(i + 1U).as_ref();
+    // The area token stands where the first endpoint's text starts.
+    const auto lead = [&]() { emit_space(lhs, parser::WhitespaceSlot::kBeforeText); };
+    // Whole columns (`A:B`) or whole rows (`1:2`) are one area.
+    if (b.sheet.empty() && ((a.is_full_col && b.is_full_col) || (a.is_full_row && b.is_full_row))) {
+      parser::Reference first = a;
+      parser::Reference last = b;
+      SpanGrid(first, last);
+      lead();
+      return emit_area_ref(first, last, a.sheet, cls);
+    }
+    if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
+      if (a.sheet.empty() && base_ && (IsRelative(a) || IsRelative(b))) {
         lead();
-        return emit_area_ref(first, last, a.sheet, cls);
+        emit_u8(out_, ClassedPtg(0x2D, cls));  // PtgAreaN
+        emit_area(out_, OffsetFrom(a, *base_), OffsetFrom(b, *base_));
+        return Expected<void, Error>::Ok();
       }
-      if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
-        if (a.sheet.empty() && base_ && (IsRelative(a) || IsRelative(b))) {
-          lead();
-          emit_u8(out_, ClassedPtg(0x2D, cls));  // PtgAreaN
-          emit_area(out_, OffsetFrom(a, *base_), OffsetFrom(b, *base_));
-          return Expected<void, Error>::Ok();
-        }
-        if (a.sheet.empty()) {
-          lead();
-          emit_u8(out_, ClassedPtg(0x25, cls));  // PtgArea
-          emit_area(out_, a, b);
-          return Expected<void, Error>::Ok();
-        }
-        const int itab = resolve_ixti(sheet_names_, a.sheet);
-        const int ixti = itab >= 0 ? try_resolve_range_ixti(itab, itab) : -1;
-        if (ixti >= 0) {
-          lead();
-          emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
-          emit_u16(out_, static_cast<std::uint16_t>(ixti));
-          emit_area(out_, a, b);
-          return Expected<void, Error>::Ok();
-        }
+      if (a.sheet.empty()) {
+        lead();
+        emit_u8(out_, ClassedPtg(0x25, cls));  // PtgArea
+        emit_area(out_, a, b);
+        return Expected<void, Error>::Ok();
+      }
+      const int itab = resolve_ixti(sheet_names_, a.sheet);
+      const int ixti = itab >= 0 ? try_resolve_range_ixti(itab, itab) : -1;
+      if (ixti >= 0) {
+        lead();
+        emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
+        emit_u16(out_, static_cast<std::uint16_t>(ixti));
+        emit_area(out_, a, b);
+        return Expected<void, Error>::Ok();
       }
     }
-    // General form: emit both operands then the `:` operator.
-    if (!promote) {
-      RETURN_IF_ERROR(emit(lhs));
-      RETURN_IF_ERROR(emit(rhs));
-      emit_u8(out_, 0x11);  // PtgRange
-      return Expected<void, Error>::Ok();
-    }
-    // Wrap the operand+operand+PtgRange run in a value-class PtgMemFunc.
-    const std::size_t mark = out_.size();
-    RETURN_IF_ERROR(emit(lhs));
-    RETURN_IF_ERROR(emit(rhs));
-    emit_u8(out_, 0x11);  // PtgRange
-    const std::vector<std::uint8_t> wrapped(out_.begin() + static_cast<std::ptrdiff_t>(mark), out_.end());
-    out_.resize(mark);
-    emit_u8(out_, ValueClassPtg(0x29));  // PtgMemFunc
-    emit_u16(out_, static_cast<std::uint16_t>(wrapped.size()));
-    out_.insert(out_.end(), wrapped.begin(), wrapped.end());
+    *emitted = false;
     return Expected<void, Error>::Ok();
   }
 

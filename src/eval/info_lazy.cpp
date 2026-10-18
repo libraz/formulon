@@ -437,7 +437,7 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     sheet_qualifier = arg.as_ref().sheet;
     have_ref_shape = true;
   } else if (arg.kind() == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs = arg.as_range_lhs();
+    const parser::AstNode& lhs = arg.as_range_operand(0);
     if (lhs.kind() == parser::NodeKind::Ref) {
       sheet_qualifier = lhs.as_ref().sheet;
       have_ref_shape = true;

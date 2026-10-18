@@ -242,8 +242,15 @@ class AstNode final {
   BinOp as_binary_op(std::uint32_t i) const;
 
   // --- RangeOp -------------------------------------------------------------
-  const AstNode& as_range_lhs() const;
-  const AstNode& as_range_rhs() const;
+  // A left-associative run of `:` over `arity` endpoints, kept in the order
+  // they were written: `A1:C3:E5` is one node of arity 3 and names the
+  // bounding box of every endpoint. A parenthesised operand is its own node.
+  std::uint32_t as_range_arity() const;
+  const AstNode& as_range_operand(std::uint32_t i) const;
+  /// True when operands `i` and `i + 1` are the two halves of one
+  /// whole-column or whole-row token (`A:C`, `1:3`), false when a `:`
+  /// operator joins them (`H:H:E:E` is two whole-column tokens).
+  bool as_range_spliced(std::uint32_t i) const;
 
   // --- UnionOp -------------------------------------------------------------
   std::uint32_t as_union_arity() const;
@@ -314,7 +321,7 @@ class AstNode final {
   friend AstNode* make_sheet_name_ref(Arena&, std::string_view, std::string_view, bool);
   friend AstNode* make_unary_op(Arena&, UnaryOp, AstNode*);
   friend AstNode* make_binary_chain(Arena&, const AstNode* const*, const BinOp*, std::uint32_t);
-  friend AstNode* make_range_op(Arena&, AstNode*, AstNode*);
+  friend AstNode* make_range_chain(Arena&, const AstNode* const*, const bool*, std::uint32_t);
   friend AstNode* make_union_op(Arena&, const AstNode* const*, std::uint32_t);
   friend AstNode* make_intersect_op(Arena&, AstNode*, AstNode*);
   friend AstNode* make_implicit_intersection(Arena&, AstNode*);
@@ -399,6 +406,11 @@ class AstNode final {
     const AstNode* lhs;
     const AstNode* rhs;
   };
+  struct RangeChainPayload {
+    const AstNode* const* operands;  // arity entries
+    const bool* spliced;             // arity - 1 entries
+    std::uint32_t arity;
+  };
   struct VariadicPayload {
     const AstNode* const* children;
     std::uint32_t count;
@@ -448,7 +460,8 @@ class AstNode final {
     NameRefPayload name;
     UnaryPayload unary;
     BinaryPayload binary;
-    RangePayload range;
+    RangePayload range;  // Used by IntersectOp.
+    RangeChainPayload range_chain;
     VariadicPayload variadic;  // Used by UnionOp.
     CallPayload call;
     ArrayPayload array;
@@ -573,7 +586,12 @@ bool any_child_node(const AstNode& node, Predicate&& predicate) {
       }
       return false;
     case NodeKind::RangeOp:
-      return predicate(node.as_range_lhs()) || predicate(node.as_range_rhs());
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        if (predicate(node.as_range_operand(i))) {
+          return true;
+        }
+      }
+      return false;
     case NodeKind::IntersectOp:
       return predicate(node.as_intersect_lhs()) || predicate(node.as_intersect_rhs());
     case NodeKind::UnionOp:
@@ -697,8 +715,23 @@ AstNode* make_binary_chain(Arena& arena, const AstNode* const* operands, const B
 /// non-null.
 AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs);
 
-/// Builds a `RangeOp` node. `lhs` and `rhs` must both be non-null.
-AstNode* make_range_op(Arena& arena, AstNode* lhs, AstNode* rhs);
+/// Builds a `RangeOp` chain from `arity` endpoints and the `arity - 1`
+/// splice flags between them (see `AstNode::as_range_spliced`). Both arrays
+/// are deep-copied; `arity` must be `>= 2`.
+AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const bool* spliced, std::uint32_t arity);
+
+/// Builds a two-endpoint `RangeOp`. `spliced` marks the pair as one
+/// whole-column or whole-row token (`A:C`) rather than two joined by `:`.
+AstNode* make_range_op(Arena& arena, AstNode* lhs, AstNode* rhs, bool spliced);
+
+/// How many operands of `range`, starting at token start `i`, form one
+/// reference token as Excel tokenises the text left to right: 2 for a
+/// whole-axis token (`A:C`) or a cell area (`A1:B2`, the second corner
+/// unqualified), 1 for anything else. Only meaningful at a token start, so
+/// walk `i += range_token_width(range, i)` from 0; consecutive tokens are
+/// joined by the `:` operator (`A1:B2:C3:D4` is two areas, `A1:C3:E5` an
+/// area and a cell).
+std::uint32_t range_token_width(const AstNode& range, std::uint32_t i) noexcept;
 
 /// Builds a `UnionOp` node from the `count` children pointed at by
 /// `children`. The pointer array is deep-copied; `count` must be `>= 2`.

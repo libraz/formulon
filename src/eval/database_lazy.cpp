@@ -294,9 +294,10 @@ bool resolve_common(const parser::AstNode& call, Arena& arena, const FunctionReg
   {
     const parser::AstNode& field_node = call.as_call_arg(1);
     if (field_node.kind() == parser::NodeKind::RangeOp) {
-      const parser::AstNode& lhs = field_node.as_range_lhs();
-      const parser::AstNode& rhs = field_node.as_range_rhs();
-      if (lhs.kind() == parser::NodeKind::Ref && rhs.kind() == parser::NodeKind::Ref) {
+      const parser::AstNode& lhs = field_node.as_range_operand(0);
+      const parser::AstNode& rhs = field_node.as_range_operand(1);
+      if (field_node.as_range_arity() == 2U && lhs.kind() == parser::NodeKind::Ref &&
+          rhs.kind() == parser::NodeKind::Ref) {
         const auto& lhs_ref = lhs.as_ref();
         const auto& rhs_ref = rhs.as_ref();
         if (lhs_ref.row != rhs_ref.row || lhs_ref.col != rhs_ref.col) {

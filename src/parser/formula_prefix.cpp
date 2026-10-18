@@ -100,7 +100,16 @@ class OperatorRespeller {
   // operator. An argument that is no range keeps the call spelling.
   std::string trim_ref(const AstNode& call, const AstNode& arg, TrimRefMode mode) const {
     if (arg.paren_depth() == 0U && arg.kind() == NodeKind::RangeOp) {
-      return text(arg.as_range_lhs(), true) + trim_ref_operator(mode) + text(arg.as_range_rhs(), true);
+      // The chain's last `:` takes the operator.
+      const std::uint32_t n = arg.as_range_arity();
+      std::string out;
+      for (std::uint32_t i = 0; i < n; ++i) {
+        if (i > 0U) {
+          out.append(i + 1U == n ? std::string(trim_ref_operator(mode)) : std::string(":"));
+        }
+        out.append(text(arg.as_range_operand(i), true));
+      }
+      return out;
     }
     if (arg.paren_depth() == 0U && arg.kind() == NodeKind::Ref) {
       const std::string ref(src_.substr(arg.range().start, arg.range().end - arg.range().start));

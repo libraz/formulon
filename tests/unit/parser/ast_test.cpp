@@ -265,11 +265,11 @@ TEST(AstNodeRangeOp, AccessorRoundtrips) {
   rb.row = 1;
   AstNode* lhs = make_ref(a, ra);
   AstNode* rhs = make_ref(a, rb);
-  AstNode* n = make_range_op(a, lhs, rhs);
+  AstNode* n = make_range_op(a, lhs, rhs, /*spliced=*/false);
   ASSERT_NE(n, nullptr);
   EXPECT_EQ(n->kind(), NodeKind::RangeOp);
-  EXPECT_EQ(format_a1(n->as_range_lhs().as_ref()), "A1");
-  EXPECT_EQ(format_a1(n->as_range_rhs().as_ref()), "B2");
+  EXPECT_EQ(format_a1(n->as_range_operand(0).as_ref()), "A1");
+  EXPECT_EQ(format_a1(n->as_range_operand(1).as_ref()), "B2");
 }
 
 TEST(AstNodeUnionOp, ChildArrayCopiedToArena) {

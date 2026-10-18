@@ -109,7 +109,7 @@ const parser::AstNode* origin_rect_ast(const SourceOrigin& origin, std::uint32_t
   if (lhs == nullptr || rhs == nullptr) {
     return nullptr;
   }
-  return parser::make_range_op(arena, lhs, rhs);
+  return parser::make_range_op(arena, lhs, rhs, /*spliced=*/false);
 }
 
 // The one-cell reference of row-major element `i` of `arr`, or nullptr for a

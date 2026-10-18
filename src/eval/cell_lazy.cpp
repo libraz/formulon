@@ -135,15 +135,12 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
     return true;
   }
   if (k == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs_ast = ref_node.as_range_lhs();
-    const parser::AstNode& rhs_ast = ref_node.as_range_rhs();
     std::uint32_t top = 0;
     std::uint32_t left = 0;
     std::uint32_t bottom = 0;
     std::uint32_t right = 0;
     ErrorCode err = ErrorCode::Ref;
-    if (!resolve_range_endpoints(lhs_ast, rhs_ast, arena, registry, ctx, out_sheet, &top, &left, &bottom, &right,
-                                 &err)) {
+    if (!resolve_range_endpoints(ref_node, arena, registry, ctx, out_sheet, &top, &left, &bottom, &right, &err)) {
       *out_err = Value::error(err);
       return false;
     }

@@ -41,7 +41,8 @@ bool is_scope_free(const parser::AstNode& node, const NameEnv* env) {
       return !parser::any_child_node(node,
                                      [&](const parser::AstNode& operand) { return !is_scope_free(operand, env); });
     case parser::NodeKind::RangeOp:
-      return is_scope_free(node.as_range_lhs(), env) && is_scope_free(node.as_range_rhs(), env);
+      return !parser::any_child_node(node,
+                                     [&](const parser::AstNode& operand) { return !is_scope_free(operand, env); });
     case parser::NodeKind::IntersectOp:
       return is_scope_free(node.as_intersect_lhs(), env) && is_scope_free(node.as_intersect_rhs(), env);
     case parser::NodeKind::UnionOp:
@@ -123,7 +124,8 @@ const parser::AstNode* resolve_computed_reference(const parser::AstNode& expr, A
   if (lhs == nullptr || rhs == nullptr) {
     return nullptr;
   }
-  return parser::make_range_op(arena, lhs, rhs);
+  // A whole-axis rectangle is one `A:C` token.
+  return parser::make_range_op(arena, lhs, rhs, /*spliced=*/first.is_full_col || first.is_full_row);
 }
 
 }  // namespace

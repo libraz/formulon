@@ -171,7 +171,7 @@ AstNode* Parser::make_whole_axis_ref(const Reference& lhs, const Reference& rhs,
   }
   lhs_node->set_range(lhs_range);
   rhs_node->set_range(rhs_range);
-  AstNode* n = make_range_op(arena_, lhs_node, rhs_node);
+  AstNode* n = make_range_op(arena_, lhs_node, rhs_node, /*spliced=*/true);
   if (n == nullptr) {
     return nullptr;
   }
