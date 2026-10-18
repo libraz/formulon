@@ -771,9 +771,8 @@ entries:
   # (src/eval/cell_evaluator.cpp unresolved_cycle_value); a cell that is its
   # own only cycle member holds 0, as in Excel. Excel computes a multi-cell
   # cycle along the chain from the member whose entry closed it, so its
-  # values depend on entry order. Cells downstream of a member are left
-  # uncomputed at 0 in Excel (ISERROR over a member reads 0, not FALSE);
-  # Formulon propagates #REF! into them, and no case pins that.
+  # values depend on entry order, and so do the cells downstream of a member
+  # (circular_reference_downstream_cells_depend_on_entry_order).
   - id: circular_reference_iterative_off_returns_ref
     applies_to: all
     cause: accepted-divergence
@@ -783,6 +782,36 @@ entries:
     reason: "A cycle through two or more cells with iterative calc OFF resolves to #REF! for every member in Formulon. Excel seeds the member whose entry closed the cycle with 0 and computes the others along the chain (A1=B1+1 / B1=A1+1 entered A then B gives 1, 0; entered B then A gives 0, 1), so member values depend on entry order, which a workbook does not record. A cell whose cycle runs through itself alone is deterministic and holds 0 as in Excel."
     prefer: formulon
     first_noted: 2026-07-02
+    last_verified_excel_version: "16.113.4"
+  - id: circular_reference_downstream_cells_depend_on_entry_order
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/recalc_engine_test.cpp]
+    reason: "With iterative calculation off, Excel leaves a cell that reads a cycle member at 0 when the cell was entered after the cycle closed (C1 =A1+1, D1 =C1+1, E1 =ISERROR(D1), =ISNUMBER(A1) all read 0, at any depth and on another sheet), and computes it from the members' values when it existed before (C1 2, D1 3, ISERROR FALSE, ISNUMBER TRUE). Neither state changes under Calculate, CalculateFull or CalculateFullRebuild, and the workbook does not record which order produced it. The same holds downstream of a single-cell self-cycle (C1 0 entered after, 1 entered before). Breaking the cycle recomputes every cell. Formulon reports a multi-cell cycle's members as #REF! and propagates it downstream, so ISERROR of a downstream cell is TRUE; downstream of a self-cycle it computes from the member's 0."
+    prefer: formulon
+    first_noted: 2026-10-18
+    last_verified_excel_version: "16.113.4"
+  - id: adhoc_evaluation_self_reference_reads_cached_value
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [src/c_api/formulon_c.h]
+    reason: "An ad-hoc evaluation (fm_workbook_evaluate_formula and its siblings) is never inserted into the dependency graph, so a formula that refers to its own anchor cell reads that cell's cached value: =A1+1 anchored at an empty A1 gives 1. Excel with automatic calculation leaves such a cell at 0 (manual calculation gives 1). Whole-axis and bounded self-rectangles are answered by the walker's cycle rule and give 0 on this path too."
+    prefer: formulon
+    first_noted: 2026-10-18
+    last_verified_excel_version: "16.113.4"
+  - id: evaluated_array_between_resource_ceiling_and_excel_bound
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/array_alloc_test.cpp]
+    reason: "Formulon refuses a generated array past 1,048,576 cells (#NUM!) and a derived array past its 10,000,000-cell ceiling (#CALC! / #NUM!), bounding evaluator memory under WASM. Excel evaluates arrays up to 53,687,091 elements and abandons the formula to 0 only past that, so SUM(SEQUENCE(3277,16383)*0+1) is 53687091 in Excel and #NUM! in Formulon. Past the Excel bound both give 0, and ROWS / COLUMNS size generators and operations without building them, so their results agree throughout."
+    prefer: formulon
+    first_noted: 2026-10-18
     last_verified_excel_version: "16.113.4"
 
   # -- XLSB-sourced pivot tables: GETPIVOTDATA unsupported ----------------
