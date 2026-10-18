@@ -204,9 +204,12 @@ TEST(XlsbSstBuilder, PhoneticSlicesMatchUtf16SubstringForEveryBoundaryPair) {
     ASSERT_EQ(decoded[i].phonetic.size(), 2U);
     EXPECT_EQ(decoded[i].phonetic[0].text, utf16_substring(kana, start, length))
         << "case " << start << " -> " << next_start;
-    if (start == 2U && next_start == 2U) {
-      // A zero-length slice at the midpoint of 🌟 widens to that codepoint
-      // because starts round down and ends round up.
+    if (next_start <= start) {
+      // Equal and backwards ranges are empty, including at the surrogate midpoint.
+      EXPECT_EQ(decoded[i].phonetic[0].text, "") << "case " << start << " -> " << next_start;
+    }
+    if (start == 1U && next_start == 2U) {
+      // A positive range ending inside 🌟 rounds up and includes the codepoint.
       EXPECT_EQ(decoded[i].phonetic[0].text, "🌟");
     }
   }

@@ -1,10 +1,8 @@
 //
 // Implementation of the UTF-8 / UTF-16 helpers declared in `text_ops.h`.
-// The codepoint walker mirrors `utf8_length.cpp`: we read the leading byte,
-// derive the byte length (1/2/3/4) and the UTF-16 unit count (1 for byte_len
-// <= 3, 2 for byte_len == 4). Malformed leading bytes and truncated
-// sequences each consume one byte and one UTF-16 unit, matching the
-// behaviour of `utf16_units_in`.
+// The UTF-16 offset walker shares `decode_utf8_step` with `utf16_units_in`,
+// so malformed input advances one byte and supplementary codepoints count as
+// two units in both helpers.
 
 #include "utils/text_ops.h"
 
@@ -19,42 +17,6 @@
 namespace formulon {
 namespace {
 
-// Decodes the leading byte at `text[i]` into a byte length and UTF-16 unit
-// length. On a malformed or truncated sequence, sets both lengths to 1 so
-// the caller advances by a single byte / unit (matching `utf16_units_in`).
-struct Step {
-  std::size_t byte_len;
-  std::uint32_t unit_len;
-};
-
-Step next_step(std::string_view text, std::size_t i) noexcept {
-  const auto c0 = static_cast<unsigned char>(text[i]);
-  if (c0 < 0x80) {
-    return {1, 1};
-  }
-  std::size_t need = 0;
-  if ((c0 & 0xE0) == 0xC0) {
-    need = 1;
-  } else if ((c0 & 0xF0) == 0xE0) {
-    need = 2;
-  } else if ((c0 & 0xF8) == 0xF0) {
-    need = 3;
-  } else {
-    return {1, 1};
-  }
-  if (i + need >= text.size()) {
-    return {1, 1};
-  }
-  for (std::size_t k = 0; k < need; ++k) {
-    const auto ck = static_cast<unsigned char>(text[i + 1 + k]);
-    if ((ck & 0xC0) != 0x80) {
-      return {1, 1};
-    }
-  }
-  // need == 3 means a 4-byte UTF-8 sequence -> supplementary plane -> 2 units.
-  return {need + 1, need == 3 ? 2u : 1u};
-}
-
 enum class MidpointRounding { kDown, kUp };
 
 std::size_t utf16_to_byte_offset_impl(std::string_view text, std::uint32_t units_offset,
@@ -65,14 +27,19 @@ std::size_t utf16_to_byte_offset_impl(std::string_view text, std::uint32_t units
   std::uint32_t units = 0;
   std::size_t i = 0;
   while (i < text.size()) {
-    const Step step = next_step(text, i);
-    const std::uint32_t next_units = units + step.unit_len;
+    std::size_t byte_len = 0;
+    const std::uint32_t codepoint = decode_utf8_step(text, i, &byte_len);
+    const std::uint32_t unit_len = codepoint > 0xFFFFu ? 2u : 1u;
+    const std::uint32_t next_units = units + unit_len;
     if (next_units >= units_offset) {
-      // Only a surrogate-pair midpoint distinguishes the two policies.
-      return rounding == MidpointRounding::kDown && next_units > units_offset ? i : i + step.byte_len;
+      // Only a supplementary-codepoint midpoint distinguishes the policies.
+      if (rounding == MidpointRounding::kDown && unit_len == 2u && next_units > units_offset) {
+        return i;
+      }
+      return i + byte_len;
     }
     units = next_units;
-    i += step.byte_len;
+    i += byte_len;
   }
   return text.size();
 }
@@ -88,6 +55,9 @@ std::size_t utf16_to_byte_offset_floor(std::string_view text, std::uint32_t unit
 }
 
 std::string utf16_substring(std::string_view text, std::uint32_t start_units, std::uint32_t length_units) {
+  if (length_units == 0u) {
+    return std::string();
+  }
   const std::size_t start_byte = utf16_to_byte_offset_floor(text, start_units);
   // Saturating add on `start_units + length_units` to avoid overflow when the
   // caller passes very large bounds (e.g. a text-length-derived end).

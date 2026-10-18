@@ -56,6 +56,9 @@ class Utf16SliceIndex {
   std::uint32_t utf16_units() const noexcept { return static_cast<std::uint32_t>(floor_bytes_.size() - 1U); }
 
   std::string substring(std::uint32_t start_units, std::uint32_t length_units) const {
+    if (length_units == 0U) {
+      return {};
+    }
     std::uint32_t end_units = start_units + length_units;
     if (end_units < start_units) {
       end_units = UINT32_MAX;

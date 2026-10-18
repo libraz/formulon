@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "gtest/gtest.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace eval {
@@ -79,6 +80,34 @@ TEST(TextOpsUtf16ToByteOffset, PermissiveContinuationRulesRemainUnchanged) {
   EXPECT_EQ(utf16_to_byte_offset_floor(out_of_unicode_range, 2), 4U);
 }
 
+TEST(TextOpsUtf16ToByteOffset, FourByteSequencesUseDecodedCodepointUnits) {
+  // The lenient decoder accepts structurally complete overlong forms. Their
+  // decoded values are in the BMP, so they occupy one UTF-16 unit just like
+  // utf16_units_in reports.
+  const std::string overlong_nul(
+      "\xF0\x80\x80\x80"
+      "A",
+      5);
+  EXPECT_EQ(utf16_units_in(overlong_nul), 2U);
+  EXPECT_EQ(utf16_to_byte_offset(overlong_nul, 0), 0U);
+  EXPECT_EQ(utf16_to_byte_offset(overlong_nul, 1), 4U);
+  EXPECT_EQ(utf16_to_byte_offset_floor(overlong_nul, 1), 4U);
+  EXPECT_EQ(utf16_to_byte_offset(overlong_nul, 2), 5U);
+  EXPECT_EQ(utf16_substring(overlong_nul, 1, 1), "A");
+
+  // F0 8F BF BF decodes to U+FFFF, also one UTF-16 unit. The following A
+  // confirms that offsets after the four-byte sequence stay aligned.
+  const std::string bmp_boundary(
+      "\xF0\x8F\xBF\xBF"
+      "A",
+      5);
+  EXPECT_EQ(utf16_units_in(bmp_boundary), 2U);
+  EXPECT_EQ(utf16_to_byte_offset(bmp_boundary, 1), 4U);
+  EXPECT_EQ(utf16_to_byte_offset_floor(bmp_boundary, 1), 4U);
+  EXPECT_EQ(utf16_to_byte_offset(bmp_boundary, 2), 5U);
+  EXPECT_EQ(utf16_substring(bmp_boundary, 1, 1), "A");
+}
+
 TEST(TextOpsUtf16ToByteOffsetFloor, AgreesOnCodepointBoundaries) {
   const std::string_view s = "hello";
   EXPECT_EQ(utf16_to_byte_offset_floor(s, 0u), 0u);
@@ -109,6 +138,13 @@ TEST(TextOpsUtf16Substring, AsciiBasic) {
 
 TEST(TextOpsUtf16Substring, ZeroLength) {
   EXPECT_EQ(utf16_substring("hello", 1u, 0u), "");
+}
+
+TEST(TextOpsUtf16Substring, ZeroLengthAtEveryEmojiOffset) {
+  for (std::uint32_t start = 0; start <= 2u; ++start) {
+    EXPECT_EQ(utf16_substring(kEmojiPopper, start, 0u), "") << "start=" << start;
+    EXPECT_EQ(text_index_substring(kEmojiPopper, start, 0u, TextIndexUnit::kUtf16Units), "") << "start=" << start;
+  }
 }
 
 TEST(TextOpsUtf16Substring, StartBeyondEndReturnsEmpty) {
