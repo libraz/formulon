@@ -119,6 +119,7 @@ _error_trigger = case_sheet.error_trigger
 _resolve_print_sheet = case_sheet.resolve_print_sheet
 _normalise_print_area = case_sheet.normalise_print_area
 _PRINT_ORIENTATIONS = case_sheet.PRINT_ORIENTATIONS
+_repaginate = case_sheet.repaginate
 _classify_python_scalar = cell_result.classify_python_scalar
 _array_cell_from_scalar = cell_result.array_cell_from_scalar
 _build_pivot_table = windows_pivot.build_pivot_table
@@ -1152,6 +1153,9 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         resolved_area = ""
     resolved_area = _normalise_print_area(resolved_area)
+    # The page setup above was applied after the content; a layout change is
+    # what makes Excel paginate at it.
+    _repaginate(sht, resolved_area)
 
     # Force a true pagination pass by activating the sheet and switching
     # the window into PageBreakPreview view. Without this, at low Zoom

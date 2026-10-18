@@ -549,5 +549,57 @@ class WindowsTextSetupTest(unittest.TestCase):
         self.assertIsNone(sheet.cell.formula2)
 
 
+class _LoggingComObject:
+    """A COM object whose attribute assignments are recorded in order."""
+
+    def __init__(self, log, name):
+        object.__setattr__(self, "_log", log)
+        object.__setattr__(self, "_name", name)
+
+    def __setattr__(self, attr, value):
+        self._log.append(f"{self._name}.{attr}={value}")
+        object.__setattr__(self, attr, value)
+
+
+class _FakePrintWs:
+    def __init__(self, log):
+        self.PageSetup = _LoggingComObject(log, "PageSetup")
+        self.PageSetup.PrintArea = "$A$1:$H$30"
+        log.clear()
+
+    def ResetAllPageBreaks(self):
+        pass
+
+
+class WindowsPrintRepaginationTest(unittest.TestCase):
+    def test_layout_is_repaginated_after_the_page_setup_and_before_the_breaks_are_read(self) -> None:
+        log = []
+        ws = _FakePrintWs(log)
+        sheet = type("_Sheet", (), {"api": ws, "name": "Sheet1", "activate": lambda self: None})()
+        app_api = type("_AppApi", (), {"DisplayPageBreaks": True, "ActiveWindow": None})()
+        wb = type("_Wb", (), {"app": type("_App", (), {"api": app_api})()})()
+
+        def read_breaks(_ws, _page_setup, _wb):
+            log.append("read")
+            return [], [2, 4, 6], 4
+
+        with (
+            patch.object(windows_excel, "_resolve_print_sheet", lambda _wb, _spec: sheet),
+            patch.object(windows_excel, "_repaginate", lambda _sht, area: log.append(f"repaginate {area}")),
+            patch.object(windows_excel, "_settle_layout", lambda _ws, _wb: None),
+            patch.object(windows_excel, "_read_pagination_settled", read_breaks),
+            patch.object(windows_excel, "_read_applied_geometry", lambda _sht, _area: {}),
+        ):
+            result = windows_excel._apply_and_read_print(
+                wb,
+                {"sheet": "Sheet1", "print_area": "A1:H30", "page_setup": {"orientation": "portrait", "scale": 50}},
+            )
+
+        self.assertEqual(result["v_breaks"], [2, 4, 6])
+        zoom_set = log.index("PageSetup.Zoom=50")
+        self.assertLess(zoom_set, log.index("repaginate A1:H30"))
+        self.assertLess(log.index("repaginate A1:H30"), log.index("read"))
+
+
 if __name__ == "__main__":
     unittest.main()

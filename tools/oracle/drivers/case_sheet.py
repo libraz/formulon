@@ -116,3 +116,20 @@ def normalise_print_area(area: str) -> str:
         token = token.replace("$", "")
         out_parts.append(token)
     return ",".join(out_parts)
+
+
+def repaginate(sht, resolved_area: str) -> None:
+    """Changes and restores one column width so Excel repaginates.
+
+    The automatic breaks Excel reports are those of its last layout pass, and
+    a page-setup change alone (a new zoom) does not start one; a layout change
+    does, at the page setup in force. The column nudged is the print area's
+    first, or A without one.
+    """
+
+    first = resolved_area.split(",")[0].split(":")[0] if resolved_area else "A1"
+    column = "".join(ch for ch in first if ch.isalpha()) or "A"
+    target = sht.range(f"{column}:{column}")
+    width = float(target.column_width)
+    target.column_width = width + 1.0
+    target.column_width = width

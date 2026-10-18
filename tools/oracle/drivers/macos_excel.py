@@ -214,6 +214,7 @@ _error_trigger = case_sheet.error_trigger
 _resolve_print_sheet = case_sheet.resolve_print_sheet
 _normalise_print_area = case_sheet.normalise_print_area
 _PRINT_ORIENTATIONS = case_sheet.PRINT_ORIENTATIONS
+_repaginate = case_sheet.repaginate
 _classify_python_scalar = cell_result.classify_python_scalar
 _array_cell_from_scalar = cell_result.array_cell_from_scalar
 
@@ -634,17 +635,25 @@ class ExcelOracle(OracleDriver):
         )
 
     def _run_print_case(self, case: Dict[str, Any], print_spec: Dict[str, Any]) -> Dict[str, Any]:
-        """Best-effort print build via the macOS xlwings `.api` bridge.
+        """Builds the case workbook and reads back Excel's pagination.
 
-        Mac Excel does expose `PageSetup` and `HPageBreaks` /
-        `VPageBreaks` through the AppleScript object model, so the print
-        path is driven directly. Any operation the bridge rejects raises
-        a clear, catchable ``RuntimeError`` so the case is marked
-        skipped rather than emitting a wrong golden.
+        Mac Excel recomputes its automatic page breaks when the sheet layout
+        changes, not when only the page setup does: a zoom applied after the
+        content leaves the breaks of the previous zoom in place. The page
+        setup is therefore applied to the empty print sheet first, and the
+        content, sizes, print area and manual breaks follow, so the breaks
+        read back belong to the requested setup. Any operation the
+        AppleScript bridge rejects raises a catchable ``RuntimeError`` so the
+        case is marked skipped rather than emitting a wrong golden.
         """
 
         wb = self._app.books.add()
         try:
+            _pin_normal_font(wb)
+            for sheet_name in case.get("sheets") or {}:
+                _get_or_add_sheet(wb, sheet_name)
+            sht = _resolve_print_sheet(wb, print_spec)
+            _apply_page_setup(sht, print_spec.get("page_setup"))
             self._build_workbook_sheets(wb, case)
             return {"print": _apply_and_read_print(wb, print_spec)}
         except RuntimeError:
@@ -662,8 +671,16 @@ class ExcelOracle(OracleDriver):
     def _build_workbook_sheets(self, wb, case: Dict[str, Any]) -> None:
         """Materialises the declarative ``sheets`` block plus the optional
         ``column_widths`` / ``row_heights`` layout maps into ``wb``.
+
+        Sizes apply to the first sheet, as on the Windows driver, and are
+        read back: a size Excel did not take would answer a different
+        question than the case asks.
         """
 
+        if case.get("hidden_columns") or case.get("hidden_rows"):
+            raise RuntimeError(
+                f"workbook case {case.get('id')!r} hides rows or columns, which the macOS driver does not apply"
+            )
         sheets = case.get("sheets") or {}
         for sheet_name, cells in sheets.items():
             sht = _get_or_add_sheet(wb, sheet_name)
@@ -675,108 +692,245 @@ class ExcelOracle(OracleDriver):
                     context=f"workbook case {case.get('id')!r} {sheet_name}!{addr!s}",
                 )
 
-        widths = case.get("column_widths") or {}
-        for col_key, width in widths.items():
-            try:
-                wb.sheets[0].range(f"{col_key}1").column_width = float(width)
-            except Exception:
-                pass
-        heights = case.get("row_heights") or {}
-        for row_key, height in heights.items():
-            try:
-                wb.sheets[0].range(f"A{row_key}").row_height = float(height)
-            except Exception:
-                pass
+        for col_key, width in (case.get("column_widths") or {}).items():
+            _apply_axis_size(wb.sheets[0], "column", str(col_key), float(width))
+        for row_key, height in (case.get("row_heights") or {}).items():
+            _apply_axis_size(wb.sheets[0], "row", str(row_key), float(height))
+
+
+# The Normal style font the character-unit column widths resolve against;
+# the Windows driver pins the same font.
+_NORMAL_FONT_NAME = "Calibri"
+_NORMAL_FONT_SIZE = 11.0
+
+# A whole-column print area would otherwise issue 16,384 AppleEvents for a
+# diagnostic nobody asserts.
+_GEOMETRY_TRACK_CAP = 64
+
+_POINTS_PER_INCH = 72.0
+
+# The largest page count Excel accepts on a fit axis. The AppleScript bridge
+# cannot set the "automatic" axis the Windows driver writes as `False`, and an
+# axis allowed this many pages never constrains the scale, which is what
+# automatic means.
+_FIT_AXIS_UNCONSTRAINED = 32767
+
+
+def _keywords():
+    """Returns appscript's keyword namespace (imported on demand)."""
+
+    from appscript import k  # noqa: PLC0415 - macOS-only dependency
+
+    return k
+
+
+def _pin_normal_font(wb) -> None:
+    """Pins the Normal style to Calibri 11 before any content is written.
+
+    A column width is stated in characters, which resolve through the
+    Normal font; a ja-JP Excel opens new books in its UI font. Excel resizes
+    columns when the Normal font changes, so this runs before any width.
+    """
+
+    font = wb.sheets[0].api.cells["A1"].style_object.font_object
+    font.name.set(_NORMAL_FONT_NAME)
+    font.font_size.set(_NORMAL_FONT_SIZE)
+    applied = str(font.name.get())
+    if applied != _NORMAL_FONT_NAME:
+        raise RuntimeError(
+            f"Normal style font is {applied!r}, not {_NORMAL_FONT_NAME!r}; character-unit column "
+            "widths would not be comparable with the engine's width model"
+        )
+
+
+def _apply_axis_size(sheet, axis: str, key: str, size: float) -> None:
+    """Sets one column width / row height and asserts Excel took it.
+
+    The key is a label or a span -- ``"A"``, ``"A:H"``, ``"3"``, ``"3:5"``.
+    A column span is already a range address; a row key needs the ``r:r``
+    form, since a bare number is no address.
+    """
+
+    if axis == "column":
+        target = sheet.range(key if ":" in key else f"{key}:{key}")
+        target.column_width = size
+        applied = target.column_width
+    else:
+        target = sheet.range(key if ":" in key else f"{key}:{key}")
+        target.row_height = size
+        applied = target.row_height
+    if applied is None or abs(float(applied) - size) > 1.0:
+        raise RuntimeError(
+            f"{axis} {key!r} kept {applied!r} instead of the requested {size}; "
+            "refusing to capture a case it does not match"
+        )
+
+
+def _apply_page_setup(sht, setup: Any) -> None:
+    """Applies the ``page_setup`` block through the AppleScript page setup.
+
+    Mirrors the Windows driver: the fit axes and zoom are reset to zoom 100
+    first, then the case's fit or scale is applied. The paper size is not
+    exposed on Mac; a new ja-JP book prints on A4 (paper 9), and any other
+    requested paper is refused.
+    """
+
+    if not isinstance(setup, dict):
+        return
+    k = _keywords()
+    page_setup = sht.api.page_setup_object
+    orientation = setup.get("orientation")
+    if orientation == "portrait":
+        page_setup.page_orientation.set(k.portrait)
+    elif orientation == "landscape":
+        page_setup.page_orientation.set(k.landscape)
+    paper = setup.get("paper")
+    if paper is not None and int(paper) != 9:
+        raise RuntimeError(f"macOS Excel exposes no paper size; cannot apply paper {paper!r}")
+    page_setup.zoom.set(100)
+    fit_w = int(setup.get("fit_to_width") or 0)
+    fit_h = int(setup.get("fit_to_height") or 0)
+    if fit_w or fit_h:
+        page_setup.zoom.set(False)
+        page_setup.fit_to_pages_wide.set(fit_w if fit_w else _FIT_AXIS_UNCONSTRAINED)
+        page_setup.fit_to_pages_tall.set(fit_h if fit_h else _FIT_AXIS_UNCONSTRAINED)
+    elif setup.get("scale") is not None:
+        page_setup.zoom.set(int(setup["scale"]))
+
+
+def _read_breaks(ws) -> "tuple[List[int], List[int]]":
+    """Returns the 0-based row / column page breaks, automatic and manual.
+
+    The collections are read by count and 1-based index: fetching an empty
+    collection whole returns a missing-value keyword, not an empty list.
+    """
+
+    k = _keywords()
+    h_count = int(ws.count(each=k.horizontal_page_break))
+    v_count = int(ws.count(each=k.vertical_page_break))
+    h_breaks = sorted(
+        int(ws.horizontal_page_breaks[i].location.first_row_index.get()) - 1 for i in range(1, h_count + 1)
+    )
+    v_breaks = sorted(
+        int(ws.vertical_page_breaks[i].location.first_column_index.get()) - 1 for i in range(1, v_count + 1)
+    )
+    return h_breaks, v_breaks
+
+
+def _fit_readback(value: Any) -> Any:
+    """Maps a fit-axis readback to the Windows golden's shape: int, or False for unconstrained."""
+
+    if isinstance(value, bool) or value is None:
+        return False
+    number = int(value)
+    return False if number >= _FIT_AXIS_UNCONSTRAINED else number
+
+
+def _read_applied(sht, resolved_area: str) -> "tuple[Dict[str, Any], Dict[str, Any]]":
+    """Reads the page setup and track sizes Excel applied, as the Windows driver does."""
+
+    page_setup = sht.api.page_setup_object
+    zoom = page_setup.zoom.get()
+    fitting = isinstance(zoom, bool)
+    orientation = str(page_setup.page_orientation.get())
+    # The fit axes only take effect while zoom is off; under a zoom they are
+    # reported as unconstrained, as the Windows driver leaves them.
+    applied: Dict[str, Any] = {
+        "orientation": "landscape" if orientation.endswith("landscape") else "portrait",
+        "paper": None,
+        "zoom": False if fitting else int(zoom),
+        "fit_to_width": _fit_readback(page_setup.fit_to_pages_wide.get()) if fitting else False,
+        "fit_to_height": _fit_readback(page_setup.fit_to_pages_tall.get()) if fitting else False,
+        "margins": {
+            key: round(float(getattr(page_setup, f"{key}_margin").get()) / _POINTS_PER_INCH, 6)
+            for key in ("left", "right", "top", "bottom", "header", "footer")
+        },
+    }
+    geometry: Dict[str, Any] = {}
+    first_rect = resolved_area.split(",")[0] if resolved_area else ""
+    if ":" in first_rect:
+        start, end = first_rect.split(":")
+        first_row, first_col = _split_a1(start)
+        last_row, last_col = _split_a1(end)
+        cells = sht.range
+        if last_col - first_col < _GEOMETRY_TRACK_CAP:
+            geometry["column_widths_pt"] = [
+                round(float(cells((first_row, col)).width), 4) for col in range(first_col, last_col + 1)
+            ]
+        if last_row - first_row < _GEOMETRY_TRACK_CAP:
+            geometry["row_heights_pt"] = [
+                round(float(cells((row, first_col)).height), 4) for row in range(first_row, last_row + 1)
+            ]
+    font = sht.api.cells["A1"].style_object.font_object
+    geometry["normal_font"] = f"{font.name.get()} {float(font.font_size.get()):g}"
+    return applied, geometry
+
+
+def _split_a1(addr: str) -> "tuple[int, int]":
+    """Splits a bare A1 address into 1-based (row, column) indices."""
+
+    match = re.fullmatch(r"\$?([A-Za-z]+)\$?(\d+)", addr.strip())
+    if match is None:
+        raise ValueError(f"not a cell address: {addr!r}")
+    col = 0
+    for ch in match.group(1).upper():
+        col = col * 26 + (ord(ch) - ord("A") + 1)
+    return int(match.group(2)), col
 
 
 def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
-    """Applies the declarative `print` block to ``wb`` and reads it back.
+    """Applies the print area, titles and manual breaks, then reads the result.
 
-    Returns the golden ``expect.print`` mapping. Mac Excel's object
-    model exposes ``PageSetup`` and the page-break collections through
-    the xlwings AppleScript bridge; the 1-based COM-style row / column
-    indices are converted to the 0-based indices the C++ engine reports.
-    Any unsupported operation surfaces as a catchable ``RuntimeError``.
+    The page setup is already in force (`_apply_page_setup` runs before the
+    content). Returns the golden ``expect.print`` mapping in the Windows
+    driver's shape. Mac Excel exposes no page count, so ``pages`` is derived
+    from the breaks for a single-rectangle print area and is ``None`` for any
+    other.
     """
 
+    k = _keywords()
     sht = _resolve_print_sheet(wb, print_spec)
     ws = sht.api
-    page_setup = ws.PageSetup
+    page_setup = ws.page_setup_object
 
     print_area = print_spec.get("print_area")
     if isinstance(print_area, str) and print_area:
-        page_setup.PrintArea = print_area
+        page_setup.print_area.set(print_area)
 
     titles = print_spec.get("print_titles")
     if isinstance(titles, dict):
         rows = titles.get("rows")
         cols = titles.get("cols")
         if isinstance(rows, str) and rows:
-            page_setup.PrintTitleRows = f"{sht.name}!{rows}"
+            page_setup.print_title_rows.set(rows)
         if isinstance(cols, str) and cols:
-            page_setup.PrintTitleColumns = f"{sht.name}!{cols}"
-
-    setup = print_spec.get("page_setup")
-    if isinstance(setup, dict):
-        orientation = setup.get("orientation")
-        if orientation in _PRINT_ORIENTATIONS:
-            page_setup.Orientation = _PRINT_ORIENTATIONS[orientation]
-        if setup.get("paper") is not None:
-            try:
-                page_setup.PaperSize = int(setup["paper"])
-            except Exception:
-                pass
-        fit_w = int(setup.get("fit_to_width") or 0)
-        fit_h = int(setup.get("fit_to_height") or 0)
-        if fit_w or fit_h:
-            page_setup.Zoom = False
-            page_setup.FitToPagesWide = fit_w if fit_w else False
-            page_setup.FitToPagesTall = fit_h if fit_h else False
-        elif setup.get("scale") is not None:
-            page_setup.Zoom = int(setup["scale"])
+            page_setup.print_title_columns.set(cols)
 
     breaks = print_spec.get("manual_breaks")
     if isinstance(breaks, dict):
         for row1 in breaks.get("rows") or []:
-            try:
-                ws.Rows(int(row1)).PageBreak = 1  # xlPageBreakManual
-            except Exception:
-                pass
+            ws.rows[int(row1)].page_break.set(k.page_break_manual)
         for col_letter in breaks.get("cols") or []:
-            try:
-                ws.Columns(str(col_letter)).PageBreak = 1
-            except Exception:
-                pass
+            ws.columns[_split_a1(f"{col_letter}1")[1]].page_break.set(k.page_break_manual)
 
-    resolved_area = ""
+    raw_area = page_setup.print_area.get()
+    resolved_area = _normalise_print_area(raw_area if isinstance(raw_area, str) else "")
+    _repaginate(sht, resolved_area)
     try:
-        resolved_area = _normalise_print_area(str(page_setup.PrintArea or ""))
-    except Exception:
-        resolved_area = ""
-
-    h_breaks: List[int] = []
-    v_breaks: List[int] = []
-    try:
-        for i in range(1, int(ws.HPageBreaks.Count) + 1):
-            h_breaks.append(int(ws.HPageBreaks(i).Location.Row) - 1)
-        for i in range(1, int(ws.VPageBreaks.Count) + 1):
-            v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
+        h_breaks, v_breaks = _read_breaks(ws)
     except Exception as exc:
         raise RuntimeError(f"macOS Excel could not read page-break collections: {_format_mac_error(exc)}") from exc
-    h_breaks.sort()
-    v_breaks.sort()
 
-    pages = 0
-    try:
-        pages = int(page_setup.Pages.Count)
-    except Exception:
-        pages = 0
-
+    single_area = bool(resolved_area) and "," not in resolved_area
+    pages = (len(h_breaks) + 1) * (len(v_breaks) + 1) if single_area else None
+    applied, geometry = _read_applied(sht, resolved_area)
     return {
         "print_area": resolved_area,
         "h_breaks": h_breaks,
         "v_breaks": v_breaks,
         "pages": pages,
+        "applied_page_setup": applied,
+        "applied_geometry": geometry,
     }
 
 

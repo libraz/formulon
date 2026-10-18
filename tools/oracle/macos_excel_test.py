@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from tools.oracle.drivers import _locale, base, cell_result, macos_excel, windows_excel
@@ -758,6 +759,211 @@ class MacExcelLocaleTest(unittest.TestCase):
         }
         with patch.object(_locale, "_read_default", lambda domain, key: values[(domain, key)]):
             self.assertEqual(_locale.detect_mac_excel_locale(), "zh-CN")
+
+
+class _Ref:
+    """An AppleScript property reference: `get` / `set`, recording each set."""
+
+    def __init__(self, value=None, log=None, name=""):
+        self.value = value
+        self._log = log
+        self._name = name
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        if self._log is not None:
+            self._log.append((self._name, value))
+        self.value = value
+
+
+_KEYWORDS = SimpleNamespace(
+    portrait="portrait",
+    landscape="landscape",
+    page_break_manual="manual",
+    horizontal_page_break="h",
+    vertical_page_break="v",
+)
+
+
+class _FakePageSetup:
+    def __init__(self, log):
+        names = ("page_orientation", "zoom", "fit_to_pages_wide", "fit_to_pages_tall", "print_area")
+        for name in names + ("print_title_rows", "print_title_columns"):
+            setattr(self, name, _Ref(None, log, name))
+        self.zoom.value = 100
+        self.page_orientation.value = "portrait"
+        self.fit_to_pages_wide.value = 1
+        self.fit_to_pages_tall.value = 1
+        for key in ("left", "right", "top", "bottom", "header", "footer"):
+            setattr(self, f"{key}_margin", _Ref(36.0))
+
+
+class _FakeBreak:
+    def __init__(self, row=None, col=None):
+        self.location = SimpleNamespace(first_row_index=_Ref(row), first_column_index=_Ref(col))
+
+
+class _FakeBreaks:
+    def __init__(self, items):
+        self._items = items
+
+    def __getitem__(self, index):
+        return self._items[index - 1]
+
+
+class _FakeAxis:
+    def __init__(self, log, kind):
+        self._log = log
+        self._kind = kind
+
+    def __getitem__(self, index):
+        return SimpleNamespace(page_break=_Ref(None, self._log, f"{self._kind}{index}.page_break"))
+
+
+class _FakeFont:
+    def __init__(self, log):
+        self.name = _Ref("游ゴシック", log, "font.name")
+        self.font_size = _Ref(12, log, "font.size")
+
+
+class _FakePrintWorksheetApi:
+    def __init__(self, log, h=(), v=()):
+        self.page_setup_object = _FakePageSetup(log)
+        self.horizontal_page_breaks = _FakeBreaks([_FakeBreak(row=r) for r in h])
+        self.vertical_page_breaks = _FakeBreaks([_FakeBreak(col=c) for c in v])
+        self.rows = _FakeAxis(log, "row")
+        self.columns = _FakeAxis(log, "col")
+        font = _FakeFont(log)
+        self.cells = {"A1": SimpleNamespace(style_object=SimpleNamespace(font_object=font))}
+        self._counts = {"h": len(h), "v": len(v)}
+
+    def count(self, each):
+        return self._counts[each]
+
+
+class _FakeRange:
+    def __init__(self, sheet, address):
+        self._sheet = sheet
+        self.address = address
+
+    @property
+    def column_width(self):
+        return self._sheet.widths.get(self.address, 10.0)
+
+    @column_width.setter
+    def column_width(self, value):
+        self._sheet.log.append(("column_width", self.address, value))
+        if not self._sheet.reject:
+            self._sheet.widths[self.address] = value
+
+    @property
+    def row_height(self):
+        return self._sheet.heights.get(self.address, 15.0)
+
+    @row_height.setter
+    def row_height(self, value):
+        self._sheet.log.append(("row_height", self.address, value))
+        self._sheet.heights[self.address] = value
+
+    width = 185.0
+    height = 15.0
+
+
+class _FakePrintSheet:
+    def __init__(self, log, name="Sheet1", h=(), v=(), reject=False):
+        self.name = name
+        self.log = log
+        self.widths = {}
+        self.heights = {}
+        self.reject = reject
+        self.api = _FakePrintWorksheetApi(log, h, v)
+
+    def range(self, address):
+        return _FakeRange(self, address)
+
+
+class MacPrintPathTest(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(macos_excel, "_keywords", lambda: _KEYWORDS)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.log = []
+
+    def test_scale_resets_to_zoom_100_before_applying(self) -> None:
+        sheet = _FakePrintSheet(self.log)
+        macos_excel._apply_page_setup(sheet, {"orientation": "landscape", "paper": 9, "scale": 50})
+        self.assertEqual(self.log, [("page_orientation", "landscape"), ("zoom", 100), ("zoom", 50)])
+
+    def test_fit_turns_zoom_off_and_leaves_an_unset_axis_unconstrained(self) -> None:
+        sheet = _FakePrintSheet(self.log)
+        macos_excel._apply_page_setup(sheet, {"orientation": "portrait", "fit_to_width": 1, "fit_to_height": 0})
+        self.assertEqual(
+            self.log[1:],
+            [("zoom", 100), ("zoom", False), ("fit_to_pages_wide", 1), ("fit_to_pages_tall", 32767)],
+        )
+
+    def test_a_paper_other_than_a4_is_refused(self) -> None:
+        with self.assertRaises(RuntimeError):
+            macos_excel._apply_page_setup(_FakePrintSheet(self.log), {"orientation": "portrait", "paper": 1})
+
+    def test_axis_sizes_address_spans_and_rows_as_ranges(self) -> None:
+        sheet = _FakePrintSheet(self.log)
+        macos_excel._apply_axis_size(sheet, "column", "A:H", 30.0)
+        macos_excel._apply_axis_size(sheet, "row", "1", 80.0)
+        self.assertEqual(self.log, [("column_width", "A:H", 30.0), ("row_height", "1:1", 80.0)])
+
+    def test_axis_size_excel_did_not_take_is_refused(self) -> None:
+        with self.assertRaises(RuntimeError):
+            macos_excel._apply_axis_size(_FakePrintSheet(self.log, reject=True), "column", "A:H", 30.0)
+
+    def test_breaks_are_read_by_index_and_reported_zero_based(self) -> None:
+        sheet = _FakePrintSheet(self.log, h=(31, 11), v=(3, 5, 7))
+        self.assertEqual(macos_excel._read_breaks(sheet.api), ([10, 30], [2, 4, 6]))
+
+    def test_readback_derives_pages_for_one_area_only(self) -> None:
+        sheet = _FakePrintSheet(self.log, v=(3, 5, 7))
+        wb = SimpleNamespace(sheets=[sheet])
+        result = macos_excel._apply_and_read_print(wb, {"sheet": "Sheet1", "print_area": "A1:H30"})
+        self.assertEqual((result["print_area"], result["v_breaks"], result["pages"]), ("A1:H30", [2, 4, 6], 4))
+        self.assertEqual(result["applied_page_setup"]["zoom"], 100)
+        self.assertEqual(result["applied_page_setup"]["fit_to_width"], False)
+        self.assertEqual(len(result["applied_geometry"]["column_widths_pt"]), 8)
+
+        multi = _FakePrintSheet(self.log, v=(3,))
+        result = macos_excel._apply_and_read_print(
+            SimpleNamespace(sheets=[multi]), {"sheet": "Sheet1", "print_area": "A1:H6,A9:H14"}
+        )
+        self.assertIsNone(result["pages"])
+
+    def test_manual_breaks_mark_the_row_and_column(self) -> None:
+        sheet = _FakePrintSheet(self.log)
+        macos_excel._apply_and_read_print(
+            SimpleNamespace(sheets=[sheet]),
+            {"sheet": "Sheet1", "print_area": "A1:F12", "manual_breaks": {"rows": [3], "cols": ["F"]}},
+        )
+        self.assertIn(("row3.page_break", "manual"), self.log)
+        self.assertIn(("col6.page_break", "manual"), self.log)
+
+    def test_page_setup_is_applied_before_the_content(self) -> None:
+        order = []
+        sheet = _FakePrintSheet(self.log)
+        wb = SimpleNamespace(sheets=[sheet], close=lambda: order.append("close"))
+        oracle = object.__new__(macos_excel.ExcelOracle)
+        oracle._app = SimpleNamespace(books=SimpleNamespace(add=lambda: wb))
+        with (
+            patch.object(macos_excel, "_pin_normal_font", lambda _wb: order.append("font")),
+            patch.object(macos_excel, "_apply_page_setup", lambda _sht, _setup: order.append("page_setup")),
+            patch.object(
+                macos_excel.ExcelOracle, "_build_workbook_sheets", lambda _self, _wb, _case: order.append("content")
+            ),
+            patch.object(macos_excel, "_apply_and_read_print", lambda _wb, _spec: order.append("read") or {}),
+        ):
+            oracle._run_print_case(
+                {"id": "c", "sheets": {"Sheet1": {}}}, {"sheet": "Sheet1", "page_setup": {"scale": 50}}
+            )
+        self.assertEqual(order, ["font", "page_setup", "content", "read", "close"])
 
 
 if __name__ == "__main__":
