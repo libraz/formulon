@@ -85,11 +85,12 @@ bool expand_resolved_rect_cells(std::string_view sheet, std::uint32_t top, std::
 
 /// Reads the cells of a 3-D reference node (`Sheet1:Sheet3!A1:B2`): the same
 /// rectangle from every sheet of the inclusive span, sheet-major then
-/// row-major. Returns false for a missing span endpoint or a malformed
-/// rectangle (`#REF!`). The eager dispatcher's inline copy of this walk is
-/// meant to call it.
+/// row-major. Returns false, setting `*out_err`, for a missing span endpoint
+/// or a malformed rectangle: `#NAME?` when the first sheet exists and the
+/// last does not (`Data:S2!A1` is then no 3-D reference but `Data` as an
+/// unknown name ranged with `'S2'!A1`), `#REF!` otherwise.
 bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, std::vector<Value>* out);
+                        const EvalContext& ctx, std::vector<Value>* out, ErrorCode* out_err);
 
 /// Resolves `arg_node` to a `RangeResult`, expanding `RangeOp` / `Ref` /
 /// `SpillRef` / range-shaped Calls (`OFFSET` / `CHOOSE` / `IF` / `ROW` /

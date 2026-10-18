@@ -121,7 +121,7 @@ TEST(DefinedNameResolve, SheetQualifiedNameUsesThatSheetsScope) {
     ErrorCode want;
   };
   for (const ErrCase& c : {ErrCase{"=Local", ErrorCode::Name}, ErrCase{"=Sheet1!Local", ErrorCode::Name},
-                           ErrCase{"=NoSuchSheet!Local", ErrorCode::Ref}}) {
+                           ErrCase{"=NoSuchSheet!Local", ErrorCode::Name}}) {
     Arena a;
     const Value v = EvalOrDie(c.src, a, ctx);
     ASSERT_TRUE(v.is_error()) << c.src << " -> " << v.debug_to_string();

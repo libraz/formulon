@@ -633,11 +633,13 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     // and flatten the resulting cells into the values vector. Mirrors the
     // RangeOp / SpillRef branches; the same provenance filters apply because
     // a 3-D ref is a range shape. A span endpoint that names a missing sheet
-    // surfaces `#REF!`. Errors short-circuit per `propagate_errors`.
+    // surfaces the error `expand_ref3d_cells` reports. Errors short-circuit
+    // per `propagate_errors`.
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D) {
       std::vector<Value> ref3d_cells;
-      if (!expand_ref3d_cells(arg_node, arena, registry, ctx, &ref3d_cells)) {
-        const Value err = Value::error(ErrorCode::Ref);
+      ErrorCode ref3d_err = ErrorCode::Ref;
+      if (!expand_ref3d_cells(arg_node, arena, registry, ctx, &ref3d_cells, &ref3d_err)) {
+        const Value err = Value::error(ref3d_err);
         if (def->propagate_errors) {
           return err;
         }

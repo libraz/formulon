@@ -516,9 +516,13 @@ TEST_F(ExternalRefEval, ExtensionlessBookScopeYieldsToALocalSheet) {
   ExpectNumber("='Src2'!Name", 3.0);
 }
 
-TEST_F(ExternalRefEval, ExtensionlessBookScopeWithoutALinkStaysRef) {
+TEST_F(ExternalRefEval, ExtensionlessBookScopeWithoutALinkIsAnUnknownName) {
+  // `Nope` is neither a sheet nor a linked book, so `Nope!Name` names
+  // nothing; a cell reference through it is `#REF!`.
   AddExtensionlessLink();
-  ExpectError("=Nope!Name", ErrorCode::Ref);
+  ExpectError("=Nope!Name", ErrorCode::Name);
+  ExpectError("=Nope!A1", ErrorCode::Ref);
+  EXPECT_EQ(wb_.external_links().size(), 2U);
 }
 
 TEST_F(ExternalRefEval, TheSelfBookNameStillResolvesLocally) {

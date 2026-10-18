@@ -842,16 +842,16 @@ entries:
     last_verified_excel_version: "16.112.1"
 
   # -- Cross-workbook references: sheet qualifiers ---------------------------
-  # Excel binds a qualifier naming no local sheet as an external book of that
-  # name; Formulon keeps it local and never creates a link without brackets
-  # or a path.
+  # Excel records a qualifier naming no local sheet as a link to an external
+  # book of that name; Formulon gives the same values but creates no link
+  # without brackets or a path.
   - id: missing_local_sheet_qualifier_binds_external_book
     applies_to: [mac-365-ja_JP]
     cause: accepted-divergence
     mode: skip-oracle
     scope: unit-test
     evidence: [tests/unit/eval/local_sheet_qualifier_eval_test.cpp, tests/unit/eval/external_ref_eval_test.cpp]
-    reason: "A sheet qualifier that names no sheet of the workbook is bound by Mac Excel 365 ja-JP as a link to an external book of that name: `=Nope!A1` is recorded in link_sources and reads #REF!, `=SUM(Data:S2!A1)` with S2 absent is no 3-D reference (it reads back `Data:'S2'!A1`) and gives #NAME?, and `=S2!LocalName` gives #NAME?. Formulon creates no link from such a qualifier: `=Nope!A1` and `=SUM(Data:S2!A1)` give #REF!, so only the first agrees in value, and `=S2!LocalName` gives #REF!. A qualifier that matches a link the workbook already holds -- a book written without an extension, whose `[1]!Name` reads back as `'Src2'!Name` -- does bind: `Src2!Name` reads that link's book-scope name, as in Excel. A new link needs the bracketed or path-qualified spelling, which Formulon accepts and binds."
+    reason: "A sheet qualifier that names no sheet of the workbook is bound by Mac Excel 365 ja-JP as a link to an external book of that name, recorded in link_sources (`=Nope!A1`, `=SUM(Data:S2!A1)` with S2 absent, `=S2!LocalName`). Formulon creates no link from such a qualifier. The values agree: `=Nope!A1` gives #REF!, while `=SUM(Data:S2!A1)` (no 3-D reference; Excel reads it back as `Data:'S2'!A1`) and `=S2!LocalName` give #NAME?. A qualifier that matches a link the workbook already holds (a book written without an extension, whose `[1]!Name` reads back as `'Src2'!Name`) does bind: `Src2!Name` reads that link's book-scope name, as in Excel. A new link needs the bracketed or path-qualified spelling, which Formulon accepts and binds."
     prefer: formulon
     first_noted: 2026-10-07
     last_verified_excel_version: "16.113.3"

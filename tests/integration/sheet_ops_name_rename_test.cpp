@@ -400,8 +400,9 @@ void ExerciseMissingSheetRecovery(const AddMissingSheet& add_missing) {
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Outer", "=Leaf")));
 
   // These formulas are entered while Missing does not exist. The evaluator
-  // reports #REF!, and the dep extractor intentionally has no target edge to
-  // register yet. Adding the sheet must recover every static reference form.
+  // reports #REF! (#NAME? for the span, whose last sheet is missing), and the
+  // dep extractor intentionally has no target edge to register yet. Adding
+  // the sheet must recover every static reference form.
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 0U, "=Missing!A1")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 1U, "=SUM(Missing!A1:A2)")));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 2U, "=SUM(Source:Missing!A1)")));
@@ -415,7 +416,7 @@ void ExerciseMissingSheetRecovery(const AddMissingSheet& add_missing) {
   for (std::uint32_t col = 0U; col < 5U; ++col) {
     const Value value = wb.sheet(1U).resolve_cell_value(0U, col);
     ASSERT_TRUE(value.is_error()) << "column=" << col;
-    EXPECT_EQ(value.as_error(), ErrorCode::Ref) << "column=" << col;
+    EXPECT_EQ(value.as_error(), col == 2U ? ErrorCode::Name : ErrorCode::Ref) << "column=" << col;
   }
   const Value unrelated_before = wb.sheet(1U).resolve_cell_value(1U, 5U);
   ASSERT_TRUE(unrelated_before.is_number());

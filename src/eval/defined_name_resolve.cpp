@@ -241,11 +241,12 @@ Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, 
   }
   if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
     // `Src2!Name` with no sheet `Src2` is the book-scope name of a linked
-    // book written without an extension, when such a link exists.
+    // book written without an extension, when such a link exists; with no
+    // such link the name is unknown.
     if (const ExternalLinkRecord* link = wb->link_for_sheet_qualifier(sheet); link != nullptr) {
       return resolve_external_book_name(link->book, ExternalBook::kNoSheet, name, arena);
     }
-    return Value::error(ErrorCode::Ref);
+    return Value::error(ErrorCode::Name);
   }
   return evaluate_defined_name(find_sheet_defined_name(*wb, sheet, name), arena, registry, ctx);
 }

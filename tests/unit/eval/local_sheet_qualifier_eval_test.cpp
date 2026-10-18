@@ -95,5 +95,31 @@ TEST_F(LocalSheetQualifierEval, QuotedTrueStillReadsItsSheet) {
   ExpectNumber("='TRUE'!A1", 8.0);
 }
 
+TEST(LocalSheetQualifierMissingSheet, QualifierNamingNoSheet) {
+  // S2 is no sheet of this workbook, and no link names a book S2. A cell
+  // through it is `#REF!`; `Data:S2!A1` is no 3-D reference and
+  // `S2!LocalName` names nothing, so both are `#NAME?`.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Host");
+  Sheet& data = wb.sheet(wb.add_sheet("Data"));
+  data.set_cell_value(0, 0, Value::number(1.0));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_scoped("LocalName", "Data!$A$1", 1)));
+  const struct {
+    const char* formula;
+    ErrorCode expected;
+  } cases[] = {{"=S2!A1", ErrorCode::Ref},
+               {"=SUM(Data:S2!A1)", ErrorCode::Name},
+               {"=S2!LocalName", ErrorCode::Name},
+               {"=SUM(S2!LocalName)", ErrorCode::Name}};
+  for (const auto& c : cases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, c.formula))) << c.formula;
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry()))) << c.formula;
+    const Value v = wb.sheet(0).cell_at(0, 0)->cached_value;
+    ASSERT_TRUE(v.is_error()) << c.formula << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), c.expected) << c.formula;
+  }
+  EXPECT_TRUE(wb.external_links().empty());
+}
+
 }  // namespace
 }  // namespace formulon

@@ -130,8 +130,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   // 3-D reference: the cells of the span, flattened (no rectangle shape).
   if (arg_node.kind() == parser::NodeKind::Ref3D) {
     out_cells->clear();
-    if (!expand_ref3d_cells(arg_node, arena, registry, ctx, out_cells)) {
-      *out_err_code = ErrorCode::Ref;
+    if (!expand_ref3d_cells(arg_node, arena, registry, ctx, out_cells, out_err_code)) {
       return false;
     }
     *out_rows = static_cast<std::uint32_t>(out_cells->size());
@@ -571,7 +570,8 @@ bool append_array_sourced_values(const FunctionDef& def, const Value* cells, std
 }
 
 bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, std::vector<Value>* out) {
+                        const EvalContext& ctx, std::vector<Value>* out, ErrorCode* out_err) {
+  *out_err = ErrorCode::Ref;
   const Workbook* wb = ctx.workbook();
   const parser::Reference& cell = node.as_ref3d_cell();
   const bool is_range = node.as_ref3d_is_range();
@@ -593,6 +593,10 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
       (!full_col && !full_row &&
        (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
         (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
+  if (wb != nullptr && begin_idx != static_cast<std::size_t>(-1) && end_idx == static_cast<std::size_t>(-1)) {
+    *out_err = ErrorCode::Name;
+    return false;
+  }
   if (wb == nullptr || begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
       incompatible_whole_shape || corners_out_of_bounds) {
     return false;
