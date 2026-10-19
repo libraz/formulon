@@ -16,6 +16,41 @@ namespace formulon {
 namespace parser {
 namespace {
 
+// Walks the tokens of a formula (leading `=` dropped) up to the `Eof`, tracking
+// the depth of `[...]` and of `{...}` outside brackets.
+struct TokenWalk {
+  explicit TokenWalk(std::string_view formula);
+
+  // Moves to the next token and updates the depths; false at the `Eof`.
+  bool advance() noexcept;
+
+  Tokenizer tokenizer;
+  const std::vector<Token>& tokens;
+  std::size_t i = static_cast<std::size_t>(-1);
+  int brackets = 0;
+  int braces = 0;
+};
+
+[[gnu::noinline]] TokenWalk::TokenWalk(std::string_view formula)
+    : tokenizer(formula.substr(!formula.empty() && formula.front() == '=' ? 1U : 0U)), tokens(tokenizer.tokens()) {}
+
+[[gnu::noinline]] bool TokenWalk::advance() noexcept {
+  if (++i >= tokens.size() || tokens[i].kind == TokenKind::Eof) {
+    return false;
+  }
+  const TokenKind kind = tokens[i].kind;
+  if (kind == TokenKind::LBracket) {
+    ++brackets;
+  } else if (kind == TokenKind::RBracket && brackets > 0) {
+    --brackets;
+  } else if (brackets == 0 && kind == TokenKind::LBrace) {
+    ++braces;
+  } else if (brackets == 0 && kind == TokenKind::RBrace && braces > 0) {
+    --braces;
+  }
+  return true;
+}
+
 // True when a token of `kind` can end an operand, making a following sign
 // binary. A rejected run counts as one, so no sign after it is taken.
 bool ends_operand(TokenKind kind) noexcept {
@@ -89,28 +124,16 @@ bool has_touching_unary_sign(const std::vector<Token>& tokens, std::size_t i) no
 }  // namespace
 
 std::string spell_number_literals(std::string_view formula) {
-  std::string_view body = formula;
-  if (!body.empty() && body.front() == '=') {
-    body.remove_prefix(1);
-  }
-  Tokenizer tokenizer(body);
-  const std::vector<Token>& tokens = tokenizer.tokens();
+  TokenWalk walk(formula);
+  const std::vector<Token>& tokens = walk.tokens;
 
   std::string out;
   out.reserve(formula.size());
   std::size_t copied = 0;
-  int brackets = 0;
-  for (std::size_t i = 0; i < tokens.size(); ++i) {
+  while (walk.advance()) {
+    const std::size_t i = walk.i;
     const Token& token = tokens[i];
-    if (token.kind == TokenKind::Eof) {
-      break;
-    }
-    if (token.kind == TokenKind::LBracket) {
-      ++brackets;
-    } else if (token.kind == TokenKind::RBracket && brackets > 0) {
-      --brackets;
-    }
-    if (token.kind != TokenKind::Number || brackets > 0 || is_row_number(tokens, i)) {
+    if (token.kind != TokenKind::Number || walk.brackets > 0 || is_row_number(tokens, i)) {
       continue;
     }
     std::size_t from = static_cast<std::size_t>(token.lexeme.data() - formula.data());
@@ -130,12 +153,8 @@ std::string spell_number_literals(std::string_view formula) {
 }
 
 std::string drop_unkept_whitespace(std::string_view formula) {
-  std::string_view body = formula;
-  if (!body.empty() && body.front() == '=') {
-    body.remove_prefix(1);
-  }
-  Tokenizer tokenizer(body);
-  const std::vector<Token>& tokens = tokenizer.tokens();
+  TokenWalk walk(formula);
+  const std::vector<Token>& tokens = walk.tokens;
   // Adjacency is checked by byte offset, since a run the tokenizer only
   // records as an error has no token of its own.
   const auto begin_of = [&formula](const Token& token) {
@@ -146,23 +165,10 @@ std::string drop_unkept_whitespace(std::string_view formula) {
   std::string out;
   out.reserve(formula.size());
   std::size_t copied = 0;
-  int brackets = 0;
-  int braces = 0;
-  for (std::size_t i = 0; i < tokens.size(); ++i) {
+  while (walk.advance()) {
+    const std::size_t i = walk.i;
     const Token& token = tokens[i];
-    if (token.kind == TokenKind::Eof) {
-      break;
-    }
-    if (token.kind == TokenKind::LBracket) {
-      ++brackets;
-    } else if (token.kind == TokenKind::RBracket && brackets > 0) {
-      --brackets;
-    } else if (brackets == 0 && token.kind == TokenKind::LBrace) {
-      ++braces;
-    } else if (brackets == 0 && token.kind == TokenKind::RBrace && braces > 0) {
-      --braces;
-    }
-    if (token.kind != TokenKind::Whitespace || brackets > 0) {
+    if (token.kind != TokenKind::Whitespace || walk.brackets > 0) {
       continue;
     }
     const std::size_t from = begin_of(token);
@@ -173,7 +179,7 @@ std::string drop_unkept_whitespace(std::string_view formula) {
     const bool after_colon = i > 0 && tokens[i - 1].kind == TokenKind::Colon && end_of(tokens[i - 1]) == from;
     out.append(formula.substr(copied, from - copied));
     copied = to;
-    if (to != formula.size() && !before_separator && !after_colon && braces == 0) {
+    if (to != formula.size() && !before_separator && !after_colon && walk.braces == 0) {
       // Spaces directly before a line feed go.
       const std::string_view run = token.lexeme;
       for (std::size_t k = 0; k < run.size();) {
@@ -190,24 +196,12 @@ std::string drop_unkept_whitespace(std::string_view formula) {
 }
 
 bool has_refused_whitespace(std::string_view formula, bool (*is_function_name)(std::string_view)) {
-  std::string_view body = formula;
-  if (!body.empty() && body.front() == '=') {
-    body.remove_prefix(1);
-  }
-  Tokenizer tokenizer(body);
-  const std::vector<Token>& tokens = tokenizer.tokens();
-  int brackets = 0;
-  for (std::size_t i = 0; i < tokens.size(); ++i) {
+  TokenWalk walk(formula);
+  const std::vector<Token>& tokens = walk.tokens;
+  while (walk.advance()) {
+    const std::size_t i = walk.i;
     const Token& token = tokens[i];
-    if (token.kind == TokenKind::Eof) {
-      break;
-    }
-    if (token.kind == TokenKind::LBracket) {
-      ++brackets;
-    } else if (token.kind == TokenKind::RBracket && brackets > 0) {
-      --brackets;
-    }
-    if (token.kind != TokenKind::Whitespace || brackets > 0) {
+    if (token.kind != TokenKind::Whitespace || walk.brackets > 0) {
       continue;
     }
     if (token.lexeme.find_first_of("\t\r") != std::string_view::npos) {
