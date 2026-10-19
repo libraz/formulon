@@ -295,6 +295,31 @@ TEST(AutoFilterModel, ColIdShiftsOnColumnInsert) {
   }
 }
 
+TEST(AutoFilterModel, LargeColumnInsertDropsFiltersShiftedOffGrid) {
+  for (const std::uint32_t count : {UINT32_MAX, UINT32_MAX - 1U}) {
+    Workbook sheet_filter = ProbeWorkbook();
+    ASSERT_TRUE(static_cast<bool>(sheet_filter.insert_cols(0, 2U, count)));
+    EXPECT_EQ(Describe(sheet_filter.sheet(0).auto_filter()), "B2:XFD12");
+
+    Workbook table_filter = ProbeTableWorkbook();
+    ASSERT_TRUE(static_cast<bool>(table_filter.insert_cols(0, 2U, count)));
+    EXPECT_EQ(Describe(table_filter.tables()[0].auto_filter_xml.get()), "B2:XFD12");
+  }
+}
+
+TEST(AutoFilterModel, ColumnInsertAtLastValidFilterIdKeepsThatCriterion) {
+  // The c2 filter lands in XFD while the c4 filter moves just beyond the grid.
+  constexpr std::uint32_t count = Sheet::kMaxCols - 3U;
+
+  Workbook sheet_filter = ProbeWorkbook();
+  ASSERT_TRUE(static_cast<bool>(sheet_filter.insert_cols(0, 2U, count)));
+  EXPECT_EQ(Describe(sheet_filter.sheet(0).auto_filter()), "B2:XFD12; colId 16382: 1");
+
+  Workbook table_filter = ProbeTableWorkbook();
+  ASSERT_TRUE(static_cast<bool>(table_filter.insert_cols(0, 2U, count)));
+  EXPECT_EQ(Describe(table_filter.tables()[0].auto_filter_xml.get()), "B2:XFD12; colId 16382: 1");
+}
+
 TEST(AutoFilterModel, ColumnDeleteRemovesCriterionAndRenumbers) {
   struct Case {
     std::uint32_t col;

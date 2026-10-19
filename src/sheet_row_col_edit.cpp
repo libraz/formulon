@@ -376,7 +376,8 @@ bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t co
   std::vector<FilterColumn> kept;
   kept.reserve(filter.columns.size());
   for (FilterColumn& col : filter.columns) {
-    const std::uint64_t absolute = static_cast<std::uint64_t>(before.first_col) + col.col_id;
+    std::uint64_t col_id = col.col_id;
+    const std::uint64_t absolute = static_cast<std::uint64_t>(before.first_col) + col_id;
     if (is_delete) {
       const std::uint64_t del_end = static_cast<std::uint64_t>(index) + count;
       if (absolute >= index && absolute < del_end) {
@@ -384,13 +385,14 @@ bool shift_auto_filter(AutoFilter& filter, std::uint32_t index, std::uint32_t co
       }
       const std::uint64_t lo = std::max<std::uint64_t>(index, before.first_col);
       const std::uint64_t hi = std::min<std::uint64_t>(del_end, absolute);
-      col.col_id -= static_cast<std::uint32_t>(hi > lo ? hi - lo : 0U);
+      col_id -= hi > lo ? hi - lo : 0U;
     } else if (index > before.first_col && absolute >= index) {
-      col.col_id += count;
+      col_id += count;
     }
-    if (col.col_id > filter.range.last_col - filter.range.first_col) {
+    if (col_id > static_cast<std::uint64_t>(filter.range.last_col - filter.range.first_col)) {
       continue;  // Pushed past the sheet edge with the clamped range.
     }
+    col.col_id = static_cast<std::uint32_t>(col_id);
     kept.push_back(std::move(col));
   }
   filter.columns = std::move(kept);
