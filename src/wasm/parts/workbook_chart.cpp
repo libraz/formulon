@@ -99,11 +99,13 @@ struct RdField {
   const RdField* sub;
 };
 
+// clang-format off
 #define RD(key, T, member, kind) {key, offsetof(T, member), 0, Rd::kind, nullptr}
 #define RD_OPT(key, T, has, member, kind) {key, offsetof(T, member), offsetof(T, has), Rd::kind, nullptr}
 #define RD_OBJ(key, T, member, table) {key, offsetof(T, member), 0, Rd::kObj, table}
 #define RD_OBJ_OPT(key, T, has, member, table) {key, offsetof(T, member), offsetof(T, has), Rd::kObjOpt, table}
 #define RD_END {nullptr, 0, 0, Rd::kI32, nullptr}
+// clang-format on
 
 constexpr RdField kTitleRd[] = {
     RD("kind", fm_chart_title_t, kind, kI32),
@@ -563,12 +565,14 @@ struct WrField {
   const WrField* sub;
 };
 
+// clang-format off
 #define WR(key, T, kind, op, value) {key, offsetof(T, op), offsetof(T, value), Wr::kind, nullptr}
 #define WR_REF(key, T, member) {key, 0, offsetof(T, member), Wr::kRef, nullptr}
 #define WR_PLAIN(key, T, member) {key, 0, offsetof(T, member), Wr::kPlainF64, nullptr}
 #define WR_OBJ(key, T, member, table) {key, 0, offsetof(T, member), Wr::kObj, table}
 #define WR_OBJ_OP(key, T, op, member, table) {key, offsetof(T, op), offsetof(T, member), Wr::kObjOp, table}
 #define WR_END {nullptr, 0, 0, Wr::kU32, nullptr}
+// clang-format on
 
 constexpr WrField kFillWr[] = {
     WR("color", fm_chart_fill_patch, kU32, color_op, color),
