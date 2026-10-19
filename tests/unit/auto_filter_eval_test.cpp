@@ -408,6 +408,64 @@ TEST(AutoFilterEval, CustomConditionPairwise) {
   EXPECT_EQ(cases, 70U);
 }
 
+TEST(AutoFilterEval, CustomConditionsKeepMixedValueAndJoinBehavior) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  const std::vector<Value> values = {Value::number(1),
+                                     Value::number(2),
+                                     Value::number(3),
+                                     Value::blank(),
+                                     Value::text(""),
+                                     Value::boolean(true),
+                                     Value::error(ErrorCode::Num),
+                                     Value::text("2"),
+                                     Value::text("*"),
+                                     Value::text("abc")};
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    sheet.set_cell_value(static_cast<std::uint32_t>(i + 1U), 0, values[i]);
+  }
+  const auto check = [&](std::vector<CustomFilter> conditions, bool and_join, const std::vector<bool>& expected) {
+    AutoFilter filter;
+    filter.range = MergeRange{0, 0, static_cast<std::uint32_t>(values.size()), 0};
+    FilterColumn column;
+    column.kind = FilterKind::kCustom;
+    column.custom.filters = std::move(conditions);
+    column.custom.and_join = and_join;
+    filter.columns.push_back(std::move(column));
+    const auto visible = evaluate_auto_filter(wb, sheet, filter);
+    ASSERT_TRUE(static_cast<bool>(visible));
+    EXPECT_EQ(visible.value(), expected);
+  };
+  const std::string long_two = std::string(48U, '0') + "2.0";
+  check({{FilterOperator::kEqual, long_two}}, false,
+        {false, true, false, false, false, false, false, false, false, false});
+  check({{FilterOperator::kEqual, "a*"}}, false, {false, false, false, false, false, false, false, false, false, true});
+  check({{FilterOperator::kEqual, "~*"}}, false, {false, false, false, false, false, false, false, false, true, false});
+  check({{FilterOperator::kEqual, " "}}, false, {false, false, false, true, true, false, false, false, false, false});
+  check({{FilterOperator::kGreaterThan, "1.5"}, {FilterOperator::kLessThan, "2.5"}}, true,
+        {false, true, false, false, false, false, false, false, false, false});
+  check({{FilterOperator::kEqual, long_two}, {FilterOperator::kEqual, "a*"}}, false,
+        {false, true, false, false, false, false, false, false, false, true});
+}
+
+TEST(AutoFilterEval, CustomNumericCriteriaKeepWhitespaceParsing) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(1, 0, Value::number(2));
+  for (const std::string criterion : {"2", " 2", "2 "}) {
+    SCOPED_TRACE(criterion);
+    AutoFilter filter;
+    filter.range = MergeRange{0, 0, 1, 0};
+    FilterColumn column;
+    column.kind = FilterKind::kCustom;
+    column.custom.filters.push_back({FilterOperator::kEqual, criterion});
+    filter.columns.push_back(std::move(column));
+    const auto visible = evaluate_auto_filter(wb, sheet, filter);
+    ASSERT_TRUE(static_cast<bool>(visible));
+    EXPECT_EQ(visible.value(), std::vector<bool>{criterion != "2 "});
+  }
+}
+
 TEST(AutoFilterEval, OpaqueFilterIsRejected) {
   Workbook wb = Workbook::create();
   AutoFilter filter;

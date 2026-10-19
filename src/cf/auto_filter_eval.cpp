@@ -73,6 +73,21 @@ std::optional<double> parse_number(std::string_view text) {
   return v;
 }
 
+struct PreparedCustomCondition {
+  const CustomFilter* source;
+  std::optional<double> numeric;
+  bool has_wildcard;
+};
+
+std::vector<PreparedCustomCondition> prepare_custom_conditions(const CustomFilters& filters) {
+  std::vector<PreparedCustomCondition> prepared;
+  prepared.reserve(filters.filters.size());
+  for (const CustomFilter& condition : filters.filters) {
+    prepared.push_back({&condition, parse_number(condition.val), eval::scan_has_wildcard(condition.val)});
+  }
+  return prepared;
+}
+
 bool ordered(FilterOperator op, int cmp) {
   switch (op) {
     case FilterOperator::kLessThan:
@@ -142,8 +157,8 @@ bool match_values(const ValueFilters& f, const Run& run, std::uint32_t row, std:
 }
 
 /// Wildcard patterns match as before; a wildcard-free criterion collates.
-bool text_equals(std::string_view criterion, std::string_view text) {
-  if (eval::scan_has_wildcard(criterion)) {
+bool text_equals(std::string_view criterion, std::string_view text, bool has_wildcard) {
+  if (has_wildcard) {
     return eval::wildcard_match(criterion, text);
   }
   return collate(eval::unescape_wildcard_literal(criterion), text) == 0;
@@ -152,7 +167,9 @@ bool text_equals(std::string_view criterion, std::string_view text) {
 /// Equality of one custom condition: a single space (or nothing) names the
 /// blank cell, wildcards apply to text only, and a numeric literal compares
 /// numerically against numbers.
-bool custom_equals(const CustomFilter& c, const Value& v, const Run& run, std::uint32_t row, std::uint32_t col) {
+bool custom_equals(const PreparedCustomCondition& prepared, const Value& v, const Run& run, std::uint32_t row,
+                   std::uint32_t col) {
+  const CustomFilter& c = *prepared.source;
   if (c.val.empty() || c.val == " ") {
     return is_blank_value(v);
   }
@@ -160,24 +177,25 @@ bool custom_equals(const CustomFilter& c, const Value& v, const Run& run, std::u
     return false;
   }
   if (v.is_number()) {
-    const std::optional<double> n = parse_number(c.val);
-    return n.has_value() && !eval::scan_has_wildcard(c.val) && *n == v.as_number();
+    return prepared.numeric.has_value() && !prepared.has_wildcard && *prepared.numeric == v.as_number();
   }
   if (v.is_text()) {
-    return text_equals(c.val, v.as_text());
+    return text_equals(c.val, v.as_text(), prepared.has_wildcard);
   }
   const text_format::DisplayText shown = text_format::format_cell_for_display(run.wb, run.sheet, row, col);
-  return text_equals(c.val, shown.text);
+  return text_equals(c.val, shown.text, prepared.has_wildcard);
 }
 
-bool match_custom_one(const CustomFilter& c, const Value& v, const Run& run, std::uint32_t row, std::uint32_t col) {
+bool match_custom_one(const PreparedCustomCondition& prepared, const Value& v, const Run& run, std::uint32_t row,
+                      std::uint32_t col) {
+  const CustomFilter& c = *prepared.source;
   if (c.op == FilterOperator::kEqual) {
-    return custom_equals(c, v, run, row, col);
+    return custom_equals(prepared, v, run, row, col);
   }
   if (c.op == FilterOperator::kNotEqual) {
-    return !custom_equals(c, v, run, row, col);
+    return !custom_equals(prepared, v, run, row, col);
   }
-  if (const std::optional<double> n = parse_number(c.val)) {
+  if (const std::optional<double>& n = prepared.numeric) {
     if (!v.is_number()) {
       return false;
     }
@@ -190,13 +208,14 @@ bool match_custom_one(const CustomFilter& c, const Value& v, const Run& run, std
   return ordered(c.op, collate(v.as_text(), c.val));
 }
 
-bool match_custom(const CustomFilters& f, const Value& v, const Run& run, std::uint32_t row, std::uint32_t col) {
+bool match_custom(const CustomFilters& f, const std::vector<PreparedCustomCondition>& prepared, const Value& v,
+                  const Run& run, std::uint32_t row, std::uint32_t col) {
   if (f.filters.empty()) {
     return true;
   }
-  bool result = match_custom_one(f.filters[0], v, run, row, col);
+  bool result = match_custom_one(prepared[0], v, run, row, col);
   for (std::size_t i = 1; i < f.filters.size(); ++i) {
-    const bool next = match_custom_one(f.filters[i], v, run, row, col);
+    const bool next = match_custom_one(prepared[i], v, run, row, col);
     result = f.and_join ? (result && next) : (result || next);
   }
   return result;
@@ -428,6 +447,9 @@ Expected<void, Error> apply_column(const FilterColumn& column, const Run& run, s
   if (column.kind == FilterKind::kNone) {
     return {};
   }
+  const std::vector<PreparedCustomCondition> custom_conditions = column.kind == FilterKind::kCustom
+                                                                     ? prepare_custom_conditions(column.custom)
+                                                                     : std::vector<PreparedCustomCondition>{};
   const bool needs_values = column.kind == FilterKind::kValues || column.kind == FilterKind::kCustom ||
                             column.kind == FilterKind::kTop10 || column.kind == FilterKind::kDynamic;
   const bool needs_numbers = column.kind == FilterKind::kTop10 || column.kind == FilterKind::kDynamic;
@@ -468,7 +490,7 @@ Expected<void, Error> apply_column(const FilterColumn& column, const Run& run, s
         match = match_values(column.values, run, row, col, *value);
         break;
       case FilterKind::kCustom:
-        match = match_custom(column.custom, *value, run, row, col);
+        match = match_custom(column.custom, custom_conditions, *value, run, row, col);
         break;
       case FilterKind::kTop10:
         match = threshold.has_value() && value->is_number() &&
