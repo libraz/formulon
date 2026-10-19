@@ -292,7 +292,9 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
     // Same derivation the scalar seam in `shape_ops_lazy.cpp` uses: a
     // full-axis endpoint names a coordinate only on its bounded axis, so
     // the rectangle cannot come from the endpoints' raw row/col fields.
-    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(rect_lhs, rect_rhs);
+    const Expected<DeclaredRect, ErrorCode> rect = ctx.current_sheet() != nullptr
+                                                       ? ctx.declared_range_rect(rect_lhs, rect_rhs)
+                                                       : declared_rect(rect_lhs, rect_rhs);
     if (!rect) {
       *out_err_code = rect.error();
       return false;

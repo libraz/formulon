@@ -372,6 +372,22 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
     return false;
   }
 
+  // A qualifier naming a missing sheet is #REF!; a context without a current sheet keeps the bare shape.
+  if (ctx.current_sheet() != nullptr) {
+    parser::Reference target_lhs{};
+    target_lhs.sheet = out_base->sheet;
+    target_lhs.row = static_cast<std::uint32_t>(top_row);
+    target_lhs.col = static_cast<std::uint32_t>(left_col);
+    parser::Reference target_rhs = target_lhs;
+    target_rhs.row = static_cast<std::uint32_t>(bottom_row);
+    target_rhs.col = static_cast<std::uint32_t>(right_col);
+    const Expected<DeclaredRect, ErrorCode> target = ctx.declared_range_rect(target_lhs, target_rhs);
+    if (!target) {
+      *out_err = target.error();
+      return false;
+    }
+  }
+
   *out_top_row = static_cast<std::uint32_t>(top_row);
   *out_left_col = static_cast<std::uint32_t>(left_col);
   *out_height = abs_height;

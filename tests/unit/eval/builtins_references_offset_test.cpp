@@ -29,6 +29,20 @@ TEST(BuiltinsOffset, OffsetOutOfGridIsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+TEST(BuiltinsOffset, RowsOfOffsetToMissingSheetIsRef) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROWS(OFFSET(Missing!A1,0,0,2,2))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsOffset, NumericArgumentErrorPrecedesMissingSheetValidation) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROWS(OFFSET(Missing!A1,0,0,1/0,2))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
 TEST(BuiltinsOffset, WholeAxisRangeBaseValidatesMismatchedSheetQualifiers) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

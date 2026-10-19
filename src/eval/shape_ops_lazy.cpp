@@ -474,7 +474,9 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     // rather than from the endpoints' raw row/col fields. Reading those
     // directly is what made `ROW(A:A)` answer 1 — the structure default
     // for the row a whole-column reference never names.
-    const Expected<DeclaredRect, ErrorCode> rect = declared_rect(rect_lhs, rect_rhs);
+    const Expected<DeclaredRect, ErrorCode> rect = ctx.current_sheet() != nullptr
+                                                       ? ctx.declared_range_rect(rect_lhs, rect_rhs)
+                                                       : declared_rect(rect_lhs, rect_rhs);
     if (!rect) {
       return Value::error(rect.error());
     }

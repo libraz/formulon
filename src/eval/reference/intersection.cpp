@@ -449,11 +449,17 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
       *out_err = ErrorCode::Value;
       return false;
     }
+    const Expected<DeclaredRect, ErrorCode> rect =
+        ctx.current_sheet() != nullptr ? ctx.declared_range_rect(r, r) : declared_rect(r, r);
+    if (!rect) {
+      *out_err = rect.error();
+      return false;
+    }
     *out_sheet = r.sheet;
-    *out_top_row = r.row;
-    *out_left_col = r.col;
-    *out_bottom_row = r.row;
-    *out_right_col = r.col;
+    *out_top_row = rect.value().row_first;
+    *out_left_col = rect.value().col_first;
+    *out_bottom_row = rect.value().row_last;
+    *out_right_col = rect.value().col_last;
     return true;
   }
   if (node.kind() == parser::NodeKind::RangeOp) {
