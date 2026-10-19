@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 
 #include "c_api/formulon_c.h"
@@ -110,7 +111,19 @@ std::string table_auto_filter_xml(std::string_view raw_xml, std::string_view ref
 
   // Locate a ref attribute in the opening element. This intentionally edits
   // only the attribute value, retaining its original quoting and whitespace.
+  char attribute_quote = '\0';
   for (std::size_t i = name_end; i + 3U <= opening_end; ++i) {
+    const char ch = raw_xml[i];
+    if (attribute_quote != '\0') {
+      if (ch == attribute_quote) {
+        attribute_quote = '\0';
+      }
+      continue;
+    }
+    if (ch == '\'' || ch == '"') {
+      attribute_quote = ch;
+      continue;
+    }
     if (raw_xml.substr(i, 3U) != "ref") {
       continue;
     }
@@ -237,17 +250,17 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
   }
   table.id = next_id;
   table.columns.reserve(column_count);
+  std::unordered_set<std::string> column_keys;
+  column_keys.reserve(column_count);
   for (size_t i = 0; i < column_count; ++i) {
     if (column_names[i] == nullptr || column_names[i][0] == '\0') {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                "fm_workbook_table_create: column name is empty");
     }
-    const std::string column_key = ascii_lower(column_names[i]);
-    for (const formulon::TableColumn& existing : table.columns) {
-      if (ascii_lower(existing.name) == column_key) {
-        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                                 "fm_workbook_table_create: column name is duplicated");
-      }
+    std::string column_key = ascii_lower(column_names[i]);
+    if (!column_keys.insert(std::move(column_key)).second) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_workbook_table_create: column name is duplicated");
     }
     formulon::TableColumn column;
     column.id = static_cast<uint32_t>(i + 1U);

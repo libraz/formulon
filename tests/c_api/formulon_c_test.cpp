@@ -12,6 +12,7 @@
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
 #include "io/zip_reader.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "workbook.h"
 
@@ -63,6 +64,50 @@ static_assert(offsetof(fm_print_range_t, first_row) == 0U, "fm_print_range_t.fir
 static_assert(offsetof(fm_print_range_t, first_col) == 4U, "fm_print_range_t.first_col offset changed");
 static_assert(offsetof(fm_print_range_t, last_row) == 8U, "fm_print_range_t.last_row offset changed");
 static_assert(offsetof(fm_print_range_t, last_col) == 12U, "fm_print_range_t.last_col offset changed");
+
+void ExpectOpaqueAutoFilterRefUpdate(std::string raw_xml, std::string expected_xml) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* columns[] = {"Product", "Amount"};
+  std::size_t index = 99U;
+  ASSERT_EQ(fm_workbook_table_create(wb.handle, 0U, "A1:B3", "Sales", "Sales", columns, 2U, "", 1, 0, &index), 0);
+
+  auto& table = wb.handle->wb->mutable_tables()[index];
+  table.auto_filter_xml.set(formulon::io::auto_filter_from_xml(raw_xml));
+  ASSERT_NE(table.auto_filter_xml.get(), nullptr);
+  ASSERT_TRUE(table.auto_filter_xml.get()->is_opaque());
+  ASSERT_EQ(fm_workbook_table_update(wb.handle, index, "A1:B4", nullptr, -1, -1), 0);
+  EXPECT_EQ(formulon::io::auto_filter_xml(table.auto_filter_xml.get()), expected_xml);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  const auto& reloaded = loaded.handle->wb->tables()[index];
+  EXPECT_EQ(reloaded.ref, "A1:B4");
+  EXPECT_TRUE(reloaded.auto_filter_xml.get()->is_opaque());
+  const std::string reloaded_xml = formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get());
+  pugi::xml_document expected_doc;
+  ASSERT_TRUE(expected_doc.load_buffer(expected_xml.data(), expected_xml.size()));
+  pugi::xml_document reloaded_doc;
+  ASSERT_TRUE(reloaded_doc.load_buffer(reloaded_xml.data(), reloaded_xml.size()));
+  const pugi::xml_node expected_root = expected_doc.child("autoFilter");
+  const pugi::xml_node reloaded_root = reloaded_doc.child("autoFilter");
+  ASSERT_TRUE(expected_root);
+  ASSERT_TRUE(reloaded_root);
+  for (const pugi::xml_attribute expected_attr : expected_root.attributes()) {
+    const pugi::xml_attribute reloaded_attr = reloaded_root.attribute(expected_attr.name());
+    ASSERT_TRUE(reloaded_attr) << expected_attr.name();
+    EXPECT_STREQ(reloaded_attr.value(), expected_attr.value()) << expected_attr.name();
+  }
+
+  formulon::io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(formulon::io::ByteSpan{saved.data, saved.len})));
+  auto table_part = zip.read_entry("xl/tables/table1.xml");
+  ASSERT_TRUE(static_cast<bool>(table_part)) << table_part.error().message;
+  const std::string table_xml(table_part.value().begin(), table_part.value().end());
+  EXPECT_NE(table_xml.find(expected_xml), std::string::npos);
+}
 
 TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   WorkbookGuard wb;
@@ -161,6 +206,57 @@ TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
   EXPECT_NE(fm_workbook_table_create(wb.handle, 0, "D1:E3", "Other", "Other", duplicate_columns, 2, "", 1, 0, &index),
             0);
 }
+
+TEST(FormulonCApi, TableDuplicateColumnAtEndRejectsAtomicallyAndUniqueNamesRoundTrip) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  const char* duplicate_columns[] = {"Product", "Amount", "Region", "Year", "Status", "pRODUCT"};
+  std::size_t index = 99U;
+  EXPECT_EQ(
+      fm_workbook_table_create(wb.handle, 0U, "A1:F3", "Invalid", "Invalid", duplicate_columns, 6U, "", 1, 0, &index),
+      static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_table_create: column name is duplicated");
+  EXPECT_EQ(index, 99U);
+  EXPECT_EQ(fm_workbook_table_count(wb.handle), 0U);
+
+  const char* unique_columns[] = {"Product", "Area", "商品"};
+  ASSERT_EQ(fm_workbook_table_create(wb.handle, 0U, "A1:C3", "Valid", "Valid", unique_columns, 3U, "", 1, 0, &index),
+            0);
+  EXPECT_EQ(index, 0U);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(loaded.handle->wb->tables().size(), 1U);
+  const auto& columns = loaded.handle->wb->tables()[0].columns;
+  ASSERT_EQ(columns.size(), 3U);
+  EXPECT_EQ(columns[0].name, "Product");
+  EXPECT_EQ(columns[1].name, "Area");
+  EXPECT_EQ(columns[2].name, "商品");
+}
+
+TEST(FormulonCApi, TableUpdateOpaqueAutoFilterSkipsDoubleQuotedDecoys) {
+  const std::string raw_xml =
+      "<autoFilter extra=\" before ref='decoy-one' and ref = 'decoy-two' after\" marker='ref=\"decoy-three\"' "
+      "ref=\"A1:B3\"><filterColumn colId=\"0\"><dynamicFilter type=\"future\"/></filterColumn></autoFilter>";
+  const std::string expected_xml =
+      "<autoFilter extra=\" before ref='decoy-one' and ref = 'decoy-two' after\" marker='ref=\"decoy-three\"' "
+      "ref=\"A1:B4\"><filterColumn colId=\"0\"><dynamicFilter type=\"future\"/></filterColumn></autoFilter>";
+  ExpectOpaqueAutoFilterRefUpdate(raw_xml, expected_xml);
+}
+
+TEST(FormulonCApi, TableUpdateOpaqueAutoFilterSkipsSingleQuotedDecoys) {
+  const std::string raw_xml =
+      "<autoFilter extra=' before ref=\"decoy-one\" and ref = \"decoy-two\" after' marker=\"ref='decoy-three'\" "
+      "ref='A1:B3'><filterColumn colId='0'><dynamicFilter type='future'/></filterColumn></autoFilter>";
+  const std::string expected_xml =
+      "<autoFilter extra=' before ref=\"decoy-one\" and ref = \"decoy-two\" after' marker=\"ref='decoy-three'\" "
+      "ref='A1:B4'><filterColumn colId='0'><dynamicFilter type='future'/></filterColumn></autoFilter>";
+  ExpectOpaqueAutoFilterRefUpdate(raw_xml, expected_xml);
+}
+
 TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
