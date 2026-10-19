@@ -10,6 +10,7 @@
 #include "external_book.h"
 #include "external_link.h"
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
@@ -45,8 +46,17 @@ bool ParseExternalRefersTo(std::string_view text, const ExternalBook& book, Exte
   }
   std::string_view sheet = text.substr(0, bang);
   std::string_view tail = text.substr(bang + 1);
+  std::string decoded_sheet;
   if (sheet.size() >= 2U && sheet.front() == '\'' && sheet.back() == '\'') {
     sheet = sheet.substr(1, sheet.size() - 2U);
+    decoded_sheet.reserve(sheet.size());
+    for (std::size_t i = 0U; i < sheet.size(); ++i) {
+      decoded_sheet.push_back(sheet[i]);
+      if (sheet[i] == '\'' && i + 1U < sheet.size() && sheet[i + 1U] == '\'') {
+        ++i;
+      }
+    }
+    sheet = decoded_sheet;
   }
   const std::uint32_t sheet_index = book.sheet_index(sheet);
   if (sheet_index == ExternalBook::kNoSheet) {
@@ -224,12 +234,15 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
       pugi::xml_parse_result rels_parse =
           rels_doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
       if (rels_parse) {
-        pugi::xml_node rels_root = rels_doc.child("Relationships");
+        pugi::xml_node rels_root = relationship_root(rels_doc);
         if (rels_root) {
           // Pick the relationship whose Id matches the body's inner
           // r:id when available; otherwise take the first link-typed
           // relationship as a best-effort fallback.
-          for (pugi::xml_node rel = rels_root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+          for (pugi::xml_node rel = rels_root.first_child(); rel; rel = rel.next_sibling()) {
+            if (!is_relationship_element(rel, rels_root)) {
+              continue;
+            }
             const std::string_view type = rel.attribute("Type").value();
             if (type != kRelExternalLinkPath && type != kRelOleLink && type != kRelDdeLink) {
               continue;

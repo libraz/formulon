@@ -125,6 +125,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/ptg_string_surrogate_test.cpp
   unit/io/xlsb/pivot_field_order_count_test.cpp
   unit/io/xlsb/external_link_cached_error_test.cpp
+  unit/io/prefixed_package_rels_test.cpp
   unit/io/xlsb/writer_external_link_test.cpp
   unit/io/xlsb/ptg_class_fixture_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp

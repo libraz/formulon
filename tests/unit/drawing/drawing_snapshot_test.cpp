@@ -5,6 +5,7 @@
 
 #include "drawing/drawing_edit.h"
 #include "gtest/gtest.h"
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -738,12 +739,119 @@ TEST(DrawingSnapshot, LoadsAVersionOneCapture) {
   const std::string before = TopXml(wb, 0, 4);
   ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 4)));
   ASSERT_EQ(Part(wb, "xl/media/image2.png"), nullptr);
+  const std::string current_sidecar =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship "
+      "Id=\"rId1\" Type=\"urn:t\" Target=\"legacy-child.xml\"/></Relationships>";
+  const Bytes legacy_child = ToBytes("current version-one dependent part");
+  ASSERT_TRUE(static_cast<bool>(
+      wb.add_passthrough_part(PassthroughPart("xl/media/_rels/image2.png.rels", "", ToBytes(current_sidecar)))));
+  ASSERT_TRUE(
+      static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/legacy-child.xml", "", legacy_child))));
   auto restored = Restore(wb, 0, v1);
   ASSERT_TRUE(static_cast<bool>(restored));
   EXPECT_EQ(restored.value(), 4U);
   EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{2, 3, 4}));
   EXPECT_EQ(TopXml(wb, 0, 4), before);
   EXPECT_EQ(Part(wb, "xl/media/image2.png")->bytes, media);
+  ASSERT_NE(Part(wb, "xl/media/_rels/image2.png.rels"), nullptr);
+  EXPECT_EQ(Part(wb, "xl/media/_rels/image2.png.rels")->bytes, ToBytes(current_sidecar));
+  ASSERT_NE(Part(wb, "xl/media/legacy-child.xml"), nullptr);
+  EXPECT_EQ(Part(wb, "xl/media/legacy-child.xml")->bytes, legacy_child);
+}
+
+TEST(DrawingSnapshot, RestoringV2WithoutCapturedSidecarRemovesItsOrphanGraph) {
+  Workbook wb = Fixture();
+  const Bytes snap = Snapshot(wb, 2);
+  const Bytes original_image = Part(wb, "xl/media/image1.png")->bytes;
+  const std::string image_rels =
+      "<p:Relationships xmlns:p=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<p:Relationship Id=\"rId1\" Type=\"urn:t\" Target=\"child.xml\"/>"
+      "<p:Relationship Id=\"rId2\" Type=\"urn:t\" Target=\"shared.xml\"/>"
+      "</p:Relationships>";
+  const std::string child_rels =
+      "<p:Relationships xmlns:p=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<p:Relationship Id=\"rId1\" Type=\"urn:t\" Target=\"grandchild.xml\"/>"
+      "</p:Relationships>";
+  const std::string holder_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship "
+      "Id=\"rId1\" Type=\"urn:t\" Target=\"shared.xml\"/></Relationships>";
+  const Bytes child = ToBytes("unique child");
+  const Bytes grandchild = ToBytes("unique grandchild");
+  const Bytes shared = ToBytes("shared child");
+  ASSERT_TRUE(static_cast<bool>(
+      wb.add_passthrough_part(PassthroughPart("xl/media/_rels/image1.png.rels", "", ToBytes(image_rels)))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/child.xml", "", child))));
+  ASSERT_TRUE(static_cast<bool>(
+      wb.add_passthrough_part(PassthroughPart("xl/media/_rels/child.xml.rels", "", ToBytes(child_rels)))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/grandchild.xml", "", grandchild))));
+  ASSERT_TRUE(static_cast<bool>(
+      wb.add_passthrough_part(PassthroughPart("xl/media/_rels/holder.xml.rels", "", ToBytes(holder_rels)))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/shared.xml", "", shared))));
+  ASSERT_TRUE(
+      static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/holder.xml", "", ToBytes("holder")))));
+
+  ASSERT_TRUE(static_cast<bool>(Restore(wb, 0, snap)));
+
+  EXPECT_EQ(Part(wb, "xl/media/image1.png")->bytes, original_image);
+  EXPECT_EQ(Part(wb, "xl/media/_rels/image1.png.rels"), nullptr);
+  EXPECT_EQ(Part(wb, "xl/media/child.xml"), nullptr);
+  EXPECT_EQ(Part(wb, "xl/media/_rels/child.xml.rels"), nullptr);
+  EXPECT_EQ(Part(wb, "xl/media/grandchild.xml"), nullptr);
+  EXPECT_NE(Part(wb, "xl/media/shared.xml"), nullptr);
+  EXPECT_NE(Part(wb, "xl/media/_rels/holder.xml.rels"), nullptr);
+
+  Workbook reloaded = RoundTrip(wb);
+  EXPECT_EQ(Find(reloaded, 2).media_path, "xl/media/image1.png");
+  EXPECT_EQ(Part(reloaded, "xl/media/image1.png")->bytes, original_image);
+  EXPECT_EQ(Part(reloaded, "xl/media/_rels/image1.png.rels"), nullptr);
+  EXPECT_EQ(Part(reloaded, "xl/media/child.xml"), nullptr);
+  EXPECT_NE(Part(reloaded, "xl/media/shared.xml"), nullptr);
+}
+
+TEST(DrawingSnapshot, PrefixedRelationshipsSurviveCopyAndRewriteMovedTargets) {
+  Workbook wb = Fixture();
+  const std::string drawing_rels =
+      "<p:Relationships xmlns:p=\"http://schemas.openxmlformats.org/package/2006/relationships\" "
+      "xmlns:f=\"urn:foreign\"><p:Relationship Id=\"rId1\" Type=\"" +
+      std::string(kImageRel) + "\" Target=\"../media/image1.png\"/><p:Relationship Id=\"rId2\" Type=\"" + kImageRel +
+      "\" Target=\"../media/image2.png\"/><f:Relationship Id=\"ignored\" "
+      "Type=\"urn:t\" Target=\"../media/ignored.xml\"/></p:Relationships>";
+  const std::string image_rels =
+      "<p:Relationships xmlns:p=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<p:Relationship Id=\"rId1\" Type=\"urn:t\" Target=\"thumb1.xml\"/>"
+      "</p:Relationships>";
+  const Bytes thumb = ToBytes("captured target");
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part(kRelsPath, ToBytes(drawing_rels))));
+  ASSERT_TRUE(static_cast<bool>(
+      wb.add_passthrough_part(PassthroughPart("xl/media/_rels/image1.png.rels", "", ToBytes(image_rels)))));
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/thumb1.xml", "", thumb))));
+  const Bytes snap = Snapshot(wb, 2);
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part("xl/media/thumb1.xml", ToBytes("changed target"))));
+
+  auto restored = Restore(wb, 0, snap, kDrawingRestoreNewId);
+
+  ASSERT_TRUE(static_cast<bool>(restored));
+  EXPECT_EQ(restored.value(), 5U);
+  const DrawingObject copy = Find(wb, 5);
+  ASSERT_EQ(copy.object_id, 5U);
+  EXPECT_NE(copy.media_path, "xl/media/image1.png");
+  ASSERT_NE(Part(wb, io::ooxml::rels_path_for_part(copy.media_path)), nullptr);
+  auto copied_rels =
+      io::ooxml::parse_part_rels(Part(wb, io::ooxml::rels_path_for_part(copy.media_path))->bytes, "xl/media");
+  ASSERT_TRUE(static_cast<bool>(copied_rels));
+  ASSERT_EQ(copied_rels.value().size(), 1U);
+  EXPECT_NE(copied_rels.value()[0].target, "xl/media/thumb1.xml");
+  EXPECT_NE(Part(wb, copied_rels.value()[0].target), nullptr);
+  const std::string copied_rels_xml(Part(wb, io::ooxml::rels_path_for_part(copy.media_path))->bytes.begin(),
+                                    Part(wb, io::ooxml::rels_path_for_part(copy.media_path))->bytes.end());
+  EXPECT_NE(copied_rels_xml.find("<p:Relationships"), std::string::npos);
+  EXPECT_NE(copied_rels_xml.find("<p:Relationship"), std::string::npos);
+
+  auto drawing_rels_after = io::ooxml::parse_part_rels(Part(wb, kRelsPath)->bytes, "xl/drawings");
+  ASSERT_TRUE(static_cast<bool>(drawing_rels_after));
+  EXPECT_EQ(drawing_rels_after.value().size(), 3U);
+  const std::string drawing_rels_xml(Part(wb, kRelsPath)->bytes.begin(), Part(wb, kRelsPath)->bytes.end());
+  EXPECT_NE(drawing_rels_xml.find("<p:Relationship"), std::string::npos);
 }
 
 TEST(DrawingSnapshot, CapturesWhatAPartsOwnRelsReach) {

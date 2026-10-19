@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/relationship_xml.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -61,7 +62,7 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
     message.append(": pugixml parse failed");
     return make_error(FormulonErrorCode::kIoXmlParse, std::move(message), std::move(ctx));
   }
-  pugi::xml_node root = doc.child("Relationships");
+  pugi::xml_node root = relationship_root(doc);
   if (!root) {
     std::string ctx("context=");
     ctx.append(context);
@@ -72,7 +73,10 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
     return make_error(FormulonErrorCode::kIoRelationshipBroken, std::move(message), std::move(ctx));
   }
 
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  for (const pugi::xml_node rel : root.children()) {
+    if (!is_relationship_element(rel, root)) {
+      continue;
+    }
     auto status = fn(rel);
     if (!status) {
       return std::move(status.error());

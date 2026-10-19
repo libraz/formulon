@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/relationship_xml.h"
 #include "io/ooxml_defs.h"
 #include "io/workbook_kind_ooxml.h"
 #include "io/xml_utils.h"
@@ -164,12 +165,15 @@ std::vector<DefaultContentType> ListDefaultContentTypesFromRoot(const pugi::xml_
 Expected<std::string, Error> resolve_office_document_path(const std::vector<std::uint8_t>& rels_bytes) {
   pugi::xml_document doc;
   RETURN_IF_ERROR(load_xml_buffer(doc, rels_bytes, "ooxml_reader", "package-level rels"));
-  pugi::xml_node root = doc.child("Relationships");
+  pugi::xml_node root = relationship_root(doc);
   if (!root) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
                       "context=ooxml_reader part=_rels/.rels");
   }
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  for (const pugi::xml_node rel : root.children()) {
+    if (!is_relationship_element(rel, root)) {
+      continue;
+    }
     const std::string_view type = attr_str(rel, "Type");
     if (type == kRelOfficeDocument) {
       std::string target(attr_str(rel, "Target"));

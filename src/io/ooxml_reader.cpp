@@ -42,6 +42,7 @@
 #include "io/ooxml/external_link_reader.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/pivot_target_reader.h"
+#include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/sheet_aux_rels_reader.h"
 #include "io/ooxml/workbook_part_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
@@ -77,13 +78,16 @@ namespace {
 Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const std::vector<std::uint8_t>& bytes) {
   pugi::xml_document doc;
   RETURN_IF_ERROR(load_xml_buffer(doc, bytes, "ooxml_reader", "package-level rels"));
-  const pugi::xml_node root = doc.child("Relationships");
+  const pugi::xml_node root = ooxml::relationship_root(doc);
   if (!root) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
                       "context=ooxml_reader part=_rels/.rels");
   }
   std::vector<UnknownRelationship> result;
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  for (const pugi::xml_node rel : root.children()) {
+    if (!ooxml::is_relationship_element(rel, root)) {
+      continue;
+    }
     const std::string_view type(rel.attribute("Type").value());
     if (type == kRelOfficeDocument || type == kRelCoreProperties || type == kRelExtendedProperties ||
         type == kRelCustomProperties) {

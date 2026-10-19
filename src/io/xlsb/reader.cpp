@@ -31,6 +31,7 @@
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
 #include "io/xlsb/external_link_reader.h"
@@ -201,12 +202,15 @@ Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::ui
     ctx.append(parse.description());
     return make_error(FormulonErrorCode::kIoXmlParse, "package-level rels: pugixml parse failed", std::move(ctx));
   }
-  pugi::xml_node root = doc.child("Relationships");
+  pugi::xml_node root = ooxml::relationship_root(doc);
   if (!root) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
                       "context=xlsb_reader part=_rels/.rels");
   }
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  for (const pugi::xml_node rel : root.children()) {
+    if (!ooxml::is_relationship_element(rel, root)) {
+      continue;
+    }
     if (std::string_view(rel.attribute("Type").value()) == kRelOfficeDocument) {
       std::string target = NormalisePartName(rel.attribute("Target").value());
       if (target.empty()) {
@@ -228,13 +232,16 @@ Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const s
     return make_error(FormulonErrorCode::kIoXmlParse, "package-level rels: pugixml parse failed",
                       "context=xlsb_reader part=_rels/.rels desc=" + std::string(parse.description()));
   }
-  const pugi::xml_node root = doc.child("Relationships");
+  const pugi::xml_node root = ooxml::relationship_root(doc);
   if (!root) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
                       "context=xlsb_reader part=_rels/.rels");
   }
   std::vector<UnknownRelationship> result;
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  for (const pugi::xml_node rel : root.children()) {
+    if (!ooxml::is_relationship_element(rel, root)) {
+      continue;
+    }
     const std::string_view type(rel.attribute("Type").value());
     if (type == kRelOfficeDocument || type == kRelCoreProperties || type == kRelExtendedProperties ||
         type == kRelCustomProperties) {

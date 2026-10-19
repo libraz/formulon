@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml/relationship_xml.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
@@ -33,9 +34,18 @@ Expected<std::vector<DrawingRel>, Error> parse_part_rels(const std::vector<std::
   if (!load_xml_buffer(doc, bytes, "drawing", "rels")) {
     return unparseable("rels part is not well-formed XML", owner_dir);
   }
+  const pugi::xml_node root = relationship_root(doc);
+  if (!root) {
+    return unparseable("rels part has an invalid Relationships root", owner_dir);
+  }
   std::vector<DrawingRel> rels;
-  for (pugi::xml_node rel = doc.child("Relationships").child("Relationship"); rel;
-       rel = rel.next_sibling("Relationship")) {
+  for (pugi::xml_node rel = root.first_child(); rel; rel = rel.next_sibling()) {
+    if (has_unbound_relationship_prefix(rel)) {
+      return unparseable("rels part has an unbound relationship prefix", rel.name());
+    }
+    if (!is_relationship_element(rel, root)) {
+      continue;
+    }
     DrawingRel entry;
     entry.id = rel.attribute("Id").value();
     entry.type = rel.attribute("Type").value();

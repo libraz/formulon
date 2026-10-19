@@ -7,6 +7,7 @@
 
 #include "../small_stack.h"
 #include "gtest/gtest.h"
+#include "io/ooxml/part_graph.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "passthrough_part.h"
@@ -174,6 +175,47 @@ TEST(DrawingEdit, DeepExtensionIsWalkedByDrawingApis) {
     ASSERT_TRUE(static_cast<bool>(snapshot));
     EXPECT_FALSE(snapshot.value().empty());
   });
+}
+
+TEST(DrawingEdit, InsertUsesThePrefixBoundByTheRelationshipsRoot) {
+  const std::string empty_drawing = std::string(kWsDrOpen) + "</xdr:wsDr>";
+  const std::string prefixed_rels =
+      "<p:Relationships xmlns:p=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>";
+  Workbook wb = WithDrawing(empty_drawing, prefixed_rels, {});
+  const Bytes png = Png(10, 10);
+
+  auto inserted = insert_image(wb, 0, png.data(), png.size(), ImageInsertOptions{});
+
+  ASSERT_TRUE(static_cast<bool>(inserted));
+  auto rels = io::ooxml::parse_part_rels(Part(wb, kRelsPath)->bytes, "xl/drawings");
+  ASSERT_TRUE(static_cast<bool>(rels));
+  ASSERT_EQ(rels.value().size(), 1U);
+  EXPECT_EQ(rels.value()[0].id, "rId1");
+  EXPECT_EQ(rels.value()[0].target, "xl/media/image1.png");
+  const std::string xml(Part(wb, kRelsPath)->bytes.begin(), Part(wb, kRelsPath)->bytes.end());
+  EXPECT_NE(xml.find("<p:Relationship"), std::string::npos);
+}
+
+TEST(DrawingEdit, RemovesAUsedPrefixedRelationshipAndItsPart) {
+  const std::string drawing = std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) +
+                              Marker("to", 0, 0, 1, 0) + Pic(2, "rId1") + "</xdr:twoCellAnchor></xdr:wsDr>";
+  const std::string rels =
+      "<p:Relationships xmlns:p=\"http://schemas.openxmlformats.org/package/2006/relationships\"><p:Relationship "
+      "Id=\"rId1\" Type=\"" +
+      std::string(kImageRel) +
+      "\" Target=\"../media/image1.png\"/>"
+      "</p:Relationships>";
+  Workbook wb = WithDrawing(drawing, rels, {"xl/media/image1.png"});
+
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 2)));
+
+  EXPECT_EQ(Part(wb, "xl/media/image1.png"), nullptr);
+  auto remaining = io::ooxml::parse_part_rels(Part(wb, kRelsPath)->bytes, "xl/drawings");
+  ASSERT_TRUE(static_cast<bool>(remaining));
+  EXPECT_TRUE(remaining.value().empty());
+  const std::string xml(Part(wb, kRelsPath)->bytes.begin(), Part(wb, kRelsPath)->bytes.end());
+  EXPECT_NE(xml.find("<p:Relationships"), std::string::npos);
+  EXPECT_EQ(xml.find("<p:Relationship "), std::string::npos);
 }
 
 TEST(DrawingEdit, ExhaustedObjectIdRejectsMutationsWithoutChangingPackage) {

@@ -51,10 +51,13 @@
 #include "external_book.h"
 #include "external_link.h"
 #include "gtest/gtest.h"
+#include "io/ooxml/external_link_reader.h"
+#include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -337,6 +340,73 @@ PartEdit Replace(std::string from, std::string to) {
   };
 }
 
+std::string ReplaceAllText(std::string text, std::string_view from, std::string_view to) {
+  std::size_t at = 0U;
+  while ((at = text.find(from, at)) != std::string::npos) {
+    text.replace(at, from.size(), to);
+    at += to.size();
+  }
+  return text;
+}
+
+PartEdit AddQuotedExternalNames() {
+  return [](std::string xml) {
+    xml = ReplaceAllText(std::move(xml), "<sheetName val=\"Data\"/>",
+                         "<sheetName val=\"Data\"/><sheetName val=\"O'Brien! 東京\"/>");
+    xml = ReplaceAllText(std::move(xml), "</definedNames>",
+                         "<definedName name=\"QuotedCell\" refersTo=\"='O''Brien! 東京'!$A$1\"/>"
+                         "<definedName name=\"QuotedRange\" refersTo=\"='O''Brien! 東京'!$A$1:$A$3\"/>"
+                         "<definedName name=\"UnquotedCell\" refersTo=\"=Data!$A$1\"/></definedNames>");
+    return ReplaceAllText(std::move(xml), "</sheetDataSet>",
+                          "<sheetData sheetId=\"1\"><row r=\"1\"><cell r=\"A1\"><v>10</v></cell></row>"
+                          "<row r=\"3\"><cell r=\"A3\"><v>30</v></cell></row></sheetData></sheetDataSet>");
+  };
+}
+
+PartEdit PrefixExternalLinkRelationships() {
+  return [](std::string xml) {
+    constexpr std::string_view kRelationshipsNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+    xml = ReplaceAllText(
+        std::move(xml), "<Relationships xmlns=\"" + std::string(kRelationshipsNamespace) + "\">",
+        "<pkg:Relationships xmlns:pkg=\"" + std::string(kRelationshipsNamespace) + "\" xmlns:foreign=\"urn:foreign\">");
+    xml = ReplaceAllText(std::move(xml), "<Relationship ", "<pkg:Relationship ");
+    xml = ReplaceAllText(std::move(xml), "</Relationships>", "</pkg:Relationships>");
+    const std::size_t first_relationship = xml.find("<pkg:Relationship ");
+    if (first_relationship != std::string::npos) {
+      xml.insert(first_relationship,
+                 "<foreign:Relationship Id=\"rId1\" "
+                 "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath\" "
+                 "Target=\"Wrong.xlsx\" TargetMode=\"Internal\"/>");
+    }
+    return xml;
+  };
+}
+
+PartEdit NamespaceLessExternalLinkRelationships() {
+  return [](std::string xml) {
+    constexpr std::string_view kRelationshipsNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+    xml = ReplaceAllText(std::move(xml), "<Relationships xmlns=\"" + std::string(kRelationshipsNamespace) + "\">",
+                         "<Relationships xmlns:foreign=\"urn:foreign\">");
+    const std::size_t first_relationship = xml.find("<Relationship ");
+    if (first_relationship != std::string::npos) {
+      xml.insert(first_relationship,
+                 "<foreign:Relationship Id=\"rId1\" "
+                 "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath\" "
+                 "Target=\"Wrong.xlsx\" TargetMode=\"Internal\"/>");
+    }
+    return xml;
+  };
+}
+
+PartEdit ForeignOnlyPrefixedExternalLinkRelationships() {
+  return [](std::string) {
+    return "<pkg:Relationships xmlns:pkg=\"http://schemas.openxmlformats.org/package/2006/relationships\" "
+           "xmlns:foreign=\"urn:foreign\"><foreign:Relationship Id=\"rId1\" "
+           "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath\" "
+           "Target=\"Wrong.xlsx\" TargetMode=\"External\"/></pkg:Relationships>";
+  };
+}
+
 Workbook LoadBytes(const std::vector<std::uint8_t>& bytes) {
   auto result_or = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()});
   EXPECT_TRUE(static_cast<bool>(result_or)) << (result_or ? "" : result_or.error().message);
@@ -349,11 +419,125 @@ Workbook LoadBytes(const std::vector<std::uint8_t>& bytes) {
 constexpr const char* kSheet1 = "xl/worksheets/sheet1.xml";
 constexpr const char* kLink1 = "xl/externalLinks/externalLink1.xml";
 constexpr const char* kLink2 = "xl/externalLinks/externalLink2.xml";
+constexpr const char* kLink1Rels = "xl/externalLinks/_rels/externalLink1.xml.rels";
 constexpr const char* kAlternateUrls = "<xxl21:alternateUrls><xxl21:absoluteUrl r:id=\"rId2\"/></xxl21:alternateUrls>";
 
 /// Appends `cells` (a run of `<c>` elements) as a new row 6 of `Use`.
 PartEdit AddRow6(const std::string& cells) {
   return Replace("</sheetData>", "<row r=\"6\">" + cells + "</row></sheetData>");
+}
+
+TEST(ExternalLinkFixtureEdited, QuotedExternalNamesDecodeDoubledApostrophesForLookup) {
+  Workbook wb = LoadBytes(
+      EditedFixture("external_link_mixed", {{kLink1, AddQuotedExternalNames()},
+                                            {kSheet1, AddRow6("<c r=\"A6\"><f>[1]!QuotedCell</f><v>0</v></c>"
+                                                              "<c r=\"B6\"><f>SUM([1]!QuotedRange)</f><v>0</v></c>"
+                                                              "<c r=\"C6\"><f>[1]!UnquotedCell</f><v>0</v></c>")}}));
+  ASSERT_EQ(wb.external_links().size(), 2U);
+  const ExternalBook& book = wb.external_links()[0].book;
+  ASSERT_EQ(book.sheet_index("O'Brien! 東京"), 1U);
+  const ExternalBookName* single = book.find_name("QuotedCell");
+  const ExternalBookName* range = book.find_name("QuotedRange");
+  const ExternalBookName* unquoted = book.find_name("UnquotedCell");
+  ASSERT_NE(single, nullptr);
+  ASSERT_NE(range, nullptr);
+  ASSERT_NE(unquoted, nullptr);
+  EXPECT_TRUE(single->resolvable);
+  EXPECT_EQ(single->sheet, 1U);
+  EXPECT_EQ(single->row, 0U);
+  EXPECT_EQ(single->col, 0U);
+  EXPECT_TRUE(range->resolvable);
+  EXPECT_TRUE(range->is_range);
+  EXPECT_EQ(range->sheet, 1U);
+  EXPECT_EQ(range->row_end, 2U);
+  EXPECT_TRUE(unquoted->resolvable);
+  EXPECT_EQ(unquoted->sheet, 0U);
+
+  auto recalc_or = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc_or)) << (recalc_or ? "" : recalc_or.error().message);
+  const Cell* single_cell = wb.sheet(0).cell_at(5U, 0U);
+  const Cell* range_cell = wb.sheet(0).cell_at(5U, 1U);
+  const Cell* unquoted_cell = wb.sheet(0).cell_at(5U, 2U);
+  ASSERT_NE(single_cell, nullptr);
+  ASSERT_NE(range_cell, nullptr);
+  ASSERT_NE(unquoted_cell, nullptr);
+  ASSERT_TRUE(single_cell->cached_value.is_number());
+  ASSERT_TRUE(range_cell->cached_value.is_number());
+  ASSERT_TRUE(unquoted_cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(single_cell->cached_value.as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(range_cell->cached_value.as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(unquoted_cell->cached_value.as_number(), 10.0);
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  Workbook roundtrip = LoadBytes(saved.value());
+  ASSERT_FALSE(roundtrip.external_links().empty());
+  const ExternalBookName* saved_single = roundtrip.external_links()[0].book.find_name("QuotedCell");
+  ASSERT_NE(saved_single, nullptr);
+  EXPECT_TRUE(saved_single->resolvable);
+  ExpectSameAsExcel(OurAnswer(roundtrip, 6U), Value::number(10.0), "[1]!QuotedCell after save/reload");
+}
+
+TEST(ExternalLinkFixtureEdited, PrefixedPerLinkRelationshipsPreserveTargetsThroughSaveReload) {
+  Workbook baseline = LoadFixture("external_link_mixed", ".xlsx");
+  ASSERT_FALSE(baseline.external_links().empty());
+  const ExternalLinkRecord& default_record = baseline.external_links()[0];
+  ASSERT_EQ(default_record.target, "ExtSource.xlsx");
+  ASSERT_TRUE(default_record.target_external);
+  ASSERT_EQ(default_record.body_rel_id, "rId1");
+  ASSERT_EQ(default_record.absolute_target, "/Users/libraz/Documents/ext_link_probe/ExtSource.xlsx");
+
+  Workbook wb = LoadBytes(EditedFixture("external_link_mixed", {{kLink1Rels, PrefixExternalLinkRelationships()}}));
+  ASSERT_FALSE(wb.external_links().empty());
+  const ExternalLinkRecord& prefixed_record = wb.external_links()[0];
+  EXPECT_EQ(prefixed_record.target, default_record.target);
+  EXPECT_EQ(prefixed_record.target_external, default_record.target_external);
+  EXPECT_EQ(prefixed_record.body_rel_id, default_record.body_rel_id);
+  EXPECT_EQ(prefixed_record.absolute_target, default_record.absolute_target);
+  ExpectSameAsExcel(OurAnswer(wb, 3U), Value::number(10.0), "[1]Data!A1");
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  Workbook roundtrip = LoadBytes(saved.value());
+  ASSERT_FALSE(roundtrip.external_links().empty());
+  const ExternalLinkRecord& reloaded = roundtrip.external_links()[0];
+  EXPECT_EQ(reloaded.target, default_record.target);
+  EXPECT_EQ(reloaded.target_external, default_record.target_external);
+  EXPECT_EQ(reloaded.body_rel_id, default_record.body_rel_id);
+  EXPECT_EQ(reloaded.absolute_target, default_record.absolute_target);
+  ExpectSameAsExcel(OurAnswer(roundtrip, 3U), Value::number(10.0), "[1]Data!A1 after save/reload");
+}
+
+TEST(ExternalLinkFixtureEdited, NamespaceLessRelationshipPartsRemainReadable) {
+  Workbook wb =
+      LoadBytes(EditedFixture("external_link_mixed", {{kLink1Rels, NamespaceLessExternalLinkRelationships()}}));
+  ASSERT_FALSE(wb.external_links().empty());
+  const ExternalLinkRecord& record = wb.external_links()[0];
+  EXPECT_EQ(record.target, "ExtSource.xlsx");
+  EXPECT_TRUE(record.target_external);
+  EXPECT_EQ(record.body_rel_id, "rId1");
+  EXPECT_EQ(record.absolute_target, "/Users/libraz/Documents/ext_link_probe/ExtSource.xlsx");
+}
+
+TEST(ExternalLinkFixtureEdited, ForeignRelationshipChildrenAreIgnored) {
+  const std::vector<std::uint8_t> bytes =
+      EditedFixture("external_link_mixed", {{kLink1Rels, ForeignOnlyPrefixedExternalLinkRelationships()}});
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(io::ByteSpan{bytes.data(), bytes.size()})));
+
+  pugi::xml_document workbook_doc;
+  ASSERT_TRUE(workbook_doc.load_string(
+      "<workbook xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<externalReferences><externalReference r:id=\"rId1\"/></externalReferences></workbook>"));
+  io::ooxml::WorkbookRels workbook_rels;
+  workbook_rels.external_link_paths_by_rid.emplace("rId1", "xl/externalLinks/externalLink1.xml");
+  auto loaded = io::ooxml::load_external_links(zip, workbook_doc.child("workbook"), workbook_rels);
+  ASSERT_TRUE(static_cast<bool>(loaded));
+  ASSERT_EQ(loaded.value().records.size(), 1U);
+  const ExternalLinkRecord& record = loaded.value().records[0];
+  EXPECT_EQ(record.body_rel_id, "rId1");
+  EXPECT_TRUE(record.target.empty());
+  EXPECT_TRUE(record.absolute_target.empty());
 }
 
 TEST(ExternalLinkFixtureEdited, WithoutAnAbsoluteUrlTheBookIsSpelledBare) {

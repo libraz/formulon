@@ -10,6 +10,7 @@
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml/part_graph.h"
+#include "io/ooxml/relationship_xml.h"
 #include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
@@ -219,9 +220,16 @@ Expected<void, Error> drop_objects(Workbook& wb, const std::string& path, pugi::
     return Expected<void, Error>::Ok();
   }
   std::vector<std::string> candidates;
-  pugi::xml_node root = rels_doc.child("Relationships");
-  for (pugi::xml_node rel = root.child("Relationship"); rel;) {
-    pugi::xml_node next = rel.next_sibling("Relationship");
+  pugi::xml_node root = io::ooxml::relationship_root(rels_doc);
+  if (!root) {
+    return unparseable("drawing: rels part has an invalid Relationships root", rels_path);
+  }
+  for (pugi::xml_node rel = root.first_child(); rel;) {
+    pugi::xml_node next = rel.next_sibling();
+    if (!io::ooxml::is_relationship_element(rel, root)) {
+      rel = next;
+      continue;
+    }
     const std::string id = rel.attribute("Id").value();
     if (std::find(used.begin(), used.end(), id) == used.end()) {
       for (const io::ooxml::DrawingRel& entry : rels) {
@@ -559,6 +567,7 @@ struct SnapshotPart {
 
 struct DrawingSnapshot {
   std::uint32_t index = 0;
+  bool has_part_graph = false;
   std::string xml;
   std::vector<SnapshotRel> rels;
   std::vector<SnapshotPart> parts;
@@ -578,6 +587,7 @@ Expected<DrawingSnapshot, Error> decode_snapshot(const std::uint8_t* bytes, std:
       !in.blob(snap.xml) || !in.u32(count)) {
     return malformed;
   }
+  snap.has_part_graph = version == kSnapshotVersion;
   for (std::uint32_t i = 0; i < count; ++i) {
     SnapshotRel rel;
     if (!in.blob(rel.id) || !in.blob(rel.type) || !in.blob(rel.target) || !in.flag(rel.external) ||
@@ -700,7 +710,8 @@ Expected<void, Error> load_rels_doc(const Workbook& wb, const std::string& rels_
 
 void append_rel(pugi::xml_document& rels_doc, const std::string& id, std::string_view type, const std::string& target,
                 bool external) {
-  pugi::xml_node node = rels_doc.child("Relationships").append_child("Relationship");
+  pugi::xml_node root = io::ooxml::relationship_root(rels_doc);
+  pugi::xml_node node = root.append_child(io::ooxml::relationship_child_qname(root).c_str());
   node.append_attribute("Id").set_value(id.c_str());
   node.append_attribute("Type").set_value(std::string(type).c_str());
   node.append_attribute("Target").set_value(target.c_str());
@@ -916,9 +927,9 @@ void place_parts(const Workbook& wb, std::vector<PlannedPart>& plan, const std::
 
 // Writes the planned parts and their rels parts, re-pointing every captured
 // relationship whose target moved. Appends to `orphans` the targets of rels
-// parts it overwrote.
-Expected<void, Error> write_parts(Workbook& wb, const std::vector<PlannedPart>& plan,
-                                  std::vector<std::string>& orphans) {
+// parts it replaces or removes.
+Expected<void, Error> write_parts(Workbook& wb, const std::vector<PlannedPart>& plan, std::vector<std::string>& orphans,
+                                  bool has_part_graph) {
   for (const PlannedPart& part : plan) {
     if (!part.write) {
       continue;
@@ -930,7 +941,7 @@ Expected<void, Error> write_parts(Workbook& wb, const std::vector<PlannedPart>& 
     if (!existed && part.content_type->empty() && !ext.empty() && info) {
       ensure_default_content_type(wb, ext.c_str(), image_content_type(info.value().format));
     }
-    if (part.rels == nullptr) {
+    if (part.rels == nullptr && !has_part_graph) {
       continue;
     }
     const std::string rels_path = io::ooxml::rels_path_for_part(part.path);
@@ -941,12 +952,30 @@ Expected<void, Error> write_parts(Workbook& wb, const std::vector<PlannedPart>& 
         }
       }
     }
+    if (part.rels == nullptr) {
+      if (has_part_graph && io::ooxml::find_passthrough_part(wb, rels_path) != nullptr) {
+        std::vector<std::uint8_t> erase(wb.passthrough_parts().size(), 0U);
+        for (std::size_t i = 0; i < wb.passthrough_parts().size(); ++i) {
+          if (wb.passthrough_parts()[i].path == rels_path) {
+            erase[i] = 1U;
+          }
+        }
+        RETURN_IF_ERROR(wb.erase_passthrough_parts(std::move(erase)));
+      }
+      continue;
+    }
     RETURN_IF_ERROR(put_part(wb, rels_path, "", *part.rels));
     pugi::xml_document rels_doc;
     RETURN_IF_ERROR(io::ooxml::load_part_dom(wb, rels_path, "drawing", rels_doc));
     bool moved = false;
-    for (pugi::xml_node rel = rels_doc.child("Relationships").child("Relationship"); rel;
-         rel = rel.next_sibling("Relationship")) {
+    const pugi::xml_node root = io::ooxml::relationship_root(rels_doc);
+    if (!root) {
+      return unparseable("drawing: rels part has an invalid Relationships root", rels_path);
+    }
+    for (pugi::xml_node rel = root.first_child(); rel; rel = rel.next_sibling()) {
+      if (!io::ooxml::is_relationship_element(rel, root)) {
+        continue;
+      }
       if (std::string_view(rel.attribute("TargetMode").value()) == "External") {
         continue;
       }
@@ -1263,8 +1292,18 @@ Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, 
   put_u32(out, static_cast<std::uint32_t>(taken.size()));
   std::vector<std::string> top_parts;
   for (const io::ooxml::DrawingRel* rel : taken) {
-    const pugi::xml_node node =
-        rels_doc.child("Relationships").find_child_by_attribute("Relationship", "Id", rel->id.c_str());
+    const pugi::xml_node rels_root = io::ooxml::relationship_root(rels_doc);
+    pugi::xml_node node;
+    for (pugi::xml_node child = rels_root.first_child(); child; child = child.next_sibling()) {
+      if (io::ooxml::is_relationship_element(child, rels_root) &&
+          std::string_view(child.attribute("Id").value()) == rel->id) {
+        node = child;
+        break;
+      }
+    }
+    if (!node) {
+      return unparseable("drawing: relationship is missing from rels part", rel->id);
+    }
     const std::string target_text = node.attribute("Target").value();
     const PassthroughPart* part = rel->external ? nullptr : io::ooxml::find_passthrough_part(wb, rel->target);
     fits = fits && put_blob(out, rel->id.data(), rel->id.size()) && put_blob(out, rel->type.data(), rel->type.size()) &&
@@ -1404,7 +1443,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
   pugi::xml_document rels_doc;
   RETURN_IF_ERROR(load_rels_doc(wb, rels_path, rels_doc));
   std::vector<std::string> orphans;
-  RETURN_IF_ERROR(write_parts(wb, plan, orphans));
+  RETURN_IF_ERROR(write_parts(wb, plan, orphans, snap.has_part_graph));
   bool rels_changed = false;
   std::vector<std::pair<std::string, std::string>> renamed;
   for (std::size_t i = 0; i < snap.rels.size(); ++i) {
