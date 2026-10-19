@@ -3531,7 +3531,9 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  *           `rule.data_bar_axis_position` or any engaged `fm_cfvo_t`
  *           `type` names no declared enumerator, when `rule.dxf_id` is
  *           engaged but past the end of the workbook's `<dxfs>` table,
- *           or when a visual payload is missing / malformed;
+ *           when a visual payload is missing / malformed, or when
+ *           `rule.priority <= 0` and an existing rule already holds
+ *           `INT32_MAX`, so the auto-assigned priority would overflow;
  *         `kParserUnexpectedToken` (1000) when a non-empty `rule.formula1`,
  *           `rule.formula2` or formula-typed `fm_cfvo_t` value does not
  *           parse (the rule is not stored).

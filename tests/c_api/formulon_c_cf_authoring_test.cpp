@@ -1,6 +1,7 @@
 // Stable C ABI conditional-format authoring tests.
 
 #include <iterator>
+#include <limits>
 
 #include "formulon_c_cf_test_helpers.h"
 
@@ -134,6 +135,78 @@ TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {
     ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, i, &out), 0);
     EXPECT_EQ(out.priority, static_cast<int32_t>(i + 1));
   }
+}
+
+TEST(FormulonCApiCfMutate, AutoPriorityRejectsExhaustedInt32RangeAtomically) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 0;  // Expression
+  rule.formula1 = "TRUE";
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  rule.priority = std::numeric_limits<std::int32_t>::max();
+
+  std::size_t rule_index = 0U;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(rule_index, 0U);
+
+  std::size_t count = 0U;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 1U);
+  for (const std::int32_t auto_priority : {0, -1, std::numeric_limits<std::int32_t>::min()}) {
+    rule.priority = auto_priority;
+    rule_index = 99U;
+    EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+    EXPECT_EQ(rule_index, 99U);
+    ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+    EXPECT_EQ(count, 1U);
+  }
+}
+
+TEST(FormulonCApiCfMutate, AutoPriorityMayReachMaxThenExplicitPriorityStillWorks) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 0;  // Expression
+  rule.formula1 = "TRUE";
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  rule.priority = std::numeric_limits<std::int32_t>::max() - 1;
+
+  std::size_t rule_index = 0U;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(rule_index, 0U);
+
+  rule.priority = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(rule_index, 1U);
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, rule_index, &out), 0);
+  EXPECT_EQ(out.priority, std::numeric_limits<std::int32_t>::max());
+
+  rule.priority = -1;
+  rule_index = 99U;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rule_index, 99U);
+
+  std::size_t count = 0U;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+
+  // Explicit positive priorities remain usable even when automatic assignment
+  // has reached its limit.
+  rule.priority = 7;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(rule_index, 2U);
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, rule_index, &out), 0);
+  EXPECT_EQ(out.priority, 7);
 }
 
 TEST(FormulonCApiCfMutate, RemoveAtFlattensIndices) {

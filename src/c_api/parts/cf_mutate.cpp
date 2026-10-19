@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -421,16 +422,25 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   formulon::cf::CFRule out_rule;
   out_rule.type = static_cast<formulon::cf::RuleType>(rule.type);
 
-  // Auto-assign priority to (max_existing + 1) when caller passed <= 0.
-  std::int32_t max_priority = 0;
-  for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
-    for (const auto& existing : block.rules) {
-      if (existing.priority > max_priority) {
-        max_priority = existing.priority;
+  if (rule.priority > 0) {
+    out_rule.priority = rule.priority;
+  } else {
+    // Auto-assign priority to (max_existing + 1) when caller passed <= 0.
+    std::int32_t max_priority = 0;
+    for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
+      for (const auto& existing : block.rules) {
+        if (existing.priority > max_priority) {
+          max_priority = existing.priority;
+        }
       }
     }
+    if (max_priority == std::numeric_limits<std::int32_t>::max()) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_sheet_cf_add_rule: auto-assignment would overflow",
+                               "max_existing_priority=" + std::to_string(max_priority));
+    }
+    out_rule.priority = max_priority + 1;
   }
-  out_rule.priority = (rule.priority > 0) ? rule.priority : (max_priority + 1);
   out_rule.stop_if_true = rule.stop_if_true != 0;
   if (rule.dxf_id_engaged != 0) {
     // A `dxfId` past the end of `<dxfs>` makes Excel treat the whole
