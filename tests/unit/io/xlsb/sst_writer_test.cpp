@@ -5,6 +5,7 @@
 
 #include "io/xlsb/sst_writer.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -19,6 +20,8 @@
 #include "io/xlsb/sst_reader.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 #include "utils/text_ops.h"
 
 namespace formulon {
@@ -86,6 +89,41 @@ void AppendPhoneticSliceCase(std::vector<std::uint8_t>& body, std::string_view k
   emit_u16(payload, 0U);
   emit_u16(payload, 0x0030U);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem), payload);
+}
+
+std::vector<std::uint8_t> BuildSstItemWithRichRuns(std::uint8_t flags, std::uint32_t run_count, std::size_t run_bytes,
+                                                   bool include_phonetic_tail = false) {
+  std::vector<std::uint8_t> payload;
+  emit_u8(payload, flags);
+  emit_xlwidestring(payload, "A");
+  if ((flags & 0x01U) != 0U) {
+    emit_u32(payload, run_count);
+    payload.insert(payload.end(), run_bytes, 0U);
+  }
+  if (include_phonetic_tail && (flags & 0x02U) != 0U) {
+    emit_xlwidestring(payload, "");
+    emit_u32(payload, 0U);
+  }
+
+  std::vector<std::uint8_t> body;
+  emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem), payload);
+  return body;
+}
+
+Expected<std::vector<std::string>, Error> DecodeSharedStringRecords(const std::vector<std::uint8_t>& body) {
+  std::deque<std::string> text_storage;
+  std::vector<std::vector<PhoneticRun>> phonetic;
+  std::vector<PhoneticProperties> phonetic_props;
+  auto entries = DecodeSharedStringsBin(body, text_storage, phonetic, phonetic_props);
+  if (!entries) {
+    return std::move(entries.error());
+  }
+  std::vector<std::string> decoded;
+  decoded.reserve(entries.value().size());
+  for (const std::string_view entry : entries.value()) {
+    decoded.emplace_back(entry);
+  }
+  return decoded;
 }
 
 TEST(XlsbSstBuilder, EmptyBuilderEmitsBeginEndFraming) {
@@ -213,6 +251,46 @@ TEST(XlsbSstBuilder, PhoneticSlicesMatchUtf16SubstringForEveryBoundaryPair) {
       EXPECT_EQ(decoded[i].phonetic[0].text, "🌟");
     }
   }
+}
+
+TEST(XlsbSstBuilder, RichRunValidationAcceptsAllFlagsWithExactRunBytes) {
+  for (std::uint8_t flags = 0U; flags < 4U; ++flags) {
+    const std::size_t run_bytes = (flags & 0x01U) != 0U ? 4U : 0U;
+    const std::vector<std::uint8_t> body = BuildSstItemWithRichRuns(flags, 1U, run_bytes, true);
+    const auto decoded = DecodeSharedStringRecords(body);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << "flags=" << static_cast<unsigned int>(flags);
+    ASSERT_EQ(decoded.value().size(), 1U);
+    EXPECT_EQ(decoded.value()[0], "A");
+  }
+}
+
+TEST(XlsbSstBuilder, RichRunTruncationIsRejectedWithOrWithoutPhoneticTail) {
+  const std::array<std::uint8_t, 2> flag_cases{{0x01U, 0x03U}};
+  for (const std::uint8_t flags : flag_cases) {
+    for (std::size_t remaining = 0U; remaining < 4U; ++remaining) {
+      const std::vector<std::uint8_t> body = BuildSstItemWithRichRuns(flags, 1U, remaining);
+      const auto decoded = DecodeSharedStringRecords(body);
+      ASSERT_FALSE(static_cast<bool>(decoded))
+          << "flags=" << static_cast<unsigned int>(flags) << " remaining=" << remaining;
+      EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
+      EXPECT_NE(decoded.error().message.find("rich-text run array truncated"), std::string::npos);
+    }
+  }
+
+  const std::vector<std::uint8_t> huge_count = BuildSstItemWithRichRuns(0x01U, UINT32_MAX, 0U);
+  const auto decoded = DecodeSharedStringRecords(huge_count);
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
+}
+
+TEST(XlsbSstBuilder, RichRunCannotReadBytesFromFollowingRecord) {
+  std::vector<std::uint8_t> body = BuildSstItemWithRichRuns(0x01U, 1U, 0U);
+  const std::vector<std::uint8_t> following = BuildSstItemWithRichRuns(0x00U, 0U, 0U);
+  body.insert(body.end(), following.begin(), following.end());
+
+  const auto decoded = DecodeSharedStringRecords(body);
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
 }
 
 TEST(XlsbSstBuilder, BeginRecordCarriesCountFields) {

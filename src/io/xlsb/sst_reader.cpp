@@ -210,12 +210,7 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     out_phonetic.emplace_back();
     out_phonetic_props.emplace_back();
 
-    if ((flags & kRichStrPhonetic) == 0U) {
-      continue;
-    }
-    // The rich-format runs sit between the string and the phonetic tail,
-    // so they have to be stepped over even though the reader models
-    // plain text only.
+    // Rich runs precede the phonetic tail; validate them even when it is absent.
     if ((flags & kRichStrRichRuns) != 0U) {
       ASSIGN_OR_RETURN(auto run_count, read_u32(p));
       const std::uint32_t rich_runs = run_count;
@@ -228,6 +223,9 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
       }
       p.data += static_cast<std::size_t>(rich_runs) * kStrRunSize;
       p.size -= static_cast<std::size_t>(rich_runs) * kStrRunSize;
+    }
+    if ((flags & kRichStrPhonetic) == 0U) {
+      continue;
     }
     if (auto decoded = DecodePhoneticTail(p, entries.back(), out_phonetic.back(), out_phonetic_props.back());
         !decoded) {
