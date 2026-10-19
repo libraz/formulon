@@ -137,9 +137,6 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
       ctx.append(std::to_string(static_cast<int>(err)));
       return make_error(ErrorCodeForMiniz(err), "ZipReader::open: central-directory preflight failed", std::move(ctx));
     }
-    if (stat.m_is_directory) {
-      continue;
-    }
     const mz_uint needed = mz_zip_reader_get_filename(&impl_->archive, i, nullptr, 0);
     if (needed == 0U) {
       mz_zip_reader_end(&impl_->archive);
@@ -159,6 +156,15 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
     std::size_t name_len = written;
     if (name_len > 0U && impl_->name_buf[name_len - 1U] == '\0') {
       --name_len;
+    }
+    if (std::memchr(impl_->name_buf.data(), '\0', name_len) != nullptr) {
+      mz_zip_reader_end(&impl_->archive);
+      return make_error(FormulonErrorCode::kIoZipCorrupt,
+                        "ZipReader::open: central-directory filename has embedded NUL",
+                        "context=zip_reader preflight embedded_nul");
+    }
+    if (stat.m_is_directory) {
+      continue;
     }
     if (!seen_names.emplace(impl_->name_buf.data(), name_len).second) {
       std::string ctx("context=zip_reader duplicate_entry=");
@@ -215,7 +221,7 @@ std::string_view ZipReader::entry_name(std::size_t index) const noexcept {
 }
 
 bool ZipReader::has_entry(std::string_view name) const noexcept {
-  if (!impl_->open || name.empty()) {
+  if (!impl_->open || name.empty() || name.find('\0') != std::string_view::npos) {
     return false;
   }
   // mz_zip_reader_locate_file requires a NUL-terminated C string. We pass
@@ -235,6 +241,11 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
   if (!impl_->open) {
     return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: archive not open",
                       "context=zip_reader entry=" + std::string(name));
+  }
+
+  if (name.find('\0') != std::string_view::npos) {
+    return make_error(FormulonErrorCode::kIoFileNotFound, "ZipReader::read_entry: entry not found",
+                      "context=zip_reader entry=embedded_nul");
   }
 
   std::string c_name(name);

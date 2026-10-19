@@ -4,9 +4,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml/zip_part_writer.h"
+#include "io/zip_reader.h"
 #include "value.h"
 #include "workbook.h"
 #include "workbook_format.h"
@@ -70,6 +75,52 @@ TEST_P(ZipEntryTimestampTest, UnchangedModelSavesIdenticalBytes) {
   auto changed = wb.save_as(GetParam());
   ASSERT_TRUE(changed);
   EXPECT_NE(first.value(), changed.value());
+}
+
+TEST(ZipPartWriter, RejectsEmbeddedNulBeforeRecordingAndWritesValidNames) {
+  io::ZipWriterGuard writer;
+  ASSERT_TRUE(writer.init());
+
+  std::unordered_set<std::string> seen_paths{"preexisting.txt"};
+  const std::string text_body = "text";
+  auto bad_text = io::AddPart(writer.get(), std::string_view{"plain.xml\0suffix", 16U}, text_body, &seen_paths);
+  EXPECT_FALSE(static_cast<bool>(bad_text));
+  if (!bad_text) {
+    EXPECT_EQ(bad_text.error().code, FormulonErrorCode::kIoWriteFailed);
+  }
+  EXPECT_EQ(seen_paths, (std::unordered_set<std::string>{"preexisting.txt"}));
+
+  const std::vector<std::uint8_t> binary_body{0x01U, 0x02U};
+  auto bad_binary = io::AddPartBytes(writer.get(), std::string_view{"blob.bin\0tail", 13U}, binary_body, &seen_paths);
+  EXPECT_FALSE(static_cast<bool>(bad_binary));
+  if (!bad_binary) {
+    EXPECT_EQ(bad_binary.error().code, FormulonErrorCode::kIoWriteFailed);
+  }
+  EXPECT_EQ(seen_paths, (std::unordered_set<std::string>{"preexisting.txt"}));
+
+  ASSERT_TRUE(static_cast<bool>(io::AddPart(writer.get(), "plain.xml", text_body, &seen_paths)));
+  ASSERT_TRUE(static_cast<bool>(io::AddPartBytes(writer.get(), "blob.bin", binary_body, &seen_paths)));
+  ASSERT_TRUE(static_cast<bool>(io::AddPart(writer.get(), "Alpha.txt", text_body, &seen_paths)));
+  ASSERT_TRUE(static_cast<bool>(io::AddPart(writer.get(), "alpha.txt", text_body, &seen_paths)));
+  ASSERT_TRUE(static_cast<bool>(io::AddPartBytes(writer.get(), "資料/値.bin", binary_body, &seen_paths)));
+  EXPECT_EQ(seen_paths.size(), 6U);
+  EXPECT_NE(seen_paths.find("plain.xml"), seen_paths.end());
+  EXPECT_NE(seen_paths.find("blob.bin"), seen_paths.end());
+  EXPECT_NE(seen_paths.find("Alpha.txt"), seen_paths.end());
+  EXPECT_NE(seen_paths.find("alpha.txt"), seen_paths.end());
+  EXPECT_NE(seen_paths.find("資料/値.bin"), seen_paths.end());
+
+  auto archive = io::FinalizeArchive(writer, "ZipPartWriter test");
+  ASSERT_TRUE(static_cast<bool>(archive)) << archive.error().message;
+  io::ZipReader reader;
+  ASSERT_TRUE(static_cast<bool>(reader.open(io::ByteSpan{archive.value().data(), archive.value().size()})));
+  EXPECT_TRUE(reader.has_entry("plain.xml"));
+  EXPECT_TRUE(reader.has_entry("blob.bin"));
+  EXPECT_TRUE(reader.has_entry("Alpha.txt"));
+  EXPECT_TRUE(reader.has_entry("alpha.txt"));
+  EXPECT_TRUE(reader.has_entry("資料/値.bin"));
+  EXPECT_FALSE(reader.has_entry(std::string_view{"plain.xml\0suffix", 16U}));
+  EXPECT_EQ(reader.entry_count(), 5U);
 }
 
 INSTANTIATE_TEST_SUITE_P(Formats, ZipEntryTimestampTest,

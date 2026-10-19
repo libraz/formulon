@@ -54,6 +54,10 @@ MZ_TIME_T FixedEntryTime() {
 /// message when miniz rejects the entry.
 Expected<void, Error> AddEntry(mz_zip_archive* archive, std::string_view path, const void* data, std::size_t size,
                                std::unordered_set<std::string>* seen_paths, const char* failure) {
+  if (path.find('\0') != std::string_view::npos) {
+    return make_error(FormulonErrorCode::kIoWriteFailed, "zip entry path contains embedded NUL",
+                      "context=zip_writer embedded_nul");
+  }
   if (auto dup_check = CheckAndRecordPath(path, seen_paths); !dup_check) {
     return std::move(dup_check.error());
   }

@@ -435,6 +435,96 @@ bool CorruptCentralDirectoryCrc(std::vector<std::uint8_t>& bytes, const std::str
   return false;
 }
 
+/// Rewrites the equal-length name in one local and one central ZIP header.
+/// Keeping the lengths unchanged leaves the surrounding archive framing
+/// intact while allowing malformed byte sequences to reach ZipReader.
+std::size_t RewriteEntryName(std::vector<std::uint8_t>& bytes, std::string_view old_name, std::string_view new_name) {
+  if (old_name.size() != new_name.size()) {
+    return 0U;
+  }
+  std::size_t replacements = 0U;
+  for (std::size_t i = 0; i + 46U <= bytes.size(); ++i) {
+    const bool local = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 3U && bytes[i + 3U] == 4U;
+    const bool central = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 1U && bytes[i + 3U] == 2U;
+    if (!local && !central) {
+      continue;
+    }
+    const std::size_t length_offset = i + (local ? 26U : 28U);
+    const std::size_t name_offset = i + (local ? 30U : 46U);
+    const std::size_t name_length =
+        static_cast<std::size_t>(bytes[length_offset]) | (static_cast<std::size_t>(bytes[length_offset + 1U]) << 8U);
+    if (name_length != old_name.size() || name_offset + name_length > bytes.size() ||
+        std::memcmp(bytes.data() + name_offset, old_name.data(), name_length) != 0) {
+      continue;
+    }
+    std::memcpy(bytes.data() + name_offset, new_name.data(), new_name.size());
+    ++replacements;
+  }
+  return replacements;
+}
+
+bool ZipEntryIsDirectory(const std::vector<std::uint8_t>& bytes) {
+  mz_zip_archive archive{};
+  std::memset(&archive, 0, sizeof(archive));
+  if (mz_zip_reader_init_mem(&archive, bytes.data(), bytes.size(), /*flags=*/0) == MZ_FALSE) {
+    return false;
+  }
+  mz_zip_archive_file_stat stat{};
+  const bool is_directory = mz_zip_reader_file_stat(&archive, 0U, &stat) != MZ_FALSE && stat.m_is_directory != 0U;
+  (void)mz_zip_reader_end(&archive);
+  return is_directory;
+}
+
+TEST(ZipReader, EmbeddedNulDoesNotAliasEntryNameOrSpendExtractionBudget) {
+  const std::array<std::uint8_t, 1> payload{{'x'}};
+  const std::vector<std::uint8_t> bytes = BuildSingleEntryZip("known", {payload.begin(), payload.end()});
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes), 1U)));
+
+  const std::string_view aliased_name{"known\0suffix", 12U};
+  EXPECT_FALSE(zip.has_entry(aliased_name));
+  auto aliased = zip.read_entry(aliased_name);
+  EXPECT_FALSE(static_cast<bool>(aliased));
+  if (!aliased) {
+    EXPECT_EQ(aliased.error().code, FormulonErrorCode::kIoFileNotFound);
+  }
+
+  auto known = zip.read_entry("known");
+  ASSERT_TRUE(static_cast<bool>(known)) << known.error().message;
+  EXPECT_EQ(known.value(), (std::vector<std::uint8_t>{'x'}));
+}
+
+TEST(ZipReader, OpenRejectsEmbeddedNulInFileAndDirectoryNamesAndCanReopen) {
+  const std::array<std::uint8_t, 1> payload{{'x'}};
+  const std::vector<std::uint8_t> valid = BuildSingleEntryZip("valid.bin", {payload.begin(), payload.end()});
+  const std::array<std::pair<std::string_view, std::string_view>, 2> cases{{
+      {"file.bin", std::string_view{"file\0bin", 8U}},
+      {"folder/", std::string_view{"folde\0/", 7U}},
+  }};
+
+  ZipReader zip;
+  for (std::size_t i = 0U; i < cases.size(); ++i) {
+    const auto [original, malformed] = cases[i];
+    const std::vector<std::uint8_t> entry_payload =
+        original.back() == '/' ? std::vector<std::uint8_t>{} : std::vector<std::uint8_t>{payload[0]};
+    std::vector<std::uint8_t> bytes = BuildSingleEntryZip(std::string(original), entry_payload);
+    ASSERT_EQ(RewriteEntryName(bytes, original, malformed), 2U);
+    if (i == 1U) {
+      ASSERT_TRUE(ZipEntryIsDirectory(bytes));
+    }
+
+    auto result = zip.open(SpanOf(bytes));
+    ASSERT_FALSE(static_cast<bool>(result)) << "embedded NUL accepted for entry index " << i;
+    EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipCorrupt);
+    EXPECT_EQ(zip.entry_count(), 0U);
+
+    ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(valid))));
+    auto reopened = zip.read_entry("valid.bin");
+    ASSERT_TRUE(static_cast<bool>(reopened));
+    EXPECT_EQ(reopened.value(), (std::vector<std::uint8_t>{'x'}));
+  }
+}
+
 TEST(ZipReader, ReadEntryRejectsZipBombSizedEntry) {
   // 101 MiB of zero bytes compresses to a few KB but reports an
   // uncompressed size that exceeds the per-entry cap; the reader must
