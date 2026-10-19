@@ -307,6 +307,18 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
                                         std::uint64_t cell_limit) {
   const bool all_rows = covers_all_rows(rect);
   const bool all_cols = covers_all_cols(rect);
+  const std::uint64_t area = (static_cast<std::uint64_t>(rect.last_row - rect.first_row) + 1U) *
+                             (static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U);
+  if (!all_rows && !all_cols && area > cell_limit) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, "remap_range_style: too many cells to restyle");
+  }
+  std::vector<CapturedCell> owned = stored_cells(sheet, rect);
+  std::uint64_t written = static_cast<std::uint64_t>(
+      std::count_if(owned.begin(), owned.end(), [](const CapturedCell& cell) { return cell.explicit_xf; }));
+  if (written > cell_limit) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, "remap_range_style: too many cells to restyle");
+  }
+
   const bool default_hidden = sheet.format_defaults().zero_height;
   const std::uint32_t mapped_default = apply_map(map, 0U);
   const SheetLayout& layout = sheet.layout();
@@ -337,8 +349,9 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
     std::uint32_t xf;
   };
   std::vector<CellRun> runs;
-  std::uint64_t written = 0;
   const auto plan_row = [&](std::uint32_t row, const RowStyle* pre_row) {
+    const RowCells* stored_row = nullptr;
+    bool looked_up_stored_row = false;
     std::uint32_t post_row_xf = 0U;
     bool post_row_styled = pre_row != nullptr;
     if (pre_row != nullptr) {
@@ -356,14 +369,26 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
         continue;
       }
       runs.push_back({row, pre.first, pre.last, target});
-      written += static_cast<std::uint64_t>(pre.last - pre.first) + 1U;
+      if (!looked_up_stored_row) {
+        const auto stored_row_it = sheet.rows().find(row);
+        stored_row = stored_row_it != sheet.rows().end() ? &stored_row_it->second : nullptr;
+        looked_up_stored_row = true;
+      }
+      const std::uint64_t run_width = static_cast<std::uint64_t>(pre.last - pre.first) + 1U;
+      std::uint64_t owned_in_run = 0U;
+      if (stored_row != nullptr) {
+        for (const RowCells::Entry entry :
+             stored_row->entries_in(pre.first, static_cast<std::uint64_t>(pre.last) + 1U)) {
+          if (cell_owns_style(entry.cell)) {
+            ++owned_in_run;
+          }
+        }
+      }
+      // Owner cells are written once by the owner pass below, unchanged xf included.
+      written += run_width - owned_in_run;
     }
   };
-  const std::uint64_t area = (static_cast<std::uint64_t>(rect.last_row - rect.first_row) + 1U) *
-                             (static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U);
-  if (!all_rows && !all_cols && area > cell_limit) {
-    written = area;
-  } else if ((all_rows || all_cols) && !style_bare_rows && !bare_rows_cross_remapped_cols) {
+  if ((all_rows || all_cols) && !style_bare_rows && !bare_rows_cross_remapped_cols) {
     // Only styled row overrides can require cell writes.
     for (std::size_t i = 0; i < pre_rows.size() && written <= cell_limit; ++i) {
       plan_row(pre_rows[i].row, &pre_rows[i]);
@@ -382,7 +407,6 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
     return make_error(FormulonErrorCode::kPreconditionFailed, "remap_range_style: too many cells to restyle");
   }
 
-  std::vector<CapturedCell> owned = stored_cells(sheet, rect);
   SheetLayout& mutable_layout = sheet.mutable_layout();
   if (all_rows) {
     for (const ColumnSegment& seg : post_cols) {
