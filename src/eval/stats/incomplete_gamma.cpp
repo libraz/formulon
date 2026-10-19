@@ -11,6 +11,7 @@
 #include <limits>
 
 #include "eval/excel_math.h"
+#include "eval/stats/flushed_ops.h"
 #include "eval/stats/horner.h"
 #include "eval/stats/special_functions.h"
 #include "utils/subnormal_flush.h"
@@ -19,6 +20,8 @@ namespace formulon {
 namespace eval {
 namespace stats {
 namespace {
+
+using flushed::two_sum;
 
 constexpr double kEps = 2.220446049250313e-16;
 constexpr double kLnSqrt2Pi = 0.9189385332046728;
@@ -150,12 +153,6 @@ double shifted_product(double x, int count) noexcept {
     acc += 1.0;
   }
   return out;
-}
-
-void two_sum(double a, double b, double* s, double* e) noexcept {
-  *s = a + b;
-  const double bb = *s - a;
-  *e = (a - (*s - bb)) + (b - bb);
 }
 
 // 1 / Gamma(1 + a) - 1 by rationals on a < 0.5 and a >= 0.5.
