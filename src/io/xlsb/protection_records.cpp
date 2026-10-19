@@ -145,6 +145,9 @@ bool base64_decode(const std::string& text, std::vector<std::uint8_t>& out) {
       }
       chunk = (chunk << 6U) | static_cast<std::uint32_t>(v);
     }
+    if ((pad == 2U && (chunk & 0xFFFFU) != 0U) || (pad == 1U && (chunk & 0xFFU) != 0U)) {
+      return false;
+    }
     out.push_back(static_cast<std::uint8_t>(chunk >> 16U));
     if (pad < 2U) {
       out.push_back(static_cast<std::uint8_t>(chunk >> 8U));

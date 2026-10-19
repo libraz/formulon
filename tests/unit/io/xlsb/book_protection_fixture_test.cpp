@@ -15,10 +15,12 @@
 #include <cstdio>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/xlsb/protection_records.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
@@ -110,6 +112,94 @@ std::map<std::uint16_t, std::vector<std::uint8_t>> BookProtectionRecords(const s
 const char* const kCases[] = {"com_s1_struct_win_nopw", "com_s2_struct_win_pw_a", "com_s3_nostruct_win_nopw",
                               "hand_lockAll",           "hand_lockRevision",      "hand_lockWindows",
                               "hand_revisionsPassword"};
+
+TEST(XlsbProtectionCodec, Base64RoundTripsRfc4648Vectors) {
+  struct Vector {
+    const char* plain;
+    const char* encoded;
+  };
+  constexpr Vector vectors[] = {{"", ""},
+                                {"f", "Zg=="},
+                                {"fo", "Zm8="},
+                                {"foo", "Zm9v"},
+                                {"foob", "Zm9vYg=="},
+                                {"fooba", "Zm9vYmE="},
+                                {"foobar", "Zm9vYmFy"}};
+  for (const Vector& vector : vectors) {
+    const std::string plain(vector.plain);
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(plain.size());
+    for (char c : plain) {
+      bytes.push_back(static_cast<std::uint8_t>(c));
+    }
+    EXPECT_EQ(base64_encode(bytes.data(), bytes.size()), vector.encoded);
+
+    std::vector<std::uint8_t> decoded;
+    ASSERT_TRUE(base64_decode(vector.encoded, decoded)) << vector.encoded;
+    EXPECT_EQ(decoded, bytes) << vector.encoded;
+  }
+}
+
+TEST(XlsbProtectionCodec, RejectsNonzeroUnusedPaddingBits) {
+  constexpr std::string_view kAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::vector<std::uint8_t> decoded;
+
+  // With two padding characters, the low four bits of the second sextet
+  // do not contribute to the decoded byte and must be zero.
+  for (std::uint32_t unused_bits = 1U; unused_bits < 16U; ++unused_bits) {
+    std::string invalid = "Zg==";
+    invalid[1] = kAlphabet[32U | unused_bits];
+    EXPECT_FALSE(base64_decode(invalid, decoded)) << invalid;
+  }
+
+  // With one padding character, the low two bits of the third sextet
+  // must be zero.
+  for (std::uint32_t unused_bits = 1U; unused_bits < 4U; ++unused_bits) {
+    std::string invalid = "Zm8=";
+    invalid[2] = kAlphabet[60U | unused_bits];
+    EXPECT_FALSE(base64_decode(invalid, decoded)) << invalid;
+  }
+}
+
+TEST(XlsbProtectionCodec, RejectsMalformedAlphabetAndPadding) {
+  for (const char* invalid : {"Zg=", "Z=g=", "====", "Zg=A", "Zg==AAAA", "!!!!"}) {
+    std::vector<std::uint8_t> decoded;
+    EXPECT_FALSE(base64_decode(invalid, decoded)) << invalid;
+  }
+}
+
+TEST(XlsbProtectionCodec, SheetProtectionRejectsInvalidHashOrSaltWithoutAppending) {
+  for (const bool invalid_hash : {true, false}) {
+    SheetProtection protection;
+    protection.enabled = true;
+    protection.algorithm_name = "SHA-512";
+    protection.hash_value = invalid_hash ? "Zh==" : "Zg==";
+    protection.salt_value = invalid_hash ? "Zm8=" : "Zm9=";
+    const std::vector<std::uint8_t> original = {0x12U, 0x34U};
+    std::vector<std::uint8_t> output = original;
+
+    auto emitted = emit_sheet_protection(output, protection);
+    ASSERT_FALSE(static_cast<bool>(emitted));
+    EXPECT_EQ(emitted.error().code, FormulonErrorCode::kInvalidArgument);
+    EXPECT_EQ(output, original);
+  }
+}
+
+TEST(XlsbProtectionCodec, BookProtectionRejectsInvalidHashOrSaltWithoutAppending) {
+  for (const bool invalid_hash : {true, false}) {
+    const std::string hash = invalid_hash ? "Zh==" : "Zg==";
+    const std::string salt = invalid_hash ? "Zm8=" : "Zm9=";
+    const std::string xml = "<workbookProtection workbookAlgorithmName=\"SHA-512\" workbookHashValue=\"" + hash +
+                            "\" workbookSaltValue=\"" + salt + "\" workbookSpinCount=\"1\"/>";
+    const std::vector<std::uint8_t> original = {0x56U, 0x78U};
+    std::vector<std::uint8_t> output = original;
+
+    auto emitted = emit_book_protection(output, xml);
+    ASSERT_FALSE(static_cast<bool>(emitted));
+    EXPECT_EQ(emitted.error().code, FormulonErrorCode::kInvalidArgument);
+    EXPECT_EQ(output, original);
+  }
+}
 
 // The .xlsb records decode to the element Excel wrote to the .xlsx twin.
 TEST(XlsbBookProtectionFixture, RecordsReadAsTheXlsxTwin) {
