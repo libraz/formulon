@@ -15,6 +15,7 @@
 #include "io/xml_utils.h"
 #include "utils/a1_ref.h"
 #include "utils/double_parse.h"
+#include "utils/index_sort.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -334,7 +335,7 @@ void read_points(const xml_node& cache, bool numeric, bool direct_text, std::vec
     value.format_code = pt.attribute("formatCode").value();
     out.push_back(std::move(value));
   }
-  std::stable_sort(out.begin(), out.end(), [](const ChartValue& l, const ChartValue& r) { return l.idx < r.idx; });
+  sort_by_index(out, [](const ChartValue& l, const ChartValue& r) { return l.idx < r.idx; });
 }
 
 xml_node ext_child(const xml_node& ref, std::string_view name) {

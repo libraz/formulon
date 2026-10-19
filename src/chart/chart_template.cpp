@@ -15,6 +15,7 @@
 #include "parser/reference.h"
 #include "sheet.h"
 #include "style_resolve.h"
+#include "utils/index_sort.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -758,8 +759,7 @@ std::optional<ChartSource> derive_chart_source(const Workbook& wb, std::size_t h
     return std::nullopt;
   }
   // Filtered series sit after the visible ones in the file; the split follows c:order.
-  std::stable_sort(series.begin(), series.end(),
-                   [](const ChartSeries* a, const ChartSeries* b) { return a->order < b->order; });
+  sort_by_index(series, [](const ChartSeries* a, const ChartSeries* b) { return a->order < b->order; });
 
   // A filtered ref keeps its full range in c15:fullRef; the c:f union lists only visible cells.
   const auto ref_of = [](const ChartDataSource& d) -> const std::string& {

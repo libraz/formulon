@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "utils/index_sort.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -389,7 +390,7 @@ void sort_by_power_desc(std::vector<T>* items) {
     }
     return;
   }
-  std::stable_sort(items->begin(), items->end(), [](const T& a, const T& b) { return a.power > b.power; });
+  sort_by_index(*items, [](const T& a, const T& b) { return a.power > b.power; });
 }
 
 struct Candidate {
