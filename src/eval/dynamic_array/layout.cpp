@@ -22,17 +22,10 @@ namespace eval {
 namespace {
 
 /// Walk every cell of `array` and append it to `out` (subject to the
-/// `ignore` bitmask) using the iteration order set by `scan_by_column`.
-/// Returns `false` on a coercion / argument-validation failure with the
-/// caller-visible error written into `error_out`.
-bool collect_tocol_torow_cells(const ArrayValue& array, std::int64_t ignore_mask, bool scan_by_column,
-                               std::vector<Value>& out, Value& error_out) {
-  // Mac Excel restricts the bitmask to 0..3 inclusive. Any other integer
-  // surfaces #VALUE!.
-  if (ignore_mask < 0 || ignore_mask > 3) {
-    error_out = Value::error(ErrorCode::Value);
-    return false;
-  }
+/// `ignore` bitmask, already validated to 0..3) using the iteration order
+/// set by `scan_by_column`.
+void collect_tocol_torow_cells(const ArrayValue& array, std::int64_t ignore_mask, bool scan_by_column,
+                               std::vector<Value>& out) {
   const bool skip_blanks = (ignore_mask & 1) != 0;
   const bool skip_errors = (ignore_mask & 2) != 0;
 
@@ -59,7 +52,6 @@ bool collect_tocol_torow_cells(const ArrayValue& array, std::int64_t ignore_mask
       }
     }
   }
-  return true;
 }
 
 /// Resolve the (`ignore`, `scan_by_column`) optional args shared by
@@ -71,18 +63,23 @@ bool resolve_tocol_torow_options(const parser::AstNode& call, std::uint32_t arit
                                  bool& scan_by_column, Value& error_out) {
   ignore_mask = 0;
   scan_by_column = false;
+  double ignore_d = 0.0;
   if (arity >= 2U) {
-    double ignore_d = 0.0;
     if (!dynamic_array::eval_truncated_number_arg(call.as_call_arg(1), arena, registry, ctx, ignore_d, error_out)) {
       return false;
     }
-    ignore_mask = static_cast<std::int64_t>(ignore_d);
   }
   if (arity >= 3U) {
     if (!dynamic_array::eval_bool_arg(call.as_call_arg(2), arena, registry, ctx, scan_by_column, error_out)) {
       return false;
     }
   }
+  // Mac Excel restricts the bitmask to 0..3 (else #VALUE!); checked before narrowing, after argument 3.
+  if (!(ignore_d >= 0.0 && ignore_d <= 3.0)) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  ignore_mask = static_cast<std::int64_t>(ignore_d);
   return true;
 }
 
@@ -122,11 +119,12 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
   if (!dynamic_array::eval_truncated_number_arg(call.as_call_arg(1), arena, registry, ctx, wc_d, error_out)) {
     return false;
   }
-  if (wc_d < 1.0) {
+  if (!(wc_d >= 1.0)) {
     error_out = Value::error(ErrorCode::Num);
     return false;
   }
-  wrap_count = static_cast<std::uint32_t>(wc_d);
+  const std::uint32_t max_wrap_count = std::max(arr->rows, arr->cols);
+  wrap_count = static_cast<std::uint32_t>(std::min(wc_d, static_cast<double>(max_wrap_count)));
 
   pad = Value::error(ErrorCode::NA);
   if (arity == 3U) {
@@ -179,9 +177,7 @@ Value eval_to_vector(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
   std::vector<Value> kept;
   kept.reserve(reserve_or.value());
-  if (!collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept, err)) {
-    return err;
-  }
+  collect_tocol_torow_cells(*array, ignore_mask, scan_by_column, kept);
   if (kept.empty()) {
     return Value::error(ErrorCode::Calc);
   }
@@ -210,6 +206,9 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   // their cells already laid out left-to-right / top-to-bottom in
   // `cells` (since rows or cols == 1). Total cell count is rows * cols.
   const std::size_t count = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
+  if (count == 0U) {
+    return Value::error(ErrorCode::Calc);
+  }
   // Excel does not extend the final shape beyond the source length when the
   // requested wrap count exceeds the vector length.
   const std::uint32_t effective_wrap =

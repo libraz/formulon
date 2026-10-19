@@ -471,6 +471,50 @@ TEST(BuiltinsTocol, OutOfRangeIgnoreMaskReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsTocol, LargeIgnoreMasksReturnValue) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Populate2x3(sheet);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  for (const std::string_view formula : {"=TOCOL(A1:C2,1E100)", "=TOCOL(A1:C2,-1E100)"}) {
+    parse_arena.reset();
+    eval_arena.reset();
+    const Value v = EvalUnder(formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
+TEST(BuiltinsTocol, FractionalIgnoreMaskTruncatesAndThirdArgumentErrorWins) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Populate2x3(sheet);
+  sheet.set_cell_value(0, 1, Value::error(ErrorCode::NA));
+  sheet.set_cell_value(0, 2, Value::blank());
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  const Value fractional = EvalUnder("=TOCOL(A1:C2,3.9)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(fractional.is_array());
+  ASSERT_EQ(fractional.as_array_rows(), 4U);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[1].as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[2].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[3].as_number(), 6.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value third_error = EvalUnder("=TOCOL(A1:C2,1E100,NA())", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(third_error.is_error());
+  EXPECT_EQ(third_error.as_error(), ErrorCode::NA);
+}
+
 // ---------------------------------------------------------------------------
 // TOROW
 // ---------------------------------------------------------------------------
@@ -554,6 +598,50 @@ TEST(BuiltinsTorow, AllArrayLiteralErrorsIgnoredReturnsCalc) {
   const Value v = EvalUnder("=TOROW({#N/A,#VALUE!}, 2)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
+TEST(BuiltinsTorow, LargeIgnoreMasksReturnValue) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Populate2x3(sheet);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  for (const std::string_view formula : {"=TOROW(A1:C2,1E100)", "=TOROW(A1:C2,-1E100)"}) {
+    parse_arena.reset();
+    eval_arena.reset();
+    const Value v = EvalUnder(formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
+TEST(BuiltinsTorow, FractionalIgnoreMaskTruncatesAndThirdArgumentErrorWins) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Populate2x3(sheet);
+  sheet.set_cell_value(0, 1, Value::error(ErrorCode::NA));
+  sheet.set_cell_value(0, 2, Value::blank());
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  const Value fractional = EvalUnder("=TOROW(A1:C2,3.9)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(fractional.is_array());
+  ASSERT_EQ(fractional.as_array_cols(), 4U);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[1].as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[2].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(fractional.as_array_cells()[3].as_number(), 6.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value third_error = EvalUnder("=TOROW(A1:C2,1E100,NA())", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(third_error.is_error());
+  EXPECT_EQ(third_error.as_error(), ErrorCode::NA);
 }
 
 // ---------------------------------------------------------------------------
@@ -677,6 +765,43 @@ TEST(BuiltinsWraprows, WrapCountExceedingLengthClipsToVectorLength) {
   ASSERT_EQ(v.as_array_cols(), 3U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 3.0);
+}
+
+TEST(BuiltinsWraprows, HugeWrapCountsClipToVectorLength) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  for (std::uint32_t c = 0; c < 3U; ++c) {
+    sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
+  }
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  for (const std::string_view formula : {"=WRAPROWS(A1:C1,4294967296)", "=WRAPROWS(A1:C1,1E100)"}) {
+    parse_arena.reset();
+    eval_arena.reset();
+    const Value v = EvalUnder(formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array()) << formula;
+    EXPECT_EQ(v.as_array_rows(), 1U) << formula;
+    EXPECT_EQ(v.as_array_cols(), 3U) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 3.0) << formula;
+  }
+}
+
+TEST(BuiltinsWraprows, HugeWrapCountStillPropagatesNaPad) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  const Value v = EvalUnder("=WRAPROWS(A1:A1,1E100,NA())", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 TEST(BuiltinsWraprows, ExplicitPadValueIsUsed) {
@@ -820,6 +945,43 @@ TEST(BuiltinsWrapcols, WrapCountExceedingLengthClipsToVectorLength) {
   ASSERT_EQ(v.as_array_cols(), 1U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 3.0);
+}
+
+TEST(BuiltinsWrapcols, HugeWrapCountsClipToVectorLength) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  for (std::uint32_t c = 0; c < 3U; ++c) {
+    sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
+  }
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  for (const std::string_view formula : {"=WRAPCOLS(A1:C1,4294967296)", "=WRAPCOLS(A1:C1,1E100)"}) {
+    parse_arena.reset();
+    eval_arena.reset();
+    const Value v = EvalUnder(formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array()) << formula;
+    EXPECT_EQ(v.as_array_rows(), 3U) << formula;
+    EXPECT_EQ(v.as_array_cols(), 1U) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0) << formula;
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 3.0) << formula;
+  }
+}
+
+TEST(BuiltinsWrapcols, HugeWrapCountStillPropagatesNaPad) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  const Value v = EvalUnder("=WRAPCOLS(A1:A1,1E100,NA())", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 TEST(BuiltinsWrapcols, TwoDimensionalSourceReturnsValue) {
