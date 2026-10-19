@@ -531,7 +531,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh0_hdr",
+      "id": "pivotby_fh0_hdr",
       "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,0)",
       "setup": {
         "A1": {
@@ -619,7 +619,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh0_nohdr",
+      "id": "pivotby_fh0_nohdr",
       "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)",
       "setup": {
         "A1": {
@@ -698,7 +698,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh1_hdr",
+      "id": "pivotby_fh1_hdr",
       "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,1)",
       "setup": {
         "A1": {
@@ -777,7 +777,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh1_nohdr",
+      "id": "pivotby_fh1_nohdr",
       "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,1)",
       "setup": {
         "A1": {
@@ -852,7 +852,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh2_hdr",
+      "id": "pivotby_fh2_hdr",
       "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,2)",
       "setup": {
         "A1": {
@@ -950,7 +950,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh2_nohdr",
+      "id": "pivotby_fh2_nohdr",
       "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,2)",
       "setup": {
         "A1": {
@@ -1037,7 +1037,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh3_hdr",
+      "id": "pivotby_fh3_hdr",
       "formula": "=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,3)",
       "setup": {
         "A1": {
@@ -1124,7 +1124,7 @@
       }
     },
     {
-      "id": "pivotby_measured_fh3_nohdr",
+      "id": "pivotby_fh3_nohdr",
       "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,3)",
       "setup": {
         "A1": {
@@ -1205,7 +1205,7 @@
       }
     },
     {
-      "id": "pivotby_measured_lit_fh0",
+      "id": "pivotby_lit_fh0",
       "formula": "=PIVOTBY({\"x\";\"y\";\"x\"},{\"p\";\"q\";\"q\"},{1;2;3},SUM,0)",
       "setup": {},
       "expect": {
@@ -1235,7 +1235,7 @@
       }
     },
     {
-      "id": "pivotby_measured_rng_fh0",
+      "id": "pivotby_rng_fh0",
       "formula": "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)",
       "setup": {
         "A2": {
@@ -1302,7 +1302,7 @@
       }
     },
     {
-      "id": "pivotby_measured_rng_fh0_isblank",
+      "id": "pivotby_rng_fh0_isblank",
       "formula": "=ISBLANK(INDEX(PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0),1,1))",
       "setup": {
         "A2": {
@@ -1348,7 +1348,7 @@
       }
     },
     {
-      "id": "pivotby_measured_lit_isblank",
+      "id": "pivotby_lit_isblank",
       "formula": "=ISBLANK(INDEX(PIVOTBY({\"x\";\"y\";\"x\"},{\"p\";\"q\";\"q\"},{1;2;3},SUM,0),1,1))",
       "setup": {},
       "expect": {
@@ -1357,7 +1357,7 @@
       }
     },
     {
-      "id": "pivotby_measured_rng_type",
+      "id": "pivotby_rng_type",
       "formula": "=TYPE(INDEX(PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0),1,1))",
       "setup": {
         "A2": {

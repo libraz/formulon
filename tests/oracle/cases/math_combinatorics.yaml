@@ -379,7 +379,7 @@ cases:
     formula: "=PERMUTATIONA(3.9, 2.5)"
     tolerance: { abs: 0, rel: 0 }
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: arabic_iim
     formula: "=ARABIC(\"IIM\")"
@@ -474,11 +474,11 @@ cases:
   - id: near_fact
     formula: "=FACT(3.9999999)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: opt_gcd_arr_bool
     formula: "=GCD({TRUE,2})"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: near_base
     description: "Excel 365: \"111\""
     formula: "=BASE(7.9999999,2)"

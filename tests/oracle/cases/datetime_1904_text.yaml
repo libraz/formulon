@@ -336,7 +336,7 @@ cases:
     description: "Native DATE result remains a date-aware serial"
     formula: "=YEAR(N(DATE(2024,3,15)))"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: year_bool
     description: "Excel 365: 1900"
     formula: "=YEAR(TRUE)"

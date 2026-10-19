@@ -1,4 +1,4 @@
-suite: locale_profile_measurements
+suite: locale_profile_rules
 description: >
   Behaviour that may differ between Excel locales and hosts: width and kana
   folding at COUNTIF criteria, exact MATCH / XLOOKUP / VLOOKUP and DCOUNT

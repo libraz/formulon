@@ -287,7 +287,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh0_hdr",
+      "id": "groupby_fh0_hdr",
       "formula": "=GROUPBY(A1:A4,B1:B4,SUM,0)",
       "setup": {
         "A1": {
@@ -342,7 +342,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh0_nohdr",
+      "id": "groupby_fh0_nohdr",
       "formula": "=GROUPBY(A2:A4,B2:B4,SUM,0)",
       "setup": {
         "A1": {
@@ -395,7 +395,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh1_hdr",
+      "id": "groupby_fh1_hdr",
       "formula": "=GROUPBY(A1:A4,B1:B4,SUM,1)",
       "setup": {
         "A1": {
@@ -448,7 +448,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh1_nohdr",
+      "id": "groupby_fh1_nohdr",
       "formula": "=GROUPBY(A2:A4,B2:B4,SUM,1)",
       "setup": {
         "A1": {
@@ -501,7 +501,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh2_hdr",
+      "id": "groupby_fh2_hdr",
       "formula": "=GROUPBY(A1:A4,B1:B4,SUM,2)",
       "setup": {
         "A1": {
@@ -558,7 +558,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh2_nohdr",
+      "id": "groupby_fh2_nohdr",
       "formula": "=GROUPBY(A2:A4,B2:B4,SUM,2)",
       "setup": {
         "A1": {
@@ -613,7 +613,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh3_hdr",
+      "id": "groupby_fh3_hdr",
       "formula": "=GROUPBY(A1:A4,B1:B4,SUM,3)",
       "setup": {
         "A1": {
@@ -668,7 +668,7 @@
       }
     },
     {
-      "id": "groupby_measured_fh3_nohdr",
+      "id": "groupby_fh3_nohdr",
       "formula": "=GROUPBY(A2:A4,B2:B4,SUM,3)",
       "setup": {
         "A1": {
@@ -723,7 +723,7 @@
       }
     },
     {
-      "id": "groupby_measured_auto_numhdr",
+      "id": "groupby_auto_numhdr",
       "formula": "=GROUPBY(A1:A3,B1:B3,SUM)",
       "setup": {
         "A1": {
@@ -770,7 +770,7 @@
       }
     },
     {
-      "id": "groupby_measured_auto_textvals",
+      "id": "groupby_auto_textvals",
       "formula": "=GROUPBY(A1:A3,B1:B3,COUNTA)",
       "setup": {
         "A1": {
@@ -817,7 +817,7 @@
       }
     },
     {
-      "id": "groupby_measured_auto_rowfield_num",
+      "id": "groupby_auto_rowfield_num",
       "formula": "=GROUPBY(A1:A3,B1:B3,SUM)",
       "setup": {
         "A1": {
@@ -862,7 +862,7 @@
       }
     },
     {
-      "id": "groupby_measured_auto_2valcols",
+      "id": "groupby_auto_2valcols",
       "formula": "=GROUPBY(A1:A3,B1:C3,SUM)",
       "setup": {
         "A1": {
@@ -922,7 +922,7 @@
       }
     },
     {
-      "id": "groupby_measured_auto_2valcols_mixed",
+      "id": "groupby_auto_2valcols_mixed",
       "formula": "=GROUPBY(A1:A3,B1:C3,SUM)",
       "setup": {
         "A1": {
@@ -982,7 +982,7 @@
       }
     },
     {
-      "id": "groupby_measured_auto_2keycols",
+      "id": "groupby_auto_2keycols",
       "formula": "=GROUPBY(A1:B4,C1:C4,SUM)",
       "setup": {
         "A1": {
@@ -1057,7 +1057,7 @@
       }
     },
     {
-      "id": "groupby_measured_sort_2keys",
+      "id": "groupby_sort_2keys",
       "formula": "=GROUPBY(A2:B4,C2:C4,SUM,0,0)",
       "setup": {
         "A2": {
@@ -1117,7 +1117,7 @@
       }
     },
     {
-      "id": "groupby_measured_sort_2keys_total",
+      "id": "groupby_sort_2keys_total",
       "formula": "=GROUPBY(A2:B4,C2:C4,SUM,0,2)",
       "setup": {
         "A2": {
@@ -1186,7 +1186,7 @@
       }
     },
     {
-      "id": "groupby_measured_sort_mixed_types",
+      "id": "groupby_sort_mixed_types",
       "formula": "=GROUPBY({\"b\";2;TRUE;\"a\";1},{1;2;3;4;5},SUM,0,0)",
       "setup": {},
       "expect": {
@@ -1210,7 +1210,7 @@
       }
     },
     {
-      "id": "groupby_measured_sort_case",
+      "id": "groupby_sort_case",
       "formula": "=GROUPBY({\"b\";\"B\";\"a\";\"A\"},{1;2;3;4},SUM,0,0)",
       "setup": {},
       "expect": {

@@ -158,7 +158,7 @@ cases:
       F4: 44
     formula: '=CELL("contents",SINGLE(F1:F4))'
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: cell_contents_range
     description: "Excel 365: 3"
     formula_cell: "G2"

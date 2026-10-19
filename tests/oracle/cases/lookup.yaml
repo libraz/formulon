@@ -997,7 +997,7 @@ cases:
   - id: choosecols_array_index_two_dimensional
     formula: "=CHOOSECOLS({1,2,3},{1,2;2,3})"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: index_col_near
     description: "Excel 365: 2"
     setup: { A1: 1, B1: 2 }

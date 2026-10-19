@@ -771,11 +771,11 @@ constexpr LocaleFacts kGermanFacts{
     "Standard",  // text_general_standard
     {"Schwarz", "Blau", "Zyan", "Grün", "Magenta", "Rot", "Weiß", "Gelb"},  // text_colors_de_de
     "Farbe",                                                                // text_color_index_prefixes
-    "Gesamt",                                                               // groupby.groupby_measured_fh2_hdr
+    "Gesamt",                                                               // groupby.groupby_fh2_hdr
     "Gesamtergebnis",                                                       // pivotby.pivotby_row_subtotal_depth_two
-    "Zeilenfeld ",                                                          // groupby.groupby_measured_fh2_hdr
-    "Spaltenfeld ",                                                         // pivotby.pivotby_measured_fh2_hdr
-    "Wert ",                                                                // groupby.groupby_measured_fh2_hdr
+    "Zeilenfeld ",                                                          // groupby.groupby_fh2_hdr
+    "Spaltenfeld ",                                                         // pivotby.pivotby_fh2_hdr
+    "Wert ",                                                                // groupby.groupby_fh2_hdr
     {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"},  // weekdays_aaaa
     {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"},                                         // weekdays_aaa
 };
@@ -845,11 +845,11 @@ constexpr LocaleFacts kFrenchFacts{
     "Standard",  // text_general_standard
     {"Noir", "Bleu", "Cyan", "Vert", "Magenta", "Rouge", "Blanc", "Jaune"},  // text_colors_fr_fr
     "Couleur",                                                               // text_color_index_prefixes
-    "Total",                                                                 // groupby.groupby_measured_fh2_hdr
+    "Total",                                                                 // groupby.groupby_fh2_hdr
     "Total général",                                                         // pivotby.pivotby_row_subtotal_depth_two
-    "Champ de ligne ",                                                       // groupby.groupby_measured_fh2_hdr
-    "Champ de colonne ",                                                     // pivotby.pivotby_measured_fh2_hdr
-    "Valeur ",                                                               // groupby.groupby_measured_fh2_hdr
+    "Champ de ligne ",                                                       // groupby.groupby_fh2_hdr
+    "Champ de colonne ",                                                     // pivotby.pivotby_fh2_hdr
+    "Valeur ",                                                               // groupby.groupby_fh2_hdr
     kEnglishDaysLong,   // assumed: aaaa is a year token (weekdays_aaaa)
     kEnglishDaysShort,  // assumed: aaa is a year token (weekdays_aaa)
 };
@@ -882,7 +882,7 @@ constexpr LocaleFacts kChineseFacts{
     {"$", "€", "¥", "US$", "", ""},  // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ assumed
     {"€", ""},
     "$",                            // usdollar.usdollar_two_decimals
-    DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
+    DateOrder::kYMD,                // locale_profile_rules.datevalue_two_digit_year
     false,                          // value_dotted_ymd
     KanjiDateText::kAll,            // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                          // datevalue_timevalue.timevalue_jp_kanji_units
@@ -916,11 +916,11 @@ constexpr LocaleFacts kChineseFacts{
     "G/通用格式",          // text_general_g_tongyong
     {"黑色", "蓝色", "蓝绿色", "绿色", "洋红", "红色", "白色", "黄色"},      // text_colors_zh_cn
     "颜色",                                                                  // text_color_index_prefixes
-    "总计",                                                                  // groupby.groupby_measured_fh2_hdr
+    "总计",                                                                  // groupby.groupby_fh2_hdr
     "总计",                                                                  // pivotby.pivotby_row_subtotal_depth_two
-    "行字段 ",                                                               // groupby.groupby_measured_fh2_hdr
-    "列字段 ",                                                               // pivotby.pivotby_measured_fh2_hdr
-    "值 ",                                                                   // groupby.groupby_measured_fh2_hdr
+    "行字段 ",                                                               // groupby.groupby_fh2_hdr
+    "列字段 ",                                                               // pivotby.pivotby_fh2_hdr
+    "值 ",                                                                   // groupby.groupby_fh2_hdr
     {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"},  // weekdays_aaaa
     {"周日", "周一", "周二", "周三", "周四", "周五", "周六"},                // weekdays_aaa
 };
@@ -953,7 +953,7 @@ constexpr LocaleFacts kKoreanFacts{
     {"$", "€", "₩", "US$", "￦", ""},            // value_dollar_prefix, value_euro_prefix, value_won_prefix
     {"€", ""},
     "$",                            // usdollar.usdollar_two_decimals
-    DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
+    DateOrder::kYMD,                // locale_profile_rules.datevalue_two_digit_year
     true,                           // value_dotted_ymd
     KanjiDateText::kNone,           // datevalue_timevalue.datevalue_kanji_with_terminator
     false,                          // datevalue_timevalue.timevalue_jp_kanji_units
@@ -987,11 +987,11 @@ constexpr LocaleFacts kKoreanFacts{
     "G/표준",                // text_general_g_pyojun
     {"검정", "파랑", "녹청", "녹색", "자홍", "빨강", "흰색", "노랑"},        // text_colors_ko_kr
     "색",                                                                    // text_color_index_prefixes
-    "합계",                                                                  // groupby.groupby_measured_fh2_hdr
+    "합계",                                                                  // groupby.groupby_fh2_hdr
     "총합계",                                                                // pivotby.pivotby_row_subtotal_depth_two
-    "행 필드 ",                                                              // groupby.groupby_measured_fh2_hdr
-    "열 필드 ",                                                              // pivotby.pivotby_measured_fh2_hdr
-    "값 ",                                                                   // groupby.groupby_measured_fh2_hdr
+    "행 필드 ",                                                              // groupby.groupby_fh2_hdr
+    "열 필드 ",                                                              // pivotby.pivotby_fh2_hdr
+    "값 ",                                                                   // groupby.groupby_fh2_hdr
     {"일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"},  // weekdays_aaaa
     {"일", "월", "화", "수", "목", "금", "토"},                              // weekdays_aaa
 };
@@ -1059,11 +1059,11 @@ constexpr LocaleFacts kThaiFacts{
     "",       // text_general_english
     {"ดำ", "น้ำเงิน", "ฟ้า", "เขียว", "ม่วงมาเจนต้า", "แดง", "ขาว", "เหลือง"},       // text_colors_th_th
     "สี",                                                                      // text_color_index_prefixes
-    "ผลรวม",                                                                  // groupby.groupby_measured_fh2_hdr
+    "ผลรวม",                                                                  // groupby.groupby_fh2_hdr
     "ผลรวมทั้งหมด",                                                             // pivotby.pivotby_row_subtotal_depth_two
-    "เขตข้อมูลแถว ",                                                            // groupby.groupby_measured_fh2_hdr
-    "เขตข้อมูลคอลัมน์ ",                                                          // pivotby.pivotby_measured_fh2_hdr
-    "ค่า ",                                                                    // groupby.groupby_measured_fh2_hdr
+    "เขตข้อมูลแถว ",                                                            // groupby.groupby_fh2_hdr
+    "เขตข้อมูลคอลัมน์ ",                                                          // pivotby.pivotby_fh2_hdr
+    "ค่า ",                                                                    // groupby.groupby_fh2_hdr
     {"วันอาทิตย์", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์"},  // weekdays_aaaa
     {"อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"},                  // weekdays_aaa
 };
@@ -1135,11 +1135,11 @@ constexpr LocaleFacts kRussianFacts{
                           // text_general_standard)
     {"Черный", "Синий", "Голубой", "Зеленый", "Фиолетовый", "Красный", "Белый", "Желтый"},  // text_colors_ru_ru
     "Цвет",                                                                                 // text_color_index_prefixes
-    "Итого",          // groupby.groupby_measured_fh2_hdr
+    "Итого",                                                                                // groupby.groupby_fh2_hdr
     "Общий итог",     // pivotby.pivotby_row_subtotal_depth_two
-    "Поле строки ",   // groupby.groupby_measured_fh2_hdr
-    "Поле столбца ",  // pivotby.pivotby_measured_fh2_hdr
-    "Значение ",      // groupby.groupby_measured_fh2_hdr
+    "Поле строки ",   // groupby.groupby_fh2_hdr
+    "Поле столбца ",  // pivotby.pivotby_fh2_hdr
+    "Значение ",      // groupby.groupby_fh2_hdr
     {"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"},  // weekdays_aaaa
     {"Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"},                                           // weekdays_aaa
 };
@@ -1173,7 +1173,7 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     {"$", "€", "NT$", "US$", "", ""},  // value_dollar_prefix, value_euro_prefix, value_yen_prefix
     {"€", ""},
     "US$",                          // usdollar.usdollar_two_decimals
-    DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
+    DateOrder::kYMD,                // locale_profile_rules.datevalue_two_digit_year
     false,                          // value_dotted_ymd
     KanjiDateText::kFullDate,       // datevalue_timevalue.datevalue_kanji_with_terminator
     true,                           // datevalue_timevalue.timevalue_jp_kanji_units
@@ -1207,11 +1207,11 @@ constexpr LocaleFacts kTraditionalChineseFacts{
     "G/通用格式",  // text_general_g_tongyong
     {"黑色", "藍色", "青色", "綠色", "洋紅", "紅色", "白色", "黃色"},        // text_colors_zh_tw
     "色彩",                                                                  // text_color_index_prefixes
-    "總計",                                                                  // groupby.groupby_measured_fh2_hdr
+    "總計",                                                                  // groupby.groupby_fh2_hdr
     "總計",                                                                  // pivotby.pivotby_row_subtotal_depth_two
-    "列欄位 ",                                                               // groupby.groupby_measured_fh2_hdr
-    "欄欄位 ",                                                               // pivotby.pivotby_measured_fh2_hdr
-    "值 ",                                                                   // groupby.groupby_measured_fh2_hdr
+    "列欄位 ",                                                               // groupby.groupby_fh2_hdr
+    "欄欄位 ",                                                               // pivotby.pivotby_fh2_hdr
+    "值 ",                                                                   // groupby.groupby_fh2_hdr
     {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"},  // weekdays_aaaa
     {"週日", "週一", "週二", "週三", "週四", "週五", "週六"},                // weekdays_aaa
 };
@@ -1282,11 +1282,11 @@ constexpr LocaleFacts kItalianFacts{
     "Standard",           // text_general_standard
     {"Nero", "Blu", "Celeste", "Verde", "Fucsia", "Rosso", "Bianco", "Giallo"},  // text_colors_it_it
     "Colore",                                                                    // text_color_index_prefixes
-    "Totale",                                                                    // groupby.groupby_measured_fh2_hdr
+    "Totale",                                                                    // groupby.groupby_fh2_hdr
     "Totale complessivo",  // pivotby.pivotby_row_subtotal_depth_two
-    "Campo riga ",         // groupby.groupby_measured_fh2_hdr
-    "Campo colonna ",      // pivotby.pivotby_measured_fh2_hdr
-    "Valore ",             // groupby.groupby_measured_fh2_hdr
+    "Campo riga ",         // groupby.groupby_fh2_hdr
+    "Campo colonna ",      // pivotby.pivotby_fh2_hdr
+    "Valore ",             // groupby.groupby_fh2_hdr
     kEnglishDaysLong,      // assumed: aaaa is a year token (weekdays_aaaa)
     kEnglishDaysShort,     // assumed: aaa is a year token (weekdays_aaa)
 };
@@ -1357,11 +1357,11 @@ constexpr LocaleFacts kDutchFacts{
                           // text_general_standard)
     {"Zwart", "Blauw", "Cyaan", "Groen", "Magenta", "Rood", "Wit", "Geel"},  // text_colors_nl_nl
     "Kleur",                                                                 // text_color_index_prefixes
-    "Totaal",                                                                // groupby.groupby_measured_fh2_hdr
+    "Totaal",                                                                // groupby.groupby_fh2_hdr
     "Eindtotaal",                                                            // pivotby.pivotby_row_subtotal_depth_two
-    "Rijveld ",                                                              // groupby.groupby_measured_fh2_hdr
-    "Kolomveld ",                                                            // pivotby.pivotby_measured_fh2_hdr
-    "Waarde ",                                                               // groupby.groupby_measured_fh2_hdr
+    "Rijveld ",                                                              // groupby.groupby_fh2_hdr
+    "Kolomveld ",                                                            // pivotby.pivotby_fh2_hdr
+    "Waarde ",                                                               // groupby.groupby_fh2_hdr
     {"zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"},  // weekdays_aaaa
     {"zo", "ma", "di", "wo", "do", "vr", "za"},                                        // weekdays_aaa
 };
@@ -1438,11 +1438,11 @@ constexpr LocaleFacts kSpanishFacts{
                           // text_general_standard)
     {"Negro", "Azul", "Cian", "Verde", "Magenta", "Rojo", "Blanco", "Amarillo"},  // text_colors_es_es
     "Color",                                                                      // text_color_index_prefixes
-    "Total",                                                                      // groupby.groupby_measured_fh2_hdr
+    "Total",                                                                      // groupby.groupby_fh2_hdr
     "Total general",      // pivotby.pivotby_row_subtotal_depth_two
-    "Campo de fila ",     // groupby.groupby_measured_fh2_hdr
-    "Campo de columna ",  // pivotby.pivotby_measured_fh2_hdr
-    "Valor ",             // groupby.groupby_measured_fh2_hdr
+    "Campo de fila ",     // groupby.groupby_fh2_hdr
+    "Campo de columna ",  // pivotby.pivotby_fh2_hdr
+    "Valor ",             // groupby.groupby_fh2_hdr
     kEnglishDaysLong,     // assumed: aaaa is a year token (weekdays_aaaa)
     kEnglishDaysShort,    // assumed: aaa is a year token (weekdays_aaa)
 };
@@ -1513,11 +1513,11 @@ constexpr LocaleFacts kMexicanSpanishFacts{
                           // text_general_standard)
     {"Negro", "Azul", "Cian", "Verde", "Magenta", "Rojo", "Blanco", "Amarillo"},  // text_colors_es_mx
     "Color",                                                                      // text_color_index_prefixes
-    "Total",                                                                      // groupby.groupby_measured_fh2_hdr
+    "Total",                                                                      // groupby.groupby_fh2_hdr
     "Total general",      // pivotby.pivotby_row_subtotal_depth_two
-    "Campo de fila ",     // groupby.groupby_measured_fh2_hdr
-    "Campo de columna ",  // pivotby.pivotby_measured_fh2_hdr
-    "Valor ",             // groupby.groupby_measured_fh2_hdr
+    "Campo de fila ",     // groupby.groupby_fh2_hdr
+    "Campo de columna ",  // pivotby.pivotby_fh2_hdr
+    "Valor ",             // groupby.groupby_fh2_hdr
     kEnglishDaysLong,     // assumed: aaaa is a year token (weekdays_aaaa)
     kEnglishDaysShort,    // assumed: aaa is a year token (weekdays_aaa)
 };
@@ -1587,11 +1587,11 @@ constexpr LocaleFacts kPortugueseFacts{
     "Geral",  // text_general_geral; General and Standard are rejected (text_general_english, text_general_standard)
     {"Preto", "Azul", "Ciano", "Verde", "Magenta", "Vermelho", "Branco", "Amarelo"},  // text_colors_pt_br
     "Cor",                                                                            // text_color_index_prefixes
-    "Total",             // groupby.groupby_measured_fh2_hdr
+    "Total",                                                                          // groupby.groupby_fh2_hdr
     "Total Geral",       // pivotby.pivotby_row_subtotal_depth_two
-    "Campo de linha ",   // groupby.groupby_measured_fh2_hdr
-    "Campo de coluna ",  // pivotby.pivotby_measured_fh2_hdr
-    "Valor ",            // groupby.groupby_measured_fh2_hdr
+    "Campo de linha ",   // groupby.groupby_fh2_hdr
+    "Campo de coluna ",  // pivotby.pivotby_fh2_hdr
+    "Valor ",            // groupby.groupby_fh2_hdr
     kEnglishDaysLong,    // assumed: aaaa is a year token (weekdays_aaaa)
     kEnglishDaysShort,   // assumed: aaa is a year token (weekdays_aaa)
 };

@@ -720,7 +720,7 @@ entries:
   # Only Calibri 11's print-layout width is therefore directly evidenced
   # (from the print captures' own breaks, not a Range.Width sweep); every
   # other font/size's print-layout width is inferred by scaling its
-  # (separately measured, DPI-dependent) 96-DPI display calibration by
+  # (separate, DPI-dependent) 96-DPI display calibration by
   # Calibri 11's print/display ratio -- an approximation, not a second
   # sweep. The display calibration itself remains exact and continues to
   # drive `applied_geometry.column_widths_pt` in the workbook oracle
@@ -731,7 +731,7 @@ entries:
     mode: skip-oracle
     scope: deferred-feature
     evidence: [src/print/sheet_geometry.cpp, tests/unit/print/pagination_test.cpp]
-    reason: "Column width in points is the stored character-unit width times the Normal font's max digit width (MDW), which depends on that font's family and size -- but pagination's break math and the diagnostic `applied_geometry.column_widths_pt` field need different MDW figures. `Range.Width` (the display figure, swept over Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI at 8/9/10/11/12/14/16/18 pt: tests/fixtures/excel/win/column_width_dpi100/results.json at 100% scaling / 96 DPI, cross-checked against tests/fixtures/excel/win/column_width/results.json at 175% / 168 DPI) is DPI-dependent -- e.g. Calibri 11 resolves an 8.43-unit column to 48 pt at 100% and 51.43 pt at 175%. Print pagination cannot depend on the authoring screen's DPI, and indeed does not: the print-track captures' page-break positions for a 30-character Calibri-11 column are identical at both DPIs (171.0 pt worth of break, not either DPI's Range.Width figure of 161.25 pt / 171.0 pt happens to coincide for the 168-DPI capture only by chance). Formulon therefore uses two geometries (`ResolveColumnPrintGeometry` / `ResolveColumnDisplayGeometry`, src/print/sheet_geometry.cpp): Calibri 11's print-layout MDW/padding is the only one taken directly from a print capture; every other font/size's print-layout figure is inferred by scaling its measured 96-DPI display calibration by Calibri 11's print/display ratio, which is an approximation Excel's actual per-font print behavior has not been swept to confirm. The display calibration remains exact and still drives the diagnostic `applied_geometry` field. A Normal font or size outside the 4x8 sampled set falls back to the Calibri-11 figures in both geometries."
+    reason: "Column width in points is the stored character-unit width times the Normal font's max digit width (MDW), which depends on that font's family and size -- but pagination's break math and the diagnostic `applied_geometry.column_widths_pt` field need different MDW figures. `Range.Width` (the display figure, swept over Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI at 8/9/10/11/12/14/16/18 pt: tests/fixtures/excel/win/column_width_dpi100/results.json at 100% scaling / 96 DPI, cross-checked against tests/fixtures/excel/win/column_width/results.json at 175% / 168 DPI) is DPI-dependent -- e.g. Calibri 11 resolves an 8.43-unit column to 48 pt at 100% and 51.43 pt at 175%. Print pagination cannot depend on the authoring screen's DPI, and indeed does not: the print-track captures' page-break positions for a 30-character Calibri-11 column are identical at both DPIs (171.0 pt worth of break, not either DPI's Range.Width figure of 161.25 pt / 171.0 pt happens to coincide for the 168-DPI capture only by chance). Formulon therefore uses two geometries (`ResolveColumnPrintGeometry` / `ResolveColumnDisplayGeometry`, src/print/sheet_geometry.cpp): Calibri 11's print-layout MDW/padding is the only one taken directly from a print capture; every other font/size's print-layout figure is inferred by scaling its 96-DPI display calibration by Calibri 11's print/display ratio, which is an approximation Excel's actual per-font print behavior has not been swept to confirm. The display calibration remains exact and still drives the diagnostic `applied_geometry` field. A Normal font or size outside the 4x8 sampled set falls back to the Calibri-11 figures in both geometries."
     prefer: win-excel-365
     first_noted: 2026-08-22
     last_verified_excel_version: "16.0.20326"
@@ -752,7 +752,7 @@ entries:
   # the writer only synthesises the element for a table that never carried
   # one. What stays unobserved is the several-items selection: no capture
   # picks more than one page item, so `multiple_items_label` reproduces
-  # Excel's UI wording without a measurement behind it. That is a label
+  # Excel's UI wording with no Excel-rendered reference. That is a label
   # default, not a divergence, and it is documented where it is declared
   # (`pivot::PivotLayoutOptions`) rather than tracked here.
 
@@ -835,13 +835,13 @@ entries:
   # .xlsb to .xlsx, which is what made the differential reference
   # available without a Windows host. What Mac genuinely cannot do is
   # *create* a pivot from the AppleScript bridge.
-  - id: xlsb_pivot_unmeasured_cell_encodings
+  - id: xlsb_pivot_unpinned_cell_encodings
     applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: fixture
     evidence: [tests/unit/io/xlsb_pivot_fixture_test.cpp, src/io/xlsb/pivot_reader.h]
-    reason: "The XLSB pivot decoder covers the encodings measured against an Excel-authored fixture: shared-item string fields, an inline-double measure, row / column axis orders, and the eleven aggregation selectors. Encodings no capture has pinned yet -- a cache field holding dates, booleans, blanks or errors, a numeric field with shared items, and the per-item flag bits that mark an item hidden -- are refused rather than guessed, so a pivot using one is skipped and GETPIVOTDATA over it still returns #REF! where Excel answers. Refusing keeps a wrong number off the sheet (a mis-sized record cell shifts every later field, and a dropped hidden-item filter would over-count silently), and the record-width check plus the shared-item bounds check are what turn a wrong encoding into a refusal instead of a plausible total. Closing this needs more Excel-authored fixtures, which the .xlsb -> .xlsx conversion path can now supply."
+    reason: "The XLSB pivot decoder covers the encodings present in an Excel-authored fixture: shared-item string fields, an inline-double measure, row / column axis orders, and the eleven aggregation selectors. Encodings no capture has pinned yet -- a cache field holding dates, booleans, blanks or errors, a numeric field with shared items, and the per-item flag bits that mark an item hidden -- are refused rather than guessed, so a pivot using one is skipped and GETPIVOTDATA over it still returns #REF! where Excel answers. Refusing keeps a wrong number off the sheet (a mis-sized record cell shifts every later field, and a dropped hidden-item filter would over-count silently), and the record-width check plus the shared-item bounds check are what turn a wrong encoding into a refusal instead of a plausible total. Closing this needs more Excel-authored fixtures, which the .xlsb -> .xlsx conversion path can now supply."
     prefer: mac-excel-365
     first_noted: 2026-07-02
     last_verified_excel_version: "16.112.1"
@@ -899,7 +899,7 @@ entries:
     mode: skip-oracle
     scope: deferred-feature
     evidence: [src/io/worksheet_child_refs.h, tests/unit/io/retained_children_edit_fixture_test.cpp]
-    reason: "A row/column edit moves the cells named by the retained `<worksheet>` children as Excel moves them -- protected ranges, scenarios, the sheet sort state, cell watches, ignored errors, web-publish ranges, and in a `.xlsb` the AutoFilter and breaks kept as records (Excel saves under tests/fixtures/excel/retained_children_edit/). The anchors inside `<oleObjects>` and `<controls>` still keep their pre-edit cells, and nothing reports it; this host cannot author either object to measure how Excel moves them. `<smartTags>` stays put too, though Excel drops smart tags on any save."
+    reason: "A row/column edit moves the cells named by the retained `<worksheet>` children as Excel moves them -- protected ranges, scenarios, the sheet sort state, cell watches, ignored errors, web-publish ranges, and in a `.xlsb` the AutoFilter and breaks kept as records (Excel saves under tests/fixtures/excel/retained_children_edit/). The anchors inside `<oleObjects>` and `<controls>` still keep their pre-edit cells, and nothing reports it; this host cannot author either object to establish how Excel moves them. `<smartTags>` stays put too, though Excel drops smart tags on any save."
     prefer: mac-excel-365
     first_noted: 2026-08-21
     last_verified_excel_version: "16.113.3"

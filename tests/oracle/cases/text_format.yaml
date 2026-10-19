@@ -306,7 +306,7 @@ cases:
 
   # text_three_section_zero omitted — the literal 'Zero' contains a digit
   # placeholder '0' that Excel parses as a format token, so the case
-  # measures Excel's digit-rendering inside a literal rather than the
+  # tests Excel's digit-rendering inside a literal rather than the
   # zero-section selection itself.
 
   - id: text_four_section_text
@@ -368,11 +368,11 @@ cases:
     formula: "=TEXT(45383, \"yyyy\\d\\d\")"
 
   # text_quote_block_literal omitted — yaml double-escape was leaking the
-  # backslash into the format string, so the case measured an authoring
+  # backslash into the format string, so the case exercised an authoring
   # bug rather than Formulon's quoted-literal handling. Add back with a
   # cleaner encoding once we have a yaml fixture for raw quoted blocks.
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: text_eur_bracket
     description: "Excel 365: #VALUE!"
     formula: "=TEXT(3.14,\"[€EUR]0.00\")"

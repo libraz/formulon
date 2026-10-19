@@ -215,7 +215,7 @@
           "formula": "=INDEX(A1:D1,3)"
         }
       },
-      "skipped": "INDEX(A1:A3,0.4) truncates the row to zero and spills the column in Mac Excel 365; the legacy Windows cache contains #VALUE! from implicit intersection. Formulon matches the Mac spill. Probe: locale_profile_measurements.index_fractional_row."
+      "skipped": "INDEX(A1:A3,0.4) truncates the row to zero and spills the column in Mac Excel 365; the legacy Windows cache contains #VALUE! from implicit intersection. Formulon matches the Mac spill. Probe: locale_profile_rules.index_fractional_row."
     },
     {
       "id": "I6",

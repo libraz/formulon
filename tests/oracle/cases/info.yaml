@@ -443,7 +443,7 @@ cases:
     setup: { A1: 42 }
     formula: "=OFFSET(A1, -5, 0)"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: atp_iseven_bool
     formula: "=ISEVEN(TRUE)"
@@ -459,6 +459,6 @@ cases:
     setup: { A1: true }
     formula: "=ISODD(A1)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: opt_iseven_arr_bool
     formula: "=ISEVEN({TRUE})"

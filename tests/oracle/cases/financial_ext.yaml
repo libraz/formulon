@@ -193,7 +193,7 @@ cases:
   - id: ispmt_nper_zero_is_div0
     formula: "=ISPMT(0.05, 0, 0, 1000)"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: atp_dollarde_bool
     formula: "=DOLLARDE(TRUE,2)"
@@ -225,7 +225,7 @@ cases:
     setup: { A1: true }
     formula: "=NOMINAL(A1,2)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: a4_dollarfr_bool
     formula: "=DOLLARFR(TRUE,2)"
 

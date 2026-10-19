@@ -705,7 +705,7 @@ cases:
     formula: "=IMSECH(\"-1\")"
     tolerance: { abs: 0, rel: 0 }
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: atp_imabs_bool
     formula: "=IMABS(TRUE)"
@@ -724,7 +724,7 @@ cases:
     setup: { A1: true }
     formula: "=COMPLEX(A1,1)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: a4_imreal_bool
     formula: "=IMREAL(TRUE)"
 

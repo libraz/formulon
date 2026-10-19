@@ -1,8 +1,8 @@
 # Known divergences and pending adjudication of imported Excel caches.
 #
 # This file is the IronCalc-oracle counterpart to `tests/divergence.yaml`.
-# It records measured divergences and classified failures awaiting
-# measurement or importer/profile repair. The
+# It records divergences and classified failures awaiting
+# a fresh Excel comparison or importer/profile repair. The
 # IronCalc importer (`tools/oracle/ironcalc_import.py`) replaces each
 # matching case's `expect` with `"skipped": "<reason>"` so the C++ test
 # driver (`tests/oracle/oracle_test.cpp`) reports the case as
@@ -69,7 +69,7 @@
 #     OOXML text decoding, lost formula dependencies, or formula row
 #     placement changed the represented case. Repair the import first.
 #   cause: unadjudicated
-#     All other mismatches awaiting a fresh Mac Excel measurement. This
+#     All other mismatches awaiting a fresh Mac Excel comparison. This
 #     is a debt entry, not evidence that Formulon or the cache is correct.
 #
 # Pending locale, placement/dependency and unadjudicated entries retain
@@ -996,7 +996,7 @@ entries:
     first_noted: 2026-08-06
 
   # -- Pending imported-cache failures (2026-10-08) -----------------------
-  # INDEX(A1:A3,0.4) remains unregistered pending its Excel measurement.
+  # INDEX(A1:A3,0.4) remains unregistered pending a fresh Excel comparison.
   - id: ironcalc_calc_tests__DATE_AND_TIME_NOW_TODAY_Sheet1.A2
     cause: stale-cache
     reason: "Volatile NOW/TODAY result or a transitive TODAY dependency; the saved timestamp cannot match a fresh calculation. Formula: =NOW()"
@@ -1225,7 +1225,7 @@ entries:
 
   - id: ironcalc_calc_tests_simple_functions_INDEX.H6
     cause: mac-probe
-    reason: 'INDEX(A1:A3,0.4) truncates the row to zero and spills the column in Mac Excel 365; the legacy Windows cache contains #VALUE! from implicit intersection. Formulon matches the Mac spill. Probe: locale_profile_measurements.index_fractional_row.'
+    reason: 'INDEX(A1:A3,0.4) truncates the row to zero and spills the column in Mac Excel 365; the legacy Windows cache contains #VALUE! from implicit intersection. Formulon matches the Mac spill. Probe: locale_profile_rules.index_fractional_row.'
     prefer: mac
     first_noted: 2026-10-08
 

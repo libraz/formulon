@@ -461,7 +461,7 @@ cases:
     formula: "=POISSON.DIST(5, 10, TRUE)"
     tolerance: { abs: 0, rel: 0 }
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: binominv_p0
     description: "Excel 365: #NUM!"
     formula: "=BINOM.INV(10,0,0.8)"

@@ -169,7 +169,7 @@ cases:
     description: "purchase_date > first_period -> #NUM!"
     formula: "=AMORDEGRC(2400, DATE(2009,1,15), DATE(2008,12,31), 300, 1, 0.15, 1)"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: atp_accrintm_bool
     formula: "=ACCRINTM(TRUE,40000,0.1,1000)"
@@ -181,7 +181,7 @@ cases:
     setup: { A1: true }
     formula: "=ACCRINTM(A1,40000,0.1,1000)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: a4_accrint_bool
     formula: "=ACCRINT(TRUE,DATE(2024,1,15),DATE(2030,1,15),0.1,1000,2)"
 

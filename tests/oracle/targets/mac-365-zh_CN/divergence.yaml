@@ -4,13 +4,13 @@
 # includes mac-365-zh_CN.
 
 entries:
-  # zh-CN orders hanzi by pinyin. Formulon carries the measured order for
+  # zh-CN orders hanzi by pinyin. Formulon carries the order for
   # GB 2312 level 1 only and places every other ideograph after it.
   - id: col_kanji_a_ichi
     applies_to: [mac-365-zh_CN]
     mode: skip-oracle
     cause: accepted-divergence
-    reason: "\"亜\" vs \"一\": Mac Excel 365 zh-CN orders by pinyin (ya before yi) and returns LT. 亜 is outside GB 2312 level 1, whose measured order is the only pinyin data Formulon ships; ideographs outside it follow the level-1 block in radical-stroke order, so Formulon returns GT. Full pinyin data would cost more than the WASM size budget allows."
+    reason: "\"亜\" vs \"一\": Mac Excel 365 zh-CN orders by pinyin (ya before yi) and returns LT. 亜 is outside GB 2312 level 1, whose order is the only pinyin data Formulon ships; ideographs outside it follow the level-1 block in radical-stroke order, so Formulon returns GT. Full pinyin data would cost more than the WASM size budget allows."
     prefer: mac-excel-365
     first_noted: 2026-10-11
     last_verified_excel_version: "16.113.4"

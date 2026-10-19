@@ -407,7 +407,7 @@ cases:
     setup: { X10: 512, C1: "=SUBTOTAL(9,X10)+SEQUENCE(3)*0" }
     formula: "=AGGREGATE(9,4,C1:C3)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: average_omit
     description: "Excel 365: 4"
     formula: "=AVERAGE(3,4,,6,7)"

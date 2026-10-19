@@ -381,7 +381,7 @@ cases:
     setup: { C1: 1, C2: "=1/0", C3: 3 }
     formula: "=SUM(C1:C3)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: near_offset
     description: "Excel 365: 2"
     formula: "=ROWS(OFFSET(A1,0,0,2.9999999,1))"

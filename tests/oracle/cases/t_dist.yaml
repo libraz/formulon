@@ -205,7 +205,7 @@ cases:
     tolerance: { abs: 0.0, rel: 1.0e-12 }
     formula: "=T.INV.2T(1.5,10)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: tdist_blank
     description: "Excel 365: #DIV/0!"
     setup: { A1: null, B1: null, C1: null }

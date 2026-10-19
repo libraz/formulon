@@ -91,7 +91,7 @@ cases:
     formula: '=GROUPBY({3;1;2},{1;2;3},SUM,0,0)'
 
   # GROUPBY defaults and header handling, placeholder text cells, key ordering.
-  - id: groupby_measured_fh0_hdr
+  - id: groupby_fh0_hdr
     setup:
       A1: "k"
       B1: "v"
@@ -103,7 +103,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A1:A4,B1:B4,SUM,0)'
 
-  - id: groupby_measured_fh0_nohdr
+  - id: groupby_fh0_nohdr
     setup:
       A1: "k"
       B1: "v"
@@ -115,7 +115,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A2:A4,B2:B4,SUM,0)'
 
-  - id: groupby_measured_fh1_hdr
+  - id: groupby_fh1_hdr
     setup:
       A1: "k"
       B1: "v"
@@ -127,7 +127,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A1:A4,B1:B4,SUM,1)'
 
-  - id: groupby_measured_fh1_nohdr
+  - id: groupby_fh1_nohdr
     setup:
       A1: "k"
       B1: "v"
@@ -139,7 +139,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A2:A4,B2:B4,SUM,1)'
 
-  - id: groupby_measured_fh2_hdr
+  - id: groupby_fh2_hdr
     setup:
       A1: "k"
       B1: "v"
@@ -151,7 +151,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A1:A4,B1:B4,SUM,2)'
 
-  - id: groupby_measured_fh2_nohdr
+  - id: groupby_fh2_nohdr
     setup:
       A1: "k"
       B1: "v"
@@ -163,7 +163,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A2:A4,B2:B4,SUM,2)'
 
-  - id: groupby_measured_fh3_hdr
+  - id: groupby_fh3_hdr
     setup:
       A1: "k"
       B1: "v"
@@ -175,7 +175,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A1:A4,B1:B4,SUM,3)'
 
-  - id: groupby_measured_fh3_nohdr
+  - id: groupby_fh3_nohdr
     setup:
       A1: "k"
       B1: "v"
@@ -187,7 +187,7 @@ cases:
       B4: 3
     formula: '=GROUPBY(A2:A4,B2:B4,SUM,3)'
 
-  - id: groupby_measured_auto_numhdr
+  - id: groupby_auto_numhdr
     setup:
       A1: "k"
       B1: 5
@@ -197,7 +197,7 @@ cases:
       B3: 2
     formula: '=GROUPBY(A1:A3,B1:B3,SUM)'
 
-  - id: groupby_measured_auto_textvals
+  - id: groupby_auto_textvals
     setup:
       A1: "k"
       B1: "v"
@@ -207,7 +207,7 @@ cases:
       B3: "y"
     formula: '=GROUPBY(A1:A3,B1:B3,COUNTA)'
 
-  - id: groupby_measured_auto_rowfield_num
+  - id: groupby_auto_rowfield_num
     setup:
       A1: 1
       B1: "v"
@@ -217,7 +217,7 @@ cases:
       B3: 2
     formula: '=GROUPBY(A1:A3,B1:B3,SUM)'
 
-  - id: groupby_measured_auto_2valcols
+  - id: groupby_auto_2valcols
     setup:
       A1: "k"
       B1: "v1"
@@ -230,7 +230,7 @@ cases:
       C3: 20
     formula: '=GROUPBY(A1:A3,B1:C3,SUM)'
 
-  - id: groupby_measured_auto_2valcols_mixed
+  - id: groupby_auto_2valcols_mixed
     setup:
       A1: "k"
       B1: "v1"
@@ -243,7 +243,7 @@ cases:
       C3: 20
     formula: '=GROUPBY(A1:A3,B1:C3,SUM)'
 
-  - id: groupby_measured_auto_2keycols
+  - id: groupby_auto_2keycols
     setup:
       A1: "k1"
       B1: "k2"
@@ -259,7 +259,7 @@ cases:
       C4: 3
     formula: '=GROUPBY(A1:B4,C1:C4,SUM)'
 
-  - id: groupby_measured_sort_2keys
+  - id: groupby_sort_2keys
     setup:
       A2: "b"
       B2: "y"
@@ -272,7 +272,7 @@ cases:
       C4: 3
     formula: '=GROUPBY(A2:B4,C2:C4,SUM,0,0)'
 
-  - id: groupby_measured_sort_2keys_total
+  - id: groupby_sort_2keys_total
     setup:
       A2: "b"
       B2: "y"
@@ -285,10 +285,10 @@ cases:
       C4: 3
     formula: '=GROUPBY(A2:B4,C2:C4,SUM,0,2)'
 
-  - id: groupby_measured_sort_mixed_types
+  - id: groupby_sort_mixed_types
     formula: '=GROUPBY({"b";2;TRUE;"a";1},{1;2;3;4;5},SUM,0,0)'
 
-  - id: groupby_measured_sort_case
+  - id: groupby_sort_case
     formula: '=GROUPBY({"b";"B";"a";"A"},{1;2;3;4},SUM,0,0)'
 
   - id: gb2_lit_total
@@ -300,7 +300,7 @@ cases:
   - id: gb2_lit_total_len
     formula: '=ISBLANK(INDEX(GROUPBY({"b","y";"a","z";"a","y"},{1;2;3},SUM,0),4,2))'
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: groupby_hdr_default_noheader
     description: "Excel 365: 3x2 array [\"a\", 2, \"b\", 4, \"合計\", 6]"
     setup: { A1: "k", B1: "v", A2: "b", B2: 1, A3: "a", B3: 2, A4: "b", B4: 3 }

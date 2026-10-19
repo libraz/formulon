@@ -893,7 +893,7 @@ cases:
     description: "Empty friendly_name still returns the empty string (not the URL)"
     formula: "=HYPERLINK(\"http://example.com\", \"\")"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: pf_right
     formula: "=LEN(RIGHT(\"abcdef\",2.9999999))"
@@ -922,7 +922,7 @@ cases:
   - id: near_left
     formula: "=LEN(LEFT(\"abcdef\",2.9999999))"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: snap_search
     formula: "=SEARCH(\"b\",\"abcb\",2.9999999)"
 
@@ -953,7 +953,7 @@ cases:
   - id: snap_rept
     formula: "=LEN(REPT(\"a\",2.9999999))"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: pf_textjoin_dummy
     description: "Excel 365: 1"
     formula: "=LEN(TEXT(1,\"0\"))"

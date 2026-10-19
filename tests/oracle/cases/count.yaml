@@ -179,7 +179,7 @@ cases:
     description: "PRODUCT(,) with no counted argument is 0"
     formula: "=PRODUCT(,)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: count_3d
     description: "Excel 365: 3"
     setup: { A1: 1, A2: "x", Sheet2!A1: 2, Sheet2!A2: 5, Sheet3!A1: 3, Sheet3!A2: 6 }

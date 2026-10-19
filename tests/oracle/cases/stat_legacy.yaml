@@ -115,7 +115,7 @@ cases:
     description: "VAR(5) -> #DIV/0! (sample variance needs >=2 values)"
     formula: '=VAR(5)'
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: da_stdev_omit
     description: "Excel 365: 2.7386127875258306"
     formula: "=STDEV(3,4,,6,7)"

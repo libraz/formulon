@@ -1,12 +1,12 @@
 {
-  "suite": "locale_profile_measurements",
+  "suite": "locale_profile_rules",
   "description": "Behaviour that may differ between Excel locales and hosts: width and kana folding at COUNTIF criteria, exact MATCH / XLOOKUP / VLOOKUP and DCOUNT criteria; a blank scalar reference in GCD / LCM; a fractional INDEX row; and two-digit years in DATEVALUE and VALUE.\n",
   "environment": {
     "excel_version": "16.113.3",
-    "excel_locale": "en-US",
+    "excel_locale": "th-TH",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T09:02:34Z"
+    "generated_at": "2026-10-08T16:42:02Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -738,8 +738,8 @@
       "formula": "=DATEVALUE(\"3/15/29\")",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 47192.0
+        "kind": "error",
+        "code": "#VALUE!"
       }
     },
     {
@@ -747,8 +747,8 @@
       "formula": "=VALUE(\"3-15-29\")",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 47192.0
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

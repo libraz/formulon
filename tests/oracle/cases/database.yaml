@@ -2381,7 +2381,7 @@ cases:
       E2: Apple
     formula: "=DSUM(A1:C2, 1.999999, E1:E2)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: dsum_field_near7
     description: "Excel 365: 300"
     setup: { A1: "a", B1: "b", C1: "c", D1: "d", E1: "e", F1: "f", G1: "g", A2: 1, F2: 10, G2: 100, A3: 2, F3: 20, G3: 200, I1: "a", I2: ">0" }

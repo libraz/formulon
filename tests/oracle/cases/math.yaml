@@ -1235,7 +1235,7 @@ cases:
     description: "A text coefficient in the scalar position"
     formula: "=SERIESSUM(2, 0, 1, \"x\")"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: pf_round_d
     formula: "=ROUND(1.23456,1.9999999)"
@@ -1276,7 +1276,7 @@ cases:
     setup: { A1: true }
     formula: "=SERIESSUM(A1,1,1,{1})"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: snap_roundup
     formula: "=ROUNDUP(1.23456,1.9999999)"
 
@@ -1289,7 +1289,7 @@ cases:
   - id: snap_ceiling_math
     formula: "=CEILING.MATH(1.5,1,0.9999999)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: near_mod
     description: "Excel 365: 3.9999998999999997"
     formula: "=MOD(7.9999999,4)"

@@ -241,16 +241,16 @@ cases:
     setup: { C2: 42, C3: 99 }
     formula: "=OFFSET(C3,0,0,-2,1)"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: pf_address
     formula: "=ADDRESS(1.9999999,1)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: snap_address_col
     formula: "=ADDRESS(1,1.9999999)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: snap_offset_rows
     description: "Excel 365: 1"
     setup: { A1: 1, A2: 2, B1: 3, B2: 4, B3: 5 }

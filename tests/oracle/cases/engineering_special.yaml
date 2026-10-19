@@ -288,7 +288,7 @@ cases:
     description: "ERFC.PRECISE is strict 1-arg; 2nd arg surfaces #VALUE!"
     formula: "=ERFC.PRECISE(1,2)"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: atp_erf_bool
     formula: "=ERF(TRUE)"
@@ -313,7 +313,7 @@ cases:
     formula: "=BESSELJ(A1,1)"
     tolerance: { abs: 0, rel: 0 }
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: a4_erfc_bool
     formula: "=ERFC(TRUE)"
 

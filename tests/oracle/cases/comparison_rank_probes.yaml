@@ -325,7 +325,7 @@ cases:
       A3: 3
     formula: "=LARGE(A1:A3, 1)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: near_large
     description: "Excel 365: 2"
     formula: "=LARGE({1,2,3},1.9999999)"

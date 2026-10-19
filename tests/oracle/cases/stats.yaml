@@ -907,7 +907,7 @@ cases:
   - id: small_k_truncates_near_integer
     formula: "=SMALL({10;5;30;20},1.9999999)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: avedev_omit
     description: "Excel 365: 2"
     formula: "=AVEDEV(3,4,,6,7)"

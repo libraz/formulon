@@ -387,7 +387,7 @@ cases:
     description: "Digit '8' invalid in base 8 -> #NUM!."
     formula: "=OCT2HEX(\"18\")"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: pf_dec2bin
     formula: "=DEC2BIN(5,3.9999999)"
@@ -432,7 +432,7 @@ cases:
     setup: { A1: true }
     formula: "=GESTEP(A1,1)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: a4_bin2oct_bool
     formula: "=BIN2OCT(TRUE)"
 

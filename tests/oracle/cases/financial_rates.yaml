@@ -245,7 +245,7 @@ cases:
     description: "YIELDMAT with pr <= 0 -> #NUM!"
     formula: "=YIELDMAT(DATE(2008,3,15), DATE(2008,11,3), DATE(2007,11,8), 0.0625, 0, 0)"
 
-  # -- Excel-measured argument coercion: Analysis-ToolPak booleans / omitted
+  # -- Argument coercion: Analysis-ToolPak booleans / omitted
   #    arguments, and the near-integer snap of integer arguments --------------
   - id: atp_disc_bool
     formula: "=DISC(TRUE,40000,97,100)"
@@ -277,7 +277,7 @@ cases:
     setup: { A1: true }
     formula: "=TBILLPRICE(A1,100,0.1)"
 
-  # -- Excel-measured Analysis-ToolPak arguments and near-integer snap, round 2 ---
+  # -- Analysis-ToolPak arguments and near-integer snap, round 2 ---
   - id: a4_intrate_bool
     formula: "=INTRATE(TRUE,DATE(2030,1,15),1000,1100)"
 
@@ -320,7 +320,7 @@ cases:
   - id: a4_yieldmat_omit
     formula: "=YIELDMAT(,DATE(2030,1,15),DATE(2024,1,15),0.05,95)"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: pricemat_settle_eq_issue
     description: "Excel 365: #NUM!"
     formula: "=PRICEMAT(DATE(2008,2,15),DATE(2008,4,13),DATE(2008,2,15),0.061,0.061,0)"

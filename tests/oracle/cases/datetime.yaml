@@ -568,7 +568,7 @@ cases:
     description: "Holidays array extends the run forward under default weekend"
     formula: "=WORKDAY.INTL(DATE(2024,1,1),5,1,{45293,45294})"
 
-  # -- Near-integer snap, second rounding, DATE limits (Excel-measured) ------
+  # -- Near-integer snap, second rounding, DATE limits ------
   - id: date_day_snap_up
     formula: "=DATE(2025,1,14.9999997616)"
 
@@ -839,7 +839,7 @@ cases:
   - id: datedif_omitted_end
     formula: "=DATEDIF(1,,\"d\")"
 
-  # -- Measured edge cases ------------------------------------------------
+  # -- Edge cases ---------------------------------------------------------
   - id: eomonth_omit_9
     description: "Excel 365: #N/A"
     formula: "=EOMONTH(,9)"
