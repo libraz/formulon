@@ -556,7 +556,7 @@ groups:
     behaviors:
       - name: "stat=1 (alpha smoothing)"
         probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*1\)'
-        expected: diverged
+        expected: impl
       - name: "stat=7 (RMSE)"
         probe_regex: 'FORECAST\.ETS\.STAT\([^,]+,[^,]+,\s*7\)'
         expected: impl
@@ -645,7 +645,7 @@ groups:
         expected: impl
       - name: "mode 3 capture groups matrix"
         probe_regex: 'REGEXEXTRACT\([^,]+,[^,]+,\s*3\)'
-        expected: diverged
+        expected: impl
       - name: "no match -> #N/A"
         probe_regex: 'REGEXEXTRACT\([^,]+,\s*"xyz_nomatch"'
         expected: impl
@@ -933,7 +933,7 @@ groups:
     behaviors:
       - name: "server/topic args -> #N/A"
         probe_regex: 'RTD\("'
-        expected: diverged
+        expected: impl
 
   - function: "STOCKHISTORY"
     aspect: "online stock data stub"
@@ -992,51 +992,51 @@ groups:
   - function: "CUBEKPIMEMBER"
     aspect: "OLAP KPI lookup stub"
     behaviors:
-      - name: "no cube connection -> #NAME?"
+      - name: "no cube connection -> #N/A"
         probe_regex: 'CUBEKPIMEMBER\("'
-        expected: diverged
+        expected: impl
 
   - function: "CUBEMEMBER"
     aspect: "OLAP member lookup stub"
     behaviors:
-      - name: "no cube connection -> #NAME?"
+      - name: "no cube connection -> #N/A"
         probe_regex: 'CUBEMEMBER\("'
-        expected: diverged
+        expected: impl
 
   - function: "CUBEMEMBERPROPERTY"
     aspect: "OLAP member-property stub"
     behaviors:
-      - name: "no cube connection -> #NAME?"
+      - name: "no cube connection -> #N/A"
         probe_regex: 'CUBEMEMBERPROPERTY\("'
-        expected: diverged
+        expected: impl
 
   - function: "CUBERANKEDMEMBER"
     aspect: "OLAP ranked-member stub"
     behaviors:
-      - name: "no cube connection -> #NAME?"
+      - name: "no cube connection -> #N/A"
         probe_regex: 'CUBERANKEDMEMBER\("'
-        expected: diverged
+        expected: impl
 
   - function: "CUBESET"
     aspect: "OLAP set-construction stub"
     behaviors:
-      - name: "no cube connection -> #NAME?"
+      - name: "no cube connection -> #N/A"
         probe_regex: 'CUBESET\("'
-        expected: diverged
+        expected: impl
 
   - function: "CUBESETCOUNT"
     aspect: "OLAP set-cardinality stub"
     behaviors:
-      - name: "no cube connection -> #NAME?"
+      - name: "no cube connection -> #N/A"
         probe: '=CUBESETCOUNT(A1)'
-        expected: diverged
+        expected: impl
 
   - function: "CUBEVALUE"
     aspect: "OLAP cell-value stub"
     behaviors:
-      - name: "no cube connection -> #NAME?"
+      - name: "no cube connection -> #N/A"
         probe_regex: 'CUBEVALUE\("'
-        expected: diverged
+        expected: impl
 
   - function: "GETPIVOTDATA"
     aspect: "pivot anchor lookup"
@@ -1431,7 +1431,7 @@ groups:
         expected: impl
       - name: "univariate stats=TRUE -> 5x(k+1) spill"
         probe: '=LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE)'
-        expected: diverged
+        expected: impl
       - name: "multivariate (k>=2) -> spill"
         probe: '=LINEST({1;2;4;7}, {1,1;2,1;3,2;4,3})'
         expected: impl
@@ -1494,7 +1494,7 @@ groups:
         expected: impl
       - name: "univariate stats=TRUE -> 5x(k+1) spill"
         probe: '=LOGEST({2;4;8;16}, {1;2;3;4}, TRUE, TRUE)'
-        expected: diverged
+        expected: impl
       - name: "multivariate -> spill"
         probe: '=LOGEST({2;4;8;16}, {1,0;2,0;3,1;4,1})'
         expected: impl
@@ -3768,7 +3768,7 @@ groups:
         expected: impl
       - name: "unsupported return_type -> #NUM!"
         probe: "=WEEKNUM(DATE(2024,1,1),99)"
-        expected: diverged
+        expected: impl
 
   - function: "ISOWEEKNUM"
     aspect: "ISO 8601 week numbering"
