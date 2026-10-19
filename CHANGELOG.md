@@ -139,6 +139,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`=A1+1` in `A1`) holds 0; cycles through several cells keep `#REF!`.
 - `N` and `T` read the top-left cell of a reference argument instead of
   spilling over it, and `TYPE` of an array argument is 64.
+- Results built on the platform's `sin`, `cos`, `tan`, `atan`, `exp`, `log`
+  and `pow` take their last bits from the host math library. Mac Excel shares
+  the macOS library's last bits, so on macOS they match exactly; on Linux
+  and in WebAssembly a few arguments (for example `TAN(1)`, `ACOT(0.5)`)
+  differ from Mac Excel by 1-2 ulp and give the correctly rounded value,
+  which is what Windows Excel returns. The oracle compares those cases
+  exactly on macOS and within 4 ulp elsewhere.
 
 ### Performance
 
@@ -178,10 +185,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   final addition. `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `TRUNC`, `CEILING` and
   `FLOOR` work on the 15-digit view, and `MOD` is `#NUM!` from a quotient of
   1,125,900,000,000. Native builds are compiled without fused multiply-add,
-  so arm64 results match WASM and Excel.
+  so arm64 arithmetic matches x86-64 and WASM.
 - Trigonometric functions are `#NUM!` from |x| = 2^27, and the hyperbolic,
   inverse trigonometric, `RADIANS`, `DEGREES`, `FACT`, `ERF` / `ERFC`, `LOG`
-  and `TIME` results match Excel's last digits. `BITLSHIFT` / `BITRSHIFT`
+  and `TIME` results follow Excel's formulas. `BITLSHIFT` / `BITRSHIFT`
   decide on the net shift; `COMBIN`, `COMBINA`, `PERMUT` and `PERMUTATIONA`
   are `#NUM!` at 2^31-1; `BASE` and `DECIMAL` follow Excel's length and
   prefix rules. `BESSELJ`, `BESSELY`, `BESSELI` and `BESSELK` follow Excel's
