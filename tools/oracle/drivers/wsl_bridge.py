@@ -102,7 +102,7 @@ class WSLBridgeOracle(OracleDriver):
         #   - WSL2 does NOT forward arbitrary env vars to Windows .exe
         #     processes; only names listed in $WSLENV cross. So setting
         #     `PYTHONUTF8=1` via `env=` would silently be lost --
-        #     measured: subprocess sees an empty PYTHONUTF8 and
+        #     subprocess sees an empty PYTHONUTF8 and
         #     sys.stdout.encoding stays at cp932.
         #
         #   - The `-X utf8=1` flag is a command-line equivalent of

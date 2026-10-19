@@ -15,7 +15,7 @@ space (`DbcsShape`: a lead-byte range and up to two trail-byte ranges; the
 94x94 row/cell grid for JIS, GB and KS, 89 leads x 157 trails for Big5),
 delta-encoded as an adaptive Exp-Golomb bit stream (see `encode_cells`;
 the decoder is `DbcsCells` in src/eval/dbcs_table.cpp). The codec choice
-reproduces every measured CODE value in code_char_jp_probes on the Mac
+reproduces every CODE value in code_char_jp_probes on the Mac
 ja-JP, zh-CN, ko-KR and zh-TW targets.
 
 Usage:
@@ -48,7 +48,7 @@ SBCS_END = "// END GENERATED\n"
 
 
 @dataclass(frozen=True)
-class MeasuredSbcs:
+class ExcelSbcs:
     title: str
     symbol: str
     target: str
@@ -58,9 +58,9 @@ class MeasuredSbcs:
         return TARGETS_DIR / self.target / "golden" / "locale_tokens.golden.json"
 
 
-MEASURED_SBCS = (
-    MeasuredSbcs("Mac Thai", "kMacThaiHigh", "mac-365-th_TH"),
-    MeasuredSbcs("Mac Cyrillic", "kMacCyrillicHigh", "mac-365-ru_RU"),
+EXCEL_SBCS = (
+    ExcelSbcs("Mac Thai", "kMacThaiHigh", "mac-365-th_TH"),
+    ExcelSbcs("Mac Cyrillic", "kMacCyrillicHigh", "mac-365-ru_RU"),
 )
 
 
@@ -269,7 +269,7 @@ def render_dbcs(table: DbcsTable) -> str:
     return head + "".join(body) + tail
 
 
-def measured_high_bytes(golden: Path) -> list[int]:
+def golden_high_bytes(golden: Path) -> list[int]:
     data = json.loads(golden.read_text(encoding="utf-8"))
     for case in data["cases"]:
         if case["id"] == "char_high_bytes_unicode":
@@ -280,7 +280,7 @@ def measured_high_bytes(golden: Path) -> list[int]:
     raise ValueError(f"char_high_bytes_unicode missing from {golden}")
 
 
-def render_sbcs_block(tables: list[tuple[MeasuredSbcs, list[int]]]) -> str:
+def render_sbcs_block(tables: list[tuple[ExcelSbcs, list[int]]]) -> str:
     lines = [SBCS_BEGIN]
     for table, values in tables:
         lines.append(f"// {table.title}: locale_tokens.char_high_bytes_unicode ({table.target}).\n")
@@ -303,8 +303,8 @@ def splice_sbcs(source: str, block: str) -> str:
 
 def outputs(sbcs_source: str) -> dict[Path, str]:
     rendered = {table.path: render_dbcs(table) for table in TABLES}
-    measured = [(table, measured_high_bytes(table.golden)) for table in MEASURED_SBCS]
-    rendered[SBCS_PATH] = splice_sbcs(sbcs_source, render_sbcs_block(measured))
+    sbcs_tables = [(table, golden_high_bytes(table.golden)) for table in EXCEL_SBCS]
+    rendered[SBCS_PATH] = splice_sbcs(sbcs_source, render_sbcs_block(sbcs_tables))
     return rendered
 
 

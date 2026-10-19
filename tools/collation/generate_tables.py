@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the text collation tables from the Mac Excel measurements.
+"""Generates the text collation tables from the Mac Excel orders.
 
 Inputs are the TSVs that tools/collation/capture.py writes under data/ (its
 docstring documents them), data/unihan_total_strokes.tsv, and the code-page
@@ -47,7 +47,7 @@ LOCALES = (
 Z_LOCALES = ("zh_CN", "zh_TW")
 BASE_LOCALE = {"W": "en_US", "Z": "zh_CN"}
 
-# Code points whose measured weights the tables reproduce; the rest are approximated.
+# Code points whose weights the tables reproduce; the rest are approximated.
 EXACT_RANGES = (
     (0x0001, 0x04FF),  # Latin through Extended-B, IPA, combining marks, Greek, Cyrillic
     (0x0E00, 0x0E7F),  # Thai
@@ -94,7 +94,7 @@ HAN_RULES = {
     "zh_TW": (HAN_STROKES, None, 0, 0),
 }
 CODEPAGE_ENUM = {None: "kNone", "jis0208": "kJis0208", "gb2312": "kGb2312", "ksx1001": "kKsX1001"}
-# Above this many Unihan disagreements the zh_TW stroke order is encoded as measured.
+# Above this many Unihan disagreements the zh_TW stroke order is encoded as Excel's.
 STROKE_OVERRIDE_LIMIT = 500
 
 MAX_WEIGHT = 253 * 254 + 253  # two base-254 digits
@@ -143,8 +143,8 @@ Weight = tuple  # (cls, p, s, d, c)
 
 
 @dataclass
-class Measured:
-    """One locale's measured BMP order as per-character rank weights."""
+class LocaleOrder:
+    """One locale's BMP order as per-character rank weights."""
 
     tag: str
     weights: dict[int, Weight]
@@ -152,7 +152,7 @@ class Measured:
     order: list[int]
 
 
-def load_measured(tag: str) -> Measured:
+def load_locale_order(tag: str) -> LocaleOrder:
     weights: dict[int, Weight] = {}
     counters: dict[int, tuple[int, int, int, int]] = {}
     order, xs = [], set()
@@ -182,7 +182,7 @@ def load_measured(tag: str) -> Measured:
         expanding[int(cp_s[2:], 16)] = (tuple(ord(ch) for ch in dec(to)), LEVELS.index(level))
     if set(expanding) != xs:
         fail(f"{tag}: X rows and the expansion table disagree")
-    return Measured(tag, weights, expanding, order)
+    return LocaleOrder(tag, weights, expanding, order)
 
 
 def load_strokes() -> dict[int, int]:
@@ -258,13 +258,13 @@ def canonical_alias(cp: int) -> int | None:
     return None
 
 
-def alias_holds(m: Measured, cp: int) -> bool:
+def alias_holds(m: LocaleOrder, cp: int) -> bool:
     t = canonical_alias(cp)
     return t is not None and cp in m.weights and t in m.weights and m.weights[cp] == m.weights[t]
 
 
-def dense_p(m: Measured, kept: set[int]) -> dict[int, Weight]:
-    """Measured weights of `kept`, P re-ranked densely from 1 per class."""
+def dense_p(m: LocaleOrder, kept: set[int]) -> dict[int, Weight]:
+    """Weights of `kept`, P re-ranked densely from 1 per class."""
     out = {}
     for cls in (WORD, BASE):
         ps = sorted({m.weights[cp][1] for cp in kept if m.weights[cp][0] == cls})
@@ -279,7 +279,7 @@ def dense_p(m: Measured, kept: set[int]) -> dict[int, Weight]:
 
 
 def codepage_rule(tag: str, w: dict[int, Weight]) -> HanRule:
-    """Code-page ideographs in measured order; a tie after the first falls back to an override."""
+    """Code-page ideographs in Excel order; a tie after the first falls back to an override."""
     kind, page, first, last = HAN_RULES[tag]
     rule = HanRule(kind, page, first, last)
     entries = sorted((w[cp][1], code) for code, cp in codepage_cells(page, first, last) if cp in w)
@@ -293,7 +293,7 @@ def codepage_rule(tag: str, w: dict[int, Weight]) -> HanRule:
 
 
 def strokes_rule(w: dict[int, Weight], strokes: dict[int, int]) -> tuple[HanRule, int]:
-    """zh_TW: measured stroke groups, code point order inside a group.
+    """zh_TW: Excel stroke groups, code point order inside a group.
 
     Returns the rule and how many ideographs the Unihan (kTotalStrokes, cp) order misplaces.
     """
@@ -326,11 +326,11 @@ def longest_increasing(values: list[int]) -> int:
     return len(tails)
 
 
-def readings_rule(m: Measured) -> tuple[HanRule, set[int]]:
+def readings_rule(m: LocaleOrder) -> tuple[HanRule, set[int]]:
     """ko: reading runs over the KS ideograph cells in code order, plus (cp, reading) outside KS.
 
-    An ideograph in the run that directly follows a syllable in the measured order reads
-    as that syllable (the measured P is unusable there: the capture's primary test
+    An ideograph in the run that directly follows a syllable in Excel order reads
+    as that syllable (Excel's P is unusable there: the capture's primary test
     cannot see a break while Hangul sorts before Latin). Its rank inside the reading is
     its KS position, then code point order after the KS ones.
     """
@@ -343,7 +343,7 @@ def readings_rule(m: Measured) -> tuple[HanRule, set[int]]:
             syllable, rank, head = cp, 0, 0
         elif in_range(cp, URO) and syllable:
             if head and m.weights[cp] == m.weights[head]:
-                aliases[cp] = head  # measured equal to the previous ideograph of the reading
+                aliases[cp] = head  # equal to the previous ideograph of the reading
                 continue
             rank, head = rank + 1, cp
             hanja[cp] = (syllable, rank)
@@ -369,7 +369,7 @@ def readings_rule(m: Measured) -> tuple[HanRule, set[int]]:
     return rule, set(hanja) | set(aliases)
 
 
-def locale_space(tag: str, m: Measured, han_rank_size: int, strokes: dict[int, int]) -> Space:
+def locale_space(tag: str, m: LocaleOrder, han_rank_size: int, strokes: dict[int, int]) -> Space:
     base = "Z" if tag in Z_LOCALES else "W"
     kept = set()
     for cp in m.weights:
@@ -458,7 +458,7 @@ def build_compositions() -> dict[tuple[int, int], int]:
     return out
 
 
-def base_expansions(m: Measured) -> dict[int, tuple[tuple[int, ...], int]]:
+def base_expansions(m: LocaleOrder) -> dict[int, tuple[tuple[int, ...], int]]:
     out = {cp: e for cp, e in m.expanding.items() if is_exact(cp)}
     for cp in range(COMPAT_IDEOGRAPHS[0], COMPAT_IDEOGRAPHS[1] + 1):
         if alias_holds(m, cp):
@@ -466,7 +466,7 @@ def base_expansions(m: Measured) -> dict[int, tuple[tuple[int, ...], int]]:
     return out
 
 
-def build_han_rank(en: Measured) -> dict[int, int]:
+def build_han_rank(en: LocaleOrder) -> dict[int, int]:
     space = locale_space("en_US", en, 0, {})
     w = space.weights
     uro = [cp for cp in w if in_range(cp, URO)]
@@ -476,7 +476,7 @@ def build_han_rank(en: Measured) -> dict[int, int]:
     return {cp: w[cp][1] - lo for cp in uro}
 
 
-def build_base(name: str, m: Measured, space: Space) -> BaseTable:
+def build_base(name: str, m: LocaleOrder, space: Space) -> BaseTable:
     w = space.weights
     listed = set(space.han.positions())
     if name == "W":
@@ -493,7 +493,7 @@ def build_base(name: str, m: Measured, space: Space) -> BaseTable:
     return table
 
 
-def repeat_marks(m: Measured) -> dict[int, int]:
+def repeat_marks(m: LocaleOrder) -> dict[int, int]:
     """zh: the characters sharing the last primary of the order; after another character
     each stands for it (the vowel for a prolonged-sound mark, voiced for a voiced
     iteration mark) plus a secondary difference."""
@@ -517,7 +517,7 @@ def first_diff(a: tuple, b: tuple) -> int:
     return next((i for i in range(len(a)) if a[i] != b[i]), len(a))
 
 
-def derive_locale(tag: str, m: Measured, space: Space, base: BaseTable, han_rank: dict[int, int]) -> LocaleTable:
+def derive_locale(tag: str, m: LocaleOrder, space: Space, base: BaseTable, han_rank: dict[int, int]) -> LocaleTable:
     """Remap segments, overrides and expansion changes reproducing `space` on top of `base`."""
     rules = RULE_IGNORE_UNLISTED | RULE_REPEAT_MARKS if base.name == "Z" else RULE_THAI_REORDER | RULE_HANGUL_JAMO
     if tag == "ja_JP":
@@ -652,28 +652,28 @@ def fit_group(members: list[int], w: dict, assigned: dict, overrides: dict) -> b
 @dataclass
 class Build:
     tables: Tables
-    measured: dict[str, Measured]
+    orders: dict[str, LocaleOrder]
     spaces: dict[str, Space]
 
 
 def build() -> Build:
-    measured = {tag: load_measured(tag) for tag in LOCALES}
+    orders = {tag: load_locale_order(tag) for tag in LOCALES}
     strokes = load_strokes()
-    han_rank = build_han_rank(measured["en_US"])
+    han_rank = build_han_rank(orders["en_US"])
     rank_size = max(han_rank.values()) + 1
-    spaces = {tag: locale_space(tag, measured[tag], rank_size, strokes) for tag in LOCALES}
-    bases = {name: build_base(name, measured[tag], spaces[tag]) for name, tag in BASE_LOCALE.items()}
+    spaces = {tag: locale_space(tag, orders[tag], rank_size, strokes) for tag in LOCALES}
+    bases = {name: build_base(name, orders[tag], spaces[tag]) for name, tag in BASE_LOCALE.items()}
     locales = {}
     for tag in LOCALES:
         base = bases["Z" if tag in Z_LOCALES else "W"]
-        locales[tag] = derive_locale(tag, measured[tag], spaces[tag], base, han_rank)
+        locales[tag] = derive_locale(tag, orders[tag], spaces[tag], base, han_rank)
     for name, tag in BASE_LOCALE.items():
         t = locales[tag]
         if t.overrides or t.expansions or len(t.remap) > 1 + (name == "W"):
             fail(f"{tag}: the base locale must reproduce its own table unchanged")
     tables = Tables(bases, han_rank, locales, build_compositions())
     check_ranges(tables)
-    return Build(tables, measured, spaces)
+    return Build(tables, orders, spaces)
 
 
 def check_ranges(t: Tables) -> None:
@@ -1439,11 +1439,11 @@ def matrix_misses(tables: Tables, tag: str) -> list[tuple[str, str, str, str, st
 def order_check(tables: Tables, b: Build, tag: str) -> tuple[int, int]:
     """(approximated code points, order failures) for the single-character round trip.
 
-    The measured order restricted to the exactly reproduced code points must come back
+    The Excel order restricted to the exactly reproduced code points must come back
     from the single-character keys: each pair of neighbours in the same class compares
-    as measured (equal for `=`, ascending otherwise; C neighbours are equal under SORT).
+    as in Excel (equal for `=`, ascending otherwise; C neighbours are equal under SORT).
     """
-    m, space = b.measured[tag], b.spaces[tag]
+    m, space = b.orders[tag], b.spaces[tag]
     excluded = {cp for cp in m.order if not is_exact(cp)} | space.approximated
     col = Collator(tables, tag)
     fails = 0

@@ -221,7 +221,7 @@ def applies_to_error(entry: dict, *, required: bool) -> "str | None":
 
     A skip entry must state its scope -- `all`, or a list of known targets --
     because an unscoped skip suppresses every target's capture, and one
-    observed on a single host would silently cost the others a measurement.
+    observed on a single host would silently cost the others their capture.
     """
 
     if "applies_to" not in entry or entry["applies_to"] is None:
@@ -634,7 +634,7 @@ def validate(path: Path, *, strict: bool) -> int:
 #                      decoding the fixture (CHAR `_x0001_`, a row shift,
 #                      or lost reference dependencies). Repair the import
 #                      before adjudicating the resulting case in Excel.
-#   unadjudicated      The remaining case has not yet been measured on Mac;
+#   unadjudicated      The remaining case has not yet been adjudicated on Mac;
 #                      it stays visible until the separate adjudication flow
 #                      assigns a more specific cause.
 IRONCALC_CAUSES = {

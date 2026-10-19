@@ -62,7 +62,7 @@ LOCALES = [
     ("zh_TW", "zh-Hant-TW", "zh_TW"),
 ]
 Z_LOCALES = ("zh_CN", "zh_TW")
-# Locales measured to share one order; every other locale has its own.
+# Locales that share one order; every other locale has its own.
 SAME_ORDER = [("en_US", "de_DE", "fr_FR", "pt_BR", "it_IT", "nl_NL"), ("es_ES", "es_MX")]
 CLASSES = ("full", "mid", "word", "sec", "base")
 # Affixes that place a lone character in a context where its class can be compared.
@@ -1108,7 +1108,7 @@ def validate(only: list[str] | None) -> int:
         print(f"expansions {tag} vs {base}: {len(diff)} differing rows")
 
     # Switching check: locales whose orders coincide (outside the RTL scripts, which vary
-    # between Excel launches) must be exactly the groups the measurements predict.
+    # between Excel launches) must be exactly the groups SAME_ORDER lists.
     def rtl(cp):
         return 0x590 <= cp <= 0x8FF or 0xFB1D <= cp <= 0xFDFF or 0xFE70 <= cp <= 0xFEFF or cp in (0x200E, 0x200F)
 

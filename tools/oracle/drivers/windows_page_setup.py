@@ -58,7 +58,7 @@ def read_paper_value(page_setup) -> Any:
     """Returns the post-apply `PaperSize` as the `XlPaperSize` int.
 
     The companion to the orientation read: paper and orientation together
-    are what fix the page the breaks were measured on.
+    are what fix the page the breaks fall on.
     """
 
     try:

@@ -17,7 +17,7 @@ Usage:
     python3 tools/dbcs/generate_lenb_tables.py --check  # exit 1 on drift
     python3 tools/dbcs/generate_lenb_tables.py --verify-probe DIR
         # DIR holds lenb_<locale>.json sweeps ({"cps": [...], "lenb": [...]});
-        # compares every measured code point with the generated toggles
+        # compares every listed code point with the generated toggles
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def verify_probe(table: dict[str, list[int]], probe_dir: Path) -> int:
             checked += 1
             if cp <= 0x7F and width != 1 or width_at(points, cp) != width:
                 failures += 1
-                print(f"{key}: U+{cp:04X} measured {width}, table {width_at(points, cp)}", file=sys.stderr)
+                print(f"{key}: U+{cp:04X} Excel {width}, table {width_at(points, cp)}", file=sys.stderr)
         print(f"{key}: {checked} code points checked")
     return failures
 

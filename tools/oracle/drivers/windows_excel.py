@@ -50,8 +50,7 @@ Running ``python -m tools.oracle.drivers.windows_excel --serve`` opens
 Excel once, prints a ``ready`` line to stdout, then loops reading
 newline-delimited JSON requests from stdin and writing newline-delimited
 JSON responses to stdout. The bridge uses this mode so all suites in a
-generation run share a single Excel instance -- Excel cold-start (5-15s
-in our measurements) dominates total runtime when generating 90+ suites,
+generation run share a single Excel instance -- Excel cold-start (5-15s) dominates total runtime when generating 90+ suites,
 and amortising it once over the whole run cuts wall-clock by ~10x.
 """
 
@@ -646,7 +645,7 @@ class WindowsExcelOracle(OracleDriver):
 
         This is the only capture path where Formulon's own bytes reach
         Excel. Every other workbook case builds the workbook with
-        ``books.add()`` and COM calls, which measures how Excel behaves
+        ``books.add()`` and COM calls, which exercises how Excel behaves
         rather than whether Excel understands what we wrote.
 
         The fixture arrives base64-encoded in the case block -- the
@@ -1270,7 +1269,7 @@ def _read_applied_geometry(sht, resolved_area: str) -> Dict[str, Any]:
         if first_row is not None and last_row - first_row < _GEOMETRY_TRACK_CAP:
             out["row_heights_pt"] = [points(lambda r=row: ws.Rows(r).Height) for row in range(first_row, last_row + 1)]
 
-    # The device the breaks were measured on. Excel paginates against the
+    # The device the breaks belong to. Excel paginates against the
     # active printer driver's metrics, not the paper size alone, so a
     # golden captured on another device is not comparable -- recording the
     # name is what lets that be seen from the golden instead of inferred
