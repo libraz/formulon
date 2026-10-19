@@ -105,6 +105,23 @@ void append_code_point(std::string& out, std::string_view text, std::size_t begi
   }
 }
 
+std::string map_case_text(std::string_view text, case_map::CaseRuns runs, bool contextual_sigma) {
+  std::string out;
+  out.reserve(text.size());
+  for (std::size_t i = 0; i < text.size();) {
+    std::size_t bytes = 0;
+    const std::uint32_t cp = decode_utf8_step(text, i, &bytes);
+    const bool valid = cp != 0xFFFDU || bytes != 1U;
+    std::uint32_t mapped = cp;
+    if (valid) {
+      mapped = contextual_sigma && cp == kCapitalSigma ? lower_in_context(text, cp, i + bytes) : map_with(runs, cp);
+    }
+    append_code_point(out, text, i, bytes, cp, mapped);
+    i += bytes;
+  }
+  return out;
+}
+
 }  // namespace
 
 std::uint32_t case_map_upper(std::uint32_t cp) noexcept {
@@ -116,29 +133,11 @@ std::uint32_t case_map_lower_isolated(std::uint32_t cp) noexcept {
 }
 
 std::string case_map_to_upper(std::string_view text) {
-  std::string out;
-  out.reserve(text.size());
-  for (std::size_t i = 0; i < text.size();) {
-    std::size_t bytes = 0;
-    const std::uint32_t cp = decode_utf8_step(text, i, &bytes);
-    const bool valid = cp != 0xFFFDU || bytes != 1U;
-    append_code_point(out, text, i, bytes, cp, valid ? case_map_upper(cp) : cp);
-    i += bytes;
-  }
-  return out;
+  return map_case_text(text, case_map::upper_runs(), false);
 }
 
 std::string case_map_to_lower(std::string_view text) {
-  std::string out;
-  out.reserve(text.size());
-  for (std::size_t i = 0; i < text.size();) {
-    std::size_t bytes = 0;
-    const std::uint32_t cp = decode_utf8_step(text, i, &bytes);
-    const bool valid = cp != 0xFFFDU || bytes != 1U;
-    append_code_point(out, text, i, bytes, cp, valid ? lower_in_context(text, cp, i + bytes) : cp);
-    i += bytes;
-  }
-  return out;
+  return map_case_text(text, case_map::lower_runs(), true);
 }
 
 std::string case_map_to_proper(std::string_view text) {
