@@ -339,8 +339,15 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   double title_height = 0.0;
   if (titles.repeat_rows.has_value()) {
     const auto [first, last] = *titles.repeat_rows;
-    for (std::uint32_t row = first; row <= last; ++row) {
-      title_height += row_height(row);
+    if (first >= union_box.first_row && last <= union_box.last_row) {
+      for (std::uint32_t row = first; row <= last; ++row) {
+        title_height += row_heights[static_cast<std::size_t>(row - union_box.first_row)];
+      }
+    } else {
+      const std::vector<double> title_row_heights = row_heights_pt(sheet, first, last);
+      for (const double height : title_row_heights) {
+        title_height += height;
+      }
     }
     // Empirical: when print-title rows are enabled, Excel reserves a
     // minimum body band of ~5 default rows even if the actual title
@@ -356,8 +363,16 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   double title_width = 0.0;
   if (titles.repeat_cols.has_value()) {
     const auto [first, last] = *titles.repeat_cols;
-    for (std::uint32_t col = first; col <= last; ++col) {
-      title_width += column_chars_to_points(col_width(col), column_geometry);
+    if (first >= union_box.first_col && last <= union_box.last_col) {
+      for (std::uint32_t col = first; col <= last; ++col) {
+        title_width +=
+            column_chars_to_points(col_widths[static_cast<std::size_t>(col - union_box.first_col)], column_geometry);
+      }
+    } else {
+      const std::vector<double> title_column_widths = column_widths_chars(sheet, first, last);
+      for (const double width : title_column_widths) {
+        title_width += column_chars_to_points(width, column_geometry);
+      }
     }
   }
 

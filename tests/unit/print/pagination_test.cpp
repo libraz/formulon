@@ -399,6 +399,101 @@ TEST(PaginationTest, FitToPageAccommodatesRepeatedTitlesOnEveryPage) {
   EXPECT_TRUE(single_result.value().h_breaks.empty());
 }
 
+TEST(PaginationTest, PrintTitleGeometryOutsidePrintAreaPreservesTrackSemantics) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  auto& defaults = sheet.mutable_format_defaults();
+  defaults.has_default_row_height = true;
+  defaults.default_row_height = 20.25;
+  defaults.zero_height = true;
+  defaults.has_default_col_width = true;
+  defaults.default_col_width = 8.43;
+
+  // Deliberately unsorted, with duplicate row and column entries. The first
+  // matching override wins; a hidden row contributes zero, a visible row
+  // without an explicit height uses the nominal default, and unlisted rows
+  // retain the sheet's zero-height default.
+  RowLayout hidden_title_row;
+  hidden_title_row.row = 2;
+  hidden_title_row.height = 300.0;
+  hidden_title_row.hidden = true;
+  RowLayout custom_title_row;
+  custom_title_row.row = 0;
+  custom_title_row.height = 120.5;
+  custom_title_row.has_height = true;
+  RowLayout visible_default_title_row;
+  visible_default_title_row.row = 1;
+  RowLayout duplicate_title_row;
+  duplicate_title_row.row = 0;
+  duplicate_title_row.height = 250.0;
+  duplicate_title_row.has_height = true;
+  RowLayout duplicate_hidden_title_row;
+  duplicate_hidden_title_row.row = 2;
+  duplicate_hidden_title_row.height = 80.0;
+  RowLayout visible_area_row;
+  visible_area_row.row = 10;
+  RowLayout custom_area_row;
+  custom_area_row.row = 11;
+  custom_area_row.height = 15.75;
+  custom_area_row.has_height = true;
+  sheet.mutable_layout().row_overrides = {hidden_title_row,    custom_title_row,           visible_default_title_row,
+                                          duplicate_title_row, duplicate_hidden_title_row, visible_area_row,
+                                          custom_area_row};
+
+  ColumnLayout hidden_title_col;
+  hidden_title_col.first = 2;
+  hidden_title_col.last = 2;
+  hidden_title_col.width = 99.0;
+  hidden_title_col.hidden = true;
+  ColumnLayout custom_title_col;
+  custom_title_col.first = 0;
+  custom_title_col.last = 0;
+  custom_title_col.width = 10.0;
+  ColumnLayout zero_title_col;
+  zero_title_col.first = 3;
+  zero_title_col.last = 3;
+  zero_title_col.has_width = true;
+  ColumnLayout default_title_col;
+  default_title_col.first = 1;
+  default_title_col.last = 1;
+  default_title_col.outline_level = 1;
+  ColumnLayout duplicate_title_col;
+  duplicate_title_col.first = 0;
+  duplicate_title_col.last = 0;
+  duplicate_title_col.width = 40.0;
+  sheet.mutable_layout().columns = {hidden_title_col, custom_title_col, zero_title_col, default_title_col,
+                                    duplicate_title_col};
+
+  sheet.set_cell_value(10, 9, Value::number(1.0));
+  wb.set_defined_names(
+      {PrintArea("Sheet1!$J$11:$K$12", 0), SheetScopedName("_xlnm.Print_Titles", "Sheet1!$1:$4,Sheet1!$A:$D", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_EQ(result.value().pages.size(), 1U);
+  ASSERT_TRUE(result.value().print_titles.has_rows);
+  ASSERT_TRUE(result.value().print_titles.has_cols);
+  EXPECT_EQ(result.value().print_titles.first_row, 0U);
+  EXPECT_EQ(result.value().print_titles.last_row, 3U);
+  EXPECT_EQ(result.value().print_titles.first_col, 0U);
+  EXPECT_EQ(result.value().print_titles.last_col, 3U);
+  EXPECT_DOUBLE_EQ(result.value().scale, 1.0);
+
+  // The title ranges are both outside the print-area union. Their repeat
+  // offsets still use the same ordered, first-match row/column geometry as
+  // tracks inside the union.
+  constexpr double kTitleHeightPt = 120.5 + 20.25;
+  EXPECT_NEAR(result.value().pages.front().origin_y_pt - result.value().printable.y, kTitleHeightPt, 1e-9);
+  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
+  double title_width_pt = 0.0;
+  title_width_pt += column_chars_to_points(10.0, model);
+  title_width_pt += column_chars_to_points(defaults.default_col_width, model);
+  title_width_pt += column_chars_to_points(0.0, model);
+  title_width_pt += column_chars_to_points(0.0, model);
+  EXPECT_NEAR(result.value().pages.front().origin_x_pt - result.value().printable.x, title_width_pt, 1e-9);
+  EXPECT_DOUBLE_EQ(result.value().pages.front().height_pt, 20.25 + 15.75);
+}
+
 TEST(PaginationTest, BoundedPrintAreaIsNotClippedToTheContent) {
   // The clip applies only to an edge declared at the grid limit. A
   // declared rectangle that names real geometry drives the page grid
