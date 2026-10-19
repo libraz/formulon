@@ -255,7 +255,9 @@ TEST(WholeAxisSpill, DerivedSelfReferenceIsZero) {
     EXPECT_EQ(v.as_number(), 0.0) << c.formula;
     EXPECT_EQ(sheet.spill_region_at_anchor(0U, c.col), nullptr) << c.formula;
     if (c.read_only_zero) {
-      Value adhoc = AdhocValue(wb, sheet, 0U, c.col, c.formula);
+      // The arena must outlive the element read below.
+      Arena arena;
+      Value adhoc = evaluate_formula_text_array(wb, sheet, 0U, c.col, c.formula, arena, default_registry());
       if (adhoc.is_array()) {
         adhoc = adhoc.as_array_cells()[0];
       }
