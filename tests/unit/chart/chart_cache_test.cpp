@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -220,6 +221,77 @@ TEST(ChartCache, ChangedCellsAreCachedInExcelNotation) {
   EXPECT_TRUE(Contains(text, "<c:pt idx=\"3\"><c:v>0.1</c:v></c:pt>"));
   // The rewrite is idempotent: stored back, nothing is left to refresh for that part.
   SetPart(wb, path, text);
+  EXPECT_EQ(RefreshedText(wb, path), "");
+}
+
+TEST(ChartCache, NonNormalNumbersMatchNumErrorAndRefreshOnce) {
+  Workbook num_error = LoadFixture("chart_column.xlsx");
+  const std::string path = ChartPathWith(num_error, "Sheet1!$B$2:$B$5");
+  num_error.sheet(0).set_cell_value(1U, 1U, Value::error(ErrorCode::Num));
+  const std::string num_error_cache = RefreshedText(num_error, path);
+  ASSERT_FALSE(num_error_cache.empty());
+  EXPECT_TRUE(Contains(num_error_cache, "<c:pt idx=\"0\"><c:v>0</c:v></c:pt>"));
+
+  const double nonfinite_values[] = {
+      std::numeric_limits<double>::quiet_NaN(),  std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),  -0.0,
+      std::numeric_limits<double>::denorm_min(), -std::numeric_limits<double>::denorm_min()};
+  for (const double value : nonfinite_values) {
+    SCOPED_TRACE(value);
+    Workbook wb = LoadFixture("chart_column.xlsx");
+    const std::string nonfinite_path = ChartPathWith(wb, "Sheet1!$B$2:$B$5");
+    ASSERT_EQ(nonfinite_path, path);
+    wb.sheet(0).set_cell_value(1U, 1U, Value::number(value));
+
+    const std::vector<PassthroughPart> refreshed = Refreshed(wb);
+    ASSERT_FALSE(refreshed.empty());
+    bool found_target = false;
+    for (const PassthroughPart& part : refreshed) {
+      if (part.path == nonfinite_path) {
+        found_target = true;
+        EXPECT_EQ(Text(part), num_error_cache);
+      }
+      SetPart(wb, part.path, Text(part));
+    }
+    EXPECT_TRUE(found_target);
+    EXPECT_TRUE(Refreshed(wb).empty());
+  }
+}
+
+TEST(ChartCache, NormalMinAndFiniteExtremesRemainNumeric) {
+  Workbook wb = LoadFixture("chart_column.xlsx");
+  const std::string path = ChartPathWith(wb, "Sheet1!$B$2:$B$5");
+  wb.sheet(0).set_cell_value(1U, 1U, Value::number(std::numeric_limits<double>::min()));
+  wb.sheet(0).set_cell_value(2U, 1U, Value::number(std::numeric_limits<double>::max()));
+  wb.sheet(0).set_cell_value(3U, 1U, Value::number(std::numeric_limits<double>::lowest()));
+  wb.sheet(0).set_cell_value(4U, 1U, Value::number(1.0));
+
+  const std::string refreshed = RefreshedText(wb, path);
+  ASSERT_FALSE(refreshed.empty());
+  const auto numeric_point = [&](std::uint32_t idx) {
+    const std::string prefix = "<c:pt idx=\"" + std::to_string(idx) + "\"><c:v>";
+    const std::size_t cache_start = refreshed.find("<c:numCache>");
+    EXPECT_NE(cache_start, std::string::npos);
+    if (cache_start == std::string::npos) {
+      return 0.0;
+    }
+    const std::size_t start = refreshed.find(prefix, cache_start);
+    EXPECT_NE(start, std::string::npos) << "idx=" << idx;
+    if (start == std::string::npos) {
+      return 0.0;
+    }
+    const std::size_t value_start = start + prefix.size();
+    const std::size_t end = refreshed.find("</c:v>", value_start);
+    EXPECT_NE(end, std::string::npos) << "idx=" << idx;
+    if (end == std::string::npos) {
+      return 0.0;
+    }
+    return std::stod(refreshed.substr(value_start, end - value_start));
+  };
+  EXPECT_DOUBLE_EQ(numeric_point(0U), std::numeric_limits<double>::min());
+  EXPECT_DOUBLE_EQ(numeric_point(1U), std::numeric_limits<double>::max());
+  EXPECT_DOUBLE_EQ(numeric_point(2U), std::numeric_limits<double>::lowest());
+  SetPart(wb, path, refreshed);
   EXPECT_EQ(RefreshedText(wb, path), "");
 }
 

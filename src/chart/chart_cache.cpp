@@ -1,6 +1,7 @@
 #include "chart/chart_cache.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <set>
@@ -197,7 +198,9 @@ class Gatherer {
       return;  // a formula's "" is text, plotted as 0
     }
     if (v.is_number()) {
-      pt.number = v.as_number();
+      const double number = v.as_number();
+      // Non-finite, signed-zero and subnormal values all cache as +0.
+      pt.number = std::isnormal(number) ? number : 0.0;
     } else if (v.is_boolean()) {
       pt.number = v.as_boolean() ? 1.0 : 0.0;
     } else if (v.is_error() && v.as_error() == ErrorCode::NA) {
