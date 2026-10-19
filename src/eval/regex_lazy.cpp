@@ -251,10 +251,10 @@ class CompiledPattern {
 
 // How a `scan_matches` walk ended.
 enum class ScanEnd : std::uint8_t {
-  kExhausted,   // no further match
-  kStopped,     // the visitor declined to continue
-  kMatchLimit,  // the match limit was hit
-  kError,       // any other PCRE2 error (depth / heap limit, bad offset)
+  kExhausted,  // no further match
+  kStopped,    // the visitor declined to continue
+  kLimitHit,   // the match limit was hit
+  kError,      // any other PCRE2 error (depth / heap limit, bad offset)
 };
 
 // Walks the matches of `program` over `subject` left to right, handing each
@@ -271,7 +271,7 @@ ScanEnd scan_matches(const CompiledPattern& program, std::string_view subject, b
       break;
     }
     if (rc == PCRE2_ERROR_MATCHLIMIT) {
-      return ScanEnd::kMatchLimit;
+      return ScanEnd::kLimitHit;
     }
     if (rc < 0) {
       return ScanEnd::kError;
@@ -360,7 +360,7 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
     return true;
   });
 
-  if (end == ScanEnd::kMatchLimit) {
+  if (end == ScanEnd::kLimitHit) {
     result.ok = false;
     result.err = Value::error(ErrorCode::Value);
     return result;
@@ -1067,7 +1067,7 @@ Value substitute_global(const CompiledPattern& program, std::string_view subject
     copied = stop;
     return true;
   });
-  if (expansion_failed || end == ScanEnd::kMatchLimit) {
+  if (expansion_failed || end == ScanEnd::kLimitHit) {
     return Value::error(ErrorCode::Value);
   }
   if (end == ScanEnd::kError) {
