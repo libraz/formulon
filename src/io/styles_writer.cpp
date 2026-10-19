@@ -3,6 +3,7 @@
 
 #include "io/styles_writer.h"
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -139,6 +140,13 @@ void AppendFontToggle(std::string& out, std::string_view name, bool was_explicit
   out.append("/>");
 }
 
+void AppendFontSize(std::string& out, double size) {
+  const double emitted_size = std::isfinite(size) && size >= 0.0 ? size : FontRecord{}.size;
+  out.append("<sz");
+  append_xml_attr_number(out, "val", emitted_size);
+  out.append("/>");
+}
+
 void AppendNumFmts(std::string& out, const StylesTable& table) {
   // Count emitted entries: only custom ids (>= 164) survive. Excel
   // rejects packages that redeclare built-in ids.
@@ -206,9 +214,7 @@ void AppendFonts(std::string& out, const StylesTable& table) {
         out.append("/>");
       }
       AppendVertAlign(out, f.vert_align);
-      out.append("<sz");
-      append_xml_attr_number(out, "val", f.size);
-      out.append("/>");
+      AppendFontSize(out, f.size);
       AppendColor(out, "color", f.color, f.color_argb);
       if (!f.name.empty()) {
         out.append("<name");
@@ -467,9 +473,7 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
   }
   AppendVertAlign(out, f.vert_align);
   if (f.has_size) {
-    out.append("<sz");
-    append_xml_attr_number(out, "val", f.size);
-    out.append("/>");
+    AppendFontSize(out, f.size);
   }
   // A differential font without a colour leaves the colour unchanged;
   // 0xFF000000 is the "automatic" sentinel an unstated colour carries.

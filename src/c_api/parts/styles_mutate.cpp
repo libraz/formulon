@@ -21,6 +21,7 @@
 #include "workbook.h"
 
 using formulon::effective_num_fmt;
+using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::num_fmt_id_known;
@@ -357,6 +358,9 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   if (wb == nullptr || out_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_font: NULL argument");
   }
+  if (fm_status_t rc = check_finite_non_negative(record.size, "fm_styles_add_font", "font.size"); rc != 0) {
+    return rc;
+  }
   formulon::FontRecord candidate = cell_font_from_c(record);
 
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
@@ -389,6 +393,9 @@ extern "C" fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index
         formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_set_font: font_index out of range",
         "font_index=" + std::to_string(font_index) + " fonts_count=" + std::to_string(styles.fonts.size()));
   }
+  if (fm_status_t rc = check_finite_non_negative(record.size, "fm_styles_set_font", "font.size"); rc != 0) {
+    return rc;
+  }
   styles.fonts[font_index] = cell_font_from_c(record);
   return 0;
 }
@@ -398,6 +405,9 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_r
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_default_font: NULL argument");
+  }
+  if (fm_status_t rc = check_finite_non_negative(record.size, "fm_workbook_set_default_font", "font.size"); rc != 0) {
+    return rc;
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   // Unlike `fm_styles_set_font`, seeding is right here: index 0 is reserved
@@ -657,6 +667,11 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_add_batch: non-empty array is NULL");
   }
+  for (size_t i = 0; i < batch->font_count; ++i) {
+    if (fm_status_t rc = check_finite_non_negative(batch->fonts[i].size, "fm_styles_add_batch", "font.size"); rc != 0) {
+      return rc;
+    }
+  }
 
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   // Stage every mutation, including the default roots that are required for
@@ -807,6 +822,11 @@ extern "C" fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record
   clear_last_error();
   if (wb == nullptr || out_dxf_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_dxf: NULL argument");
+  }
+  if (record.font_engaged != 0 && record.font.has_size != 0) {
+    if (fm_status_t rc = check_finite_non_negative(record.font.size, "fm_styles_add_dxf", "font.size"); rc != 0) {
+      return rc;
+    }
   }
 
   formulon::DifferentialFormat candidate;

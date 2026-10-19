@@ -6,7 +6,9 @@
 
 #include "io/styles_writer.h"
 
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -176,6 +178,107 @@ TEST(StylesWriter, EmitsFontFields) {
   EXPECT_NE(xml.find("<sz val=\"14\""), std::string::npos);
   EXPECT_NE(xml.find("rgb=\"FFFF0000\""), std::string::npos);
   EXPECT_NE(xml.find("<name val=\"Meiryo\""), std::string::npos);
+}
+
+TEST(StylesWriter, InvalidDirectFontSizesUseDefaultWithoutMutatingModels) {
+  const std::vector<double> invalid_sizes = {std::numeric_limits<double>::quiet_NaN(),
+                                             std::numeric_limits<double>::infinity(),
+                                             -std::numeric_limits<double>::infinity(), -1.0};
+
+  for (const double size : invalid_sizes) {
+    SCOPED_TRACE(size);
+    StylesTable table;
+    FontRecord font;
+    font.size = size;
+    EXPECT_NE(font_fragment(font).find("<sz val=\"11\"/>"), std::string::npos);
+    table.fonts.push_back(font);
+
+    DifferentialFormat dxf;
+    dxf.has_font = true;
+    dxf.font.size = size;
+    table.dxfs.push_back(dxf);
+
+    const std::string xml = write_styles(table);
+    EXPECT_NE(xml.find("<sz val=\"11\"/>"), std::string::npos) << xml;
+    const std::size_t dxf_begin = xml.find("<dxf>");
+    ASSERT_NE(dxf_begin, std::string::npos) << xml;
+    const std::size_t dxf_end = xml.find("</dxf>", dxf_begin);
+    ASSERT_NE(dxf_end, std::string::npos) << xml;
+    EXPECT_NE(xml.substr(dxf_begin, dxf_end - dxf_begin).find("<sz val=\"11\"/>"), std::string::npos) << xml;
+
+    if (std::isnan(size)) {
+      EXPECT_TRUE(std::isnan(table.fonts[0].size));
+      EXPECT_TRUE(std::isnan(table.dxfs[0].font.size));
+    } else {
+      EXPECT_EQ(table.fonts[0].size, size);
+      EXPECT_EQ(table.dxfs[0].font.size, size);
+    }
+
+    auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
+    ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+    ASSERT_EQ(round_or.value().fonts.size(), 1U);
+    EXPECT_DOUBLE_EQ(round_or.value().fonts[0].size, 11.0);
+    ASSERT_EQ(round_or.value().dxfs.size(), 1U);
+    EXPECT_TRUE(round_or.value().dxfs[0].font.has_size);
+    EXPECT_DOUBLE_EQ(round_or.value().dxfs[0].font.size, 11.0);
+  }
+}
+
+TEST(StylesWriter, KeepsAbsentAndFiniteDifferentialFontSizes) {
+  FontRecord absent;
+  absent.has_size = false;
+  absent.size = std::numeric_limits<double>::quiet_NaN();
+  const std::string absent_fragment = font_fragment(absent);
+  EXPECT_EQ(absent_fragment.find("<sz"), std::string::npos);
+  EXPECT_TRUE(std::isnan(absent.size));
+
+  StylesTable absent_table;
+  DifferentialFormat absent_dxf;
+  absent_dxf.has_font = true;
+  absent_dxf.font = absent;
+  absent_table.dxfs.push_back(absent_dxf);
+  const std::string absent_xml = write_styles(absent_table);
+  const std::size_t absent_dxf_begin = absent_xml.find("<dxf>");
+  ASSERT_NE(absent_dxf_begin, std::string::npos) << absent_xml;
+  const std::size_t absent_dxf_end = absent_xml.find("</dxf>", absent_dxf_begin);
+  ASSERT_NE(absent_dxf_end, std::string::npos) << absent_xml;
+  EXPECT_EQ(absent_xml.substr(absent_dxf_begin, absent_dxf_end - absent_dxf_begin).find("<sz"), std::string::npos)
+      << absent_xml;
+  auto absent_round_or = read_styles(std::vector<std::uint8_t>(absent_xml.begin(), absent_xml.end()));
+  ASSERT_TRUE(static_cast<bool>(absent_round_or)) << absent_round_or.error().message;
+  ASSERT_EQ(absent_round_or.value().dxfs.size(), 1U);
+  EXPECT_FALSE(absent_round_or.value().dxfs[0].font.has_size);
+  EXPECT_DOUBLE_EQ(absent_round_or.value().dxfs[0].font.size, 11.0);
+
+  const std::vector<double> finite_sizes = {0.0, -0.0, std::numeric_limits<double>::max()};
+  for (const double size : finite_sizes) {
+    SCOPED_TRACE(size);
+    StylesTable table;
+    FontRecord font;
+    font.size = size;
+    table.fonts.push_back(font);
+    DifferentialFormat dxf;
+    dxf.has_font = true;
+    dxf.font.size = size;
+    table.dxfs.push_back(dxf);
+
+    const std::string fragment = font_fragment(font);
+    EXPECT_NE(fragment.find("<sz val=\""), std::string::npos);
+    EXPECT_EQ(fragment.find("<sz val=\"11\"/>"), std::string::npos);
+    if (size == 0.0) {
+      EXPECT_NE(fragment.find("<sz val=\"0\"/>"), std::string::npos) << fragment;
+    }
+
+    const std::string xml = write_styles(table);
+    EXPECT_EQ(std::signbit(table.fonts[0].size), std::signbit(size));
+    EXPECT_EQ(std::signbit(table.dxfs[0].font.size), std::signbit(size));
+    auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
+    ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+    ASSERT_EQ(round_or.value().fonts.size(), 1U);
+    EXPECT_DOUBLE_EQ(round_or.value().fonts[0].size, size);
+    ASSERT_EQ(round_or.value().dxfs.size(), 1U);
+    EXPECT_DOUBLE_EQ(round_or.value().dxfs[0].font.size, size);
+  }
 }
 
 TEST(StylesWriter, FontSizeAndTintUseTheShortestRoundTripSpelling) {
