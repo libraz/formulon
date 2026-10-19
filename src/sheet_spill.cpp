@@ -456,11 +456,20 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // two parallel-recalc workers spilling on the same sheet cannot interleave.
   // `std::mutex` is non-recursive, so every internal call below routes
   // through the `_locked` helpers rather than the public, self-locking ones.
+  std::vector<std::string> replaced_text_storage;
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const CellAddress anchor_addr{anchor_row, anchor_col};
 
   // Drop any region currently anchored at this cell first, regardless of
   // whether the new commit ends up succeeding. The "register over an
-  // existing region" case is intentionally idempotent.
+  // existing region" case is intentionally idempotent. Its strings outlive
+  // the copy below, because `cells` may view into them; a move keeps their addresses.
+  if (spill_table_ != nullptr) {
+    const auto previous = spill_table_->by_anchor.find(anchor_addr);
+    if (previous != spill_table_->by_anchor.end()) {
+      replaced_text_storage = std::move(previous->second.owned_strings);
+    }
+  }
   clear_spill_locked(anchor_row, anchor_col);
 
   // Admission is shared with the read-only/ad-hoc evaluation path and with
@@ -488,8 +497,7 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // Register the anchor entry. Capture the first cell up-front because the
   // region is about to be moved into the map; afterwards the by-value
   // `cells[0]` is no longer reachable through `region`.
-  const Value first_cell = region.cells[0];
-  const CellAddress anchor_addr{anchor_row, anchor_col};
+  Value first_cell = region.cells[0];
   const bool inserted = spill_table_->add_region(anchor_addr, std::move(region));
   assert(inserted && "commit_spill: anchor entry already present after clear");
   (void)inserted;
@@ -499,7 +507,7 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // without a special anchor case.
   RowCells& row_cells = rows_[anchor_row];
   Cell& anchor_slot = row_cells.ensure(anchor_col);
-  anchor_slot.cached_value = first_cell;
+  set_cell_cached_value_locked(anchor_slot, std::move(first_cell));
   cell_enumeration_revision_.bump();
   return true;
 }

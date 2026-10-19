@@ -1598,6 +1598,10 @@ class Sheet {
   // already holds it (e.g. `commit_spill` scanning its footprint) must reach
   // the `_locked` variant directly to avoid self-deadlock.
 
+  /// Writes a cached value and its owned Text backing to a stored Cell.
+  /// Caller must hold `spill_mutex_`.
+  void set_cell_cached_value_locked(Cell& slot, Value v);
+
   /// `cell_at` body; assumes `spill_mutex_` is held.
   const Cell* cell_at_locked(std::uint32_t row, std::uint32_t col) const noexcept;
 

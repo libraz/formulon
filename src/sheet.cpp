@@ -239,6 +239,31 @@ void Sheet::set_cell_formula_text(std::uint32_t row, std::uint32_t col, std::str
   }
 }
 
+void Sheet::set_cell_cached_value_locked(Cell& slot, Value v) {
+  if (v.is_text()) {
+    // Deep-copy the Text payload into a heap-stable `std::string` owned by
+    // the Cell so the stored `cached_value` no longer references whatever
+    // buffer the caller used (the recalc engine's per-evaluation `Arena`, or a
+    // spill region's strings about to be replaced). Allocating a fresh `unique_ptr<std::string>` per
+    // write keeps the bytes at a fixed heap address that survives the Cell
+    // being relocated by a row's insert or growth — a bare `std::string`
+    // would relocate its inline (SSO) bytes on every Cell move and dangle the
+    // `string_view` we are about to store.
+    //
+    // Construct from `v.as_text()` directly: even when the caller passes the
+    // cell's own current cached text back through this API, the new string
+    // allocates its own buffer before we replace `cached_text_owned`, so the
+    // source bytes remain valid for the duration of the construction.
+    auto owned = std::make_unique<std::string>(v.as_text());
+    const std::string_view view(*owned);
+    slot.cached_text_owned = std::move(owned);
+    slot.cached_value = Value::text(view);
+  } else {
+    slot.cached_value = v;
+    slot.cached_text_owned.reset();
+  }
+}
+
 void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v) {
   // Bounds checks are advisory: callers above this layer (parser, OOXML
   // reader, recalc engine) own coordinate validation. A debug assert
@@ -260,30 +285,7 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
-
-  if (v.is_text()) {
-    // Deep-copy the Text payload into a heap-stable `std::string` owned by
-    // the Cell so the stored `cached_value` no longer references whatever
-    // buffer the caller used (typically the recalc engine's per-evaluation
-    // `Arena`, which is about to be reset). Allocating a fresh
-    // `unique_ptr<std::string>` per write keeps the bytes at a fixed heap
-    // address that survives the Cell being relocated by a row's insert or
-    // growth — a bare `std::string` would relocate its inline (SSO) bytes on
-    // every Cell move and dangle the `string_view` we are about to store.
-    //
-    // Construct from `v.as_text()` directly: even when the caller passes
-    // the cell's own current cached text back through this API, the new
-    // `std::string` allocates its own buffer before we replace
-    // `cached_text_owned`, so the source bytes remain valid for the
-    // duration of the construction.
-    auto owned = std::make_unique<std::string>(v.as_text());
-    const std::string_view view(*owned);
-    slot.cached_text_owned = std::move(owned);
-    slot.cached_value = Value::text(view);
-  } else {
-    slot.cached_value = v;
-    slot.cached_text_owned.reset();
-  }
+  set_cell_cached_value_locked(slot, std::move(v));
   cell_enumeration_revision_.bump();
 }
 
