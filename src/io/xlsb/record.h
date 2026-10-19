@@ -131,9 +131,8 @@ enum class XlsbRecordType : std::uint16_t {
 
   // External link part (`xl/externalLinks/externalLink<N>.bin`): the
   // supporting workbook's defined names and the cell values Excel cached
-  // the last time it could read that workbook. Layout measured against
-  // Excel-365 output with the equivalent `.xlsx` package as the
-  // reference; see `xlsb/external_link_reader.cpp`.
+  // the last time it could read that workbook. Layout follows Excel-365 output with
+  // the equivalent `.xlsx` package as the reference; see `xlsb/external_link_reader.cpp`.
   BrtBeginExternalBook = 360,  ///< Opens the part; carries the link's rel id.
   BrtEndExternalBook = 588,    ///< Closes the part.
   BrtExternNameStart = 577,    ///< One supporting-workbook defined name.

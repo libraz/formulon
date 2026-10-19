@@ -1,6 +1,6 @@
 //
 // MS-XLSB data-validation container codec: BrtBeginDVals .. BrtEndDVals to
-// and from `Sheet::validations()`. Measured from Excel 365 (macOS)
+// and from `Sheet::validations()`. Layouts follow Excel 365 (macOS)
 // re-saves against the .xlsx Excel wrote for the same book:
 //
 //   * BrtBeginDVals (573): fWnClosed u16, xLeft, yTop, unused u32 (all 0
@@ -40,7 +40,7 @@ inline constexpr std::uint16_t kBrtBeginDVals = 573;
 inline constexpr std::uint16_t kBrtEndDVals = 574;
 
 /// Decodes one framed container. Returns nothing when any validation in it
-/// holds content outside the measured set; the caller then keeps the bytes.
+/// holds content outside the supported set; the caller then keeps the bytes.
 std::optional<std::vector<DataValidation>> decode_dv_block(ByteSpan block, const FeatureFormulaReadContext& ctx);
 
 /// Emits `validations` as one framed container; nothing when none covers a cell.

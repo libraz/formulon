@@ -323,7 +323,7 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
   if (!phonetic.empty()) {
     // A caller supplying a bare kana string is annotating the whole cell:
     // there is no span vocabulary on this entry point, so the run covers
-    // the surface text end to end. The span is measured now rather than
+    // the surface text end to end. The span is computed now rather than
     // at write time because every value-mutating setter clears the
     // annotation, so the text it describes cannot change underneath it.
     const std::string_view surface = slot.cached_value.is_text() ? slot.cached_value.as_text() : std::string_view{};

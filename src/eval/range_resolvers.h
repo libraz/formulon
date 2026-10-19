@@ -95,7 +95,7 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
 /// bound sheet). A qualifier spelled on a `Ref` or a `:` chain
 /// (`Sheet2!A1:B2`) carries to a bare partner; one produced by a name or a
 /// call leaves the bare partner on the formula's own sheet. Endpoints on
-/// two different sheets fail with `#VALUE!`, as measured on Excel 365.
+/// two different sheets fail with `#VALUE!` on Excel 365.
 bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lhs_sheet, const parser::AstNode& rhs,
                                  std::string_view rhs_sheet, const EvalContext& ctx, std::string_view* out_sheet,
                                  ErrorCode* out_err);

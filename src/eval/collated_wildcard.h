@@ -5,7 +5,7 @@
 // contractions never span characters. `*` matches any run, `?` one
 // character, and `~` makes the next character literal. This is the model
 // SEARCH and the PivotTable caption predicates (begins / ends / contains)
-// share, measured on Mac Excel 365.
+// share, as on Mac Excel 365.
 
 #ifndef FORMULON_EVAL_COLLATED_WILDCARD_H_
 #define FORMULON_EVAL_COLLATED_WILDCARD_H_

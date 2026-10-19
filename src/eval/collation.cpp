@@ -6,7 +6,7 @@
 // iteration marks, zh repeat marks, Thai prefix vowels), and each token's
 // elements feed the key parts.
 //
-// Windows profiles reuse the locale's tables under the host rules measured on
+// Windows profiles reuse the locale's tables under the host rules of
 // win-365-ja_JP, an NLS-style word sort: script blocks keep the base order with
 // the locale's Han rule; hyphen, apostrophe and C0/C1 controls weigh only after
 // every other level; width and enclosed or super/subscript forms differ at the

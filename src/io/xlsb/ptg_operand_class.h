@@ -43,14 +43,14 @@ struct Slot {
 };
 
 /// Class bits Excel gives a cell (`area == false`) or area reference at
-/// `slot` (measured per parameter; see `xlsb_parameter_class`). Outside
+/// `slot` (per parameter; see `xlsb_parameter_class`). Outside
 /// every built-in an operand is value class and a direct argument keeps
 /// reference class.
 std::uint8_t SlotClass(Slot slot, bool area, PtgEvaluation evaluation = PtgEvaluation::kDynamicArray);
 
-/// A node's result as Excel 365 judges it statically (measured against the
+/// A node's result as Excel 365 judges it statically (as the
 /// dynamic-array marks it gives formulas and the `@`s it shows in legacy
-/// ones): one value, a reference that may cover several cells, or an array.
+/// ones reflect): one value, a reference that may cover several cells, or an array.
 enum class Shape : std::uint8_t { kScalar, kReference, kArray };
 
 /// True when a call to `name` is a built-in Excel knows, by id or by hidden name.

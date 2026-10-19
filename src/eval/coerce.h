@@ -86,7 +86,7 @@ inline int truncate_saturated_int(double value) noexcept {
 }
 
 /// Distance below an integer within which Excel snaps an integer argument up
-/// to it: 2^-22, measured identical at 1.x, 14.x and 10000.x.
+/// to it: 2^-22, identical at 1.x, 14.x and 10000.x.
 inline constexpr double kNearIntegerSnap = 0x1p-22;
 
 /// Snaps `value` to the nearest integer when it lies within `kNearIntegerSnap`

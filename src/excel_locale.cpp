@@ -5,8 +5,8 @@
 namespace formulon {
 namespace {
 
-// Trailing comments name the measuring case: `locale_tokens.<id>` unless a
-// suite is given. `// unmeasured` slots hold the en-US value.
+// Trailing comments name the pinning case: `locale_tokens.<id>` unless a
+// suite is given. `// assumed` slots hold the en-US value.
 
 using Names7 = std::array<std::string_view, 7>;
 using Names12 = std::array<std::string_view, 12>;
@@ -430,7 +430,7 @@ constexpr TagLanguage kTagDutch{
     false,
 };
 
-// Windows spellings, measured on win-365-ja_JP; a tag absent here spells as on Mac.
+// Windows spellings on win-365-ja_JP; a tag absent here spells as on Mac.
 // locale_tokens.lcid_names_411: mmm is the bare month number.
 constexpr TagLanguage kWinTagJapanese{
     kTagJapanese.month_long, {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"},
@@ -508,7 +508,7 @@ constexpr TagLanguage kWinTagRussian{
     false,
 };
 
-// unmeasured on Windows: the genitive months over the Windows short names.
+// Assumed on Windows: the genitive months over the Windows short names.
 constexpr TagLanguage kWinTagRussianGenitive{
     kTagRussianGenitive.month_long,
     kWinTagRussian.month_short,
@@ -850,8 +850,8 @@ constexpr LocaleFacts kFrenchFacts{
     "Champ de ligne ",                                                       // groupby.groupby_measured_fh2_hdr
     "Champ de colonne ",                                                     // pivotby.pivotby_measured_fh2_hdr
     "Valeur ",                                                               // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,   // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,  // unmeasured: aaa is a year token (weekdays_aaa)
+    kEnglishDaysLong,   // assumed: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,  // assumed: aaa is a year token (weekdays_aaa)
 };
 
 constexpr LocaleFacts kChineseFacts{
@@ -879,7 +879,7 @@ constexpr LocaleFacts kChineseFacts{
     kInvariantFormatLetters,  // months_yyyy, months_d, weekdays_aaaa
     kNoLetterAliases,
     {"¥", false, false, true, false, true, 2U},  // text.dollar_negative_minus_sign, text.dollar_rounds_to_negative_zero
-    {"$", "€", "¥", "US$", "", ""},  // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ unmeasured
+    {"$", "€", "¥", "US$", "", ""},  // value_dollar_prefix, value_euro_prefix, value_yen_prefix; ￥ assumed
     {"€", ""},
     "$",                            // usdollar.usdollar_two_decimals
     DateOrder::kYMD,                // locale_profile_measurements.datevalue_two_digit_year
@@ -1287,8 +1287,8 @@ constexpr LocaleFacts kItalianFacts{
     "Campo riga ",         // groupby.groupby_measured_fh2_hdr
     "Campo colonna ",      // pivotby.pivotby_measured_fh2_hdr
     "Valore ",             // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,      // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,     // unmeasured: aaa is a year token (weekdays_aaa)
+    kEnglishDaysLong,      // assumed: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,     // assumed: aaa is a year token (weekdays_aaa)
 };
 
 constexpr LocaleFacts kDutchFacts{
@@ -1443,8 +1443,8 @@ constexpr LocaleFacts kSpanishFacts{
     "Campo de fila ",     // groupby.groupby_measured_fh2_hdr
     "Campo de columna ",  // pivotby.pivotby_measured_fh2_hdr
     "Valor ",             // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,     // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,    // unmeasured: aaa is a year token (weekdays_aaa)
+    kEnglishDaysLong,     // assumed: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,    // assumed: aaa is a year token (weekdays_aaa)
 };
 
 // es-MX keeps the en-US separators and number-format dialect; month and weekday names, bool names, currency
@@ -1518,8 +1518,8 @@ constexpr LocaleFacts kMexicanSpanishFacts{
     "Campo de fila ",     // groupby.groupby_measured_fh2_hdr
     "Campo de columna ",  // pivotby.pivotby_measured_fh2_hdr
     "Valor ",             // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,     // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,    // unmeasured: aaa is a year token (weekdays_aaa)
+    kEnglishDaysLong,     // assumed: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,    // assumed: aaa is a year token (weekdays_aaa)
 };
 
 constexpr LocaleFacts kPortugueseFacts{
@@ -1592,8 +1592,8 @@ constexpr LocaleFacts kPortugueseFacts{
     "Campo de linha ",   // groupby.groupby_measured_fh2_hdr
     "Campo de coluna ",  // pivotby.pivotby_measured_fh2_hdr
     "Valor ",            // groupby.groupby_measured_fh2_hdr
-    kEnglishDaysLong,    // unmeasured: aaaa is a year token (weekdays_aaaa)
-    kEnglishDaysShort,   // unmeasured: aaa is a year token (weekdays_aaa)
+    kEnglishDaysLong,    // assumed: aaaa is a year token (weekdays_aaaa)
+    kEnglishDaysShort,   // assumed: aaa is a year token (weekdays_aaa)
 };
 
 }  // namespace
@@ -1673,7 +1673,7 @@ WidthFolding width_folding(ExcelProfile profile) noexcept {
 namespace {
 
 const TagLanguage* mac_tag_language(std::uint16_t lcid) noexcept {
-  // Regional LCIDs measured to share the base spellings (locale_tokens.lcid_regional_variants).
+  // Regional LCIDs share the base spellings (locale_tokens.lcid_regional_variants).
   switch (lcid) {
     case 0x0411:
       return &kTagJapanese;
@@ -1722,7 +1722,7 @@ const TagLanguage* tag_language_for_lcid(std::uint16_t lcid, ExcelHost host) noe
 }
 
 const TagLanguage* tag_language_for_name(std::string_view name, ExcelHost host) noexcept {
-  // Bare language names measured to match the regional tables (locale_tokens.lcid_language_names).
+  // Bare language names match the regional tables (locale_tokens.lcid_language_names).
   struct NamedLcid {
     std::string_view name;
     std::uint16_t lcid;

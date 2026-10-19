@@ -509,7 +509,7 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
   // function call resolves through the matching BrtName's ilbl, so these
   // flags and the placeholder body must match Excel byte-for-byte or the
   // callee shows up as #NAME? on load. A prefixed name Excel does not know
-  // (`_xlfn.FOOBAR`) is an ordinary undefined-name stub instead (measured).
+  // (`_xlfn.FOOBAR`) is an ordinary undefined-name stub instead.
   const bool is_param = name.rfind("_xlpm.", 0) == 0;
   const bool is_function_value = name.rfind("_xleta.", 0) == 0;
   std::string_view callee(name);
@@ -555,7 +555,7 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     if (calc_exp) {
       p[0] |= 0x10U;  // fCalcExp (grbit bit 4)
     }
-    // Measured: a defined-name body's root reference stays reference class.
+    // A defined-name body's root reference stays reference class.
     auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kReference);
     if (!encoded_or) {
       return std::move(encoded_or.error());
@@ -631,8 +631,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     return std::move(protection.error());
   }
   emit_record(body, kBrtBeginBookViews, ByteSpan{});
-  // itabCur (u32 at offset 24): measured to equal the tab-selected sheet's
-  // index in every fixture; a mismatch made Excel show every tab selected.
+  // itabCur (u32 at offset 24): equals the tab-selected sheet's
+  // index; a mismatch made Excel show every tab selected.
   std::vector<std::uint8_t> wb_view_payload = kWbViewPayload;
   std::uint32_t itab_cur = 0U;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {

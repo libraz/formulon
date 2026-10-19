@@ -118,9 +118,9 @@ struct PivotLocaleLabels {
   std::string_view data_total_suffix;
 };
 
-// Indexed by `ExcelLocale`. Measured on Mac Excel 365 by switching the UI
-// locale and reading what Excel renders and names. `values_label` is the
-// dataCaption Excel stores when a pivot is created in that UI.
+// Indexed by `ExcelLocale`. Mac Excel 365 values per UI locale: what Excel
+// renders and names. `values_label` is the dataCaption Excel stores when a
+// pivot is created in that UI.
 constexpr std::array<PivotLocaleLabels, 14> kLocaleLabels{{
     {kJaJpAggregationLabels, "総計", "値", "行ラベル", "列ラベル", "", " 集計", "(空白)", "(すべて)",
      "(複数のアイテム)", " / ", "全体の ", ""},

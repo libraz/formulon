@@ -4,7 +4,7 @@
 // `io/ext_lst_refs.h`.
 //
 // The future records that carry cell coordinates the model does not own
-// share one header, measured against Excel's .xlsx twins: u32 flags (0x02
+// share one header: u32 flags (0x02
 // range list, 0x04 formula list), then the range list (u32 count; per range
 // u32 flags and an Sqrfx), then the formula list (u32 count; per formula
 // u32 flags, `cce`, `cb`, `rgce`, `rgcb`). Ranges live on

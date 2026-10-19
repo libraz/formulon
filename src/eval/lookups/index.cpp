@@ -583,7 +583,7 @@ Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols
       return IndexPick{IndexPickKind::kCell, row_idx - 1U, 0U};
     }
     // A 2-D reference with a row number alone, 0 included, is #REF!
-    // (measured on Excel 365).
+    // (Excel 365).
     if (reference) {
       return ErrorCode::Ref;
     }

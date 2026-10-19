@@ -257,7 +257,7 @@ struct DataBarSpec {
 struct IconSetSpec {
   IconSetName name = IconSetName::Three_Arrows;
   /// Lower bound of the lowest icon's bucket (the first `<cfvo>`). A cell
-  /// below it gets no icon at all (measured in Excel, for number, formula
+  /// below it gets no icon at all (for number, formula
   /// and percent floors); the usual `percent 0` floor admits every value.
   CfValueObject floor{CfvoType::Percent, "0", true};
   /// The N-1 boundaries between the buckets of an N-icon set. For example,

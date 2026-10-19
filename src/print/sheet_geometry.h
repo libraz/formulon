@@ -3,7 +3,7 @@
 //
 // Excel stores a column width in character units relative to the Normal
 // font's maximum digit width (MDW). This module owns the Normal-font
-// resolution, the measured MDW calibration, and the character-unit to point
+// resolution, the MDW calibration, and the character-unit to point
 // conversion, in two modes:
 //
 //   * `kDisplay` — the Windows screen figure (`Range.Width` at 96 DPI;
@@ -45,7 +45,7 @@ struct ColumnWidthModel {
   double padding_pt = 0.0;       ///< Flat per-visible-column padding, in points.
   std::string normal_font_name;  ///< Normal-style font family the model was resolved for.
   double normal_font_size = 0.0;
-  /// False when `(normal_font_name, normal_font_size)` is not a measured
+  /// False when `(normal_font_name, normal_font_size)` is not a tabulated
   /// calibration point and the Calibri 11 figure was used instead.
   bool calibrated = true;
   const char* platform = "win";  ///< The only calibrated platform.
@@ -79,7 +79,7 @@ double column_points_to_chars(double points, const ColumnWidthModel& model);
 double default_column_width_chars(const Sheet& sheet);
 
 /// The sheet's default row height in points (`defaultRowHeight`, else the
-/// measured 102/7 pt).
+/// 102/7 pt).
 double default_row_height_pt(const Sheet& sheet);
 
 /// Effective width of column `col` in character units; zero when hidden.

@@ -82,7 +82,7 @@ const XlsbFuncEntry* lookup_func_by_name(std::string_view name);
 ///   * `I` a direct or operand area is array class, a cell value class;
 ///   * `Y` a direct area is value class, a direct cell reference class,
 ///     operands as for `I`.
-/// Measured for every built-in the writer calls; `V` for a name with none.
+/// Defined for every built-in the writer calls; `V` for a name with none.
 char xlsb_parameter_class(std::string_view name, std::uint32_t index);
 
 /// `xlsb_parameter_class` as a formula saved without the dynamic-array mark

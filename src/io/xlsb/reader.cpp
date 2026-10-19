@@ -543,7 +543,7 @@ std::uint16_t ExternalLinkSbt(ByteSpan part) {
 /// `[N]` prefix selects.
 ///
 /// A part that is missing, unreadable or uses an encoding the decoder
-/// has not measured contributes an entry with an empty cache rather than
+/// does not support contributes an entry with an empty cache rather than
 /// none: the position has to be held or every later `[N]` would shift by
 /// one and resolve against the wrong workbook. A reference into an empty
 /// cache reads `#REF!`, which is the behaviour before this existed.

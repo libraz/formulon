@@ -283,7 +283,7 @@ def measured_high_bytes(golden: Path) -> list[int]:
 def render_sbcs_block(tables: list[tuple[MeasuredSbcs, list[int]]]) -> str:
     lines = [SBCS_BEGIN]
     for table, values in tables:
-        lines.append(f"// {table.title}, measured: locale_tokens.char_high_bytes_unicode ({table.target}).\n")
+        lines.append(f"// {table.title}: locale_tokens.char_high_bytes_unicode ({table.target}).\n")
         lines.append(f"constexpr std::array<std::uint32_t, 128> {table.symbol} = {{{{\n")
         for start in range(0, len(values), 13):
             chunk = values[start : start + 13]

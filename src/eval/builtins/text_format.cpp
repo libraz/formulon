@@ -263,7 +263,7 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
 // ---------------------------------------------------------------------------
 //
 // Both render `number` as currency text through one kernel; they differ in
-// the symbol, the default `decimals` and the negative section (measured on
+// the symbol, the default `decimals` and the negative section (on
 // Mac Excel 365 ja-JP):
 //   DOLLAR   `¥1,235`,   `¥-1,235`     (locale currency, default 0 decimals)
 //   USDOLLAR `$1,234.50`, `($1,234.50)` (US dollars, default 2)

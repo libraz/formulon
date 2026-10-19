@@ -37,13 +37,13 @@ namespace {
 //     verifier today (`workbook_oracle_test.cpp` never reads it). This
 //     is the 96-DPI `Range.Width` figure, unadjusted.
 //
-// Only Calibri 11's print-layout width is directly measured (from the
-// print-track captures' own break positions, not a `Range.Width` sweep).
-// Other fonts/sizes' print-layout widths are unmeasured; they are
+// Only Calibri 11's print-layout width is known directly (from the
+// print-track break positions, not `Range.Width`).
+// Other fonts/sizes' print-layout widths are not known; they are
 // inferred by scaling that font's *display* calibration by the ratio
 // between Calibri 11's print and display figures, separately for the
 // per-character rate and the padding term (`kPrintMdwRatio` /
-// `kPrintPaddingRatio` below) -- an approximation, not a second sweep.
+// `kPrintPaddingRatio` below) -- an approximation.
 
 /// Calibri 11's print-layout points-per-character-unit and per-column
 /// padding: the pre-existing figure that both DPI captures' page breaks
@@ -62,8 +62,8 @@ constexpr double kDisplayPointsPerColumnCharCalibri11 = 5.25;
 constexpr double kDisplayColumnPaddingPtCalibri11 = 3.75;
 
 /// Print-layout-to-display ratios for the per-character rate and the
-/// padding term, derived from Calibri 11 (the only font with a directly
-/// measured print-layout figure) and applied to every other font's
+/// padding term, derived from Calibri 11 (the only font with a known
+/// print-layout figure) and applied to every other font's
 /// display calibration to approximate its print-layout one.
 constexpr double kPrintMdwRatio = kPrintPointsPerColumnCharCalibri11 / kDisplayPointsPerColumnCharCalibri11;
 constexpr double kPrintPaddingRatio = kPrintColumnPaddingPtCalibri11 / kDisplayColumnPaddingPtCalibri11;
@@ -74,7 +74,7 @@ constexpr double kPrintPaddingRatio = kPrintColumnPaddingPtCalibri11 / kDisplayC
 constexpr double kStandardColWidthChars = 8.43;
 
 /// One (Normal font family, size) -> (MDW, padding) *display* calibration
-/// point, measured on Windows Excel 365 ja-JP (build 16.0.20228, 100%
+/// point on Windows Excel 365 ja-JP (build 16.0.20228, 100%
 /// display scaling / 96 DPI) via `Range.Width` at stored widths 30/100
 /// chars. `Calibri`/11 reproduces `kDisplayPointsPerColumnCharCalibri11` /
 /// `kDisplayColumnPaddingPtCalibri11` above exactly.
@@ -100,14 +100,14 @@ constexpr ColumnWidthCalibration kColumnWidthCalibrations[] = {
 };
 
 /// The resolved points-per-character-unit and per-column padding for either
-/// mode, plus whether the font was a measured calibration point.
+/// mode, plus whether the font was a tabulated calibration point.
 struct ColumnWidthGeometry {
   double points_per_char = kPrintPointsPerColumnCharCalibri11;
   double padding_pt = kPrintColumnPaddingPtCalibri11;
   bool calibrated = false;
 };
 
-/// Looks up the measured *display* calibration for `(family, size)` in
+/// Looks up the *display* calibration for `(family, size)` in
 /// `kColumnWidthCalibrations`. Falls back to the Calibri-11 display
 /// figure (with `calibrated == false`) for any `(family, size)` pair the
 /// table does not cover -- interpolating between sampled sizes would be
@@ -123,7 +123,7 @@ ColumnWidthGeometry ResolveColumnDisplayGeometry(const std::string& family, doub
 
 /// The geometry pagination's break math must use: `(family, size)`'s
 /// display calibration scaled by Calibri 11's print/display ratios. Reduces
-/// to the measured `kPrintPointsPerColumnCharCalibri11` /
+/// to `kPrintPointsPerColumnCharCalibri11` /
 /// `kPrintColumnPaddingPtCalibri11` exactly for `{"Calibri", 11}` and for
 /// any untabulated font/size.
 ColumnWidthGeometry ResolveColumnPrintGeometry(const std::string& family, double size) {

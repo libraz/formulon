@@ -5,7 +5,7 @@
 // The extension payload is retained verbatim, but its `<xm:sqref>` and
 // `<xm:f>` elements name cells: the x14 conditional-format ranges, each
 // sparkline's location and source, the x14 data-validation ranges. Excel
-// moves them with the edit (measured on Windows Excel 365: an x14 CF
+// moves them with the edit (Windows Excel 365: an x14 CF
 // `xm:sqref` mirrors the legacy union sqref and moves with it, a sparkline's
 // `xm:f` and `xm:sqref` move like ordinary references), so these helpers
 // let the structural-edit pass apply the same mapping the modelled

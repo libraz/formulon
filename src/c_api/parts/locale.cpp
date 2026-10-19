@@ -2,7 +2,7 @@
 // C ABI - locale facts and formula text conversion.
 //
 // Every entry takes a profile id string (`parse_excel_profile_id`), so one
-// identifier selects the locale and the measured / estimated status. Facts
+// identifier selects the locale and the Excel-backed / estimated status. Facts
 // are read from `LocaleFacts`; the string views behind them are literals, so
 // they are NUL-terminated and live for the process.
 

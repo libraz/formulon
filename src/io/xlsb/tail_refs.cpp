@@ -62,7 +62,7 @@ void StoreU16(std::uint8_t* p, std::uint16_t v) {
   p[1] = static_cast<std::uint8_t>(v >> 8);
 }
 
-/// The range list of a 1046 / 1043 record in the measured shape; `rest` is
+/// The range list of a 1046 / 1043 record in the supported shape; `rest` is
 /// the offset of whatever follows the Sqrfx.
 bool ParseRanges(const FramedRecord& rec, std::vector<MergeRange>& ranges, std::size_t& rest) {
   const std::uint32_t want = rec.type == kBeginCondFmt14 ? kFrtRanges : kFrtRangesAndFormulas;
@@ -526,7 +526,7 @@ void CloneSlotSparklines(std::vector<std::uint8_t>& buf, const std::vector<XlsbE
   }
 }
 
-// Worksheet-children records, measured against Excel's .xlsx twins (field
+// Worksheet-children records (field
 // offsets in bytes).
 constexpr std::uint16_t kBeginScenMan = 500;  // u16 current, u16 show
 constexpr std::uint16_t kEndScenMan = 501;

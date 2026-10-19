@@ -49,8 +49,8 @@ using detail::Shapes;
 using detail::Slot;
 using detail::SlotClass;
 
-/// Built-ins whose result can be a reference, as measured for the class of
-/// their call token.
+/// Built-ins whose result can be a reference, for the class of their
+/// call token.
 bool ReturnsReference(std::string_view name) {
   for (const std::string_view fn : {"INDEX", "INDIRECT", "CHOOSE", "IF", "OFFSET", "IFS", "SWITCH", "XLOOKUP",
                                     "TRIMRANGE", "_TRO_ALL", "_TRO_LEADING", "_TRO_TRAILING"}) {
@@ -162,7 +162,7 @@ void emit_area(std::vector<std::uint8_t>& dst, const parser::Reference& a, const
 
 /// Turns `first`:`last` over whole columns or rows (per `first`'s flags)
 /// into the grid-spanning area XLSB stores, its spanned axis absolute
-/// (measured: `A:A` -> 0x4000, `1:1` -> 0x8000..0xBFFF).
+/// (`A:A` -> 0x4000, `1:1` -> 0x8000..0xBFFF).
 void SpanGrid(parser::Reference& first, parser::Reference& last) {
   if (first.is_full_col) {
     first.row = 0;
@@ -740,7 +740,7 @@ class Encoder {
 
   /// Class of the token of a call at `slot` whose result is not taken as a
   /// reference: value at a cell formula's root, array inside an array scope,
-  /// else what an operand of its shape takes at `slot` (measured in cell
+  /// else what an operand of its shape takes at `slot` (in cell
   /// formulas: `SUM(SEQUENCE(2))` -> 0x62, `SUM(ABS(A1))` -> 0x41,
   /// `ROWS(ABS(A1))` -> 0x61).
   std::uint8_t CallClass(const parser::AstNode& node, Slot slot, bool promote) {
@@ -757,8 +757,7 @@ class Encoder {
   }
 
   /// In a dynamic-array formula a single value at an `S` operand or an `I`
-  /// argument takes the class an area takes there (measured:
-  /// `AND(A1>0,A1:A2>0)` and `IFERROR(A1,A1:A2)` store A1 as 0x64).
+  /// argument takes the class an area takes there (`AND(A1>0,A1:A2>0)` and `IFERROR(A1,A1:A2)` store A1 as 0x64).
   bool MarkedAsArea(Slot slot) const { return marked_ && (slot.letter == 'I' || (slot.operand && slot.letter == 'S')); }
 
   /// Class of a `LET`, `#` or LAMBDA call token: as a built-in's in a cell
@@ -926,7 +925,7 @@ class Encoder {
   /// Encodes a `Lambda` as Excel 365 saves one: `PtgName(_xlfn.LAMBDA)`, a
   /// `PtgName(_xlpm.<param>)` per parameter, the body with the parameters
   /// in scope, then `PtgFuncVar(255)` with `cparams == params + 2`.
-  /// Optional `[param]`s have no measured encoding and are refused.
+  /// Optional `[param]`s have no known encoding and are refused.
   Expected<void, Error> emit_lambda(const parser::AstNode& node) {
     if (node.as_lambda_optional_count() != 0) {
       return unsupported_node("Lambda(optional parameter)");
@@ -1073,7 +1072,7 @@ class Encoder {
                         std::string("context=xlsb_ptg_writer sheets=") + std::string(begin) + ":" + std::string(end));
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(itab_begin, itab_end));
-    // Measured: a value/array-class 3-D reference used as a function
+    // A value/array-class 3-D reference used as a function
     // argument reads back as #REF! in real Excel -- do not promote here.
     if (node.as_ref3d_is_range()) {
       emit_u8(out_, promote ? ValueClassPtg(0x3B) : 0x3B);  // PtgArea3d
@@ -1268,7 +1267,7 @@ class Encoder {
 
   /// `cls`: the class of the fast-path Area/Area3d collapse (see
   /// `emit_ref`). A root the general form wraps, `operand+operand+PtgRange`,
-  /// in a value-class `PtgMemFunc` instead (`promote`; both measured, real
+  /// in a value-class `PtgMemFunc` instead (`promote`; both as in real
   /// Excel 365).
   Expected<void, Error> emit_range(const parser::AstNode& node, bool promote, std::uint8_t cls) {
     // One area token (`A1:B2`, `A:C`) is a single operand.
@@ -1414,7 +1413,7 @@ class Encoder {
   }
 
   /// A union or intersection, inside the memory token Excel 365 puts in
-  /// front of it (measured):
+  /// front of it:
   ///   * a cell formula over plain same-sheet references stores the result
   ///     it precomputes: `PtgMemArea` with the rectangles in `rgcb`, or at
   ///     the root, where the value is taken, `PtgMemErr` when that is an
@@ -1475,10 +1474,10 @@ class Encoder {
 
   Expected<void, Error> emit_call(const parser::AstNode& node) {
     // A call that can return a reference keeps reference class where its
-    // parameter takes one (`ROWS(OFFSET(A1,0,0))` -> 0x22), as measured.
+    // parameter takes one (`ROWS(OFFSET(A1,0,0))` -> 0x22).
     const bool reference_slot = std::exchange(call_in_reference_slot_, false);
     const std::uint8_t result_class = std::exchange(call_class_, kPtgValueClass);
-    // A named LAMBDA's token outside the formulas measured for it stays value class.
+    // A named LAMBDA's token outside the formulas it is known for stays value class.
     const std::uint8_t name_call_class = reference_slot    ? kPtgReferenceClass
                                          : measured_calls_ ? result_class
                                                            : kPtgValueClass;
@@ -1672,7 +1671,7 @@ class Encoder {
   /// Encodes a written `@` as a call to the hidden `_xlfn.SINGLE` name,
   /// as Excel 365 saves `=@A1` (`23 <ilbl> 24 .. 42 02 ff 00`).
   /// In a defined name's body, which is evaluated as an array, the operand
-  /// is a reference and the token one where its slot takes one (measured at
+  /// is a reference and the token one where its slot takes one (at
   /// the root: `@Sheet1!$A$1:$A$2` -> 0x3B, 0x22).
   Expected<void, Error> emit_implicit_intersection(const parser::AstNode& node, bool reference_result) {
     RETURN_IF_ERROR(emit_hidden_callee("SINGLE"));
@@ -1688,7 +1687,7 @@ class Encoder {
     // The token carries the column and row counts less one as u16s, then
     // bytes Excel leaves unused; the dimensions and elements go into
     // `extra_` (this formula's `rgcb`): rows and columns as u32s, then each
-    // element row-major as a tag byte and its payload (measured).
+    // element row-major as a tag byte and its payload.
     const std::uint32_t rows = node.as_array_rows();
     const std::uint32_t cols = node.as_array_cols();
     emit_u8(out_, ClassedPtg(0x20, cls));  // PtgArray
@@ -1755,7 +1754,7 @@ class Encoder {
   /// The formula's built-ins named as values (`function_value_refs`).
   std::vector<const parser::AstNode*> function_values_;
   /// A cell formula or defined name encoded as Excel 365 types it: calls take
-  /// the classes measured for them there (`CallClass`), LET / LAMBDA
+  /// the classes Excel gives them there (`CallClass`), LET / LAMBDA
   /// parameters the class of their slot.
   bool measured_calls_ = false;
   /// A cell formula stored with the dynamic-array mark (`MarkedAsArea`).
@@ -1798,7 +1797,7 @@ Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const s
   Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, names, std::move(whitespace));
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
-  // (measured for cells and name bodies; the u16 is unused). A whitespace
+  // (in cells and name bodies; the u16 is unused). A whitespace
   // attr opening the formula carries the flag instead.
   const bool volatile_formula = formula_calls_volatile(node);
   if (volatile_formula) {

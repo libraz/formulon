@@ -37,7 +37,7 @@ struct PatternItem {
 
 // Interns each code point's comparison collation key, so two characters are
 // one class exactly when `=` calls them equal. Expansions and contractions
-// never span characters, matching SEARCH (measured on Mac Excel 365).
+// never span characters, matching SEARCH (Mac Excel 365).
 class CharClasses {
  public:
   explicit CharClasses(ExcelProfile profile) : profile_(profile) {}

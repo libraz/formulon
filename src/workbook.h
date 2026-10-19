@@ -109,7 +109,7 @@ class Workbook {
   /// on Mac and 11 pt on Windows; the Mac default row height and base
   /// column width are set, the Windows ones are left at the engine
   /// defaults. Windows values other than the size are estimated from the
-  /// Mac measurements. No theme part is created; Excel reads its absence as
+  /// Mac values. No theme part is created; Excel reads its absence as
   /// the Office theme. The phonetic font (font 1) keeps the locale face
   /// when font 0 is changed later.
   static Workbook create_for_profile(const ExcelProfile& profile);

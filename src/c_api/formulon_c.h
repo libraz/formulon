@@ -206,7 +206,7 @@ FM_API fm_status_t fm_workbook_create(fm_workbook_t** out);
  * a workbook without one as the Office theme. `fm_workbook_create` is
  * unchanged and still seeds `Calibri` 11.
  *
- * Only the `mac-*` values are measured. The `win-*` ids are estimates: the
+ * Only the `mac-*` values come from Excel. The `win-*` ids are estimates: the
  * Mac locale table with an 11 pt body font, and no default row height or
  * base column width (the engine defaults apply).
  *
@@ -2364,8 +2364,8 @@ FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const c
  * New workbooks use `win-365-en_US` by default. Supported ids are
  * `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,
  * pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. The `mac-*`
- * ids and `win-365-ja_JP` follow Excel measurements; the other `win-*` ids
- * are estimated from the Mac measurements plus the Windows host rules.
+ * ids and `win-365-ja_JP` follow Excel; the other `win-*` ids
+ * are estimated from the Mac values plus the Windows host rules.
  *
  * Existing cached formula values are not recomputed until the caller drives
  * `fm_workbook_recalc` or an equivalent partial recalc.
@@ -4656,11 +4656,11 @@ typedef enum { FM_DATE_ORDER_MDY = 0, FM_DATE_ORDER_YMD = 1, FM_DATE_ORDER_DMY =
  * @brief Scalar locale facts of one profile (`fm_locale_facts`).
  *
  * Every string is a NUL-terminated UTF-8 view into process-static storage.
- * `measured` is `1` for the profiles captured from Excel (every `mac-*`
+ * `measured` is `1` for the profiles backed by Excel (every `mac-*`
  * profile and `win-365-ja_JP`) and `0` for the estimated `win-*` ones; the
- * other facts are measured in every Mac locale. Collation measurement is
+ * other facts hold in every Mac locale. Collation backing is
  * separate: `collation_measured` is `1` only for `mac-*` profiles, so
- * `win-365-ja_JP` is measured for facts but its collation order is estimated.
+ * `win-365-ja_JP` is Excel-backed for facts but its collation order is estimated.
  */
 typedef struct {
   const char* decimal_separator;
@@ -4675,8 +4675,8 @@ typedef struct {
   int32_t currency_suffix; /* 1: the symbol follows the number */
   int32_t currency_space;  /* 1: one space between symbol and number */
   int32_t currency_default_decimals;
-  int32_t measured;           /* 1: Excel-measured profile; 0: estimated */
-  int32_t collation_measured; /* 1: collation order measured (mac-*); 0: estimated (win-*) */
+  int32_t measured;           /* 1: Excel-backed profile; 0: estimated */
+  int32_t collation_measured; /* 1: collation order Excel-backed (mac-*); 0: estimated (win-*) */
 } fm_locale_facts_t;
 
 /**
@@ -4758,7 +4758,7 @@ FM_API size_t fm_locale_error_name_count(void);
  *        the error at `error_index`.
  *
  * Both strings are process-static. `*out_measured` is `1` when the
- * localized spelling was captured from Excel under a measured profile and
+ * localized spelling comes from Excel under an Excel-backed profile and
  * `0` when it is assumed.
  *
  * @return `kOk` on success;
@@ -5588,7 +5588,7 @@ typedef enum {
  * @brief The character-unit to point conversion for the workbook's Normal
  *        font in one mode.
  *
- * `calibrated` is `0` when the Normal font is not a measured calibration
+ * `calibrated` is `0` when the Normal font is not a tabulated calibration
  * point and the Calibri 11 figure was extrapolated. `normal_font_name` is a
  * read-scratch-backed view; `platform` is a static view (`"win"`).
  */

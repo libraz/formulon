@@ -222,7 +222,7 @@ inline bool fold_range_chain(const parser::AstNode& node, RangeChainFold* acc) {
 /// `RangeOp` whose endpoints are reference-returning calls has a rectangle
 /// only once evaluated, which is `resolve_range_endpoint`'s job.
 ///
-/// The leaves do not have to bound the same axis. Measured on Excel 365
+/// The leaves do not have to bound the same axis. On Excel 365
 /// (Mac, ja-JP, 16.112.1): `=COLUMNS(A:C:1:3)` is 16384 and
 /// `=ROWS(A:C:1:3)` is 1048576 -- composing a whole-column span with a
 /// whole-row span bounds the entire grid, it is not an error. Likewise

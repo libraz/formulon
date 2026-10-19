@@ -351,7 +351,7 @@ bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const Func
                            ErrorCode* out_err);
 
 // A name standing as an endpoint (`A1:MyName`, `A1:[0]!MyName`) denotes the reference its
-// value is. Measured on Excel 365: an undefined name is #NAME?, an
+// value is. On Excel 365 an undefined name is #NAME?, an
 // error-valued name surfaces its error, and any other non-reference value
 // (a constant, an expression, text) is #VALUE!.
 bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

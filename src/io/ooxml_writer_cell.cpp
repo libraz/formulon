@@ -242,7 +242,7 @@ void AppendFormulaValue(std::string& out, const Value& cv) {
 
 // A spilled (non-anchor) cell as Excel 365 stores it: its own style, the
 // value typed as a formula result's, and `<f ca="1"/>` when the anchor is
-// recalculated every time (measured).
+// recalculated every time.
 void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col, std::uint32_t xf_index,
                           bool force_style, const Value& value, bool always_calculates) {
   out.append("<c r=\"");
@@ -336,7 +336,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // strip it before serialisation.
     // Excel stores `ca="1"` on a formula it recalculates every time, and on a
     // dynamic-array formula whose spill is blocked; the array form adds
-    // `aca="1"` (measured).
+    // `aca="1"`.
     const bool always_calculates = formula_cell_always_calculates(sheet, row, col, cell, name_shapes);
     if (anchored != nullptr || dynamic || cse) {
       out.append(always_calculates ? "<f t=\"array\" aca=\"1\" ref=\"" : "<f t=\"array\" ref=\"");

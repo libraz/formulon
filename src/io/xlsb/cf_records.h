@@ -1,12 +1,12 @@
 //
 // MS-XLSB conditional-formatting block codec: one
 // BrtBeginConditionalFormatting .. BrtEndConditionalFormatting run to and
-// from a `cf::ConditionalFormat`. Layouts were measured from Excel 365
+// from a `cf::ConditionalFormat`. Layouts follow Excel 365
 // (macOS) re-saves, cross-checked against the .xlsx Excel wrote for the
 // same workbook; `cf_records.cpp` carries the field tables.
 //
 // Decoding is all-or-nothing per block: a block holding any value outside
-// the measured set (a theme colour, an unobserved template, a pivot-scoped
+// the supported set (a theme colour, an unsupported template, a pivot-scoped
 // block, a formula the Ptg codec refuses) decodes to nothing, and the
 // caller keeps its bytes verbatim instead.
 
@@ -41,7 +41,7 @@ std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const Featu
 /// bar lengths) onto the linked rules of `formats`, as the .xlsx reader
 /// does with `<x14:dataBar>`. `records` is a run of framed tail records;
 /// the x14 blocks stay retained verbatim. An x14 rule whose records hold
-/// anything unmeasured leaves its legacy rule as decoded.
+/// anything unsupported leaves its legacy rule as decoded.
 void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFormat>& formats);
 
 /// Brings the x14 data-bar rules in a sheet's retained tail `records` in
@@ -57,7 +57,7 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
 /// hyperlinks) for every model data bar that needs one and is not in
 /// `linked`, inside the retained x14 container when there is one, and adds
 /// its id to `linked`. Fails for a formula threshold, whose x14 form is
-/// unmeasured.
+/// unsupported.
 Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
                                         const std::vector<cf::ConditionalFormat>& formats,
                                         std::unordered_set<std::string>& linked);

@@ -128,8 +128,8 @@ namespace {
 
 // --- Byte-oriented text family (LENB / LEFTB / RIGHTB / MIDB / CHAR / CODE)
 //
-// A DBCS profile measures "byte" length with `dbcs_char_bytes`: ASCII is 1
-// byte, a BMP character takes the locale's measured width (1 or 2), and a
+// A DBCS profile counts "byte" length with `dbcs_char_bytes`: ASCII is 1
+// byte, a BMP character takes the locale's width (1 or 2), and a
 // supplementary-plane code point such as an emoji counts as 2 bytes.
 //
 // When a byte-budgeted slice (LEFTB/RIGHTB/MIDB) would land in the middle

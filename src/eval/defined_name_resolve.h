@@ -75,7 +75,7 @@ const DefinedName* find_defined_name(const EvalContext& ctx, std::string_view na
 
 /// Finds the definition a self-book reference `[0]!name` denotes: the
 /// workbook-scoped one, else the sheet-local one on the lowest-index sheet,
-/// as measured on Excel 365. Returns `nullptr` when `name` is undefined.
+/// on Excel 365. Returns `nullptr` when `name` is undefined.
 const DefinedName* find_self_book_defined_name(const Workbook& workbook, std::string_view name) noexcept;
 
 /// Finds the defined name a sheet-qualified reference `sheet!name` denotes:

@@ -4,7 +4,7 @@
 // A file's cell value can only hold the legacy error set. Excel 365 keeps
 // every newer error as `#VALUE!` in the cell and carries the real one in a
 // rich value (cell `vm` metadata plus the `richData` parts), which this
-// writer does not produce; it stores `#GETTING_DATA` as `#N/A`. Measured
+// writer does not produce; it stores `#GETTING_DATA` as `#N/A`. This holds
 // for #SPILL!, #CALC! and #GETTING_DATA in both .xlsx and .xlsb; the other
 // newer errors cannot be produced by entering a formula and follow the
 // same fallback. Every writer of a cell value goes through this one rule.

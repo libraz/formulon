@@ -226,7 +226,7 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   // Workbook-level calc settings: this writer emits no calc-properties
   // record at all, so a non-default mode or an enabled iterative solve
   // silently reverts to automatic / non-iterative recalculation on open.
-  // lockWindows / lockRevision / a revisions password have no measured
+  // lockWindows / lockRevision / a revisions password have no
   // BrtBookProtection field and are left out of the saved workbook.
   std::vector<std::uint8_t> protection_scratch;
   const auto book_protection = emit_book_protection(protection_scratch, workbook.workbook_protection_xml());

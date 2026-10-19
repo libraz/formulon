@@ -1,7 +1,7 @@
 //
 // The date / time text recogniser shared by VALUE, NUMBERVALUE, DATEVALUE,
 // TIMEVALUE, implicit text->number coercion and the criteria engine. One
-// grammar, measured on Mac Excel, serves every profile; the active profile's
+// grammar, as on Mac Excel, serves every profile; the active profile's
 // locale facts supply the field order, the date and trailing separators, the
 // month names, the CJK width folding and the kanji / era / hangul forms.
 

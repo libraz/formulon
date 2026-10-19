@@ -407,7 +407,7 @@ Value Clean(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
 // --- CHAR / CODE ---------------------------------------------------------
 //
-// Excel ja-JP measures "byte" length against the Shift-JIS (CP932) single-
+// Excel ja-JP counts "byte" length against the Shift-JIS (CP932) single-
 // byte region: ASCII and half-width katakana are 1 byte, and every other
 // character -- including supplementary-plane codepoints such as emoji --
 // counts as 2 bytes (matching observed Mac Excel ja-JP behaviour). See
@@ -453,7 +453,7 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       // Half-width katakana mapping: 0xA1 -> U+FF61, 0xDF -> U+FF9F.
       cp = 0xFF61u + static_cast<std::uint32_t>(n - 0xA1);
     } else if ((n >= 0x81 && n <= 0x9F) || (n >= 0xE0 && n <= 0xFC)) {
-      // A CP932 lead byte on its own is a space (measured on Mac Excel ja-JP).
+      // A CP932 lead byte on its own is a space (Mac Excel ja-JP).
       cp = 0x20u;
     } else {
       // 0x80, 0xA0 and 0xFD-0xFF map to the same-numbered code point.
@@ -486,7 +486,7 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //   * Anything the DBCS table encodes: row / cell plus `dbcs_code_bias`
 //     (e.g. CODE("あ") = 9250 in ja, 42146 in zh).
 //   * Anything else (NEC extensions, emoji, supplementary plane, etc.):
-//     95 (ASCII underscore), the measured Mac fallback.
+//     95 (ASCII underscore), the Mac fallback.
 //
 // Goldens: code_char_jp_probes on every Mac target. Under the runtime-default
 // win-365-ja_JP profile, `eval_code_lazy` (src/eval/info_lazy.cpp) overrides

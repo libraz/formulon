@@ -134,7 +134,7 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     if (!field.subtotal_fns.empty()) {
       field.default_subtotal = false;
     }
-    // Measured: an absent `sortType` is the schema's "manual" default, so
+    // An absent `sortType` is the schema's "manual" default, so
     // the field follows its `<items>` document order.
     if (pugi::xml_attribute sort_attr = f.attribute("sortType"); sort_attr) {
       const std::string_view value = sort_attr.value();

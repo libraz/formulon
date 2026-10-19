@@ -74,7 +74,7 @@ void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBre
     // manual break in an Excel-authored file one track early, and the
     // writer's matching increment put it back on save -- so a Formulon
     // read/write cycle looked clean while Formulon and Excel disagreed
-    // about where the page ended. Measured against Excel 365: authoring a
+    // about where the page ended. Excel 365 authors a
     // manual break before row 21 / column D produces `id="20"` / `id="3"`.
     entry.id = static_cast<std::uint32_t>(brk.attribute("id").as_uint(0));
     entry.min = static_cast<std::uint32_t>(brk.attribute("min").as_uint(0));

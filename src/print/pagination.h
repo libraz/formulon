@@ -10,7 +10,7 @@
 //
 // Exact 1-bit parity with Excel's pagination is best-effort: the
 // character-width to pixel rounding depends on the rendering font's
-// metrics. The workbook's Normal-style font/size selects a measured
+// metrics. The workbook's Normal-style font/size selects a tabulated
 // calibration when it is one of the sampled Windows combinations, and
 // falls back to Calibri-11 constants otherwise. Structural correctness —
 // page count, break ordering, and which track each break sits before —

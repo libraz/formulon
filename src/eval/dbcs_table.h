@@ -34,7 +34,7 @@ std::uint16_t lookup_dbcs_to_unicode(DbcsCodepage codepage, std::uint8_t row, st
 std::uint16_t dbcs_code_bias(DbcsCodepage codepage) noexcept;
 
 /// Sorted BMP code points where a character's LENB width flips between 1 and 2,
-/// starting at width 1 from U+0000; empty when the code page has no measured
+/// starting at width 1 from U+0000; empty when the code page has no known
 /// widths. Defined in the generated dbcs_lenb_table.cpp.
 struct DbcsWidthToggles {
   const std::uint16_t* points;

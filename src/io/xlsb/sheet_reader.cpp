@@ -288,7 +288,7 @@ RecordDisposition ResolveUnmodelledRecord(SheetDecodeState& state, XlsbRecordTyp
 /// formatting blocks and the data-validation container -- which the writer
 /// re-emits from `Sheet`. `rec` has just been read from `cursor`; a block's
 /// remaining records are consumed here. A record or block holding content
-/// outside the measured set is retained verbatim instead. Returns false
+/// outside the supported set is retained verbatim instead. Returns false
 /// for any other record.
 Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* framed, const XlsbRecord& rec,
                                         SheetDecodeState& state, Sheet& sheet, const FeatureFormulaReadContext& ctx) {

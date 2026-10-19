@@ -19,7 +19,7 @@ namespace {
 
 /// Opcodes of the two reference Ptgs a supporting-workbook defined name
 /// stores. Both appear unclassed (no value/array class bit) in every
-/// sample measured.
+/// sample.
 constexpr std::uint8_t kPtgRef3d = 0x3A;
 constexpr std::uint8_t kPtgArea3d = 0x3B;
 

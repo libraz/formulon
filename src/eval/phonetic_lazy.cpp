@@ -125,7 +125,7 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
       return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
     }
     // Excel does not count PHONETIC's read toward circularity:
-    // `=PHONETIC(A1)` in A1 is not circular (measured on Mac Excel 365).
+    // `=PHONETIC(A1)` in A1 is not circular (Mac Excel 365).
     const EvalContext text_ctx = ctx.without_read_observer();
     const Cell* cell = target->cell_at(r.row, r.col);
     if (cell != nullptr && !cell->phonetic_runs.empty()) {

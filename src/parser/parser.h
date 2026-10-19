@@ -80,9 +80,9 @@ struct ParserOptions {
   /// stack, which is megabytes wide and never the binding constraint. On
   /// WASM it is the shadow stack, whose size is a link-time constant: the
   /// deepest tree this cap admits costs about 155 KiB to parse, so
-  /// `cmake/FormulonWasm.cmake` pins `STACK_SIZE` from that measurement
+  /// `cmake/FormulonWasm.cmake` pins `STACK_SIZE` from that figure
   /// rather than inheriting Emscripten's 64 KiB default. Raising the cap
-  /// means re-measuring and re-pinning that flag, not just editing this
+  /// means recomputing and re-pinning that flag, not just editing this
   /// number -- an overflow there is untrappable, and the engine is built
   /// with exceptions off, so there is nothing to catch it with either way.
   std::uint32_t max_parse_depth = kMaxFormulaAstDepth;

@@ -62,7 +62,7 @@ Error Refuse(const std::string& what) {
 
 void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFormat>& formats) {
   // State of the x14 rule being read; `measured` drops to false at the
-  // first record outside the measured data-bar shape.
+  // first record outside the supported data-bar shape.
   struct Rule14 {
     bool measured = false;
     bool has_bar = false;
@@ -187,7 +187,7 @@ void EmitDataBar14(std::vector<std::uint8_t>& head, std::vector<std::uint8_t>& c
 
 /// A retained x14 data-bar rule (`recs[first..last]`, BrtBeginCFRule14 to
 /// BrtEndCFRule14) rewritten from `bar`, or the source bytes when its
-/// BrtBeginDataBar14 is not the measured shape.
+/// BrtBeginDataBar14 is not the supported shape.
 std::vector<std::uint8_t> RewriteRule14(const std::vector<std::uint8_t>& buf, const std::vector<FramedRecord>& recs,
                                         std::size_t first, std::size_t last, const cf::DataBarSpec& bar) {
   std::vector<std::uint8_t> out;
@@ -344,7 +344,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
         double num = 0;
         if (v->type == cf::CfvoType::Formula) {
-          return Refuse("xlsb x14 data bar with a formula threshold has no measured record form");
+          return Refuse("xlsb x14 data bar with a formula threshold has no known record form");
         }
         if (v->type == cf::CfvoType::Number || v->type == cf::CfvoType::Percent ||
             v->type == cf::CfvoType::Percentile) {
@@ -380,7 +380,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
   }
   std::vector<std::uint8_t> block;
   // Excel refuses an x14 container that directly follows the last legacy
-  // block (measured); every sheet it writes has BrtPrintOptions there, so
+  // block; every sheet it writes has BrtPrintOptions there, so
   // a sheet without print records gets Excel's default one.
   const bool has_print = std::any_of(recs.begin(), recs.end(), [](const FramedRecord& r) {
     return r.type == kPrintOptions || r.type == kMargins || r.type == kPageSetup;

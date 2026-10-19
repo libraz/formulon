@@ -102,8 +102,8 @@ bool MarksDynamic(Shapes& shapes, const parser::AstNode& node, Slot slot, bool r
 }
 
 /// Walker behind `legacy_intersections`: where Excel 365 shows an `@` in a
-/// formula saved without the dynamic-array mark (measured cell by cell
-/// against its formula2 text). A multi-valued node takes one wherever an
+/// formula saved without the dynamic-array mark (cell by cell
+/// as in its formula2 text). A multi-valued node takes one wherever an
 /// area would be value class.
 class LegacyIntersections {
  public:

@@ -248,7 +248,7 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
 
     // ---- Class-marked Ptgs (Reference-class base bytes 0x20..0x3D) --------
     // `Array` (inline array constant): every element kind Excel stores,
-    // number, text, boolean and error, round-trips (measured tags 0, 1, 2, 4).
+    // number, text, boolean and error, round-trips (tags 0, 1, 2, 4).
     {PtgKind::Array, 0x20, "Array", PtgStatus::Full},
     {PtgKind::Func, 0x21, "Func", PtgStatus::Full},
     {PtgKind::FuncVar, 0x22, "FuncVar", PtgStatus::Full},

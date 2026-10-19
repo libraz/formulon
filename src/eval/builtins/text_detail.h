@@ -99,10 +99,10 @@ struct TextWindowArgs {
 // reads `start` through `read_snapped_int_arg`.
 Expected<TextWindowArgs, ErrorCode> read_text_window_args(const Value* args, std::uint32_t arity, bool snap_start);
 
-// DBCS byte cost of one code point: 1 for ASCII, the measured per-code-point
+// DBCS byte cost of one code point: 1 for ASCII, the per-code-point
 // width of the code page's locale for the BMP (`dbcs_width_toggles`), and 2
 // for everything else (including characters the code page cannot encode,
-// measured by lenb_hangul and lenb_kanji_not_in_gb2312).
+// see lenb_hangul and lenb_kanji_not_in_gb2312).
 int dbcs_char_bytes(std::uint32_t codepoint, DbcsCodepage codepage) noexcept;
 
 // Sum of `dbcs_char_bytes` over `s`; a malformed UTF-8 byte costs 1.

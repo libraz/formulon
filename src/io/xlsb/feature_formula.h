@@ -3,7 +3,7 @@
 //
 // Unlike a cell formula, these are stored relative to a base cell -- the
 // top-left of the owning sqref's bounding box, which is also what the
-// .xlsx formula text is relative to (measured) -- so references with a
+// .xlsx formula text is relative to -- so references with a
 // relative axis are PtgRefN / PtgAreaN (see `PtgBaseCell`). This file
 // frames them (`cce` / `rgce` / `cb` / `rgcb`) and supplies the base.
 
@@ -46,7 +46,7 @@ struct FeatureFormulaWriteContext {
 /// `rgcb` (`bytes`), plus the size field BrtBeginCFRule / BrtCFVO keep
 /// alongside it (`cb_fmla`). Excel writes `cce` plus 2 per reference token
 /// and 4 per PtgName there but reads it only as present / absent: a file
-/// storing `cce` opens and re-saves identically (measured), so `cce` is
+/// storing `cce` opens and re-saves identically, so `cce` is
 /// what is written.
 struct EncodedFeatureFormula {
   std::vector<std::uint8_t> bytes;

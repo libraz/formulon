@@ -1,11 +1,11 @@
 // Locale-aware text collation for Excel text comparison.
 //
 // On Mac profiles a string becomes an order-preserving byte key built from the
-// measured tables in `collation_table.cpp`: primary, secondary, dynamic and
+// tables in `collation_table.cpp`: primary, secondary, dynamic and
 // compare-only tertiary weights, then the zh word-sort symbols and a trailing
 // ignorable mark, the parts joined by 0x01. Comparing two strings is comparing
 // their keys bytewise. Windows profiles build the same keys from the same
-// tables under the host rules measured on win-365-ja_JP (collation.cpp).
+// tables under the win-365-ja_JP host rules (collation.cpp).
 
 #ifndef FORMULON_EVAL_COLLATION_H_
 #define FORMULON_EVAL_COLLATION_H_

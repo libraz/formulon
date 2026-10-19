@@ -14,9 +14,8 @@
 // trailer numerically.
 //
 // An absent element and a present-but-bare one resolve differently, which
-// is the trap in this part of the format. Both were measured by handing
-// Excel a package that varies in exactly one attribute and reading the
-// ordinals back out of the `.xlsb` it converts to:
+// is the trap in this part of the format. Excel's ordinals for each
+// state, as stored in the `.xlsb` it converts to:
 //
 //   * No `<phoneticPr>` at all -> `fontId="0"`, `halfwidthKatakana`,
 //     `noControl`: the all-zero triple, so a default-constructed

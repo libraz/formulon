@@ -57,7 +57,7 @@ constexpr double kPowersOfTen[] = {
     1e304, 1e305, 1e306, 1e307, 1e308};
 constexpr std::uint64_t kMaxTabulatedPowerOfTen = 308U;
 
-// Excel's power for a non-negative exponent, measured bit-exact on Mac Excel
+// Excel's power for a non-negative exponent, bit-exact on Mac Excel
 // 365: an integer exponent up to `kMaxSquaringExponent` is right-to-left
 // square-and-multiply with flushing multiplies (a base of 10 is tabulated), 0.5 is sqrt, and any other
 // exponent is exp(log(x) * y) rather than a correctly rounded pow. `x87`

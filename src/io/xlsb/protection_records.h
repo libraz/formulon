@@ -1,6 +1,6 @@
 //
-// MS-XLSB sheet and workbook protection records. Field layouts were
-// measured from Excel 365 (macOS) re-saves of OOXML workbooks, checked
+// MS-XLSB sheet and workbook protection records. Field layouts follow
+// Excel 365 (macOS) re-saves of OOXML workbooks, checked
 // against the `<sheetProtection>` / `<workbookProtection>` Excel wrote for
 // the same book:
 //
@@ -44,7 +44,7 @@ inline constexpr std::uint16_t kBrtBookProtection = 534;
 inline constexpr std::uint16_t kBrtBookProtectionIso = 677;
 
 /// Folds a BrtSheetProtection payload into `out`. Returns false, leaving
-/// `out` untouched, for a payload whose width or values were not measured.
+/// `out` untouched, for a payload whose width or values are not supported.
 /// A record with fLocked clear leaves the sheet unprotected: Excel writes
 /// one for every sheet and omits `<sheetProtection>` from .xlsx for it.
 bool decode_sheet_protection(ByteSpan payload, SheetProtection& out);
@@ -62,13 +62,13 @@ Expected<void, Error> emit_sheet_protection(std::vector<std::uint8_t>& dst, cons
 /// model carries (`Workbook::workbook_protection_xml`), attributes in the
 /// order Excel writes them. `iso` may be empty when the book has no
 /// modern hash. Returns an empty string for an unprotected book, and
-/// false for content that was not measured.
+/// false for content that is not supported.
 bool decode_book_protection(ByteSpan payload, ByteSpan iso, std::string& xml);
 
 /// Emits BrtBookProtectionIso (when a modern hash is set) and
 /// BrtBookProtection for a `<workbookProtection>` element; nothing when
 /// only dropped flags remain, as in Excel's own save. Returns false when the element carries lockWindows,
-/// lockRevision or a revisions password, which have no measured field and
+/// lockRevision or a revisions password, which have no field and
 /// are left out. Fails on a hash, salt or password the records cannot carry.
 Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const std::string& xml);
 

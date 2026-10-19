@@ -362,8 +362,8 @@ void ApplyX14DataBarOverlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out)
 /// `id` attribute on the `<cfRule>` itself. Both spellings appear in the
 /// wild, but only the nested one survives Excel: opening a file that uses
 /// the attribute form and saving it back strips the attribute and drops
-/// the orphaned worksheet-level x14 block entirely (measured against
-/// Excel 365, macOS, 2026-08-15). The attribute is still accepted here as
+/// the orphaned worksheet-level x14 block entirely in Excel 365 (macOS).
+/// The attribute is still accepted here as
 /// a lenient fallback -- it costs one lookup and keeps hand-written files
 /// working -- but the nested form is what real input uses and therefore
 /// what decides.

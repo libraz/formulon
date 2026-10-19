@@ -17,8 +17,8 @@ inline constexpr std::uint16_t kBrtBeginDxfs = 505;
 inline constexpr std::uint16_t kBrtEndDxfs = 506;
 inline constexpr std::uint16_t kBrtDxf = 507;
 
-/// BrtDXF property types, measured against Excel-saved dxfs (each checked
-/// against the <dxf> Excel wrote for the same book).
+/// BrtDXF property types as Excel saves them (each matches the
+/// <dxf> Excel wrote for the same book).
 inline constexpr std::uint16_t kDxfPropFillPattern = 0;
 inline constexpr std::uint16_t kDxfPropFillFg = 1;
 inline constexpr std::uint16_t kDxfPropFillBg = 2;

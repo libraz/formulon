@@ -441,7 +441,7 @@ Expected<std::string, Error> ReadShortWideString(ByteSpan& d) {
 }
 
 /// Applies one BrtDXF property to `dxf`; `d` is the property data. A type
-/// outside the measured table is skipped, as an undecoded record is.
+/// outside the known table is skipped, as an undecoded record is.
 Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialFormat& dxf) {
   FontRecord& font = dxf.font;
   FillRecord& fill = dxf.fill;

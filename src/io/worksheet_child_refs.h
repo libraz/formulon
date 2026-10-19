@@ -4,7 +4,7 @@
 //
 // A child the model does not interpret keeps its source XML, but several of
 // them name cells and Excel moves those with the edit, each kind by its own
-// rule (measured on Mac Excel 365; tests/fixtures/excel/retained_children_edit/):
+// rule (tests/fixtures/excel/retained_children_edit/):
 //
 //   protectedRange sqref, sortState / sortCondition ref, and the sourceRef
 //   of a range webPublishItem      -- ordinary ranges (`shift_sqref_ranges`);

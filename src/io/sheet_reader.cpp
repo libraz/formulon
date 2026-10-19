@@ -106,7 +106,7 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
   // prefixes for LET / LAMBDA specially, so an un-stripped future-function
   // callee would shift and re-format with the prefix still glued to its
   // name, and the prefix bytes also count against the tokenizer's
-  // formula-length cap even though Excel's own limit is measured on the
+  // formula-length cap even though Excel's own limit applies to the
   // canonical (formula-bar) text this produces.
   std::string source("=");
   source.append(parser::strip_storage_prefixes(master.text, &has_storage_prefix));

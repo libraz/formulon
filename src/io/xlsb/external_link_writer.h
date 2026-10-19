@@ -12,7 +12,7 @@
 // positions never do.
 //
 // Defined names are written book-scope only: the part's name records carry
-// no scope this writer has measured.
+// no scope this writer models.
 
 #ifndef FORMULON_IO_XLSB_EXTERNAL_LINK_WRITER_H_
 #define FORMULON_IO_XLSB_EXTERNAL_LINK_WRITER_H_

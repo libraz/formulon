@@ -240,7 +240,7 @@ struct LocaleFacts {
   bool english_general;
   /// TEXT rejects a format holding a `.` outside quotes and escapes.
   bool format_rejects_dot;
-  /// Locale spelling of the General format; empty when none is measured.
+  /// Locale spelling of the General format; empty when the locale has none.
   std::string_view general_alias;
   /// Colour numbers 1-8 (black blue cyan green magenta red white yellow);
   /// an empty slot is a colour name the locale rejects.

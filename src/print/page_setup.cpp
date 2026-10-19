@@ -110,7 +110,7 @@ PrintableArea compute_printable_area(const PageSetup& setup, const PageMargins& 
   // setting a header margin larger than the top margin does.
   //
   // Reserving both bands unconditionally cost ~71 pt of body height and
-  // broke pages Excel keeps whole: the workbook goldens' measured row
+  // broke pages Excel keeps whole: the workbook goldens' row
   // geometry bounds the total reserve at 36.18 pt (print_pagination.
   // tall_table_horizontal_breaks) and no captured case requires any.
   //

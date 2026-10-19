@@ -4,7 +4,7 @@
 // shape to `Workbook::set_styles`: custom `<numFmt>` entries (`BrtFmt`),
 // the font / fill / border tables (`BrtFont` / `BrtFill` / `BrtBorder`),
 // the `<cellXfs>` / `<cellStyleXfs>` tables (`BrtXF`) and the differential
-// formats (`BrtDXF`). A `BrtDXF` property outside the measured table in
+// formats (`BrtDXF`). A `BrtDXF` property outside the known table in
 // `io/xlsb/dxf_props.h` is skipped, so it does not reach a converted `.xlsx`.
 //
 // Decoding the records rather than counting them is what keeps a

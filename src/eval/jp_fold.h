@@ -20,14 +20,14 @@
 //
 // Exact-match lookups (MATCH / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH) fold
 // full-width digits like criteria do; the approximate-order comparisons
-// still pass `fold_fullwidth_digits = false`, which is unmeasured.
+// still pass `fold_fullwidth_digits = false`, which is assumed to match en-US.
 //
 // D-function headers: the `field` argument folds half-width katakana like
 // every other Mac comparison. A criteria-block header does too, except in
 // ja-JP, where half-width katakana stays distinct
 // (`LocaleFacts::criteria_header_keeps_halfwidth_kana`); that caller passes
 // `fold_halfwidth_kana = false`, which also skips voicing-mark composition
-// (`ｶﾞ` stays FF76 FF9E). Both rules are measured in
+// (`ｶﾞ` stays FF76 FF9E). Both rules are pinned in
 // `tests/oracle/cases/dfunc_kana_folding_probes.yaml`.
 
 #ifndef FORMULON_EVAL_JP_FOLD_H_

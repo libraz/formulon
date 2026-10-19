@@ -1,7 +1,7 @@
 //
 // What a new Excel workbook starts as in each UI locale: Normal font,
 // phonetic font, Normal style name, first sheet name, row metrics and page
-// margins. Values are measured from empty workbooks Mac Excel 365 saved per
+// margins. Values are those of the empty workbooks Mac Excel 365 saves per
 // locale; Windows reuses them with its own body size and leaves the row
 // metrics to the engine defaults.
 

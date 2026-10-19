@@ -120,8 +120,8 @@ int external_sheet_index(const XlsbLinkTables& link, std::string_view sheet);
 std::uint32_t external_name_ilbl(const XlsbLinkTables& link, std::string_view name);
 
 /// Ptg class of a formula's own root token (the whole formula, or a bare
-/// reference an enclosing function/operator does not consume). Measured
-/// against real Excel 365 output: a cell formula's root promotes to value
+/// reference an enclosing function/operator does not consume). Per
+/// real Excel 365 output: a cell formula's root promotes to value
 /// class (`kValue`); a `BrtName` defined-name body's root stays reference
 /// class (`kReference`). See `encode_ptgs`'s doc comment.
 enum class PtgRootClass : std::uint8_t {
@@ -130,7 +130,7 @@ enum class PtgRootClass : std::uint8_t {
 };
 
 /// How the formula evaluates arrays, which decides an operator's operand
-/// class inside a function (measured): a dynamic-array formula gives an area
+/// class inside a function: a dynamic-array formula gives an area
 /// operand array class where the parameter takes arrays
 /// (`SUM(A1:A2*2)` -> 0x65); a legacy formula (`Cell::dynamic_array` clear)
 /// intersects it, value class (0x45), except under a forced-array parameter
@@ -245,7 +245,7 @@ using NameShapes = std::function<NameShape(const parser::AstNode& name)>;
 /// True when Excel 365 enters the cell formula `root` as a dynamic-array
 /// formula (`cm` / `BrtCellMeta`): its result may be more than one value, or
 /// it evaluates a multi-valued operand where a formula without the mark
-/// would intersect it (`=SUM(A1:A2*2)`). Measured against Excel's own marks.
+/// would intersect it (`=SUM(A1:A2*2)`).
 bool formula_is_dynamic_array(const parser::AstNode& root, const NameShapes& names);
 
 /// The `NameRef`s in `root` that name a built-in function as a value
@@ -255,7 +255,7 @@ bool formula_is_dynamic_array(const parser::AstNode& root, const NameShapes& nam
 std::vector<const parser::AstNode*> function_value_refs(const parser::AstNode& root, const NameShapes& names);
 
 /// True when Excel 365 sets `fCalcExp` on a defined name whose formula is
-/// `root` (measured name by name): its value is a call to a built-in
+/// `root` (name by name): its value is a call to a built-in
 /// `xlsb_sets_calc_exp` lists or through a name, a LET, a LAMBDA or a call
 /// to one, or a spill
 /// reference, reached from the root through operators but not parentheses;
@@ -267,7 +267,7 @@ bool name_sets_calc_exp(const parser::AstNode& root, const NameShapes& names);
 bool formula_calls_volatile(const parser::AstNode& root);
 
 /// True when Excel 365 recalculates the formula `root` every time, and so
-/// stores it with `ca="1"` in .xlsx (measured): it calls a volatile function,
+/// stores it with `ca="1"` in .xlsx: it calls a volatile function,
 /// one that is neither built in nor defined, or a reference (`A1(1)`), or
 /// refers to a defined name whose formula `names` says is recalculated every
 /// time.

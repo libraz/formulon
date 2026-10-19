@@ -14,13 +14,13 @@
 // different sheet, row and column and diffing the record byte that
 // moved.
 //
-// One measured surprise is worth stating: inside an external link part a
+// One surprise is worth stating: inside an external link part a
 // reference Ptg carries 16-bit rows and an inline `(itabFirst, itabLast)`
 // sheet-index pair, not the 32-bit rows and `ixti` table index the same
 // opcode uses inside a worksheet. The decoder therefore has its own
 // reader for these rather than sharing `ptg_reader`'s.
 //
-// Anything outside the measured set is refused. The caller treats a
+// Anything outside the supported set is refused. The caller treats a
 // refusal as "this link has no cache", which leaves a cross-workbook
 // reference reading `#REF!` -- the behaviour before this module existed
 // -- rather than resolving to a plausible wrong number. The part stays in
@@ -50,7 +50,7 @@ namespace xlsb {
 ///   * `kIoXlsbRecordTruncated` — a record overruns the part.
 ///   * `kIoXlsbCorrupt`         — a cached address or a name's stored
 ///                                formula uses an encoding this module
-///                                has not measured.
+///                                does not support.
 Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::string* book_rel_id = nullptr);
 
 }  // namespace xlsb

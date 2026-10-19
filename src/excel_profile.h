@@ -52,9 +52,9 @@ inline constexpr ExcelProfile win_365_en_us_profile() noexcept {
   return ExcelProfile{ExcelHost::kWin365, ExcelLocale::kEnUS};
 }
 
-/// True when the profile was measured against Excel: every Mac profile and
+/// True when the profile is backed by Excel itself: every Mac profile and
 /// `win-365-ja_JP`. The other Windows profiles are estimated from the Mac
-/// measurements plus the Windows host rules.
+/// values plus the Windows host rules.
 inline constexpr bool is_measured_profile(ExcelProfile p) noexcept {
   return p.host == ExcelHost::kMac365 || p.locale == ExcelLocale::kJaJP;
 }

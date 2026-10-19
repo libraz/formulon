@@ -80,7 +80,7 @@ constexpr std::size_t kDataFieldNameGap = 17;
 
 /// A `BrtBeginPivotFieldItem` payload: item kind, two flag bytes, and the
 /// cache-item index. The flag bytes carry per-item state (hidden, missing,
-/// expanded) whose bit assignments have not been measured, so a non-zero
+/// expanded) whose bit assignments are not modelled, so a non-zero
 /// value is refused rather than ignored -- silently dropping a hidden-item
 /// filter would over-count every aggregate on that field.
 constexpr std::size_t kPivotFieldItemSize = 7;
@@ -105,8 +105,8 @@ enum class CellEncoding : std::uint8_t { SharedIndex, Double };
 /// Spelled out rather than cast, even though the two numberings happen to
 /// agree today: the model enum is ours to reorder and a silent cast would
 /// turn a reordering into wrong pivot totals rather than a build error.
-/// Every selector below was measured by re-saving one pivot per
-/// `<dataField subtotal>` value and diffing the record.
+/// Every selector below is the record Excel writes for one
+/// `<dataField subtotal>` value.
 Expected<pivot::Aggregation, Error> AggregationFromSelector(std::uint32_t selector) {
   switch (selector) {
     case 0U:
@@ -168,9 +168,9 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
       return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
-    // Inside a cache field only the records the measured fixture carries are
+    // Inside a cache field only the records the supported layout carries are
     // accepted. Anything else (a grouping block, a non-string shared item)
-    // has an unmeasured layout and would otherwise be skipped silently.
+    // has an unsupported layout and would otherwise be skipped silently.
     if (in_field && rec.type != kEndPCDField && rec.type != kBeginPCDFAtbl && rec.type != kEndPCDFAtbl &&
         rec.type != kPCDIString) {
       return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
@@ -207,8 +207,8 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
           return CorruptError("xlsb pivot cache field end without a start");
         }
         // A field with shared items indexes into them; one without stores
-        // its values inline, and the only inline width this module has
-        // measured is an 8-byte double. The record-width check in
+        // its values inline, and the only inline width this module
+        // supports is an 8-byte double. The record-width check in
         // `DecodeCacheRecords` is what catches a field whose real inline
         // encoding is something else.
         encodings->push_back(field_has_shared_items ? CellEncoding::SharedIndex : CellEncoding::Double);
@@ -381,7 +381,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
       }
       case kBeginPivotField: {
         // The field's own header carries axis and data-field flags whose
-        // bit assignments have not been measured. They are not read: the
+        // bit assignments are not modelled. They are not read: the
         // row / column / data lists below state the same assignment
         // unambiguously, so there is nothing to gain by inferring it.
         pivot::PivotField field;
@@ -411,7 +411,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         if (flags_or.value() != 0U) {
           // Hidden / missing / expanded state lives here. Dropping a
           // hidden-item filter would over-count every aggregate on the
-          // field, so an unmeasured flag refuses the table instead.
+          // field, so an unknown flag refuses the table instead.
           return CorruptError("xlsb pivot field item carries flags this reader has not characterised");
         }
         ASSIGN_OR_RETURN(auto index, read_u32(payload));

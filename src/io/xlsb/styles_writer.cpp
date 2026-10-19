@@ -189,7 +189,7 @@ std::vector<std::uint8_t> ColorProp(std::uint32_t argb, const ColorSpec& spec) {
 
 /// A dxf as Excel writes it: fill, font, number format, border, each only
 /// where the dxf states it. Alignment and protection are left out: Excel
-/// discards them from a CF dxf, so they have no measured property.
+/// discards them from a CF dxf, so they have no property.
 void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
   std::vector<std::uint8_t> props;
   std::uint16_t count = 0;

@@ -354,7 +354,7 @@ std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell
   }
 
   const double cell = cell_value.as_number();
-  // Below the floor Excel draws no icon at all (measured for number,
+  // Below the floor Excel draws no icon at all (for number,
   // formula and percent floors, with and without `gte`).
   if (spec.floor.gte ? cell < *floor : cell <= *floor) {
     return std::nullopt;

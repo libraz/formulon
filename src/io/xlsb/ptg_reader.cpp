@@ -870,8 +870,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // here in encounter order.
         //
         // The first u32 is the row count and the second the column count,
-        // elements row-major, each a tag byte and its payload (measured on
-        // non-square Excel constants, `xlsb_phantom_cells.xlsb`).
+        // elements row-major, each a tag byte and its payload (see
+        // `xlsb_phantom_cells.xlsb`).
         if (cursor.size < 14) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgArray placeholder truncated",
                             "context=xlsb_ptg_reader");

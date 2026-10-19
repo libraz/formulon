@@ -340,7 +340,7 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 //      we implement this as a row-major flatten of each argument and a
 //      hard size check before any math runs.
 //   2. A per-pair filter whose rules diverge between the two functions.
-//      The asymmetry is empirical, measured against the IronCalc oracle:
+//      The two functions differ as follows:
 //        * XIRR silently drops a pair whose value cell is Blank, sorts
 //          the surviving pairs by date ascending (so the schedule is
 //          normalised even when the input columns are shuffled), and
