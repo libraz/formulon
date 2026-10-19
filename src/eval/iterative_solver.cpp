@@ -146,23 +146,19 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
   }
 
   // Per-cell snapshots of the previous and current iterations. Seed the
-  // previous map with comparable Blank values to preserve the legacy solver
+  // previous vector with comparable Blank values to preserve the legacy solver
   // contract: a Blank result can converge on the first sweep, while Number
   // and Text results still see the initial kind mismatch as +infinity. Text
   // views point into the matching Arena only:
   // `previous_snapshots` is never reset while it is the baseline, and the
-  // two map/Arena pairs are swapped only after the current sweep finishes.
-  // This bounds retained Text storage to at most two sweep buffers instead of
-  // accumulating one heap string per cell per iteration.
-  std::unordered_map<CellNodeId, ConvergenceSnapshot, CellNodeIdHash> previous_snapshots;
-  std::unordered_map<CellNodeId, ConvergenceSnapshot, CellNodeIdHash> current_snapshots;
-  previous_snapshots.reserve(scc.size());
+  // two vector/Arena pairs are swapped only after the current sweep finishes.
+  // Stable SCC order provides a direct ordinal lookup without per-cell hash
+  // nodes, while the two buffers bound retained Text storage to two sweeps.
+  std::vector<ConvergenceSnapshot> previous_snapshots(scc.size());
+  std::vector<ConvergenceSnapshot> current_snapshots;
   current_snapshots.reserve(scc.size());
   Arena previous_arena(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes);
   Arena current_arena(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes);
-  for (CellNodeId cell : scc) {
-    previous_snapshots.emplace(cell, ConvergenceSnapshot{});
-  }
 
   for (std::uint32_t iter = 0U; iter < max_iters; ++iter) {
     // At this point current_arena/current_snapshots belong to the sweep that
@@ -180,24 +176,22 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
     // gives us a stable order per SCC. The last-iteration commit means
     // each member sees its peers' freshest values during the same pass,
     // which is what Excel does when iterative calc is enabled.
-    for (CellNodeId cell : scc) {
+    for (std::size_t i = 0; i < scc.size(); ++i) {
+      const CellNodeId cell = scc[i];
       Value curr = evaluate_one(cell);
       // Capture the result before committing it. `commit` may copy the value
       // into workbook storage or otherwise advance/reset the evaluator
       // Arena; the convergence check must only inspect the current sweep's
       // owned snapshot.
       ConvergenceSnapshot curr_snapshot = ConvergenceSnapshot::capture(curr, current_arena);
-      auto previous_entry = previous_snapshots.find(cell);
-      const double delta = (previous_entry != previous_snapshots.end())
-                               ? abs_delta(previous_entry->second, curr_snapshot)
-                               : std::numeric_limits<double>::infinity();
+      const double delta = abs_delta(previous_snapshots[i], curr_snapshot);
       if (delta > max_delta) {
         max_delta = delta;
       }
       // Commit so subsequent members in this iteration (and the next
       // iteration) see the new value.
       commit(cell, curr);
-      current_snapshots.insert_or_assign(cell, std::move(curr_snapshot));
+      current_snapshots.push_back(std::move(curr_snapshot));
     }
 
     out.iterations_run = iter + 1U;
@@ -225,9 +219,9 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
       return out;
     }
 
-    // The current map's views now become the next iteration's baseline. The
-    // old baseline is moved to the current buffer and will be reset only at
-    // the top of the next sweep, after all of its views are no longer read.
+    // The current vector's views now become the next iteration's baseline.
+    // The old baseline is moved to the current buffer and will be cleared only
+    // at the top of the next sweep, before its Arena is reset.
     std::swap(previous_snapshots, current_snapshots);
     std::swap(previous_arena, current_arena);
   }
