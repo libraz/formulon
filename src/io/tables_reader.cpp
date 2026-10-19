@@ -25,21 +25,88 @@ namespace {
 
 std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
   std::string out;
+  if (root) {
+    for (pugi::xml_attribute attr : node.attributes()) {
+      const std::string_view name(attr.name());
+      const bool is_known_root = name == "id" || name == "name" || name == "displayName" || name == "ref" ||
+                                 name == "headerRowCount" || name == "totalsRowCount" || name == "xmlns";
+      if (is_known_root) {
+        continue;
+      }
+      append_xml_attr(out, name, attr.value());
+    }
+    return out;
+  }
+
+  std::vector<std::pair<std::string, std::string>> captured;
+  capture_unknown_attrs(node, {"id", "name", "totalsRowLabel", "totalsRowFunction"}, captured);
+
+  std::vector<std::pair<std::string, std::string>> namespace_attrs;
+  std::vector<std::pair<std::string, std::string>> other_attrs;
+  namespace_attrs.reserve(captured.size());
+  other_attrs.reserve(captured.size());
+  for (auto& attr : captured) {
+    if (std::string_view(attr.first).rfind("xmlns:", 0U) == 0U) {
+      namespace_attrs.push_back(std::move(attr));
+    } else {
+      other_attrs.push_back(std::move(attr));
+    }
+  }
+
+  const auto append_namespace_if_missing = [&namespace_attrs](std::string name, std::string value) {
+    for (const auto& existing : namespace_attrs) {
+      if (existing.first == name) {
+        return;
+      }
+    }
+    namespace_attrs.emplace_back(std::move(name), std::move(value));
+  };
+
+  // Keep every local declaration, used by an attribute or not.
   for (pugi::xml_attribute attr : node.attributes()) {
     const std::string_view name(attr.name());
-    const bool is_known_column =
-        name == "id" || name == "name" || name == "totalsRowLabel" || name == "totalsRowFunction";
-    const bool is_known_root = name == "id" || name == "name" || name == "displayName" || name == "ref" ||
-                               name == "headerRowCount" || name == "totalsRowCount" || name == "xmlns";
-    const bool is_namespace = name.rfind("xmlns:", 0U) == 0U || name == "mc:Ignorable";
-    if ((root && is_known_root) || (!root && (is_known_column || is_namespace))) {
+    if (name.rfind("xmlns:", 0U) == 0U) {
+      append_namespace_if_missing(std::string(name), std::string(attr.value()));
+    }
+  }
+
+  // Carry each `mc:Ignorable` prefix's in-scope binding; the writer drops the column's ancestors.
+  constexpr std::string_view kMarkupCompatibilityNamespace =
+      "http://schemas.openxmlformats.org/markup-compatibility/2006";
+  for (pugi::xml_attribute ignorable : node.attributes()) {
+    const std::string_view attr_name(ignorable.name());
+    const std::size_t colon = attr_name.find(':');
+    if (colon == std::string_view::npos || attr_name.substr(colon + 1U) != "Ignorable" ||
+        find_namespace_binding(node, attr_name.substr(0U, colon)) != kMarkupCompatibilityNamespace) {
       continue;
     }
-    // Verbatim-retained attributes go through the same escape rule as
-    // modelled ones, so a captured value cannot be written in a weaker form
-    // than the tag it is spliced into.
-    append_xml_attr(out, name, attr.value());
+    const std::string_view prefixes(ignorable.value());
+    std::size_t position = 0U;
+    while (position < prefixes.size()) {
+      while (position < prefixes.size() && (prefixes[position] == ' ' || prefixes[position] == '\t' ||
+                                            prefixes[position] == '\r' || prefixes[position] == '\n')) {
+        ++position;
+      }
+      const std::size_t begin = position;
+      while (position < prefixes.size() && prefixes[position] != ' ' && prefixes[position] != '\t' &&
+             prefixes[position] != '\r' && prefixes[position] != '\n') {
+        ++position;
+      }
+      if (begin == position) {
+        continue;
+      }
+      const std::string_view prefix = prefixes.substr(begin, position - begin);
+      const std::string_view uri = find_namespace_binding(node, prefix);
+      if (!uri.empty()) {
+        std::string declaration("xmlns:");
+        declaration.append(prefix);
+        append_namespace_if_missing(std::move(declaration), std::string(uri));
+      }
+    }
   }
+
+  append_raw_attrs(out, namespace_attrs);
+  append_raw_attrs(out, other_attrs);
   return out;
 }
 

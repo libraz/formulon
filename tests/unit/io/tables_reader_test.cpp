@@ -13,17 +13,99 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml_writer.h"
+#include "io/xml_utils.h"
+#include "io/zip_reader.h"
+#include "pugixml.hpp"
 #include "utils/error.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace io {
 namespace {
 
+constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+
 std::vector<std::uint8_t> Bytes(std::string_view xml) {
   return std::vector<std::uint8_t>(xml.begin(), xml.end());
 }
 
-constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+std::string SerializeTablePart(const TableMetadata& table) {
+  Workbook workbook = Workbook::create_empty();
+  workbook.add_sheet("Sheet1");
+  workbook.set_tables({table});
+  auto package_or = write_ooxml(workbook);
+  if (!package_or) {
+    ADD_FAILURE() << "write_ooxml failed: " << package_or.error().message;
+    return {};
+  }
+
+  ZipReader zip;
+  const std::vector<std::uint8_t>& package = package_or.value();
+  auto open_or = zip.open(ByteSpan{package.data(), package.size()});
+  if (!open_or) {
+    ADD_FAILURE() << "opening the written package failed: " << open_or.error().message;
+    return {};
+  }
+  auto table_xml_or = zip.read_entry("xl/tables/table1.xml");
+  if (!table_xml_or) {
+    ADD_FAILURE() << "reading xl/tables/table1.xml failed: " << table_xml_or.error().message;
+    return {};
+  }
+  const std::vector<std::uint8_t>& bytes = table_xml_or.value();
+  return std::string(bytes.begin(), bytes.end());
+}
+
+void ExpectTableColumnNamespaceRoundTrip(std::string_view table_columns_attrs, std::string_view column_attrs,
+                                         std::string_view prefix, std::string_view expected_uri,
+                                         std::string_view retained_attr_name, std::string_view retained_attr_value,
+                                         std::string_view extra_prefix = {}, std::string_view extra_uri = {}) {
+  std::string xml(kXmlDecl);
+  xml.append("<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" ");
+  xml.append("xmlns:x=\"urn:root\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" ");
+  xml.append("id=\"1\" name=\"Table1\" displayName=\"Table1\" ref=\"A1:A2\">");
+  xml.append("<tableColumns count=\"1\"");
+  if (!table_columns_attrs.empty()) {
+    xml.push_back(' ');
+    xml.append(table_columns_attrs);
+  }
+  xml.append("><tableColumn id=\"1\" name=\"Output\" totalsRowLabel=\"Total\"");
+  if (!column_attrs.empty()) {
+    xml.push_back(' ');
+    xml.append(column_attrs);
+  }
+  xml.append("><calculatedColumnFormula>SUM(A1)</calculatedColumnFormula></tableColumn></tableColumns></table>");
+
+  auto table_or = read_table(Bytes(xml), 0U);
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read_table failed: " << table_or.error().message;
+  ASSERT_EQ(table_or.value().columns.size(), 1U);
+  EXPECT_EQ(table_or.value().columns[0].id, 1U);
+  EXPECT_EQ(table_or.value().columns[0].name, "Output");
+  EXPECT_EQ(table_or.value().columns[0].totals_label, "Total");
+  EXPECT_EQ(table_or.value().columns[0].calculated_column_formula, "SUM(A1)");
+
+  const std::string output = SerializeTablePart(table_or.value());
+  ASSERT_FALSE(output.empty());
+  pugi::xml_document doc;
+  const pugi::xml_parse_result parse = doc.load_buffer(output.data(), output.size());
+  ASSERT_TRUE(parse) << parse.description();
+  const pugi::xml_node table = doc.child("table");
+  ASSERT_TRUE(table);
+  EXPECT_EQ(find_namespace_binding(table, "x"), "urn:root");
+  const pugi::xml_node column = table.child("tableColumns").child("tableColumn");
+  ASSERT_TRUE(column);
+  EXPECT_EQ(find_namespace_binding(column, prefix), expected_uri);
+  if (!extra_prefix.empty()) {
+    EXPECT_EQ(find_namespace_binding(column, extra_prefix), extra_uri);
+  }
+  const std::string retained_name(retained_attr_name);
+  EXPECT_EQ(std::string_view(column.attribute(retained_name.c_str()).value()), retained_attr_value);
+  EXPECT_EQ(std::string_view(column.attribute("id").value()), "1");
+  EXPECT_EQ(std::string_view(column.attribute("name").value()), "Output");
+  EXPECT_EQ(std::string_view(column.attribute("totalsRowLabel").value()), "Total");
+  ASSERT_TRUE(column.child("calculatedColumnFormula"));
+  EXPECT_EQ(std::string_view(column.child("calculatedColumnFormula").text().as_string()), "SUM(A1)");
+}
 
 // ---------------------------------------------------------------------------
 // Happy paths
@@ -55,6 +137,32 @@ TEST(TablesReader, MinimalTableTwoColumns) {
   EXPECT_EQ(t.columns[0].name, "A");
   EXPECT_EQ(t.columns[1].id, 2U);
   EXPECT_EQ(t.columns[1].name, "B");
+}
+
+TEST(TablesReader, ColumnLocalNamespaceDeclarationSurvivesSerialization) {
+  ExpectTableColumnNamespaceRoundTrip("", "xmlns:y=\"urn:local\"", "y", "urn:local", "xmlns:y", "urn:local");
+}
+
+TEST(TablesReader, InheritedTableColumnsNamespaceSurvivesSerialization) {
+  ExpectTableColumnNamespaceRoundTrip("xmlns:x=\"urn:columns\"", "x:tag=\"inherited\"", "x", "urn:columns", "x:tag",
+                                      "inherited");
+}
+
+TEST(TablesReader, ColumnNamespaceShadowingRootSurvivesSerialization) {
+  ExpectTableColumnNamespaceRoundTrip("", "xmlns:x=\"urn:column\" x:tag=\"shadowed\"", "x", "urn:column", "x:tag",
+                                      "shadowed");
+}
+
+TEST(TablesReader, IgnorableOnlyPrefixBindingSurvivesSerialization) {
+  ExpectTableColumnNamespaceRoundTrip("xmlns:x=\"urn:columns\"", "mc:Ignorable=\"x\"", "x", "urn:columns",
+                                      "mc:Ignorable", "x");
+}
+
+TEST(TablesReader, AliasedIgnorableOnlyPrefixBindingSurvivesSerialization) {
+  ExpectTableColumnNamespaceRoundTrip(
+      "xmlns:x=\"urn:columns\"",
+      "xmlns:m=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" m:Ignorable=\"x\"", "x", "urn:columns",
+      "m:Ignorable", "x", "m", "http://schemas.openxmlformats.org/markup-compatibility/2006");
 }
 
 TEST(TablesReader, HeaderRowCountZeroDisablesHeader) {
