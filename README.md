@@ -27,7 +27,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 ## What's inside
 
 - **Formula engine** — 526 Excel function names, 511 implemented locally; dynamic arrays, `LET` / `LAMBDA`, and `REGEX*`. The rest call cloud or COM services and return a fixed error. [Coverage](https://formulon.libraz.net/compatibility/formula-coverage)
-- **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
+- **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables, charts and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
 - **Locale profiles** — 28 Excel behavior profiles across fourteen locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)
 - **Excel oracle** — formula results are compared bit for bit against goldens captured from Mac Excel 365 in fourteen locales; pivot and print layout against Windows Excel 365. [Oracle testing](https://formulon.libraz.net/compatibility/oracle-testing)
 - **Size-budgeted WASM** — CI fails the build above 4.5 MiB uncompressed or 1280 KiB Brotli. [Size budgets](https://formulon.libraz.net/development/size-budgets)

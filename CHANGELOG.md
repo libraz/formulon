@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-19
+
+### BREAKING
+
+- **C ABI and every binding:** the five picture operations are renamed to
+  drawing-object operations and now act on charts as well as pictures. A
+  snapshot of a chart carries its chart part and every part the chart's
+  relationships reach; snapshots taken by earlier versions still restore.
+  Migration, by rename only:
+
+  | Before | After |
+  |---|---|
+  | `fm_sheet_remove_image` / `removeImage` / `remove_image` | `fm_sheet_remove_drawing` / `removeDrawing` / `remove_drawing` |
+  | `fm_sheet_set_image_anchor` / `setImageAnchor` / `set_image_anchor` | `fm_sheet_set_drawing_anchor` / `setDrawingAnchor` / `set_drawing_anchor` |
+  | `fm_sheet_set_image_z_order` / `setImageZOrder` / `set_image_z_order` | `fm_sheet_set_drawing_z_order` / `setDrawingZOrder` / `set_drawing_z_order` |
+  | `fm_sheet_snapshot_image` / `snapshotImage` / `snapshot_image` | `fm_sheet_snapshot_drawing` / `snapshotDrawing` / `snapshot_drawing` |
+  | `fm_sheet_restore_image` / `restoreImage` / `restore_image` | `fm_sheet_restore_drawing` / `restoreDrawing` / `restore_drawing` |
+  | `fm_image_anchor` | `fm_drawing_anchor` (same layout) |
+  | `FM_IMAGE_RESTORE_NEW_ID` | `FM_DRAWING_RESTORE_NEW_ID` (same value) |
+
+  `probeImage`, `getImage` and `insertImage` keep their names. The old names
+  are gone rather than aliased, so a caller linked against an earlier
+  shared library must be recompiled.
+- Formula text is stored the way Excel stores entered text, so a formula
+  reads back respelled: number literals are respelled from their value
+  (`1.50` reads back as `1.5`), a unary sign touching a literal is absorbed
+  (`+5` as `5`), and whitespace Excel drops is removed (trailing, before `,`,
+  around `:`, inside array constants). Legacy (non-dynamic-array) formulas
+  show Excel's implied `@`. This applies to cells, defined names,
+  conditional-format and data-validation formulas.
+- A formula number literal whose leading digit lies outside Excel's range
+  (`1E308` and above, `1E-310` and below, other than zero) is rejected as an
+  invalid number literal instead of evaluating to `#NUM!` or 0. Literals of
+  64 bytes or more are accepted and keep 15 significant digits.
+- Formula entry (`fm_workbook_set_formula`, defined names, conditional-format
+  and data-validation formulas) rejects a tab, a carriage return, and
+  whitespace between a built-in function name and its `(`, as Excel does,
+  with `kParserUnexpectedToken`.
+- Writing a value, text, formula or blank into a cell of a legacy array
+  formula (CSE) block other than its anchor fails with `kPreconditionFailed`
+  and leaves the block unchanged; writing to the anchor replaces the whole
+  block. Every cell of a block reports the block's formula (`FORMULATEXT`
+  shows `{=...}`, `ISFORMULA` is TRUE).
+- Font sizes must be finite and non-negative, `fm_workbook_set_iterative`
+  takes a finite non-negative `max_change`, and the pivot-cache number
+  setters take finite values; anything else fails with `kInvalidArgument`.
+  `fm_sheet_cf_add_rule` fails with `kInvalidArgument` instead of overflowing
+  when the auto-assigned priority would pass `INT32_MAX`.
+- Python integer parameters reject a fractional or non-finite number with
+  `ValueError` and a non-number (including a numeric string) with `TypeError`
+  instead of truncating or converting it.
+- Ad-hoc formula evaluation (`fm_workbook_evaluate_formula`,
+  `fm_workbook_evaluate_formula_array` and `fm_workbook_evaluate_cf_formula`,
+  in every binding) rejects an out-of-grid target or anchor with
+  `kInvalidArgument`.
+- Both JavaScript bindings reject an iterative-calculation cap that is not an
+  int32 (above 2^31-1, fractional or non-finite) with `RangeError` instead of
+  wrapping it.
+
 ### Added
 
 - Charts. A chart is addressed by sheet and drawing object id, the id
@@ -36,27 +95,163 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `getChartData` series carries `xFormatCode`
   (`x_format_code`, `fm_chart_data_series_t.x_format_code`), the number format
   of its x values.
+- Chart caches are refreshed on save the way Excel writes them, and chart
+  references follow row and column inserts and deletes and sheet renames and
+  deletes (`#REF!` as Excel writes it). Changing a chart's type carries series
+  colours, lines and points the way Excel's own type change does. A chart
+  with no title and one unfiltered series reads as an automatic title, and
+  marker symbols cover `x`, `star`, `plus`, `dot`, `dash` and (read-only)
+  `picture`.
+- Pivot data fields can show values as `PercentOf`, `PercentOfRunningTotal`,
+  `RankAscending` and `RankDescending` (`FM_PIVOT_SHOW_AS_PERCENT_OF` = 12 to
+  `FM_PIVOT_SHOW_AS_RANK_DESCENDING` = 15 in the C ABI, `ShowValuesAs` in the
+  bindings). The x14 `pivotShowAs` extension and `subtotalHiddenItems` are
+  read and written, and every value-filter comparison type is read.
+- Built-in number format ids (5-8 and 41-44 included) resolve to the
+  profile's locale code in cell display, effective styles and data
+  validation, and the `fm_styles_*` setters accept those ids.
 
 ### Changed
 
 - The WASM size report's ceilings moved to 4.25 MiB soft / 4.5 MiB hard
   uncompressed and 1216 KiB soft / 1280 KiB hard Brotli, to take in the
   chart API.
-- Numbers in saved `.xlsx` cell values are spelled the way Excel writes
+- Numbers Formulon writes into `.xlsx` parts (cell values, chart values,
+  pivot cache records, external-link caches) are spelled the way Excel writes
   them: fixed notation with 15 significant digits when that round-trips
-  (else 17) for magnitudes from 0.01 up to 1E+16, and 17-digit exponential
-  form outside it.
+  (else 17) from 0.1 up to but not including 1E+16, 17-digit exponential
+  form with a signed exponent (`1.23E-2`) outside it, and `0` for zero and
+  denormals.
+- Inserted rows take the row style, custom height and per-cell formats of the
+  row above; inserted columns take the width, column style and per-cell
+  formats of the column to the left. Sparklines hosted on the source row or
+  column are cloned onto each inserted one. Hidden state and outline level
+  are never inherited.
+- On `mac-*` profiles `FILTERXML` and `WEBSERVICE` are unknown names
+  (`#NAME?`, also as a function value), as Mac Excel provides neither;
+  Windows profiles are unchanged. `CUBE*` functions return `#N/A` without a
+  cube connection instead of `#NAME?`.
+- A flat chain of same-precedence operators is limited by the 8,192-character
+  formula length rather than the nesting cap. `ROWS` and `COLUMNS` size their
+  operands from shape without reading values. An evaluated array of more than
+  53,687,091 elements abandons the formula, which then holds 0. With
+  iterative calculation off, a cell that is the only member of its cycle
+  (`=A1+1` in `A1`) holds 0; cycles through several cells keep `#REF!`.
+- `N` and `T` read the top-left cell of a reference argument instead of
+  spilling over it, and `TYPE` of an array argument is 64.
+
+### Performance
+
+- Pivot Sum aggregation over sparse records takes one pass. Order statistics
+  (`AGGREGATE`, `LARGE`, `SMALL`, `PERCENTILE`) select with `nth_element`,
+  sparse range precedent tracing walks stored rows only, and parallel
+  recalculation drops per-pass copies.
+- Releasing a range dependency is constant time and dependency edges are
+  cleared in bulk; the iterative solver indexes cycle state by position.
+- Conditional-format evaluation computes `AboveAverage` statistics once per
+  population and visits only populated cells of oversized ranges; AutoFilter
+  custom conditions are prepared once per filter, and clearing or remapping
+  styles no longer walks every row.
+- Effective style resolution parses the theme once per call, and print-title
+  and manual page-break lookups use indexed tracks.
 
 ### Fixed
 
-- Python integer parameters reject a fractional or non-finite number with
-  `ValueError` and a non-number (including a numeric string) with `TypeError`
-  instead of truncating or converting it.
-- Ad-hoc formula evaluation (`fm_workbook_evaluate_formula`, its array form
-  and `fm_workbook_evaluate_cf_formula`, in every binding) rejects an
-  out-of-grid target or anchor with `kInvalidArgument`.
-- Both JavaScript bindings reject an iterative-calculation cap above 2^31-1
-  with `RangeError` instead of wrapping it to a negative value.
+- Number formats follow Excel for fractions (`#` placeholders pad nothing, a
+  numerator that rounds to 0 drops the fraction group, fixed denominators
+  round half up, approximations take the last convergent that fits), `?` and
+  `0` placeholders on a zero integer part, thousands separators, scientific
+  mantissas taken from the 15-digit view, `General` and `@`, and subnormals.
+  Ties in the 15-digit view round toward zero in `&`, `TEXT`, `FIXED` and
+  `ROUND`. `TEXT`, `FIXED`, `DOLLAR` and `USDOLLAR` return `#VALUE!` when the
+  output exceeds 255 characters.
+- Text that converts to a number (`VALUE`, arithmetic on text, criteria)
+  keeps 15 significant digits by truncation and follows Excel's range,
+  percent and 255-character rules; `NUMBERVALUE` is a pre-pass in front of
+  the same recogniser. Date and time text uses one recogniser for all
+  fourteen locales, including Korean, Chinese meridiem, era and kanji forms,
+  per-locale currency spellings and month-name matching.
+- Subnormal results of `*`, `/`, `^`, unary `%`, `PRODUCT`, `SUMPRODUCT` and
+  `SUMSQ` flush to 0 as Excel does, and `SIGN`, truthiness and unary minus
+  use Excel's one-sided zero test. The cancellation snap scales with the left
+  operand, and `SUM`, `AVERAGE`, `SUBTOTAL` and `AGGREGATE` snap only the
+  final addition. `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `TRUNC`, `CEILING` and
+  `FLOOR` work on the 15-digit view, and `MOD` is `#NUM!` from a quotient of
+  1,125,900,000,000. Native builds are compiled without fused multiply-add,
+  so arm64 results match WASM and Excel.
+- Trigonometric functions are `#NUM!` from |x| = 2^27, and the hyperbolic,
+  inverse trigonometric, `RADIANS`, `DEGREES`, `FACT`, `ERF` / `ERFC`, `LOG`
+  and `TIME` results match Excel's last digits. `BITLSHIFT` / `BITRSHIFT`
+  decide on the net shift; `COMBIN`, `COMBINA`, `PERMUT` and `PERMUTATIONA`
+  are `#NUM!` at 2^31-1; `BASE` and `DECIMAL` follow Excel's length and
+  prefix rules. `BESSELJ`, `BESSELY`, `BESSELI` and `BESSELK` follow Excel's
+  algorithms and order limit, `CONVERT` uses Excel's unit table and
+  arithmetic, and the `IM*` functions use Excel's parsing, arithmetic and
+  text output.
+- `YEARFRAC` basis 1 counts the 1900-02-29 serial, `DATEDIF` `"YD"` follows
+  Excel, `WORKDAY` truncates a fractional start, `EOMONTH` before 1900 is
+  `#NUM!`, `DATE(1900,3,0)` is serial 60, and `HOUR` / `MINUTE` / `SECOND`
+  honour the 1904 bound.
+- The gamma, beta, normal, binomial and related distributions and their
+  inverses are evaluated with Excel's kernels, so large and extreme
+  parameters give Excel's values instead of `#NUM!` or a last-digit drift.
+  `T.TEST`, `F.TEST`, `CHISQ.TEST`, `Z.TEST`, `CONFIDENCE.*`,
+  `BINOM.DIST.RANGE`, `CORREL`, `RSQ`, `SLOPE`, `FORECAST` and `COVAR`
+  compute in Excel's order. The variance family takes a second pass where
+  the one-pass sum cancels; `PERCENTILE.*`, `QUARTILE.*` and `MEDIAN`
+  interpolate as Excel does; the `*A` aggregates skip logical and text
+  elements of array arguments. `LINEST`, `LOGEST`, `TREND` and `GROWTH` fit
+  with Excel's pivoted QR and dropped-column rule, and `MINVERSE` solves by
+  partial-pivot LU.
+- `AGGREGATE` validates `k` as `LARGE` / `SMALL` do, never counts error cells
+  for function 2, and counts them for function 3 under options that keep
+  errors.
+- `FORECAST.ETS` and its `.CONFINT`, `.SEASONALITY` and `.STAT` forms follow
+  Excel's timeline handling, seasonality detection, smoothing-parameter
+  candidates, holdout scoring and trend reset; out-of-range options are
+  `#NUM!`.
+- The payment, present/future value, depreciation and bond functions compute
+  in Excel's operation order with its `log1p` / `expm1` / power kernels, so
+  results match to the last digits and `PMT` no longer loses precision at
+  small rates. `DDB` accepts fractional periods. `RATE`, `IRR`, `XIRR` and
+  `YIELD` run Excel's solvers (a `RATE` / `IRR` guess at or below -1 is
+  `#VALUE!`, a single `XIRR` flow is `#N/A`), and `IRR`, `NPV` and `PV`
+  return `#DIV/0!` or `#NUM!` as Excel does when the discount factor
+  underflows or overflows.
+- `MATCH` type 1, `LOOKUP`, approximate `VLOOKUP` / `HLOOKUP`, `XLOOKUP` and
+  `XMATCH` share one search that reproduces Excel's result on unsorted and
+  mixed-type data and orders errors above booleans. Wildcard criteria match
+  per UTF-16 unit, consistent with `SEARCH`.
+- On Mac profiles `LEN`, `LEFT`, `RIGHT`, `MID`, `REPLACE`, `FIND` and
+  `SEARCH` count a supplementary-plane character as one position; other
+  profiles keep UTF-16 units. The `LENB` family uses per-locale byte widths.
+  `UPPER`, `LOWER`, `PROPER` and the case escapes of `REGEXREPLACE` map case
+  across Unicode.
+- `REGEXTEST`, `REGEXEXTRACT` and `REGEXREPLACE` accept the empty pattern,
+  expand replacements with Excel's grammar, and return `#VALUE!` when a match
+  exceeds the step limit; `REGEXEXTRACT` rejects a `return_mode` above 2.
+- Sheet names are quoted by Excel's rule in formulas and `ADDRESS`, and names
+  qualified by a sheet or book are not localized as built-ins.
+- Iterative calculation stops on a workbook-wide change test, sweeping
+  independent circular components together, as Excel does.
+- `ROW`, `COLUMN`, `OFFSET` and range endpoints on a missing sheet return
+  `#REF!`, `Sheet!Name` with an unknown qualifier is `#NAME?`, and `OFFSET`
+  resolves a chained `:` base to its bounding box. An arena exhausted during
+  parallel recalculation reports `kOutOfMemory` instead of committing
+  `#REF!`.
+- Huge and non-finite numeric arguments to the `D*` functions, `XMATCH`,
+  `XLOOKUP`, `TOCOL`, `WRAPROWS`, `WRAPCOLS`, `OFFSET`, `INDEX`, `RANK` and
+  the date and bond functions saturate or give `#VALUE!` instead of an
+  undefined conversion.
+- Pivot values follow Excel cell for cell: Sum totals are built from the
+  rendered cells, an all-blank cell or total renders blank instead of 0,
+  custom subtotals switch Sum totals to the accumulator model, hidden, page
+  and label filters compact records as Excel does, and show-values-as
+  results follow Excel's blank and error precedence. A field without
+  `sortType` keeps its `<items>` document order.
+- `PIVOTBY` without column subtotals no longer reads past its subtotal table,
+  and a spill anchor's cached text stays valid after the spill region is
+  cleared or recommitted.
 - Data validation evaluates its formulas as if the proposed value were in the
   cell, so a rule that refers to the cell it validates (for example
   `=COUNTIF($A:$A,A1)=1`) checks the new value rather than the stored one.
@@ -67,37 +262,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `effective_default_row_height` is 0.
 - `SUBTOTAL` and `AGGREGATE` reached through a defined name recalculate when
   row visibility changes.
+- Colour scales, data bars and percent thresholds stay finite for extreme
+  endpoints, and an out-of-range percentile threshold is clamped.
 - An external reference matches a cached sheet name case-insensitively
   beyond ASCII (`[Book.xlsx]ärea!A1` finds `Ärea`), in evaluation and in an
   XLSB save.
+- `_xHHHH_` escapes are decoded when reading formulas, cached strings,
+  comment authors and external-link text, so text no longer grows across
+  saves. Relationship parts are matched by namespace under any prefix, zip
+  entry names with an embedded NUL are rejected, and the streaming reader
+  reads inline strings like the DOM reader.
+- Non-finite numbers are stored as `#NUM!` in external-link caches and
+  `.xlsb` cells, `.xlsb` formula string literals keep surrogate pairs, and
+  the XLSB shared-string header counts total references separately from
+  unique strings.
 - Format detection reads the parsed `[Content_Types].xml` declarations, so
   incidental text in that part no longer routes a package to the XLSB reader.
 - A drawing edit fails with `kPreconditionFailed` when no drawing object id
   is left, instead of writing a wrapped id.
 - Malformed UTF-8 is rejected the same way by every code-point consumer and
   by sheet-name validation.
-
-### Removed
-
-- **Breaking (C ABI and every binding):** the five picture operations are
-  renamed to drawing-object operations and now act on charts as well as
-  pictures. A snapshot of a chart carries its chart part and every part the
-  chart's relationships reach; snapshots taken by earlier versions still
-  restore. Migration, by rename only:
-
-  | Before | After |
-  |---|---|
-  | `fm_sheet_remove_image` / `removeImage` / `remove_image` | `fm_sheet_remove_drawing` / `removeDrawing` / `remove_drawing` |
-  | `fm_sheet_set_image_anchor` / `setImageAnchor` / `set_image_anchor` | `fm_sheet_set_drawing_anchor` / `setDrawingAnchor` / `set_drawing_anchor` |
-  | `fm_sheet_set_image_z_order` / `setImageZOrder` / `set_image_z_order` | `fm_sheet_set_drawing_z_order` / `setDrawingZOrder` / `set_drawing_z_order` |
-  | `fm_sheet_snapshot_image` / `snapshotImage` / `snapshot_image` | `fm_sheet_snapshot_drawing` / `snapshotDrawing` / `snapshot_drawing` |
-  | `fm_sheet_restore_image` / `restoreImage` / `restore_image` | `fm_sheet_restore_drawing` / `restoreDrawing` / `restore_drawing` |
-  | `fm_image_anchor` | `fm_drawing_anchor` (same layout) |
-  | `FM_IMAGE_RESTORE_NEW_ID` | `FM_DRAWING_RESTORE_NEW_ID` (same value) |
-
-  `probeImage`, `getImage` and `insertImage` keep their names. The old names
-  are gone rather than aliased, so a caller linked against an earlier
-  shared library must be recompiled.
+- Node `recalc()` reports its failure message and code instead of losing
+  them, and Python workbook calls hold the handle lock for the whole
+  operation, so closing a workbook on another thread cannot free it mid-call.
 
 ## [0.15.2] - 2026-10-14
 
@@ -2728,7 +2915,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/libraz/formulon/compare/v0.15.2...v0.16.0
 [0.15.2]: https://github.com/libraz/formulon/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/libraz/formulon/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/libraz/formulon/compare/v0.14.0...v0.15.0
