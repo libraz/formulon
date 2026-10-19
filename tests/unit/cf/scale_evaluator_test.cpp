@@ -20,6 +20,9 @@
 namespace formulon::cf {
 namespace {
 
+using scales::resolve_color_scale;
+using scales::resolve_data_bar;
+using scales::resolve_icon_set;
 using test::At;
 using test::CFEvalHarness;
 using test::Cfvo;
@@ -65,6 +68,20 @@ TEST(CFEvaluator, ColorScaleTwoStopMinMaxInterpolatesBetweenStops) {
   EXPECT_EQ(match.resolved_fill_color->r, 128);
   EXPECT_EQ(match.resolved_fill_color->g, 128);
   EXPECT_EQ(match.resolved_fill_color->b, 0);
+}
+
+TEST(CFEvaluator, ColorScaleInterpolatesAcrossExtremeFiniteThresholds) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-9e307));
+  harness.sheet.set_cell_value(1, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(9e307));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  r.color_scale = TwoStopMinMax(RGB(255, 0, 0), RGB(0, 255, 0));
+
+  CFMatch match = make_match(r, Value::number(0.0), SqrefContext(harness, sqref));
+  ASSERT_TRUE(match.resolved_fill_color.has_value());
+  EXPECT_EQ(*match.resolved_fill_color, RGB(128, 128, 0));
 }
 
 TEST(CFEvaluator, ColorScaleClampsToOuterStops) {
@@ -173,6 +190,30 @@ TEST(CFEvaluator, ColorScalePercentCfvoUsesPopulationRangeFraction) {
   CFMatch hi = make_match(r, Value::number(40.0), ctx);
   ASSERT_TRUE(hi.resolved_fill_color.has_value());
   EXPECT_EQ(*hi.resolved_fill_color, RGB(255, 255, 255));
+}
+
+TEST(CFEvaluator, ColorScalePercentCfvoInterpolatesAcrossExtremeFinitePopulation) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-9e307));
+  harness.sheet.set_cell_value(1, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(9e307));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  ColorScaleSpec spec;
+  spec.thresholds = {Cfvo(CfvoType::Percent, "25"), Cfvo(CfvoType::Percent, "75")};
+  spec.colors = {RGB(0, 0, 0), RGB(255, 255, 255)};
+  r.color_scale = std::move(spec);
+
+  CFMatch midpoint = make_match(r, Value::number(0.0), SqrefContext(harness, sqref));
+  ASSERT_TRUE(midpoint.resolved_fill_color.has_value());
+  EXPECT_EQ(*midpoint.resolved_fill_color, RGB(128, 128, 128));
+}
+
+TEST(CFEvaluator, PercentileInterpolationHandlesExtremeFiniteEndpoints) {
+  const std::vector<double> sorted{-9e307, 9e307};
+  EXPECT_DOUBLE_EQ(helpers::percentile_inc(sorted, 0.0), -9e307);
+  EXPECT_DOUBLE_EQ(helpers::percentile_inc(sorted, 0.5), 0.0);
+  EXPECT_DOUBLE_EQ(helpers::percentile_inc(sorted, 1.0), 9e307);
 }
 
 TEST(CFEvaluator, ColorScaleNonNumericCellDoesNotResolve) {
@@ -359,6 +400,48 @@ TEST(CFEvaluator, DataBarLengthIsLinearBetweenMinAndMax) {
   EXPECT_DOUBLE_EQ(hi.data_bar_render->length_pct, 100.0);
 
   CFMatch mid = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(mid.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(mid.data_bar_render->length_pct, 50.0);
+}
+
+TEST(CFEvaluator, DataBarExtremeFiniteThresholdsKeepHalfLengthAndAxis) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-9e307));
+  harness.sheet.set_cell_value(1, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(9e307));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch mid = make_match(r, Value::number(0.0), ctx);
+  ASSERT_TRUE(mid.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(mid.data_bar_render->length_pct, 0.0);
+  EXPECT_DOUBLE_EQ(mid.data_bar_render->axis_position_pct, 50.0);
+
+  r.data_bar->axis_position = DataBarAxisPosition::Middle;
+  CFMatch middle_axis = make_match(r, Value::number(0.0), ctx);
+  ASSERT_TRUE(middle_axis.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(middle_axis.data_bar_render->length_pct, 50.0);
+
+  r.data_bar->axis_position = DataBarAxisPosition::None;
+  CFMatch no_axis = make_match(r, Value::number(0.0), ctx);
+  ASSERT_TRUE(no_axis.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(no_axis.data_bar_render->length_pct, 50.0);
+}
+
+TEST(CFEvaluator, DataBarPercentCfvosInterpolateAcrossExtremeFinitePopulation) {
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-9e307));
+  harness.sheet.set_cell_value(1, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(9e307));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 2, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  DataBarSpec spec = MakeDataBarSpec(Cfvo(CfvoType::Percent, "25"), Cfvo(CfvoType::Percent, "75"));
+  spec.axis_position = DataBarAxisPosition::Middle;
+  r.data_bar = std::move(spec);
+
+  CFMatch mid = make_match(r, Value::number(0.0), SqrefContext(harness, sqref));
   ASSERT_TRUE(mid.data_bar_render.has_value());
   EXPECT_DOUBLE_EQ(mid.data_bar_render->length_pct, 50.0);
 }
@@ -639,6 +722,69 @@ IconSetSpec ThreeIconNumberSet(std::string lo, std::string hi, IconSetName name 
   spec.name = name;
   spec.thresholds = {IconCfvo(CfvoType::Number, std::move(lo)), IconCfvo(CfvoType::Number, std::move(hi))};
   return spec;
+}
+
+TEST(CFEvaluator, PercentileCfvoClampsOutOfRangeValuesAcrossVisualRules) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  const auto ctx = SqrefContext(harness, sqref);
+  const auto color_at = [&ctx](const std::string& percentile) {
+    CFRule rule = MakeRule(RuleType::ColorScale);
+    rule.color_scale = ThreeStopMinMidMax(RGB(0, 0, 0), RGB(128, 128, 128), RGB(255, 255, 255), percentile);
+    return resolve_color_scale(rule, Value::number(30.0), ctx);
+  };
+  const auto bar_at = [&ctx](const std::string& percentile) {
+    CFRule rule = MakeRule(RuleType::DataBar);
+    rule.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Percentile, percentile), Cfvo(CfvoType::Max));
+    return resolve_data_bar(rule, Value::number(30.0), ctx);
+  };
+  const auto icon_at = [&ctx](const std::string& percentile) {
+    CFRule rule = MakeRule(RuleType::IconSet);
+    IconSetSpec spec;
+    spec.name = IconSetName::Three_TrafficLights1;
+    spec.thresholds = {IconCfvo(CfvoType::Percentile, percentile), IconCfvo(CfvoType::Max, "")};
+    rule.icon_set = std::move(spec);
+    return resolve_icon_set(rule, Value::number(30.0), ctx);
+  };
+  const std::pair<const char*, const char*> cases[] = {
+      {"-10", "0"}, {"-1e308", "0"}, {"100.1", "100"}, {"1e308", "100"}};
+  for (const auto& [out_of_range, bound] : cases) {
+    const auto color = color_at(out_of_range);
+    ASSERT_TRUE(color.has_value()) << out_of_range;
+    EXPECT_EQ(*color, *color_at(bound)) << out_of_range;
+    const auto bar = bar_at(out_of_range);
+    ASSERT_TRUE(bar.has_value()) << out_of_range;
+    EXPECT_EQ(bar->length_pct, bar_at(bound)->length_pct) << out_of_range;
+    const auto icon = icon_at(out_of_range);
+    ASSERT_TRUE(icon.has_value()) << out_of_range;
+    EXPECT_EQ(icon->icon_index, icon_at(bound)->icon_index) << out_of_range;
+  }
+}
+
+TEST(CFEvaluator, PercentileCfvoAcceptsInclusiveZeroAndHundred) {
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFRule color_rule = MakeRule(RuleType::ColorScale);
+  ColorScaleSpec color_spec;
+  color_spec.thresholds = {Cfvo(CfvoType::Percentile, "0"), Cfvo(CfvoType::Percentile, "100")};
+  color_spec.colors = {RGB(0, 0, 0), RGB(255, 255, 255)};
+  color_rule.color_scale = std::move(color_spec);
+  EXPECT_TRUE(resolve_color_scale(color_rule, Value::number(30.0), ctx).has_value());
+
+  CFRule bar_rule = MakeRule(RuleType::DataBar);
+  bar_rule.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Percentile, "0"), Cfvo(CfvoType::Percentile, "100"));
+  EXPECT_TRUE(resolve_data_bar(bar_rule, Value::number(30.0), ctx).has_value());
+
+  CFRule icon_rule = MakeRule(RuleType::IconSet);
+  IconSetSpec icon_spec;
+  icon_spec.name = IconSetName::Three_TrafficLights1;
+  icon_spec.thresholds = {IconCfvo(CfvoType::Percentile, "0"), IconCfvo(CfvoType::Percentile, "100")};
+  icon_rule.icon_set = std::move(icon_spec);
+  EXPECT_TRUE(resolve_icon_set(icon_rule, Value::number(30.0), ctx).has_value());
 }
 
 TEST(CFEvaluator, IconSetWithoutSqrefDoesNotMatch) {

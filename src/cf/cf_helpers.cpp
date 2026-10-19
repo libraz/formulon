@@ -472,10 +472,38 @@ const ColorScalePopulation* numeric_population_for_cell(const Value& cell_value,
 // Numeric helpers.
 // ---------------------------------------------------------------------------
 
+double interval_fraction(double value, double low, double high) {
+  const double span = high - low;
+  if (std::isfinite(span) || !std::isfinite(value) || !std::isfinite(low) || !std::isfinite(high)) {
+    return (value - low) / span;
+  }
+
+  // Opposite-sign finite endpoints can overflow the span; rescale by the larger magnitude.
+  const double scale = std::max(std::abs(low), std::abs(high));
+  return (value / scale - low / scale) / (high / scale - low / scale);
+}
+
+double interpolate_interval(double low, double high, double fraction) {
+  const double span = high - low;
+  if (std::isfinite(span) || !std::isfinite(low) || !std::isfinite(high) || fraction < 0.0 || fraction > 1.0) {
+    return low + fraction * span;
+  }
+  if (fraction == 0.0) {
+    return low;
+  }
+  if (fraction == 1.0) {
+    return high;
+  }
+  return (1.0 - fraction) * low + fraction * high;
+}
+
 double percentile_inc(const std::vector<double>& sorted, double percentile) {
   const std::size_t count = sorted.size();
-  if (count == 1) {
+  if (count == 1 || !(percentile > 0.0)) {
     return sorted.front();
+  }
+  if (percentile >= 1.0) {
+    return sorted.back();
   }
   const double position = percentile * static_cast<double>(count - 1);
   const auto lower_index = static_cast<std::size_t>(std::floor(position));
@@ -483,7 +511,7 @@ double percentile_inc(const std::vector<double>& sorted, double percentile) {
     return sorted.back();
   }
   const double fraction = position - static_cast<double>(lower_index);
-  return sorted[lower_index] + fraction * (sorted[lower_index + 1] - sorted[lower_index]);
+  return interpolate_interval(sorted[lower_index], sorted[lower_index + 1], fraction);
 }
 
 std::optional<double> parse_double(std::string_view source) {

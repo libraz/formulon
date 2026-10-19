@@ -46,7 +46,7 @@ std::optional<double> resolve_cfvo(const CfValueObject& cfvo, const ColorScalePo
       if (!pct.has_value()) {
         return std::nullopt;
       }
-      return pop.min + (*pct / kPercentDivisor) * (pop.max - pop.min);
+      return helpers::interpolate_interval(pop.min, pop.max, *pct / kPercentDivisor);
     }
     case CfvoType::Percentile: {
       auto pct = helpers::parse_double(cfvo.value);
@@ -169,7 +169,10 @@ double automatic_axis_position(double threshold_min, double threshold_max) {
   // above.
   const double negative_span = -threshold_min;
   const double total_span = negative_span + threshold_max;
-  return (negative_span / total_span) * kAxisRight;
+  if (std::isfinite(total_span)) {
+    return (negative_span / total_span) * kAxisRight;
+  }
+  return helpers::interval_fraction(0.0, threshold_min, threshold_max) * kAxisRight;
 }
 
 DataBarRender make_data_bar_render(const DataBarSpec& spec, double length_pct, double cell, double threshold_min,
@@ -241,7 +244,7 @@ std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_v
       // When the segment collapses (lower == upper), pick the upper
       // colour; the cell is exactly at a stop so either end is correct.
       const double span = upper_bound - lower_bound;
-      const double fraction = span == 0.0 ? 1.0 : (cell - lower_bound) / span;
+      const double fraction = span == 0.0 ? 1.0 : helpers::interval_fraction(cell, lower_bound, upper_bound);
       return interpolate_color(effective_color(spec.colors[i], ctx, ColorContext::kFillForeground),
                                effective_color(spec.colors[i + 1], ctx, ColorContext::kFillForeground), fraction);
     }
@@ -305,8 +308,7 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
     const double raw_fraction = (cell >= 0.0) ? cell / *threshold_max : cell / *threshold_min;
     clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
   } else {
-    const double range = *threshold_max - *threshold_min;
-    const double raw_fraction = (cell - *threshold_min) / range;
+    const double raw_fraction = helpers::interval_fraction(cell, *threshold_min, *threshold_max);
     clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
   }
 

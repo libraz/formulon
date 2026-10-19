@@ -191,9 +191,18 @@ const ColorScalePopulation* numeric_population_for_cell(const Value& cell_value,
 // ---------------------------------------------------------------------------
 
 /// `PERCENTILE.INC`: linear interpolation between sorted points.
-/// `percentile` is in `[0, 1]`. For empty populations the caller
+/// `percentile` is clamped to `[0, 1]`. For empty populations the caller
 /// short-circuits.
 double percentile_inc(const std::vector<double>& sorted, double percentile);
+
+/// Fraction of the way from `low` to `high` at `value`. Uses the existing
+/// subtraction/division when the span is finite, and scales finite endpoints
+/// only when their span overflows.
+double interval_fraction(double value, double low, double high);
+
+/// Linear interpolation from `low` to `high`. Uses the existing arithmetic
+/// for finite spans and a weighted sum only when finite endpoints overflow.
+double interpolate_interval(double low, double high, double fraction);
 
 /// Parses a textual double (full match required, no trailing junk).
 /// Used by the CFVO threshold resolver and `parse_literal`.
