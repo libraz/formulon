@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "defined_name.h"
 #include "gtest/gtest.h"
@@ -104,6 +105,42 @@ TEST(DefinedNamesReader, SheetScopedNameCapturesLocalSheetId) {
   EXPECT_EQ(names_or.value()[0].local_sheet_id, 2);
 }
 
+TEST(DefinedNamesReader, InvalidLocalSheetIdsFallBackToWorkbookScope) {
+  const std::string xml =
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<definedNames>"
+      "<definedName name=\"negativeZero\" localSheetId=\"-0\">A1</definedName>"
+      "<definedName name=\"positive\" localSheetId=\"+1\">A1</definedName>"
+      "<definedName name=\"whitespace\" localSheetId=\" +1\">A1</definedName>"
+      "<definedName name=\"negative\" localSheetId=\"-1\">A1</definedName>"
+      "<definedName name=\"overflow\" localSheetId=\"4294967296\">A1</definedName>"
+      "<definedName name=\"int32Overflow\" localSheetId=\"2147483648\">A1</definedName>"
+      "<definedName name=\"uint32Max\" localSheetId=\"4294967295\">A1</definedName>"
+      "<definedName name=\"veryLongOverflow\" localSheetId=\"999999999999999999999999999999999999\">A1</definedName>"
+      "<definedName name=\"empty\" localSheetId=\"\">A1</definedName>"
+      "<definedName name=\"leadingSpace\" localSheetId=\" 0\">A1</definedName>"
+      "<definedName name=\"trailingSpace\" localSheetId=\"0 \">A1</definedName>"
+      "<definedName name=\"suffix\" localSheetId=\"1suffix\">A1</definedName>"
+      "<definedName name=\"missing\">A1</definedName>"
+      "<definedName name=\"zero\" localSheetId=\"0\">A1</definedName>"
+      "<definedName name=\"one\" localSheetId=\"1\">A1</definedName>"
+      "<definedName name=\"leadingZero\" localSheetId=\"001\">A1</definedName>"
+      "<definedName name=\"int32Max\" localSheetId=\"2147483647\">A1</definedName>"
+      "</definedNames></workbook>";
+
+  pugi::xml_document doc;
+  ASSERT_TRUE(LoadDoc(doc, xml));
+  auto names_or = read_defined_names(doc);
+  ASSERT_TRUE(static_cast<bool>(names_or)) << names_or.error().message;
+  ASSERT_EQ(names_or.value().size(), 17U);
+
+  const std::vector<std::int32_t> expected_sheet_ids = {-1, -1, -1, -1, -1, -1, -1, -1,       -1,
+                                                        -1, -1, -1, -1, 0,  1,  1,  INT32_MAX};
+  for (std::size_t i = 0; i < expected_sheet_ids.size(); ++i) {
+    EXPECT_EQ(names_or.value()[i].local_sheet_id, expected_sheet_ids[i]) << "entry " << i;
+  }
+}
+
 TEST(DefinedNamesReader, HiddenAttributeAcceptsBothLexicalForms) {
   // Excel-style writers emit `hidden="1"`; pre-2003-style emit
   // `hidden="true"`. Both must yield true; absent / "false" / "0"
@@ -132,6 +169,39 @@ TEST(DefinedNamesReader, HiddenAttributeAcceptsBothLexicalForms) {
   EXPECT_FALSE(names_or.value()[3].hidden);
   EXPECT_FALSE(names_or.value()[4].hidden);
   EXPECT_FALSE(names_or.value()[5].hidden);
+}
+
+TEST(DefinedNamesReader, HiddenUsesXsdBooleanLexiconAndPreservesPayloads) {
+  const std::string xml =
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<definedNames>"
+      "<definedName name=\"one\" hidden=\"1\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"true\" hidden=\"true\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"upperTrue\" hidden=\"TRUE\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"zero\" hidden=\"0\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"false\" hidden=\"false\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"upperFalse\" hidden=\"FALSE\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"yes\" hidden=\"yes\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"on\" hidden=\"on\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"empty\" hidden=\"\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "<definedName name=\"missing\" comment=\"keep\">=SUM(A1, A2)</definedName>"
+      "</definedNames></workbook>";
+
+  pugi::xml_document doc;
+  ASSERT_TRUE(LoadDoc(doc, xml));
+  auto names_or = read_defined_names(doc);
+  ASSERT_TRUE(static_cast<bool>(names_or)) << names_or.error().message;
+  ASSERT_EQ(names_or.value().size(), 10U);
+
+  const std::vector<std::string> expected_names = {"one",        "true", "upperTrue", "zero",  "false",
+                                                   "upperFalse", "yes",  "on",        "empty", "missing"};
+  const std::vector<bool> expected_hidden = {true, true, true, false, false, false, false, false, false, false};
+  for (std::size_t i = 0; i < expected_names.size(); ++i) {
+    EXPECT_EQ(names_or.value()[i].name, expected_names[i]);
+    EXPECT_EQ(names_or.value()[i].formula, "=SUM(A1, A2)");
+    EXPECT_EQ(names_or.value()[i].comment, "keep");
+    EXPECT_EQ(names_or.value()[i].hidden, expected_hidden[i]);
+  }
 }
 
 TEST(DefinedNamesReader, MultipleNamesPreserveDeclarationOrder) {

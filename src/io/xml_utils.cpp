@@ -19,6 +19,7 @@
 
 #include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
+#include "io/xsd_int.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -33,6 +34,11 @@ void AppendAttrOpen(std::string& out, std::string_view name) {
   out.push_back(' ');
   out.append(name.data(), name.size());
   out.append("=\"");
+}
+
+std::uint32_t ParsePhoneticIndex(const pugi::xml_attribute& attribute) noexcept {
+  std::uint32_t value = 0U;
+  return parse_xsd_nonneg_int(attribute.value(), &value) ? value : 0U;
 }
 
 }  // namespace
@@ -158,21 +164,11 @@ std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t 
 }
 
 std::optional<std::uint32_t> parse_xml_u32_attr_strict(const pugi::xml_attribute& attr) {
-  if (!attr) {
+  std::uint32_t value = 0U;
+  if (!parse_xsd_nonneg_int(attr.value(), &value)) {
     return std::nullopt;
   }
-  const char* raw = attr.value();
-  if (raw == nullptr || *raw == '\0' || *raw == '-' || *raw == '+') {
-    return std::nullopt;
-  }
-  errno = 0;
-  char* end = nullptr;
-  const unsigned long parsed = std::strtoul(raw, &end, 10);
-  if (end == raw || *end != '\0' || errno != 0 ||
-      parsed > static_cast<unsigned long>(std::numeric_limits<std::uint32_t>::max())) {
-    return std::nullopt;
-  }
-  return static_cast<std::uint32_t>(parsed);
+  return value;
 }
 
 std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t default_value) {
@@ -639,8 +635,8 @@ std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
 void append_phonetic_runs(const pugi::xml_node& node, std::vector<PhoneticRun>& out) {
   for (pugi::xml_node rph = node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
     PhoneticRun run;
-    run.sb = static_cast<std::uint32_t>(rph.attribute("sb").as_uint(0U));
-    run.eb = static_cast<std::uint32_t>(rph.attribute("eb").as_uint(0U));
+    run.sb = ParsePhoneticIndex(rph.attribute("sb"));
+    run.eb = ParsePhoneticIndex(rph.attribute("eb"));
     for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
       AppendOoxmlTextUnescaped(run.text, t.text().get());
     }
@@ -651,7 +647,7 @@ void append_phonetic_runs(const pugi::xml_node& node, std::vector<PhoneticRun>& 
 PhoneticProperties read_phonetic_properties(const pugi::xml_node& node) {
   PhoneticProperties props;
   if (pugi::xml_node pr = node.child("phoneticPr")) {
-    props.font_id = static_cast<std::uint16_t>(pr.attribute("fontId").as_uint(0U));
+    props.font_id = static_cast<std::uint16_t>(ParsePhoneticIndex(pr.attribute("fontId")));
     props.type = parse_phonetic_type(pr.attribute("type").value());
     props.alignment = parse_phonetic_alignment(pr.attribute("alignment").value());
   }

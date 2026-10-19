@@ -4,15 +4,15 @@
 
 #include <cctype>
 #include <cstdint>
-#include <cstdlib>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "io/defined_names_internal.h"
 #include "io/future_functions.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "parser/ast_format.h"
 #include "parser/formula_prefix.h"
 #include "pugixml.hpp"
@@ -22,24 +22,6 @@
 namespace formulon {
 namespace io {
 namespace {
-
-/// Returns `true` when `value` is the canonical OOXML truthy form for a
-/// boolean attribute: `"1"` or `"true"` (case-insensitive). The OOXML
-/// boolean lexicon also nominally accepts `"yes"` / `"on"` but Excel
-/// itself never emits those for `<definedName hidden=...>`, so we
-/// stay consistent with what the writer round-trips.
-bool IsXmlBoolTrue(std::string_view value) {
-  if (value == "1") {
-    return true;
-  }
-  if (value.size() != 4) {
-    return false;
-  }
-  // Compare against "true" case-insensitively without dragging in
-  // <algorithm> for a single 4-byte check.
-  return (value[0] == 't' || value[0] == 'T') && (value[1] == 'r' || value[1] == 'R') &&
-         (value[2] == 'u' || value[2] == 'U') && (value[3] == 'e' || value[3] == 'E');
-}
 
 /// Strips leading and trailing ASCII whitespace from `s` in place. We
 /// intentionally do NOT touch interior whitespace: a defined name like
@@ -64,24 +46,11 @@ void TrimAsciiWhitespace(std::string& s) {
 /// than rejecting the entire workbook for what is purely passive
 /// metadata at this layer.
 std::int32_t ParseLocalSheetId(const pugi::xml_attribute& attr) {
-  if (!attr) {
+  const auto parsed = parse_xml_u32_attr_strict(attr);
+  if (!parsed || *parsed > static_cast<std::uint32_t>(INT32_MAX)) {
     return -1;
   }
-  const char* raw = attr.value();
-  if (raw == nullptr || *raw == '\0') {
-    return -1;
-  }
-  char* end = nullptr;
-  // Use long here so we can range-check without depending on errno.
-  long parsed = std::strtol(raw, &end, 10);
-  if (end == raw || *end != '\0' || parsed < 0) {
-    return -1;
-  }
-  // Excel caps workbooks well below INT32_MAX sheets; clamp to be safe.
-  if (parsed > static_cast<long>(INT32_MAX)) {
-    return -1;
-  }
-  return static_cast<std::int32_t>(parsed);
+  return static_cast<std::int32_t>(*parsed);
 }
 
 }  // namespace
@@ -112,9 +81,7 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     DefinedName entry;
     entry.name = name_attr.value();
     entry.local_sheet_id = ParseLocalSheetId(dn.attribute("localSheetId"));
-    if (pugi::xml_attribute hidden_attr = dn.attribute("hidden"); hidden_attr) {
-      entry.hidden = IsXmlBoolTrue(hidden_attr.value());
-    }
+    entry.hidden = read_xsd_bool(dn, "hidden", false);
     if (pugi::xml_attribute comment_attr = dn.attribute("comment"); comment_attr) {
       entry.comment = comment_attr.value();
     }

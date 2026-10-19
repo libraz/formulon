@@ -64,6 +64,35 @@ TEST(XmlUtilsAttr, U32MalformedFallsBackToDefault) {
   EXPECT_EQ(attr_u32(n, "neg", 7U), 7U);
 }
 
+TEST(XmlUtilsAttr, U32StrictRejectsWhitespaceAndWrappedNegativeValues) {
+  pugi::xml_document doc = Load("<r/>");
+  pugi::xml_node node = doc.child("r");
+  const std::vector<std::string> invalid = {"",           " ",
+                                            " 0",         "0 ",
+                                            "\t1",        " +1",
+                                            " -0",        " -18446744073709551615",
+                                            "+0",         "-0",
+                                            "0junk",      "1.0",
+                                            "4294967296", "18446744073709551616"};
+  for (const std::string& value : invalid) {
+    SCOPED_TRACE(value);
+    node.append_attribute("index").set_value(value.c_str());
+    EXPECT_FALSE(parse_xml_u32_attr_strict(node.attribute("index")).has_value());
+    EXPECT_EQ(parse_xml_u32_attr(node.attribute("index"), 17U), 17U);
+    EXPECT_EQ(attr_u32(node, "index", 17U), 17U);
+    node.remove_attribute("index");
+  }
+  EXPECT_FALSE(parse_xml_u32_attr_strict(node.attribute("missing")).has_value());
+}
+
+TEST(XmlUtilsAttr, U32StrictPreservesDecimalBoundariesAndLeadingZeros) {
+  pugi::xml_document doc = Load(R"(<r zero="0" padded="000001" max="4294967295"/>)");
+  pugi::xml_node node = doc.child("r");
+  EXPECT_EQ(parse_xml_u32_attr_strict(node.attribute("zero")), 0U);
+  EXPECT_EQ(parse_xml_u32_attr_strict(node.attribute("padded")), 1U);
+  EXPECT_EQ(parse_xml_u32_attr_strict(node.attribute("max")), UINT32_MAX);
+}
+
 TEST(XmlUtilsAttr, I32Roundtrip) {
   pugi::xml_document doc = Load(R"(<r a="42" b="-1" c="0" d="-2147483648"/>)");
   pugi::xml_node n = doc.child("r");

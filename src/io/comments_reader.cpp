@@ -63,9 +63,9 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
     CellComment cc;
     cc.row = rc.value().first;
     cc.col = rc.value().second;
-    const std::int64_t author_id = c.attribute("authorId").as_llong(-1);
-    if (author_id >= 0 && static_cast<std::size_t>(author_id) < authors.size()) {
-      cc.author = authors[static_cast<std::size_t>(author_id)];
+    const auto author_id = parse_xml_u32_attr_strict(c.attribute("authorId"));
+    if (author_id && static_cast<std::size_t>(*author_id) < authors.size()) {
+      cc.author = authors[static_cast<std::size_t>(*author_id)];
     }
     cc.uid = c.attribute("xr:uid").value();
     if (pugi::xml_node text = c.child("text"); text) {

@@ -116,6 +116,37 @@ TEST(CommentsRoundTrip, MultiRunRichTextConcatenated) {
   EXPECT_EQ(out_or.value()[0].text, "foobar");
 }
 
+TEST(CommentsRoundTrip, InvalidAuthorIdsDoNotSelectAnAuthor) {
+  const std::string xml =
+      "<comments xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<authors><author>Alice</author><author>Bob</author></authors>"
+      "<commentList>"
+      "<comment ref=\"A1\" authorId=\"0junk\"><text><t>suffix</t></text></comment>"
+      "<comment ref=\"B1\" authorId=\"0.5\"><text><t>fraction</t></text></comment>"
+      "<comment ref=\"C1\" authorId=\"-1\"><text><t>negative</t></text></comment>"
+      "<comment ref=\"D1\" authorId=\"4294967296\"><text><t>overflow</t></text></comment>"
+      "<comment ref=\"E1\"><text><t>missing</t></text></comment>"
+      "<comment ref=\"F1\" authorId=\"2\"><text><t>out of range</t></text></comment>"
+      "<comment ref=\"G1\" authorId=\"0\"><text><t>zero</t></text></comment>"
+      "<comment ref=\"H1\" authorId=\"1\"><text><t>one</t></text></comment>"
+      "<comment ref=\"I1\" authorId=\"01\"><text><t>leading zero</t></text></comment>"
+      "</commentList></comments>";
+
+  auto out_or = read_comments(AsBytes(xml));
+  ASSERT_TRUE(static_cast<bool>(out_or)) << out_or.error().message;
+  ASSERT_EQ(out_or.value().size(), 9U);
+
+  const std::vector<std::string> expected_authors = {"", "", "", "", "", "", "Alice", "Bob", "Bob"};
+  const std::vector<std::string> expected_text = {"suffix",       "fraction", "negative", "overflow",    "missing",
+                                                  "out of range", "zero",     "one",      "leading zero"};
+  for (std::size_t i = 0; i < out_or.value().size(); ++i) {
+    EXPECT_EQ(out_or.value()[i].row, 0U);
+    EXPECT_EQ(out_or.value()[i].col, i);
+    EXPECT_EQ(out_or.value()[i].author, expected_authors[i]);
+    EXPECT_EQ(out_or.value()[i].text, expected_text[i]);
+  }
+}
+
 TEST(CommentsRoundTrip, MissingRootRejected) {
   const std::string xml = "<?xml version=\"1.0\"?><notcomments/>";
   auto out_or = read_comments(AsBytes(xml));

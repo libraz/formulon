@@ -332,15 +332,6 @@ std::string_view AttrOfRaw(const TagHeader& header, std::string_view name) noexc
   return {};
 }
 
-/// Reads `name` as a non-negative integer, returning `fallback` when the
-/// attribute is absent or does not parse. Used for the `<rPh>` span
-/// offsets, which Excel always writes as bare ASCII digits, so the raw
-/// (undecoded) attribute value is the right input.
-std::uint32_t AttrUintOr(const TagHeader& header, std::string_view name, std::uint32_t fallback) noexcept {
-  std::uint32_t out = 0;
-  return parse_xsd_nonneg_int(AttrOfRaw(header, name), &out) ? out : fallback;
-}
-
 /// Same as `AttrOfRaw` but transparently decodes XML entity references
 /// (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#N;`, `&#xN;`) and applies
 /// literal attribute-whitespace normalization into canonical UTF-8 text.
@@ -365,6 +356,15 @@ std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, s
   }
   DecodeAttributeInto(raw, scratch);
   return std::string_view(*scratch);
+}
+
+/// Reads a non-negative integer from a decoded attribute, returning
+/// `fallback` when it is absent or does not use the SAX path's strict XSD
+/// lexical form.
+std::uint32_t AttrUintOrDecoded(const TagHeader& header, std::string_view name, std::uint32_t fallback,
+                                std::string* scratch) {
+  std::uint32_t out = 0;
+  return parse_xsd_nonneg_int(AttrOfDecoded(header, name, scratch), &out) ? out : fallback;
 }
 
 // ---------------------------------------------------------------------------
@@ -826,6 +826,9 @@ bool ReadChildOrClose(const char* begin, const char* end, const char** p, std::s
 struct CellScratch {
   std::string decoded_value;
   std::string inline_string;
+  std::string inline_string_runs;
+  std::string inline_decoded_text;
+  std::string inline_decoded_attr;
   std::string decoded_formula;
   std::string ooxml_value;
   std::string ooxml_formula;
@@ -855,111 +858,108 @@ struct CellScratch {
   std::string row_attr_style;
 };
 
-/// Reads `<is> ... </is>` content, concatenating every `<t>` body
-/// encountered along the way (whether at the top level or inside an
-/// `<r>` rich-text run). Foreign elements are tolerated and their
-/// text content is dropped.
-///
-/// The opening `<is>` header has already been consumed; on entry
-/// `*p` points just past `>`.
-///
-/// Implementation: rather than tracking nested-element structure
-/// strictly, we stream-find every `<t>...</t>` pair within the `<is>`
-/// body and bail when we see the matching `</is>`. This is correct
-/// for Excel-emitted output (which only ever nests `<t>` under `<is>`
-/// or `<r>`) and shaves substantial code size compared to a strict
-/// recursive walk.
-bool ScanInlineString(const char* begin, const char* end, const char** p, CellScratch* scratch, Error* err) {
-  scratch->inline_string.clear();
-  scratch->inline_string_phonetic.clear();
-  scratch->inline_string_phonetic_props = PhoneticProperties{};
-  // Tracks whether we are currently inside an <rPh> (phonetic guide)
-  // subtree. <rPh> wraps a <t> element carrying kana, which must NOT
-  // be concatenated into the surface text — otherwise PHONETIC's
-  // surface-text fallback for unannotated cells would silently include
-  // the kana too. The kana is captured separately into
-  // `inline_string_phonetic` so PHONETIC can return it for inline-
-  // string cells the SAX path materialises. Each block opens a fresh
-  // run so its sb/eb span survives; `in_rph` names the open one.
-  bool in_rph = false;
-  while (*p < end) {
-    while (*p < end && **p != '<') {
-      ++(*p);
-    }
-    if (*p >= end) {
-      break;
-    }
-    const std::size_t lt_off = static_cast<std::size_t>(*p - begin);
-    ++(*p);  // past '<'
-    if (*p < end && (**p == '?' || **p == '!')) {
-      Error sub{};
-      if (!SkipMarkupNonElement(end, p, lt_off, &sub)) {
-        *err = sub;
-        return false;
-      }
-      continue;
-    }
-    TagHeader header;
-    if (!ParseTagHeader(begin, end, p, &header, err)) {
+/// Reads one `<t>` body and appends its decoded OOXML text.
+bool AppendInlineText(const char* begin, const char* end, const char** p, std::string* destination,
+                      CellScratch* scratch, Error* err) {
+  std::string_view text;
+  if (!ReadElementText(begin, end, p, "t", &scratch->inline_decoded_text, &text, err)) {
+    return false;
+  }
+  // `_xHHHH_` is plain text, not an entity, so it is decoded here as on the DOM path.
+  AppendOoxmlTextUnescaped(*destination, text);
+  return true;
+}
+
+bool SkipChildElement(const char* begin, const char* end, const char** p, const TagHeader& child, Error* err) {
+  return child.self_closing || SkipUntilClose(begin, end, p, child.name, err);
+}
+
+bool ScanInlineTextChildren(const char* begin, const char* end, const char** p, std::string_view parent,
+                            std::string* destination, CellScratch* scratch, Error* err) {
+  while (true) {
+    TagHeader child;
+    bool closed = false;
+    if (!ReadChildOrClose(begin, end, p, parent, err, &child, &closed)) {
       return false;
     }
-    if (header.is_end_tag && header.name == "is") {
+    if (closed) {
       return true;
     }
-    if (header.is_end_tag && header.name == "rPh") {
-      in_rph = false;
-      continue;
-    }
-    if (header.is_end_tag) {
-      // Close of an inner element (e.g. </r>): keep streaming.
-      continue;
-    }
-    if (header.name == "phoneticPr") {
-      // Self-closing, so this arm has to precede the generic skip below.
-      // The attribute values are a fixed vocabulary with no escapes, so
-      // the raw slice is the decoded one.
-      scratch->inline_string_phonetic_props.font_id = static_cast<std::uint16_t>(AttrUintOr(header, "fontId", 0U));
-      scratch->inline_string_phonetic_props.type = parse_phonetic_type(AttrOfRaw(header, "type"));
-      scratch->inline_string_phonetic_props.alignment = parse_phonetic_alignment(AttrOfRaw(header, "alignment"));
-      continue;
-    }
-    if (header.self_closing) {
-      continue;
-    }
-    if (header.name == "rPh") {
-      in_rph = true;
-      PhoneticRun run;
-      // A missing or unparsable offset reads as 0. That degrades the
-      // block to an insertion at the head of the string rather than
-      // dropping its kana, which is what the DOM path does too.
-      run.sb = static_cast<std::uint32_t>(AttrUintOr(header, "sb", 0U));
-      run.eb = static_cast<std::uint32_t>(AttrUintOr(header, "eb", 0U));
-      scratch->inline_string_phonetic.push_back(std::move(run));
-      continue;
-    }
-    if (header.name == "t") {
-      std::string_view text;
-      std::string decoded;
-      if (!ReadElementText(begin, end, p, "t", &decoded, &text, err)) {
+    if (child.name == "t") {
+      if (!child.self_closing && !AppendInlineText(begin, end, p, destination, scratch, err)) {
         return false;
       }
-      // An `<rPh>` close tag clears `in_rph`, so the open run is always
-      // the last one pushed. A stray `<t>` before any `<rPh>` opened
-      // cannot reach this arm with `in_rph` set.
-      std::string* dest = in_rph && !scratch->inline_string_phonetic.empty()
-                              ? &scratch->inline_string_phonetic.back().text
-                              : &scratch->inline_string;
-      // `_xHHHH_` is plain ASCII text, not an XML entity, so it survives
-      // the no-processing path and must be decoded unconditionally --
-      // matching the DOM path's `AppendOoxmlTextUnescaped` on this same
-      // `<t>` slot (`io::append_rich_text`).
-      AppendOoxmlTextUnescaped(*dest, text);
+    } else if (!SkipChildElement(begin, end, p, child, err)) {
+      return false;
     }
-    // Other open elements (e.g. <r>, <rPr>) are descended into by
-    // simply continuing the loop; their <t> children will be picked
-    // up on subsequent iterations and their close tags hit the
-    // is_end_tag branch above. <rPr> contents have no <t> so the
-    // walk passes through them harmlessly.
+  }
+}
+
+bool ScanPhoneticRun(const char* begin, const char* end, const char** p, const TagHeader& header, CellScratch* scratch,
+                     Error* err) {
+  PhoneticRun run;
+  run.sb = AttrUintOrDecoded(header, "sb", 0U, &scratch->inline_decoded_attr);
+  run.eb = AttrUintOrDecoded(header, "eb", 0U, &scratch->inline_decoded_attr);
+  scratch->inline_string_phonetic.push_back(std::move(run));
+  return header.self_closing ||
+         ScanInlineTextChildren(begin, end, p, "rPh", &scratch->inline_string_phonetic.back().text, scratch, err);
+}
+
+void ReadPhoneticProperties(const TagHeader& header, CellScratch* scratch) {
+  scratch->inline_string_phonetic_props.font_id =
+      static_cast<std::uint16_t>(AttrUintOrDecoded(header, "fontId", 0U, &scratch->inline_decoded_attr));
+  scratch->inline_string_phonetic_props.type =
+      parse_phonetic_type(AttrOfDecoded(header, "type", &scratch->inline_decoded_attr));
+  scratch->inline_string_phonetic_props.alignment =
+      parse_phonetic_alignment(AttrOfDecoded(header, "alignment", &scratch->inline_decoded_attr));
+}
+
+/// Reads `<is> ... </is>` using the DOM reader's direct-child structure:
+/// direct `<t>` bodies precede all `<r>/<t>` bodies regardless of input
+/// order, while `<rPh>` and the first direct `<phoneticPr>` are retained.
+/// Unknown subtrees and nested non-`t` children are skipped whole.
+/// The opening `<is>` header has already been consumed; on entry
+/// `*p` points just past `>`.
+bool ScanInlineString(const char* begin, const char* end, const char** p, CellScratch* scratch, Error* err) {
+  scratch->inline_string.clear();
+  scratch->inline_string_runs.clear();
+  scratch->inline_string_phonetic.clear();
+  scratch->inline_string_phonetic_props = PhoneticProperties{};
+  bool phonetic_props_read = false;
+  while (*p < end) {
+    TagHeader header;
+    bool closed = false;
+    if (!ReadChildOrClose(begin, end, p, "is", err, &header, &closed)) {
+      return false;
+    }
+    if (closed) {
+      scratch->inline_string.append(scratch->inline_string_runs);
+      return true;
+    }
+    if (header.name == "t") {
+      if (!header.self_closing && !AppendInlineText(begin, end, p, &scratch->inline_string, scratch, err)) {
+        return false;
+      }
+    } else if (header.name == "r") {
+      if (!header.self_closing &&
+          !ScanInlineTextChildren(begin, end, p, "r", &scratch->inline_string_runs, scratch, err)) {
+        return false;
+      }
+    } else if (header.name == "rPh") {
+      if (!ScanPhoneticRun(begin, end, p, header, scratch, err)) {
+        return false;
+      }
+    } else if (header.name == "phoneticPr") {
+      if (!phonetic_props_read) {
+        ReadPhoneticProperties(header, scratch);
+        phonetic_props_read = true;
+      }
+      if (!SkipChildElement(begin, end, p, header, err)) {
+        return false;
+      }
+    } else if (!SkipChildElement(begin, end, p, header, err)) {
+      return false;
+    }
   }
   *err = MakeXmlParseError(0, "unterminated <is>");
   return false;

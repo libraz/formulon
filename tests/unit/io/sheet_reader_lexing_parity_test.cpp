@@ -53,6 +53,8 @@ struct CellSnapshot {
   double number = 0.0;
   std::string text;
   std::uint32_t xf_index = 0;
+  std::vector<PhoneticRun> phonetic_runs;
+  PhoneticProperties phonetic_props;
 };
 
 struct LoadResult {
@@ -80,6 +82,8 @@ void SnapshotSheet(const Sheet& sheet, LoadResult* out) {
         snap.text = std::string(cell.cached_value.as_text());
       }
       snap.xf_index = cell.xf_index;
+      snap.phonetic_runs = cell.phonetic_runs;
+      snap.phonetic_props = cell.phonetic_props;
       out->cells.push_back(std::move(snap));
     }
   }
@@ -189,6 +193,21 @@ LoadResult LoadSax(std::string_view sheet_xml, bool date1904 = false) {
       return ::testing::AssertionFailure()
              << "cell " << i << " xf index differs: " << a.xf_index << " vs " << b.xf_index;
     }
+    if (a.phonetic_runs.size() != b.phonetic_runs.size()) {
+      return ::testing::AssertionFailure() << "cell " << i << " phonetic run count differs: " << a.phonetic_runs.size()
+                                           << " vs " << b.phonetic_runs.size();
+    }
+    for (std::size_t run = 0; run < a.phonetic_runs.size(); ++run) {
+      const PhoneticRun& expected = a.phonetic_runs[run];
+      const PhoneticRun& actual = b.phonetic_runs[run];
+      if (expected.sb != actual.sb || expected.eb != actual.eb || expected.text != actual.text) {
+        return ::testing::AssertionFailure() << "cell " << i << " phonetic run " << run << " differs";
+      }
+    }
+    if (a.phonetic_props.font_id != b.phonetic_props.font_id || a.phonetic_props.type != b.phonetic_props.type ||
+        a.phonetic_props.alignment != b.phonetic_props.alignment) {
+      return ::testing::AssertionFailure() << "cell " << i << " phonetic properties differ";
+    }
   }
   if (dom.rows.size() != sax.rows.size()) {
     return ::testing::AssertionFailure() << "row override count differs: " << dom.rows.size() << " vs "
@@ -210,6 +229,95 @@ std::string WrapSheet(std::string_view body) {
   return std::string("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>")
       .append(body)
       .append("</sheetData></worksheet>");
+}
+
+void ExpectInlineStringParity(std::string_view inline_body, std::string_view expected_text,
+                              const std::vector<PhoneticRun>& expected_runs = {},
+                              PhoneticProperties expected_props = {}) {
+  const std::string xml = WrapSheet(
+      std::string("<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is>").append(inline_body).append("</is></c></row>"));
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  ASSERT_TRUE(sax.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  EXPECT_EQ(dom.serialized, sax.serialized);
+  ASSERT_EQ(dom.cells.size(), 1U);
+  ASSERT_EQ(sax.cells.size(), 1U);
+  EXPECT_EQ(dom.cells[0].kind, ValueKind::Text);
+  EXPECT_EQ(dom.cells[0].text, expected_text);
+  ASSERT_EQ(dom.cells[0].phonetic_runs.size(), expected_runs.size());
+  for (std::size_t i = 0; i < expected_runs.size(); ++i) {
+    EXPECT_EQ(dom.cells[0].phonetic_runs[i].sb, expected_runs[i].sb);
+    EXPECT_EQ(dom.cells[0].phonetic_runs[i].eb, expected_runs[i].eb);
+    EXPECT_EQ(dom.cells[0].phonetic_runs[i].text, expected_runs[i].text);
+  }
+  EXPECT_EQ(dom.cells[0].phonetic_props.font_id, expected_props.font_id);
+  EXPECT_EQ(dom.cells[0].phonetic_props.type, expected_props.type);
+  EXPECT_EQ(dom.cells[0].phonetic_props.alignment, expected_props.alignment);
+}
+
+std::string MakeInlinePhoneticNumericBody(std::string_view attribute, std::string_view value) {
+  const std::string_view sb = attribute == "sb" ? value : "7";
+  const std::string_view eb = attribute == "eb" ? value : "8";
+  const std::string_view font_id = attribute == "fontId" ? value : "9";
+  std::string body = "<t>surface</t><rPh sb=\"";
+  body.append(sb);
+  body.append("\" eb=\"");
+  body.append(eb);
+  body.append("\"><t>kana</t></rPh><phoneticPr fontId=\"");
+  body.append(font_id);
+  body.append("\" type=\"Hiragana\" alignment=\"center\"/>");
+  return body;
+}
+
+void ExpectInlinePhoneticNumericValues(const LoadResult& result, std::uint32_t expected_sb, std::uint32_t expected_eb,
+                                       std::uint16_t expected_font_id) {
+  ASSERT_TRUE(result.ok);
+  ASSERT_EQ(result.cells.size(), 1U);
+  EXPECT_EQ(result.cells[0].text, "surface");
+  ASSERT_EQ(result.cells[0].phonetic_runs.size(), 1U);
+  EXPECT_EQ(result.cells[0].phonetic_runs[0].sb, expected_sb);
+  EXPECT_EQ(result.cells[0].phonetic_runs[0].eb, expected_eb);
+  EXPECT_EQ(result.cells[0].phonetic_runs[0].text, "kana");
+  EXPECT_EQ(result.cells[0].phonetic_props.font_id, expected_font_id);
+  EXPECT_EQ(result.cells[0].phonetic_props.type, 2U);
+  EXPECT_EQ(result.cells[0].phonetic_props.alignment, 2U);
+}
+
+void ExpectInlinePhoneticNumericParity(std::string_view attribute, std::string_view lexical_value,
+                                       std::uint32_t expected_value) {
+  std::uint32_t expected_sb = 7U;
+  std::uint32_t expected_eb = 8U;
+  std::uint32_t expected_font_id = 9U;
+  if (attribute == "sb") {
+    expected_sb = expected_value;
+  } else if (attribute == "eb") {
+    expected_eb = expected_value;
+  } else {
+    expected_font_id = expected_value;
+  }
+
+  const std::string xml = WrapSheet(std::string("<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is>")
+                                        .append(MakeInlinePhoneticNumericBody(attribute, lexical_value))
+                                        .append("</is></c></row>"));
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ExpectInlinePhoneticNumericValues(dom, expected_sb, expected_eb, static_cast<std::uint16_t>(expected_font_id));
+  ExpectInlinePhoneticNumericValues(sax, expected_sb, expected_eb, static_cast<std::uint16_t>(expected_font_id));
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  EXPECT_EQ(dom.serialized, sax.serialized);
+
+  // The serializer writes normalized decimal indices. Reading that output
+  // again must preserve both the non-empty phonetic text and its attributes.
+  const LoadResult dom_roundtrip = LoadDom(dom.serialized);
+  const LoadResult sax_roundtrip = LoadSax(sax.serialized);
+  ExpectInlinePhoneticNumericValues(dom_roundtrip, expected_sb, expected_eb,
+                                    static_cast<std::uint16_t>(expected_font_id));
+  ExpectInlinePhoneticNumericValues(sax_roundtrip, expected_sb, expected_eb,
+                                    static_cast<std::uint16_t>(expected_font_id));
+  EXPECT_TRUE(SameOutcome(dom_roundtrip, sax_roundtrip));
+  EXPECT_EQ(dom_roundtrip.serialized, sax_roundtrip.serialized);
 }
 
 TEST(SheetReaderLexingParity, WellFormedStyleAndRowOverrideAgree) {
@@ -646,6 +754,92 @@ TEST(SheetReaderNodeShapeParity, CommentAndProcessingInstructionInsideInlineStri
     ASSERT_EQ(dom.cells.size(), 1U) << markup;
     EXPECT_EQ(dom.cells[0].text, "hello") << markup;
   }
+}
+
+TEST(SheetReaderNodeShapeParity, InlinePhoneticAttributesDecodeEntities) {
+  PhoneticProperties expected_props;
+  expected_props.font_id = 3U;
+  expected_props.type = 2U;
+  expected_props.alignment = 2U;
+  ExpectInlineStringParity(
+      "<t>AB</t><rPh sb=\"&#49;\" eb=\"&#50;\"><t>ka&#110;a</t></rPh>"
+      "<phoneticPr fontId=\"&#51;\" type=\"Hir&#97;gana\" alignment=\"c&#101;nter\"/>",
+      "AB", {PhoneticRun{1U, 2U, "kana"}}, expected_props);
+}
+
+TEST(SheetReaderNodeShapeParity, InlinePhoneticNumericAttributesRejectNonDecimalForms) {
+  constexpr std::string_view invalid_values[] = {"+1", " 1", "1 ", "-1", "0x10", "1tail", "4294967296"};
+  for (std::string_view attribute : {"sb", "eb", "fontId"}) {
+    for (std::string_view value : invalid_values) {
+      SCOPED_TRACE(attribute);
+      SCOPED_TRACE(value);
+      ExpectInlinePhoneticNumericParity(attribute, value, 0U);
+    }
+  }
+}
+
+TEST(SheetReaderNodeShapeParity, InlinePhoneticNumericAttributesPreserveValidValuesOnRoundTrip) {
+  struct ValidIndex {
+    std::string_view lexical_value;
+    std::uint32_t expected_value;
+  };
+  constexpr ValidIndex valid_values[] = {{"0", 0U}, {"0007", 7U}, {"4294967295", 0xFFFFFFFFU}, {"&#49;", 1U}};
+  for (std::string_view attribute : {"sb", "eb", "fontId"}) {
+    for (const ValidIndex& value : valid_values) {
+      SCOPED_TRACE(attribute);
+      SCOPED_TRACE(value.lexical_value);
+      ExpectInlinePhoneticNumericParity(attribute, value.lexical_value, value.expected_value);
+    }
+  }
+}
+
+TEST(SheetReaderNodeShapeParity, InlineStringSkipsUnknownSubtrees) {
+  ExpectInlineStringParity(
+      "<ext><t>hidden</t><rPh sb=\"0\" eb=\"1\"><t>hidden-kana</t></rPh>"
+      "<phoneticPr fontId=\"9\" type=\"noConversion\" alignment=\"distributed\"/></ext><t>visible</t>",
+      "visible");
+}
+
+TEST(SheetReaderNodeShapeParity, InlineRichAndPhoneticRunsSkipNestedForeignSubtrees) {
+  PhoneticProperties expected_props;
+  expected_props.font_id = 4U;
+  expected_props.type = 3U;
+  expected_props.alignment = 3U;
+  ExpectInlineStringParity(
+      "<r><rPr><ext><t>hidden-format</t></ext></rPr><ext><t>hidden-rich</t></ext><t>富士</t></r>"
+      "<rPh sb=\"0\" eb=\"2\"><ext><t>hidden-kana</t></ext><t>ふじ</t></rPh>"
+      "<phoneticPr fontId=\"4\" type=\"noConversion\" alignment=\"distributed\"/>",
+      "富士", {PhoneticRun{0U, 2U, "ふじ"}}, expected_props);
+}
+
+TEST(SheetReaderNodeShapeParity, InlineDirectTextPrecedesRichRunsRegardlessOfSourceOrder) {
+  ExpectInlineStringParity("<r><t>R1</t></r><t>D1</t><r><t>R2</t></r><t>D2</t>", "D1D2R1R2");
+}
+
+TEST(SheetReaderNodeShapeParity, InlineSelfClosingPhoneticRunIsPreserved) {
+  PhoneticProperties expected_props;
+  expected_props.font_id = 2U;
+  expected_props.type = 2U;
+  expected_props.alignment = 2U;
+  ExpectInlineStringParity(
+      "<t>A</t><rPh sb=\"0\" eb=\"1\"/><phoneticPr fontId=\"2\" type=\"Hiragana\" alignment=\"center\"/>", "A",
+      {PhoneticRun{0U, 1U, ""}}, expected_props);
+}
+
+TEST(SheetReaderNodeShapeParity, InlineStringUsesTheFirstPhoneticProperties) {
+  PhoneticProperties expected_props;
+  expected_props.font_id = 1U;
+  expected_props.type = 2U;
+  expected_props.alignment = 2U;
+  ExpectInlineStringParity(
+      "<t>A</t><rPh sb=\"0\" eb=\"1\"><t>あ</t></rPh>"
+      "<phoneticPr fontId=\"1\" type=\"Hiragana\" alignment=\"center\"/>"
+      "<phoneticPr fontId=\"9\" type=\"noConversion\" alignment=\"distributed\"/>",
+      "A", {PhoneticRun{0U, 1U, "あ"}}, expected_props);
+}
+
+TEST(SheetReaderNodeShapeParity, LegitimateInlineRichTextStillConcatenates) {
+  ExpectInlineStringParity("<r><rPr><b/></rPr><t>富士</t></r><r><rPr><i/></rPr><t>山</t></r>", "富士山");
 }
 
 TEST(SheetReaderNodeShapeParity, TextRunEndsAtTheFirstNonCharacterNode) {
