@@ -200,6 +200,14 @@ def run_driver(runner: Path, results: Path) -> None:
     if not runner.exists():
         print(f"check_regression: runner not found: {runner}", file=sys.stderr)
         sys.exit(2)
+    if results.exists():
+        for path in results.glob("bench_*.json"):
+            if path.is_file() or path.is_symlink():
+                try:
+                    path.unlink()
+                except OSError as exc:
+                    print(f"check_regression: cannot remove stale result {path}: {exc}", file=sys.stderr)
+                    sys.exit(2)
     print(f"check_regression: invoking {runner}", flush=True)
     proc = subprocess.run([str(runner)], cwd=runner.parent, check=False)
     if proc.returncode != 0:
@@ -263,7 +271,30 @@ def reduce_runs(runs: list[dict[str, dict[str, Sample]]]) -> dict[str, dict[str,
     by whichever run produced that minimum.
     """
     if not runs:
-        return {}
+        print("check_regression: no result runs to reduce", file=sys.stderr)
+        sys.exit(2)
+
+    expected_coverage: dict[str, frozenset[str]] | None = None
+    for run_number, run in enumerate(runs, start=1):
+        if not run:
+            print(f"check_regression: no bench JSON files found in run {run_number}", file=sys.stderr)
+            sys.exit(2)
+        empty_files = sorted(stem for stem, scenarios in run.items() if not scenarios)
+        if empty_files:
+            names = ", ".join(empty_files)
+            print(f"check_regression: bench result file has no scenarios: {names}", file=sys.stderr)
+            sys.exit(2)
+
+        coverage = {stem: frozenset(scenarios) for stem, scenarios in run.items()}
+        if expected_coverage is None:
+            expected_coverage = coverage
+        elif coverage != expected_coverage:
+            print(
+                f"check_regression: file/scenario coverage differs in driver run {run_number}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
     reduced: dict[str, dict[str, Sample]] = {}
     for run in runs:
         for stem, scenarios in run.items():
@@ -306,6 +337,19 @@ def load_baseline(path: Path) -> dict[str, dict[str, float]]:
             elif isinstance(entry, (int, float)):
                 out[stem][name] = float(entry)
     return out
+
+
+def validate_baseline_coverage(actual: dict[str, dict[str, Sample]], baseline: dict[str, dict[str, float]]) -> None:
+    """Requires every committed baseline case to appear in measured output."""
+    missing: list[tuple[str, str]] = []
+    for stem, scenarios in sorted(baseline.items()):
+        actual_scenarios = actual.get(stem, {})
+        missing.extend((stem, name) for name in sorted(scenarios) if name not in actual_scenarios)
+    if missing:
+        print("check_regression: actual results are missing baseline cases:", file=sys.stderr)
+        for stem, name in missing:
+            print(f"  {stem} :: {name}", file=sys.stderr)
+        sys.exit(2)
 
 
 def write_baseline(path: Path, results: dict[str, dict[str, Sample]]) -> None:
@@ -406,22 +450,35 @@ def collect_runs(runner: Path, results_dir: Path, runs: int, skip_runner: bool) 
     return reduce_runs(collected)
 
 
+def baseline_conflicts_with_results(baseline_arg: Path, baseline_path: Path, results_dir: Path) -> bool:
+    """Whether the selected baseline occupies a filename the runner clears or reads as output."""
+    lexical_match = baseline_arg.parent.resolve() == results_dir and baseline_arg.match("bench_*.json")
+    resolved_match = baseline_path.parent == results_dir and baseline_path.match("bench_*.json")
+    return lexical_match or resolved_match
+
+
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     runner = Path(args.runner).resolve()
     results_dir = Path(args.results).resolve()
-    baseline_path = Path(args.baseline).resolve()
+    baseline_arg = Path(args.baseline)
+    baseline_path = baseline_arg.resolve()
+
+    if baseline_conflicts_with_results(baseline_arg, baseline_path, results_dir):
+        print(
+            f"check_regression: baseline path overlaps benchmark results: {baseline_arg}",
+            file=sys.stderr,
+        )
+        return 3
 
     actual = collect_runs(runner, results_dir, args.runs, args.skip_runner)
-    if not actual:
-        print(f"check_regression: no JSON files found in {results_dir}", file=sys.stderr)
-        return 2
 
     if args.regenerate_baseline:
         write_baseline(baseline_path, actual)
         return 0
 
     baseline = load_baseline(baseline_path)
+    validate_baseline_coverage(actual, baseline)
     regressions = diff(actual, baseline, args.threshold, args.err_mult, args.small_sec, args.small_widen)
     if regressions:
         print("check_regression: REGRESSIONS DETECTED", file=sys.stderr)

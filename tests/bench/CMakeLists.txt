@@ -109,6 +109,17 @@ file(CHMOD "${_BENCH_RUNNER}"
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
   add_test(
+    NAME formulon_bench_regression_unit
+    COMMAND ${Python3_EXECUTABLE} -m unittest
+            tools.bench.check_regression_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_bench_regression_unit
+    PROPERTIES
+      TIMEOUT 30
+  )
+
+  add_test(
     NAME formulon_bench_check
     COMMAND ${CMAKE_COMMAND} -E env
       "FORMULON_BENCH_RUNNER=${_BENCH_RUNNER}"
