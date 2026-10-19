@@ -1536,6 +1536,107 @@ TEST(ChartEdit, FormatFormsMatchExcel) {
                  Between(vary_form, "<c:ser>", "<c:invertIfNegative"));
 }
 
+TEST(ChartEdit, VaryColorsPreservesPointOrderAndSchemaPosition) {
+  Workbook wb = GridBook();
+  const std::uint32_t id = Insert(wb, K::kBar);
+  const Located chart = Find(wb);
+  ASSERT_EQ(chart.id, id);
+  std::string xml = PartText(wb, chart.path);
+
+  const auto original_point = [](std::uint32_t index, const char* marker) {
+    return "<c:dPt><c:idx val=\"" + std::to_string(index) +
+           "\"/><c:extLst><c:ext uri=\"urn:test\"><x:payload xmlns:x=\"urn:test\">" + marker +
+           "</x:payload></c:ext></c:extLst></c:dPt>";
+  };
+  const auto inject_points = [&](std::size_t series_index, const std::string& points) {
+    std::size_t series = 0;
+    for (std::size_t i = 0; i <= series_index; ++i) {
+      series = xml.find("<c:ser>", i == 0U ? 0U : series + std::string("<c:ser>").size());
+      ASSERT_NE(series, std::string::npos);
+    }
+    const std::size_t category = xml.find("<c:cat>", series);
+    ASSERT_NE(category, std::string::npos);
+    xml.insert(category, points);
+  };
+  inject_points(0U, original_point(5U, "keep-5") + original_point(1U, "keep-1a") + original_point(3U, "keep-3") +
+                        original_point(1U, "keep-1b") + original_point(9U, "keep-9"));
+  inject_points(1U, original_point(2U, "keep-2a") + original_point(0U, "keep-0") + original_point(2U, "keep-2b"));
+  ASSERT_TRUE(
+      static_cast<bool>(wb.replace_passthrough_part(chart.path, std::vector<std::uint8_t>(xml.begin(), xml.end()))));
+
+  ChartPlotPatch vary;
+  vary.vary_colors = true;
+  MustOk(set_chart_plot(wb, chart.sheet, chart.id, 0U, vary));
+  const std::string edited = PartText(wb, chart.path);
+
+  const auto point_indices = [&](std::size_t series_index) {
+    std::vector<std::uint32_t> indices;
+    std::size_t series = 0;
+    for (std::size_t i = 0; i <= series_index; ++i) {
+      series = edited.find("<c:ser>", i == 0U ? 0U : series + std::string("<c:ser>").size());
+      EXPECT_NE(series, std::string::npos);
+      if (series == std::string::npos) {
+        return indices;
+      }
+    }
+    const std::size_t series_end = edited.find("</c:ser>", series);
+    EXPECT_NE(series_end, std::string::npos);
+    if (series_end == std::string::npos) {
+      return indices;
+    }
+    std::size_t point = edited.find("<c:dPt>", series);
+    while (point != std::string::npos && point < series_end) {
+      const std::size_t index = edited.find("<c:idx val=\"", point);
+      EXPECT_NE(index, std::string::npos);
+      if (index == std::string::npos) {
+        return indices;
+      }
+      const std::size_t value = index + std::string("<c:idx val=\"").size();
+      const std::size_t end = edited.find('"', value);
+      EXPECT_NE(end, std::string::npos);
+      if (end == std::string::npos) {
+        return indices;
+      }
+      indices.push_back(static_cast<std::uint32_t>(std::stoul(edited.substr(value, end - value))));
+      const std::size_t close = edited.find("</c:dPt>", point);
+      EXPECT_NE(close, std::string::npos);
+      if (close == std::string::npos) {
+        return indices;
+      }
+      point = edited.find("<c:dPt>", close + std::string("</c:dPt>").size());
+    }
+    return indices;
+  };
+
+  EXPECT_EQ(point_indices(0U), (std::vector<std::uint32_t>{0U, 2U, 5U, 1U, 3U, 1U, 9U}));
+  EXPECT_EQ(point_indices(1U), (std::vector<std::uint32_t>{1U, 2U, 0U, 2U, 3U}));
+  EXPECT_EQ(point_indices(2U), (std::vector<std::uint32_t>{0U, 1U, 2U, 3U}));
+
+  const char* const retained_markers[] = {"keep-5", "keep-1a", "keep-3", "keep-1b",
+                                          "keep-9", "keep-2a", "keep-0", "keep-2b"};
+  std::size_t previous_marker = 0;
+  for (const char* marker : retained_markers) {
+    const std::size_t position = edited.find(marker);
+    ASSERT_NE(position, std::string::npos) << marker;
+    EXPECT_LT(previous_marker, position) << marker;
+    previous_marker = position;
+  }
+
+  std::size_t third_series = 0;
+  for (std::size_t i = 0; i < 3U; ++i) {
+    third_series = edited.find("<c:ser>", i == 0U ? 0U : third_series + std::string("<c:ser>").size());
+    ASSERT_NE(third_series, std::string::npos);
+  }
+  const std::size_t last_point = edited.find("<c:dPt><c:idx val=\"3\"", third_series);
+  const std::size_t category = edited.find("<c:cat>", third_series);
+  ASSERT_NE(last_point, std::string::npos);
+  ASSERT_NE(category, std::string::npos);
+  EXPECT_LT(last_point, category);
+
+  MustOk(set_chart_plot(wb, chart.sheet, chart.id, 0U, vary));
+  EXPECT_EQ(PartText(wb, chart.path), edited);
+}
+
 // ---------------------------------------------------------------------------
 // Preview (pairwise: direction x header row x header column x blanks x visibility x source)
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -1120,16 +1121,36 @@ void vary_bar(xml_node plot, bool on, const Palette& palette) {
     if (on) {
       drop(ser, "spPr");
       const std::uint32_t n = point_count(ser);
+      const std::vector<xml_node> original_points = children_local(ser, "dPt");
+      std::vector<std::uint32_t> original_indices;
+      original_indices.reserve(original_points.size());
+      std::unordered_set<std::uint32_t> existing_ids;
+      existing_ids.reserve(original_points.size());
+      for (const xml_node& point : original_points) {
+        const std::uint32_t idx = val_u(point, "idx");
+        original_indices.push_back(idx);
+        existing_ids.insert(idx);
+      }
+      const xml_node later_schema_slot = slot(ser, "dPt", kSerOrder);
+      std::size_t next_original = 0;
       for (std::uint32_t p = 0; p < n; ++p) {
-        if (find_point(ser, p)) {
+        if (existing_ids.find(p) != existing_ids.end()) {
           continue;
         }
+        while (next_original < original_points.size() && original_indices[next_original] <= p) {
+          ++next_original;
+        }
         pugi::xml_document frag;
-        insert_point(ser,
-                     fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(p) +
-                                        "\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" +
-                                        accent_sppr(palette, p) + "</c:dPt>"),
-                     p);
+        const xml_node point = fragment(frag, "<c:dPt><c:idx val=\"" + std::to_string(p) +
+                                                  "\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/>" +
+                                                  accent_sppr(palette, p) + "</c:dPt>");
+        if (next_original < original_points.size()) {
+          ser.insert_copy_before(point, original_points[next_original]);
+        } else if (later_schema_slot) {
+          ser.insert_copy_before(point, later_schema_slot);
+        } else {
+          ser.append_copy(point);
+        }
       }
       continue;
     }
