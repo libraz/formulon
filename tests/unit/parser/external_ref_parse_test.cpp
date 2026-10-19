@@ -5,9 +5,9 @@
 //
 // Pairwise model for `PairwiseEntryAndDisplay` (every pair of levels across
 // the three factors appears):
-//   book  : the measured bare-safe book names (letters, leading digit, dots,
+//   book  : the bare-safe book names (letters, leading digit, dots,
 //           underscore, Japanese, fullwidth, no extension, cell- and
-//           bool-shaped) and one name per measured forbidden character
+//           bool-shaped) and one name per forbidden character
 //           (space - ( & + , $ # % @ ~ = ; ^ { !)                    (26)
 //   form  : cell, area, whole column, 3-D, book-scope name, path       (6)
 //   quote : bare, quoted                                              (2)

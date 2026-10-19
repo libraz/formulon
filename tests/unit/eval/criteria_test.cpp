@@ -700,7 +700,7 @@ bool dcount_hit(const std::string& criterion, const std::string& cell, ExcelProf
   return matches_criterion(Value::text(cell), parse_criterion_dfunc(Value::text(criterion)), profile);
 }
 
-// Drives the countif / countifeq / sumif / dcount columns of the measured
+// Drives the countif / countifeq / sumif / dcount columns of the
 // equality table. Row a is the criterion and b the cell; rows whose criterion
 // is numeric or carries a comparator or wildcard take other criteria paths.
 void check_eq_columns(const char* tag, ExcelLocale locale) {
@@ -808,7 +808,7 @@ TEST(CriteriaCollation, MacOrderingUsesCollation) {
 
 TEST(CriteriaCollation, WindowsJaUsesCollation) {
   const ExcelProfile win = win_profile(ExcelLocale::kJaJP);
-  // Measured on Windows ja-JP: width and kana type separate, case and ligatures do not.
+  // On Windows ja-JP: width and kana type separate, case and ligatures do not.
   EXPECT_TRUE(countif_hit("\xEF\xBD\xB1", "\xEF\xBD\xB1", win));
   EXPECT_FALSE(countif_hit("\xEF\xBD\xB1", "\xE3\x82\xA2", win));              // ｱ vs ア
   EXPECT_FALSE(countif_hit("\xE3\x81\x82", "\xE3\x82\xA2", win));              // あ vs ア

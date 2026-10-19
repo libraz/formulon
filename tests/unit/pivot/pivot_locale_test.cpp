@@ -18,7 +18,7 @@
 namespace formulon::pivot {
 namespace {
 
-struct MeasuredLocale {
+struct ExcelLocaleRow {
   const char* profile_id;
   // Data-field names Excel gave field `Amt`, in `Aggregation` order.
   std::array<const char*, 11> data_field_names;
@@ -31,7 +31,7 @@ struct MeasuredLocale {
   const char* north_subtotal;  // tabular subtotal row of group `North`
 };
 
-const std::array<MeasuredLocale, 7> kMeasured{{
+const std::array<ExcelLocaleRow, 7> kExcelLocales{{
     {"mac-365-ja_JP",
      {"合計 / Amt", "個数 / Amt", "平均 / Amt", "最大 / Amt", "最小 / Amt", "積 / Amt", "数値の個数 / Amt",
       "標本標準偏差 / Amt", "標準偏差 / Amt", "標本分散 / Amt", "分散 / Amt"},
@@ -113,7 +113,7 @@ ExcelProfile profile_of(const char* id) {
 }
 
 TEST(PivotLocale, DataFieldNamesMatchExcelPerLocale) {
-  for (const MeasuredLocale& m : kMeasured) {
+  for (const ExcelLocaleRow& m : kExcelLocales) {
     const ExcelProfile profile = profile_of(m.profile_id);
     for (std::size_t agg = 0; agg < m.data_field_names.size(); ++agg) {
       EXPECT_EQ(data_field_display_name(static_cast<Aggregation>(agg), "Amt", profile), m.data_field_names[agg])
@@ -123,7 +123,7 @@ TEST(PivotLocale, DataFieldNamesMatchExcelPerLocale) {
 }
 
 TEST(PivotLocale, LayoutLabelsMatchExcelPerLocale) {
-  for (const MeasuredLocale& m : kMeasured) {
+  for (const ExcelLocaleRow& m : kExcelLocales) {
     const PivotLayoutOptions options = pivot_layout_options_for(profile_of(m.profile_id));
     EXPECT_EQ(options.grand_total_label, m.grand_total) << m.profile_id;
     EXPECT_EQ(options.row_labels_label, m.row_labels) << m.profile_id;
@@ -138,7 +138,7 @@ TEST(PivotLocale, TabularSubtotalRowIsLabelledPerLocale) {
   const PivotCache cache = layout_test::build_basic_cache();
   PivotTable table = layout_test::build_table(/*row=*/{0, 1}, /*col=*/{});
   table.set_layout(PivotLayout::Tabular);
-  for (const MeasuredLocale& m : kMeasured) {
+  for (const ExcelLocaleRow& m : kExcelLocales) {
     const PivotLayoutOptions options = pivot_layout_options_for(profile_of(m.profile_id));
     auto result_or = evaluate(table, cache, options);
     ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;

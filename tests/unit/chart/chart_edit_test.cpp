@@ -1063,7 +1063,7 @@ TEST(ChartEdit, TypeChangeSetsSeriesLineWidth) {
   }
 }
 
-// Measured on Mac Excel: between line and bar/area types the series colour is re-derived, an explicit outline
+// Between line and bar/area types the series colour is re-derived, an explicit outline
 // becomes the line and an explicit line the outline, minus what the automatic one would set.
 TEST(ChartEdit, TypeChangeTradesExplicitLinesAndOutlines) {
   const auto ser = [](const std::string& xml, std::size_t n) {
@@ -1112,7 +1112,7 @@ TEST(ChartEdit, TypeChangeTradesExplicitLinesAndOutlines) {
       << ser(xml, 1);
 }
 
-// Measured on Mac Excel: a chart's automatic colours, re-derived by a type change, come from its own colour style.
+// A chart's automatic colours, re-derived by a type change, come from its own colour style.
 TEST(ChartEdit, TypeChangeColoursFromTheChartsColourStyle) {
   Workbook wb = LoadFixture("chart_column.xlsx");
   const Located c = Find(wb, "xl/charts/chart1.xml");
@@ -1463,7 +1463,7 @@ TEST(ChartEdit, FilterUnderForeignC15PrefixKeepsC15Bound) {
 }
 
 // ---------------------------------------------------------------------------
-// Measured XML forms
+// Excel's XML forms
 // ---------------------------------------------------------------------------
 
 // Series and category filters written the way Excel saves them.

@@ -18,7 +18,7 @@ namespace {
 // 2024-03-04 13:30:18.
 constexpr double kStamp = 45355.56270833333;
 
-struct MeasuredRow {
+struct ExcelRow {
   ExcelLocale locale;
   std::uint16_t id;
   double value;
@@ -27,7 +27,7 @@ struct MeasuredRow {
 
 // Mac Excel 16.113.4 `Range.Text` of a cell holding built-in `id` (no <numFmts>
 // entry), in each UI locale, with the accounting repeat-fill run removed.
-constexpr MeasuredRow kMeasured[] = {
+constexpr ExcelRow kExcelRows[] = {
     {ExcelLocale::kJaJP, 5, -1234.567, "¥-1,235"},
     {ExcelLocale::kJaJP, 14, kStamp, "2024/3/4"},
     {ExcelLocale::kJaJP, 15, kStamp, "4-Mar-24"},
@@ -218,8 +218,8 @@ text_format::DisplayText RenderBuiltin(std::uint16_t id, double value, ExcelProf
   return text_format::format_value_for_display(Value::number(value), code ? *code : std::string_view{}, false, profile);
 }
 
-TEST(NumFmtLocale, MatchesMeasuredDisplayOnBothHosts) {
-  for (const MeasuredRow& row : kMeasured) {
+TEST(NumFmtLocale, MatchesExcelDisplayOnBothHosts) {
+  for (const ExcelRow& row : kExcelRows) {
     for (const ExcelHost host : {ExcelHost::kMac365, ExcelHost::kWin365}) {
       const ExcelProfile profile{host, row.locale};
       SCOPED_TRACE(excel_profile_id(profile));

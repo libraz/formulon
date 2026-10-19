@@ -174,12 +174,12 @@ TEST(DefinedNameResolve, SheetQualifiedNameRecalcsRenamesAndRemoves) {
   EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=#REF!*2");
 }
 
-// Values measured on Mac Excel 365 16.113.2 (ja-JP). Workbook names G = 5
+// Values on Mac Excel 365 16.113.2 (ja-JP). Workbook names G = 5
 // and Inner = 1; Sheet2-local Inner = 100, Local = Sheet2!$A$1*10 with
 // Sheet2!A1 = 2, Outer = Inner+1 and Fn = LAMBDA(x,x*2). A local name's
 // body binds its unqualified names in the owning sheet's scope, so
 // `Sheet2!Outer` is 101 from either sheet.
-class MeasuredSheetScopedNames : public ::testing::Test {
+class ExcelSheetScopedNames : public ::testing::Test {
  protected:
   void SetUp() override {
     wb_.add_sheet("Sheet1");
@@ -205,7 +205,7 @@ class MeasuredSheetScopedNames : public ::testing::Test {
   Arena arena_;
 };
 
-TEST_F(MeasuredSheetScopedNames, NumbersFromEitherSheet) {
+TEST_F(ExcelSheetScopedNames, NumbersFromEitherSheet) {
   struct Case {
     std::size_t sheet;
     const char* src;
@@ -221,7 +221,7 @@ TEST_F(MeasuredSheetScopedNames, NumbersFromEitherSheet) {
   }
 }
 
-TEST_F(MeasuredSheetScopedNames, UnqualifiedLocalNamesAreInvisibleFromOtherSheet) {
+TEST_F(ExcelSheetScopedNames, UnqualifiedLocalNamesAreInvisibleFromOtherSheet) {
   for (const char* src : {"=Sheet2!Undefined", "=Outer", "=Local"}) {
     const Value v = Eval(0, src);
     ASSERT_TRUE(v.is_error()) << src << " -> " << v.debug_to_string();
@@ -229,15 +229,15 @@ TEST_F(MeasuredSheetScopedNames, UnqualifiedLocalNamesAreInvisibleFromOtherSheet
   }
 }
 
-TEST_F(MeasuredSheetScopedNames, QualifiedFormulaNameIsNotAReference) {
+TEST_F(ExcelSheetScopedNames, QualifiedFormulaNameIsNotAReference) {
   const Value v = Eval(0, "=ISREF(Sheet2!Local)");
   ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
   EXPECT_FALSE(v.as_boolean());
 }
 
-// `[0]!Name` is Excel's storage form of `Book!Name`. Values measured on
+// `[0]!Name` is Excel's storage form of `Book!Name`. Values on
 // Excel 365 (Mac, ja-JP) against files holding the formulas below.
-class MeasuredSelfBookNames : public ::testing::Test {
+class ExcelSelfBookNames : public ::testing::Test {
  protected:
   void SetUp() override {
     wb_.add_sheet("Sheet1");
@@ -264,7 +264,7 @@ class MeasuredSelfBookNames : public ::testing::Test {
   Arena arena_;
 };
 
-TEST_F(MeasuredSelfBookNames, Numbers) {
+TEST_F(ExcelSelfBookNames, Numbers) {
   struct Case {
     std::size_t sheet;
     const char* src;
@@ -281,13 +281,13 @@ TEST_F(MeasuredSelfBookNames, Numbers) {
   }
 }
 
-TEST_F(MeasuredSelfBookNames, UndefinedNameIsNameError) {
+TEST_F(ExcelSelfBookNames, UndefinedNameIsNameError) {
   const Value v = Eval(1, "=[0]!Nope");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
-TEST_F(MeasuredSelfBookNames, NeverALexicalBinding) {
+TEST_F(ExcelSelfBookNames, NeverALexicalBinding) {
   const Value v = Eval(0, "=LET(G,1,[0]!G)");
   ASSERT_TRUE(v.is_number()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(v.as_number(), 5.0);

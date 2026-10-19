@@ -631,8 +631,8 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitEndAboveDataMaxAddsCatchA
   // pivot_week_1900's own auto-End bucket "1900/2/25 - 1900/3/2",
   // which spans serials 56-62 including the ghost day. Not in the
   // fixture itself (which only varies Start, never End); label shape
-  // mirrors the measured `<start` bucket, but `>end` itself is
-  // unmeasured.
+  // mirrors the `<start` bucket, but `>end` itself is
+  // not covered by a fixture.
   PivotCache cache = build_days_interval_cache();
   PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt, /*interval_days=*/7,
                                               /*end_serial=*/60.0);

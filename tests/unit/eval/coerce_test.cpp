@@ -498,7 +498,7 @@ TEST(CoerceToNumberTextLocale, MalformedGroupingRejected) {
 }
 
 TEST(CoerceToNumberText, HexAndInfNanSpellingsAreText) {
-  // Measured on Mac Excel 365: `="0x10"+1`, `="inf"+1`, `="nan"+1` and the
+  // On Mac Excel 365: `="0x10"+1`, `="inf"+1`, `="nan"+1` and the
   // rest all give #VALUE!; none of these spellings is a number to Excel.
   for (const char* text : {"0x10", "0X1A", "0x1p3", "inf", "INF", "infinity", "-inf", "nan", "NaN"}) {
     auto r = coerce_to_number(Value::text(text));

@@ -1,8 +1,8 @@
 //
 // Unit tests for the text collation keys. Expectations come from the Mac Excel
-// measurements under tools/collation/data (FORMULON_COLLATION_DATA_DIR): the
+// data under tools/collation/data (FORMULON_COLLATION_DATA_DIR): the
 // probe matrix, the BMP sort order, the function equality table and the
-// trailing-ignorable table, plus the Windows host rules measured on
+// trailing-ignorable table, plus the Windows host rules on
 // win-365-ja_JP (tests/oracle/targets/win-365-ja_JP/golden/collation*.json).
 
 #include "eval/collation.h"
@@ -235,7 +235,7 @@ bool in_exact_range(std::uint32_t cp) {
   return false;
 }
 
-struct Measured {
+struct ExcelEntry {
   std::uint32_t cp;
   int cls;  // 0 full, 1 mid, 2 word, 3 sec, 4 base
   bool expanding;
@@ -252,12 +252,12 @@ int class_index(const std::string& name) {
   return -1;
 }
 
-// Measured ranks per class, as the generator derives them from the `rel` column.
-std::vector<Measured> load_order(const std::string& tag) {
-  std::vector<Measured> out;
+// Ranks per class, as the generator derives them from the `rel` column.
+std::vector<ExcelEntry> load_order(const std::string& tag) {
+  std::vector<ExcelEntry> out;
   std::map<int, std::array<int, 4>> counters;
   for (const auto& row : read_tsv("order_" + tag + ".tsv")) {
-    Measured m{parse_cp(row[0]), class_index(row[1]), row[2] == "X", {0, 0, 0, 0}};
+    ExcelEntry m{parse_cp(row[0]), class_index(row[1]), row[2] == "X", {0, 0, 0, 0}};
     if (!m.expanding && m.cls >= 2) {
       std::array<int, 4>& c = counters[m.cls];
       const std::string& rel = row[2];
@@ -301,18 +301,18 @@ void check_order(ExcelLocale locale) {
   const ExcelProfile profile = mac(locale);
   ScopedEvalProfile scope(profile);
   const std::string tag = tag_of(locale);
-  const std::vector<Measured> order = load_order(tag);
+  const std::vector<ExcelEntry> order = load_order(tag);
   ASSERT_GT(order.size(), 60000u);
 
   std::set<std::uint32_t> excluded;
-  for (const Measured& m : order) {
+  for (const ExcelEntry& m : order) {
     if (!in_exact_range(m.cp)) {
       excluded.insert(m.cp);
     }
   }
   if (locale == ExcelLocale::kZhCN) {
     // Ideographs outside GB 2312 level 1 are placed approximately, and so are the
-    // compatibility ideographs measured equal to one of them.
+    // compatibility ideographs that compare equal to one of them.
     std::set<std::uint32_t> level1;
     for (unsigned row = 16; row <= 55; ++row) {
       for (unsigned cell = 1; cell <= kDbcsGridSize; ++cell) {
@@ -321,13 +321,13 @@ void check_order(ExcelLocale locale) {
       }
     }
     std::set<std::array<int, 5>> approximated_weights;
-    for (const Measured& m : order) {
+    for (const ExcelEntry& m : order) {
       if (m.cp >= kUroFirst && m.cp <= kUroLast && m.cls == 4 && !m.expanding && level1.count(m.cp) == 0) {
         excluded.insert(m.cp);
         approximated_weights.insert({m.cls, m.w[0], m.w[1], m.w[2], m.w[3]});
       }
     }
-    for (const Measured& m : order) {
+    for (const ExcelEntry& m : order) {
       if (m.cp >= 0xF900 && m.cp <= 0xFAFF && !m.expanding &&
           approximated_weights.count({m.cls, m.w[0], m.w[1], m.w[2], m.w[3]}) != 0) {
         excluded.insert(m.cp);
@@ -337,11 +337,11 @@ void check_order(ExcelLocale locale) {
   // Out-of-range counts recorded when the tables were first generated.
   EXPECT_EQ(excluded.size(), locale == ExcelLocale::kZhCN ? 44301u : 26986u);
 
-  // ko ideographs placed by their reading compare by syllable, not by the measured rank.
+  // ko ideographs placed by their reading compare by syllable, not by rank.
   std::set<std::uint32_t> by_reading;
   if (locale == ExcelLocale::kKoKR) {
     bool in_syllable = false;
-    for (const Measured& m : order) {
+    for (const ExcelEntry& m : order) {
       if (m.cp >= 0xAC00 && m.cp <= 0xD7A3) {
         in_syllable = true;
       } else if (m.cp >= kUroFirst && m.cp <= kUroLast && in_syllable) {
@@ -353,9 +353,9 @@ void check_order(ExcelLocale locale) {
   }
 
   for (const CollationStrength strength : {CollationStrength::kCompare, CollationStrength::kDynamic}) {
-    std::map<int, std::pair<const Measured*, std::string>> prev;
+    std::map<int, std::pair<const ExcelEntry*, std::string>> prev;
     int failures = 0;
-    for (const Measured& m : order) {
+    for (const ExcelEntry& m : order) {
       if (m.expanding || excluded.count(m.cp) != 0) {
         continue;
       }
@@ -366,7 +366,7 @@ void check_order(ExcelLocale locale) {
       }
       auto it = prev.find(m.cls);
       if (it != prev.end()) {
-        const Measured& p = *it->second.first;
+        const ExcelEntry& p = *it->second.first;
         std::size_t level = 0;
         while (level < 4 && p.w[level] == m.w[level]) {
           ++level;
@@ -392,10 +392,10 @@ void check_order(ExcelLocale locale) {
 FORMULON_PER_LOCALE(CollationOrder, check_order)
 
 // ---------------------------------------------------------------------------
-// Function equality table: each measured function column through its strength.
+// Function equality table: each function column through its strength.
 // ---------------------------------------------------------------------------
 
-// Criteria pre-fold the measured cells imply: full-width digits fold everywhere,
+// Criteria pre-fold what the cells imply: full-width digits fold everywhere,
 // and on Mac ja_JP a half-width voicing mark also composes onto its base. A wider
 // kana fold breaks iteration marks (`かゝ` matches `かか` in COUNTIF), and composing
 // outside ja contradicts the prefix rule (`ガ` against a `ｶﾞ` cell is 0).
@@ -713,7 +713,7 @@ struct WinOrder {
 };
 
 // win-365-ja_JP collation goldens, one row per rule.
-TEST(CollationWin, MeasuredCompareOrder) {
+TEST(CollationWin, ExcelCompareOrder) {
   ScopedEvalProfile scope(win(ExcelLocale::kJaJP));
   const std::string ctrl = u8(0x01);
   const std::string shy = u8(0xAD);

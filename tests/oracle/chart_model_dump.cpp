@@ -18,7 +18,7 @@
 // projections, so the verifier and the capture agree on both by
 // construction.
 //
-// Absent elements whose Excel reading is measured are normalised in the
+// Absent elements whose Excel reading is known are normalised in the
 // format view: dispBlanksAs reads as zero, plotVisOnly and
 // autoTitleDeleted as true, an axis's crosses as autoZero.
 

@@ -34,7 +34,7 @@ namespace {
 
 constexpr std::string_view kFilterDatabase = "_xlnm._FilterDatabase";
 
-// The structure-edit setup measured in Excel: header row 2 of B2:F12, filters on c2
+// The structure-edit setup: header row 2 of B2:F12, filters on c2
 // (colId 1, value `1`) and c4 (colId 3, value `2`).
 constexpr const char* kProbeFilter =
     "<autoFilter ref=\"B2:F12\"><filterColumn colId=\"1\"><filters><filter val=\"1\"/></filters></filterColumn>"
@@ -122,7 +122,7 @@ const AutoFilter& SheetFilter(const Workbook& wb, std::string_view sheet_name) {
   return kEmpty;
 }
 
-/// `B2:E12; colId 2: 2` — the shape of the measured expectation table.
+/// `B2:E12; colId 2: 2` — the shape of the expectation table.
 std::string Describe(const AutoFilter* filter) {
   if (filter == nullptr) {
     return "none";

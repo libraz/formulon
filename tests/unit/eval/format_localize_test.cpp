@@ -111,7 +111,7 @@ TEST(FormatLocalizeRender, LocaleNumberSyntax) {
   EXPECT_EQ(Render(1234.5, "#,##0.00", kDe, FormatDialect::kStored).text, "1.234,50");
 }
 
-TEST(FormatLocalizeRender, InvariantGapsMeasuredAcrossLocales) {
+TEST(FormatLocalizeRender, InvariantGapsAcrossLocales) {
   const ExcelProfile en = mac_365_en_us_profile();
   EXPECT_EQ(Render(-1234.5, "0,0E+00", en).text, "-1,235E+00");     // locale_tokens.text_sci_comma
   EXPECT_EQ(Render(-1234.5, "#.##0,00", en).text, "-1234.5000");    // locale_tokens.text_group_dot_decimal_comma

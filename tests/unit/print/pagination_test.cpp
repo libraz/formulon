@@ -140,12 +140,12 @@ TEST(PaginationTest, CalibriNormalFontBaselineColumnGeometryUnchanged) {
   EXPECT_EQ(result.value().v_breaks.front(), 2U);
 }
 
-TEST(PaginationTest, NonCalibriNormalFontUsesMeasuredColumnGeometry) {
+TEST(PaginationTest, NonCalibriNormalFontUsesExcelColumnGeometry) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   // Meiryo UI 14's print-layout geometry (its 96-DPI display MDW/padding
-  // scaled by Calibri 11's print/display ratio -- unmeasured for any
-  // font but Calibri) resolves 30 chars to ~291.93 pt versus Calibri
+  // scaled by Calibri 11's print/display ratio -- only Calibri's
+  // ratio is known) resolves 30 chars to ~291.93 pt versus Calibri
   // 11's 171 pt, so the second column (~583.86 pt) already overflows
   // the ~494.5 pt A4 body -- one column earlier than the Calibri-11
   // baseline above.
@@ -162,7 +162,7 @@ TEST(PaginationTest, NonCalibriNormalFontUsesMeasuredColumnGeometry) {
 TEST(PaginationTest, UntabulatedNormalFontSizeFallsBackToCalibriBaseline) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  // Meiryo UI at 20pt is outside the measured table (8-18pt only); the
+  // Meiryo UI at 20pt is outside the table (8-18pt only); the
   // geometry must fall back to the Calibri-11 baseline rather than
   // extrapolate Meiryo's growth trend, reproducing the exact break
   // position of the Calibri-11 case above.

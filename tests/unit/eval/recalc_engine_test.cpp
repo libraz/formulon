@@ -630,7 +630,7 @@ TEST(RecalcEngine, DynamicRangeEndpointTracksCellsInsideTheBox) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 108.0);
 }
 
-// Measured on Excel 365 (Mac 16.113.2, ja-JP): none of these is circular.
+// On Excel 365 (Mac 16.113.2, ja-JP): none of these is circular.
 TEST(RecalcEngine, PositionOfOwnCellIsNotACycle) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=ROWS(A:A)")));      // A1
@@ -858,7 +858,7 @@ TEST_P(SpilledCellRead, ReaderFollowsTheSpill) {
 }
 
 // B1 `=SEQUENCE(2)+D1` with D1 `=B2+100`: D1 reads B1's own spill, which is
-// circular (measured on Mac Excel 365).
+// circular.
 TEST_P(SpilledCellRead, ReadingTheAnchorsOwnSpillIsCircular) {
   Workbook wb = Workbook::create();
   SetFormula(wb, 0U, 1U, "=SEQUENCE(2)+D1");

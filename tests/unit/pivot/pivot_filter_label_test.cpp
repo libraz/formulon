@@ -257,7 +257,7 @@ unsigned surviving_probe_mask(const PivotTable& table) {
 // Probe B rows: begins / ends / contains match the autoFilter pattern against
 // the whole label one code point at a time under `=` (case, width and kana
 // type fold; diacritics count; no expansion or voicing composition).
-TEST(PivotEvaluatorCaptionFilter, MatchesTheMeasuredMacJaJpCaptionFilters) {
+TEST(PivotEvaluatorCaptionFilter, MatchesTheExcelMacJaJpCaptionFilters) {
   struct Case {
     CaptionPredicate predicate;
     const char* value;

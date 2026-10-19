@@ -1045,7 +1045,7 @@ TEST(PivotTableWriter, CustomFunctionsReplaceTheDefaultSubtotalAsExcelWritesThem
   EXPECT_EQ(xml.find("defaultSubtotal"), std::string::npos) << xml;
 }
 
-TEST(PivotTableWriter, CountAndAverageUseTheMeasuredAttributeNames) {
+TEST(PivotTableWriter, CountAndAverageUseTheExcelAttributeNames) {
   pivot::PivotTable table = TableWithTwoItemRowField();
   table.mutable_fields()[0].subtotal_fns = {pivot::SubtotalFn::Average, pivot::SubtotalFn::Count};
 

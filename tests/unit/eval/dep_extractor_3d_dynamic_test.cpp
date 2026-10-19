@@ -163,7 +163,7 @@ TEST(DepExtractor, OffsetEndpointKeepsDynamicReference) {
 
 TEST(DepExtractor, OffsetBaseIsNoRead) {
   // OFFSET's base only positions the rectangle it returns: `=OFFSET(D2,-1,0)`
-  // in D2 reads D1, not D2, and is not circular (measured on Excel 365).
+  // in D2 reads D1, not D2, and is not circular.
   // A reference-returning base only positions what it can return, so
   // `=OFFSET(INDEX(A1:A10,3),1,0)` in A3 is not circular either; the offsets
   // and the base's other arguments are still read.

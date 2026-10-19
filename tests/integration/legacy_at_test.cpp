@@ -430,8 +430,8 @@ constexpr LegacyCase kLegacy61[] = {
     {"=AND(A1:A2>0)", "=AND(@A1:A2>0)", "#VALUE!"},
 };
 
-// INDEX / OFFSET shapes on the same sheet with A5 = 0, A6 = 1, measured the
-// same way.
+// INDEX / OFFSET shapes on the same sheet with A5 = 0, A6 = 1,
+// each written the same way.
 constexpr LegacyCase kLegacyIndexOffset[] = {
     {"=INDEX(A1:B2,0,1)", "=@INDEX(A1:B2,0,1)", "1"},
     {"=INDEX(A1:B2,1)", "=INDEX(A1:B2,1)", "#REF!"},
@@ -457,7 +457,7 @@ constexpr LegacyCase kLegacyIndexOffset[] = {
     {"=INDEX((A1:A2,B1:B2),1,1,2)", "=INDEX((A1:A2,B1:B2),1,1,2)", "1"},
 };
 
-// The legacy workbook both tables were measured on, loaded with every
+// The legacy workbook both tables describe, loaded with every
 // formula unmarked, as a reader leaves a file without dynamic-array marks.
 template <std::size_t N>
 Workbook LoadedLegacyWorkbook(const LegacyCase (&cases)[N], bool index_offset_inputs) {

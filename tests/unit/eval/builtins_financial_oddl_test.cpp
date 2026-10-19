@@ -44,7 +44,7 @@ TEST(FinancialOddl, MicrosoftDocCanonicalOddlPrice) {
   // Verify both that we produce the closed-form value and that we land
   // within ~1e-7 of the documented anchor (matches "at 4 decimal places"
   // in task spec; tighter than that against the published docs is not
-  // achievable without a Mac oracle measurement).
+  // achievable without a Mac oracle value).
   const Value v =
       EvalSource("=ODDLPRICE(DATE(2008,2,7), DATE(2008,6,15), DATE(2007,10,15), 0.0375, 0.0405, 100, 2, 0)");
   ASSERT_TRUE(v.is_number());
@@ -399,7 +399,7 @@ TEST(FinancialOddl, OddlYieldTooManyArgsIsValue) {
 
 // Terms are formed per quasi-coupon period and summed left to right, so the
 // closed forms reproduce Excel to the last bit.
-TEST(FinancialOddl, BitExactAgainstMeasuredValues) {
+TEST(FinancialOddl, BitExactAgainstExcelValues) {
   const Value yield0 =
       EvalSource("=ODDLYIELD(DATE(2008,4,20), DATE(2008,6,15), DATE(2007,12,24), 0.0375, 99.875, 100, 2, 0)");
   ASSERT_TRUE(yield0.is_number());

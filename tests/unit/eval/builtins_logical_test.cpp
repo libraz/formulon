@@ -929,7 +929,7 @@ struct EqCase {
   bool win;  // win-365-ja_JP
 };
 
-// Equality under the compare strength, one row per measured pair.
+// Equality under the compare strength, one row per pair.
 const EqCase kEqCases[] = {
     {"ß", "ss", true, true, true, true},    {"①", "1", true, true, false, false},
     {"Ａ", "A", true, true, false, false},  {"ｱ", "ア", true, true, false, false},

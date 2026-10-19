@@ -74,7 +74,7 @@ TEST(FinancialOddf, MicrosoftDocCanonicalOddfPrice) {
   //   frequency = 2 (semi-annual), basis = 1 (Actual/Actual).
   // Microsoft's docs publish ~113.5977. The brief tightens "match
   // within 1e-3 of the published value"; exact-bit parity will be
-  // measured against Mac later.
+  // checked against Mac later.
   const Value v = EvalSource(
       "=ODDFPRICE(DATE(2008,11,11), DATE(2021,3,1), DATE(2008,10,15), DATE(2009,3,1), 0.0785, 0.0625, 100, 2, 1)");
   ASSERT_TRUE(v.is_number()) << "got error: " << static_cast<int>(v.is_error() ? v.as_error() : ErrorCode::NA);
@@ -602,7 +602,7 @@ TEST(FinancialOddf, OddfYieldLowYieldRoundTrip) {
   EXPECT_NEAR(yld_v.as_number(), 0.0125, 1e-9);
 }
 
-TEST(FinancialOddf, OddfYieldMatchesMeasuredValueWithinOneUlp) {
+TEST(FinancialOddf, OddfYieldMatchesExcelValueWithinOneUlp) {
   // Excel's iteration divides by the regular-bond derivative, so its result
   // sits ~1e-12 from the exact root; the engine reproduces it to the last bit.
   const Value v = EvalSource(

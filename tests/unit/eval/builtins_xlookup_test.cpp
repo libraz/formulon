@@ -81,7 +81,7 @@ TEST(BuiltinsXLookup, ArrayLiteralLookupAndReturnArrays) {
   EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
 }
 
-// Both hosts fold full-width digits for an exact XLOOKUP (Mac and Windows ja-JP measured).
+// Both hosts fold full-width digits for an exact XLOOKUP (Mac and Windows ja-JP).
 TEST(BuiltinsXLookup, ExactFullwidthDigitsFoldOnEveryHost) {
   const ExcelProfile profiles[] = {
       mac_365_ja_jp_profile(),

@@ -128,7 +128,7 @@ void ExpectStylesXml(const pugi::xml_document& doc, const Captured& c, double bo
   EXPECT_STREQ(style.attribute("builtinId").value(), "0");
 }
 
-/// Checks the written `sheet1.xml`; `mac` selects the measured Mac row
+/// Checks the written `sheet1.xml`; `mac` selects the Mac row
 /// height and base column width, which the Windows estimate leaves unset.
 void ExpectSheetXml(const pugi::xml_document& doc, const Captured& c, bool mac) {
   const pugi::xml_node ws = doc.child("worksheet");

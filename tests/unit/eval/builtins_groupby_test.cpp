@@ -35,7 +35,7 @@
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "excel_profile.h"
-#include "groupby_pivotby_measured_helpers.h"
+#include "groupby_pivotby_excel_parity_helpers.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -462,7 +462,7 @@ TEST(GroupBy, EmptySortOrderSlotIsAnOmission) {
 
 // The argument is a signed column index and that domain has no zero member,
 // so spelling the default out loud is rejected even though omitting it is
-// not. Measured against Excel (groupby_sort_order_zero_rejected).
+// not. Matches Excel (groupby_sort_order_zero_rejected).
 TEST(GroupBy, SuppliedSortOrderZeroYieldsValueError) {
   const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
@@ -719,9 +719,9 @@ TEST(GroupBy, AggregatorReturningArrayYieldsCalcInThatCell) {
   EXPECT_EQ(Cell(v, 1, 1).as_error(), ErrorCode::Calc);
 }
 
-// Results measured in Excel (ja-JP), cell by cell.
+// Results from Excel (ja-JP), cell by cell.
 
-TEST(GroupByMeasured, GbFh0Hdr) {
+TEST(GroupByExcelParity, GbFh0Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -732,11 +732,11 @@ TEST(GroupByMeasured, GbFh0Hdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A4,B1:B4,SUM,0)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 2,
-                        {"t:a", "n:2.000000", "t:b", "n:4.000000", "t:k", "n:0.000000", "t:合計", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 2,
+                            {"t:a", "n:2.000000", "t:b", "n:4.000000", "t:k", "n:0.000000", "t:合計", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbFh0Nohdr) {
+TEST(GroupByExcelParity, GbFh0Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -747,10 +747,10 @@ TEST(GroupByMeasured, GbFh0Nohdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A2:A4,B2:B4,SUM,0)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 3, 2, {"t:a", "n:2.000000", "t:b", "n:4.000000", "t:合計", "n:6.000000"});
+  excel_parity::ExpectCells(v, 3, 2, {"t:a", "n:2.000000", "t:b", "n:4.000000", "t:合計", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbFh1Hdr) {
+TEST(GroupByExcelParity, GbFh1Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -761,10 +761,10 @@ TEST(GroupByMeasured, GbFh1Hdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A4,B1:B4,SUM,1)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 3, 2, {"t:a", "n:2.000000", "t:b", "n:4.000000", "t:合計", "n:6.000000"});
+  excel_parity::ExpectCells(v, 3, 2, {"t:a", "n:2.000000", "t:b", "n:4.000000", "t:合計", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbFh1Nohdr) {
+TEST(GroupByExcelParity, GbFh1Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -775,10 +775,10 @@ TEST(GroupByMeasured, GbFh1Nohdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A2:A4,B2:B4,SUM,1)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 3, 2, {"t:a", "n:2.000000", "t:b", "n:3.000000", "t:合計", "n:5.000000"});
+  excel_parity::ExpectCells(v, 3, 2, {"t:a", "n:2.000000", "t:b", "n:3.000000", "t:合計", "n:5.000000"});
 }
 
-TEST(GroupByMeasured, GbFh2Hdr) {
+TEST(GroupByExcelParity, GbFh2Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -789,12 +789,12 @@ TEST(GroupByMeasured, GbFh2Hdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A4,B1:B4,SUM,2)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 5, 2,
-                        {"t:行フィールド 1", "t:値 1", "t:a", "n:2.000000", "t:b", "n:4.000000", "t:k", "n:0.000000",
-                         "t:合計", "n:6.000000"});
+  excel_parity::ExpectCells(v, 5, 2,
+                            {"t:行フィールド 1", "t:値 1", "t:a", "n:2.000000", "t:b", "n:4.000000", "t:k",
+                             "n:0.000000", "t:合計", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbFh2Nohdr) {
+TEST(GroupByExcelParity, GbFh2Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -805,11 +805,11 @@ TEST(GroupByMeasured, GbFh2Nohdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A2:A4,B2:B4,SUM,2)", wb, wb.sheet(0));
-  measured::ExpectCells(
+  excel_parity::ExpectCells(
       v, 4, 2, {"t:行フィールド 1", "t:値 1", "t:a", "n:2.000000", "t:b", "n:4.000000", "t:合計", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbFh3Hdr) {
+TEST(GroupByExcelParity, GbFh3Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -820,10 +820,10 @@ TEST(GroupByMeasured, GbFh3Hdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A4,B1:B4,SUM,3)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 2, {"t:k", "t:v", "t:a", "n:2.000000", "t:b", "n:4.000000", "t:合計", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 2, {"t:k", "t:v", "t:a", "n:2.000000", "t:b", "n:4.000000", "t:合計", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbFh3Nohdr) {
+TEST(GroupByExcelParity, GbFh3Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -834,11 +834,11 @@ TEST(GroupByMeasured, GbFh3Nohdr) {
   wb.sheet(0).set_cell_value(3, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(3, 1, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A2:A4,B2:B4,SUM,3)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 2,
-                        {"t:b", "n:1.000000", "t:a", "n:2.000000", "t:b", "n:3.000000", "t:合計", "n:5.000000"});
+  excel_parity::ExpectCells(v, 4, 2,
+                            {"t:b", "n:1.000000", "t:a", "n:2.000000", "t:b", "n:3.000000", "t:合計", "n:5.000000"});
 }
 
-TEST(GroupByMeasured, GbAutoNumhdr) {
+TEST(GroupByExcelParity, GbAutoNumhdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::number(5.0));
@@ -847,11 +847,11 @@ TEST(GroupByMeasured, GbAutoNumhdr) {
   wb.sheet(0).set_cell_value(2, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(2, 1, Value::number(2.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A3,B1:B3,SUM)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 2,
-                        {"t:a", "n:1.000000", "t:b", "n:2.000000", "t:k", "n:5.000000", "t:合計", "n:8.000000"});
+  excel_parity::ExpectCells(v, 4, 2,
+                            {"t:a", "n:1.000000", "t:b", "n:2.000000", "t:k", "n:5.000000", "t:合計", "n:8.000000"});
 }
 
-TEST(GroupByMeasured, GbAutoTextvals) {
+TEST(GroupByExcelParity, GbAutoTextvals) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -860,11 +860,11 @@ TEST(GroupByMeasured, GbAutoTextvals) {
   wb.sheet(0).set_cell_value(2, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(2, 1, Value::text("y"));
   const Value v = EvalSrcIn("=GROUPBY(A1:A3,B1:B3,COUNTA)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 2,
-                        {"t:a", "n:1.000000", "t:b", "n:1.000000", "t:k", "n:1.000000", "t:合計", "n:3.000000"});
+  excel_parity::ExpectCells(v, 4, 2,
+                            {"t:a", "n:1.000000", "t:b", "n:1.000000", "t:k", "n:1.000000", "t:合計", "n:3.000000"});
 }
 
-TEST(GroupByMeasured, GbAutoRowfieldNum) {
+TEST(GroupByExcelParity, GbAutoRowfieldNum) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v"));
@@ -873,10 +873,10 @@ TEST(GroupByMeasured, GbAutoRowfieldNum) {
   wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
   wb.sheet(0).set_cell_value(2, 1, Value::number(2.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A3,B1:B3,SUM)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 3, 2, {"n:2.000000", "n:1.000000", "n:3.000000", "n:2.000000", "t:合計", "n:3.000000"});
+  excel_parity::ExpectCells(v, 3, 2, {"n:2.000000", "n:1.000000", "n:3.000000", "n:2.000000", "t:合計", "n:3.000000"});
 }
 
-TEST(GroupByMeasured, GbAuto2valcols) {
+TEST(GroupByExcelParity, GbAuto2valcols) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v1"));
@@ -888,12 +888,12 @@ TEST(GroupByMeasured, GbAuto2valcols) {
   wb.sheet(0).set_cell_value(2, 1, Value::number(2.0));
   wb.sheet(0).set_cell_value(2, 2, Value::number(20.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A3,B1:C3,SUM)", wb, wb.sheet(0));
-  measured::ExpectCells(
+  excel_parity::ExpectCells(
       v, 3, 3,
       {"t:a", "n:1.000000", "n:10.000000", "t:b", "n:2.000000", "n:20.000000", "t:合計", "n:3.000000", "n:30.000000"});
 }
 
-TEST(GroupByMeasured, GbAuto2valcolsMixed) {
+TEST(GroupByExcelParity, GbAuto2valcolsMixed) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("v1"));
@@ -905,12 +905,12 @@ TEST(GroupByMeasured, GbAuto2valcolsMixed) {
   wb.sheet(0).set_cell_value(2, 1, Value::number(2.0));
   wb.sheet(0).set_cell_value(2, 2, Value::number(20.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:A3,B1:C3,SUM)", wb, wb.sheet(0));
-  measured::ExpectCells(
+  excel_parity::ExpectCells(
       v, 3, 3,
       {"t:a", "n:1.000000", "n:10.000000", "t:b", "n:2.000000", "n:20.000000", "t:合計", "n:3.000000", "n:30.000000"});
 }
 
-TEST(GroupByMeasured, GbAuto2keycols) {
+TEST(GroupByExcelParity, GbAuto2keycols) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("k1"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("k2"));
@@ -925,12 +925,12 @@ TEST(GroupByMeasured, GbAuto2keycols) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("y"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A1:B4,C1:C4,SUM)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 3,
-                        {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:b", "t:y", "n:1.000000", "t:合計",
-                         "t:", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 3,
+                            {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:b", "t:y", "n:1.000000",
+                             "t:合計", "t:", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbSort2keys) {
+TEST(GroupByExcelParity, GbSort2keys) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(1, 1, Value::text("y"));
@@ -942,10 +942,11 @@ TEST(GroupByMeasured, GbSort2keys) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("y"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A2:B4,C2:C4,SUM,0,0)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 3, 3, {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:b", "t:y", "n:1.000000"});
+  excel_parity::ExpectCells(v, 3, 3,
+                            {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:b", "t:y", "n:1.000000"});
 }
 
-TEST(GroupByMeasured, GbSort2keysTotal) {
+TEST(GroupByExcelParity, GbSort2keysTotal) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 0, Value::text("b"));
   wb.sheet(0).set_cell_value(1, 1, Value::text("y"));
@@ -957,24 +958,24 @@ TEST(GroupByMeasured, GbSort2keysTotal) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("y"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=GROUPBY(A2:B4,C2:C4,SUM,0,2)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 6, 3,
-                        {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:a", "t:", "n:5.000000", "t:b",
-                         "t:y", "n:1.000000", "t:b", "t:", "n:1.000000", "t:総計", "t:", "n:6.000000"});
+  excel_parity::ExpectCells(v, 6, 3,
+                            {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:a", "t:", "n:5.000000", "t:b",
+                             "t:y", "n:1.000000", "t:b", "t:", "n:1.000000", "t:総計", "t:", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, GbSortMixedTypes) {
+TEST(GroupByExcelParity, GbSortMixedTypes) {
   const Value v = EvalSrc("=GROUPBY({\"b\";2;TRUE;\"a\";1},{1;2;3;4;5},SUM,0,0)");
-  measured::ExpectCells(v, 5, 2,
-                        {"n:1.000000", "n:5.000000", "n:2.000000", "n:2.000000", "t:a", "n:4.000000", "t:b",
-                         "n:1.000000", "b:1", "n:3.000000"});
+  excel_parity::ExpectCells(v, 5, 2,
+                            {"n:1.000000", "n:5.000000", "n:2.000000", "n:2.000000", "t:a", "n:4.000000", "t:b",
+                             "n:1.000000", "b:1", "n:3.000000"});
 }
 
-TEST(GroupByMeasured, GbSortCase) {
+TEST(GroupByExcelParity, GbSortCase) {
   const Value v = EvalSrc("=GROUPBY({\"b\";\"B\";\"a\";\"A\"},{1;2;3;4},SUM,0,0)");
-  measured::ExpectCells(v, 2, 2, {"t:a", "n:7.000000", "t:b", "n:3.000000"});
+  excel_parity::ExpectCells(v, 2, 2, {"t:a", "n:7.000000", "t:b", "n:3.000000"});
 }
 
-TEST(PivotByMeasured, PbFh0Hdr) {
+TEST(PivotByExcelParity, PbFh0Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -989,14 +990,14 @@ TEST(PivotByMeasured, PbFh0Hdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,0)", wb, wb.sheet(0));
-  measured::ExpectCells(
+  excel_parity::ExpectCells(
       v, 5, 5, {"t:",         "t:c",        "t:p",        "t:q",       "t:合計",     "t:r",        "n:0.000000",
                 "t:",         "t:",         "n:0.000000", "t:x",       "t:",         "n:1.000000", "n:3.000000",
                 "n:4.000000", "t:y",        "t:",         "t:",        "n:2.000000", "n:2.000000", "t:合計",
                 "n:0.000000", "n:1.000000", "n:5.000000", "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbFh0Nohdr) {
+TEST(PivotByExcelParity, PbFh0Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -1011,12 +1012,12 @@ TEST(PivotByMeasured, PbFh0Nohdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 4,
-                        {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
-                         "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 4,
+                            {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
+                             "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbFh1Hdr) {
+TEST(PivotByExcelParity, PbFh1Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -1031,12 +1032,12 @@ TEST(PivotByMeasured, PbFh1Hdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,1)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 4,
-                        {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
-                         "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 4,
+                            {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
+                             "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbFh1Nohdr) {
+TEST(PivotByExcelParity, PbFh1Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -1051,12 +1052,12 @@ TEST(PivotByMeasured, PbFh1Nohdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,1)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 3,
-                        {"t:", "t:q", "t:合計", "t:x", "n:3.000000", "n:3.000000", "t:y", "n:2.000000", "n:2.000000",
-                         "t:合計", "n:5.000000", "n:5.000000"});
+  excel_parity::ExpectCells(v, 4, 3,
+                            {"t:", "t:q", "t:合計", "t:x", "n:3.000000", "n:3.000000", "t:y", "n:2.000000",
+                             "n:2.000000", "t:合計", "n:5.000000", "n:5.000000"});
 }
 
-TEST(PivotByMeasured, PbFh2Hdr) {
+TEST(PivotByExcelParity, PbFh2Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -1071,44 +1072,44 @@ TEST(PivotByMeasured, PbFh2Hdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,2)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 7, 5, {"t:",
-                                  "t:列フィールド 1",
-                                  "t:",
-                                  "t:",
-                                  "t:",
-                                  "t:",
-                                  "t:c",
-                                  "t:p",
-                                  "t:q",
-                                  "t:合計",
-                                  "t:行フィールド 1",
-                                  "t:値 1",
-                                  "t:値 1",
-                                  "t:値 1",
-                                  "t:値 1",
-                                  "t:r",
-                                  "n:0.000000",
-                                  "t:",
-                                  "t:",
-                                  "n:0.000000",
-                                  "t:x",
-                                  "t:",
-                                  "n:1.000000",
-                                  "n:3.000000",
-                                  "n:4.000000",
-                                  "t:y",
-                                  "t:",
-                                  "t:",
-                                  "n:2.000000",
-                                  "n:2.000000",
-                                  "t:合計",
-                                  "n:0.000000",
-                                  "n:1.000000",
-                                  "n:5.000000",
-                                  "n:6.000000"});
+  excel_parity::ExpectCells(v, 7, 5, {"t:",
+                                      "t:列フィールド 1",
+                                      "t:",
+                                      "t:",
+                                      "t:",
+                                      "t:",
+                                      "t:c",
+                                      "t:p",
+                                      "t:q",
+                                      "t:合計",
+                                      "t:行フィールド 1",
+                                      "t:値 1",
+                                      "t:値 1",
+                                      "t:値 1",
+                                      "t:値 1",
+                                      "t:r",
+                                      "n:0.000000",
+                                      "t:",
+                                      "t:",
+                                      "n:0.000000",
+                                      "t:x",
+                                      "t:",
+                                      "n:1.000000",
+                                      "n:3.000000",
+                                      "n:4.000000",
+                                      "t:y",
+                                      "t:",
+                                      "t:",
+                                      "n:2.000000",
+                                      "n:2.000000",
+                                      "t:合計",
+                                      "n:0.000000",
+                                      "n:1.000000",
+                                      "n:5.000000",
+                                      "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbFh2Nohdr) {
+TEST(PivotByExcelParity, PbFh2Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -1123,14 +1124,14 @@ TEST(PivotByMeasured, PbFh2Nohdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,2)", wb, wb.sheet(0));
-  measured::ExpectCells(
+  excel_parity::ExpectCells(
       v, 6, 4, {"t:",         "t:列フィールド 1", "t:",        "t:",     "t:",         "t:p",        "t:q",
                 "t:合計",     "t:行フィールド 1", "t:値 1",    "t:値 1", "t:値 1",     "t:x",        "n:1.000000",
                 "n:3.000000", "n:4.000000",       "t:y",       "t:",     "n:2.000000", "n:2.000000", "t:合計",
                 "n:1.000000", "n:5.000000",       "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbFh3Hdr) {
+TEST(PivotByExcelParity, PbFh3Hdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -1145,13 +1146,13 @@ TEST(PivotByMeasured, PbFh3Hdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A1:A4,B1:B4,C1:C4,SUM,3)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 6, 4,
-                        {"t:",  "t:c", "t:",         "t:",         "t:",     "t:p",        "t:q",        "t:合計",
-                         "t:r", "t:v", "t:v",        "t:v",        "t:x",    "n:1.000000", "n:3.000000", "n:4.000000",
-                         "t:y", "t:",  "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
+  excel_parity::ExpectCells(
+      v, 6, 4, {"t:",  "t:c", "t:",         "t:",         "t:",     "t:p",        "t:q",        "t:合計",
+                "t:r", "t:v", "t:v",        "t:v",        "t:x",    "n:1.000000", "n:3.000000", "n:4.000000",
+                "t:y", "t:",  "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbFh3Nohdr) {
+TEST(PivotByExcelParity, PbFh3Nohdr) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("r"));
   wb.sheet(0).set_cell_value(0, 1, Value::text("c"));
@@ -1166,20 +1167,20 @@ TEST(PivotByMeasured, PbFh3Nohdr) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,3)", wb, wb.sheet(0));
-  measured::ExpectCells(
+  excel_parity::ExpectCells(
       v, 6, 3,
       {"t:", "t:p", "t:", "t:", "t:q", "t:合計", "t:x", "n:1.000000", "n:1.000000", "t:x", "n:3.000000", "n:3.000000",
        "t:y", "n:2.000000", "n:2.000000", "t:合計", "n:5.000000", "n:5.000000"});
 }
 
-TEST(PivotByMeasured, PbLitFh0) {
+TEST(PivotByExcelParity, PbLitFh0) {
   const Value v = EvalSrc("=PIVOTBY({\"x\";\"y\";\"x\"},{\"p\";\"q\";\"q\"},{1;2;3},SUM,0)");
-  measured::ExpectCells(v, 4, 4,
-                        {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
-                         "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 4,
+                            {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
+                             "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbRngFh0) {
+TEST(PivotByExcelParity, PbRngFh0) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(1, 1, Value::text("p"));
@@ -1191,12 +1192,12 @@ TEST(PivotByMeasured, PbRngFh0) {
   wb.sheet(0).set_cell_value(3, 1, Value::text("q"));
   wb.sheet(0).set_cell_value(3, 2, Value::number(3.0));
   const Value v = EvalSrcIn("=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM,0)", wb, wb.sheet(0));
-  measured::ExpectCells(v, 4, 4,
-                        {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
-                         "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 4,
+                            {"t:", "t:p", "t:q", "t:合計", "t:x", "n:1.000000", "n:3.000000", "n:4.000000", "t:y",
+                             "t:", "n:2.000000", "n:2.000000", "t:合計", "n:1.000000", "n:5.000000", "n:6.000000"});
 }
 
-TEST(PivotByMeasured, PbRngFh0Isblank) {
+TEST(PivotByExcelParity, PbRngFh0Isblank) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(1, 1, Value::text("p"));
@@ -1212,13 +1213,13 @@ TEST(PivotByMeasured, PbRngFh0Isblank) {
   EXPECT_EQ(v.as_boolean(), false);
 }
 
-TEST(PivotByMeasured, PbLitIsblank) {
+TEST(PivotByExcelParity, PbLitIsblank) {
   const Value v = EvalSrc("=ISBLANK(INDEX(PIVOTBY({\"x\";\"y\";\"x\"},{\"p\";\"q\";\"q\"},{1;2;3},SUM,0),1,1))");
   ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
   EXPECT_EQ(v.as_boolean(), false);
 }
 
-TEST(PivotByMeasured, PbRngType) {
+TEST(PivotByExcelParity, PbRngType) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(1, 1, Value::text("p"));
@@ -1234,20 +1235,20 @@ TEST(PivotByMeasured, PbRngType) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
-TEST(GroupByMeasured, Gb2LitTotal) {
+TEST(GroupByExcelParity, Gb2LitTotal) {
   const Value v = EvalSrc("=GROUPBY({\"b\",\"y\";\"a\",\"z\";\"a\",\"y\"},{1;2;3},SUM,0)");
-  measured::ExpectCells(v, 4, 3,
-                        {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:b", "t:y", "n:1.000000", "t:合計",
-                         "t:", "n:6.000000"});
+  excel_parity::ExpectCells(v, 4, 3,
+                            {"t:a", "t:y", "n:3.000000", "t:a", "t:z", "n:2.000000", "t:b", "t:y", "n:1.000000",
+                             "t:合計", "t:", "n:6.000000"});
 }
 
-TEST(GroupByMeasured, Gb2LitTotalType) {
+TEST(GroupByExcelParity, Gb2LitTotalType) {
   const Value v = EvalSrc("=TYPE(INDEX(GROUPBY({\"b\",\"y\";\"a\",\"z\";\"a\",\"y\"},{1;2;3},SUM,0),4,2))");
   ASSERT_TRUE(v.is_number()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
-TEST(GroupByMeasured, Gb2LitTotalLen) {
+TEST(GroupByExcelParity, Gb2LitTotalLen) {
   const Value v = EvalSrc("=ISBLANK(INDEX(GROUPBY({\"b\",\"y\";\"a\",\"z\";\"a\",\"y\"},{1;2;3},SUM,0),4,2))");
   ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
   EXPECT_EQ(v.as_boolean(), false);
@@ -1267,7 +1268,7 @@ struct CollationPair {
   double zh_cn;
 };
 
-constexpr std::array<CollationPair, 26> kMeasuredGroupCounts = {{
+constexpr std::array<CollationPair, 26> kExcelGroupCounts = {{
     {"\xC3\x9F", "ss", 1, 1, 1},                                        // U+00DF | U+0073 U+0073
     {"\xC4\xB3", "ij", 1, 1, 1},                                        // U+0133 | U+0069 U+006A
     {"\xE2\x91\xA0", "1", 1, 1, 1},                                     // U+2460 | U+0031
@@ -1316,8 +1317,8 @@ std::string EvalText(const std::string& src, ExcelProfile profile) {
   return v.is_text() ? std::string(v.as_text()) : std::string();
 }
 
-TEST(GroupByCollation, MacGroupCountsMatchMeasurement) {
-  for (const CollationPair& pair : kMeasuredGroupCounts) {
+TEST(GroupByCollation, MacGroupCountsMatchExcel) {
+  for (const CollationPair& pair : kExcelGroupCounts) {
     const std::string src = "=ROWS(GROUPBY(" + Pair(pair.a, pair.b) + ",{1;2},SUM,0,0))";
     EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kJaJP)), pair.ja_jp) << "ja_JP " << src;
     EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kEnUS)), pair.en_us) << "en_US " << src;
@@ -1326,7 +1327,7 @@ TEST(GroupByCollation, MacGroupCountsMatchMeasurement) {
 }
 
 TEST(GroupByCollation, MergedKeysSumIntoOneGroup) {
-  // U+FF71 and U+30A2 form one group in every measured Mac locale.
+  // U+FF71 and U+30A2 form one group in every Mac locale.
   const Value v = EvalSrcWithProfile("=GROUPBY({\"\xEF\xBD\xB1\";\"\xE3\x82\xA2\"},{10;20},SUM,0,0)",
                                      MacProfile(ExcelLocale::kJaJP));
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
@@ -1370,10 +1371,10 @@ TEST(GroupByCollation, WindowsJaJpGroups) {
 }
 
 // PIVOTBY merges row and column items at the same strength as GROUPBY, so
-// the measured GROUPBY counts carry over: one header row (or column) plus
+// the GROUPBY counts carry over: one header row (or column) plus
 // one per group.
-TEST(PivotByCollation, MacRowGroupCountsMatchMeasurement) {
-  for (const CollationPair& pair : kMeasuredGroupCounts) {
+TEST(PivotByCollation, MacRowGroupCountsMatchExcel) {
+  for (const CollationPair& pair : kExcelGroupCounts) {
     const std::string src = "=ROWS(PIVOTBY(" + Pair(pair.a, pair.b) + ",{\"X\";\"X\"},{1;2},SUM,0,0,,0))";
     EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kJaJP)), 1 + pair.ja_jp) << "ja_JP " << src;
     EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kEnUS)), 1 + pair.en_us) << "en_US " << src;
@@ -1381,8 +1382,8 @@ TEST(PivotByCollation, MacRowGroupCountsMatchMeasurement) {
   }
 }
 
-TEST(PivotByCollation, MacColumnGroupCountsMatchMeasurement) {
-  for (const CollationPair& pair : kMeasuredGroupCounts) {
+TEST(PivotByCollation, MacColumnGroupCountsMatchExcel) {
+  for (const CollationPair& pair : kExcelGroupCounts) {
     const std::string src = "=COLUMNS(PIVOTBY({\"X\";\"X\"}," + Pair(pair.a, pair.b) + ",{1;2},SUM,0,0,,0))";
     EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kJaJP)), 1 + pair.ja_jp) << "ja_JP " << src;
     EXPECT_EQ(EvalNumber(src, MacProfile(ExcelLocale::kEnUS)), 1 + pair.en_us) << "en_US " << src;

@@ -127,7 +127,7 @@ TEST(BuiltinsIndex, ZeroColOn2DRangeSpillsRow) {
 
 TEST(BuiltinsIndex, TwoArg2DReferenceRowOnlyIsRefError) {
   // The reference form needs both indices on a 2-D area: Excel 365 gives
-  // `INDEX(A1:B2,1)` #REF! (measured).
+  // `INDEX(A1:B2,1)` #REF!.
   Workbook wb = Workbook::create();
   for (std::uint32_t r = 0; r < 3; ++r) {
     for (std::uint32_t c = 0; c < 3; ++c) {
@@ -392,7 +392,7 @@ TEST(BuiltinsIndex, ArraySelectorReferenceBlankCountsInCountA) {
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
-// Excel-measured near-integer snap, sub-integer index handling, array index
+// Excel near-integer snap, sub-integer index handling, array index
 // arguments, implicit-intersection CELL and 3-D conditional aggregates.
 
 Workbook SnapWorkbook() {

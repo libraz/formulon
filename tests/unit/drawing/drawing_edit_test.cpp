@@ -433,7 +433,7 @@ struct AnchorCase {
   AnchorPoint move_from, move_to;
 };
 
-TEST(DrawingEdit, AnchorsFollowMeasuredRowColumnRules) {
+TEST(DrawingEdit, AnchorsFollowExcelRowColumnRules) {
   // {row, col, row_off, col_off}; Excel's anchors after each edit.
   const AnchorCase cases[] = {
       {"delete rows 3-4 above",
@@ -871,7 +871,7 @@ void ExpectPlaced(const pugi::xml_node& anchor, AnchorKind kind, const Box& box,
   EXPECT_EQ(child_local(xfrm, "ext").attribute("cy").as_llong(), cy);
 }
 
-// A picture carrying the measured Excel extras (creationId, useLocalDpi, an
+// A picture carrying the Excel extras (creationId, useLocalDpi, an
 // empty picLocks) plus a crop and a horizontal flip.
 std::string RichPic(std::uint32_t id, const std::string& rot_attr) {
   return "<xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"" + std::to_string(id) +
@@ -1203,8 +1203,8 @@ TEST(DrawingAnchorUpdate, MoveAndResizeRewriteMarkersAndXfrm) {
                ExpectedBox(wb, moved, 3048000, 762000, 0), 3048000, 762000);
 }
 
-TEST(DrawingAnchorUpdate, MeasuredExcelPictureKeepsEverythingElse) {
-  // Excel's own picture XML (measured): editAs="oneCell", creationId,
+TEST(DrawingAnchorUpdate, ExcelPictureKeepsEverythingElse) {
+  // Excel's own picture XML: editAs="oneCell", creationId,
   // useLocalDpi and an empty picLocks.
   const std::string excel =
       "<xdr:twoCellAnchor editAs=\"oneCell\"><xdr:from><xdr:col>1</xdr:col><xdr:colOff>317500</xdr:colOff>"

@@ -699,7 +699,7 @@ Value EvalMacEnUs(std::string_view formula) {
 }
 
 // Mac Excel 365 folds case, width and kana one code point at a time; nothing
-// composes, expands or ignores accents (measured, en-US).
+// composes, expands or ignores accents.
 TEST(TextSearch, FoldsBeyondAscii) {
   for (const char* formula : {"=SEARCH(\"ä\",\"Äpfel\")", "=SEARCH(\"σ\",\"ΣΟΦΙΑ\")", "=SEARCH(\"п\",\"ПРИВЕТ\")",
                               "=SEARCH(\"ア\",\"あいう\")", "=SEARCH(\"ア\",\"ｱｲｳ\")", "=SEARCH(\"ａ\",\"ABC\")",

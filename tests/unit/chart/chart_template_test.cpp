@@ -24,7 +24,7 @@ namespace {
 using D = ChartSeriesDirection;
 
 // ---------------------------------------------------------------------------
-// Measured chart-part fragments (normalised: axis ids, unique ids and caches
+// Chart-part fragments (normalised: axis ids, unique ids and caches
 // are placeholders; `@X@` marks a substitution point of the composer below).
 // ---------------------------------------------------------------------------
 
@@ -58,7 +58,7 @@ constexpr const char* kTail =
     R"X(<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr></c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr><c:txPr><a:bodyPr rot="0" spcFirstLastPara="1" vertOverflow="ellipsis" vert="horz" wrap="square" anchor="ctr" anchorCtr="1"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900" b="0" i="0" u="none" strike="noStrike" kern="1200" baseline="0"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:pPr><a:endParaRPr lang="@L@"/></a:p></c:txPr></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/><c:showDLblsOverMax val="0"/><c:extLst><c:ext uri="{UID}" xmlns:c16r3="http://schemas.microsoft.com/office/drawing/2017/03/chart"><c16r3:dataDisplayOptions16><c16r3:dispNaAsBlank val="1"/></c16r3:dataDisplayOptions16></c:ext></c:extLst></c:chart><c:spPr><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill><a:round/></a:ln><a:effectLst/></c:spPr><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr/></a:pPr><a:endParaRPr lang="@L@"/></a:p></c:txPr><c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings></c:chartSpace>)X";
 
 // ---------------------------------------------------------------------------
-// Measured split table
+// Split table
 // ---------------------------------------------------------------------------
 
 struct SplitRow {
@@ -400,7 +400,7 @@ Expected<ChartSplit, Error> split(const Workbook& wb, const std::string& src,
 
 constexpr const char* kStdGrid = "\xC2\xB7,S1,S2/a,1,4/b,2,5/c,3,6/d,7,8";
 
-TEST(ChartTemplateSplit, MeasuredTable) {
+TEST(ChartTemplateSplit, ExcelTable) {
   for (const SplitRow& row : kSplitTable) {
     Workbook wb = Workbook::create();
     const std::string rect = fill_grid(wb, 0, row.grid);
@@ -513,7 +513,7 @@ std::string swap_axis_ids(std::string s) {
 
 enum class TitleForm { kAuto, kDeleted };
 
-/// The measured part for a two-series chart over the fixture ranges.
+/// The part for a two-series chart over the fixture ranges.
 std::string expected_part(ChartInsertKind kind, ChartGrouping grouping, TitleForm title, const std::string& lang) {
   const bool scatter = kind == ChartInsertKind::kScatter;
   const bool ring = kind == ChartInsertKind::kDoughnut;
@@ -625,7 +625,7 @@ std::string build(const Workbook& wb, const ChartInsertOptions& options) {
   return xml ? xml.value() : std::string();
 }
 
-Workbook measured_workbook() {
+Workbook excel_workbook() {
   Workbook wb = Workbook::create();
   wb.set_excel_profile(mac_365_ja_jp_profile());
   return wb;
@@ -654,8 +654,8 @@ const TemplateCase kTemplateCases[] = {
     {ChartInsertKind::kDoughnut, ChartGrouping::kClustered},
 };
 
-TEST(ChartTemplateXml, MatchesMeasuredTemplates) {
-  const Workbook wb = measured_workbook();
+TEST(ChartTemplateXml, MatchesExcelTemplates) {
+  const Workbook wb = excel_workbook();
   for (const TemplateCase& tc : kTemplateCases) {
     SCOPED_TRACE(std::to_string(static_cast<int>(tc.kind)) + "/" + std::to_string(static_cast<int>(tc.grouping)));
     ChartInsertOptions options;
@@ -670,7 +670,7 @@ TEST(ChartTemplateXml, MatchesMeasuredTemplates) {
 }
 
 TEST(ChartTemplateXml, LineAndAreaTakeEitherPlainGrouping) {
-  const Workbook wb = measured_workbook();
+  const Workbook wb = excel_workbook();
   for (const ChartInsertKind kind : {ChartInsertKind::kLine, ChartInsertKind::kArea}) {
     ChartInsertOptions a;
     a.kind = kind;
@@ -684,7 +684,7 @@ TEST(ChartTemplateXml, LineAndAreaTakeEitherPlainGrouping) {
 }
 
 TEST(ChartTemplateXml, TitleForms) {
-  const Workbook wb = measured_workbook();
+  const Workbook wb = excel_workbook();
   ChartInsertOptions options;
   options.legend = ChartLegendPosition::kBottom;
 
@@ -707,7 +707,7 @@ TEST(ChartTemplateXml, TitleForms) {
 }
 
 TEST(ChartTemplateXml, PlainTextAndFormulaSlotsKeepOoxmlSpellingsLiteral) {
-  Workbook wb = measured_workbook();
+  Workbook wb = excel_workbook();
   ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "_x0041_")));
   const std::string title = "literal _x0041_ _x005F_x0041_ & <猫>\r";
   ChartInsertOptions options;
@@ -763,7 +763,7 @@ TEST(ChartTemplateXml, LegendDate1904AndLocale) {
 }
 
 TEST(ChartTemplateXml, ReferenceElementsFollowTheCells) {
-  Workbook wb = measured_workbook();
+  Workbook wb = excel_workbook();
   fill_grid(wb, 0, "\xC2\xB7,S1/10,1/20,2/30,3");
   ChartInsertOptions options;
   options.legend = ChartLegendPosition::kBottom;
@@ -773,7 +773,7 @@ TEST(ChartTemplateXml, ReferenceElementsFollowTheCells) {
   ASSERT_TRUE(static_cast<bool>(xml));
   EXPECT_NE(xml.value().find("<c:cat><c:numRef><c:f>Sheet1!$A$2:$A$4</c:f>"), std::string::npos);
 
-  Workbook multi = measured_workbook();
+  Workbook multi = excel_workbook();
   const std::string rect = fill_grid(multi, 0, "\xC2\xB7,\xC2\xB7,S1/g,a,1/\xC2\xB7,b,2");
   const auto msp = split(multi, rect);
   ASSERT_TRUE(static_cast<bool>(msp));
@@ -782,7 +782,7 @@ TEST(ChartTemplateXml, ReferenceElementsFollowTheCells) {
   EXPECT_NE(mxml.value().find("<c:cat><c:multiLvlStrRef><c:f>Sheet1!$A$2:$B$3</c:f><c:multiLvlStrCache>"),
             std::string::npos);
 
-  Workbook text_x = measured_workbook();
+  Workbook text_x = excel_workbook();
   const std::string xr = fill_grid(text_x, 0, "\xC2\xB7,S1/a,1/b,2");
   options.kind = ChartInsertKind::kScatter;
   const auto xsp = split_chart_source(text_x, 0, xr, ChartInsertKind::kScatter, D::kAuto, ChartHeaderMode::kAuto,
@@ -812,7 +812,7 @@ TEST(ChartTemplateXml, ColoursCycleThroughVariations) {
       "<a:schemeClr val=\"accent1\"/><a:srgbClr val=\"112233\"/><cs:variation/><cs:extLst/></cs:colorStyle>"));
   EXPECT_EQ(chart_cycle_color(extended.document_element(), 2), "<a:schemeClr val=\"accent1\"/>");
 
-  const Workbook wb = measured_workbook();
+  const Workbook wb = excel_workbook();
   ChartSplit sp;
   for (int i = 0; i < 8; ++i) {
     ChartSeriesRefs s;
@@ -851,7 +851,7 @@ TEST(ChartTemplateXml, ColourAttributesKeepOoxmlSpellingsLiteral) {
 }
 
 TEST(ChartTemplateXml, RejectsEmptySplit) {
-  const Workbook wb = measured_workbook();
+  const Workbook wb = excel_workbook();
   const auto xml = build_chart_xml(wb, ChartInsertOptions{}, ChartSplit{});
   ASSERT_FALSE(static_cast<bool>(xml));
   EXPECT_EQ(xml.error().code, FormulonErrorCode::kIoChartInvalidReference);

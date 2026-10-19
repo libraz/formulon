@@ -89,7 +89,7 @@ TEST(VolatileTracker, ForEachVisitsEveryRegisteredCell) {
 }
 
 TEST(VolatileTracker, IsVolatileFunctionMatchesExcelsVolatileSet) {
-  // The functions Excel 365 marks volatile in its files (measured).
+  // The functions Excel 365 marks volatile in its files.
   EXPECT_TRUE(VolatileTracker::is_volatile_function("NOW"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("TODAY"));
   EXPECT_TRUE(VolatileTracker::is_volatile_function("RAND"));

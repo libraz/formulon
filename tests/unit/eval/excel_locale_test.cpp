@@ -441,7 +441,7 @@ TEST(ExcelLocale, WidthFoldingDependsOnHostExceptForChinese) {
   EXPECT_EQ(width_folding(profile_of(ExcelHost::kWin365, ExcelLocale::kZhTW)), WidthFolding::kNone);
 }
 
-TEST(ExcelLocale, TagLanguagesFollowMeasuredLcidsAndNames) {
+TEST(ExcelLocale, TagLanguagesFollowExcelLcidsAndNames) {
   constexpr ExcelHost kMac = ExcelHost::kMac365;
   ASSERT_NE(tag_language_for_lcid(0x0411, kMac), nullptr);
   EXPECT_EQ(tag_language_for_lcid(0x0411, kMac)->month_long[2], "3月");

@@ -846,7 +846,7 @@ TEST(CFEvaluator, IconSetExactlyAtThresholdHonoursGteFlag) {
   EXPECT_EQ(at_threshold_gt.icon_render->icon_index, 0);
 }
 
-// Measured in Excel: a cell below the floor gets no icon at all, for a
+// In Excel, a cell below the floor gets no icon at all, for a
 // number floor, and at the floor itself when the floor's gte is off.
 TEST(CFEvaluator, IconSetDrawsNoIconBelowTheFloor) {
   CFEvalHarness harness;

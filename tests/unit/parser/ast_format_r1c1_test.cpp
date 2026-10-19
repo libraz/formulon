@@ -26,7 +26,7 @@ std::string R1C1(std::string_view src, std::uint32_t row, std::uint32_t col) {
   return format_formula_r1c1(*root, row, col);
 }
 
-// Rows measured against Mac Excel `FormulaR1C1`: `a1` is the normalized (read
+// Rows from Mac Excel `FormulaR1C1`: `a1` is the normalized (read
 // back) A1 spelling, `r1c1` Excel's answer, both without the leading `=`.
 struct ProbeRow {
   const char* a1;

@@ -137,7 +137,7 @@ TEST(OoxmlDynamicArrayMetadata, SpillAnchorsFromARealFixtureKeepCmOnResave) {
 
 // A formula is stored dynamic-array (`cm=`) exactly when Excel 365 marked it
 // on entry. Entered through the same path as any formula, with Rng/Cel/Val/Fn
-// the range, cell, constant and LAMBDA names of the measured workbook.
+// the range, cell, constant and LAMBDA names of the workbook.
 TEST(OoxmlDynamicArrayMetadata, EnteredFormulasAreStoredDynamicWhereExcelDoes) {
   struct Case {
     const char* formula;

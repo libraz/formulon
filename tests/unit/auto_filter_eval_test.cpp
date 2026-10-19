@@ -497,7 +497,7 @@ TEST(AutoFilterEval, TableCriterionMakesSheetFiltered) {
 }
 
 // Locale collation: value-list and custom filters follow the workbook profile.
-// Expectations are the measured equality and ordering fixtures
+// Expectations are the equality and ordering fixtures
 // (tools/collation/data/fixtures).
 struct FilterEqualityCase {
   const char* label;

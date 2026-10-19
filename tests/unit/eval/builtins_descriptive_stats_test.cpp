@@ -324,7 +324,7 @@ void ExpectStatErr(const char* formula, ErrorCode code) {
 }
 
 // ---------------------------------------------------------------------------
-// Direct arguments: omitted slots and coercion (Excel-measured)
+// Direct arguments: omitted slots and coercion
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsDirectStatArgs, OmittedSlotCountsAsZero) {

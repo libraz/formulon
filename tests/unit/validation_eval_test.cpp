@@ -134,7 +134,7 @@ bool CheckMatrixCell(Ty ty, Op op, bool allow_blank, In in) {
   return f.Check(v).valid;
 }
 
-// Matrix of measured results (Mac Excel `Validation.Value`), one row per type/operator/allowBlank;
+// Matrix of results (Mac Excel `Validation.Value`), one row per type/operator/allowBlank;
 // `expect` lists validity for num, numtext, text, blank, date, datetime.
 struct MatrixRow {
   Ty ty;
@@ -430,7 +430,7 @@ const char* ListFormula(ListSrc src) {
 //   input kind(6): number 5, numeric text "5", text "abcde", blank, date 45306, datetime 45306.5
 //   list source(2): inline "a,b,c", range H1:H3 = a,b,c (only for list)
 // Combinations are 528 valid tuples; the table below is 72 rows covering every pair of
-// parameter values that co-occur. Expected values come from the measured matrix: typed rows
+// parameter values that co-occur. Expected values come from the matrix: typed rows
 // from the matrix table, list rows are invalid unless blank is allowed (none of the six
 // inputs is a list member), custom rows use ISNUMBER(A1), type none is always valid.
 struct PairRow {
@@ -925,7 +925,7 @@ TEST(ValidationEval, NoRuleAndOutcomeFields) {
   EXPECT_EQ(oob.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
-// Measured on overlapping sqrefs: R1 whole 1..3 on A1:A3, R2 whole 10..20 on A1:A2. The rule
+// Overlapping sqrefs: R1 whole 1..3 on A1:A3, R2 whole 10..20 on A1:A2. The rule
 // that comes first in file order is the only one applied, whichever order they are declared in.
 TEST(ValidationEval, OverlapPicksOneRule) {
   for (const bool r1_first : {true, false}) {
@@ -995,7 +995,7 @@ bool CheckStored(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
 }
 
 // The Excel-saved matrix workbook: every stored cell is validated against its own rule and
-// compared with the measured result for that row.
+// compared with the result for that row.
 TEST(ValidationEval, FixtureMatrix) {
   const std::vector<std::uint8_t> bytes = ReadFile("data_validation_matrix.xlsx");
   auto read = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()});
@@ -1030,7 +1030,7 @@ TEST(ValidationEval, FixtureMatrix) {
   EXPECT_EQ(row, 261U);
 }
 
-// Inline lists compare the displayed text of the proposed value (measured on Mac Excel).
+// Inline lists compare the displayed text of the proposed value.
 bool InlineValid(const char* list, const Value& v, const char* format = nullptr) {
   Fixture f;
   f.wb.set_excel_profile(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP});

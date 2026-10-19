@@ -12,10 +12,10 @@
 namespace formulon {
 namespace {
 
-// Theme colour scheme the table was measured against (clrScheme order).
-constexpr std::uint32_t kMeasuredScheme[12] = {0xFF000000U, 0xFFFFFFFFU, 0xFF44546AU, 0xFFE7E6E6U,
-                                               0xFF4472C4U, 0xFFED7D31U, 0xFFA5A5A5U, 0xFFFFC000U,
-                                               0xFF5B9BD5U, 0xFF70AD47U, 0xFF0563C1U, 0xFF954F72U};
+// Theme colour scheme the table is expressed against (clrScheme order).
+constexpr std::uint32_t kExcelScheme[12] = {0xFF000000U, 0xFFFFFFFFU, 0xFF44546AU, 0xFFE7E6E6U,
+                                            0xFF4472C4U, 0xFFED7D31U, 0xFFA5A5A5U, 0xFFFFC000U,
+                                            0xFF5B9BD5U, 0xFF70AD47U, 0xFF0563C1U, 0xFF954F72U};
 
 // Columns of kTintTable.
 constexpr double kTints[9] = {-0.5, -0.25, -0.1, 0.0, 0.1, 0.25, 0.4, 0.6, 0.8};
@@ -60,10 +60,10 @@ std::string Hex(std::uint32_t argb) {
   return buf;
 }
 
-Theme MeasuredTheme() {
+Theme ExcelTheme() {
   Theme theme = default_theme();
   for (std::size_t i = 0; i < kThemeColorCount; ++i) {
-    theme.colors[i] = kMeasuredScheme[i];
+    theme.colors[i] = kExcelScheme[i];
   }
   return theme;
 }
@@ -84,7 +84,7 @@ ColorSpec IndexedSpec(std::uint32_t index) {
 }
 
 TEST(ColorResolve, ProbeTable) {
-  const Theme theme = MeasuredTheme();
+  const Theme theme = ExcelTheme();
   const IndexedPalette palette;
   int theme_checked = 0;
   for (std::uint32_t index = 0; index < 12U; ++index) {
@@ -115,13 +115,13 @@ TEST(ColorResolve, ExtremeTintIsBoundedBeforeLuminanceArithmetic) {
     EXPECT_EQ(apply_tint(rgb, -tint), apply_tint(rgb, -1.0));
   }
   EXPECT_EQ(apply_tint(rgb, std::numeric_limits<double>::quiet_NaN()), rgb);
-  const Theme theme = MeasuredTheme();
+  const Theme theme = ExcelTheme();
   EXPECT_EQ(resolve_color(ThemeSpec(4U, 1e300), theme, ThemeSource::kPart, {}, ColorContext::kFont).argb, 0xFFFFFFFFU);
   EXPECT_EQ(resolve_color(ThemeSpec(4U, -1e300), theme, ThemeSource::kPart, {}, ColorContext::kFont).argb, 0xFF000000U);
 }
 
 TEST(ColorResolve, ThemeFontColourWithoutTint) {
-  const Theme theme = MeasuredTheme();
+  const Theme theme = ExcelTheme();
   const char* expected[4] = {"FFFFFF", "000000", "E7E6E6", "44546A"};
   for (std::uint32_t index = 0; index < 4U; ++index) {
     EXPECT_EQ(Hex(resolve_color(ThemeSpec(index, 0.0), theme, ThemeSource::kPart, {}, ColorContext::kFont).argb),

@@ -613,7 +613,7 @@ TEST(BuiltinsCountIf, ThousandsGroupedNumericCriterion) {
 
 // ---------------------------------------------------------------------------
 // Array criteria lift: the call returns an array shaped by its criteria,
-// one result per criterion element (measured on Mac Excel 365, with
+// one result per criterion element (on Mac Excel 365, with
 // A1:A3 = 1, 2, 2 and B1:B3 = 10, 20, 30).
 // ---------------------------------------------------------------------------
 

@@ -4,7 +4,7 @@
 //
 // Sheet L: A1:A5 = "k1","k2","k3",(blank),"k5"; B1:B5 = 10..50; column C is
 // empty. Formulas are evaluated as if on sheet H. Expected values are the Mac
-// Excel 365 ja-JP measurements recorded in
+// Excel 365 ja-JP results recorded in
 // tests/oracle/cases/whole_axis_spill.yaml.
 
 #include <cstddef>
@@ -28,7 +28,7 @@ constexpr std::uint32_t kH = 0U;  // Sheet index of H.
 constexpr std::uint32_t kL = 1U;  // Sheet index of L.
 constexpr std::uint32_t kHCol = 7U;
 
-// A dense whole column cannot come in under this; the evaluations measured
+// A dense whole column cannot come in under this; the evaluations
 // here stay far below it.
 constexpr std::size_t kArenaCeilingBytes = 1U << 20;
 

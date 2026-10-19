@@ -381,7 +381,7 @@ TEST(XlsbPivotFixture, CacheFieldWithOnlyCharacterisedRecordsDecodes) {
 }
 
 TEST(XlsbPivotFixture, CacheFieldWithAnUncharacterisedRecordIsRejected) {
-  // An id the measured fixture never carries inside a field, standing in for
+  // An id the fixture never carries inside a field, standing in for
   // a grouping block whose layout has not been decoded.
   constexpr std::uint16_t kUncharacterised = 373;
   const std::vector<std::uint8_t> bytes = OneFieldCacheDefinition({EncodeRecord(kUncharacterised, {0U, 0U})});
@@ -448,7 +448,7 @@ TEST(XlsbPivotFixture, RowAxisIndexOutOfRangeIsRejected) {
 TEST(XlsbPivotFixture, UnknownAggregationSelectorIsRejected) {
   std::vector<std::uint8_t> payload;
   AppendU32(payload, 0U);    // field_index
-  AppendU32(payload, 999U);  // no selector this reader has measured
+  AppendU32(payload, 999U);  // no selector this reader recognises
   const std::vector<std::uint8_t> bytes = EncodeRecord(kBeginPivotDataField, payload);
 
   auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});

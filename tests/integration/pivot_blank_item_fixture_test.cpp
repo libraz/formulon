@@ -9,7 +9,7 @@
 //   North  50
 //
 // Excel's cached render (`Sheet2`, A3:B7) is what the expectations below
-// are measured against:
+// are checked against:
 //   行ラベル   合計 / Amt
 //   North             150
 //   South             300

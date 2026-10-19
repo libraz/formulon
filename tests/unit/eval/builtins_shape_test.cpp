@@ -549,8 +549,8 @@ TEST(BuiltinsSumproduct, ScalarArgsMultiply) {
 // ---------------------------------------------------------------------------
 //
 // Excel accepts a `:` chain and stores it verbatim, and the rectangle it
-// names is the bounding box of every endpoint: `=COLUMNS(A:C:E:G)` is 7,
-// measured on Excel 365 (Mac, ja-JP, 16.112.1). The two-endpoint shape is
+// names is the bounding box of every endpoint: `=COLUMNS(A:C:E:G)` is 7
+// on Excel 365 (Mac, ja-JP, 16.112.1). The two-endpoint shape is
 // not a special case of the grammar, so a derivation that stops there
 // answers `#VALUE!` for a spelling Excel evaluates.
 
@@ -615,8 +615,8 @@ TEST(BuiltinsShapeChainedRange, BoundedChainTakesEachAxisFromADifferentEndpoint)
 TEST(BuiltinsShapeChainedRange, MixedAxisChainBoundsTheWholeGrid) {
   // The endpoints do not have to bound the same axis. Composing a
   // whole-column span with a whole-row span leaves neither axis bounded,
-  // so the rectangle is the entire grid -- not an error. Measured on
-  // Excel 365 (Mac, ja-JP, 16.112.1); `shape.yaml` carries the goldens.
+  // so the rectangle is the entire grid -- not an error. On
+  // Excel 365 (Mac, ja-JP, 16.112.1) `shape.yaml` carries the goldens.
   Workbook wb = Workbook::create();
   const Value cols = EvalSourceIn("=COLUMNS(A:C:1:3)", wb, wb.sheet(0));
   ASSERT_TRUE(cols.is_number()) << "a mixed-axis chain is not an error in Excel";

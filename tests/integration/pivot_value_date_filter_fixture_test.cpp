@@ -5,8 +5,8 @@
 //
 // The fixture carries one pivot per filter family over a single source
 // table, each filtered from the row-label dropdown. Excel's own bytes
-// make the expectations below measurements rather than a reading of the
-// schema, and its cached render of each report is what the evaluation is
+// make the expectations below Excel's own results rather than a reading of
+// the schema, and its cached render of each report is what the evaluation is
 // compared against.
 //
 // Source table (`Sheet1`, A1:D9) — Region / Product / Date / Amt:

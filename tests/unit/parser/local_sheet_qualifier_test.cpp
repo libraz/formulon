@@ -37,13 +37,13 @@ constexpr Form kForms[] = {Form::kCell, Form::kAbsoluteCell, Form::kColumn,    F
 
 enum class Space { kNone, kBeforeBang, kAfterBang };
 
-// Measured A1 display: quoted when cell-shaped, digit-leading, R/C-shaped or
+// A1 display: quoted when cell-shaped, digit-leading, R/C-shaped or
 // a bool word; `XFE1` and `Data` stay bare.
 bool QuotedInA1(std::string_view name) {
   return name != "XFE1" && name != "Data";
 }
 
-// Measured R1C1 display: the A1 cell shapes print bare.
+// R1C1 display: the A1 cell shapes print bare.
 bool QuotedInR1C1(std::string_view name) {
   return name == "2024" || name == "R1C1" || name == "R" || name == "C" || name == "TRUE";
 }

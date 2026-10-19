@@ -1,9 +1,9 @@
-// Cell-by-cell comparison helper for GROUPBY / PIVOTBY results measured in
+// Cell-by-cell comparison helper for GROUPBY / PIVOTBY results from
 // Excel. Expected cells are written as "n:<number>", "t:<text>" or "b:<0|1>";
 // an empty-text placeholder is "t:".
 
-#ifndef FORMULON_TESTS_UNIT_EVAL_GROUPBY_PIVOTBY_MEASURED_HELPERS_H_
-#define FORMULON_TESTS_UNIT_EVAL_GROUPBY_PIVOTBY_MEASURED_HELPERS_H_
+#ifndef FORMULON_TESTS_UNIT_EVAL_GROUPBY_PIVOTBY_EXCEL_PARITY_HELPERS_H_
+#define FORMULON_TESTS_UNIT_EVAL_GROUPBY_PIVOTBY_EXCEL_PARITY_HELPERS_H_
 
 #include <cstdint>
 #include <string>
@@ -12,7 +12,7 @@
 #include "gtest/gtest.h"
 #include "value.h"
 
-namespace formulon::eval::measured {
+namespace formulon::eval::excel_parity {
 
 inline std::string Render(const Value& v) {
   if (v.is_number()) {
@@ -38,6 +38,6 @@ inline void ExpectCells(const Value& v, std::uint32_t rows, std::uint32_t cols,
   }
 }
 
-}  // namespace formulon::eval::measured
+}  // namespace formulon::eval::excel_parity
 
-#endif  // FORMULON_TESTS_UNIT_EVAL_GROUPBY_PIVOTBY_MEASURED_HELPERS_H_
+#endif  // FORMULON_TESTS_UNIT_EVAL_GROUPBY_PIVOTBY_EXCEL_PARITY_HELPERS_H_

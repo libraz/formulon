@@ -492,7 +492,7 @@ TEST(EvalContextCrossSheetRange, ThreeDRangeTailUnaryIsRefError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-// The measured probe: Host, Sa (A1=13), Sb (A1=23), evaluated on Host.
+// The fixture: Host, Sa (A1=13), Sb (A1=23), evaluated on Host.
 struct ThreeDProbe {
   ThreeDProbe() {
     wb.add_sheet("Host");

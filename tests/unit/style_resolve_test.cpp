@@ -234,7 +234,7 @@ TEST(StylesBuiltinIds, ExcelSavedThemeIsParsed) {
   EXPECT_EQ(loaded.theme.colors[4], 0xFF4F81BDU);  // accent1 of the fixture's own theme part
 }
 
-/// The styles of the deletion measurement: a custom style (xf 1: 0.000 format,
+/// The styles of the deletion case: a custom style (xf 1: 0.000 format,
 /// bold red font, yellow fill, right alignment, unlocked) and cell xfs 1..7
 /// referencing it with different apply flags.
 StylesTable BuildDeletionTable() {

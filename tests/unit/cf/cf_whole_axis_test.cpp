@@ -100,7 +100,7 @@ TEST(CfWholeAxis, ReducedWholeAxisAggregateMatchesEveryCell) {
   }
 }
 
-// Inferred from the whole-axis measurement, not measured: a bounded array result is also
+// Inferred from the whole-axis behaviour, not checked directly: a bounded array result is also
 // decided by its first element.
 TEST(CfWholeAxis, BoundedArrayResultDecidedByFirstElement) {
   Grid g;

@@ -5,7 +5,7 @@
 //
 // Local fixture, sheet L: A1:A5 = "k1","k2","k3",(blank),"k5"; B1:B5 = 10..50;
 // column C empty. Formulas sit on sheet H. Expected values are Excel 365
-// ja-JP measurements.
+// ja-JP results.
 
 #include <cstdint>
 #include <string>

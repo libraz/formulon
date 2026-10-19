@@ -1,7 +1,7 @@
 // SUBTOTAL(1..11) excludes filter-hidden rows and 101..111 every hidden row.
 // A hidden row counts as filtered exactly when an AutoFilter on its sheet (the
 // sheet's own or a table's) carries a criterion, inside the filter range or
-// not. Expected values were measured in Excel after save, close and reopen.
+// not. Expected values were read in Excel after save, close and reopen.
 
 #include <cstdint>
 #include <set>
@@ -131,7 +131,7 @@ TEST(SubtotalFilterHidden, ProbeTable) {
   }
 }
 
-// Region totals measured on the Excel-built sheets.
+// Region totals of the Excel-built sheets.
 TEST(SubtotalFilterHidden, RegionSums) {
   struct Sums {
     const char* name;

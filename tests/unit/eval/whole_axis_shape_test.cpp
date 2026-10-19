@@ -5,7 +5,7 @@
 //
 // Sheet L: A1:A5 = "k1","k2","k3",(blank),"k5"; B1:B5 = 10..50; column C is
 // empty. Formulas sit on sheet H unless a test says otherwise. Expected values
-// are the Mac Excel 365 ja-JP measurements recorded in
+// are the Mac Excel 365 ja-JP results recorded in
 // tests/oracle/cases/whole_axis_spill.yaml.
 
 #include <cstddef>

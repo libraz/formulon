@@ -451,7 +451,7 @@ target_compile_definitions(formulon_unit_tests
     # symmetry tests (tests/unit/io/roundtrip_symmetry_test.cpp) to load real
     # Excel-produced packages under tests/fixtures/.
     FORMULON_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
-    # Measured collation tables and probe fixtures read by tests/unit/eval/collation_test.cpp.
+    # Excel collation tables and probe fixtures read by tests/unit/eval/collation_test.cpp.
     FORMULON_COLLATION_DATA_DIR="${CMAKE_SOURCE_DIR}/tools/collation/data"
 )
 

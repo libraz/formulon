@@ -964,7 +964,7 @@ TEST(PivotLayout, SortIndependentSubtotalProjectionKeepsBothAxesAndGrandTotals) 
 }
 
 // ---------------------------------------------------------------------------
-// Custom subtotal functions on a row field, measured on Mac Excel 365 ja-JP:
+// Custom subtotal functions on a row field, on Mac Excel 365 ja-JP:
 // Region > Product with Sum of Amt / Sum of Qty over East A, North A+B and
 // South A+B.
 // ---------------------------------------------------------------------------

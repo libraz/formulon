@@ -408,7 +408,7 @@ std::string Row(int plot, const std::string& io, const std::string& name, const 
          "|line=" + line + "|marker=" + marker + "|smooth=" + smooth + "|dpt=" + dpt + "|labels=" + labels;
 }
 
-// Frequently repeated fragments of the measured tables.
+// Frequently repeated fragments of the tables.
 const std::string kNameS1 = "strRef Sheet1!$B$1 n=1 0:S1";
 const std::string kNameS2 = "strRef Sheet1!$C$1 n=1 0:S2";
 const std::string kCatAbcd = "strRef Sheet1!$A$2:$A$5 n=4 0:a 1:b 2:c 3:d";
@@ -442,7 +442,7 @@ std::string AreaPair(const std::string& header) {
 // Fixture models
 // ---------------------------------------------------------------------------
 
-TEST(ChartXml, ColumnFixtureMatchesMeasuredModel) {
+TEST(ChartXml, ColumnFixtureMatchesExcelModel) {
   const std::vector<std::string> expected = {
       BarPair("2 col_clustered|barChart|col|clustered|0|219|absent|absent|none|0|b|1/gap/1"),
       BarPair("3 col_stacked|barChart|col|stacked|0|219|100|absent|none|0|b|1/gap/1"),
@@ -455,14 +455,14 @@ TEST(ChartXml, ColumnFixtureMatchesMeasuredModel) {
   ExpectFixture("chart_xlsb.xlsb", expected);
 }
 
-TEST(ChartXml, BarFixtureMatchesMeasuredModel) {
+TEST(ChartXml, BarFixtureMatchesExcelModel) {
   ExpectFixture("chart_bar.xlsx",
                 {BarPair("2 bar_clustered|barChart|bar|clustered|0|182|absent|absent|none|0|b|1/gap/1"),
                  BarPair("3 bar_stacked|barChart|bar|stacked|0|182|100|absent|none|0|b|1/gap/1"),
                  BarPair("4 bar_percent|barChart|bar|percentStacked|0|182|100|absent|none|0|b|1/gap/1")});
 }
 
-TEST(ChartXml, LineFixtureMatchesMeasuredModel) {
+TEST(ChartXml, LineFixtureMatchesExcelModel) {
   ExpectFixture("chart_line.xlsx",
                 {LinePair("2 line_standard|lineChart|absent|standard|0|absent|absent|absent|none|0|b|1/gap/1"),
                  LinePair("3 line_stacked|lineChart|absent|stacked|0|absent|absent|absent|none|0|b|1/gap/1"),
@@ -472,7 +472,7 @@ TEST(ChartXml, LineFixtureMatchesMeasuredModel) {
                        Row(0, "1/1", kNameS2, kCatAbcd, kValC, "absent", kLine2, kCircle2, "0")})});
 }
 
-TEST(ChartXml, AreaFixtureMatchesMeasuredModel) {
+TEST(ChartXml, AreaFixtureMatchesExcelModel) {
   ExpectFixture("chart_area.xlsx",
                 {AreaPair("2 area_standard|areaChart|absent|standard|0|absent|absent|absent|none|0|b|1/gap/1"),
                  AreaPair("3 area_stacked|areaChart|absent|stacked|0|absent|absent|absent|none|0|b|1/gap/1"),

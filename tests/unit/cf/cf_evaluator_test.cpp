@@ -171,7 +171,7 @@ TEST(CFEvaluator, CellIsNotBetweenNumericIsExclusive) {
   EXPECT_TRUE(match_rule(r, Value::number(10.001)));
 }
 
-// Excel ignores the bound order (measured on Mac Excel 365).
+// Excel ignores the bound order.
 TEST(CFEvaluator, CellIsBetweenBoundsAreUnordered) {
   CFRule r = MakeRule(RuleType::CellIs);
   r.op = CellIsOperator::Between;
@@ -534,7 +534,7 @@ TEST(CFEvaluator, MakeMatchPropagatesEmptyDxf) {
 
 // ---------------------------------------------------------------------------
 // Locale collation: text cell-value and duplicate / unique rules follow the
-// profile of the evaluation context. Expectations are the measured equality
+// profile of the evaluation context. Expectations are the equality
 // and ordering fixtures (tools/collation/data/fixtures).
 // ---------------------------------------------------------------------------
 

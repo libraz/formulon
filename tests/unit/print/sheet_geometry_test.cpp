@@ -63,11 +63,11 @@ TEST(SheetGeometry, CalibriModelDiffersByMode) {
   EXPECT_TRUE(print.calibrated);
 }
 
-TEST(SheetGeometry, ThirtyCharColumnMatchesMeasuredWidths) {
+TEST(SheetGeometry, ThirtyCharColumnMatchesExcelWidths) {
   Workbook wb = Workbook::create();
   const ColumnWidthModel display = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
   const ColumnWidthModel print = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
-  // Measured Range.Width for a 30-character Calibri 11 column at 96 DPI.
+  // Range.Width for a 30-character Calibri 11 column at 96 DPI.
   EXPECT_DOUBLE_EQ(column_chars_to_points(30.0, display), 161.25);
   // Print-layout figure, 1197/7.
   EXPECT_DOUBLE_EQ(column_chars_to_points(30.0, print), 171.0);
@@ -143,7 +143,7 @@ TEST(SheetGeometry, UncalibratedFontReportsExtrapolated) {
   ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
   EXPECT_FALSE(model.calibrated);
   EXPECT_EQ(model.normal_font_name, "Comic Sans MS");
-  // The Calibri 11 figure stands in for the unmeasured font.
+  // The Calibri 11 figure stands in for a font without a table.
   EXPECT_DOUBLE_EQ(model.points_per_char, kDisplayMdw);
   EXPECT_DOUBLE_EQ(model.padding_pt, kDisplayPad);
 

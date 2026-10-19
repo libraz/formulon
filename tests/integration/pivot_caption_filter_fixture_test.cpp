@@ -6,7 +6,7 @@
 // Excel built over A1:C7 (Region on rows, Qtr on columns, sum of Amt),
 // then filtered from the row-label dropdown with
 // "label filters -> equals -> North". Excel's own bytes are what makes
-// the expectations below measurements rather than a reading of the
+// the expectations below Excel's own results rather than a reading of the
 // schema.
 //
 // Two properties of those bytes drive the whole design:

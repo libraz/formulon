@@ -65,7 +65,7 @@ constexpr LocalRow kLocalRows[] = {
     {"\xE5\x85\xA8\xE3\x80\x80\xE8\xA7\x92", true, true},  // 全　角
 };
 
-TEST(SheetQuoting, LocalPredicatesFollowMeasuredDisplay) {
+TEST(SheetQuoting, LocalPredicatesFollowExcelDisplay) {
   for (const LocalRow& row : kLocalRows) {
     EXPECT_EQ(local_sheet_needs_quoting_a1(row.name), row.quoted_a1) << row.name;
     EXPECT_EQ(local_sheet_needs_quoting_r1c1(row.name), row.quoted_r1c1) << row.name;

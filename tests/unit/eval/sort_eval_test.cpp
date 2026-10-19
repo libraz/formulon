@@ -649,7 +649,7 @@ std::string PairArray(const CollationPair& p) {
   return std::string("{\"") + p.a + "\";\"" + p.b + "\"}";
 }
 
-TEST(BuiltinsSortCollation, FirstOfPairFollowsMeasuredOrder) {
+TEST(BuiltinsSortCollation, FirstOfPairFollowsExcelOrder) {
   for (const CollationCase& c : kCollationCases) {
     ScopedEvalProfile scope(c.profile);
     for (std::size_t i = 0; i < c.count; ++i) {

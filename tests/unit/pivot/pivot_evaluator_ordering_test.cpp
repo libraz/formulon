@@ -452,7 +452,7 @@ ExcelProfile mac(ExcelLocale locale) {
 // Item counts per locale, from the `groupby` column of
 // tools/collation/data/fixtures/eq_{ja_JP,en_US,zh_CN}.tsv; pivot items merge
 // at the same strength as GROUPBY keys.
-TEST(PivotEvaluatorCollation, MacItemsMergeAsMeasured) {
+TEST(PivotEvaluatorCollation, MacItemsMergeAsExcel) {
   struct ItemCase {
     const char* a;
     const char* b;

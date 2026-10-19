@@ -145,7 +145,7 @@ TEST_F(FunctionValueTrimRefEval, TwoDimensionalAndWholeAxis) {
 }
 
 TEST_F(FunctionValueTrimRefEval, FormulaInsideItsOwnTrimmedRangeIsNoCircularRead) {
-  // Measured with the formula in Z1: row 1's last used column is Z itself.
+  // With the formula in Z1: row 1's last used column is Z itself.
   Set(0, 0, 0, 1.0);
   Set(0, 0, 2, 2.0);
   const auto eval_z1 = [&](const std::string& formula) {

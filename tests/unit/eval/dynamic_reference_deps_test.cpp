@@ -1,6 +1,6 @@
 //
 // Recalculation through references OFFSET and INDIRECT resolve while the
-// formula runs. The circularity rules are measured on Mac Excel 365
+// formula runs. The circularity rules hold on Mac Excel 365
 // (16.113.2): ROW / ROWS / ISREF / AREAS on their own cell are not
 // circular, OFFSET / INDIRECT resolving onto their own cell are, and the
 // verdict follows the resolved target; a circular cell keeps its last value.
@@ -78,7 +78,7 @@ TEST(DynamicReferenceRecalc, ReferenceOnlyFunctionsOnTheirOwnCellAreNotCircular)
 
 // A reference bound to a LET name, a LAMBDA parameter or a helper callback
 // parameter reads its cell only where the name is used as a value, so a
-// position-only use of the formula's own cell is not circular. Measured on
+// position-only use of the formula's own cell is not circular. On
 // Mac Excel 365 with each formula in A1 and A2 = 5.
 Workbook OwnCellBook(const char* formula) {
   Workbook wb = Workbook::create();
@@ -155,7 +155,7 @@ TEST(DynamicReferenceRecalc, ValueUseOfBoundReferenceRecalcs) {
 
 // CELL reads its reference's value only for "contents" and "type", and a
 // reference-returning call in a position-only slot only positions the
-// arguments it can return; its other arguments are value reads. Measured on
+// arguments it can return; its other arguments are value reads. On
 // Mac Excel 365 with each formula in A1 and B1 = 1.
 TEST(DynamicReferenceRecalc, PositionOnlyCellInfoAndReferenceCallsOnOwnCell) {
   const char* not_circular[] = {
@@ -186,7 +186,7 @@ TEST(DynamicReferenceRecalc, PositionOnlyCellInfoAndReferenceCallsOnOwnCell) {
 }
 
 // A computed CELL info_type leaves the reference unread by the formula text:
-// a position key on the formula's own cell is not circular (measured on Mac
+// a position key on the formula's own cell is not circular (on Mac
 // Excel 365), and a value key's read is learned as the formula runs.
 TEST(DynamicReferenceRecalc, ComputedCellInfoTypeReadsAtRunTime) {
   for (const char* info : {"row", "address", "prefix"}) {
@@ -446,7 +446,7 @@ TEST(DynamicReferenceRecalc, HelperCallbackBodyReadsRecalc) {
 // With iterative calculation off, a cycle closing through an OFFSET read
 // leaves every member -- the static one included -- at the value it showed
 // before the recalc, an uncomputed member at 0, and recalculating changes
-// nothing. Measured on Mac Excel 365 (A1 `=B1+1`, B1 `=OFFSET(A1,0,0)`).
+// nothing. On Mac Excel 365 (A1 `=B1+1`, B1 `=OFFSET(A1,0,0)`).
 enum class CycleDriver { kSerial, kParallel };
 
 void RecalcWith(Workbook& wb, CycleDriver driver) {
@@ -516,7 +516,7 @@ INSTANTIATE_TEST_SUITE_P(Drivers, DynamicCycleRecalc, ::testing::Values(CycleDri
 
 // Excel judges circularity by what evaluation reads: a formula whose only
 // path back to its own cell sits in a branch never taken is not circular.
-// Measured on Mac Excel 365 with each formula in A1.
+// On Mac Excel 365 with each formula in A1.
 TEST(ReadCircularity, BranchNotTakenIsNotCircular) {
   struct Case {
     const char* formula;
@@ -580,7 +580,7 @@ TEST(ReadCircularity, ReadingTheOwnCellStaysCircular) {
 }
 
 // Reading a spill reads its anchor's value: B1 `=SEQUENCE(2)+D1` with D1
-// `=SUM(B1#)+100` is circular (measured on Mac Excel 365).
+// `=SUM(B1#)+100` is circular.
 TEST(ReadCircularity, ReadingASpillOfTheComponentIsCircular) {
   Workbook wb = Workbook::create();
   Formula(wb, {0U, kB}, "=SEQUENCE(2)+D1");

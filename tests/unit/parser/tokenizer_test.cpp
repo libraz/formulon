@@ -884,8 +884,7 @@ TEST(TokenizerExcessiveLength, MultibyteRunStopsNearTheCap) {
 TEST(TokenizerExcessiveLength, DefaultCapMatchesExcelsFormulaLengthLimit) {
   // Excel 365's real per-formula ceiling is 8,192 characters (Microsoft 365
   // Excel specifications and limits; see tests/divergence.yaml's
-  // left_associative_chain_default_depth_cap entry for the directly
-  // measured Excel observation). A formula one character over that limit
+  // left_associative_chain_default_depth_cap entry). A formula one character over that limit
   // is truncated with ExcessiveLength using the *default* options, and one
   // at exactly the limit is accepted.
   {

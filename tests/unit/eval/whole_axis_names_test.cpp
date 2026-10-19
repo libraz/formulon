@@ -8,7 +8,7 @@
 // Sheet L: A1:A5 = "k1","k2","k3",(blank),"k5"; B1:B5 = 10..50; column C is
 // empty. Formulas sit on sheet H. `Src.xlsx` is a closed-book cache of sheet
 // S with the same layout (A4 not cached). Expected values are the Mac Excel
-// 365 ja-JP measurements recorded in tests/oracle/cases/whole_axis_spill.yaml.
+// 365 ja-JP results recorded in tests/oracle/cases/whole_axis_spill.yaml.
 
 #include <cstddef>
 #include <cstdint>
@@ -194,7 +194,7 @@ TEST_F(WholeAxisNames, LetBoundExternalRangeIsValueToRangeCriteriaFunctions) {
 TEST_F(WholeAxisNames, TextJoinCountsWholeColumnBlanks) {
   ExpectError("=TEXTJOIN(\",\",FALSE,L!A:A)", ErrorCode::Calc);
   ExpectNumber("=LEN(TEXTJOIN(\",\",FALSE,L!A1:A20000))", 20007.0);
-  // Not measured: with no delimiter the whole sheet's blanks add nothing, and
+  // With no delimiter the whole sheet's blanks add nothing, and
   // must not be walked one by one.
   ExpectNumber("=LEN(TEXTJOIN(\"\",FALSE,L!A:XFD))", 18.0);
   for (const char* formula : {"=TEXTJOIN(\",\",TRUE,L!A:A)", "=CONCAT(L!A:A)"}) {

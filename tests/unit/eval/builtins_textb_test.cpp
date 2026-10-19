@@ -135,7 +135,7 @@ TEST(TextLenb, SupplementaryPlaneIsTwoBytes) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
-// Measured Mac Excel widths of the combining and half-width probes per locale.
+// Mac Excel widths of the combining and half-width test strings per locale.
 struct LenbLocaleCase {
   ExcelLocale locale;
   double halfwidth_kana;  // LENB("ｱｲｳ")
@@ -144,7 +144,7 @@ struct LenbLocaleCase {
   double latin1_a_circ;   // LENB("â")
 };
 
-TEST(TextLenb, MeasuredWidthsFollowTheLocaleTable) {
+TEST(TextLenb, ExcelWidthsFollowTheLocaleTable) {
   constexpr std::array<LenbLocaleCase, 4> kCases = {{
       {ExcelLocale::kJaJP, 3.0, 3.0, 2.0, 2.0},
       {ExcelLocale::kZhCN, 6.0, 2.0, 2.0, 2.0},

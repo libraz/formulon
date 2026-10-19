@@ -423,7 +423,7 @@ TEST(DateTimeWorkday, ErrorPropagates) {
 }
 
 // ---------------------------------------------------------------------------
-// Excel-measured near-integer snap, second rounding, DATE limits, serial 0 and
+// Excel near-integer snap, second rounding, DATE limits, serial 0 and
 // the Analysis-ToolPak argument rule for the calendar family.
 // ---------------------------------------------------------------------------
 

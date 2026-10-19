@@ -618,7 +618,7 @@ TEST(BuiltinsText3Dollar, RoundedToZeroKeepsTheSign) {
 
 // ---------------------------------------------------------------------------
 // USDOLLAR: DOLLAR's kernel with `$`, two default decimals and parenthesised
-// negatives, whatever the locale (measured on Mac Excel 365 ja-JP).
+// negatives, whatever the locale (Mac Excel 365 ja-JP).
 // ---------------------------------------------------------------------------
 
 void ExpectUsDollar(const char* src, const char* want) {
