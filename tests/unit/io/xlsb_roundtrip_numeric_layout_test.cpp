@@ -303,5 +303,122 @@ TEST(XlsbWriteReadSymmetry, AlignmentAndApplyFlagsSurviveBothFormatsAlike) {
   EXPECT_TRUE(b.apply_protection);
 }
 
+std::uint32_t AppendXlsbTestStyle(Workbook& wb) {
+  StylesTable& styles = wb.mutable_styles();
+  if (styles.cell_xfs.empty()) {
+    styles.cell_xfs.push_back(CellXf{});
+  }
+  CellXf styled = styles.cell_xfs.front();
+  styled.num_fmt_id = 2U;
+  styled.apply_number_format = true;
+  styles.cell_xfs.push_back(styled);
+  return static_cast<std::uint32_t>(styles.cell_xfs.size() - 1U);
+}
+
+TEST(XlsbWriteReadSymmetry, NonFiniteLiteralNumbersRoundTripAsNumErrors) {
+  const double infinity = std::numeric_limits<double>::infinity();
+  const double special_values[] = {std::numeric_limits<double>::quiet_NaN(), infinity, -infinity};
+  const double finite_values[] = {1.25, 3611469.5700000003};
+
+  Workbook source = Workbook::create_empty();
+  source.add_sheet("Sheet1");
+  for (std::size_t i = 0; i < std::size(special_values); ++i) {
+    source.sheet(0).set_cell_value(static_cast<std::uint32_t>(i), 0U, Value::number(special_values[i]));
+  }
+  for (std::size_t i = 0; i < std::size(finite_values); ++i) {
+    source.sheet(0).set_cell_value(static_cast<std::uint32_t>(i + std::size(special_values)), 0U,
+                                   Value::number(finite_values[i]));
+  }
+
+  auto saved = io::xlsb::write_xlsb(source);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto loaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << "read_xlsb failed: " << loaded.error().message;
+
+  for (std::size_t i = 0; i < std::size(special_values); ++i) {
+    SCOPED_TRACE("non-finite literal row " + std::to_string(i));
+    const Cell* before = source.sheet(0).cell_at(static_cast<std::uint32_t>(i), 0U);
+    ASSERT_NE(before, nullptr);
+    ASSERT_TRUE(before->cached_value.is_number());
+    if (std::isnan(special_values[i])) {
+      EXPECT_TRUE(std::isnan(before->cached_value.as_number()));
+    } else {
+      EXPECT_EQ(before->cached_value.as_number(), special_values[i]);
+    }
+
+    const Cell* after = loaded.value().workbook.sheet(0).cell_at(static_cast<std::uint32_t>(i), 0U);
+    ASSERT_NE(after, nullptr);
+    ASSERT_TRUE(after->cached_value.is_error());
+    EXPECT_EQ(after->cached_value.as_error(), ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < std::size(finite_values); ++i) {
+    const std::uint32_t row = static_cast<std::uint32_t>(i + std::size(special_values));
+    const Cell* after = loaded.value().workbook.sheet(0).cell_at(row, 0U);
+    ASSERT_NE(after, nullptr);
+    ASSERT_TRUE(after->cached_value.is_number());
+    EXPECT_EQ(BitsOf(after->cached_value.as_number()), BitsOf(finite_values[i]));
+  }
+}
+
+TEST(XlsbWriteReadSymmetry, NonFiniteFormulaAndSpillCachesRoundTripAsNumErrors) {
+  const double infinity = std::numeric_limits<double>::infinity();
+  const double special_values[] = {std::numeric_limits<double>::quiet_NaN(), infinity, -infinity};
+  Workbook source = Workbook::create_empty();
+  source.add_sheet("Sheet1");
+  const std::uint32_t styled_xf = AppendXlsbTestStyle(source);
+  Sheet& sheet = source.sheet(0);
+
+  for (std::size_t i = 0; i < std::size(special_values); ++i) {
+    const std::uint32_t row = static_cast<std::uint32_t>(i);
+    sheet.set_cell_formula(row, 0U, "=1+1");
+    sheet.set_cell_cached_value(row, 0U, Value::number(special_values[i]));
+    sheet.set_cell_xf_index(row, 0U, styled_xf);
+  }
+
+  const std::uint32_t anchor_row = 4U;
+  sheet.set_cell_formula(anchor_row, 0U, "=SEQUENCE(3)");
+  sheet.set_cell_dynamic_array(anchor_row, 0U, true);
+  sheet.set_cell_xf_index(anchor_row, 0U, styled_xf);
+  ASSERT_TRUE(sheet.commit_spill(
+      anchor_row, 0U, 3U, 1U,
+      {Value::number(special_values[0]), Value::number(special_values[1]), Value::number(special_values[2])}));
+  const Cell* source_anchor = sheet.cell_at(anchor_row, 0U);
+  ASSERT_NE(source_anchor, nullptr);
+  ASSERT_TRUE(source_anchor->cached_value.is_number());
+  ASSERT_TRUE(std::isnan(source_anchor->cached_value.as_number()));
+  EXPECT_TRUE(sheet.resolve_cell_value(anchor_row + 1U, 0U).is_number());
+  EXPECT_TRUE(sheet.resolve_cell_value(anchor_row + 2U, 0U).is_number());
+
+  auto saved = io::xlsb::write_xlsb(source);
+  ASSERT_TRUE(static_cast<bool>(saved)) << "write_xlsb failed: " << saved.error().message;
+  auto loaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << "read_xlsb failed: " << loaded.error().message;
+  const Sheet& restored = loaded.value().workbook.sheet(0);
+
+  for (std::size_t i = 0; i < std::size(special_values); ++i) {
+    const Cell* formula = restored.cell_at(static_cast<std::uint32_t>(i), 0U);
+    ASSERT_NE(formula, nullptr);
+    EXPECT_EQ(formula->formula_text, "=1+1");
+    EXPECT_EQ(formula->xf_index, styled_xf);
+    ASSERT_TRUE(formula->cached_value.is_error());
+    EXPECT_EQ(formula->cached_value.as_error(), ErrorCode::Num);
+  }
+
+  const Cell* restored_anchor = restored.cell_at(anchor_row, 0U);
+  ASSERT_NE(restored_anchor, nullptr);
+  EXPECT_EQ(restored_anchor->formula_text, "=SEQUENCE(3)");
+  EXPECT_EQ(restored_anchor->xf_index, styled_xf);
+  EXPECT_TRUE(restored_anchor->dynamic_array);
+  ASSERT_TRUE(restored_anchor->cached_value.is_error());
+  EXPECT_EQ(restored_anchor->cached_value.as_error(), ErrorCode::Num);
+  const SpillRegion* restored_spill = restored.spill_region_at_anchor(anchor_row, 0U);
+  ASSERT_NE(restored_spill, nullptr);
+  ASSERT_EQ(restored_spill->cells.size(), std::size(special_values));
+  for (const Value& value : restored_spill->cells) {
+    ASSERT_TRUE(value.is_error());
+    EXPECT_EQ(value.as_error(), ErrorCode::Num);
+  }
+}
+
 }  // namespace
 }  // namespace formulon

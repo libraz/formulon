@@ -7,7 +7,9 @@
 // path). Formulas store each book as the 1-based position of its link in
 // `<externalReferences>`.
 
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <regex>
 #include <string>
 #include <string_view>
@@ -23,6 +25,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "miniz.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -65,6 +68,80 @@ Workbook Load(const std::vector<std::uint8_t>& pkg) {
 
 std::vector<std::uint8_t> FixtureBytes(const char* name) {
   return test::read_file_bytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/" + name);
+}
+
+std::vector<std::uint8_t> ReplaceZipPart(const std::vector<std::uint8_t>& package, std::string_view part_name,
+                                         std::string_view from, std::string_view to) {
+  mz_zip_archive reader{};
+  if (mz_zip_reader_init_mem(&reader, package.data(), package.size(), 0) == MZ_FALSE) {
+    ADD_FAILURE() << "could not open fixture package";
+    return {};
+  }
+  mz_zip_archive writer{};
+  if (mz_zip_writer_init_heap(&writer, 0, 4096) == MZ_FALSE) {
+    ADD_FAILURE() << "could not create edited fixture package";
+    mz_zip_reader_end(&reader);
+    return {};
+  }
+
+  bool replaced = false;
+  const mz_uint count = mz_zip_reader_get_num_files(&reader);
+  for (mz_uint i = 0; i < count; ++i) {
+    char name[256] = {};
+    if (mz_zip_reader_get_filename(&reader, i, name, sizeof(name)) == MZ_FALSE) {
+      ADD_FAILURE() << "could not read fixture entry name at index " << i;
+      continue;
+    }
+    std::size_t size = 0;
+    void* data = mz_zip_reader_extract_to_heap(&reader, i, &size, 0);
+    if (data == nullptr) {
+      ADD_FAILURE() << "could not extract fixture entry " << name;
+      continue;
+    }
+    std::string bytes(static_cast<const char*>(data), size);
+    mz_free(data);
+    if (part_name == name) {
+      const std::size_t at = bytes.find(from);
+      EXPECT_NE(at, std::string::npos) << "missing source text in " << name;
+      if (at != std::string::npos) {
+        bytes.replace(at, from.size(), to);
+        replaced = true;
+      }
+    }
+    EXPECT_NE(
+        mz_zip_writer_add_mem(&writer, name, bytes.data(), bytes.size(), static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+        MZ_FALSE)
+        << "could not write fixture entry " << name;
+  }
+  EXPECT_TRUE(replaced) << "fixture entry not found: " << part_name;
+  mz_zip_reader_end(&reader);
+
+  void* archive = nullptr;
+  std::size_t archive_size = 0;
+  if (mz_zip_writer_finalize_heap_archive(&writer, &archive, &archive_size) == MZ_FALSE) {
+    ADD_FAILURE() << "could not finish edited fixture package";
+    mz_zip_writer_end(&writer);
+    return {};
+  }
+  mz_zip_writer_end(&writer);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive),
+                                static_cast<const std::uint8_t*>(archive) + archive_size);
+  mz_free(archive);
+  return out;
+}
+
+pugi::xml_node FindCachedCell(pugi::xml_document& doc, std::string_view ref) {
+  const pugi::xml_node set = doc.child("externalLink").child("externalBook").child("sheetDataSet");
+  for (pugi::xml_node sheet = set.child("sheetData"); sheet; sheet = sheet.next_sibling("sheetData")) {
+    for (pugi::xml_node row = sheet.child("row"); row; row = row.next_sibling("row")) {
+      for (pugi::xml_node cell = row.child("cell"); cell; cell = cell.next_sibling("cell")) {
+        if (std::string_view(cell.attribute("r").value()) == ref) {
+          return cell;
+        }
+      }
+    }
+  }
+  return {};
 }
 
 /// The text of every `<f>` element in `xml`, in document order.
@@ -193,6 +270,104 @@ Workbook BookWithGeneratedLink() {
   rec.book.cells[ExternalBook::cell_key(0, 1, 1)].value = Value::error(ErrorCode::NA);
   wb.set_external_links({rec});
   return wb;
+}
+
+TEST(OoxmlExternalLinkWriter, NonFiniteCachedNumbersAreStoredAsNumErrors) {
+  Workbook wb = HostBook();
+  ExternalLinkRecord rec = NewLink(1, "Book.xlsx");
+  rec.book.sheet_data = {true};
+  const auto add_number = [&rec](std::uint32_t col, double value) {
+    ExternalCell cell;
+    cell.value = Value::number(value);
+    rec.book.cells[ExternalBook::cell_key(0, 0, col)] = std::move(cell);
+  };
+  add_number(0, std::numeric_limits<double>::infinity());
+  add_number(1, -std::numeric_limits<double>::infinity());
+  add_number(2, std::numeric_limits<double>::quiet_NaN());
+  add_number(3, 12.5);
+  ExternalCell boolean;
+  boolean.value = Value::boolean(true);
+  rec.book.cells[ExternalBook::cell_key(0, 0, 4)] = std::move(boolean);
+  ExternalCell text;
+  text.value = Value::text({});
+  text.text = "control";
+  rec.book.cells[ExternalBook::cell_key(0, 0, 5)] = std::move(text);
+  wb.set_external_links({std::move(rec)});
+
+  const std::vector<std::uint8_t> pkg = Save(wb);
+  const std::string body = Part(pkg, "xl/externalLinks/externalLink1.xml");
+  pugi::xml_document doc;
+  ASSERT_TRUE(test::parse_xml(body, &doc));
+  for (const char* ref : {"A1", "B1", "C1"}) {
+    const pugi::xml_node cell = FindCachedCell(doc, ref);
+    ASSERT_TRUE(cell) << ref << ": " << body;
+    EXPECT_STREQ(cell.attribute("t").value(), "e") << ref;
+    EXPECT_STREQ(cell.child("v").text().get(), "#NUM!") << ref;
+  }
+  const pugi::xml_node finite = FindCachedCell(doc, "D1");
+  ASSERT_TRUE(finite) << body;
+  EXPECT_FALSE(finite.attribute("t"));
+  EXPECT_STREQ(finite.child("v").text().get(), "12.5");
+  const pugi::xml_node boolean_cell = FindCachedCell(doc, "E1");
+  ASSERT_TRUE(boolean_cell) << body;
+  EXPECT_STREQ(boolean_cell.attribute("t").value(), "b");
+  EXPECT_STREQ(boolean_cell.child("v").text().get(), "1");
+  const pugi::xml_node text_cell = FindCachedCell(doc, "F1");
+  ASSERT_TRUE(text_cell) << body;
+  EXPECT_STREQ(text_cell.attribute("t").value(), "str");
+  EXPECT_STREQ(text_cell.child("v").text().get(), "control");
+
+  const Workbook reloaded = Load(pkg);
+  ASSERT_EQ(reloaded.external_links().size(), 1U);
+  const ExternalBook& book = reloaded.external_links()[0].book;
+  for (std::uint32_t col = 0; col < 3U; ++col) {
+    const Value value = book.cached_cell(0, 0, col);
+    ASSERT_TRUE(value.is_error()) << col;
+    EXPECT_EQ(value.as_error(), ErrorCode::Num) << col;
+  }
+  const Value finite_value = book.cached_cell(0, 0, 3);
+  ASSERT_TRUE(finite_value.is_number());
+  EXPECT_DOUBLE_EQ(finite_value.as_number(), 12.5);
+  EXPECT_TRUE(book.cached_cell(0, 0, 4).as_boolean());
+  EXPECT_EQ(book.cached_cell(0, 0, 5).as_text(), "control");
+}
+
+TEST(OoxmlExternalLinkWriter, NonFiniteNumbersInLoadedBodyStayVerbatimUntilRegenerated) {
+  constexpr std::string_view kLinkPart = "xl/externalLinks/externalLink1.xml";
+  const std::vector<std::uint8_t> fixture = FixtureBytes("external_link_cell_kinds.xlsx");
+  ASSERT_FALSE(fixture.empty());
+  const std::vector<std::uint8_t> patched = ReplaceZipPart(fixture, kLinkPart, "<v>42</v>", "<v>1e999</v>");
+  ASSERT_FALSE(patched.empty());
+  const std::string patched_body = Part(patched, kLinkPart);
+
+  Workbook wb = Load(patched);
+  ASSERT_EQ(wb.external_links().size(), 1U);
+  const Value cached = wb.external_links()[0].book.cached_cell(1, 1, 1);
+  ASSERT_TRUE(cached.is_number());
+  ASSERT_TRUE(std::isinf(cached.as_number()));
+  EXPECT_GT(cached.as_number(), 0.0);
+
+  const std::vector<std::uint8_t> untouched = Save(wb);
+  EXPECT_EQ(Part(untouched, kLinkPart), patched_body);
+
+  std::vector<ExternalLinkRecord> links = wb.external_links();
+  links[0].body_stale = true;
+  wb.set_external_links(std::move(links));
+  const std::vector<std::uint8_t> regenerated = Save(wb);
+  const std::string body = Part(regenerated, kLinkPart);
+  EXPECT_NE(body, patched_body);
+  pugi::xml_document doc;
+  ASSERT_TRUE(test::parse_xml(body, &doc));
+  const pugi::xml_node cell = FindCachedCell(doc, "B2");
+  ASSERT_TRUE(cell) << body;
+  EXPECT_STREQ(cell.attribute("t").value(), "e");
+  EXPECT_STREQ(cell.child("v").text().get(), "#NUM!");
+
+  const Workbook reloaded = Load(regenerated);
+  ASSERT_EQ(reloaded.external_links().size(), 1U);
+  const Value error = reloaded.external_links()[0].book.cached_cell(1, 1, 1);
+  ASSERT_TRUE(error.is_error());
+  EXPECT_EQ(error.as_error(), ErrorCode::Num);
 }
 
 TEST(OoxmlExternalLinkWriter, GeneratedBodyCarriesSheetsNamesAndCachedData) {

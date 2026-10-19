@@ -5,6 +5,7 @@
 #include "io/ooxml/external_link_writer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -112,9 +113,10 @@ void AppendCachedCell(std::string& out, const ExternalBook& book, std::uint32_t 
   } else if (value.is_boolean()) {
     out.append(" t=\"b\"><v>");
     out.push_back(value.as_boolean() ? '1' : '0');
-  } else if (value.is_error()) {
+  } else if (value.is_error() || (value.is_number() && !std::isfinite(value.as_number()))) {
     out.append(" t=\"e\"><v>");
-    out.append(display_name(stored_cell_error(value.as_error())));
+    const ErrorCode error = value.is_error() ? stored_cell_error(value.as_error()) : ErrorCode::Num;
+    out.append(display_name(error));
   } else {
     out.append("><v>");
     append_xml_number(out, value.is_number() ? value.as_number() : 0.0);

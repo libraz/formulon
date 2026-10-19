@@ -2,6 +2,7 @@
 // other cell-value writer.
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "external_link.h"
@@ -48,6 +49,33 @@ TEST(XlsbExternalLinkCachedError, CalcIsStoredAsStoredCellErrorMapsIt) {
 
 TEST(XlsbExternalLinkCachedError, LegacyErrorIsKept) {
   EXPECT_EQ(CachedErrorAfterWrite(ErrorCode::Div0), ErrorCode::Div0);
+}
+
+TEST(XlsbExternalLinkCachedError, NonFiniteNumbersAreStoredAsNumErrors) {
+  ExternalLinkRecord link;
+  link.index = 1;
+  link.kind = ExternalLinkRecord::Kind::kExternalBook;
+  link.book.sheet_names = {"S"};
+  link.book.sheet_data = {true};
+  const double inputs[] = {std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity(),
+                           std::numeric_limits<double>::quiet_NaN(), 12.5};
+  for (std::uint32_t col = 0; col < 4U; ++col) {
+    link.book.cells[ExternalBook::cell_key(0, 0, col)].value = Value::number(inputs[col]);
+  }
+  XlsbLinkTables tables;
+  tables.index = 1;
+  tables.sheet_names = {"S"};
+  const std::vector<std::uint8_t> bin = build_external_link_bin(link, tables);
+  auto book = read_external_link_bin(ByteSpan{bin.data(), bin.size()});
+  ASSERT_TRUE(static_cast<bool>(book));
+  for (std::uint32_t col = 0; col < 3U; ++col) {
+    const Value v = book.value().cached_cell(0, 0, col);
+    ASSERT_TRUE(v.is_error()) << col;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << col;
+  }
+  const Value finite = book.value().cached_cell(0, 0, 3);
+  ASSERT_TRUE(finite.is_number());
+  EXPECT_EQ(finite.as_number(), 12.5);
 }
 
 }  // namespace

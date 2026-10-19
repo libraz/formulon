@@ -5,6 +5,7 @@
 #include "io/xlsb/external_link_writer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -135,14 +136,15 @@ void EmitSheetTable(std::vector<std::uint8_t>& out, const ExternalBook& book, st
     p.clear();
     emit_u32(p, col);
     XlsbRecordType type = XlsbRecordType::BrtExternCellReal;
-    if (value.is_number()) {
+    if (value.is_number() && std::isfinite(value.as_number())) {
       emit_double(p, value.as_number());
     } else if (value.is_boolean()) {
       type = XlsbRecordType::BrtExternCellBool;
       emit_u8(p, value.as_boolean() ? 1U : 0U);
-    } else if (value.is_error()) {
+    } else if (value.is_error() || value.is_number()) {
       type = XlsbRecordType::BrtExternCellError;
-      emit_u8(p, static_cast<std::uint8_t>(ooxml_code(stored_cell_error(value.as_error()))));
+      const ErrorCode error = value.is_error() ? stored_cell_error(value.as_error()) : ErrorCode::Num;
+      emit_u8(p, static_cast<std::uint8_t>(ooxml_code(error)));
     } else if (value.is_text()) {
       type = XlsbRecordType::BrtExternCellString;
       emit_xlwidestring(p, cell.text);

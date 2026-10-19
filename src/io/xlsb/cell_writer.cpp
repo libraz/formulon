@@ -4,6 +4,7 @@
 
 #include "io/xlsb/cell_writer.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -102,10 +103,17 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
 
   XlsbRecordType type = XlsbRecordType::BrtFmlaNum;
   switch (cached.kind()) {
-    case ValueKind::Number:
-      type = XlsbRecordType::BrtFmlaNum;
-      emit_double(p, cached.as_number());
+    case ValueKind::Number: {
+      const double value = cached.as_number();
+      if (std::isfinite(value)) {
+        type = XlsbRecordType::BrtFmlaNum;
+        emit_double(p, value);
+      } else {
+        type = XlsbRecordType::BrtFmlaError;
+        emit_u8(p, ErrorWireCode(ErrorCode::Num));
+      }
       break;
+    }
     case ValueKind::Bool:
       type = XlsbRecordType::BrtFmlaBool;
       emit_u8(p, cached.as_boolean() ? 1U : 0U);
@@ -197,6 +205,11 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
       const double v = cached.as_number();
       std::vector<std::uint8_t> p;
       EmitCellHeader(p, col, xf_index);
+      if (!std::isfinite(v)) {
+        emit_u8(p, ErrorWireCode(ErrorCode::Num));
+        emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellError), p);
+        return;
+      }
       if (rk_round_trips_value(v)) {
         emit_rk_number(p, v);
         emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellRk), p);
