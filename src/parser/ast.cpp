@@ -469,7 +469,8 @@ AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs) {
   return make_binary_chain(arena, operands, &op, 2U);
 }
 
-AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const bool* spliced, std::uint32_t arity) {
+AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const std::uint8_t* spliced,
+                          std::uint32_t arity) {
   FM_CHECK(arity >= 2, "make_range_chain: a chain requires at least 2 operands");
   FM_CHECK(operands != nullptr && spliced != nullptr, "make_range_chain: operands/spliced must be non-null");
   for (std::uint32_t i = 0; i < arity; ++i) {
@@ -479,11 +480,11 @@ AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const bo
   if (copied == nullptr) {
     return nullptr;
   }
-  bool* copied_spliced = arena.create_array<bool>(arity - 1U);
+  std::uint8_t* copied_spliced = arena.create_array<std::uint8_t>(arity - 1U);
   if (copied_spliced == nullptr) {
     return nullptr;
   }
-  std::memcpy(copied_spliced, spliced, sizeof(bool) * (arity - 1U));
+  std::memcpy(copied_spliced, spliced, arity - 1U);
   AstNode* n = AstNode::make_node(arena, NodeKind::RangeOp);
   if (n == nullptr) {
     return nullptr;
@@ -497,7 +498,43 @@ AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const bo
 AstNode* make_range_op(Arena& arena, AstNode* lhs, AstNode* rhs, bool spliced) {
   FM_CHECK(lhs != nullptr && rhs != nullptr, "make_range_op: lhs/rhs must be non-null");
   const AstNode* operands[2] = {lhs, rhs};
-  return make_range_chain(arena, operands, &spliced, 2U);
+  const std::uint8_t flag = spliced ? 1U : 0U;
+  return make_range_chain(arena, operands, &flag, 2U);
+}
+
+AstNode* make_chain_with_operands(Arena& arena, const AstNode& chain, const AstNode* const* operands) {
+  if (chain.kind() == NodeKind::RangeOp) {
+    return make_range_chain(arena, operands, chain.data_.range_chain.spliced, chain.data_.range_chain.arity);
+  }
+  FM_CHECK(chain.kind() == NodeKind::BinaryOp, "make_chain_with_operands: chain must be a BinaryOp or RangeOp");
+  return make_binary_chain(arena, operands, chain.data_.binary.ops, chain.data_.binary.arity);
+}
+
+void ChainBuilder::push(const AstNode* operand, BinOp link) {
+  operands_.push_back(operand);
+  links_.push_back(link);
+}
+
+void ChainBuilder::append_range(const AstNode& node, BinOp link) {
+  if (node.kind() != NodeKind::RangeOp || node.paren_depth() != 0U) {
+    push(&node, link);
+    return;
+  }
+  const AstNode::RangeChainPayload& chain = node.data_.range_chain;
+  for (std::uint32_t i = 0; i < chain.arity; ++i) {
+    push(chain.operands[i], i == 0U ? link : static_cast<BinOp>(chain.spliced[i - 1U]));
+  }
+}
+
+AstNode* ChainBuilder::close(Arena& arena, std::uint32_t m) {
+  const std::uint32_t arity = mark() - m;
+  const AstNode* const* operands = operands_.data() + m;
+  const BinOp* links = links_.data() + m + 1U;
+  AstNode* node = is_range(m) ? make_range_chain(arena, operands, reinterpret_cast<const std::uint8_t*>(links), arity)
+                              : make_binary_chain(arena, operands, links, arity);
+  operands_.resize(m);
+  links_.resize(m);
+  return node;
 }
 
 std::uint32_t range_token_width(const AstNode& range, std::uint32_t i) noexcept {
@@ -937,7 +974,7 @@ const AstNode& AstNode::as_range_operand(std::uint32_t i) const {
 bool AstNode::as_range_spliced(std::uint32_t i) const {
   FM_CHECK(kind_ == NodeKind::RangeOp, "AstNode::as_range_spliced on non-RangeOp");
   FM_CHECK(i + 1U < data_.range_chain.arity, "AstNode::as_range_spliced index out of range");
-  return data_.range_chain.spliced[i];
+  return data_.range_chain.spliced[i] != 0U;
 }
 
 std::uint32_t AstNode::as_union_arity() const {

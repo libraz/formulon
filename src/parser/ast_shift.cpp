@@ -9,7 +9,6 @@
 #include "parser/ast_shift.h"
 
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -227,11 +226,7 @@ const AstNode* TransformBinary(const AstNode& node, Arena& arena, const RefTrans
   if (!changed) {
     return &node;
   }
-  std::vector<BinOp> ops(n - 1U);
-  for (std::uint32_t i = 0; i + 1U < n; ++i) {
-    ops[i] = node.as_binary_op(i);
-  }
-  return make_binary_chain(arena, operands.data(), ops.data(), n);
+  return make_chain_with_operands(arena, node, operands.data());
 }
 
 bool IsRefError(const AstNode& node) {
@@ -309,11 +304,7 @@ const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransf
   if (!changed) {
     return &node;
   }
-  std::unique_ptr<bool[]> spliced(new bool[n - 1U]);
-  for (std::uint32_t i = 0; i + 1U < n; ++i) {
-    spliced[i] = node.as_range_spliced(i);
-  }
-  return make_range_chain(arena, operands.data(), spliced.get(), n);
+  return make_chain_with_operands(arena, node, operands.data());
 }
 
 const AstNode* TransformIntersect(const AstNode& node, Arena& arena, const RefTransform& transform) {

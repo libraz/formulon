@@ -321,7 +321,9 @@ class AstNode final {
   friend AstNode* make_sheet_name_ref(Arena&, std::string_view, std::string_view, bool);
   friend AstNode* make_unary_op(Arena&, UnaryOp, AstNode*);
   friend AstNode* make_binary_chain(Arena&, const AstNode* const*, const BinOp*, std::uint32_t);
-  friend AstNode* make_range_chain(Arena&, const AstNode* const*, const bool*, std::uint32_t);
+  friend AstNode* make_range_chain(Arena&, const AstNode* const*, const std::uint8_t*, std::uint32_t);
+  friend AstNode* make_chain_with_operands(Arena&, const AstNode&, const AstNode* const*);
+  friend class ChainBuilder;
   friend AstNode* make_union_op(Arena&, const AstNode* const*, std::uint32_t);
   friend AstNode* make_intersect_op(Arena&, AstNode*, AstNode*);
   friend AstNode* make_implicit_intersection(Arena&, AstNode*);
@@ -408,7 +410,7 @@ class AstNode final {
   };
   struct RangeChainPayload {
     const AstNode* const* operands;  // arity entries
-    const bool* spliced;             // arity - 1 entries
+    const std::uint8_t* spliced;     // arity - 1 entries
     std::uint32_t arity;
   };
   struct VariadicPayload {
@@ -716,9 +718,57 @@ AstNode* make_binary_chain(Arena& arena, const AstNode* const* operands, const B
 AstNode* make_binary_op(Arena& arena, BinOp op, AstNode* lhs, AstNode* rhs);
 
 /// Builds a `RangeOp` chain from `arity` endpoints and the `arity - 1`
-/// splice flags between them (see `AstNode::as_range_spliced`). Both arrays
-/// are deep-copied; `arity` must be `>= 2`.
-AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const bool* spliced, std::uint32_t arity);
+/// splice flags (0 or 1) between them (see `AstNode::as_range_spliced`).
+/// Both arrays are deep-copied; `arity` must be `>= 2`.
+AstNode* make_range_chain(Arena& arena, const AstNode* const* operands, const std::uint8_t* spliced,
+                          std::uint32_t arity);
+
+/// Builds a copy of the `BinaryOp` or `RangeOp` chain `chain` with its
+/// operators or splice flags and `chain.arity` new `operands`.
+AstNode* make_chain_with_operands(Arena& arena, const AstNode& chain, const AstNode* const* operands);
+
+/// Accumulates the operands, operators and splice flags of nested binary or
+/// `:` chains, innermost last, and folds the innermost into one node. A
+/// chain is identified by `mark()` taken before it starts, and is open while
+/// it has operands.
+class ChainBuilder {
+ public:
+  std::uint32_t mark() const noexcept { return static_cast<std::uint32_t>(operands_.size()); }
+  bool open(std::uint32_t m) const noexcept { return operands_.size() != m; }
+
+  /// Starts a binary chain at `lhs`; `push_binary` appends `op rhs`.
+  void start_binary(const AstNode* lhs) { push(lhs, kBinaryHead); }
+  void push_binary(BinOp op, const AstNode* rhs) { push(rhs, op); }
+  /// Starts a `:` chain at `lhs`; `push_range` appends `:rhs`. An
+  /// unparenthesised range joins endpoint by endpoint, keeping its splice
+  /// flags.
+  void start_range(const AstNode& lhs) { append_range(lhs, kRangeHead); }
+  void push_range(const AstNode& rhs) { append_range(rhs, BinOp{}); }
+
+  /// Facts about the open chain started at `m`.
+  bool is_range(std::uint32_t m) const { return links_[m] == kRangeHead; }
+  std::uint32_t op_count(std::uint32_t m) const { return static_cast<std::uint32_t>(links_.size()) - m - 1U; }
+  BinOp first_op(std::uint32_t m) const { return links_[m + 1U]; }
+  const AstNode& front(std::uint32_t m) const { return *operands_[m]; }
+  const AstNode& back() const { return *operands_.back(); }
+
+  /// Folds the open chain started at `m` into one `RangeOp` or `BinaryOp`
+  /// node and drops it; null on arena exhaustion.
+  AstNode* close(Arena& arena, std::uint32_t m);
+
+ private:
+  // A chain's first link marks its kind; a `:` chain stores splice flags
+  // (0 or 1) in place of operators.
+  static constexpr BinOp kBinaryHead = static_cast<BinOp>(0xFE);
+  static constexpr BinOp kRangeHead = static_cast<BinOp>(0xFF);
+
+  void push(const AstNode* operand, BinOp link);
+  void append_range(const AstNode& node, BinOp link);
+
+  std::vector<const AstNode*> operands_;
+  // Per operand, what joins it to the previous one.
+  std::vector<BinOp> links_;
+};
 
 /// Builds a two-endpoint `RangeOp`. `spliced` marks the pair as one
 /// whole-column or whole-row token (`A:C`) rather than two joined by `:`.

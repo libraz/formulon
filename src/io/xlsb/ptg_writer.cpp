@@ -1,3 +1,5 @@
+// @size-budget: 62 KB
+
 //
 // Implementation of the AST -> Ptg encoder. See `io/xlsb/ptg_writer.h`.
 //
@@ -20,6 +22,7 @@
 #include "io/xlsb/func_id_table.h"
 #include "io/xlsb/ptg.h"
 #include "io/xlsb/ptg_operand_class.h"
+#include "io/xlsb/ptg_space.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/record_writer.h"
 #include "parser/ast_format.h"
@@ -605,13 +608,7 @@ class Encoder {
       if (run.node != &node || run.slot != slot || run.index != index) {
         continue;
       }
-      const bool feeds = run.ch == '\n';
-      std::uint8_t type = feeds ? kPtgSpaceLineFeeds : kPtgSpaceSpaces;
-      if (slot == parser::WhitespaceSlot::kBeforeClose) {
-        type = feeds ? kPtgSpaceLineFeedsBeforeClose : kPtgSpaceBeforeClose;
-      } else if (slot == parser::WhitespaceSlot::kBeforeOpen) {
-        type = kPtgSpaceBeforeOpen;
-      }
+      const std::uint8_t type = ptg_space_type(slot, run.ch == '\n');
       emit_attr(static_cast<std::uint8_t>(PtgAttrKind::Space), static_cast<std::uint16_t>(type | (run.count << 8)));
     }
   }

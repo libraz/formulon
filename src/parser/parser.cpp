@@ -41,7 +41,6 @@
 #include "parser/parser.h"
 
 #include <cstdint>
-#include <memory>
 #include <string_view>
 #include <vector>
 
@@ -625,19 +624,16 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
   }
 
   // The binary or `:` chain `lhs` heads, if any: its further operators share
-  // `chain_bp`, and its operands, operators and splice flags live in
-  // `chain_operands_` / `chain_ops_` / `chain_spliced_` past these bases.
-  const std::size_t operand_base = chain_operands_.size();
-  const std::size_t op_base = chain_ops_.size();
-  const std::size_t spliced_base = chain_spliced_.size();
+  // `chain_bp`, and it lives in `chain_` past `mark`.
+  const std::uint32_t mark = chain_.mark();
   int chain_bp = 0;
 
   while (true) {
     const TokenKind kind = peek_kind();
     int chain_right_bp = 0;
-    if (chain_operands_.size() != operand_base &&
+    if (chain_.open(mark) &&
         (bailed_ || kind == TokenKind::Whitespace || InfixBindingPower(kind, &chain_right_bp) != chain_bp)) {
-      close_chain(lhs, operand_base, op_base, spliced_base);
+      close_chain(lhs, mark);
     }
     if (bailed_) {
       --depth_;
@@ -838,7 +834,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // Parse_expression always returns a node post-recovery; null means
       // hard failure (arena exhaustion). Surface the existing LHS to the
       // caller so they can salvage a partial tree.
-      close_chain(lhs, operand_base, op_base, spliced_base);
+      close_chain(lhs, mark);
       --depth_;
       return lhs;
     }
@@ -855,7 +851,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // SpillRef is rejected on both sides: `A1#:B2` and `A1:B2#` are not
       // legal Excel range expressions (the spill operator is terminal).
       // A chain already open validated its left endpoint when it started.
-      const bool chain_open = chain_operands_.size() != operand_base;
+      const bool chain_open = chain_.open(mark);
       const NodeKind lk = chain_open ? NodeKind::RangeOp : lhs->kind();
       const NodeKind rk = rhs->kind();
       if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
@@ -866,15 +862,14 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       }
       if (!chain_open) {
         chain_bp = bp;
-        append_range_operands(*lhs);
+        chain_.start_range(*lhs);
       }
-      chain_spliced_.push_back(0U);
-      append_range_operands(*rhs);
+      chain_.push_range(*rhs);
       if (op_tok.trim == TrimRefMode::None) {
         continue;
       }
       // A trim operator applies to the whole chain written before it.
-      close_chain(lhs, operand_base, op_base, spliced_base);
+      close_chain(lhs, mark);
       if (bailed_) {
         --depth_;
         return lhs;
@@ -895,12 +890,11 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       }
       node = make_intersect_op(arena_, lhs, rhs);
     } else {
-      if (chain_operands_.size() == operand_base) {
-        chain_operands_.push_back(lhs);
+      if (!chain_.open(mark)) {
+        chain_.start_binary(lhs);
         chain_bp = bp;
       }
-      chain_ops_.push_back(TokenToBinOp(kind));
-      chain_operands_.push_back(rhs);
+      chain_.push_binary(TokenToBinOp(kind), rhs);
       continue;
     }
     if (node == nullptr) {
@@ -913,40 +907,12 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
   }
 }
 
-void Parser::append_range_operands(const AstNode& node) {
-  // An unparenthesised range (a whole-axis token such as `A:C`) joins the
-  // chain endpoint by endpoint, keeping its splice flags.
-  if (node.kind() != NodeKind::RangeOp || node.paren_depth() != 0U) {
-    chain_operands_.push_back(&node);
+void Parser::close_chain(AstNode*& lhs, std::uint32_t mark) {
+  if (!chain_.open(mark)) {
     return;
   }
-  for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
-    if (i > 0U) {
-      chain_spliced_.push_back(node.as_range_spliced(i - 1U) ? 1U : 0U);
-    }
-    chain_operands_.push_back(&node.as_range_operand(i));
-  }
-}
-
-void Parser::close_chain(AstNode*& lhs, std::size_t operand_base, std::size_t op_base, std::size_t spliced_base) {
-  if (chain_operands_.size() == operand_base) {
-    return;
-  }
-  const std::uint32_t arity = static_cast<std::uint32_t>(chain_operands_.size() - operand_base);
-  const TextRange span = SpanRange(chain_operands_[operand_base]->range(), chain_operands_.back()->range());
-  AstNode* node = nullptr;
-  if (chain_spliced_.size() != spliced_base) {
-    std::unique_ptr<bool[]> spliced(new bool[arity - 1U]);
-    for (std::uint32_t i = 0; i + 1U < arity; ++i) {
-      spliced[i] = chain_spliced_[spliced_base + i] != 0U;
-    }
-    node = make_range_chain(arena_, chain_operands_.data() + operand_base, spliced.get(), arity);
-  } else {
-    node = make_binary_chain(arena_, chain_operands_.data() + operand_base, chain_ops_.data() + op_base, arity);
-  }
-  chain_operands_.resize(operand_base);
-  chain_ops_.resize(op_base);
-  chain_spliced_.resize(spliced_base);
+  const TextRange span = SpanRange(chain_.front(mark).range(), chain_.back().range());
+  AstNode* node = chain_.close(arena_, mark);
   if (node == nullptr) {
     bailed_ = true;
     return;

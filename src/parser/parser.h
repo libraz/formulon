@@ -159,14 +159,10 @@ class Parser {
   // error occurs inside this subexpression. Always returns a non-null node:
   // an unparseable subtree becomes an `ErrorPlaceholder`.
   AstNode* parse_expression(int min_bp, SyncContext ctx);
-  // Folds the binary or `:` chain a `parse_expression` frame gathered past
-  // the given bases of `chain_operands_` / `chain_ops_` / `chain_spliced_`
-  // into one node and stores it in `lhs`; a no-op when the frame has no open
-  // chain.
-  void close_chain(AstNode*& lhs, std::size_t operand_base, std::size_t op_base, std::size_t spliced_base);
-  // Appends `node` to the open `:` chain: its endpoints and splice flags
-  // when it is itself an unparenthesised range, otherwise the node.
-  void append_range_operands(const AstNode& node);
+  // Folds the binary or `:` chain a `parse_expression` frame gathered in
+  // `chain_` past `mark` into one node and stores it in `lhs`; a no-op when
+  // the frame has no open chain.
+  void close_chain(AstNode*& lhs, std::uint32_t mark);
 
   // Atom / null-denotation dispatch.
   AstNode* parse_atom(SyncContext ctx);
@@ -303,13 +299,10 @@ class Parser {
   // Current recursion depth of `parse_expression`, used to enforce
   // `ParserOptions::max_parse_depth`.
   std::uint32_t depth_ = 0;
-  // Operands and operators of the binary chains still open in the active
-  // `parse_expression` frames, innermost last. Kept here rather than in each
-  // frame so a deeply nested formula does not pay for them per level.
-  std::vector<const AstNode*> chain_operands_;
-  std::vector<BinOp> chain_ops_;
-  // Splice flags of an open `:` chain (see `AstNode::as_range_spliced`).
-  std::vector<std::uint8_t> chain_spliced_;
+  // The binary and `:` chains still open in the active `parse_expression`
+  // frames, innermost last. Kept here rather than in each frame so a deeply
+  // nested formula does not pay for them per level.
+  ChainBuilder chain_;
 
   // Byte offsets (relative to `source_.data()`) of each structured-ref
   // bracket payload the parser has consumed: `(payload_start, payload_end)`
