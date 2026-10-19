@@ -86,12 +86,11 @@ TEST(PartGraph, RejectsRelationshipsRootInAnUnrelatedNamespace) {
 }
 
 TEST(PartGraph, RejectsUnboundRelationshipPrefixAndMalformedPrefixedRoot) {
-  for (const std::string& xml :
-       {"<Relationships><p:Relationship Id=\"rId1\" Type=\"urn:t\" Target=\"child.xml\"/>"
-        "</Relationships>",
-        "<p:Relationships><p:Relationship Id=\"rId1\" Type=\"urn:t\" Target=\"child.xml\"/>"
-        "</p:Relationships>",
-        "<:Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>"}) {
+  for (const char* xml : {"<Relationships><p:Relationship Id=\"rId1\" Type=\"urn:t\" Target=\"child.xml\"/>"
+                          "</Relationships>",
+                          "<p:Relationships><p:Relationship Id=\"rId1\" Type=\"urn:t\" Target=\"child.xml\"/>"
+                          "</p:Relationships>",
+                          "<:Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>"}) {
     auto rels = io::ooxml::parse_part_rels(ToBytes(xml), "xl/parts");
     ASSERT_FALSE(static_cast<bool>(rels)) << xml;
     EXPECT_EQ(rels.error().code, FormulonErrorCode::kIoDrawingUnparseable) << xml;
