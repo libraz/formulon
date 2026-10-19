@@ -459,9 +459,13 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
   const std::uint32_t end =
       static_cast<std::uint32_t>(std::min<std::uint64_t>(static_cast<std::uint64_t>(edit.index) + edit.count, bound));
   const auto owns_xf = [](const Cell& cell) { return cell.has_explicit_xf || cell.xf_index != 0U; };
-  const auto copy_xf = [](Cell& to, std::uint32_t xf_index) {
-    to.xf_index = xf_index;
-    to.has_explicit_xf = true;
+  // Gives the cell `cell_at(i)` the style of the source for every i in the inserted band.
+  const auto copy_xf = [&](std::uint32_t xf_index, auto&& cell_at) {
+    for (std::uint32_t i = edit.index; i < end; ++i) {
+      Cell& to = cell_at(i);
+      to.xf_index = xf_index;
+      to.has_explicit_xf = true;
+    }
   };
   if (edit.row_axis) {
     // Style and an explicit height carry over; hidden state and outline level do not.
@@ -492,9 +496,8 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
       if (!owns_xf(cell)) {
         continue;
       }
-      for (std::uint32_t row = edit.index; row < end; ++row) {
-        copy_xf(rows_[row].ensure(col), cell.xf_index);
-      }
+      const std::uint32_t source_col = col;
+      copy_xf(cell.xf_index, [&](std::uint32_t row) -> Cell& { return rows_[row].ensure(source_col); });
     }
     return;
   }
@@ -517,10 +520,7 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
     if (from == nullptr || !owns_xf(*from)) {
       continue;
     }
-    const std::uint32_t xf_index = from->xf_index;
-    for (std::uint32_t col = edit.index; col < end; ++col) {
-      copy_xf(kv.second.ensure(col), xf_index);
-    }
+    copy_xf(from->xf_index, [&](std::uint32_t col) -> Cell& { return kv.second.ensure(col); });
   }
 }
 
