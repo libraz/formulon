@@ -1,6 +1,8 @@
 #include "drawing/drawing_xml.h"
 
 #include <cstring>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #include "io/ooxml/package_validator.h"
@@ -203,7 +205,22 @@ pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor) {
   return {};
 }
 
-DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<io::ooxml::DrawingRel>& rels) {
+namespace {
+
+using RelationshipTargetIndex = std::unordered_map<std::string_view, const io::ooxml::DrawingRel*>;
+
+RelationshipTargetIndex index_drawing_relationships(const std::vector<io::ooxml::DrawingRel>& rels) {
+  RelationshipTargetIndex index;
+  index.reserve(rels.size());
+  for (const io::ooxml::DrawingRel& rel : rels) {
+    if (!rel.external && !rel.id.empty()) {
+      index.insert_or_assign(std::string_view(rel.id), &rel);
+    }
+  }
+  return index;
+}
+
+DrawingObject read_drawing_object_fields(const pugi::xml_node& anchor) {
   DrawingObject obj;
   const std::string_view anchor_name = local_name(anchor);
   if (anchor_name == "oneCellAnchor") {
@@ -241,6 +258,15 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
   obj.descr = cnvpr.attribute("descr").value();
   if (obj.kind == DrawingObjectKind::kPicture) {
     obj.image_rel_id = attr_local(find_descendant(content, "blip"), "embed").value();
+  }
+  return obj;
+}
+
+}  // namespace
+
+DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<io::ooxml::DrawingRel>& rels) {
+  DrawingObject obj = read_drawing_object_fields(anchor);
+  if (obj.kind == DrawingObjectKind::kPicture) {
     for (const io::ooxml::DrawingRel& rel : rels) {
       if (!rel.external && !obj.image_rel_id.empty() && rel.id == obj.image_rel_id) {
         obj.media_path = rel.target;
@@ -253,8 +279,16 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
 std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
                                                 const std::vector<io::ooxml::DrawingRel>& rels) {
   std::vector<DrawingObject> objects;
+  const RelationshipTargetIndex relation_index = index_drawing_relationships(rels);
   for (const pugi::xml_node& anchor : drawing_anchors(doc.document_element(), false)) {
-    objects.push_back(read_drawing_object(anchor, rels));
+    DrawingObject obj = read_drawing_object_fields(anchor);
+    if (obj.kind == DrawingObjectKind::kPicture && !obj.image_rel_id.empty()) {
+      const auto relation = relation_index.find(obj.image_rel_id);
+      if (relation != relation_index.end()) {
+        obj.media_path = relation->second->target;
+      }
+    }
+    objects.push_back(std::move(obj));
   }
   return objects;
 }
@@ -304,6 +338,7 @@ Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, 
   pugi::xml_document doc;
   RETURN_IF_ERROR(parse_drawing_part(part->bytes, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
+  const RelationshipTargetIndex relation_index = index_drawing_relationships(rels);
   for (const pugi::xml_node& anchor : drawing_anchors(doc.document_element(), false)) {
     const pugi::xml_node content = anchor_content(anchor);
     if (classify(content) != DrawingObjectKind::kChart) {
@@ -314,9 +349,10 @@ Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, 
     ref.is_chartex = strings::ends_with(
         child_local(child_local(content, "graphic"), "graphicData").attribute("uri").value(), "/chartex");
     const std::string_view rid = attr_local(frame_chart(content), "id").value();
-    for (const io::ooxml::DrawingRel& rel : rels) {
-      if (!rel.external && !rid.empty() && rel.id == rid) {
-        ref.part_path = rel.target;
+    if (!rid.empty()) {
+      const auto relation = relation_index.find(rid);
+      if (relation != relation_index.end()) {
+        ref.part_path = relation->second->target;
       }
     }
     charts.push_back(std::move(ref));

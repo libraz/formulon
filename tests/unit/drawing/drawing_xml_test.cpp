@@ -94,6 +94,28 @@ std::vector<DrawingObject> ReadObjects(const std::string& xml, const std::vector
   return read_drawing_objects(doc, rels);
 }
 
+void ExpectSameDrawingObject(const DrawingObject& actual, const DrawingObject& expected) {
+  EXPECT_EQ(actual.object_id, expected.object_id);
+  EXPECT_EQ(actual.kind, expected.kind);
+  EXPECT_EQ(actual.anchor_kind, expected.anchor_kind);
+  EXPECT_EQ(actual.edit_as, expected.edit_as);
+  EXPECT_EQ(actual.from.row, expected.from.row);
+  EXPECT_EQ(actual.from.col, expected.from.col);
+  EXPECT_EQ(actual.from.row_off, expected.from.row_off);
+  EXPECT_EQ(actual.from.col_off, expected.from.col_off);
+  EXPECT_EQ(actual.to.row, expected.to.row);
+  EXPECT_EQ(actual.to.col, expected.to.col);
+  EXPECT_EQ(actual.to.row_off, expected.to.row_off);
+  EXPECT_EQ(actual.to.col_off, expected.to.col_off);
+  EXPECT_EQ(actual.cx, expected.cx);
+  EXPECT_EQ(actual.cy, expected.cy);
+  EXPECT_EQ(actual.name, expected.name);
+  EXPECT_EQ(actual.descr, expected.descr);
+  EXPECT_EQ(actual.image_rel_id, expected.image_rel_id);
+  EXPECT_EQ(actual.media_path, expected.media_path);
+  EXPECT_EQ(actual.image_format, expected.image_format);
+}
+
 TEST(DrawingXml, ReadsEveryObjectKindAndAnchor) {
   auto rels = io::ooxml::parse_part_rels(ToBytes(kRels), "xl/drawings");
   ASSERT_TRUE(static_cast<bool>(rels));
@@ -168,6 +190,47 @@ TEST(DrawingXml, DescendantLookupKeepsDepthFirstFirstMatchOrder) {
   ASSERT_EQ(objects.size(), 1U);
   EXPECT_EQ(objects[0].image_rel_id, "rId2");
   EXPECT_EQ(objects[0].media_path, "xl/media/image1.png");
+}
+
+TEST(DrawingXml, BatchObjectReadsMatchSingleReadsAndResolveLastInternalRelationship) {
+  std::string drawing = kDrawing;
+  const auto extra_picture = [](std::uint32_t id, const std::string& rel_id) {
+    return "<xdr:oneCellAnchor><xdr:from/><xdr:ext cx=\"1\" cy=\"2\"/><xdr:pic><xdr:nvPicPr>"
+           "<xdr:cNvPr id=\"" +
+           std::to_string(id) + "\" name=\"P\"/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed=\"" + rel_id +
+           "\"/></xdr:blipFill></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>";
+  };
+  const std::size_t close = drawing.rfind("</xdr:wsDr>");
+  ASSERT_NE(close, std::string::npos);
+  drawing.insert(close, extra_picture(10U, "rID2") + extra_picture(11U, "") + extra_picture(12U, "missing"));
+
+  const std::vector<io::ooxml::DrawingRel> rels = {
+      {"", "image", "xl/media/empty-id.png", false},
+      {"rId2", "image", "xl/media/first.png", false},
+      {"rId2", "image", "https://example.com/external.png", true},
+      {"RID2", "image", "xl/media/different-case.png", false},
+      {"rId2", "image", "xl/media/last-internal.png", false},
+      {"rId2", "image", "https://example.com/external-late.png", true},
+  };
+  pugi::xml_document doc;
+  ASSERT_TRUE(static_cast<bool>(parse_drawing_part(ToBytes(drawing), doc)));
+  const std::vector<pugi::xml_node> anchors = drawing_anchors(doc.document_element(), false);
+  const std::vector<DrawingObject> objects = read_drawing_objects(doc, rels);
+  ASSERT_EQ(objects.size(), anchors.size());
+  ASSERT_EQ(objects.size(), 9U);
+  for (std::size_t i = 0; i < objects.size(); ++i) {
+    SCOPED_TRACE(i);
+    ExpectSameDrawingObject(objects[i], read_drawing_object(anchors[i], rels));
+  }
+
+  EXPECT_EQ(objects[0].image_rel_id, "rId2");
+  EXPECT_EQ(objects[0].media_path, "xl/media/last-internal.png");
+  EXPECT_EQ(objects[6].image_rel_id, "rID2");
+  EXPECT_TRUE(objects[6].media_path.empty());
+  EXPECT_TRUE(objects[7].image_rel_id.empty());
+  EXPECT_TRUE(objects[7].media_path.empty());
+  EXPECT_EQ(objects[8].image_rel_id, "missing");
+  EXPECT_TRUE(objects[8].media_path.empty());
 }
 
 TEST(DrawingXml, FallbackAnchorsAreIncludedOnlyOnRequest) {
@@ -409,6 +472,32 @@ TEST(DrawingXml, ListsChartPartsOfASheet) {
       empty.add_passthrough_part(PassthroughPart("xl/drawings/drawing1.xml", kCtDrawing, ToBytes("<notDrawing/>")))));
   empty.sheet(0).set_drawing_rel_target("xl/drawings/drawing1.xml");
   EXPECT_EQ(list_chart_parts(empty, 0).error().code, FormulonErrorCode::kIoDrawingUnparseable);
+}
+
+TEST(DrawingXml, ChartRelationshipIndexKeepsLastInternalTargetAndOrder) {
+  Workbook wb = ChartSheetZero();
+  const std::string external_rid1 = "<Relationship Id=\"rId1\" Type=\"" + std::string(kChartRelType) +
+                                    "\" Target=\"https://example.com/external.xml\" TargetMode=\"External\"/>";
+  const std::string external_rid2 = "<Relationship Id=\"rId2\" Type=\"" + std::string(kChartRelType) +
+                                    "\" Target=\"https://example.com/chartex.xml\" TargetMode=\"External\"/>";
+  const std::string rels = RelsOf(Relationship("rId1", kChartRelType, "../charts/first.xml") + external_rid1 +
+                                  Relationship("rId1", kChartRelType, "../charts/last.xml") + external_rid1 +
+                                  Relationship("rID1", kChartRelType, "../charts/different-case.xml") + external_rid2);
+  const auto replaced = wb.replace_passthrough_part("xl/drawings/_rels/drawing1.xml.rels", ToBytes(rels));
+  ASSERT_TRUE(static_cast<bool>(replaced));
+
+  const auto refs = list_chart_parts(wb, 0U);
+  ASSERT_TRUE(static_cast<bool>(refs));
+  ASSERT_EQ(refs.value().size(), 3U);
+  EXPECT_EQ(refs.value()[0].object_id, 2U);
+  EXPECT_EQ(refs.value()[0].part_path, "xl/charts/last.xml");
+  EXPECT_FALSE(refs.value()[0].is_chartex);
+  EXPECT_EQ(refs.value()[1].object_id, 3U);
+  EXPECT_TRUE(refs.value()[1].part_path.empty());
+  EXPECT_TRUE(refs.value()[1].is_chartex);
+  EXPECT_EQ(refs.value()[2].object_id, 4U);
+  EXPECT_TRUE(refs.value()[2].part_path.empty());
+  EXPECT_FALSE(refs.value()[2].is_chartex);
 }
 
 TEST(DrawingXml, ChartsheetDrawingIsListed) {
