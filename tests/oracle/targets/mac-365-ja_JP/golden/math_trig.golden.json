@@ -612,7 +612,8 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
-      }
+      },
+      "compare_mode": "host_libm"
     },
     {
       "id": "trig_rules_tan_at_limit",
@@ -690,7 +691,8 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
-      }
+      },
+      "compare_mode": "host_libm"
     },
     {
       "id": "trig_rules_cot_at_limit",

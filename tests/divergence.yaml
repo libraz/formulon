@@ -83,7 +83,7 @@
 #                                          # REQUIRED when mode is
 #                                          # skip-oracle; see above
 #       tolerance: { abs: 1e-10, rel: 0 }
-#       compare_mode: exact | complex_text | numeric_text | ...
+#       compare_mode: exact | complex_text | numeric_text | host_libm | ...
 #       prefer: mac-excel-365 | win-excel-365 | formulon
 #       first_noted: YYYY-MM-DD
 #       last_verified_excel_version: "16.xx.x (Build ...)"
@@ -948,6 +948,16 @@ entries:
     reason: "A chart with no c:title, autoTitleDeleted=0 and exactly one unfiltered series has an automatic title, and Formulon reads it as one (chart_xml_test pins the rule). Whether Excel writes that title into the part on re-save depends on state the file does not carry: charts that were laid out in the visible window gain a c:title, charts below it are saved without one, so the re-saved title kind is not determined by the workbook."
     prefer: formulon
     first_noted: 2026-10-14
+    last_verified_excel_version: "16.113.4"
+
+  - ids:
+      - trig_rules_tan_below_limit
+      - trig_rules_cot_below_limit
+    applies_to: [mac]
+    compare_mode: host_libm
+    reason: "These values come from the host libm. Mac Excel's last bits match Apple's libm and are reproduced exactly on macOS; Linux and WebAssembly return the correctly rounded value, which Windows Excel also returns, within 1-2 ulp."
+    prefer: mac-excel-365
+    first_noted: 2026-10-19
     last_verified_excel_version: "16.113.4"
 
 
