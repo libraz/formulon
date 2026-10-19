@@ -31,6 +31,37 @@ ByteSpan SpanOf(const std::vector<std::uint8_t>& v) {
   return ByteSpan{v.data(), v.size()};
 }
 
+void ExpectWideStringEncoding(std::string_view input, const std::vector<std::uint16_t>& units,
+                              std::string_view expected_readback, bool nullable) {
+  std::vector<std::uint8_t> bytes;
+  if (nullable) {
+    emit_xlnullablewidestring(bytes, std::optional<std::string_view>{input});
+  } else {
+    emit_xlwidestring(bytes, input);
+  }
+
+  ASSERT_EQ(bytes.size(), 4U + units.size() * 2U);
+  const std::uint32_t cch = static_cast<std::uint32_t>(bytes[0]) | (static_cast<std::uint32_t>(bytes[1]) << 8) |
+                            (static_cast<std::uint32_t>(bytes[2]) << 16) | (static_cast<std::uint32_t>(bytes[3]) << 24);
+  EXPECT_EQ(cch, units.size());
+  for (std::size_t i = 0; i < units.size(); ++i) {
+    EXPECT_EQ(bytes[4U + i * 2U], static_cast<std::uint8_t>(units[i] & 0xFFU)) << "unit=" << i;
+    EXPECT_EQ(bytes[5U + i * 2U], static_cast<std::uint8_t>(units[i] >> 8)) << "unit=" << i;
+  }
+
+  ByteSpan cursor = SpanOf(bytes);
+  if (nullable) {
+    auto decoded = read_xlnullablewidestring(cursor);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << decoded.error().message;
+    EXPECT_EQ(decoded.value(), expected_readback);
+  } else {
+    auto decoded = read_xlwidestring(cursor);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << decoded.error().message;
+    EXPECT_EQ(decoded.value(), expected_readback);
+  }
+  EXPECT_EQ(cursor.size, 0U);
+}
+
 // ---------------------------------------------------------------------------
 // Record framing: type + size + payload round-trip.
 // ---------------------------------------------------------------------------
@@ -135,6 +166,83 @@ TEST(XlsbRecordWriter, XLWideStringSurrogatePair) {
   EXPECT_EQ(s.value(), emoji);
   // 4-byte length + 1 codepoint expanded to 2 surrogates * 2 bytes = 4.
   EXPECT_EQ(bytes.size(), 4U + 4U);
+}
+
+TEST(XlsbRecordWriter, MalformedUtf8UsesOneReplacementPerInvalidByte) {
+  constexpr std::uint16_t kReplacement = 0xFFFD;
+  const std::string replacement = "\xEF\xBF\xBD";
+  struct MalformedCase {
+    const char* name;
+    std::string input;
+    std::vector<std::uint16_t> units;
+    std::string readback;
+  };
+  const std::vector<MalformedCase> cases = {
+      {"overlong two-byte", std::string{"\xC0\x80", 2}, {kReplacement, kReplacement}, replacement + replacement},
+      {"overlong three-byte",
+       std::string{"\xE0\x80\x80", 3},
+       {kReplacement, kReplacement, kReplacement},
+       replacement + replacement + replacement},
+      {"overlong four-byte",
+       std::string{"\xF0\x80\x80\x80", 4},
+       {kReplacement, kReplacement, kReplacement, kReplacement},
+       replacement + replacement + replacement + replacement},
+      {"high surrogate",
+       std::string{"\xED\xA0\x80", 3},
+       {kReplacement, kReplacement, kReplacement},
+       replacement + replacement + replacement},
+      {"low surrogate",
+       std::string{"\xED\xBF\xBF", 3},
+       {kReplacement, kReplacement, kReplacement},
+       replacement + replacement + replacement},
+      {"above U+10FFFF",
+       std::string{"\xF4\x90\x80\x80", 4},
+       {kReplacement, kReplacement, kReplacement, kReplacement},
+       replacement + replacement + replacement + replacement},
+      {"stray continuation",
+       std::string{"\x80"
+                   "A",
+                   2},
+       {kReplacement, 'A'},
+       replacement + "A"},
+      {"truncated three-byte", std::string{"\xE2\x82", 2}, {kReplacement, kReplacement}, replacement + replacement},
+      {"truncated four-byte",
+       std::string{"\xF0\x90\x80", 3},
+       {kReplacement, kReplacement, kReplacement},
+       replacement + replacement + replacement},
+      {"bad continuation resynchronizes",
+       std::string{"\xE2"
+                   "("
+                   "\xA1"
+                   "Z",
+                   4},
+       {kReplacement, '(', kReplacement, 'Z'},
+       replacement + "(" + replacement + "Z"},
+  };
+
+  for (const MalformedCase& test : cases) {
+    SCOPED_TRACE(test.name);
+    ExpectWideStringEncoding(test.input, test.units, test.readback, false);
+    ExpectWideStringEncoding(test.input, test.units, test.readback, true);
+  }
+}
+
+TEST(XlsbRecordWriter, Utf8BoundariesKeepUtf16CountsAndBytes) {
+  std::string input("\0", 1);
+  input.append("\x7F", 1);
+  input.append("\xC2\x80", 2);
+  input.append("\xDF\xBF", 2);
+  input.append("\xE0\xA0\x80", 3);
+  input.append("\xED\x9F\xBF", 3);
+  input.append("\xEE\x80\x80", 3);
+  input.append("\xEF\xBF\xBF", 3);
+  input.append("\xF0\x90\x80\x80", 4);
+  input.append("\xF4\x8F\xBF\xBF", 4);
+  const std::vector<std::uint16_t> units = {0x0000, 0x007F, 0x0080, 0x07FF, 0x0800, 0xD7FF,
+                                            0xE000, 0xFFFF, 0xD800, 0xDC00, 0xDBFF, 0xDFFF};
+
+  ExpectWideStringEncoding(input, units, input, false);
+  ExpectWideStringEncoding(input, units, input, true);
 }
 
 // ---------------------------------------------------------------------------

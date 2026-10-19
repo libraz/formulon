@@ -14,6 +14,7 @@
 
 #include "io/xlsb/record.h"
 #include "io/zip_reader.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace io {
@@ -105,40 +106,14 @@ inline void AppendCodeUnit(std::vector<std::uint8_t>& dst, std::uint16_t cu) {
 /// the consumed bytes. Returns `0xFFFD` for ill-formed sequences,
 /// consuming exactly one byte so we make forward progress.
 std::uint32_t DecodeUtf8(std::string_view text, std::size_t& i) {
-  const auto remaining = text.size() - i;
-  const std::uint8_t b0 = static_cast<std::uint8_t>(text[i]);
-  if (b0 < 0x80U) {
+  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(text.substr(i));
+  if (!decoded.valid) {
+    // One U+FFFD per ill-formed byte, then resynchronise at the next byte.
     ++i;
-    return b0;
+    return 0xFFFDU;
   }
-  if ((b0 & 0xE0U) == 0xC0U && remaining >= 2U) {
-    const std::uint8_t b1 = static_cast<std::uint8_t>(text[i + 1]);
-    if ((b1 & 0xC0U) == 0x80U) {
-      i += 2U;
-      return (static_cast<std::uint32_t>(b0 & 0x1FU) << 6) | static_cast<std::uint32_t>(b1 & 0x3FU);
-    }
-  } else if ((b0 & 0xF0U) == 0xE0U && remaining >= 3U) {
-    const std::uint8_t b1 = static_cast<std::uint8_t>(text[i + 1]);
-    const std::uint8_t b2 = static_cast<std::uint8_t>(text[i + 2]);
-    if ((b1 & 0xC0U) == 0x80U && (b2 & 0xC0U) == 0x80U) {
-      i += 3U;
-      return (static_cast<std::uint32_t>(b0 & 0x0FU) << 12) | (static_cast<std::uint32_t>(b1 & 0x3FU) << 6) |
-             static_cast<std::uint32_t>(b2 & 0x3FU);
-    }
-  } else if ((b0 & 0xF8U) == 0xF0U && remaining >= 4U) {
-    const std::uint8_t b1 = static_cast<std::uint8_t>(text[i + 1]);
-    const std::uint8_t b2 = static_cast<std::uint8_t>(text[i + 2]);
-    const std::uint8_t b3 = static_cast<std::uint8_t>(text[i + 3]);
-    if ((b1 & 0xC0U) == 0x80U && (b2 & 0xC0U) == 0x80U && (b3 & 0xC0U) == 0x80U) {
-      i += 4U;
-      return (static_cast<std::uint32_t>(b0 & 0x07U) << 18) | (static_cast<std::uint32_t>(b1 & 0x3FU) << 12) |
-             (static_cast<std::uint32_t>(b2 & 0x3FU) << 6) | static_cast<std::uint32_t>(b3 & 0x3FU);
-    }
-  }
-  // Ill-formed: skip exactly one byte and surface U+FFFD so we always
-  // make progress.
-  ++i;
-  return 0xFFFDU;
+  i += decoded.byte_len;
+  return decoded.codepoint;
 }
 
 /// Returns the count of UTF-16 code units a UTF-8 string would expand
