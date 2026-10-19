@@ -62,10 +62,11 @@ struct Resolver {
     return Expected<void, Error>::Ok();
   }
 
-  /// Bare `Name`: the host sheet's scope; a chartsheet sees workbook names only.
-  const DefinedName* find_bare_name(std::string_view name) const {
-    if (host_sheet != kChartNoHostSheet) {
-      return eval::find_defined_name(wb, static_cast<std::uint16_t>(host_sheet), name);
+  /// Bare `Name`: an active name scope takes precedence; a root chartsheet
+  /// without one sees workbook-scoped names only.
+  const DefinedName* find_bare_name(std::string_view name, const eval::EvalContext& ctx) const {
+    if (host_sheet != kChartNoHostSheet || ctx.name_scope_sheet() >= 0) {
+      return eval::find_defined_name(ctx, name);
     }
     for (const DefinedName& def : wb.defined_names()) {
       if (def.local_sheet_id < 0 && strings::case_insensitive_eq(def.name, name)) {
@@ -82,7 +83,7 @@ struct Resolver {
     } else if (!node.as_name_sheet().empty()) {
       def = eval::find_sheet_defined_name(wb, node.as_name_sheet(), node.as_name());
     } else {
-      def = find_bare_name(node.as_name());
+      def = find_bare_name(node.as_name(), ctx);
     }
     if (def == nullptr) {
       return invalid(formula, "undefined name");

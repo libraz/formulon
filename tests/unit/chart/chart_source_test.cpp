@@ -120,6 +120,34 @@ TEST(ChartSource, RejectsWhatIsNotAResolvableReference) {
   }
 }
 
+TEST(ChartSource, DefinedNameBodiesResolveNamesInDeclaredScope) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Other");
+  wb.sheet(0).set_cell_value(0, 1, Value::number(10));
+  wb.sheet(1).set_cell_value(0, 2, Value::number(20));
+  wb.set_defined_names({
+      DefinedName{"Base", "Sheet1!$B$1", 0, false, ""},
+      DefinedName{"Base", "Other!$C$1", 1, false, ""},
+      DefinedName{"Outer", "Base", 1, false, ""},
+      DefinedName{"Alias", "Base", -1, false, ""},
+      DefinedName{"ViaAlias", "Alias", 1, false, ""},
+      DefinedName{"Cycle", "Cycle", -1, false, ""},
+  });
+
+  // The local Outer name sees Other's Base even when the chart is hosted by
+  // Sheet1 or by a chartsheet.
+  EXPECT_EQ(Resolve(wb, 0, "Other!Outer"), "1:0,2-0,2");
+  EXPECT_EQ(Resolve(wb, kChartNoHostSheet, "Other!Outer"), "1:0,2-0,2");
+
+  // A workbook-scoped alias inherits the scope of the local name that uses it.
+  EXPECT_EQ(Resolve(wb, 0, "Other!ViaAlias"), "1:0,2-0,2");
+  EXPECT_EQ(Resolve(wb, kChartNoHostSheet, "Other!ViaAlias"), "1:0,2-0,2");
+
+  // Bare local names remain invisible from a chartsheet, and cycles still fail.
+  EXPECT_EQ(Resolve(wb, kChartNoHostSheet, "Outer"), "error");
+  EXPECT_EQ(Resolve(wb, 0, "Cycle"), "error");
+}
+
 TEST(ChartSource, SpillReferenceCoversTheSpilledRectangle) {
   Workbook wb = Book();
   ASSERT_TRUE(wb.sheet(1).commit_spill(
