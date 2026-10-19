@@ -91,10 +91,13 @@ OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const 
       }
     }
     ErrorCode err = ErrorCode::Value;
-    if (!(sequence ? sequence_shape : randarray_shape)(args, arity, out_rows, out_cols, &err)) {
+    GeneratorParams params;
+    if (!generator_params(args, arity, sequence, &params, &err)) {
       *out_err = Value::error(err);
       return OperationShape::kError;
     }
+    *out_rows = params.rows;
+    *out_cols = params.cols;
   }
   if (static_cast<std::uint64_t>(*out_rows) * *out_cols > kMaxShapeOnlyGeneratorElements) {
     abandon_formula();

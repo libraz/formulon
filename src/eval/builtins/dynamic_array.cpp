@@ -101,14 +101,15 @@ Expected<GridShape, ErrorCode> validate_grid_shape(double rows_d, double cols_d,
 /// `cells` buffer are arena-allocated, matching the `Value::Text` lifetime
 /// rule (caller's arena must outlive the returned Value).
 Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
+  GeneratorParams params;
   ErrorCode err = ErrorCode::Value;
-  if (!sequence_shape(args, arity, &rows, &cols, &err)) {
+  if (!generator_params(args, arity, /*sequence=*/true, &params, &err)) {
     return Value::error(err);
   }
-  const double start = read_optional_number_arg(args, arity, 2U, 1.0).value();
-  const double step = read_optional_number_arg(args, arity, 3U, 1.0).value();
+  const std::uint32_t rows = params.rows;
+  const std::uint32_t cols = params.cols;
+  const double start = params.first;
+  const double step = params.second;
   Value* buffer = nullptr;
   ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
   if (arr == nullptr) {
@@ -151,15 +152,16 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
 /// RNG: shared per-thread Mersenne Twister via `thread_local_rng()` (same
 /// stream as RAND / RANDBETWEEN).
 Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
+  GeneratorParams params;
   ErrorCode err = ErrorCode::Value;
-  if (!randarray_shape(args, arity, &rows, &cols, &err)) {
+  if (!generator_params(args, arity, /*sequence=*/false, &params, &err)) {
     return Value::error(err);
   }
-  const double min_v = read_optional_number_arg(args, arity, 2U, 0.0).value();
-  const double max_v = read_optional_number_arg(args, arity, 3U, 1.0).value();
-  const bool whole_number = read_optional_bool_arg(args, arity, 4U, false).value();
+  const std::uint32_t rows = params.rows;
+  const std::uint32_t cols = params.cols;
+  const double min_v = params.first;
+  const double max_v = params.second;
+  const bool whole_number = params.whole_number;
   const auto n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
 
   Value* buffer = nullptr;
@@ -230,81 +232,48 @@ Value MUnit(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
 }  // namespace
 
-bool sequence_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
-                    ErrorCode* out_err) {
-  auto rows_c = coerce_to_number(args[0]);
-  if (!rows_c) {
-    *out_err = rows_c.error();
-    return false;
-  }
-  for (std::uint32_t index = 1U; index < 4U; ++index) {
-    auto number = read_optional_number_arg(args, arity, index, 1.0);
+bool generator_params(const Value* args, std::uint32_t arity, bool sequence, GeneratorParams* out, ErrorCode* out_err) {
+  // Defaults of the first four arguments: (rows, cols, start, step) or (rows, cols, min, max).
+  const double defaults[4] = {1.0, 1.0, sequence ? 1.0 : 0.0, 1.0};
+  double numbers[4];
+  for (std::uint32_t index = 0; index < 4U; ++index) {
+    auto number = read_optional_number_arg(args, arity, index, defaults[index]);
     if (!number) {
       *out_err = number.error();
       return false;
     }
+    numbers[index] = number.value();
   }
-  // A value that truncates to zero yields #CALC!, while a strictly negative
-  // dimension yields #VALUE!. This distinction is observable for
-  // SEQUENCE(0) versus SEQUENCE(-1).
-  auto shape = validate_grid_shape(rows_c.value(), read_optional_number_arg(args, arity, 1U, 1.0).value(),
-                                   /*zero_is_calc=*/true);
+  if (!sequence) {
+    auto whole_number = read_optional_bool_arg(args, arity, 4U, false);
+    if (!whole_number) {
+      *out_err = whole_number.error();
+      return false;
+    }
+    out->whole_number = whole_number.value();
+  }
+  // A value that truncates to zero yields #CALC! for SEQUENCE, while a strictly negative
+  // dimension yields #VALUE!: SEQUENCE(0) differs from SEQUENCE(-1).
+  auto shape = validate_grid_shape(numbers[0], numbers[1], /*zero_is_calc=*/sequence);
   if (!shape) {
     *out_err = shape.error();
     return false;
   }
-  *out_rows = shape.value().rows;
-  *out_cols = shape.value().cols;
-  return true;
-}
-
-bool randarray_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
-                     ErrorCode* out_err) {
-  auto rows_c = read_optional_number_arg(args, arity, 0U, 1.0);
-  if (!rows_c) {
-    *out_err = rows_c.error();
-    return false;
+  if (!sequence) {
+    if (!std::isfinite(numbers[2]) || !std::isfinite(numbers[3])) {
+      *out_err = ErrorCode::Num;
+      return false;
+    }
+    if (numbers[2] > numbers[3] ||
+        (out->whole_number && (std::trunc(numbers[2]) != numbers[2] || std::trunc(numbers[3]) != numbers[3]))) {
+      *out_err = ErrorCode::Value;
+      return false;
+    }
   }
-  auto cols_c = read_optional_number_arg(args, arity, 1U, 1.0);
-  if (!cols_c) {
-    *out_err = cols_c.error();
-    return false;
-  }
-  auto min_c = read_optional_number_arg(args, arity, 2U, 0.0);
-  if (!min_c) {
-    *out_err = min_c.error();
-    return false;
-  }
-  auto max_c = read_optional_number_arg(args, arity, 3U, 1.0);
-  if (!max_c) {
-    *out_err = max_c.error();
-    return false;
-  }
-  auto whole_number_c = read_optional_bool_arg(args, arity, 4U, false);
-  if (!whole_number_c) {
-    *out_err = whole_number_c.error();
-    return false;
-  }
-  // Shape validation. SEQUENCE precedent: truncate-toward-zero, reject
-  // <= 0 with #VALUE!, reject oversize with #NUM!.
-  auto shape = validate_grid_shape(rows_c.value(), cols_c.value(), /*zero_is_calc=*/false);
-  if (!shape) {
-    *out_err = shape.error();
-    return false;
-  }
-  // Bounds validation.
-  const double min_v = min_c.value();
-  const double max_v = max_c.value();
-  if (std::isnan(min_v) || std::isnan(max_v) || std::isinf(min_v) || std::isinf(max_v)) {
-    *out_err = ErrorCode::Num;
-    return false;
-  }
-  if (min_v > max_v || (whole_number_c.value() && (std::trunc(min_v) != min_v || std::trunc(max_v) != max_v))) {
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  *out_rows = shape.value().rows;
-  *out_cols = shape.value().cols;
+  out->rows = shape.value().rows;
+  out->cols = shape.value().cols;
+  out->first = numbers[2];
+  out->second = numbers[3];
   return true;
 }
 

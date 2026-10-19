@@ -27,19 +27,22 @@ namespace eval {
 
 class FunctionRegistry;
 
-/// Validates the evaluated arguments of `SEQUENCE(rows, [cols], [start],
-/// [step])` and reports the `rows` x `cols` grid it returns, without
-/// building it. Returns false, setting `*out_err` to the error SEQUENCE
-/// returns instead, when an argument is rejected.
-bool sequence_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
-                    ErrorCode* out_err);
+/// Parsed arguments of `SEQUENCE(rows, [cols], [start], [step])` or
+/// `RANDARRAY([rows], [cols], [min], [max], [whole_number])`: `first` / `second`
+/// are start / step or min / max.
+struct GeneratorParams {
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  double first = 0.0;
+  double second = 0.0;
+  bool whole_number = false;
+};
 
-/// Validates the evaluated arguments of `RANDARRAY([rows], [cols], [min],
-/// [max], [whole_number])` and reports the `rows` x `cols` grid it returns,
-/// without building it. Returns false, setting `*out_err` to the error
-/// RANDARRAY returns instead, when an argument is rejected.
-bool randarray_shape(const Value* args, std::uint32_t arity, std::uint32_t* out_rows, std::uint32_t* out_cols,
-                     ErrorCode* out_err);
+/// Validates the evaluated arguments of SEQUENCE (`sequence`) or RANDARRAY and
+/// reports the grid it returns, without building it. Returns false, setting
+/// `*out_err` to the error the function returns instead, when an argument is
+/// rejected.
+bool generator_params(const Value* args, std::uint32_t arity, bool sequence, GeneratorParams* out, ErrorCode* out_err);
 
 /// Registers the dynamic-array (spilling) built-in functions into
 /// `registry`. Currently registers SEQUENCE; other dynamic-array functions
