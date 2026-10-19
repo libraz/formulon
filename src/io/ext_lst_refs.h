@@ -36,14 +36,6 @@ using SqrefRemap = std::function<void(std::vector<MergeRange>&)>;
 /// when it is unchanged.
 using FormulaRemap = std::function<std::optional<std::string>(std::string_view)>;
 
-/// Maps every `<xm:sqref>` in `xml` through `remap`. An emptied sqref
-/// removes its owner -- the `<x14:sparkline>` (and its group once no
-/// sparkline is left), the `<x14:conditionalFormatting>`, or whatever
-/// other element holds it -- and any container that leaves empty; a
-/// container's `count` attribute is kept in step. An sqref that does not
-/// parse is left alone. Returns true when `xml` changed.
-bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap);
-
 /// Maps the text of every `<xm:f>` in `xml` through `remap`. Returns true
 /// when `xml` changed.
 bool remap_ext_lst_formulas(std::string& xml, const FormulaRemap& remap);
@@ -101,12 +93,18 @@ class TranslateTransform final : public parser::RefTransform {
 
 /// Returns the text of one formula translated through `transform`, or
 /// nothing when it is unchanged or cannot be translated.
-using FormulaTranslate = std::function<std::optional<std::string>(std::string_view, const parser::RefTransform&)>;
+using FormulaTranslate = std::optional<std::string> (*)(std::string_view, const parser::RefTransform&);
 
-/// Appends each copy `clone` describes after its sparkline, translating the
-/// source with `translate`. A container's `count` attribute is kept in step.
-/// Returns true when `xml` changed.
-bool clone_ext_lst_sparklines(std::string& xml, const SparklineClone& clone, const FormulaTranslate& translate);
+/// Maps every `<xm:sqref>` in `xml` through `remap`. An emptied sqref
+/// removes its owner -- the `<x14:sparkline>` (and its group once no
+/// sparkline is left), the `<x14:conditionalFormatting>`, or whatever
+/// other element holds it -- and any container that leaves empty; a
+/// container's `count` attribute is kept in step. An sqref that does not
+/// parse is left alone. When `clone` is given, the same pass then appends
+/// each sparkline copy it describes, its source translated with `translate`
+/// (required in that case). Returns true when `xml` changed.
+bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone = nullptr,
+                          FormulaTranslate translate = nullptr);
 
 }  // namespace formulon::io
 

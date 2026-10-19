@@ -68,16 +68,7 @@ void Store(std::string& xml, const pugi::xml_document& doc) {
   xml = has_element_child(root) ? raw_xml(root) : std::string();
 }
 
-}  // namespace
-
-bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap) {
-  if (xml.find("xm:sqref") == std::string::npos) {
-    return false;
-  }
-  pugi::xml_document doc;
-  if (!Load(doc, xml)) {
-    return false;
-  }
+bool RemapSqrefs(const pugi::xml_document& doc, const SqrefRemap& remap) {
   std::vector<pugi::xml_node> sqrefs;
   Collect(doc.document_element(), "xm:sqref", sqrefs);
   bool changed = false;
@@ -96,43 +87,10 @@ bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap) {
       changed = true;
     }
   }
-  if (changed) {
-    Store(xml, doc);
-  }
   return changed;
 }
 
-bool remap_ext_lst_formulas(std::string& xml, const FormulaRemap& remap) {
-  if (xml.find("xm:f") == std::string::npos) {
-    return false;
-  }
-  pugi::xml_document doc;
-  if (!Load(doc, xml)) {
-    return false;
-  }
-  std::vector<pugi::xml_node> formulas;
-  Collect(doc.document_element(), "xm:f", formulas);
-  bool changed = false;
-  for (const pugi::xml_node& node : formulas) {
-    if (const std::optional<std::string> text = remap(node.text().get())) {
-      node.text().set(text->c_str());
-      changed = true;
-    }
-  }
-  if (changed) {
-    Store(xml, doc);
-  }
-  return changed;
-}
-
-bool clone_ext_lst_sparklines(std::string& xml, const SparklineClone& clone, const FormulaTranslate& translate) {
-  if (xml.find("x14:sparkline>") == std::string::npos) {
-    return false;
-  }
-  pugi::xml_document doc;
-  if (!Load(doc, xml)) {
-    return false;
-  }
+bool CloneSparklines(const pugi::xml_document& doc, const SparklineClone& clone, FormulaTranslate translate) {
   std::vector<pugi::xml_node> sparklines;
   Collect(doc.document_element(), "x14:sparkline", sparklines);
   bool changed = false;
@@ -160,6 +118,47 @@ bool clone_ext_lst_sparklines(std::string& xml, const SparklineClone& clone, con
       changed = true;
     }
     SyncCount(node.parent());
+  }
+  return changed;
+}
+
+}  // namespace
+
+bool remap_ext_lst_sqrefs(std::string& xml, const SqrefRemap& remap, const SparklineClone* clone,
+                          FormulaTranslate translate) {
+  if (xml.find("xm:sqref") == std::string::npos) {
+    return false;
+  }
+  pugi::xml_document doc;
+  if (!Load(doc, xml)) {
+    return false;
+  }
+  bool changed = RemapSqrefs(doc, remap);
+  if (clone != nullptr) {
+    changed = CloneSparklines(doc, *clone, translate) || changed;
+  }
+  if (changed) {
+    Store(xml, doc);
+  }
+  return changed;
+}
+
+bool remap_ext_lst_formulas(std::string& xml, const FormulaRemap& remap) {
+  if (xml.find("xm:f") == std::string::npos) {
+    return false;
+  }
+  pugi::xml_document doc;
+  if (!Load(doc, xml)) {
+    return false;
+  }
+  std::vector<pugi::xml_node> formulas;
+  Collect(doc.document_element(), "xm:f", formulas);
+  bool changed = false;
+  for (const pugi::xml_node& node : formulas) {
+    if (const std::optional<std::string> text = remap(node.text().get())) {
+      node.text().set(text->c_str());
+      changed = true;
+    }
   }
   if (changed) {
     Store(xml, doc);
