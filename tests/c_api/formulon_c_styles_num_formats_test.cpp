@@ -14,6 +14,33 @@ TEST(FormulonCApiStyles, BuiltinNumFmtResolves) {
   EXPECT_STREQ(s, "mm-dd-yy");
 }
 
+TEST(FormulonCApiStyles, LocaleOnlyBuiltinNumFmtFollowsProfile) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* s = nullptr;
+  // Under en-US the East Asian date ids render as the short date.
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 31, &s), 0);
+  EXPECT_STREQ(s, "m/d/yy");
+
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 31, &s), 0);
+  EXPECT_STREQ(s, "yyyy\"年\"m\"月\"d\"日\"");
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 57, &s), 0);
+  EXPECT_STREQ(s, "[$-411]ge\\.m\\.d");
+  // Ids with an ECMA-376 code keep it whatever the profile.
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14, &s), 0);
+  EXPECT_STREQ(s, "mm-dd-yy");
+
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-zh_CN"), 0);
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 57, &s), 0);
+  EXPECT_STREQ(s, "yyyy\"年\"m\"月\"");
+
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-th_TH"), 0);
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 59, &s), 0);
+  ASSERT_NE(s, nullptr);
+  EXPECT_GT(std::strlen(s), 0U);
+}
+
 TEST(FormulonCApiStyles, CustomNumFmtOverridingBuiltinIdWins) {
   // A file may define a custom <numFmt> whose numFmtId collides with a
   // built-in slot; Excel honours the file's definition. Parse a production-
@@ -173,9 +200,12 @@ TEST(FormulonCApiStyles, UnknownNumFmtIdRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   const char* s = nullptr;
-  // Reserved built-in slot (id 5) without a custom override surfaces
-  // an error rather than an empty string.
-  EXPECT_NE(fm_styles_get_num_fmt_string(wb.handle, 5, &s), 0);
+  // A built-in slot no locale assigns a code surfaces an error rather than an
+  // empty string.
+  EXPECT_NE(fm_styles_get_num_fmt_string(wb.handle, 82, &s), 0);
+  // Id 5 is reserved in ECMA-376 but rendered as the locale currency.
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 5, &s), 0);
+  EXPECT_STREQ(s, "\"$\"#,##0_);\\(\"$\"#,##0\\)");
 }
 
 TEST(FormulonCApiStyles, AddNumFmtBuiltinReturnsBuiltinId) {

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `fm_styles_get_num_fmt_string` / `getNumFmt` / `get_num_fmt` now resolve
+  built-in ids that have no ECMA-376 code (East Asian date ids such as 31 and
+  55-58, Thai-digit ids 59-81, the currency ids 5-8) to the code the
+  workbook's Excel profile renders them with, instead of failing. A cell
+  saved by a Japanese, Chinese or Korean desktop spreadsheet therefore reports
+  its date format. Ids with an ECMA-376 code still return that code.
+
 ## [0.16.0] - 2026-10-19
 
 ### BREAKING
