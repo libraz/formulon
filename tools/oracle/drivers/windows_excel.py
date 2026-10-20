@@ -50,8 +50,9 @@ Running ``python -m tools.oracle.drivers.windows_excel --serve`` opens
 Excel once, prints a ``ready`` line to stdout, then loops reading
 newline-delimited JSON requests from stdin and writing newline-delimited
 JSON responses to stdout. The bridge uses this mode so all suites in a
-generation run share a single Excel instance -- Excel cold-start (5-15s) dominates total runtime when generating 90+ suites,
-and amortising it once over the whole run cuts wall-clock by ~10x.
+generation run share a single Excel instance -- Excel cold-start (5-15s)
+dominates total runtime when generating 90+ suites, and amortising it once
+over the whole run cuts wall-clock by ~10x.
 """
 
 from __future__ import annotations
