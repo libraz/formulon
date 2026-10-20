@@ -6282,9 +6282,9 @@ FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm
  * this includes a custom record below 164 that overrides a built-in slot.
  * When no valid custom record matches, a non-empty built-in code in the
  * `0..163` range is used as the fallback. A built-in id with no ECMA-376 code
- * (the East Asian date ids, the Thai-digit ids) resolves to the code the
- * workbook's Excel profile renders it with, so the result for those ids
- * follows `fm_workbook_set_excel_profile_id`. On success `*out` is either a
+ * (the East Asian date ids, the Thai-digit ids, the currency ids 5-8)
+ * resolves to the code the workbook's Excel profile renders it with, so the
+ * result for those ids follows `fm_workbook_set_excel_profile_id`. On success `*out` is either a
  * model-backed view into the custom record's format string (valid until the
  * next mutation of the numFmt list, `fm_styles_add_num_fmt`, or until
  * handle destruction), or a static built-in view with program lifetime.

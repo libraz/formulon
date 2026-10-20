@@ -249,7 +249,7 @@ extern "C" fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t 
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
   std::optional<std::string_view> resolved = effective_num_fmt(styles, num_fmt_id);
-  // Ids with no ECMA-376 code (East Asian dates, Thai digits) resolve to the code the profile renders them with.
+  // Ids with no ECMA-376 code (East Asian dates, Thai digits, currency) take the code the profile renders.
   if (!resolved.has_value()) {
     resolved = effective_num_fmt(styles, num_fmt_id, wb->workbook().excel_profile());
   }

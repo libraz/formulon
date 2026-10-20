@@ -37,8 +37,7 @@ TEST(FormulonCApiStyles, LocaleOnlyBuiltinNumFmtFollowsProfile) {
 
   ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-th_TH"), 0);
   ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 59, &s), 0);
-  ASSERT_NE(s, nullptr);
-  EXPECT_GT(std::strlen(s), 0U);
+  EXPECT_STREQ(s, "t0");
 }
 
 TEST(FormulonCApiStyles, CustomNumFmtOverridingBuiltinIdWins) {
