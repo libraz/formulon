@@ -5601,8 +5601,10 @@ FM_API fm_status_t fm_table_evaluate_auto_filter(const fm_workbook_t* wb, size_t
  *        takes precedence on overlapping columns; non-overlapping
  *        portions of pre-existing entries are retained.
  *
- * `width` is in Excel's character-width unit. A rejected call leaves the
- * layout exactly as it was.
+ * `width` is a stored column width: Excel's character-width unit with the
+ * column padding included, as `<col width>` holds it (Calibri 11 stores the
+ * 8.43-character column as 9.140625). A rejected call leaves the layout
+ * exactly as it was.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -5852,15 +5854,17 @@ FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_ind
 /**
  * @brief Sheet default column / row metrics (`<sheetFormatPr>`).
  *
- * `default_col_width` is in character units and `default_row_height` in
- * points; each is meaningful only when its `has_*` flag is non-zero, since
- * an absent attribute and an explicit `0` are different states.
+ * `default_col_width` is a stored column width (character units with the
+ * column padding included, as OOXML writes it) and `default_row_height` is
+ * in points; each is meaningful only when its `has_*` flag is non-zero,
+ * since an absent attribute and an explicit `0` are different states.
  * `base_col_width` is in characters and always present (OOXML default 8).
  *
- * `effective_default_col_width` (characters) and
+ * `effective_default_col_width` (stored width) and
  * `effective_default_row_height` (points) are the values the sheet actually
  * lays out with: the stated default when its `has_*` flag is set, else the
- * built-in fallback (8.43 characters, 102/7 pt); the row height is 0 when
+ * column Excel derives from `base_col_width` and the Normal font (Calibri
+ * 11, base 8: 9.140625, shown as 8.43) and 102/7 pt; the row height is 0 when
  * the sheet's zeroHeight hides rows by default. They are filled by
  * `fm_sheet_get_format_defaults` and ignored by
  * `fm_sheet_set_format_defaults`.
@@ -5915,6 +5919,11 @@ typedef enum {
 /**
  * @brief The character-unit to point conversion for the workbook's Normal
  *        font in one mode.
+ *
+ * `points_per_char` and `padding_pt` describe a column in displayed
+ * characters (`Range.ColumnWidth`): `width_pt = chars * points_per_char +
+ * padding_pt`. Stored widths go through `fm_sheet_column_chars_to_pt`,
+ * which also snaps to whole screen pixels.
  *
  * `calibrated` is `0` when the Normal font is not a tabulated calibration
  * point and the Calibri 11 figure was extrapolated. `normal_font_name` is a
@@ -5979,8 +5988,10 @@ FM_API fm_status_t fm_sheet_row_height_pt(const fm_workbook_t* wb, size_t sheet_
 FM_API fm_status_t fm_sheet_width_model(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, fm_width_model* out);
 
 /**
- * @brief Converts a column width in character units to points. Zero
- *        characters is exactly zero points.
+ * @brief Converts a stored column width (character units with the column
+ *        padding included, as `<col width>` holds it) to points. On screen
+ *        the width snaps to whole pixels of the Normal font's maximum digit
+ *        width (ECMA-376 §18.3.1.13). Zero is exactly zero points.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -5991,8 +6002,9 @@ FM_API fm_status_t fm_sheet_column_chars_to_pt(const fm_workbook_t* wb, size_t s
                                                double* out_pt);
 
 /**
- * @brief Inverse of `fm_sheet_column_chars_to_pt`; a width at or below the
- *        padding maps to zero characters.
+ * @brief Inverse of `fm_sheet_column_chars_to_pt`: the stored width Excel
+ *        writes for a column of `pt`, rounded to whole screen pixels; zero
+ *        points maps to zero.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;

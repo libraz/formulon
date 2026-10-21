@@ -126,11 +126,10 @@ TEST(PaginationTest, WideTableWrapsOntoFurtherPageColumns) {
 TEST(PaginationTest, CalibriNormalFontBaselineColumnGeometryUnchanged) {
   Workbook wb = Workbook::create();  // Seeds Normal on Calibri 11, the calibrated baseline row.
   Sheet& sheet = wb.sheet(0);
-  // Five 30-char-unit columns: Calibri 11's print-layout geometry (not
-  // its 96-DPI display geometry -- see `ResolveColumnPrintGeometry` in
-  // pagination.cpp) resolves 30 chars to exactly 171.0 pt, so a third
-  // column (342 + 171 = 513 pt) overflows the ~494.5 pt A4 body -- the
-  // second still fits at 342 pt.
+  // Five columns of stored width 30: Calibri 11's print-layout geometry
+  // (not its 96-DPI display geometry -- see `resolve_column_width_model`)
+  // resolves them to ~167.0 pt each, so a third column (~501 pt)
+  // overflows the ~494.5 pt A4 body -- the second still fits at ~334 pt.
   SetColumnWidth(&sheet, 0, 4, 30.0);
   wb.set_defined_names({PrintArea("Sheet1!$A$1:$E$1", 0)});
 
@@ -145,8 +144,8 @@ TEST(PaginationTest, NonCalibriNormalFontUsesExcelColumnGeometry) {
   Sheet& sheet = wb.sheet(0);
   // Meiryo UI 14's print-layout geometry (its 96-DPI display MDW/padding
   // scaled by Calibri 11's print/display ratio -- only Calibri's
-  // ratio is known) resolves 30 chars to ~291.93 pt versus Calibri
-  // 11's 171 pt, so the second column (~583.86 pt) already overflows
+  // ratio is known) resolves stored width 30 to ~286.4 pt versus Calibri
+  // 11's ~167.0 pt, so the second column (~572.7 pt) already overflows
   // the ~494.5 pt A4 body -- one column earlier than the Calibri-11
   // baseline above.
   SetNormalFont(&wb, "Meiryo UI", 14.0);

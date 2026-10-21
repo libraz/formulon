@@ -51,7 +51,7 @@ export function registerCellGeometryDisplay(Module, test) {
     withWorkbook(Module, (wb) => {
       let d = wb.getSheetFormatDefaults(0);
       assert.equal(d.hasDefaultColWidth, false);
-      assert.equal(d.effectiveDefaultColWidth, 8.43);
+      assert.equal(d.effectiveDefaultColWidth, 2340 / 256); // Base-8 Calibri 11 default, shown as 8.43.
       assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
       assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 }).ok);
       d = wb.getSheetFormatDefaults(0);
@@ -287,7 +287,8 @@ export function registerCellGeometryDisplay(Module, test) {
 
       const pt = wb.columnCharsToPt(0, 0, 10);
       assert.ok(pt.status.ok);
-      assert.ok(Math.abs(pt.value - (10 * model.pointsPerChar + model.paddingPt)) < 1e-6);
+      // Stored width 10 is Truncate((2560 + 18) / 256 * 7) = 70 px with Calibri 11.
+      assert.equal(pt.value, 70 * 0.75);
       const chars = wb.columnPtToChars(0, 0, pt.value);
       assert.ok(Math.abs(chars.value - 10) < 1e-6);
       assert.equal(wb.columnCharsToPt(0, 0, 0).value, 0);

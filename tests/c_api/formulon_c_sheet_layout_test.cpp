@@ -1151,7 +1151,7 @@ TEST(FormulonCApiSheetLayout, EffectiveFormatDefaultsFollowTheStatedValues) {
   fm_sheet_format_defaults d{};
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
   EXPECT_EQ(d.has_default_col_width, 0);
-  EXPECT_DOUBLE_EQ(d.effective_default_col_width, 8.43);
+  EXPECT_DOUBLE_EQ(d.effective_default_col_width, 2340.0 / 256.0);  // Base 8: 64 px, shown as 8.43.
   EXPECT_DOUBLE_EQ(d.effective_default_row_height, 102.0 / 7.0);
 
   // zeroHeight hides rows without an explicit override, so the effective
@@ -1179,7 +1179,7 @@ TEST(FormulonCApiSheetLayout, EffectiveFormatDefaultsFollowTheStatedValues) {
   next.has_default_row_height = 0;
   ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &next), 0);
   ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &d), 0);
-  EXPECT_DOUBLE_EQ(d.effective_default_col_width, 8.43);
+  EXPECT_DOUBLE_EQ(d.effective_default_col_width, 2340.0 / 256.0);  // Base 8: 64 px, shown as 8.43.
   EXPECT_DOUBLE_EQ(d.effective_default_row_height, 102.0 / 7.0);
 }
 

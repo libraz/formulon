@@ -1863,11 +1863,13 @@ class PageLayout:
 class SheetFormatDefaults:
     """Sheet default column / row metrics (``<sheetFormatPr>``).
 
-    ``default_col_width`` is in characters and ``default_row_height`` in
-    points; each is meaningful only when its ``has_*`` flag is set.
+    ``default_col_width`` is a stored width (characters with the column
+    padding included) and ``default_row_height`` in points; each is
+    meaningful only when its ``has_*`` flag is set.
     ``effective_default_col_width`` / ``effective_default_row_height`` are
     read-only values the sheet lays out with: the stated default, else the
-    fallback (8.43 characters, 102/7 pt); the row height is 0 when
+    column Excel derives from ``base_col_width`` and the Normal font
+    (Calibri 11, base 8: 9.140625, shown as 8.43) and 102/7 pt; the row height is 0 when
     ``zero_height`` hides rows by default. They are ignored when setting.
     """
 
@@ -1882,7 +1884,12 @@ class SheetFormatDefaults:
 
 @dataclass(frozen=True)
 class WidthModel:
-    """Column-width conversion model for the workbook's Normal font."""
+    """Column-width conversion model for the workbook's Normal font.
+
+    ``points_per_char`` and ``padding_pt`` are per displayed character:
+    ``chars * points_per_char + padding_pt``; stored widths go through
+    ``column_chars_to_pt``.
+    """
 
     points_per_char: float
     padding_pt: float
@@ -5576,14 +5583,14 @@ class Workbook:
     def column_chars_to_pt(
         self, sheet: int, chars: float, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY
     ) -> float:
-        """Convert a column width in character units to points."""
+        """Convert a stored column width (padding included) to points, snapped to whole screen pixels."""
         h = self._require()
         return self._read_f64_out(
             LIB.fm_sheet_column_chars_to_pt, h, _uint(sheet, "sheet_index"), _sint(int(mode), "mode"), float(chars)
         )
 
     def column_pt_to_chars(self, sheet: int, pt: float, mode: Union[GeometryMode, int] = GeometryMode.DISPLAY) -> float:
-        """Convert a column width in points to character units."""
+        """Convert points to the stored column width Excel writes for that column."""
         h = self._require()
         return self._read_f64_out(
             LIB.fm_sheet_column_pt_to_chars, h, _uint(sheet, "sheet_index"), _sint(int(mode), "mode"), float(pt)
@@ -7565,7 +7572,11 @@ class Workbook:
         return out
 
     def set_column_width(self, sheet: int, first: int, last: int, width: float) -> None:
-        """Set the column width override on ``[first, last]``."""
+        """Set the column width override on ``[first, last]``.
+
+        ``width`` is a stored width: characters with the column padding
+        included, as ``<col width>`` holds it.
+        """
         h = self._require()
         _check(
             LIB.fm_sheet_set_column_width(

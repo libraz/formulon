@@ -662,12 +662,14 @@ TEST(WorkbookBuilder, FormulaSourceErrorCrossedWithColumnFieldStaysInItsOwnCell)
 
 namespace {
 
-// A wide column width (in OOXML character units) chosen so that exactly
+// A wide column width (Excel `ColumnWidth`, displayed characters) chosen so that exactly
 // three columns saturate an A4-portrait printable body. A4 portrait body
 // width is ~494 pt after default 0.7" side margins; at ~165 pt per
 // column three columns (~495 pt) just exceed it, forcing a fourth column
 // onto a second page.
 constexpr double kWideColumnChars = 30.0;
+// The stored width Excel writes for it with the Calibri 11 Normal font (215 px).
+constexpr double kWideColumnStored = 7862.0 / 256.0;
 
 // A tall row height (in points) chosen so that a long table overflows
 // the A4-portrait printable body (~734 pt high) within a small row
@@ -916,7 +918,7 @@ TEST(WorkbookBuilderPrint, HidingAndSizingTheSameColumnStayIndependent) {
   EXPECT_FALSE(layout.columns[0].has_width);
   EXPECT_EQ(layout.columns[0].first, 2U);  // C
   EXPECT_FALSE(layout.columns[1].hidden);
-  EXPECT_EQ(layout.columns[1].width, kWideColumnChars);
+  EXPECT_EQ(layout.columns[1].width, kWideColumnStored);
 }
 
 TEST(WorkbookBuilderPrint, HiddenColumnIsNotMaskedByAWidthSpanCoveringIt) {

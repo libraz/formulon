@@ -1533,8 +1533,8 @@ export interface MergeRange {
 }
 
 /** Return type of `Workbook.getSheetFormatDefaults(sheet)`; also the
- *  argument shape of `setSheetFormatDefaults`. `defaultColWidth` is in
- *  character units and `defaultRowHeight` in points, each meaningful only
+ *  argument shape of `setSheetFormatDefaults`. `defaultColWidth` is a
+ *  stored width (padding included) and `defaultRowHeight` in points, each meaningful only
  *  when its `has*` flag is set. `baseColWidth` is in characters (OOXML
  *  default 8). */
 export interface SheetFormatDefaults {
@@ -1549,7 +1549,8 @@ export interface SheetFormatDefaults {
  *  values are read-only and ignored by `setSheetFormatDefaults`. */
 export interface SheetFormatDefaultsResult extends SheetFormatDefaults {
   status: Status;
-  /** Character units the sheet lays columns out with: `defaultColWidth` when set, else 8.43. */
+  /** Stored width the sheet lays columns out with: `defaultColWidth` when set, else the column
+   *  Excel derives from `baseColWidth` and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43). */
   effectiveDefaultColWidth: number;
   /** Points the sheet lays rows out with: `defaultRowHeight` when set, else 102/7 (about 14.57); 0 when `zeroHeight` hides rows by default. */
   effectiveDefaultRowHeight: number;
@@ -1562,7 +1563,9 @@ export interface CellRectResult extends RectPt {
   status: Status;
 }
 
-/** Return type of `Workbook.getWidthModel(sheet, mode)`. `calibrated` is
+/** Return type of `Workbook.getWidthModel(sheet, mode)`. `pointsPerChar` and
+ *  `paddingPt` are per displayed character: `chars * pointsPerChar + paddingPt`;
+ *  stored widths go through `columnCharsToPt`. `calibrated` is
  *  false when the Normal font is not a measured calibration point and the
  *  Calibri 11 figure was extrapolated. */
 export interface WidthModelResult {
@@ -3759,7 +3762,8 @@ export interface Workbook {
 
   /** Returns the column-layout overrides on `sheet` in storage order. */
   getSheetColumns(sheet: number): ColumnsResult;
-  /** Sets / replaces the column width override on `[first, last]`. */
+  /** Sets / replaces the column width override on `[first, last]`. `width` is a stored width:
+   *  characters with the column padding included, as `<col width>` holds it. */
   setColumnWidth(sheet: number, first: number, last: number, width: number): Status;
   /** Sets / replaces the column hidden flag on `[first, last]`. */
   setColumnHidden(sheet: number, first: number, last: number, hidden: boolean): Status;
@@ -3790,9 +3794,9 @@ export interface Workbook {
   getRowHeightPt(sheet: number, row: number): NumberResult;
   /** Reads the character-unit to point conversion for the workbook's Normal font. */
   getWidthModel(sheet: number, mode: GeometryMode): WidthModelResult;
-  /** Converts a column width in characters to points. */
+  /** Converts a stored column width (padding included) to points, snapped to whole screen pixels. */
   columnCharsToPt(sheet: number, mode: GeometryMode, chars: number): NumberResult;
-  /** Inverse of `columnCharsToPt`. */
+  /** Inverse of `columnCharsToPt`: the stored width Excel writes for a column of `pt`. */
   columnPtToChars(sheet: number, mode: GeometryMode, pt: number): NumberResult;
   /** Sets / replaces the row hidden flag at `row`. */
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;

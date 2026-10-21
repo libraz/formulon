@@ -1,6 +1,7 @@
 #include "print/sheet_geometry.h"
 
 #include <algorithm>
+#include <cmath>
 #include <unordered_set>
 #include <utility>
 
@@ -68,10 +69,15 @@ constexpr double kDisplayColumnPaddingPtCalibri11 = 3.75;
 constexpr double kPrintMdwRatio = kPrintPointsPerColumnCharCalibri11 / kDisplayPointsPerColumnCharCalibri11;
 constexpr double kPrintPaddingRatio = kPrintColumnPaddingPtCalibri11 / kDisplayColumnPaddingPtCalibri11;
 
-/// Excel's standard default column width, in character units. Used when
-/// neither a `<col>` override nor `<sheetFormatPr defaultColWidth>`
-/// applies.
-constexpr double kStandardColWidthChars = 8.43;
+/// Points per 96-DPI screen pixel.
+constexpr double kPointsPerPixel = 72.0 / 96.0;
+
+/// A stored width resolves in 1/256 of a character (ECMA-376 §18.3.1.13).
+constexpr double kStoredWidthSteps = 256.0;
+
+/// Windows rounds a default column derived from `baseColWidth` up to a
+/// multiple of 8 pixels: Calibri 11 base 8 is 61 px, shown as 64 px (8.43).
+constexpr int kDefaultColumnPixelStep = 8;
 
 /// One (Normal font family, size) -> (MDW, padding) *display* calibration
 /// point on Windows Excel 365 ja-JP (build 16.0.20228, 100%
@@ -121,17 +127,6 @@ ColumnWidthGeometry ResolveColumnDisplayGeometry(const std::string& family, doub
   return ColumnWidthGeometry{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11, false};
 }
 
-/// The geometry pagination's break math must use: `(family, size)`'s
-/// display calibration scaled by Calibri 11's print/display ratios. Reduces
-/// to `kPrintPointsPerColumnCharCalibri11` /
-/// `kPrintColumnPaddingPtCalibri11` exactly for `{"Calibri", 11}` and for
-/// any untabulated font/size.
-ColumnWidthGeometry ResolveColumnPrintGeometry(const std::string& family, double size) {
-  const ColumnWidthGeometry display = ResolveColumnDisplayGeometry(family, size);
-  return ColumnWidthGeometry{display.points_per_char * kPrintMdwRatio, display.padding_pt * kPrintPaddingRatio,
-                             display.calibrated};
-}
-
 /// Height of one row override: hidden is zero, an explicit height wins,
 /// anything else keeps the sheet default.
 double OverrideRowHeight(const RowLayout& layout, double default_height) {
@@ -175,19 +170,20 @@ const FontRecord* resolve_normal_font(const StylesTable& styles) {
 ColumnWidthModel resolve_column_width_model(const StylesTable& styles, GeometryMode mode) {
   const FontRecord* font = resolve_normal_font(styles);
   ColumnWidthModel model;
-  ColumnWidthGeometry geometry;
+  ColumnWidthGeometry display{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11, false};
   if (font != nullptr) {
-    geometry = mode == GeometryMode::kDisplay ? ResolveColumnDisplayGeometry(font->name, font->size)
-                                              : ResolveColumnPrintGeometry(font->name, font->size);
+    display = ResolveColumnDisplayGeometry(font->name, font->size);
     model.normal_font_name = font->name;
     model.normal_font_size = font->size;
-  } else {
-    geometry = mode == GeometryMode::kDisplay
-                   ? ColumnWidthGeometry{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11, false}
-                   : ColumnWidthGeometry{};
   }
+  // Print scales the display calibration by Calibri 11's print/display ratios.
+  const ColumnWidthGeometry print{display.points_per_char * kPrintMdwRatio, display.padding_pt * kPrintPaddingRatio,
+                                  display.calibrated};
+  const ColumnWidthGeometry& geometry = mode == GeometryMode::kDisplay ? display : print;
   model.points_per_char = geometry.points_per_char;
   model.padding_pt = geometry.padding_pt;
+  model.max_digit_width_px = static_cast<int>(std::lround(display.points_per_char / kPointsPerPixel));
+  model.padding_px = static_cast<int>(std::lround(display.padding_pt / kPointsPerPixel));
   model.calibrated = geometry.calibrated;
   return model;
 }
@@ -200,19 +196,37 @@ double column_chars_to_points(double chars, const ColumnWidthModel& model) {
   if (chars == 0.0) {
     return 0.0;
   }
-  return chars * model.points_per_char + model.padding_pt;
+  const double mdw = static_cast<double>(model.max_digit_width_px);
+  const double pixels =
+      std::floor((kStoredWidthSteps * chars + std::floor(kStoredWidthSteps / 2.0 / mdw)) / kStoredWidthSteps * mdw);
+  // Scale by points per pixel first so whole screen pixels stay exact quarter points.
+  const double points_per_pixel = model.points_per_char / mdw;
+  return std::max(0.0, (pixels - static_cast<double>(model.padding_px)) * points_per_pixel + model.padding_pt);
 }
 
 double column_points_to_chars(double points, const ColumnWidthModel& model) {
   if (points <= 0.0 || model.points_per_char <= 0.0) {
     return 0.0;
   }
-  return std::max(0.0, (points - model.padding_pt) / model.points_per_char);
+  const double mdw = static_cast<double>(model.max_digit_width_px);
+  const double displayed_chars = (points - model.padding_pt) / model.points_per_char;
+  const double pixels = std::round(displayed_chars * mdw + static_cast<double>(model.padding_px));
+  if (pixels <= 0.0) {
+    return 0.0;
+  }
+  return std::floor(pixels / mdw * kStoredWidthSteps) / kStoredWidthSteps;
 }
 
-double default_column_width_chars(const Sheet& sheet) {
+double default_column_width_chars(const Sheet& sheet, const ColumnWidthModel& model) {
   const SheetFormatDefaults& defaults = sheet.format_defaults();
-  return defaults.has_default_col_width ? defaults.default_col_width : kStandardColWidthChars;
+  if (defaults.has_default_col_width) {
+    return defaults.default_col_width;
+  }
+  const double mdw = static_cast<double>(model.max_digit_width_px);
+  const double step = static_cast<double>(kDefaultColumnPixelStep);
+  const double pixels =
+      std::ceil((defaults.base_col_width * mdw + static_cast<double>(model.padding_px)) / step) * step;
+  return std::floor(pixels / mdw * kStoredWidthSteps) / kStoredWidthSteps;
 }
 
 double default_row_height_pt(const Sheet& sheet) {
@@ -228,8 +242,8 @@ double implicit_row_height_pt(const Sheet& sheet) {
   return sheet.format_defaults().zero_height ? 0.0 : default_row_height_pt(sheet);
 }
 
-double effective_column_width_chars(const Sheet& sheet, std::uint32_t col) {
-  const double default_width = default_column_width_chars(sheet);
+double effective_column_width_chars(const Sheet& sheet, std::uint32_t col, const ColumnWidthModel& model) {
+  const double default_width = default_column_width_chars(sheet, model);
   for (const ColumnLayout& span : sheet.layout().columns) {
     if (col >= span.first && col <= span.last) {
       // Hidden columns occupy no printed width, so they never advance the
@@ -250,8 +264,9 @@ double effective_row_height_pt(const Sheet& sheet, std::uint32_t row) {
   return implicit_row_height_pt(sheet);
 }
 
-std::vector<double> column_widths_chars(const Sheet& sheet, std::uint32_t first, std::uint32_t last) {
-  const double default_width = default_column_width_chars(sheet);
+std::vector<double> column_widths_chars(const Sheet& sheet, std::uint32_t first, std::uint32_t last,
+                                        const ColumnWidthModel& model) {
+  const double default_width = default_column_width_chars(sheet, model);
   std::vector<double> widths(static_cast<std::size_t>(last - first) + 1U, default_width);
   std::vector<bool> assigned(widths.size(), false);
   for (const ColumnLayout& span : sheet.layout().columns) {
@@ -288,7 +303,7 @@ std::vector<double> row_heights_pt(const Sheet& sheet, std::uint32_t first, std:
 }
 
 double effective_column_width_pt(const Sheet& sheet, std::uint32_t col, const ColumnWidthModel& model) {
-  return column_chars_to_points(effective_column_width_chars(sheet, col), model);
+  return column_chars_to_points(effective_column_width_chars(sheet, col, model), model);
 }
 
 double column_offset_pt(const Sheet& sheet, std::uint32_t col, const ColumnWidthModel& model) {
@@ -296,7 +311,7 @@ double column_offset_pt(const Sheet& sheet, std::uint32_t col, const ColumnWidth
     return 0.0;
   }
   double offset = 0.0;
-  for (const double chars : column_widths_chars(sheet, 0U, col - 1U)) {
+  for (const double chars : column_widths_chars(sheet, 0U, col - 1U, model)) {
     offset += column_chars_to_points(chars, model);
   }
   return offset;

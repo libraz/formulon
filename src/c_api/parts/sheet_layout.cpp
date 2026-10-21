@@ -761,7 +761,9 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
   out->has_default_col_width = defaults.has_default_col_width ? 1 : 0;
   out->has_default_row_height = defaults.has_default_row_height ? 1 : 0;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  out->effective_default_col_width = formulon::print::default_column_width_chars(sheet);
+  out->effective_default_col_width = formulon::print::default_column_width_chars(
+      sheet,
+      formulon::print::resolve_column_width_model(wb->workbook().styles(), formulon::print::GeometryMode::kDisplay));
   out->effective_default_row_height = defaults.zero_height ? 0.0 : formulon::print::default_row_height_pt(sheet);
   return 0;
 }
@@ -834,7 +836,7 @@ extern "C" fm_status_t fm_sheet_cell_rect_pt(const fm_workbook_t* wb, size_t she
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   const formulon::print::ColumnWidthModel model = width_model_for(wb, mode);
   double width = 0.0;
-  for (const double chars : formulon::print::column_widths_chars(sheet, first_col, last_col)) {
+  for (const double chars : formulon::print::column_widths_chars(sheet, first_col, last_col, model)) {
     width += formulon::print::column_chars_to_points(chars, model);
   }
   const double y = formulon::print::row_offset_pt(sheet, first_row);

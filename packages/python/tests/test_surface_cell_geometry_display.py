@@ -125,7 +125,8 @@ class GeometryTests(unittest.TestCase):
     def test_effective_format_defaults(self) -> None:
         with Workbook.create_default() as wb:
             d = wb.get_sheet_format_defaults(0)
-            self.assertEqual(d.effective_default_col_width, 8.43)
+            # Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
+            self.assertEqual(d.effective_default_col_width, 2340 / 256)
             self.assertEqual(d.effective_default_row_height, 102 / 7)
             wb.set_sheet_format_defaults(
                 0,

@@ -12,6 +12,8 @@
 #include "eval/recalc_engine.h"
 #include "excel_profile.h"
 #include "pivot/pivot_locale.h"
+#include "print/sheet_geometry.h"
+#include "styles.h"
 #include "tests/oracle/oracle_runner.h"
 #include "tests/oracle/workbook_builder.h"
 #include "tests/oracle/workbook_builder_internal.h"
@@ -43,7 +45,7 @@ constexpr const char* kPrintTitlesName = "_xlnm.Print_Titles";
 /// ("A" / "A:D"); each entry becomes one `ColumnLayout{first,last,width}`.
 /// A `row_heights` key is a 1-based Excel row number ("3"); each entry
 /// becomes one `RowLayout{row,height}`. Both maps are optional.
-Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* sheet) {
+Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, const StylesTable& styles, Sheet* sheet) {
   // Hidden lines are emitted before the size maps on purpose: both the
   // pagination fast path and `ColumnWidthChars` resolve a track against the
   // *first* matching span, so a `column_widths` span covering a hidden
@@ -96,6 +98,8 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
     if (!widths_v->is_object()) {
       return invalid("'column_widths' must be an object");
     }
+    const print::ColumnWidthModel display_model =
+        print::resolve_column_width_model(styles, print::GeometryMode::kDisplay);
     for (const auto& [key, value] : widths_v->as_object()) {
       if (!value.is_number()) {
         return invalid("column_widths/" + key + ": width must be a number");
@@ -119,7 +123,10 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, Sheet* shee
       ColumnLayout col;
       col.first = std::min(first, last) - 1U;
       col.last = std::max(first, last) - 1U;
-      col.width = value.as_number();
+      // A case width is Excel's `ColumnWidth` (displayed characters); the
+      // layout holds the stored width Excel writes for it.
+      col.width = print::column_points_to_chars(
+          value.as_number() * display_model.points_per_char + display_model.padding_pt, display_model);
       sheet->mutable_layout().columns.push_back(col);
     }
   }
@@ -276,7 +283,7 @@ Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec, ExcelPr
   Sheet& sheet = workbook->sheet(sheet_index);
 
   // --- case-level layout dimensions ---------------------------------------
-  RETURN_IF_ERROR(apply_layout_dimensions(spec, &sheet));
+  RETURN_IF_ERROR(apply_layout_dimensions(spec, workbook->styles(), &sheet));
 
   // --- page setup ----------------------------------------------------------
   if (const JsonValue* setup_v = print.find("page_setup"); setup_v != nullptr && !setup_v->is_null()) {

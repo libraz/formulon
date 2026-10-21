@@ -35,7 +35,7 @@ Workbook MakeGridWorkbook() {
   ColumnLayout span;
   span.first = 0;
   span.last = 3;
-  span.width = 60.0;
+  span.width = 15542.0 / 256.0;  // Stored width of a 60-character Calibri 11 column.
   span.has_width = true;
   sheet.mutable_layout().columns.push_back(span);
   sheet.mutable_format_defaults().has_default_row_height = true;

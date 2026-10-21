@@ -143,8 +143,9 @@ TEST(FormulonCApiCellGeometry, CharsAndPointsConvertBothWays) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   double pt = 0.0;
+  // Stored width 10 is Truncate((2560 + 18) / 256 * 7) = 70 px.
   ASSERT_EQ(fm_sheet_column_chars_to_pt(wb.handle, 0, FM_GEOMETRY_DISPLAY, 10.0, &pt), 0);
-  EXPECT_DOUBLE_EQ(pt, 10.0 * 5.25 + 3.75);
+  EXPECT_DOUBLE_EQ(pt, 70.0 * 0.75);
   double chars = 0.0;
   ASSERT_EQ(fm_sheet_column_pt_to_chars(wb.handle, 0, FM_GEOMETRY_DISPLAY, pt, &chars), 0);
   EXPECT_DOUBLE_EQ(chars, 10.0);
@@ -168,7 +169,7 @@ TEST(FormulonCApiCellGeometry, TrackSizesFollowOverridesAndHiddenState) {
 
   double width = 0.0;
   ASSERT_EQ(fm_sheet_column_width_pt(wb.handle, 0, 1U, FM_GEOMETRY_DISPLAY, &width), 0);
-  EXPECT_DOUBLE_EQ(width, 20.0 * 5.25 + 3.75);
+  EXPECT_DOUBLE_EQ(width, 140.0 * 0.75);  // Stored width 20 is 140 px.
   ASSERT_EQ(fm_sheet_column_width_pt(wb.handle, 0, 2U, FM_GEOMETRY_DISPLAY, &width), 0);
   EXPECT_EQ(width, 0.0);
   double height = 0.0;
@@ -229,7 +230,7 @@ TEST(FormulonCApiCellGeometry, DefaultsDriveUnoverriddenTracks) {
   ASSERT_EQ(fm_sheet_set_format_defaults(wb.handle, 0, &defaults), 0);
   double width = 0.0;
   ASSERT_EQ(fm_sheet_column_width_pt(wb.handle, 0, 5U, FM_GEOMETRY_DISPLAY, &width), 0);
-  EXPECT_DOUBLE_EQ(width, 12.0 * 5.25 + 3.75);
+  EXPECT_DOUBLE_EQ(width, 84.0 * 0.75);  // Stored width 12 is 84 px.
   double height = 0.0;
   ASSERT_EQ(fm_sheet_row_height_pt(wb.handle, 0, 5U, &height), 0);
   EXPECT_EQ(height, 21.0);

@@ -2,14 +2,16 @@
 // Sheet geometry: column widths, row heights and cell rectangles in points.
 //
 // Excel stores a column width in character units relative to the Normal
-// font's maximum digit width (MDW). This module owns the Normal-font
-// resolution, the MDW calibration, and the character-unit to point
-// conversion, in two modes:
+// font's maximum digit width (MDW), padding included (OOXML `<col width>` and
+// `defaultColWidth`; Calibri 11 stores the 8.43-character column as
+// 9.140625). Every width this module takes or returns is that stored unit.
+// It owns the Normal-font resolution, the MDW calibration, and the stored
+// width to point conversion, in two modes:
 //
-//   * `kDisplay` — the Windows screen figure (`Range.Width` at 96 DPI;
-//     Calibri 11 resolves to 5.25 pt per character plus 3.75 pt padding).
+//   * `kDisplay` — the Windows screen figure (`Range.Width` at 96 DPI): the
+//     stored width snaps to whole pixels of the MDW (ECMA-376 §18.3.1.13).
 //   * `kPrint` — the DPI-stable figure the pagination break math uses
-//     (Calibri 11: 39/7 pt per character plus 27/7 pt padding).
+//     (Calibri 11: 39/7 pt per displayed character plus 27/7 pt padding).
 //
 // Only Windows calibration exists; Mac Excel follows a different regime and
 // is deliberately not modelled. A Normal font outside the calibrated set
@@ -41,8 +43,10 @@ enum class GeometryMode : std::int32_t {
 
 /// The character-unit to point conversion for one Normal font and mode.
 struct ColumnWidthModel {
-  double points_per_char = 0.0;  ///< Points per character unit (the MDW).
+  double points_per_char = 0.0;  ///< Points per displayed character (the MDW).
   double padding_pt = 0.0;       ///< Flat per-visible-column padding, in points.
+  int max_digit_width_px = 7;    ///< Windows screen MDW, 96-DPI pixels.
+  int padding_px = 5;            ///< Windows screen column padding, 96-DPI pixels.
   std::string normal_font_name;  ///< Normal-style font family the model was resolved for.
   double normal_font_size = 0.0;
   /// False when `(normal_font_name, normal_font_size)` is not a tabulated
@@ -67,31 +71,34 @@ const FontRecord* resolve_normal_font(const StylesTable& styles);
 /// empty font table yields the Calibri 11 model with `calibrated == false`.
 ColumnWidthModel resolve_column_width_model(const StylesTable& styles, GeometryMode mode);
 
-/// Converts a width in character units to points. Zero characters (a hidden
-/// or zero-width column) is exactly zero points: no padding applies.
+/// Converts a stored width to points. Zero (a hidden or zero-width column) is
+/// exactly zero points.
 double column_chars_to_points(double chars, const ColumnWidthModel& model);
 
-/// Inverse of `column_chars_to_points`; zero or negative points map to zero.
+/// Inverse of `column_chars_to_points`: the stored width Excel writes for a
+/// column of `points` (whole screen pixels); zero or negative maps to zero.
 double column_points_to_chars(double points, const ColumnWidthModel& model);
 
-/// The sheet's default column width in character units
-/// (`defaultColWidth`, else Excel's 8.43).
-double default_column_width_chars(const Sheet& sheet);
+/// The sheet's default stored column width: `defaultColWidth`, else the
+/// width Excel derives from `baseColWidth` and the Normal font (Calibri 11,
+/// base 8: 9.140625, shown as 8.43).
+double default_column_width_chars(const Sheet& sheet, const ColumnWidthModel& model);
 
 /// The sheet's default row height in points (`defaultRowHeight`, else the
 /// 102/7 pt).
 double default_row_height_pt(const Sheet& sheet);
 
-/// Effective width of column `col` in character units; zero when hidden.
-double effective_column_width_chars(const Sheet& sheet, std::uint32_t col);
+/// Effective stored width of column `col`; zero when hidden.
+double effective_column_width_chars(const Sheet& sheet, std::uint32_t col, const ColumnWidthModel& model);
 
 /// Effective height of row `row` in points; zero when hidden.
 double effective_row_height_pt(const Sheet& sheet, std::uint32_t row);
 
-/// Effective widths of columns `first..last` (inclusive) in character units.
-/// Equivalent to calling `effective_column_width_chars` per column, in one
-/// pass over the layout.
-std::vector<double> column_widths_chars(const Sheet& sheet, std::uint32_t first, std::uint32_t last);
+/// Effective stored widths of columns `first..last` (inclusive). Equivalent
+/// to calling `effective_column_width_chars` per column, in one pass over the
+/// layout.
+std::vector<double> column_widths_chars(const Sheet& sheet, std::uint32_t first, std::uint32_t last,
+                                        const ColumnWidthModel& model);
 
 /// Effective heights of rows `first..last` (inclusive) in points.
 std::vector<double> row_heights_pt(const Sheet& sheet, std::uint32_t first, std::uint32_t last);

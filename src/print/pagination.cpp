@@ -310,7 +310,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   const CellRange union_box = BoundingBox(effective_areas);
   const double default_row_h = default_row_height_pt(sheet);
   const std::vector<double> row_heights = row_heights_pt(sheet, union_box.first_row, union_box.last_row);
-  const std::vector<double> col_widths = column_widths_chars(sheet, union_box.first_col, union_box.last_col);
+  const std::vector<double> col_widths =
+      column_widths_chars(sheet, union_box.first_col, union_box.last_col, column_geometry);
   const auto row_height = [&](std::uint32_t row) {
     if (row >= union_box.first_row && row <= union_box.last_row) {
       return row_heights[static_cast<std::size_t>(row - union_box.first_row)];
@@ -321,7 +322,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     if (col >= union_box.first_col && col <= union_box.last_col) {
       return col_widths[static_cast<std::size_t>(col - union_box.first_col)];
     }
-    return effective_column_width_chars(sheet, col);
+    return effective_column_width_chars(sheet, col, column_geometry);
   };
 
   // 2. Printable body area is determined once from the page setup.
@@ -369,7 +370,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
             column_chars_to_points(col_widths[static_cast<std::size_t>(col - union_box.first_col)], column_geometry);
       }
     } else {
-      const std::vector<double> title_column_widths = column_widths_chars(sheet, first, last);
+      const std::vector<double> title_column_widths = column_widths_chars(sheet, first, last, column_geometry);
       for (const double width : title_column_widths) {
         title_width += column_chars_to_points(width, column_geometry);
       }

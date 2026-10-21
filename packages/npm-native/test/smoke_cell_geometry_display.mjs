@@ -96,7 +96,8 @@ test('getSheetFormatDefaults reports the effective default width and height', as
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   let d = wb.getSheetFormatDefaults(0);
-  assert.equal(d.effectiveDefaultColWidth, 8.43);
+  // Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
+  assert.equal(d.effectiveDefaultColWidth, 2340 / 256);
   assert.equal(d.effectiveDefaultRowHeight, 102 / 7);
   assert.ok(wb.setSheetFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 20.25 }).ok);
   d = wb.getSheetFormatDefaults(0);
@@ -149,12 +150,12 @@ test('geometry accessors agree with each other', async () => {
   assert.equal(wb.getCellRectPt(0, A1_B2, 7).status.ok, false);
   assert.ok(wb.getColumnWidthPt(0, 0, 1).status.ok);
 
-  const pt = wb.columnCharsToPt(0, 0, 8.43);
+  const pt = wb.columnCharsToPt(0, 0, 2340 / 256);
   assert.ok(pt.status.ok);
-  assert.ok(pt.value > 0);
+  assert.equal(pt.value, 48);
   const chars = wb.columnPtToChars(0, 0, pt.value);
   assert.ok(chars.status.ok);
-  assert.ok(Math.abs(chars.value - 8.43) < 1e-6);
+  assert.equal(chars.value, 2340 / 256);
   assert.equal(wb.columnCharsToPt(0, 0, 0).value, 0);
   assert.equal(wb.columnCharsToPt(0, 0, -1).status.ok, false);
   assert.equal(wb.getRowHeightPt(99, 0).status.ok, false);
