@@ -1,11 +1,7 @@
 //
-// Shared walker for OOXML `.rels` files. Every per-part rels reader
-// (workbook rels, sheet aux rels, pivot cache rels, external-link rels)
-// loads the same shape — `<Relationships><Relationship .../></Relationships>`
-// — and dispatches on `Type=` to interpret each entry.
-// `visit_relationship_nodes` centralises the load + parse +
-// envelope-validation step so each consumer site reduces to a single
-// per-entry lambda.
+// Shared loader and walker for OOXML `.rels` files. It validates the common
+// `<Relationships><Relationship .../></Relationships>` envelope and lets
+// consumers revisit one parsed document without extracting it again.
 //
 // Internal helper for the OOXML reader. Not exposed beyond `src/io/`.
 
@@ -28,20 +24,11 @@ namespace formulon {
 namespace io {
 namespace ooxml {
 
-/// Loads `rels_path` from `zip`, parses it as a `<Relationships>` document,
-/// and invokes `fn(node)` for each `<Relationship>` child in document
-/// order. `label` is the human-readable name used in error messages
-/// (e.g. `"workbook rels"`, `"sheet rels"`), and `context` names the
-/// reader that drove the walk so an error can be traced back to the
-/// package format it came from (`"ooxml_reader"`, `"xlsb_reader"`).
-///
-/// Returns a parse / structure error on malformed input (`kIoXmlParse` /
-/// `kIoRelationshipBroken`) or the first error surfaced by `fn`. The
-/// callback's return type must be `Expected<void, Error>` (or implicitly
-/// convertible); a failed status short-circuits the walk.
-template <typename Fn>
-Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
-                                               std::string_view context, Fn&& fn) {
+/// Reads and validates one relationship document. `label` and `context`
+/// retain the diagnostics used by the ZIP-backed visitor below.
+inline Expected<pugi::xml_document, Error> load_relationship_document(const ZipReader& zip, std::string_view rels_path,
+                                                                      std::string_view label,
+                                                                      std::string_view context) {
   auto rels_bytes_or = zip.read_entry(rels_path);
   if (!rels_bytes_or) {
     return std::move(rels_bytes_or.error());
@@ -72,7 +59,15 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
     message.append(": missing <Relationships>");
     return make_error(FormulonErrorCode::kIoRelationshipBroken, std::move(message), std::move(ctx));
   }
+  return std::move(doc);
+}
 
+/// Visits validated `<Relationship>` children in document order. The
+/// document is validated by `load_relationship_document` before it reaches
+/// this overload; a callback error short-circuits the walk.
+template <typename Fn>
+Expected<void, Error> visit_relationship_nodes(const pugi::xml_document& doc, Fn&& fn) {
+  const pugi::xml_node root = relationship_root(doc);
   for (const pugi::xml_node rel : root.children()) {
     if (!is_relationship_element(rel, root)) {
       continue;
@@ -83,6 +78,19 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
     }
   }
   return Expected<void, Error>::Ok();
+}
+
+/// Loads and validates `rels_path`, then visits its relationship children.
+/// The callback's return type must be `Expected<void, Error>` (or implicitly
+/// convertible); a failed status short-circuits the walk.
+template <typename Fn>
+Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
+                                               std::string_view context, Fn&& fn) {
+  auto doc_or = load_relationship_document(zip, rels_path, label, context);
+  if (!doc_or) {
+    return std::move(doc_or.error());
+  }
+  return visit_relationship_nodes(doc_or.value(), std::forward<Fn>(fn));
 }
 
 /// `visit_relationship_nodes` for the OOXML reader, which is the common

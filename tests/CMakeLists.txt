@@ -93,6 +93,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/sheet_reader_lexing_parity_test.cpp
   unit/io/sheet_reader_cell_metadata_parity_test.cpp
   unit/io/sheet_reader_test.cpp
+  unit/io/sheet_rels_reuse_test.cpp
   unit/io/sst_reader_test.cpp
   unit/io/storage_prefix_container_test.cpp
   unit/io/function_value_trim_ref_storage_test.cpp
@@ -243,6 +244,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/array_alloc_test.cpp
+  unit/eval/aggregate_filter_storage_test.cpp
   unit/eval/array_producer_test.cpp
   unit/eval/builtins_row_column_array_test.cpp
   unit/eval/sumproduct_array_test.cpp

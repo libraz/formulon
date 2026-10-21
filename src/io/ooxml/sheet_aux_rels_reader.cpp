@@ -9,7 +9,6 @@
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
-#include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -23,25 +22,25 @@ namespace {
 /// Collects every relationship of `rel_type` in the sheet's rels part,
 /// resolving each `Target` against `sheet_dir`. Other rel types
 /// (printerSettings, drawings, comments, ...) are handled by sibling helpers.
-Expected<std::vector<std::string>, Error> load_targets_of_type(const ZipReader& zip, std::string_view sheet_rels_path,
-                                                               std::string_view sheet_dir, std::string_view rel_type) {
+Expected<std::vector<std::string>, Error> collect_targets_of_type(const pugi::xml_document& document,
+                                                                  std::string_view sheet_dir,
+                                                                  std::string_view rel_type) {
   std::vector<std::string> targets;
-  auto visit_status = visit_relationship_nodes(zip, sheet_rels_path, "sheet rels",
-                                               [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-                                                 const std::string_view type = rel.attribute("Type").value();
-                                                 const std::string_view target = rel.attribute("Target").value();
-                                                 if (target.empty()) {
-                                                   return Expected<void, Error>::Ok();
-                                                 }
-                                                 if (type == rel_type) {
-                                                   auto resolved = resolve_relative_path(sheet_dir, target);
-                                                   if (!resolved) {
-                                                     return std::move(resolved.error());
-                                                   }
-                                                   targets.push_back(std::move(resolved).value());
-                                                 }
-                                                 return Expected<void, Error>::Ok();
-                                               });
+  auto visit_status = visit_relationship_nodes(document, [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+    const std::string_view type = rel.attribute("Type").value();
+    const std::string_view target = rel.attribute("Target").value();
+    if (target.empty()) {
+      return Expected<void, Error>::Ok();
+    }
+    if (type == rel_type) {
+      auto resolved = resolve_relative_path(sheet_dir, target);
+      if (!resolved) {
+        return std::move(resolved.error());
+      }
+      targets.push_back(std::move(resolved).value());
+    }
+    return Expected<void, Error>::Ok();
+  });
   if (!visit_status) {
     return std::move(visit_status.error());
   }
@@ -50,15 +49,13 @@ Expected<std::vector<std::string>, Error> load_targets_of_type(const ZipReader& 
 
 }  // namespace
 
-Expected<std::vector<std::string>, Error> load_sheet_table_targets(const ZipReader& zip,
-                                                                   std::string_view sheet_rels_path,
-                                                                   std::string_view sheet_dir) {
-  return load_targets_of_type(zip, sheet_rels_path, sheet_dir, kRelTable);
+Expected<std::vector<std::string>, Error> collect_sheet_table_targets(const pugi::xml_document& document,
+                                                                      std::string_view sheet_dir) {
+  return collect_targets_of_type(document, sheet_dir, kRelTable);
 }
 
-Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::string_view sheet_rels_path,
-                                                  std::string_view sheet_dir,
-                                                  std::string_view legacy_drawing_body_rid) {
+Expected<SheetAuxRels, Error> collect_sheet_aux_rels(const pugi::xml_document& document, std::string_view sheet_dir,
+                                                     std::string_view legacy_drawing_body_rid) {
   SheetAuxRels out;
   // A sheet may declare up to two `kRelVmlDrawing` relationships (comment
   // geometry and header/footer image); collect every candidate here and
@@ -69,72 +66,71 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
     std::string path;
   };
   std::vector<VmlCandidate> vml_candidates;
-  auto visit_status = visit_relationship_nodes(
-      zip, sheet_rels_path, "sheet rels", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        const std::string_view type = rel.attribute("Type").value();
-        const std::string_view target = rel.attribute("Target").value();
-        if (target.empty()) {
-          return Expected<void, Error>::Ok();
-        }
-        if (type == kRelHyperlink) {
-          const std::string id = rel.attribute("Id").value();
-          if (id.empty()) {
-            return Expected<void, Error>::Ok();
-          }
-          // Hyperlink targets are external URLs — preserve them exactly as
-          // the OOXML producer wrote them (no relative-path resolution).
-          out.hyperlink_rid_to_target.emplace(id, std::string(target));
-        } else if (type == kRelComments) {
-          auto resolved = resolve_relative_path(sheet_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          out.comments_path = std::move(resolved).value();
-        } else if (type == kRelThreadedComment) {
-          auto resolved = resolve_relative_path(sheet_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          out.threaded_comments_path = std::move(resolved).value();
-        } else if (type == kRelVmlDrawing) {
-          auto resolved = resolve_relative_path(sheet_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          vml_candidates.push_back(VmlCandidate{std::string(rel.attribute("Id").value()), std::move(resolved).value()});
-        } else if (type == kRelPrinterSettings) {
-          auto resolved = resolve_relative_path(sheet_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          out.printer_settings_rid.assign(rel.attribute("Id").value());
-          out.printer_settings_path = std::move(resolved).value();
-        } else if (type == kRelDrawing) {
-          auto resolved = resolve_relative_path(sheet_dir, target);
-          if (!resolved) {
-            return std::move(resolved.error());
-          }
-          out.drawing_path = std::move(resolved).value();
-        } else if (type != kRelTable && type != kRelPivotTable) {
-          UnknownRelationship entry;
-          entry.id = rel.attribute("Id").value();
-          entry.type = std::string(type);
-          entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
-          if (entry.target_external) {
-            entry.target = std::string(target);
-          } else {
-            auto resolved = resolve_relative_path(sheet_dir, target);
-            if (!resolved) {
-              return std::move(resolved.error());
-            }
-            entry.target = std::move(resolved).value();
-          }
-          if (!entry.id.empty()) {
-            out.unknown_rels.push_back(std::move(entry));
-          }
-        }
+  auto visit_status = visit_relationship_nodes(document, [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+    const std::string_view type = rel.attribute("Type").value();
+    const std::string_view target = rel.attribute("Target").value();
+    if (target.empty()) {
+      return Expected<void, Error>::Ok();
+    }
+    if (type == kRelHyperlink) {
+      const std::string id = rel.attribute("Id").value();
+      if (id.empty()) {
         return Expected<void, Error>::Ok();
-      });
+      }
+      // Hyperlink targets are external URLs — preserve them exactly as
+      // the OOXML producer wrote them (no relative-path resolution).
+      out.hyperlink_rid_to_target.emplace(id, std::string(target));
+    } else if (type == kRelComments) {
+      auto resolved = resolve_relative_path(sheet_dir, target);
+      if (!resolved) {
+        return std::move(resolved.error());
+      }
+      out.comments_path = std::move(resolved).value();
+    } else if (type == kRelThreadedComment) {
+      auto resolved = resolve_relative_path(sheet_dir, target);
+      if (!resolved) {
+        return std::move(resolved.error());
+      }
+      out.threaded_comments_path = std::move(resolved).value();
+    } else if (type == kRelVmlDrawing) {
+      auto resolved = resolve_relative_path(sheet_dir, target);
+      if (!resolved) {
+        return std::move(resolved.error());
+      }
+      vml_candidates.push_back(VmlCandidate{std::string(rel.attribute("Id").value()), std::move(resolved).value()});
+    } else if (type == kRelPrinterSettings) {
+      auto resolved = resolve_relative_path(sheet_dir, target);
+      if (!resolved) {
+        return std::move(resolved.error());
+      }
+      out.printer_settings_rid.assign(rel.attribute("Id").value());
+      out.printer_settings_path = std::move(resolved).value();
+    } else if (type == kRelDrawing) {
+      auto resolved = resolve_relative_path(sheet_dir, target);
+      if (!resolved) {
+        return std::move(resolved.error());
+      }
+      out.drawing_path = std::move(resolved).value();
+    } else if (type != kRelTable && type != kRelPivotTable) {
+      UnknownRelationship entry;
+      entry.id = rel.attribute("Id").value();
+      entry.type = std::string(type);
+      entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+      if (entry.target_external) {
+        entry.target = std::string(target);
+      } else {
+        auto resolved = resolve_relative_path(sheet_dir, target);
+        if (!resolved) {
+          return std::move(resolved.error());
+        }
+        entry.target = std::move(resolved).value();
+      }
+      if (!entry.id.empty()) {
+        out.unknown_rels.push_back(std::move(entry));
+      }
+    }
+    return Expected<void, Error>::Ok();
+  });
   if (!visit_status) {
     return std::move(visit_status.error());
   }
@@ -177,10 +173,9 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
   return out;
 }
 
-Expected<std::vector<std::string>, Error> load_sheet_pivot_table_targets(const ZipReader& zip,
-                                                                         std::string_view sheet_rels_path,
-                                                                         std::string_view sheet_dir) {
-  return load_targets_of_type(zip, sheet_rels_path, sheet_dir, kRelPivotTable);
+Expected<std::vector<std::string>, Error> collect_sheet_pivot_table_targets(const pugi::xml_document& document,
+                                                                            std::string_view sheet_dir) {
+  return collect_targets_of_type(document, sheet_dir, kRelPivotTable);
 }
 
 }  // namespace ooxml

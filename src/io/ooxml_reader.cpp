@@ -43,6 +43,7 @@
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/pivot_target_reader.h"
 #include "io/ooxml/relationship_xml.h"
+#include "io/ooxml/rels_walker.h"
 #include "io/ooxml/sheet_aux_rels_reader.h"
 #include "io/ooxml/workbook_part_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
@@ -547,15 +548,16 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     }
     RETURN_IF_ERROR(ooxml::apply_worksheet_metadata(sheet_doc, i, wb, &diagnostics));
 
-    // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives
-    // the table-part and pivot-table lookups. Optional: most sheets have
-    // no rels at all. Tables and pivot tables are read in two passes
-    // through the same rels file (separate helpers, each scoped to one
-    // relationship type) so each consumer site reads linearly.
+    // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — load and
+    // validate once, then traverse the retained document at each pipeline
+    // phase. Keeping these passes separate preserves error precedence:
+    // table resolution and reads, pivot resolution and reads, then aux.
     const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
     if (zip.has_entry(sheet_rels_path)) {
       const std::string sheet_dir = ooxml::dir_of(sheet_path);
-      ASSIGN_OR_RETURN(auto targets, ooxml::load_sheet_table_targets(zip, sheet_rels_path, sheet_dir));
+      ASSIGN_OR_RETURN(auto sheet_rels_doc,
+                       ooxml::load_relationship_document(zip, sheet_rels_path, "sheet rels", "ooxml_reader"));
+      ASSIGN_OR_RETURN(auto targets, ooxml::collect_sheet_table_targets(sheet_rels_doc, sheet_dir));
       consumed_parts.insert(sheet_rels_path);
       for (const std::string& table_path : targets) {
         if (!zip.has_entry(table_path)) {
@@ -574,7 +576,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // Pivot tables anchored on this sheet. Each part feeds into the
       // pivot-table reader and is attached to the owning sheet; the
       // workbook-level pivot caches are loaded after the sheet loop.
-      ASSIGN_OR_RETURN(auto pivot_targets, ooxml::load_sheet_pivot_table_targets(zip, sheet_rels_path, sheet_dir));
+      ASSIGN_OR_RETURN(auto pivot_targets, ooxml::collect_sheet_pivot_table_targets(sheet_rels_doc, sheet_dir));
       for (const std::string& pivot_table_path : pivot_targets) {
         if (!zip.has_entry(pivot_table_path)) {
           std::string ctx("context=ooxml_reader sheet_index=");
@@ -598,16 +600,15 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         }
       }
 
-      // Hyperlink / comments / VML auxiliary parts. The rels walker
-      // surfaces all three in one pass; missing entries are simply
-      // empty in the result. The worksheet body's own `<legacyDrawing>`
+      // Hyperlink / comments / VML auxiliary parts. Missing entries are
+      // simply empty in the result. The worksheet body's own `<legacyDrawing>`
       // element (comment geometry) names which `kRelVmlDrawing`
       // relationship is the modelled comment-VML slot, distinguishing it
       // from a second `<legacyDrawingHF>` (header/footer image)
       // relationship the sheet may also carry.
       const std::string legacy_drawing_body_rid =
           ooxml::relationship_ref_id(sheet_doc.child("worksheet").child("legacyDrawing"));
-      auto aux_or = ooxml::load_sheet_aux_rels(zip, sheet_rels_path, sheet_dir, legacy_drawing_body_rid);
+      auto aux_or = ooxml::collect_sheet_aux_rels(sheet_rels_doc, sheet_dir, legacy_drawing_body_rid);
       if (!aux_or) {
         return std::move(aux_or.error());
       }

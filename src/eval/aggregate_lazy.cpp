@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "auto_filter.h"
+#include "eval/aggregate_filter.h"
 #include "eval/array_alloc.h"
 #include "eval/builtin_names.h"
 #include "eval/builtins/numeric_helpers.h"
@@ -410,34 +411,6 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
   return true;
 }
 
-// Drops the cells whose visibility flag is set. `hidden` must be the vector
-// `collect_arg` grew alongside `cells`.
-void drop_hidden_cells(std::vector<Value>* cells, const std::vector<bool>& hidden) {
-  if (cells->size() != hidden.size()) {
-    return;  // Shapes disagree: keep every cell rather than drop a wrong one.
-  }
-  std::vector<Value> kept;
-  kept.reserve(cells->size());
-  for (std::size_t i = 0; i < cells->size(); ++i) {
-    if (!hidden[i]) {
-      kept.push_back((*cells)[i]);
-    }
-  }
-  *cells = std::move(kept);
-}
-
-// Builds the drop mask for one call: the hidden flags when `use_hidden`, OR
-// the nested flags when `use_nested`. Both inputs grew in lockstep with the
-// cells, so the mask drops them in a single pass and no vector goes stale.
-std::vector<bool> make_drop_mask(std::size_t n, bool use_hidden, const std::vector<bool>& hidden, bool use_nested,
-                                 const std::vector<bool>& nested) {
-  std::vector<bool> mask(n, false);
-  for (std::size_t i = 0; i < n; ++i) {
-    mask[i] = (use_hidden && i < hidden.size() && hidden[i]) || (use_nested && i < nested.size() && nested[i]);
-  }
-  return mask;
-}
-
 // Filters `cells` in place according to the options bit and the function
 // code's expected provenance:
 //
@@ -452,15 +425,18 @@ std::vector<bool> make_drop_mask(std::size_t n, bool use_hidden, const std::vect
 // Returns true on a clean filter, false (with `*out_err` populated) when an
 // un-ignored error short-circuits.
 bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Value* out_err) {
-  std::vector<Value> kept;
-  kept.reserve(cells->size());
-  for (const Value& v : *cells) {
+  std::size_t kept = 0;
+  for (std::size_t i = 0; i < cells->size(); ++i) {
+    const Value& v = (*cells)[i];
     if (v.is_error()) {
       if (ignore_errors || code == kCodeCount) {
         continue;
       }
       if (code == kCodeCountA) {
-        kept.push_back(v);  // an error cell is a non-blank cell
+        if (kept != i) {
+          (*cells)[kept] = std::move((*cells)[i]);
+        }
+        ++kept;  // an error cell is a non-blank cell
         continue;
       }
       *out_err = v;
@@ -468,16 +444,22 @@ bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Valu
     }
     if (code == kCodeCountA) {
       if (!v.is_blank() || v.blank_counts_for_counta()) {
-        kept.push_back(v);
+        if (kept != i) {
+          (*cells)[kept] = std::move((*cells)[i]);
+        }
+        ++kept;
       }
       continue;
     }
     // Numeric branches: drop everything that is not a Number.
     if (v.is_number()) {
-      kept.push_back(v);
+      if (kept != i) {
+        (*cells)[kept] = std::move((*cells)[i]);
+      }
+      ++kept;
     }
   }
-  *cells = std::move(kept);
+  cells->erase(cells->begin() + static_cast<std::vector<Value>::difference_type>(kept), cells->end());
   return true;
 }
 
@@ -604,6 +586,23 @@ Value map_array(const ArrayValue& in, const Fn& fn, Arena& arena) {
 
 }  // namespace
 
+void aggregate_filter_detail::compact_by_flags(std::vector<Value>* cells, const std::vector<bool>& hidden,
+                                               bool use_hidden, const std::vector<bool>& nested, bool use_nested) {
+  std::size_t kept = 0;
+  for (std::size_t i = 0; i < cells->size(); ++i) {
+    const bool drop_hidden = use_hidden && i < hidden.size() && hidden[i];
+    const bool drop_nested = use_nested && i < nested.size() && nested[i];
+    if (drop_hidden || drop_nested) {
+      continue;
+    }
+    if (kept != i) {
+      (*cells)[kept] = std::move((*cells)[i]);
+    }
+    ++kept;
+  }
+  cells->erase(cells->begin() + static_cast<std::vector<Value>::difference_type>(kept), cells->end());
+}
+
 Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -634,7 +633,7 @@ Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const Functi
       return err;
     }
   }
-  drop_hidden_cells(&cells, make_drop_mask(cells.size(), /*use_hidden=*/true, hidden, /*use_nested=*/true, nested));
+  aggregate_filter_detail::compact_by_flags(&cells, hidden, /*use_hidden=*/true, nested, /*use_nested=*/true);
 
   // Hand the mode dispatch the same shape the eager dispatcher would have
   // built: the function code followed by the flattened data cells.
@@ -693,7 +692,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     if (!collect_arg(call.as_call_arg(2), arena, registry, ctx, HiddenScope::kAll, &cells, &hidden, nested_out, &err)) {
       return err;
     }
-    drop_hidden_cells(&cells, make_drop_mask(cells.size(), ignore_hidden, hidden, ignore_nested, nested));
+    aggregate_filter_detail::compact_by_flags(&cells, hidden, ignore_hidden, nested, ignore_nested);
     if (!apply_filters(&cells, code, ignore_errors, &err)) {
       // An array k fails per element with the data error.
       const Value k_for_error = eval_node(call.as_call_arg(3), arena, registry, ctx);
@@ -750,7 +749,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
       return err;
     }
   }
-  drop_hidden_cells(&cells, make_drop_mask(cells.size(), ignore_hidden, hidden, ignore_nested, nested));
+  aggregate_filter_detail::compact_by_flags(&cells, hidden, ignore_hidden, nested, ignore_nested);
   if (!apply_filters(&cells, code, ignore_errors, &err)) {
     return err;
   }

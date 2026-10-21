@@ -1,20 +1,19 @@
 //
-// `xl/worksheets/_rels/sheetN.xml.rels` reader. Splits the per-sheet
-// relationship file into three thematic lookups:
+// `xl/worksheets/_rels/sheetN.xml.rels` collectors. Each traverses a retained
+// document once for one pipeline phase:
 //
-//   * `load_sheet_table_targets`       — `kRelTable` entries (table
+//   * `collect_sheet_table_targets`   — `kRelTable` entries (table
 //                                        definition parts)
-//   * `load_sheet_pivot_table_targets` — `kRelPivotTable` entries
+//   * `collect_sheet_pivot_table_targets` — `kRelPivotTable` entries
 //                                        (pivot-table parts anchored
 //                                        on this sheet)
-//   * `load_sheet_aux_rels`            — hyperlink / comments / VML /
+//   * `collect_sheet_aux_rels`         — hyperlink / comments / VML /
 //                                        printer-settings entries that
 //                                        the per-sheet consumer needs
-//                                        in a single pass.
+//                                        in one pass.
 //
-// Each helper walks the same rels file once. Keeping them as separate
-// entry points lets each consumer site read linearly without folding
-// in unrelated types.
+// The orchestrator loads the ZIP entry once and keeps these phase-specific
+// passes separate so relationship resolution errors retain their order.
 //
 // Internal helper for the OOXML reader. Not exposed beyond `src/io/`.
 
@@ -26,7 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "io/zip_reader.h"
+#include "pugixml.hpp"
 #include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -36,8 +35,7 @@ namespace io {
 namespace ooxml {
 
 /// Aggregated lookup for the per-sheet auxiliary parts that are not
-/// already covered by `load_sheet_table_targets` /
-/// `load_sheet_pivot_table_targets`:
+/// covered by the table and pivot target collectors:
 ///
 ///   * `hyperlink_rid_to_target` — every `rId -> Target` pair under the
 ///     hyperlink relationship type. Hyperlink targets are external
@@ -48,7 +46,7 @@ namespace ooxml {
 ///     empty when the sheet has none.
 ///   * `vml_path` — resolved path of the `kRelVmlDrawing` target bound
 ///     to comment geometry (matched to the worksheet body's
-///     `<legacyDrawing r:id>`, see `load_sheet_aux_rels`), or empty. Used
+///     `<legacyDrawing r:id>`, see `collect_sheet_aux_rels`), or empty. Used
 ///     to detect the legacy bounding-box stub so it gets marked consumed
 ///     (passthrough re-emits the bytes). A sheet may carry a *second*
 ///     `kRelVmlDrawing` relationship for `<legacyDrawingHF>` (header /
@@ -77,24 +75,18 @@ struct SheetAuxRels {
   std::vector<UnknownRelationship> unknown_rels;
 };
 
-/// Walks `sheet_rels_path` for `kRelTable` entries and returns the
-/// resolved table-part paths, each resolved relative to `sheet_dir`.
-/// Non-table relationships are silently ignored at this layer.
-Expected<std::vector<std::string>, Error> load_sheet_table_targets(const ZipReader& zip,
-                                                                   std::string_view sheet_rels_path,
-                                                                   std::string_view sheet_dir);
+/// Collects `kRelTable` targets from a parsed relationship document in
+/// document order, resolving each against `sheet_dir`.
+Expected<std::vector<std::string>, Error> collect_sheet_table_targets(const pugi::xml_document& document,
+                                                                      std::string_view sheet_dir);
 
-/// Walks `sheet_rels_path` for `kRelPivotTable` entries and returns the
-/// resolved part paths in document order, each resolved relative to
-/// `sheet_dir`. Non-pivot relationships are silently ignored.
-Expected<std::vector<std::string>, Error> load_sheet_pivot_table_targets(const ZipReader& zip,
-                                                                         std::string_view sheet_rels_path,
-                                                                         std::string_view sheet_dir);
+/// Collects `kRelPivotTable` targets from a parsed relationship document
+/// in document order, resolving each against `sheet_dir`.
+Expected<std::vector<std::string>, Error> collect_sheet_pivot_table_targets(const pugi::xml_document& document,
+                                                                            std::string_view sheet_dir);
 
-/// Walks `sheet_rels_path` once for hyperlink, comments, threaded
-/// comments, VML and printer-settings entries; returns the aggregated
-/// lookup. The walker silently ignores unrelated relationship types so
-/// each consumer site reads only the slice it cares about.
+/// Collects the auxiliary relationships from a parsed document. Unrelated
+/// types are ignored and VML selection uses the worksheet body's legacy id.
 ///
 /// `legacy_drawing_body_rid` is the `r:id` value of the worksheet body's
 /// `<legacyDrawing>` element (empty when the sheet has none). A sheet
@@ -110,8 +102,8 @@ Expected<std::vector<std::string>, Error> load_sheet_pivot_table_targets(const Z
 /// comments needs exactly one candidate to serve as its comment VML.
 /// Every `kRelVmlDrawing` relationship not selected this way is added to
 /// `unknown_rels` instead, preserving its id and target verbatim.
-Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::string_view sheet_rels_path,
-                                                  std::string_view sheet_dir, std::string_view legacy_drawing_body_rid);
+Expected<SheetAuxRels, Error> collect_sheet_aux_rels(const pugi::xml_document& document, std::string_view sheet_dir,
+                                                     std::string_view legacy_drawing_body_rid);
 
 }  // namespace ooxml
 }  // namespace io
