@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-21
+
+### BREAKING
+
+- **C ABI:** `fm_sheet_view_t` grows by four `uint32_t` fields
+  (`top_left_row`, `top_left_col`, `pane_top_left_row`, `pane_top_left_col`),
+  from 48 to 64 bytes on 64-bit targets. A caller compiled against an earlier
+  header must be recompiled before calling `fm_sheet_get_view`.
+- Column widths are Excel's stored width, padding included, as `<col width>`
+  holds it: Calibri 11 stores the 8.43-character column as 9.140625. This
+  applies to the column-width setters and getters, the sheet default column
+  width and `fm_sheet_column_chars_to_pt` / `columnCharsToPt` /
+  `column_chars_to_pt` and their inverses in every binding. On screen a width
+  snaps to whole pixels of the Normal font's maximum digit width. The default
+  column width is derived from `baseColWidth` and the Normal font instead of
+  a fixed 8.43 characters, and print layout with an empty font table uses the
+  Calibri 11 model.
+- Hiding or removing the active sheet activates the next visible sheet to the
+  right, else the nearest visible one on the left, and moves `tabSelected`
+  with it.
+- Saved XLSX and XLSB files no longer carry the Show Phonetic flag on formula
+  cells, and loading drops it there; Excel keeps it on constants and blanks
+  only.
+- A sheet added to a workbook created from an Excel profile takes the first
+  sheet's row metrics, page margins and `phoneticPr`, fixed at creation, so a
+  later `set_excel_profile` does not change what added sheets get. Plain and
+  loaded workbooks still add bare sheets.
+
+### Added
+
+- The active sheet: `fm_workbook_get_active_sheet` /
+  `fm_workbook_set_active_sheet` (`activeSheet` / `setActiveSheet`,
+  `active_sheet` / `set_active_sheet`), backed by `activeTab` and kept across
+  sheet inserts, removals and moves. Setting it moves `tabSelected` and
+  rejects hidden sheets.
+- The per-cell Show Phonetic flag (`fm_workbook_get_cell_show_phonetic` /
+  `fm_workbook_set_cell_show_phonetic`, `getCellShowPhonetic` /
+  `setCellShowPhonetic`, `get_show_phonetic` / `set_show_phonetic`) and
+  `fm_workbook_has_cell_phonetic_properties` for an explicit `phoneticPr`.
+  Row and column phonetic flags are preserved.
+- Pivot definition read-back: cache id, name, grand totals, fields and their
+  items, data fields, and row and column field order
+  (`fm_workbook_pivot_get_*` / `fm_workbook_pivot_field_*` /
+  `fm_workbook_pivot_data_field_at`, `pivot*` in Node, `pivot_*` in Python).
+  A data field added or replaced with no name is named from the profile's
+  pivot wording ("Sum of Sales", "合計 / Sales").
+- Sheet view scroll origin, pane origin and selection:
+  `fm_sheet_set_top_left`, `fm_sheet_set_pane_top_left`,
+  `fm_sheet_get_selection` and `fm_sheet_set_selection`
+  (`setSheetTopLeft` / `setSheetPaneTopLeft` / `getSheetSelection` /
+  `setSheetSelection`, `set_sheet_top_left` / `set_sheet_pane_top_left` /
+  `get_sheet_selection` / `set_sheet_selection`). Unfrozen split panes and
+  `frozenSplit` round-trip through XLSX and XLSB, and selections are saved one
+  per pane in Excel's order.
+
+### Fixed
+
+- XLSB files with frozen panes open in Excel: panes are written as `BrtPane`
+  (record 151) with the column split first, and Excel's own frozen panes are
+  no longer rejected on load. Per-pane selections (`BrtSel`) are read and
+  written, and pane and selection records of other windows or custom views
+  are no longer folded into the main view.
+- A selection in a pane the view lacks is dropped on save, since Excel refuses
+  such a file, and an active cell outside every selected range moves to the
+  first range's top-left.
+
+### Performance
+
+- Aggregates compact their values in place, one parsed sheet relationships
+  document is reused across load phases, `VLOOKUP` / `HLOOKUP` / `MATCH` share
+  one exact-text scan, and table references skip redundant validation.
+- The WASM binding glue is compiled for size while the engine stays at `-O3`,
+  which takes about 75 KB raw and 6 KB Brotli off each `.wasm`.
+
 ## [0.16.1] - 2026-10-21
 
 ### Fixed
@@ -2933,7 +3007,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/libraz/formulon/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/libraz/formulon/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/libraz/formulon/compare/v0.15.2...v0.16.0
 [0.15.2]: https://github.com/libraz/formulon/compare/v0.15.1...v0.15.2
