@@ -33,6 +33,7 @@
 #include "io/iso_date.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "io/xsd_double.h"
 #include "io/xsd_int.h"
 #include "phonetic.h"
@@ -368,6 +369,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   out.formula = std::move(formula);
   out.xf_index = xf_index;
   out.has_explicit_xf = has_explicit_xf;
+  out.show_phonetic = read_xsd_bool(node, "ph", false);
 
   // Capture <rPh> phonetic runs from the inline-string block (when
   // present). SST-referenced cells (t="s") carry their phonetic on the
@@ -378,6 +380,7 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   if (is_node) {
     append_phonetic_runs(is_node, out.phonetic_runs);
     out.phonetic_props = read_phonetic_properties(is_node);
+    out.phonetic_pr_present = static_cast<bool>(is_node.child("phoneticPr"));
   }
   return out;
 }

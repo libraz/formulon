@@ -837,6 +837,7 @@ struct CellScratch {
   /// at the start of each `ScanInlineString` call.
   std::vector<PhoneticRun> inline_string_phonetic;
   PhoneticProperties inline_string_phonetic_props;
+  bool inline_string_phonetic_pr_present = false;
   /// Scratch buffers for entity-decoded / normalized semantic attributes.
   /// Every simultaneously exposed view has a distinct backing string: the
   /// three `<c>` attributes, the three `<f>` attributes, and the four row
@@ -846,6 +847,7 @@ struct CellScratch {
   std::string c_attr_t;
   std::string c_attr_s;
   std::string c_attr_cm;
+  std::string c_attr_ph;
   std::string f_attr_t;
   std::string f_attr_si;
   std::string f_attr_ref;
@@ -854,6 +856,7 @@ struct CellScratch {
   std::string row_attr_hidden;
   std::string row_attr_custom_height;
   std::string row_attr_outline_level;
+  std::string row_attr_ph;
   std::string row_attr_custom_format;
   std::string row_attr_style;
 };
@@ -925,6 +928,7 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
   scratch->inline_string_runs.clear();
   scratch->inline_string_phonetic.clear();
   scratch->inline_string_phonetic_props = PhoneticProperties{};
+  scratch->inline_string_phonetic_pr_present = false;
   bool phonetic_props_read = false;
   while (*p < end) {
     TagHeader header;
@@ -952,6 +956,7 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
     } else if (header.name == "phoneticPr") {
       if (!phonetic_props_read) {
         ReadPhoneticProperties(header, scratch);
+        scratch->inline_string_phonetic_pr_present = true;
         phonetic_props_read = true;
       }
       if (!SkipChildElement(begin, end, p, header, err)) {
@@ -991,6 +996,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->t = AttrOfDecoded(cell_header, "t", &scratch->c_attr_t);
   record->s = AttrOfDecoded(cell_header, "s", &scratch->c_attr_s);
   record->cm = AttrOfDecoded(cell_header, "cm", &scratch->c_attr_cm);
+  record->ph = AttrOfDecoded(cell_header, "ph", &scratch->c_attr_ph);
   record->formula = std::string_view{};
   record->f_t = std::string_view{};
   record->f_si = std::string_view{};
@@ -999,6 +1005,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->is_inline_string = false;
   record->phonetic = nullptr;
   record->phonetic_props = PhoneticProperties{};
+  record->phonetic_pr_present = false;
 
   if (cell_header.self_closing) {
     return true;
@@ -1060,6 +1067,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       record->value = std::string_view(scratch->inline_string);
       record->phonetic = &scratch->inline_string_phonetic;
       record->phonetic_props = scratch->inline_string_phonetic_props;
+      record->phonetic_pr_present = scratch->inline_string_phonetic_pr_present;
     } else if (!child.self_closing) {
       // Unrecognised child of <c>: skip it.
       if (!SkipUntilClose(begin, end, p, child.name, err)) {
@@ -1098,6 +1106,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
     rec.outline_level = AttrOfDecoded(row_header, "outlineLevel", &scratch->row_attr_outline_level);
     rec.custom_format = AttrOfDecoded(row_header, "customFormat", &scratch->row_attr_custom_format);
     rec.style = AttrOfDecoded(row_header, "s", &scratch->row_attr_style);
+    rec.ph = AttrOfDecoded(row_header, "ph", &scratch->row_attr_ph);
     auto rs = cb.on_row_start(cb.user_data, rec);
     if (!rs) {
       *err = std::move(rs.error());

@@ -307,6 +307,34 @@ extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_i
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_get_active_sheet(const fm_workbook_t* wb, uint32_t* out_index) {
+  clear_last_error();
+  if (wb == nullptr || out_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_active_sheet: NULL argument");
+  }
+  *out_index = wb->workbook().active_sheet();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t index) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_active_sheet: wb is NULL");
+  }
+  if (index >= wb->workbook().sheet_count()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_active_sheet: index out of range", "index=" + std::to_string(index));
+  }
+  if (wb->workbook().sheet(index).view().visibility() != formulon::SheetVisibility::kVisible) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_active_sheet: sheet is hidden", "index=" + std::to_string(index));
+  }
+  wb->workbook().set_active_sheet(index);
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index) {
   clear_last_error();
   if (wb == nullptr) {

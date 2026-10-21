@@ -780,11 +780,25 @@ namespace {
 
 // Materialises a `fm_pivot_data_field_spec_t` into a `PivotDataField`.
 // The spec is already validated by `validate(*spec, api)` and
-// `check_num_fmt_id_text` at the entry point, so this only copies.
-void fill_data_field(const fm_pivot_data_field_spec_t& spec, formulon::pivot::PivotDataField* out) {
-  out->name = spec.name;
-  out->field_index = spec.field_index;
+// `check_num_fmt_id_text` at the entry point. A NULL or empty name is
+// derived from the workbook profile; that needs `field_index` in range,
+// else the binding error is set and the status returned.
+fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::pivot::PivotTable& table,
+                            const fm_pivot_data_field_spec_t& spec, const char* api,
+                            formulon::pivot::PivotDataField* out) {
   out->aggregation = pivot_agg_from_fm(spec.aggregation);
+  if (spec.name != nullptr && spec.name[0] != '\0') {
+    out->name = spec.name;
+  } else if (spec.field_index < table.fields().size()) {
+    out->name = formulon::pivot::data_field_display_name(
+        out->aggregation, formulon::pivot::pivot_field_display_name(table.fields()[spec.field_index]),
+        workbook.excel_profile());
+  } else {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": field_index out of range for a derived name").c_str(),
+                             "field_index=" + std::to_string(spec.field_index));
+  }
+  out->field_index = spec.field_index;
   out->number_format = spec.number_format != nullptr ? spec.number_format : "";
   out->show_as = pivot_show_as_from_fm(spec.show_as);
   if (spec.show_as_base_field >= 0) {
@@ -797,6 +811,7 @@ void fill_data_field(const fm_pivot_data_field_spec_t& spec, formulon::pivot::Pi
   } else {
     out->show_as_base_item.reset();
   }
+  return 0;
 }
 
 }  // namespace
@@ -821,7 +836,9 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, std::
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   formulon::pivot::PivotDataField df;
-  fill_data_field(*spec, &df);
+  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, "fm_workbook_pivot_data_field_add", &df); rc != 0) {
+    return rc;
+  }
   table->mutable_data_fields().push_back(std::move(df));
   *out_idx = table->data_fields().size() - 1U;
   invalidate_pivot_result(wb->workbook(), *table);
@@ -867,10 +884,241 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
                              "data_field_idx=" + std::to_string(data_field_idx));
   }
   formulon::pivot::PivotDataField df;
-  fill_data_field(*spec, &df);
+  if (auto rc = fill_data_field(wb->workbook(), *table, *spec, "fm_workbook_pivot_data_field_set", &df); rc != 0) {
+    return rc;
+  }
   table->mutable_data_fields()[data_field_idx] = std::move(df);
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
+}
+
+// ---------------------------------------------------------------------------
+// PivotTable definition read-back
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Resolves `field_idx` on a const pivot. Sets the binding error and returns
+// NULL on miss.
+const formulon::pivot::PivotField* lookup_pivot_field(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                      std::size_t pivot_index, std::size_t field_idx, const char* fn,
+                                                      const formulon::pivot::PivotTable** out_table) {
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, fn);
+  if (table == nullptr) {
+    return nullptr;
+  }
+  if (field_idx >= table->fields().size()) {
+    set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                      (std::string(fn) + ": field_idx out of range").c_str(), "field_idx=" + std::to_string(field_idx));
+    return nullptr;
+  }
+  if (out_table != nullptr) {
+    *out_table = table;
+  }
+  return &table->fields()[field_idx];
+}
+
+fm_status_t get_field_order(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                            const std::uint32_t** out_indices, std::size_t* out_count, bool row, const char* fn) {
+  if (wb == nullptr || out_indices == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(fn) + ": NULL argument").c_str());
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, fn);
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  const std::vector<std::uint32_t>& order = row ? table->row_field_order() : table->col_field_order();
+  *out_indices = order.data();
+  *out_count = order.size();
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_pivot_get_cache_id(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                      std::size_t pivot_index, std::uint32_t* out_cache_id) {
+  clear_last_error();
+  if (wb == nullptr || out_cache_id == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_get_cache_id: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_get_cache_id");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  *out_cache_id = table->pivot_cache_id();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_get_name(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                  std::size_t pivot_index, const char** out_name) {
+  clear_last_error();
+  if (wb == nullptr || out_name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_get_name: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_get_name");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  *out_name = table->name().c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t pivot_index, std::int32_t* out_rows,
+                                                          std::int32_t* out_cols) {
+  clear_last_error();
+  if (wb == nullptr || out_rows == nullptr || out_cols == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_get_grand_totals: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_get_grand_totals");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  *out_rows = table->grand_totals_rows() ? 1 : 0;
+  *out_cols = table->grand_totals_cols() ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                  std::size_t pivot_index, std::size_t field_idx,
+                                                  fm_pivot_field_info_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_at: NULL argument");
+  }
+  const formulon::pivot::PivotTable* table = nullptr;
+  const formulon::pivot::PivotField* field =
+      lookup_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_at", &table);
+  if (field == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  fm_pivot_field_info_t result{};
+  result.source_name = field->source_name.c_str();
+  result.custom_name = field->custom_name.c_str();
+  const auto axis = pivot_axis_to_fm(field->axis);
+  result.axis = axis.has_value() ? static_cast<std::int32_t>(*axis) : -1;
+  result.subtotal_top = field->subtotal_top ? 1 : 0;
+  result.number_format = field->number_format.c_str();
+  const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id());
+  result.cache_field_index =
+      cache != nullptr && field_idx < cache->fields().size() ? static_cast<std::int32_t>(field_idx) : -1;
+  result.sort_order = field->sort.manual      ? FM_PIVOT_SORT_MANUAL
+                      : field->sort.ascending ? FM_PIVOT_SORT_ASCENDING
+                                              : FM_PIVOT_SORT_DESCENDING;
+  result.sort_by_field = field->sort.by_field.c_str();
+  result.date_start_year = -1;
+  result.date_end_year = -1;
+  result.date_start_serial = -1.0;
+  result.date_end_serial = -1.0;
+  if (field->date_group.has_value()) {
+    const formulon::pivot::PivotDateGroup& group = *field->date_group;
+    result.has_date_group = 1;
+    result.date_granularity = static_cast<std::int32_t>(group.granularity);
+    result.date_calendar = static_cast<std::int32_t>(group.calendar);
+    result.date_start_year = group.start_year.value_or(-1);
+    result.date_end_year = group.end_year.value_or(-1);
+    result.date_interval_days = group.interval_days;
+    result.date_start_serial = group.start_serial.value_or(-1.0);
+    result.date_end_serial = group.end_serial.value_or(-1.0);
+  }
+  *out = result;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_field_item_count(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t pivot_index, std::size_t field_idx,
+                                                          std::size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_item_count: NULL argument");
+  }
+  const formulon::pivot::PivotField* field =
+      lookup_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_item_count", nullptr);
+  if (field == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  *out_count = field->items.size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_field_item_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                       std::size_t pivot_index, std::size_t field_idx,
+                                                       std::size_t item_idx, fm_pivot_item_info_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_item_at: NULL argument");
+  }
+  const formulon::pivot::PivotField* field =
+      lookup_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_item_at", nullptr);
+  if (field == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  if (item_idx >= field->items.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_field_item_at: item_idx out of range",
+                             "item_idx=" + std::to_string(item_idx));
+  }
+  const formulon::pivot::PivotItem& item = field->items[item_idx];
+  fm_pivot_item_info_t result{};
+  result.name = item.name.c_str();
+  result.cache_index = item.has_cache_index ? static_cast<std::int32_t>(item.cache_index) : -1;
+  result.visible = item.visible ? 1 : 0;
+  *out = result;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                       std::size_t pivot_index, std::size_t data_field_idx,
+                                                       fm_pivot_data_field_spec_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_data_field_at: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_data_field_at");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  if (data_field_idx >= table->data_fields().size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_data_field_at: data_field_idx out of range",
+                             "data_field_idx=" + std::to_string(data_field_idx));
+  }
+  const formulon::pivot::PivotDataField& df = table->data_fields()[data_field_idx];
+  fm_pivot_data_field_spec_t result{};
+  result.name = df.name.c_str();
+  result.field_index = df.field_index;
+  result.aggregation = static_cast<fm_pivot_aggregation_t>(df.aggregation);
+  result.number_format = df.number_format.c_str();
+  result.show_as = static_cast<fm_pivot_show_as_t>(df.show_as);
+  result.show_as_base_field =
+      df.show_as_base_field.has_value() ? static_cast<std::int32_t>(*df.show_as_base_field) : -1;
+  result.show_as_base_item = df.show_as_base_item.has_value() ? static_cast<std::int32_t>(*df.show_as_base_item) : -1;
+  *out = result;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_get_row_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                             std::size_t pivot_index, const std::uint32_t** out_indices,
+                                                             std::size_t* out_count) {
+  clear_last_error();
+  return get_field_order(wb, sheet_index, pivot_index, out_indices, out_count, true,
+                         "fm_workbook_pivot_get_row_field_order");
+}
+
+extern "C" fm_status_t fm_workbook_pivot_get_col_field_order(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                             std::size_t pivot_index, const std::uint32_t** out_indices,
+                                                             std::size_t* out_count) {
+  clear_last_error();
+  return get_field_order(wb, sheet_index, pivot_index, out_indices, out_count, false,
+                         "fm_workbook_pivot_get_col_field_order");
 }
 
 // ---------------------------------------------------------------------------

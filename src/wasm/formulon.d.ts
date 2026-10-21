@@ -438,7 +438,11 @@ export interface PivotFieldSpec {
  *  `pivotDataFieldSet`. Mirrors `fm_pivot_data_field_spec_t`. Pass
  *  `-1` for `showAsBaseField` / `showAsBaseItem` to mean "unset". */
 export interface PivotDataFieldSpec {
-  name: string;
+  /** Display name (key for GETPIVOTDATA). Omit or pass `""` to let the
+   *  engine name the data field from the workbook profile's pivot wording,
+   *  e.g. `"Sum of Sales"` (en-US) or `"合計 / Sales"` (ja-JP). That needs
+   *  `fieldIndex` to be in range. */
+  name?: string;
   fieldIndex: number;
   aggregation: PivotAggregation;
   /** `numFmtId` as a decimal string (built-in or from `addNumFmt`). */
@@ -446,6 +450,74 @@ export interface PivotDataFieldSpec {
   showAs?: PivotShowValuesAs;
   showAsBaseField?: number;
   showAsBaseItem?: number;
+}
+
+/** Return type of `Workbook.pivotGetGrandTotals(...)`. */
+export interface PivotGrandTotalsResult {
+  status: Status;
+  rows: boolean;
+  cols: boolean;
+}
+
+/** Return type of `Workbook.pivotRowFieldOrder` / `pivotColFieldOrder`:
+ *  the indices `pivotSetRowFieldOrder` / `pivotSetColFieldOrder` take. */
+export interface PivotFieldOrderResult {
+  status: Status;
+  indices: number[];
+}
+
+/** Return type of `Workbook.pivotFieldAt(...)`. `sourceName`, `customName`,
+ *  `axis`, `subtotalTop` and `numberFormat` match `PivotFieldSpec`, except
+ *  that `axis` is `-1` for a field that sits on no axis. */
+export interface PivotFieldResult {
+  status: Status;
+  sourceName: string;
+  customName: string;
+  axis: PivotAxis | -1;
+  subtotalTop: boolean;
+  numberFormat: string;
+  /** Index of the bound pivot-cache field, `-1` when the cache does not
+   *  cover this field. Pivot field `i` binds to cache field `i`. */
+  cacheFieldIndex: number;
+  /** As written by `pivotFieldSetSort`. */
+  sortOrder: PivotSortOrder;
+  sortByField: string;
+  /** When `false` the `date*` members are zero and the unset sentinels. */
+  hasDateGroup: boolean;
+  dateGranularity: PivotDateGrouping;
+  dateCalendar: PivotCalendar;
+  /** `-1` when unset. */
+  dateStartYear: number;
+  dateEndYear: number;
+  dateIntervalDays: number;
+  /** `-1` when unset. */
+  dateStartSerial: number;
+  dateEndSerial: number;
+}
+
+/** Return type of `Workbook.pivotFieldItemAt(...)`. */
+export interface PivotItemResult {
+  status: Status;
+  /** The item's own label; empty for an item bound only by cache index. */
+  name: string;
+  /** Index into the bound cache field's shared items, `-1` for an item
+   *  bound by label only. */
+  cacheIndex: number;
+  visible: boolean;
+}
+
+/** Return type of `Workbook.pivotDataFieldAt(...)`. Same shape as
+ *  `PivotDataFieldSpec` with every member present; `showAsBaseField` /
+ *  `showAsBaseItem` are `-1` when unset and `numberFormat` is `""` for none. */
+export interface PivotDataFieldResult {
+  status: Status;
+  name: string;
+  fieldIndex: number;
+  aggregation: PivotAggregation;
+  numberFormat: string;
+  showAs: PivotShowValuesAs;
+  showAsBaseField: number;
+  showAsBaseItem: number;
 }
 
 /** Plain-data spec for `Workbook.pivotFilterAdd`. Mirrors
@@ -881,6 +953,33 @@ export interface SheetView {
   tabSelected: number;
   /** `view` mode: `""` (normal), `"pageBreakPreview"`, or `"pageLayout"`. */
   viewMode: string;
+  /** Scroll origin of the sheet view (`topLeftCell`), 0-based; A1 by default. */
+  topLeftRow: number;
+  topLeftCol: number;
+  /** First visible cell of a frozen view's unfrozen pane (`<pane
+   *  topLeftCell>`): the first cell past the frozen rows and columns until a
+   *  host scrolls it. `0, 0` when nothing is frozen. */
+  paneTopLeftRow: number;
+  paneTopLeftCol: number;
+}
+
+/** The active pane's selection: the active cell and the selected ranges.
+ *  Input of `Workbook.setSheetSelection`; `ranges` may be empty or omitted,
+ *  which selects the active cell alone. */
+export interface SheetSelection {
+  activeRow: number;
+  activeCol: number;
+  ranges?: ReadonlyArray<MergeRange>;
+}
+
+/** Return type of `Workbook.getSheetSelection(sheet)`. A sheet that stores
+ *  no selection reports A1 with the single range A1. XLSX carries the
+ *  selection; XLSB load and save do not. */
+export interface SheetSelectionResult {
+  status: Status;
+  activeRow: number;
+  activeCol: number;
+  ranges: MergeRange[];
 }
 
 /** Return type of `Workbook.getSheetView(sheet)`. */
@@ -1654,6 +1753,17 @@ export interface PhoneticProperties {
 /** Return type of `Workbook.getCellPhoneticProperties(sheet, row, col)`. */
 export interface PhoneticPropertiesResult extends PhoneticProperties {
   status: Status;
+  /** `true` when the triple came from an explicit `<phoneticPr>` element or
+   *  `setCellPhoneticProperties` (an all-zero triple included); `false` for
+   *  the state an absent element resolves to. Python reads it through
+   *  `has_phonetic_properties`. */
+  present: boolean;
+}
+
+/** Return type of `Workbook.getCellShowPhonetic(sheet, row, col)`. */
+export interface CellShowPhoneticResult {
+  status: Status;
+  show: boolean;
 }
 
 /** Return type of `Workbook.getFont(fontIndex)`. */
@@ -2978,6 +3088,16 @@ export interface Workbook {
   sheetCount(): NumberResult;
   /** Display name of the sheet at `idx`; `kInvalidArgument` when `idx` is out of range. */
   sheetName(idx: number): StringResult;
+  /** Returns `{ status, index }`: the sheet the first `<workbookView>` marks
+   *  active (`activeTab`); without workbook views (an XLSB load) the first
+   *  tab-selected sheet; `0` when neither is recorded. */
+  activeSheet(): AddStyleResult;
+  /** Marks sheet `sheet` active so a save records it, creating a minimal
+   *  `<bookViews>` when the workbook has none. Other `<workbookView>`
+   *  attributes survive; `firstSheet` is lowered to `sheet` when larger. The
+   *  sheet becomes the only tab-selected one. A sheet index out of range or a
+   *  hidden sheet is rejected. */
+  setActiveSheet(sheet: number): Status;
 
   /** Stores a numeric literal. NaN and infinity are rejected with `kInvalidArgument`; so is an out-of-range `sheet`. */
   setNumber(sheet: number, row: number, col: number, value: number): Status;
@@ -3075,6 +3195,12 @@ export interface Workbook {
   /** Returns how the cell's guide renders. A cell with no annotation
    *  reports the all-zero triple. */
   getCellPhoneticProperties(sheet: number, row: number, col: number): PhoneticPropertiesResult;
+  /** Reads the cell's "Show Phonetic" flag (`<c ph="1">`); `false` for an
+   *  absent cell. */
+  getCellShowPhonetic(sheet: number, row: number, col: number): CellShowPhoneticResult;
+  /** Sets the cell's "Show Phonetic" display flag. It is independent of the
+   *  readings and survives value writes. */
+  setCellShowPhonetic(sheet: number, row: number, col: number, show: boolean): Status;
 
   /** Recalculates all dirty cells serially on the caller thread.
    *
@@ -3461,12 +3587,32 @@ export interface Workbook {
   pivotGetLayout(sheet: number, pivotIdx: number): PivotReportLayoutResult;
   /** Sets the pivot's compact / tabular / outline report layout. */
   pivotSetLayout(sheet: number, pivotIdx: number, layout: PivotReportLayout): Status;
+  /** Returns `{ status, index: cacheId }`: the cache the pivot draws from.
+   *  The definition read-backs here work for pivots created in-session and
+   *  loaded from a package alike. */
+  pivotCacheId(sheet: number, pivotIdx: number): AddStyleResult;
+  /** Reads the pivot's name. */
+  pivotName(sheet: number, pivotIdx: number): StringResult;
+  /** Reads the row / column grand total flags `pivotSetGrandTotals` writes. */
+  pivotGetGrandTotals(sheet: number, pivotIdx: number): PivotGrandTotalsResult;
+  /** Reads the row-axis field order (the list `pivotSetRowFieldOrder` takes). */
+  pivotRowFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
+  /** Reads the column-axis field order. */
+  pivotColFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
 
   /** Number of fields configured on the pivot. */
   pivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
   /** Appends a new field. Returns `{ status, index: fieldIdx }`. A field
    *  added on the row or column axis is appended to that axis's order. */
   pivotFieldAdd(sheet: number, pivotIdx: number, spec: PivotFieldSpec): AddStyleResult;
+  /** Reads the definition of field `fieldIdx`. */
+  pivotFieldAt(sheet: number, pivotIdx: number, fieldIdx: number): PivotFieldResult;
+  /** Number of items in the field's item list (what `pivotFieldAddItem` /
+   *  `pivotFieldAddItemAt` append to). */
+  pivotFieldItemCount(sheet: number, pivotIdx: number, fieldIdx: number): NumberResult;
+  /** Reads item `itemIdx` of the field; the index `pivotFieldSetItemVisible`
+   *  takes. */
+  pivotFieldItemAt(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number): PivotItemResult;
   /** Drops every field from the pivot, emptying the row and column orders. */
   pivotFieldClear(sheet: number, pivotIdx: number): Status;
   /** Sets the axis of pivot field `fieldIdx`. Moving onto the row or column
@@ -3546,11 +3692,15 @@ export interface Workbook {
 
   /** Number of `<dataField>` entries on the pivot. */
   pivotDataFieldCount(sheet: number, pivotIdx: number): NumberResult;
-  /** Appends a new data-field entry. */
+  /** Appends a new data-field entry. An omitted or empty `spec.name` is
+   *  derived from the workbook profile; see {@link PivotDataFieldSpec}. */
   pivotDataFieldAdd(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): AddStyleResult;
+  /** Reads data field `dataFieldIdx`. */
+  pivotDataFieldAt(sheet: number, pivotIdx: number, dataFieldIdx: number): PivotDataFieldResult;
   /** Drops every data-field entry from the pivot. */
   pivotDataFieldClear(sheet: number, pivotIdx: number): Status;
-  /** Replaces the data-field entry at `dataFieldIdx` in place. */
+  /** Replaces the data-field entry at `dataFieldIdx` in place. An omitted
+   *  or empty `spec.name` is derived as in `pivotDataFieldAdd`. */
   pivotDataFieldSet(sheet: number, pivotIdx: number, dataFieldIdx: number, spec: PivotDataFieldSpec): Status;
 
   /** Number of active (slicer-applied) filters on the pivot. Counts only
@@ -3681,6 +3831,17 @@ export interface Workbook {
   setSheetRightToLeft(sheet: number, rightToLeft: boolean): Status;
   /** Sets the sheet's `tabSelected` flag. */
   setSheetTabSelected(sheet: number, selected: boolean): Status;
+  /** Sets the sheet view's scroll origin (`<sheetView topLeftCell>`). */
+  setSheetTopLeft(sheet: number, row: number, col: number): Status;
+  /** Sets the first visible cell of a frozen view's unfrozen pane. It must
+   *  lie past the frozen rows and columns; rejected when nothing is frozen.
+   *  Changing the freeze resets it to the first unfrozen cell. */
+  setSheetPaneTopLeft(sheet: number, row: number, col: number): Status;
+  /** Reads the active pane's selection (active cell and ranges). */
+  getSheetSelection(sheet: number): SheetSelectionResult;
+  /** Replaces the active pane's selection. In a frozen view the selection
+   *  belongs to the pane the view is active in; other panes' are kept. */
+  setSheetSelection(sheet: number, selection: SheetSelection): Status;
   /** Sets the sheet's `<sheetView view="...">` mode: `""`,
    *  `"pageBreakPreview"`, or `"pageLayout"`. Stored verbatim. */
   setSheetViewMode(sheet: number, mode: string): Status;

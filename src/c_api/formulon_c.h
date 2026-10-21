@@ -596,6 +596,35 @@ FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_nam
 FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index, uint32_t to_index);
 
 /**
+ * @brief Reads the active sheet: the first `<workbookView>`'s `activeTab`.
+ *
+ * A workbook with no `<bookViews>` (an XLSB load included) reports its first
+ * `tabSelected` sheet, else `0`; an `activeTab` outside the sheet list
+ * reports `0`. Inserting, removing and moving sheets keep the stored index
+ * on the sheet it named.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_get_active_sheet(const fm_workbook_t* wb, uint32_t* out_index);
+
+/**
+ * @brief Marks sheet `index` active so a save records it.
+ *
+ * Writes `activeTab` on the first `<workbookView>` and lowers its
+ * `firstSheet` to `index` when that is larger; every other attribute is kept
+ * verbatim. A workbook with no `<bookViews>` gets a minimal
+ * `<bookViews><workbookView activeTab="N"/></bookViews>`. Sheet `index`
+ * becomes the only `tabSelected` sheet, as clicking its tab does in Excel.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `index` is not a sheet of the workbook or
+ *         the sheet is hidden or very hidden.
+ */
+FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t index);
+
+/**
  * @brief Removes the sheet at `index`.
  *
  * References to the removed sheet are rewritten to `#REF!` at the affected
@@ -897,6 +926,24 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t 
 #define FM_PHONETIC_ALIGNMENT_DISTRIBUTED 3u
 
 /**
+ * @brief Sets the cell's "Show Phonetic" display flag (OOXML `<c ph="1">`,
+ *        XLSB `fPhShow`).
+ *
+ * The flag only says whether the guide is displayed. It is independent of the
+ * readings and survives value writes, so re-entering a cell's value does not
+ * clear it (the readings, by contrast, are cleared). A blank cell carrying
+ * only the flag is kept and saved. Row (`ph`) and column (`phonetic`) flags
+ * read from OOXML are preserved on save but have no setter here.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or the cell coordinate is
+ *         out of range.
+ */
+FM_API fm_status_t fm_workbook_set_cell_show_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                      int32_t show);
+
+/**
  * @brief Stores how a cell's phonetic guide renders (OOXML `<phoneticPr>`).
  *
  * `font_id` indexes the workbook's font table for the ruby text; `type` is
@@ -1054,6 +1101,35 @@ FM_API fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb, si
 FM_API fm_status_t fm_workbook_get_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                             uint32_t col, uint32_t* out_font_id, uint32_t* out_type,
                                                             uint32_t* out_alignment);
+
+/**
+ * @brief Reports whether the cell's `<phoneticPr>` triple is explicit.
+ *
+ * `*out_present` is `1` when the triple came from a `<phoneticPr>` element
+ * or `fm_workbook_set_cell_phonetic_properties` (an all-zero triple included),
+ * and `0` when it is the state an absent element resolves to, which is also
+ * what a cell with no annotation reports. Like the triple, it is cleared by
+ * any value-mutating setter. A save spells the element out beside any runs,
+ * and XLSB always stores the triple, so a reloaded or XLSB-loaded cell with
+ * runs reports `1`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_present` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_has_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                            uint32_t col, int32_t* out_present);
+
+/**
+ * @brief Reads the cell's "Show Phonetic" flag into `*out_show` (`0` or `1`).
+ *        An absent cell reports `0`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_show` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_get_cell_show_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                      uint32_t col, int32_t* out_show);
 
 /**
  * @brief Renders the lambda closure stored at `(sheet_index, row, col)`
@@ -3894,7 +3970,13 @@ typedef struct {
  * @brief Plain-data spec for `fm_workbook_pivot_data_field_add` /
  *        `fm_workbook_pivot_data_field_set`.
  *
- *   * `name`          — required; display name (key for GETPIVOTDATA).
+ *   * `name`          — display name (key for GETPIVOTDATA). `NULL` or the
+ *                       empty string asks the engine to name the data field
+ *                       from the workbook profile's pivot wording, e.g.
+ *                       "Sum of Sales" (en-US) or "合計 / Sales" (ja-JP):
+ *                       the aggregation label, the locale's separator and
+ *                       the source pivot field's display name. That needs
+ *                       `field_index` to be in range.
  *   * `field_index`   — index into `PivotTable::fields()` of the source
  *                       pivot field.
  *   * `aggregation`   — aggregation function applied to the source.
@@ -3917,6 +3999,63 @@ typedef struct {
   int32_t show_as_base_field;
   int32_t show_as_base_item;
 } fm_pivot_data_field_spec_t;
+
+/**
+ * @brief Read-back of a pivot field definition (`fm_workbook_pivot_field_at`).
+ *
+ * The first five members carry the same meaning as `fm_pivot_field_spec_t`,
+ * except that `axis` is `-1` for a field that sits on no axis. Strings are
+ * model-backed views, never `NULL`.
+ *
+ *   * `cache_field_index` — index of the bound pivot-cache field, `-1` when
+ *                           the cache does not cover this field. Pivot field
+ *                           `i` binds to cache field `i`.
+ *   * `sort_order`        — `fm_pivot_sort_order_t`, as written by
+ *                           `fm_workbook_pivot_field_set_sort`.
+ *   * `sort_by_field`     — the by-field key; empty for label order.
+ *   * `has_date_group`    — non-zero when the members below describe the
+ *                           field's date grouping; otherwise they are zero
+ *                           and the unset sentinels below.
+ *   * `date_granularity`, `date_calendar`, `date_start_year`,
+ *     `date_end_year`, `date_interval_days`, `date_start_serial`,
+ *     `date_end_serial` — the arguments of
+ *                           `fm_workbook_pivot_field_set_date_group`; an
+ *                           unset year or serial reads `-1`.
+ */
+typedef struct {
+  const char* source_name;
+  const char* custom_name;
+  int32_t axis;
+  int32_t subtotal_top;
+  const char* number_format;
+  int32_t cache_field_index;
+  int32_t sort_order;
+  const char* sort_by_field;
+  int32_t has_date_group;
+  int32_t date_granularity;
+  int32_t date_calendar;
+  int32_t date_start_year;
+  int32_t date_end_year;
+  uint32_t date_interval_days;
+  double date_start_serial;
+  double date_end_serial;
+} fm_pivot_field_info_t;
+
+/**
+ * @brief Read-back of one pivot-field item (`fm_workbook_pivot_field_item_at`).
+ *
+ *   * `name`        — the item's own label, a model-backed view that is
+ *                     empty for an item bound only by cache index.
+ *   * `cache_index` — index into the bound cache field's shared items (the
+ *                     OOXML `<item x="N">`), `-1` for an item bound by label
+ *                     only.
+ *   * `visible`     — non-zero when the item is shown.
+ */
+typedef struct {
+  const char* name;
+  int32_t cache_index;
+  int32_t visible;
+} fm_pivot_item_info_t;
 
 /**
  * @brief Plain-data spec for `fm_workbook_pivot_filter_add`.
@@ -4326,14 +4465,16 @@ FM_API fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* wb, s
                                                       size_t* out_count);
 
 /**
- * @brief Appends a new data-field entry. `spec->name` must be non-NULL.
+ * @brief Appends a new data-field entry. A `NULL` or empty `spec->name` is
+ *        replaced by the engine-derived name described on
+ *        `fm_pivot_data_field_spec_t`.
  *
  * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `spec`, `out_idx` or
- *           `spec->name` is `NULL`;
+ *         `kBindingNullPointer` if `wb`, `spec` or `out_idx` is `NULL`;
  *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out
- *           of range, or `spec->aggregation` / `spec->show_as` names no
- *           declared enumerator.
+ *           of range, `spec->aggregation` / `spec->show_as` names no
+ *           declared enumerator, or the name is derived and
+ *           `spec->field_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     const fm_pivot_data_field_spec_t* spec, size_t* out_idx);
@@ -4342,17 +4483,122 @@ FM_API fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, size_t sh
 FM_API fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
 /**
- * @brief Replaces the data-field entry at `data_field_idx` in place.
+ * @brief Replaces the data-field entry at `data_field_idx` in place. A
+ *        `NULL` or empty `spec->name` is derived as in
+ *        `fm_workbook_pivot_data_field_add`.
  *
  * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb`, `spec` or `spec->name` is
- *           `NULL`;
+ *         `kBindingNullPointer` if `wb` or `spec` is `NULL`;
  *         `kInvalidArgument` when `sheet_index`, `pivot_index` or
- *           `data_field_idx` is out of range, or `spec->aggregation` /
- *           `spec->show_as` names no declared enumerator.
+ *           `data_field_idx` is out of range, `spec->aggregation` /
+ *           `spec->show_as` names no declared enumerator, or the name is
+ *           derived and `spec->field_index` is out of range.
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t data_field_idx, const fm_pivot_data_field_spec_t* spec);
+
+/*
+ * Definition read-back. Every getter below is read-only and works the same
+ * for a pivot created in this session and one loaded from a package. String
+ * and index-list outputs are model-backed views: they remain valid until the
+ * next mutation of the pivot (any `fm_workbook_pivot_*` setter on it), a
+ * workbook model replacement, or handle destruction. Reads do not invalidate
+ * them. Copy them when they must outlive those events. On any error the
+ * output arguments are left unchanged.
+ */
+
+/**
+ * @brief Reads the `cache_id` of the pivot cache the pivot draws from.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_cache_id` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_cache_id(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                  uint32_t* out_cache_id);
+
+/**
+ * @brief Reads the pivot's name. `*out_name` is a NUL-terminated UTF-8 view.
+ *
+ * @return As `fm_workbook_pivot_get_cache_id`, with `out_name` in place of
+ *         `out_cache_id`.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_name(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                              const char** out_name);
+
+/**
+ * @brief Reads the row / column grand total flags (`0` or `1`), the values
+ *        `fm_workbook_pivot_set_grand_totals` writes.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `out_rows` or `out_cols` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                      int32_t* out_rows, int32_t* out_cols);
+
+/**
+ * @brief Reads the definition of pivot field `field_idx` into `out`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index`, `pivot_index` or `field_idx`
+ *         is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                              size_t field_idx, fm_pivot_field_info_t* out);
+
+/**
+ * @brief Number of items in pivot field `field_idx`'s item list, the list
+ *        `fm_workbook_pivot_field_add_item` / `_add_item_at` append to.
+ *
+ * @return As `fm_workbook_pivot_field_at`, with `out_count` in place of `out`.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_item_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                      size_t field_idx, size_t* out_count);
+
+/**
+ * @brief Reads item `item_idx` of pivot field `field_idx` into `out`. The
+ *        index is the one `fm_workbook_pivot_field_set_item_visible` takes.
+ *
+ * @return As `fm_workbook_pivot_field_at`, plus `kInvalidArgument` when
+ *         `item_idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_item_at(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                   size_t field_idx, size_t item_idx, fm_pivot_item_info_t* out);
+
+/**
+ * @brief Reads data field `data_field_idx` into the shape
+ *        `fm_workbook_pivot_data_field_add` accepts. `name` and
+ *        `number_format` are views and never `NULL` (`number_format` is `""`
+ *        for none); an unset `show_as_base_field` / `show_as_base_item` is `-1`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index`, `pivot_index` or
+ *         `data_field_idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                   size_t data_field_idx, fm_pivot_data_field_spec_t* out);
+
+/**
+ * @brief Reads the row-axis field order: `*out_indices` points at
+ *        `*out_count` indices into the pivot's fields, the list
+ *        `fm_workbook_pivot_set_row_field_order` takes. `*out_indices` may
+ *        be `NULL` when `*out_count` is `0`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `out_indices` or `out_count` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_row_field_order(const fm_workbook_t* wb, size_t sheet_index,
+                                                         size_t pivot_index, const uint32_t** out_indices,
+                                                         size_t* out_count);
+
+/** @brief Reads the column-axis field order. Same contract as rows. */
+FM_API fm_status_t fm_workbook_pivot_get_col_field_order(const fm_workbook_t* wb, size_t sheet_index,
+                                                         size_t pivot_index, const uint32_t** out_indices,
+                                                         size_t* out_count);
 
 /*
  * Session-state contract shared by the whole pivot-filter family
@@ -4802,6 +5048,12 @@ typedef enum {
  * consistent on the way out; a struct is never handed back in, so the
  * contradictory combination cannot be constructed across this boundary.
  *
+ * `top_left_*` is the scroll origin (`<sheetView topLeftCell>`, A1 when
+ * absent). `pane_top_left_*` is `<pane topLeftCell>` of a frozen view: the
+ * first visible cell of the unfrozen area, which is the first cell past the
+ * frozen rows and columns until a host scrolls it; `0, 0` when nothing is
+ * frozen.
+ *
  * `view_mode` is a model-backed NUL-terminated UTF-8 view from the workbook
  * handle. It remains valid until a mutation of this sheet's view record
  * (including `fm_sheet_set_view_mode` or another sheet-view setter) or
@@ -4821,6 +5073,10 @@ typedef struct {
   int32_t right_to_left;        /* 0/1; OOXML default 0 */
   int32_t tab_selected;         /* 0/1; OOXML default 0 */
   const char* view_mode;        /* "", "pageBreakPreview", or "pageLayout" */
+  uint32_t top_left_row;        /* scroll origin of the sheet view (`topLeftCell`), 0-based */
+  uint32_t top_left_col;
+  uint32_t pane_top_left_row; /* first visible cell of a frozen view's lower/right pane */
+  uint32_t pane_top_left_col;
 } fm_sheet_view_t;
 
 /**
@@ -4920,6 +5176,69 @@ FM_API fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t she
  *         `kInvalidArgument` when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out);
+
+/**
+ * @brief Sets the sheet view's scroll origin (`<sheetView topLeftCell>`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` or the cell is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
+
+/**
+ * @brief Sets the first visible cell of a frozen view's unfrozen pane
+ *        (`<pane topLeftCell>`).
+ *
+ * The cell must lie in the unfrozen area: `row >= freeze_rows` and
+ * `col >= freeze_cols`. Changing the freeze with `fm_sheet_set_freeze`
+ * resets this to the first unfrozen cell.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, the sheet
+ *         has no frozen panes, or the cell is not in the unfrozen area.
+ */
+FM_API fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
+
+/**
+ * @brief Reads the active pane's selection: the active cell and its ranges.
+ *
+ * `*out_total` receives the number of selected ranges; at most `capacity` of
+ * them are written to `out_ranges`, which may be `NULL` when `capacity` is
+ * `0` (size the buffer first). A sheet that stores no selection reports `A1`
+ * and one range, `A1`; a selection without an explicit `sqref` is the active
+ * cell alone. Whole-row and whole-column references read as full-width /
+ * full-height ranges. The selection is carried by XLSX only: an XLSB load
+ * reports the default and an XLSB save drops it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `out_active_row`, `out_active_col`
+ *         or `out_total` is `NULL`, or `out_ranges` is `NULL` while
+ *         `capacity > 0`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_index, uint32_t* out_active_row,
+                                          uint32_t* out_active_col, fm_merge_range* out_ranges, size_t capacity,
+                                          size_t* out_total);
+
+/**
+ * @brief Replaces the active pane's selection (`<selection>`): the active
+ *        cell and the selected ranges (`sqref`). `count == 0` selects the
+ *        active cell alone.
+ *
+ * The selection of a frozen view belongs to the pane it is active in
+ * (`bottomRight`, `topRight` or `bottomLeft`, see `fm_sheet_set_freeze`);
+ * other panes' selections are kept.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`, or `ranges` is `NULL` with
+ *           a non-zero `count`;
+ *         `kInvalidArgument` when `sheet_index`, the active cell or a range
+ *         is out of range, or a range has `first > last`.
+ */
+FM_API fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index, uint32_t active_row,
+                                          uint32_t active_col, const fm_merge_range* ranges, size_t count);
 
 /**
  * @brief Returns the complete worksheet-level `<autoFilter>` XML fragment.

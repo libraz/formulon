@@ -88,6 +88,10 @@ struct ParsedCell {
   /// The `<phoneticPr>` sibling of those runs, defaulted when the block
   /// carries none. Only meaningful when `phonetic_runs` is non-empty.
   PhoneticProperties phonetic_props;
+  /// True when `phonetic_props` came from an explicit `<phoneticPr>`.
+  bool phonetic_pr_present = false;
+  /// `<c ph="1">`: the cell shows its phonetic guide.
+  bool show_phonetic = false;
   /// Index into the workbook's `StylesTable::cell_xfs`, sourced from the
   /// `s=` attribute on the `<c>` element. Defaults to `0` (the default
   /// xf) when the attribute is absent.

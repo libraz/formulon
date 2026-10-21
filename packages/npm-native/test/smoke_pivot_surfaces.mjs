@@ -117,17 +117,126 @@ test('a required pivot spec string field left out of the object is rejected, not
     assert.equal(field.status.status, 7001);
     assert.equal(wb.pivotFieldCount(0, pivot).value, fieldCountBefore, 'no field must have been added');
 
+    // `name` is optional: an omitted one is derived from the workbook profile.
     const dataFieldCountBefore = wb.pivotDataFieldCount(0, pivot).value;
     const dataField = wb.pivotDataFieldAdd(0, pivot, { fieldIndex: 0, aggregation: 0 }); // no `name`
-    assert.equal(dataField.status.ok, false);
-    assert.equal(dataField.status.status, 7001);
-    assert.equal(wb.pivotDataFieldCount(0, pivot).value, dataFieldCountBefore, 'no data field must have been added');
+    assert.ok(dataField.status.ok, JSON.stringify(dataField.status));
+    assert.equal(wb.pivotDataFieldCount(0, pivot).value, dataFieldCountBefore + 1);
+    assert.equal(wb.pivotDataFieldAt(0, pivot, dataField.index).name, 'Sum of Region');
 
     const filterCountBefore = wb.pivotFilterCount(0, pivot).value;
     const filter = wb.pivotFilterAdd(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }); // no `fieldName`
     assert.equal(filter.ok, false);
     assert.equal(filter.status, 7001);
     assert.equal(wb.pivotFilterCount(0, pivot).value, filterCountBefore, 'no filter must have been added');
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('pivot definition read-backs report what the setters wrote', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  try {
+    assert.equal(wb.pivotCacheId(0, pivot).index, wb.pivotCacheIdAt(0).index);
+    assert.equal(wb.pivotName(0, pivot).value, 'Pivot1');
+    assert.deepEqual((({ rows, cols }) => ({ rows, cols }))(wb.pivotGetGrandTotals(0, pivot)), {
+      rows: true,
+      cols: true,
+    });
+    assert.ok(wb.pivotSetGrandTotals(0, pivot, false, true).ok);
+    const totals = wb.pivotGetGrandTotals(0, pivot);
+    assert.ok(totals.status.ok);
+    assert.equal(totals.rows, false);
+    assert.equal(totals.cols, true);
+
+    assert.deepEqual(wb.pivotRowFieldOrder(0, pivot).indices, [0]);
+    assert.deepEqual(wb.pivotColFieldOrder(0, pivot).indices, []);
+
+    assert.ok(wb.pivotFieldSetSort(0, pivot, 0, 0, 'Sum of Amount').ok);
+    const region = wb.pivotFieldAt(0, pivot, 0);
+    assert.ok(region.status.ok, JSON.stringify(region.status));
+    assert.equal(region.sourceName, 'Region');
+    assert.equal(region.axis, 0);
+    assert.equal(region.cacheFieldIndex, 0);
+    assert.equal(region.sortOrder, 0);
+    assert.equal(region.sortByField, 'Sum of Amount');
+    assert.equal(region.hasDateGroup, false);
+    assert.equal(region.dateStartYear, -1);
+    assert.equal(wb.pivotFieldAt(0, pivot, 1).axis, 2);
+
+    assert.ok(wb.pivotFieldAddItem(0, pivot, 0, 'East', true).ok);
+    assert.ok(wb.pivotFieldAddItem(0, pivot, 0, 'West', true).ok);
+    assert.ok(wb.pivotFieldSetItemVisible(0, pivot, 0, 1, false).ok);
+    assert.equal(wb.pivotFieldItemCount(0, pivot, 0).value, 2);
+    const east = wb.pivotFieldItemAt(0, pivot, 0, 0);
+    assert.equal(east.name, 'East');
+    // The scratch cache holds no shared items, so a label binds to nothing.
+    assert.equal(east.cacheIndex, -1);
+    assert.equal(east.visible, true);
+    assert.equal(wb.pivotFieldItemAt(0, pivot, 0, 1).visible, false);
+    assert.ok(wb.pivotFieldAddItemAt(0, pivot, 0, 5, true).ok);
+    const bound = wb.pivotFieldItemAt(0, pivot, 0, 2);
+    assert.equal(bound.cacheIndex, 5);
+    assert.equal(bound.name, '');
+
+    const dataField = wb.pivotDataFieldAt(0, pivot, 0);
+    assert.ok(dataField.status.ok, JSON.stringify(dataField.status));
+    assert.equal(dataField.name, 'Sum of Amount');
+    assert.equal(dataField.fieldIndex, 1);
+    assert.equal(dataField.aggregation, 0);
+    assert.equal(dataField.showAsBaseField, -1);
+    assert.equal(dataField.showAsBaseItem, -1);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('pivot definition read-backs reject out-of-range indices', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  try {
+    for (const r of [
+      wb.pivotCacheId(0, 9),
+      wb.pivotName(0, 9),
+      wb.pivotGetGrandTotals(9, pivot),
+      wb.pivotRowFieldOrder(0, 9),
+      wb.pivotColFieldOrder(0, 9),
+      wb.pivotFieldAt(0, pivot, 99),
+      wb.pivotFieldItemCount(0, pivot, 99),
+      wb.pivotFieldItemAt(0, pivot, 0, 99),
+      wb.pivotDataFieldAt(0, pivot, 99),
+    ]) {
+      const status = r.status;
+      assert.equal(status.ok, false, JSON.stringify(status));
+    }
+    assert.equal(wb.pivotFieldAt(0, pivot, 99).axis, -1);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('an empty or omitted data field name is derived from the workbook profile', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  try {
+    for (const [profile, expected] of [
+      ['win-365-ja_JP', '合計 / Amount'],
+      ['win-365-en_US', 'Sum of Amount'],
+    ]) {
+      assert.ok(wb.setExcelProfileId(profile).ok);
+      for (const spec of [
+        { fieldIndex: 1, aggregation: 0 },
+        { name: '', fieldIndex: 1, aggregation: 0 },
+      ]) {
+        const added = wb.pivotDataFieldAdd(0, pivot, spec);
+        assert.ok(added.status.ok, JSON.stringify(added.status));
+        assert.equal(wb.pivotDataFieldAt(0, pivot, added.index).name, expected);
+      }
+      assert.ok(wb.pivotDataFieldSet(0, pivot, 0, { fieldIndex: 1, aggregation: 2 }).ok);
+      assert.ok(wb.pivotDataFieldAt(0, pivot, 0).name.endsWith(' Amount'));
+    }
+    assert.equal(wb.pivotDataFieldAdd(0, pivot, { fieldIndex: 99, aggregation: 0 }).status.ok, false);
   } finally {
     wb.dispose();
   }

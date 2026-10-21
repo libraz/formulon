@@ -112,6 +112,10 @@ struct CellRecord {
   /// The `<phoneticPr>` block that came with those runs. Only meaningful
   /// when `phonetic` points at a non-empty vector.
   PhoneticProperties phonetic_props;
+  /// True when `phonetic_props` came from an explicit `<phoneticPr>`.
+  bool phonetic_pr_present = false;
+  /// Decoded `ph=` attribute of the `<c>`, or empty.
+  std::string_view ph;
 };
 
 /// One `<row>` element's opening attributes, surfaced to `on_row_start`
@@ -131,6 +135,7 @@ struct RowRecord {
   std::string_view outline_level;  ///< Decoded `outlineLevel=` (0..7).
   std::string_view custom_format;  ///< Decoded `customFormat=` (XSD boolean).
   std::string_view style;          ///< Decoded `s=` (row style xf index).
+  std::string_view ph;             ///< Decoded `ph=` (XSD boolean, show phonetic).
 };
 
 /// Callback bundle handed to `scan_sheet_data`. Each callback returns

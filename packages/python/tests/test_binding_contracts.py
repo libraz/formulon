@@ -752,6 +752,121 @@ class PivotFilterSessionStateTests(unittest.TestCase):
             wb.close()
 
 
+class PivotDefinitionReadBackTests(unittest.TestCase):
+    """The definition read-backs report persisted state, unlike the filter list."""
+
+    def test_definition_survives_save_and_load(self) -> None:
+        wb, pivot = PivotFilterSessionStateTests._workbook_with_pivot()
+        try:
+            wb.pivot_set_grand_totals(0, pivot, True, False)
+            cache_id = wb.pivot_cache_id(0, pivot)
+            data = wb.save()
+        finally:
+            wb.close()
+        with Workbook.load(data) as reloaded:
+            self.assertEqual(reloaded.pivot_cache_id(0, 0), cache_id)
+            self.assertEqual(reloaded.pivot_name(0, 0), "Pivot1")
+            self.assertEqual(reloaded.pivot_grand_totals(0, 0), (True, False))
+            self.assertEqual(reloaded.pivot_row_field_order(0, 0), [0])
+            self.assertEqual(reloaded.pivot_field_at(0, 0, 0).axis, PivotAxis.ROW)
+            self.assertEqual(reloaded.pivot_data_field_at(0, 0, 0).name, "Sum of Amount")
+
+    def test_out_of_range_index_is_rejected(self) -> None:
+        wb, pivot = PivotFilterSessionStateTests._workbook_with_pivot()
+        try:
+            with self.assertRaises(FormulonError):
+                wb.pivot_field_at(0, pivot, 99)
+            with self.assertRaises(FormulonError):
+                wb.pivot_data_field_at(0, pivot, 99)
+        finally:
+            wb.close()
+
+
+class WorkbookViewAndPhoneticFlagTests(unittest.TestCase):
+    def test_active_sheet_is_recorded_and_survives_a_round_trip(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.add_sheet("B")
+            wb.add_sheet("C")
+            self.assertEqual(wb.active_sheet(), 0)
+            wb.set_active_sheet(2)
+            self.assertEqual(wb.active_sheet(), 2)
+            with self.assertRaises(FormulonError):
+                wb.set_active_sheet(9)
+            self.assertEqual(wb.active_sheet(), 2)
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self.assertEqual(reloaded.active_sheet(), 2)
+            reloaded.move_sheet(2, 0)
+            self.assertEqual(reloaded.active_sheet(), 0)
+
+    def test_show_phonetic_survives_value_writes_and_a_round_trip(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertFalse(wb.get_show_phonetic(0, 0, 0))
+            wb.set_text(0, 0, 0, "漢字")
+            wb.set_show_phonetic(0, 0, 0, True)
+            wb.set_text(0, 0, 0, "漢字")
+            self.assertTrue(wb.get_show_phonetic(0, 0, 0))
+            with self.assertRaises(FormulonError):
+                wb.set_show_phonetic(9, 0, 0, True)
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self.assertTrue(reloaded.get_show_phonetic(0, 0, 0))
+            reloaded.set_show_phonetic(0, 0, 0, False)
+            self.assertFalse(reloaded.get_show_phonetic(0, 0, 0))
+
+    def test_explicit_all_zero_phonetic_pr_is_present_and_round_trips(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "漢字")
+            wb.set_phonetic_runs(0, 0, 0, [PhoneticRun(0, 2, "かんじ")])
+            self.assertFalse(wb.has_phonetic_properties(0, 0, 0))
+            wb.set_phonetic_properties(0, 0, 0, PhoneticProperties(0, 0, 0))
+            self.assertTrue(wb.has_phonetic_properties(0, 0, 0))
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self.assertTrue(reloaded.has_phonetic_properties(0, 0, 0))
+            self.assertEqual(reloaded.get_phonetic_properties(0, 0, 0), PhoneticProperties(0, 0, 0))
+            with self.assertRaises(FormulonError):
+                reloaded.has_phonetic_properties(9, 0, 0)
+
+
+class SheetViewOriginAndSelectionTests(unittest.TestCase):
+    def test_scroll_origin_pane_origin_and_selection_round_trip(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_sheet_freeze(0, 2, 1)
+            view = wb.get_sheet_view(0)
+            self.assertEqual((view.pane_top_left_row, view.pane_top_left_col), (2, 1))
+            wb.set_sheet_top_left(0, 5, 0)
+            wb.set_sheet_pane_top_left(0, 40, 6)
+            with self.assertRaises(FormulonError):
+                wb.set_sheet_pane_top_left(0, 1, 6)
+            ranges = [MergeRange(41, 7, 43, 8), MergeRange(50, 9, 50, 9)]
+            wb.set_sheet_selection(0, 41, 7, ranges)
+            with self.assertRaises(FormulonError):
+                wb.set_sheet_selection(0, 0, 0, [MergeRange(3, 0, 1, 0)])
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            view = reloaded.get_sheet_view(0)
+            self.assertEqual(
+                (view.top_left_row, view.top_left_col, view.pane_top_left_row, view.pane_top_left_col),
+                (5, 0, 40, 6),
+            )
+            self.assertEqual(reloaded.get_sheet_selection(0), ((41, 7), ranges))
+
+    def test_unset_selection_reads_as_a1(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.get_sheet_selection(0), ((0, 0), [MergeRange(0, 0, 0, 0)]))
+            with self.assertRaises(FormulonError):
+                wb.get_sheet_selection(9)
+
+    def test_selection_without_ranges_is_the_active_cell(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_sheet_selection(0, 4, 2)
+            self.assertEqual(wb.get_sheet_selection(0), ((4, 2), [MergeRange(4, 2, 4, 2)]))
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self.assertEqual(reloaded.get_sheet_selection(0), ((4, 2), [MergeRange(4, 2, 4, 2)]))
+
+
 class CollectionReaderAllocationTests(unittest.TestCase):
     """Reading N items must cost O(1) WASM malloc/free, not O(N)."""
 

@@ -32,6 +32,8 @@ struct ColumnLayout {
   bool has_width = false;
   bool has_style = false;
   std::uint32_t style_xf = 0;
+  /// OOXML `<col phonetic="1">`: cells in the span show their phonetic guide.
+  bool show_phonetic = false;
 };
 
 /// Returns whether a column has a logically explicit width.
@@ -63,6 +65,8 @@ struct RowLayout {
   // explicitly set to zero.
   bool has_style = false;
   std::uint32_t style_xf = 0;
+  /// OOXML `<row ph="1">`: cells in the row show their phonetic guide.
+  bool show_phonetic = false;
 };
 
 /// Aggregate of per-sheet layout overrides (column spans + row overrides).

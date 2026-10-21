@@ -18,10 +18,12 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/xml_fragment.h"
 #include "io/auto_filter_xml.h"
+#include "io/sqref_text.h"
 #include "print/sheet_geometry.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "style_region.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -465,8 +467,7 @@ extern "C" fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index
     return rc;
   }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
-  view.freeze_rows = freeze_rows;
-  view.freeze_cols = freeze_cols;
+  view.set_freeze(freeze_rows, freeze_cols);
   return 0;
 }
 
@@ -526,6 +527,162 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->right_to_left = v.right_to_left ? 1 : 0;
   out->tab_selected = v.tab_selected ? 1 : 0;
   out->view_mode = v.view_mode.c_str();
+  out->top_left_row = 0;
+  out->top_left_col = 0;
+  (void)formulon::a1::parse_a1_ref(v.top_left_cell, &out->top_left_row, &out->top_left_col);
+  const bool frozen = v.freeze_rows != 0U || v.freeze_cols != 0U;
+  out->pane_top_left_row = frozen ? v.freeze_rows : 0U;
+  out->pane_top_left_col = frozen ? v.freeze_cols : 0U;
+  if (frozen) {
+    (void)formulon::a1::parse_a1_ref(v.pane_top_left_cell, &out->pane_top_left_row, &out->pane_top_left_col);
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_top_left"); rc != 0) {
+    return rc;
+  }
+  if (!formulon::Sheet::coord_in_grid(row, col)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_top_left: cell out of grid");
+  }
+  wb->workbook().sheet(sheet_index).mutable_view().top_left_cell =
+      row == 0U && col == 0U ? std::string() : formulon::a1::encode_a1(row, col);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_pane_top_left"); rc != 0) {
+    return rc;
+  }
+  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
+  if ((view.freeze_rows == 0U && view.freeze_cols == 0U) || row < view.freeze_rows || col < view.freeze_cols ||
+      !formulon::Sheet::coord_in_grid(row, col)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_set_pane_top_left: cell is not in the unfrozen area");
+  }
+  view.pane_top_left_cell =
+      row == view.freeze_rows && col == view.freeze_cols ? std::string() : formulon::a1::encode_a1(row, col);
+  return 0;
+}
+
+namespace {
+
+// Appends the ranges of an `sqref`. A1 forms go through the shared parser;
+// whole-row (`3:4`) and whole-column (`A:B`) tokens, which it rejects, are
+// widened to the full sheet here.
+void parse_selection_sqref(std::string_view sqref, std::vector<formulon::MergeRange>* ranges) {
+  for (std::size_t at = 0; at < sqref.size();) {
+    const std::size_t end = std::min(sqref.find(' ', at), sqref.size());
+    const std::string_view token = sqref.substr(at, end - at);
+    at = end + 1U;
+    if (formulon::io::parse_sqref_text(token, *ranges)) {
+      continue;
+    }
+    const std::size_t colon = token.find(':');
+    std::size_t head_pos = 0;
+    std::size_t tail_pos = 0;
+    std::uint32_t first = 0;
+    std::uint32_t last = 0;
+    if (colon == std::string_view::npos) {
+      continue;
+    }
+    const std::string_view head = token.substr(0, colon);
+    const std::string_view tail = token.substr(colon + 1U);
+    if (formulon::a1::parse_column_letters(head, &head_pos, &first) && head_pos == head.size() &&
+        formulon::a1::parse_column_letters(tail, &tail_pos, &last) && tail_pos == tail.size()) {
+      if (first <= last && last <= formulon::Sheet::kMaxCols) {
+        ranges->push_back({0U, first - 1U, formulon::Sheet::kMaxRows - 1U, last - 1U});
+      }
+    } else if (head_pos = tail_pos = 0; formulon::a1::parse_uint(head, &head_pos, &first) && head_pos == head.size() &&
+                                        first != 0U && formulon::a1::parse_uint(tail, &tail_pos, &last) &&
+                                        tail_pos == tail.size() && first <= last && last <= formulon::Sheet::kMaxRows) {
+      ranges->push_back({first - 1U, 0U, last - 1U, formulon::Sheet::kMaxCols - 1U});
+    }
+  }
+}
+
+const formulon::SheetSelection* active_selection(const formulon::SheetView& view) {
+  for (const formulon::SheetSelection& selection : view.selections) {
+    if (formulon::SheetView::pane_key(selection.pane) == formulon::SheetView::pane_key(view.effective_active_pane())) {
+      return &selection;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_index, uint32_t* out_active_row,
+                                              uint32_t* out_active_col, fm_merge_range* out_ranges, size_t capacity,
+                                              size_t* out_total) {
+  clear_last_error();
+  if (out_active_row == nullptr || out_active_col == nullptr || out_total == nullptr ||
+      (out_ranges == nullptr && capacity != 0U)) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_selection: NULL argument");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_selection"); rc != 0) {
+    return rc;
+  }
+  std::vector<formulon::MergeRange> ranges;
+  *out_active_row = 0;
+  *out_active_col = 0;
+  if (const formulon::SheetSelection* selection = active_selection(wb->workbook().sheet(sheet_index).view());
+      selection != nullptr) {
+    parse_selection_sqref(selection->sqref, &ranges);
+    if (!formulon::a1::parse_a1_ref(selection->active_cell, out_active_row, out_active_col) && !ranges.empty()) {
+      *out_active_row = ranges.front().first_row;
+      *out_active_col = ranges.front().first_col;
+    }
+  }
+  if (ranges.empty()) {
+    ranges.push_back({*out_active_row, *out_active_col, *out_active_row, *out_active_col});
+  }
+  *out_total = ranges.size();
+  for (std::size_t i = 0; i < ranges.size() && i < capacity; ++i) {
+    out_ranges[i] = {ranges[i].first_row, ranges[i].first_col, ranges[i].last_row, ranges[i].last_col};
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_selection(fm_workbook_t* wb, size_t sheet_index, uint32_t active_row,
+                                              uint32_t active_col, const fm_merge_range* ranges, size_t count) {
+  clear_last_error();
+  if (count != 0U && ranges == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_set_selection: ranges is NULL");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_selection"); rc != 0) {
+    return rc;
+  }
+  if (!formulon::Sheet::coord_in_grid(active_row, active_col)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_set_selection: active cell out of grid");
+  }
+  std::vector<formulon::MergeRange> selected;
+  for (std::size_t i = 0; i < count; ++i) {
+    const fm_merge_range& r = ranges[i];
+    if (!formulon::Sheet::coord_in_grid(r.first_row, r.first_col) ||
+        !formulon::Sheet::coord_in_grid(r.last_row, r.last_col) || r.first_row > r.last_row ||
+        r.first_col > r.last_col) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_sheet_set_selection: range out of grid or inverted");
+    }
+    selected.push_back({r.first_row, r.first_col, r.last_row, r.last_col});
+  }
+  formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
+  formulon::SheetSelection replacement{std::string(formulon::SheetView::pane_key(view.effective_active_pane())),
+                                       formulon::a1::encode_a1(active_row, active_col),
+                                       formulon::io::format_sqref_text(selected)};
+  for (formulon::SheetSelection& selection : view.selections) {
+    if (formulon::SheetView::pane_key(selection.pane) == replacement.pane) {
+      selection = std::move(replacement);
+      return 0;
+    }
+  }
+  view.selections.push_back(std::move(replacement));
   return 0;
 }
 

@@ -562,6 +562,26 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   return Expected<void, Error>::Ok();
 }
 
+std::uint32_t Workbook::active_sheet() const {
+  if (book_views_xml_.empty()) {
+    for (std::size_t i = 0; i < sheets_.size(); ++i) {
+      if (sheets_[i].view().tab_selected) {
+        return static_cast<std::uint32_t>(i);
+      }
+    }
+    return 0U;
+  }
+  const std::uint32_t index = book_views_active_tab(book_views_xml_);
+  return index < sheets_.size() ? index : 0U;
+}
+
+void Workbook::set_active_sheet(std::uint32_t index) {
+  set_book_views_active_tab(book_views_xml_, index);
+  for (std::size_t i = 0; i < sheets_.size(); ++i) {
+    sheets_[i].mutable_view().tab_selected = i == index;
+  }
+}
+
 Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   // Hold the engine mutex from the first workbook-state read through the
   // final graph rebuild. A parallel recalc therefore observes one complete

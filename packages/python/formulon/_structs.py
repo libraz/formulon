@@ -402,6 +402,33 @@ PIVOT_DATA_FIELD_SPEC = Struct(
     ],
 )
 
+PIVOT_FIELD_INFO = Struct(
+    "fm_pivot_field_info_t",
+    [
+        ("source_name", PTR),
+        ("custom_name", PTR),
+        ("axis", I32),
+        ("subtotal_top", I32),
+        ("number_format", PTR),
+        ("cache_field_index", I32),
+        ("sort_order", I32),
+        ("sort_by_field", PTR),
+        ("has_date_group", I32),
+        ("date_granularity", I32),
+        ("date_calendar", I32),
+        ("date_start_year", I32),
+        ("date_end_year", I32),
+        ("date_interval_days", U32),
+        ("date_start_serial", F64),
+        ("date_end_serial", F64),
+    ],
+)
+
+PIVOT_ITEM_INFO = Struct(
+    "fm_pivot_item_info_t",
+    [("name", PTR), ("cache_index", I32), ("visible", I32)],
+)
+
 PIVOT_FILTER_SPEC = Struct(
     "fm_pivot_filter_spec_t",
     [
@@ -510,6 +537,10 @@ SHEET_VIEW = Struct(
         ("right_to_left", I32),
         ("tab_selected", I32),
         ("view_mode", PTR),
+        ("top_left_row", U32),
+        ("top_left_col", U32),
+        ("pane_top_left_row", U32),
+        ("pane_top_left_col", U32),
     ],
 )
 

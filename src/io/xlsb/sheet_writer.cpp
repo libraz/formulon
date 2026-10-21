@@ -31,6 +31,7 @@
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "style_resolve.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
@@ -45,7 +46,8 @@ namespace {
 /// useful would be carried by emitting a `BrtCellBlank` for it. Used
 /// to skip stored slots whose content was cleared.
 bool IsEmptySlot(const Cell& cell) {
-  return cell.formula_text.empty() && cell.cached_value.is_blank() && cell.xf_index == 0U && !cell.has_explicit_xf;
+  return cell.formula_text.empty() && cell.cached_value.is_blank() && cell.xf_index == 0U && !cell.has_explicit_xf &&
+         !cell.show_phonetic;
 }
 
 /// Emits a `BrtRowHdr` for `row`. [MS-XLSB] §2.4.770 layout:
@@ -150,10 +152,13 @@ void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const Sheet
     flags |= 0x0040U;
   }
   emit_u16(view, flags);
-  emit_u32(view, 0U);    // XLVNORMAL
-  emit_u32(view, 0U);    // rwTop
-  emit_u32(view, 0U);    // colLeft
-  emit_u8(view, 0x40U);  // default gridline color
+  emit_u32(view, 0U);  // XLVNORMAL
+  std::uint32_t top_row = 0U;
+  std::uint32_t left_col = 0U;
+  (void)a1::parse_a1_ref(sheet_view.top_left_cell, &top_row, &left_col);
+  emit_u32(view, top_row);   // rwTop
+  emit_u32(view, left_col);  // colLeft
+  emit_u8(view, 0x40U);      // default gridline color
   emit_u8(view, 0U);
   emit_u16(view, 0U);
   const std::uint32_t zoom = std::clamp(sheet_view.zoom_scale, 10U, 400U);
@@ -170,9 +175,16 @@ void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const Sheet
     std::vector<std::uint8_t> pane;
     emit_double(pane, static_cast<double>(sheet_view.freeze_rows));
     emit_double(pane, static_cast<double>(sheet_view.freeze_cols));
-    emit_u32(pane, sheet_view.freeze_rows);
-    emit_u32(pane, sheet_view.freeze_cols);
-    emit_u32(pane, 0U);  // PNNBOTRIGHT
+    std::uint32_t pane_row = sheet_view.freeze_rows;
+    std::uint32_t pane_col = sheet_view.freeze_cols;
+    (void)a1::parse_a1_ref(sheet_view.pane_top_left_cell, &pane_row, &pane_col);
+    emit_u32(pane, pane_row);
+    emit_u32(pane, pane_col);
+    const std::string_view active_pane = sheet_view.effective_active_pane();
+    emit_u32(pane, active_pane == "topRight"     ? 1U
+                   : active_pane == "bottomLeft" ? 2U
+                   : active_pane == "topLeft"    ? 3U
+                                                 : 0U);
     emit_u8(pane, 0x02U);
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtPane), pane);
   }

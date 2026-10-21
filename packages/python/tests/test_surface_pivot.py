@@ -167,6 +167,15 @@ _PIVOT_READERS = {
     "pivot_data_field_count",
     "pivot_filter_count",
     "pivot_filter_at",
+    "pivot_cache_id",
+    "pivot_name",
+    "pivot_grand_totals",
+    "pivot_row_field_order",
+    "pivot_col_field_order",
+    "pivot_field_at",
+    "pivot_field_item_count",
+    "pivot_field_item_at",
+    "pivot_data_field_at",
     "get_pivot_cache_worksheet_source",
     "get_pivot_report_layout",
 }
@@ -635,6 +644,110 @@ class PivotMutatorTableTests(unittest.TestCase):
                 if after is not None:
                     after(fixture)
                 expect(self, fixture, result)
+
+
+class PivotDefinitionReadBackTests(unittest.TestCase):
+    def _assert_fixture_definition(self, wb: Workbook, f: _PivotFixture, pivot: int) -> None:
+        eq = self.assertEqual
+        eq(wb.pivot_name(0, pivot), "Pivot1")
+        eq(wb.pivot_grand_totals(0, pivot), (True, True))
+        eq(wb.pivot_row_field_order(0, pivot), [f.region])
+        eq(wb.pivot_col_field_order(0, pivot), [])
+
+        region = wb.pivot_field_at(0, pivot, f.region)
+        eq(region.source_name, "Region")
+        eq(region.axis, PivotAxis.ROW)
+        eq(region.cache_field_index, 0)
+        eq(region.sort_order, PivotSortOrder.ASCENDING)
+        self.assertFalse(region.has_date_group)
+        eq(region.date_start_year, -1)
+
+        eq(wb.pivot_field_item_count(0, pivot, f.region), 2)
+        for index, label in enumerate(("East", "West")):
+            item = wb.pivot_field_item_at(0, pivot, f.region, index)
+            eq((item.name, item.cache_index, item.visible), (label, index, True))
+
+        eq(wb.pivot_data_field_count(0, pivot), 1)
+        data_field = wb.pivot_data_field_at(0, pivot, 0)
+        eq(data_field.name, "Sum of Amount")
+        eq(data_field.field_index, f.amount)
+        eq(data_field.aggregation, PivotAggregation.SUM)
+        eq((data_field.show_as_base_field, data_field.show_as_base_item), (-1, -1))
+
+    def test_reads_back_what_the_setters_wrote(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            self.assertEqual(wb.pivot_cache_id(0, f.pivot), f.cache)
+            self._assert_fixture_definition(wb, f, f.pivot)
+
+            wb.pivot_set_grand_totals(0, f.pivot, False, True)
+            wb.pivot_field_set_sort(0, f.pivot, f.region, PivotSortOrder.DESCENDING, "Sum of Amount")
+            wb.pivot_field_set_item_visible(0, f.pivot, f.region, 1, False)
+            wb.pivot_field_set_date_group(0, f.pivot, f.date, PivotDateGrouping.YEAR, PivotCalendar.GREGORIAN)
+            self.assertEqual(wb.pivot_grand_totals(0, f.pivot), (False, True))
+            region = wb.pivot_field_at(0, f.pivot, f.region)
+            self.assertEqual((region.sort_order, region.sort_by_field), (PivotSortOrder.DESCENDING, "Sum of Amount"))
+            self.assertFalse(wb.pivot_field_item_at(0, f.pivot, f.region, 1).visible)
+            date = wb.pivot_field_at(0, f.pivot, f.date)
+            self.assertTrue(date.has_date_group)
+            self.assertEqual(date.date_granularity, PivotDateGrouping.YEAR)
+            self.assertEqual(date.axis, PivotAxis.VALUE)
+
+            wb.pivot_field_set_axis(0, f.pivot, f.product, PivotAxis.COL)
+            self.assertEqual(wb.pivot_col_field_order(0, f.pivot), [f.product])
+            wb.pivot_set_row_field_order(0, f.pivot, [f.product, f.region])
+            self.assertEqual(wb.pivot_row_field_order(0, f.pivot), [f.product, f.region])
+            self.assertEqual(wb.pivot_col_field_order(0, f.pivot), [])
+
+    def test_reads_back_a_saved_and_reloaded_pivot(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            data = wb.save()
+        with Workbook.load(data) as loaded:
+            self.assertEqual(loaded.pivot_count(0), 1)
+            self.assertEqual(loaded.pivot_cache_id(0, 0), f.cache)
+            self._assert_fixture_definition(loaded, f, 0)
+
+    def test_out_of_range_indices_raise(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            for call in (
+                lambda: wb.pivot_cache_id(0, 9),
+                lambda: wb.pivot_name(0, 9),
+                lambda: wb.pivot_grand_totals(9, f.pivot),
+                lambda: wb.pivot_row_field_order(0, 9),
+                lambda: wb.pivot_col_field_order(0, 9),
+                lambda: wb.pivot_field_at(0, f.pivot, 99),
+                lambda: wb.pivot_field_item_count(0, f.pivot, 99),
+                lambda: wb.pivot_field_item_at(0, f.pivot, f.region, 99),
+                lambda: wb.pivot_data_field_at(0, f.pivot, 99),
+            ):
+                with self.assertRaises(FormulonError) as caught:
+                    call()
+                self.assertEqual(caught.exception.status, 2)
+
+    def test_empty_data_field_name_is_derived_from_the_profile(self) -> None:
+        for profile, expected in (("win-365-ja_JP", "合計 / Amount"), ("win-365-en_US", "Sum of Amount")):
+            for name in ("", None):
+                with Workbook.create_default() as wb:
+                    f = _PivotFixture(wb)
+                    wb.set_excel_profile_id(profile)
+                    idx = wb.pivot_data_field_add(0, f.pivot, PivotDataFieldSpec(name=name, field_index=f.amount))
+                    self.assertEqual(wb.pivot_data_field_at(0, f.pivot, idx).name, expected)
+                    wb.pivot_data_field_set(
+                        0,
+                        f.pivot,
+                        0,
+                        PivotDataFieldSpec(name=name, field_index=f.amount, aggregation=PivotAggregation.COUNT),
+                    )
+                    self.assertTrue(wb.pivot_data_field_at(0, f.pivot, 0).name.endswith(" Amount"))
+
+    def test_derived_name_needs_an_in_range_field(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            with self.assertRaises(FormulonError):
+                wb.pivot_data_field_add(0, f.pivot, PivotDataFieldSpec(name="", field_index=99))
+            self.assertEqual(wb.pivot_data_field_count(0, f.pivot), 1)
 
 
 if __name__ == "__main__":

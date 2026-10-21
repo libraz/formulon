@@ -50,7 +50,7 @@ int main(void) {
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf) == 128, "fm_cell_xf ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4 ? 44 : 48), "fm_sheet_view_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4 ? 60 : 64), "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_print_range_t` from
   // pagination, and `fm_styles_batch` is passed in by pointer with fifteen

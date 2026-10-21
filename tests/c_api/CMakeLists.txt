@@ -28,6 +28,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_logging_test.cpp
   formulon_c_named_styles_test.cpp
   formulon_c_pivot_authoring_test.cpp
+  formulon_c_pivot_definition_test.cpp
   formulon_c_pivot_filters_test.cpp
   formulon_c_pivot_grouping_test.cpp
   formulon_c_pivot_lifecycle_test.cpp
@@ -50,6 +51,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_test.cpp
   formulon_c_theme_test.cpp
   formulon_c_threaded_comments_test.cpp
+  formulon_c_workbook_view_test.cpp
   formulon_c_validation_test.cpp
   formulon_c_values_test.cpp
   formulon_c_save_test.cpp

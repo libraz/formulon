@@ -97,6 +97,18 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
 /// wrong roots, and fragments that need no valid change remain byte-identical.
 bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::uint32_t>& old_to_new);
 
+/// Reads the first `<workbookView>`'s `activeTab` from the raw `<bookViews>`
+/// fragment. An empty or malformed fragment, a missing element or attribute,
+/// and a value outside the non-negative integer space all read as the OOXML
+/// default of zero.
+std::uint32_t book_views_active_tab(const std::string& book_views_xml);
+
+/// Sets the first `<workbookView>`'s `activeTab` to `index` and clamps its
+/// `firstSheet` down to `index` when it exceeds it. Every other attribute and
+/// element is kept verbatim. An empty or unparsable fragment is replaced by
+/// `<bookViews><workbookView activeTab="N"/></bookViews>`.
+void set_book_views_active_tab(std::string& book_views_xml, std::uint32_t index);
+
 /// Applies the transform associated with each name's owning sheet. Workbook
 /// scoped names and names whose owner is outside `per_sheet` use the explicit
 /// `unowned_transform` policy instead of borrowing a sheet slot.

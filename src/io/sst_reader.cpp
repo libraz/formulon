@@ -72,6 +72,7 @@ Expected<SharedStringTable, Error> read_shared_strings(std::vector<std::uint8_t>
     table.phonetic_for_entries.emplace_back();
     append_phonetic_runs(si, table.phonetic_for_entries.back());
     table.phonetic_props_for_entries.push_back(read_phonetic_properties(si));
+    table.phonetic_pr_present_for_entries.push_back(static_cast<bool>(si.child("phoneticPr")));
   }
 
   return table;

@@ -67,6 +67,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetCellPhoneticRuns(const Napi::CallbackInfo& info);
   Napi::Value SetCellPhoneticProperties(const Napi::CallbackInfo& info);
   Napi::Value SetBlank(const Napi::CallbackInfo& info);
+  /// The cell's "Show Phonetic" display flag; value writes leave it alone.
+  Napi::Value GetCellShowPhonetic(const Napi::CallbackInfo& info);
+  Napi::Value SetCellShowPhonetic(const Napi::CallbackInfo& info);
   Napi::Value SetFormula(const Napi::CallbackInfo& info);
 
   // Cell read.
@@ -145,6 +148,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RenameSheet(const Napi::CallbackInfo& info);
   Napi::Value MoveSheet(const Napi::CallbackInfo& info);
   Napi::Value SheetCount(const Napi::CallbackInfo& info);
+  /// The active sheet (`activeTab` of the first `<workbookView>`) as
+  /// `{ status, index }`, and its setter.
+  Napi::Value ActiveSheet(const Napi::CallbackInfo& info);
+  Napi::Value SetActiveSheet(const Napi::CallbackInfo& info);
   Napi::Value SheetName(const Napi::CallbackInfo& info);
   Napi::Value Paginate(const Napi::CallbackInfo& info);
 
@@ -238,8 +245,18 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotSetGrandTotals(const Napi::CallbackInfo& info);
   Napi::Value PivotGetLayout(const Napi::CallbackInfo& info);
   Napi::Value PivotSetLayout(const Napi::CallbackInfo& info);
+  /// Definition read-back; works for pivots created in-session and loaded
+  /// from a package alike. `pivotCacheId` returns `{ status, index: cacheId }`.
+  Napi::Value PivotCacheId(const Napi::CallbackInfo& info);
+  Napi::Value PivotName(const Napi::CallbackInfo& info);
+  Napi::Value PivotGetGrandTotals(const Napi::CallbackInfo& info);
+  Napi::Value PivotRowFieldOrder(const Napi::CallbackInfo& info);
+  Napi::Value PivotColFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldCount(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAdd(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldAt(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldItemCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldItemAt(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClear(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetAxis(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetSort(const Napi::CallbackInfo& info);
@@ -260,6 +277,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotSetColFieldOrder(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldCount(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldAdd(const Napi::CallbackInfo& info);
+  Napi::Value PivotDataFieldAt(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldClear(const Napi::CallbackInfo& info);
   Napi::Value PivotDataFieldSet(const Napi::CallbackInfo& info);
   Napi::Value PivotFilterCount(const Napi::CallbackInfo& info);
@@ -302,6 +320,14 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetShowZeros(const Napi::CallbackInfo& info);
   Napi::Value SetSheetRightToLeft(const Napi::CallbackInfo& info);
   Napi::Value SetSheetTabSelected(const Napi::CallbackInfo& info);
+  /// Scroll origin of the sheet view, and the first visible cell of a frozen
+  /// view's unfrozen pane (which must lie past the frozen rows and columns).
+  Napi::Value SetSheetTopLeft(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetPaneTopLeft(const Napi::CallbackInfo& info);
+  /// The active pane's selection as `{ status, activeRow, activeCol, ranges }`,
+  /// and its setter taking `{ activeRow, activeCol, ranges }`.
+  Napi::Value GetSheetSelection(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetSelection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetViewMode(const Napi::CallbackInfo& info);
   Napi::Value GetSheetColumns(const Napi::CallbackInfo& info);
   Napi::Value SetColumnWidth(const Napi::CallbackInfo& info);

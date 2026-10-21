@@ -38,6 +38,20 @@ Napi::Value Workbook::MoveSheet(const Napi::CallbackInfo& info) {
 // `Workbook::SheetCount` is now emitted by the binding codegen (see
 // `src/node_addon/generated/workbook_counts.cc`).
 
+Napi::Value Workbook::ActiveSheet(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  uint32_t out = 0;
+  const fm_status_t rc = fm_workbook_get_active_sheet(handle_, &out);
+  return MakeIndexResult(env, rc, out);
+}
+
+Napi::Value Workbook::SetActiveSheet(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_workbook_set_active_sheet);
+}
+
 Napi::Value Workbook::SheetName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

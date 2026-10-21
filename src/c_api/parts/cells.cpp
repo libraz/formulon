@@ -243,6 +243,50 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_properties(fm_workbook_t* w
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_set_cell_show_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                          uint32_t col, int32_t show) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_cell_show_phonetic"); rc != 0) {
+    return rc;
+  }
+  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_show_phonetic: cell coordinate out of range");
+  }
+  wb->workbook().sheet(sheet_index).set_cell_show_phonetic(row, col, show != 0);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_cell_show_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                          uint32_t col, int32_t* out_show) {
+  clear_last_error();
+  if (out_show == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_cell_show_phonetic: out_show is NULL");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_show_phonetic"); rc != 0) {
+    return rc;
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  *out_show = cell != nullptr && cell->show_phonetic ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_has_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index,
+                                                                uint32_t row, uint32_t col, int32_t* out_present) {
+  clear_last_error();
+  if (out_present == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_has_cell_phonetic_properties: out_present is NULL");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_has_cell_phonetic_properties"); rc != 0) {
+    return rc;
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  *out_present = cell != nullptr && cell->phonetic_present ? 1 : 0;
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_set_blank(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_blank"); rc != 0) {

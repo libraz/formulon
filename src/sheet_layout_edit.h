@@ -19,7 +19,8 @@ namespace formulon {
 
 inline bool SameColumnLayoutState(const ColumnLayout& lhs, const ColumnLayout& rhs) {
   return lhs.width == rhs.width && lhs.hidden == rhs.hidden && lhs.outline_level == rhs.outline_level &&
-         lhs.has_width == rhs.has_width && lhs.has_style == rhs.has_style && lhs.style_xf == rhs.style_xf;
+         lhs.has_width == rhs.has_width && lhs.has_style == rhs.has_style && lhs.style_xf == rhs.style_xf &&
+         lhs.show_phonetic == rhs.show_phonetic;
 }
 
 // Orders column spans by start, then by end. This lives at namespace scope
@@ -131,13 +132,14 @@ inline void drop_stateless_columns(SheetLayout& layout) {
   columns.erase(std::remove_if(columns.begin(), columns.end(),
                                [](const ColumnLayout& entry) {
                                  return !HasExplicitColumnWidth(entry) && !entry.hidden && entry.outline_level == 0U &&
-                                        !entry.has_style;
+                                        !entry.has_style && !entry.show_phonetic;
                                }),
                 columns.end());
 }
 
 inline bool row_override_is_empty(const RowLayout& entry) {
-  return !entry.has_height && !entry.custom_height && !entry.hidden && entry.outline_level == 0U && !entry.has_style;
+  return !entry.has_height && !entry.custom_height && !entry.hidden && entry.outline_level == 0U && !entry.has_style &&
+         !entry.show_phonetic;
 }
 
 // Intrinsic emptiness does not account for zeroHeight: an existing empty row

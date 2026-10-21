@@ -199,6 +199,10 @@ struct JsSheetView {
   int32_t rightToLeft = 0;
   int32_t tabSelected = 0;
   std::string viewMode;
+  uint32_t topLeftRow = 0U;
+  uint32_t topLeftCol = 0U;
+  uint32_t paneTopLeftRow = 0U;
+  uint32_t paneTopLeftCol = 0U;
 };
 
 /// Return envelope for `Workbook.getSheetView(...)`.

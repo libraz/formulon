@@ -150,10 +150,12 @@ __all__ = [
     "PivotCellKind",
     "PivotDataFieldSpec",
     "PivotDateGrouping",
+    "PivotFieldInfo",
     "PivotFieldSpec",
     "PivotFilterSpec",
     "PivotFilterType",
     "PivotFilterValueKind",
+    "PivotItemInfo",
     "PivotLayout",
     "PivotReportLayout",
     "PivotShowValuesAs",
@@ -1716,6 +1718,10 @@ class SheetView:
     right_to_left: bool = False
     tab_selected: bool = False
     view_mode: str = ""
+    top_left_row: int = 0
+    top_left_col: int = 0
+    pane_top_left_row: int = 0
+    pane_top_left_col: int = 0
 
 
 @dataclass(frozen=True)
@@ -2658,14 +2664,60 @@ class PivotFieldSpec:
     number_format: str = ""
 
 
+@dataclass(frozen=True)
+class PivotFieldInfo:
+    """A pivot field's definition, as read by :meth:`Workbook.pivot_field_at`.
+
+    ``axis`` is ``None`` for a field that sits on no axis. ``cache_field_index``
+    is the bound pivot-cache field (pivot field ``i`` binds to cache field
+    ``i``), ``-1`` when the cache does not cover the field. The ``date_*``
+    members describe the field's date grouping and are only meaningful when
+    ``has_date_group`` is true; an unset year or serial reads ``-1``.
+    """
+
+    source_name: str
+    custom_name: str
+    axis: Optional[PivotAxis]
+    subtotal_top: bool
+    number_format: str
+    cache_field_index: int
+    sort_order: PivotSortOrder
+    sort_by_field: str
+    has_date_group: bool
+    date_granularity: PivotDateGrouping
+    date_calendar: PivotCalendar
+    date_start_year: int
+    date_end_year: int
+    date_interval_days: int
+    date_start_serial: float
+    date_end_serial: float
+
+
+@dataclass(frozen=True)
+class PivotItemInfo:
+    """One pivot-field item, as read by :meth:`Workbook.pivot_field_item_at`.
+
+    ``name`` is the item's own label (empty for an item bound only by cache
+    index); ``cache_index`` indexes the bound cache field's shared items and
+    is ``-1`` for an item bound by label only.
+    """
+
+    name: str
+    cache_index: int
+    visible: bool
+
+
 @dataclass
 class PivotDataFieldSpec:
     """Argument shape for ``pivot_data_field_add`` / ``pivot_data_field_set``.
 
+    An empty or ``None`` ``name`` asks the engine to name the data field from
+    the workbook profile's pivot wording (``"Sum of Sales"`` under en-US,
+    ``"合計 / Sales"`` under ja-JP); that needs ``field_index`` to be in range.
     ``show_as_base_field`` / ``show_as_base_item`` use ``-1`` for "unset".
     """
 
-    name: str
+    name: Optional[str]
     field_index: int
     aggregation: "PivotAggregation | int" = PivotAggregation.SUM
     number_format: str = ""
@@ -3868,6 +3920,26 @@ class Workbook:
         h = self._require()
         return int(LIB.fm_workbook_sheet_count(h))
 
+    def active_sheet(self) -> int:
+        """Index of the active sheet (``activeTab`` of the first workbook view).
+
+        Without workbook views (an XLSB load) the first tab-selected sheet;
+        ``0`` when the workbook records neither.
+        """
+        h = self._require()
+        return _read_count(LIB.fm_workbook_get_active_sheet, h)
+
+    def set_active_sheet(self, index: int) -> None:
+        """Mark the sheet at ``index`` active so :meth:`save` records it.
+
+        Creates a minimal ``<bookViews>`` when the workbook has none; other
+        ``<workbookView>`` attributes survive, and ``firstSheet`` is lowered
+        to ``index`` when larger. The sheet becomes the only tab-selected
+        one. An out-of-range index or a hidden sheet raises.
+        """
+        h = self._require()
+        _check(LIB.fm_workbook_set_active_sheet(h, _uint(index, "index")), "fm_workbook_set_active_sheet")
+
     def sheet_name(self, index: int) -> str:
         """Display name (UTF-8) of the sheet at ``index``."""
         h = self._require()
@@ -4116,6 +4188,52 @@ class Workbook:
             LIB.free(font_ptr)
             LIB.free(type_ptr)
             LIB.free(alignment_ptr)
+
+    def has_phonetic_properties(self, sheet: int, row: int, col: int) -> bool:
+        """Whether the cell's phonetic properties are explicit.
+
+        True when they came from a ``<phoneticPr>`` element or
+        :meth:`set_phonetic_properties` (an all-zero triple included), false
+        for the state an absent element resolves to. The JS bindings report
+        it as ``present`` on the phonetic-properties result.
+        """
+        h = self._require()
+        return bool(
+            _read_count(
+                LIB.fm_workbook_has_cell_phonetic_properties,
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(row, "row"),
+                _uint(col, "col"),
+            )
+        )
+
+    def get_show_phonetic(self, sheet: int, row: int, col: int) -> bool:
+        """Whether the cell shows its phonetic guide (``<c ph="1">``)."""
+        h = self._require()
+        return bool(
+            _read_count(
+                LIB.fm_workbook_get_cell_show_phonetic,
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(row, "row"),
+                _uint(col, "col"),
+            )
+        )
+
+    def set_show_phonetic(self, sheet: int, row: int, col: int, show: bool) -> None:
+        """Set the cell's "Show Phonetic" display flag.
+
+        Independent of the readings: value writes clear the readings but keep
+        this flag.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_workbook_set_cell_show_phonetic(
+                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), 1 if show else 0
+            ),
+            "fm_workbook_set_cell_show_phonetic",
+        )
 
     def get_phonetic(self, sheet: int, row: int, col: int) -> str:
         """Return the cell's phonetic guide, or ``""`` when it has none.
@@ -6738,6 +6856,10 @@ class Workbook:
                 right_to_left=bool(d["right_to_left"]),
                 tab_selected=bool(d["tab_selected"]),
                 view_mode=LIB.read_cstr(d["view_mode"]) or "",
+                top_left_row=d["top_left_row"],
+                top_left_col=d["top_left_col"],
+                pane_top_left_row=d["pane_top_left_row"],
+                pane_top_left_col=d["pane_top_left_col"],
             )
         finally:
             LIB.free(ptr)
@@ -6817,6 +6939,85 @@ class Workbook:
             LIB.fm_sheet_set_right_to_left(h, _uint(sheet, "sheet_index"), 1 if right_to_left else 0),
             "fm_sheet_set_right_to_left",
         )
+
+    def set_sheet_top_left(self, sheet: int, row: int, col: int) -> None:
+        """Set the sheet view's scroll origin (``topLeftCell``)."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_top_left(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")),
+            "fm_sheet_set_top_left",
+        )
+
+    def set_sheet_pane_top_left(self, sheet: int, row: int, col: int) -> None:
+        """Set the first visible cell of a frozen view's unfrozen pane.
+
+        The cell must lie past the frozen rows and columns, and the sheet must
+        be frozen. Changing the freeze resets it to the first unfrozen cell.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_pane_top_left(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")),
+            "fm_sheet_set_pane_top_left",
+        )
+
+    def get_sheet_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]:
+        """Return ``((active_row, active_col), ranges)`` of the active pane's selection.
+
+        A sheet that stores no selection reports A1 with the single range A1.
+        XLSX carries the selection; XLSB load and save do not.
+        """
+        h = self._require()
+        row_ptr = _alloc_out_ptr()
+        col_ptr = _alloc_out_ptr()
+        total_ptr = _alloc_out_ptr()
+        array_ptr = 0
+        try:
+            # Size the buffer first, then fetch.
+            _check(
+                LIB.fm_sheet_get_selection(h, _uint(sheet, "sheet_index"), row_ptr, col_ptr, 0, 0, total_ptr),
+                "fm_sheet_get_selection",
+            )
+            total = LIB.read_u32(total_ptr)
+            owned: List[int] = []
+            array_ptr = _alloc_struct_array(S.MERGE_RANGE, total, owned)
+            _check(
+                LIB.fm_sheet_get_selection(
+                    h, _uint(sheet, "sheet_index"), row_ptr, col_ptr, array_ptr, _uint(total, "capacity"), total_ptr
+                ),
+                "fm_sheet_get_selection",
+            )
+            size = S.MERGE_RANGE.size
+            ranges = [_decode_merge_at(array_ptr + i * size) for i in range(total)]
+            return (LIB.read_u32(row_ptr), LIB.read_u32(col_ptr)), ranges
+        finally:
+            LIB.free(row_ptr)
+            LIB.free(col_ptr)
+            LIB.free(total_ptr)
+            if array_ptr:
+                LIB.free(array_ptr)
+
+    def set_sheet_selection(
+        self, sheet: int, active_row: int, active_col: int, ranges: Sequence[MergeRange] = ()
+    ) -> None:
+        """Replace the active pane's selection; no ``ranges`` selects the active cell alone."""
+        h = self._require()
+        owned: List[int] = []
+        ptr = _pack_merge_array(list(ranges), owned)
+        try:
+            _check(
+                LIB.fm_sheet_set_selection(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(active_row, "active_row"),
+                    _uint(active_col, "active_col"),
+                    ptr,
+                    _uint(len(ranges), "count"),
+                ),
+                "fm_sheet_set_selection",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
 
     def set_sheet_tab_selected(self, sheet: int, selected: bool) -> None:
         """Set the sheet's ``tabSelected`` flag."""
@@ -9221,6 +9422,164 @@ class Workbook:
             ),
             "fm_workbook_pivot_set_grand_totals",
         )
+
+    def pivot_cache_id(self, sheet: int, pivot_index: int) -> int:
+        """Return the ``cache_id`` of the pivot cache the pivot draws from."""
+        h = self._require()
+        return _read_count(
+            LIB.fm_workbook_pivot_get_cache_id, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+        )
+
+    def pivot_name(self, sheet: int, pivot_index: int) -> str:
+        """Return the pivot's name."""
+        h = self._require()
+        return _read_cstr_out(
+            LIB.fm_workbook_pivot_get_name, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
+        )
+
+    def pivot_grand_totals(self, sheet: int, pivot_index: int) -> Tuple[bool, bool]:
+        """Return ``(rows, cols)``, the flags :meth:`pivot_set_grand_totals` writes."""
+        h = self._require()
+        rows = _alloc_out_ptr()
+        cols = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_workbook_pivot_get_grand_totals(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), rows, cols
+                ),
+                "fm_workbook_pivot_get_grand_totals",
+            )
+            return LIB.read_i32(rows) != 0, LIB.read_i32(cols) != 0
+        finally:
+            LIB.free(rows)
+            LIB.free(cols)
+
+    def _pivot_get_field_order(self, fn, sheet: int, pivot_index: int) -> List[int]:
+        h = self._require()
+        out_ptr = _alloc_out_ptr()
+        out_count = _alloc_out_ptr()
+        try:
+            _check(
+                fn(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out_ptr, out_count),
+                getattr(fn, "__name__", "pivot_get_field_order"),
+            )
+            count = LIB.read_u32(out_count)
+            if count == 0:
+                return []
+            raw = LIB.read_bytes(LIB.read_u32(out_ptr), 4 * count)
+            return list(struct.unpack("<%dI" % count, raw))
+        finally:
+            LIB.free(out_ptr)
+            LIB.free(out_count)
+
+    def pivot_row_field_order(self, sheet: int, pivot_index: int) -> List[int]:
+        """Return the row-axis field order (the list :meth:`pivot_set_row_field_order` takes)."""
+        return self._pivot_get_field_order(LIB.fm_workbook_pivot_get_row_field_order, sheet, pivot_index)
+
+    def pivot_col_field_order(self, sheet: int, pivot_index: int) -> List[int]:
+        """Return the column-axis field order. Same contract as rows."""
+        return self._pivot_get_field_order(LIB.fm_workbook_pivot_get_col_field_order, sheet, pivot_index)
+
+    def pivot_field_at(self, sheet: int, pivot_index: int, field_idx: int) -> PivotFieldInfo:
+        """Read the definition of pivot field ``field_idx``."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PIVOT_FIELD_INFO)
+        try:
+            _check(
+                LIB.fm_workbook_pivot_field_at(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
+                    ptr,
+                ),
+                "fm_workbook_pivot_field_at",
+            )
+            d = S.PIVOT_FIELD_INFO.unpack(LIB, ptr)
+            return PivotFieldInfo(
+                source_name=LIB.read_cstr(d["source_name"]),
+                custom_name=LIB.read_cstr(d["custom_name"]),
+                axis=PivotAxis(d["axis"]) if d["axis"] >= 0 else None,
+                subtotal_top=d["subtotal_top"] != 0,
+                number_format=LIB.read_cstr(d["number_format"]),
+                cache_field_index=d["cache_field_index"],
+                sort_order=PivotSortOrder(d["sort_order"]),
+                sort_by_field=LIB.read_cstr(d["sort_by_field"]),
+                has_date_group=d["has_date_group"] != 0,
+                date_granularity=PivotDateGrouping(d["date_granularity"]),
+                date_calendar=PivotCalendar(d["date_calendar"]),
+                date_start_year=d["date_start_year"],
+                date_end_year=d["date_end_year"],
+                date_interval_days=d["date_interval_days"],
+                date_start_serial=d["date_start_serial"],
+                date_end_serial=d["date_end_serial"],
+            )
+        finally:
+            LIB.free(ptr)
+
+    def pivot_field_item_count(self, sheet: int, pivot_index: int, field_idx: int) -> int:
+        """Return the number of items in pivot field ``field_idx``'s item list."""
+        h = self._require()
+        return _read_count(
+            LIB.fm_workbook_pivot_field_item_count,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(pivot_index, "pivot_index"),
+            _uint(field_idx, "field_idx"),
+        )
+
+    def pivot_field_item_at(self, sheet: int, pivot_index: int, field_idx: int, item_idx: int) -> PivotItemInfo:
+        """Read item ``item_idx`` of pivot field ``field_idx``."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PIVOT_ITEM_INFO)
+        try:
+            _check(
+                LIB.fm_workbook_pivot_field_item_at(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
+                    _uint(item_idx, "item_idx"),
+                    ptr,
+                ),
+                "fm_workbook_pivot_field_item_at",
+            )
+            d = S.PIVOT_ITEM_INFO.unpack(LIB, ptr)
+            return PivotItemInfo(
+                name=LIB.read_cstr(d["name"]),
+                cache_index=d["cache_index"],
+                visible=d["visible"] != 0,
+            )
+        finally:
+            LIB.free(ptr)
+
+    def pivot_data_field_at(self, sheet: int, pivot_index: int, data_field_idx: int) -> PivotDataFieldSpec:
+        """Read data field ``data_field_idx`` in the shape ``pivot_data_field_add`` accepts."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PIVOT_DATA_FIELD_SPEC)
+        try:
+            _check(
+                LIB.fm_workbook_pivot_data_field_at(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(data_field_idx, "data_field_idx"),
+                    ptr,
+                ),
+                "fm_workbook_pivot_data_field_at",
+            )
+            d = S.PIVOT_DATA_FIELD_SPEC.unpack(LIB, ptr)
+            return PivotDataFieldSpec(
+                name=LIB.read_cstr(d["name"]),
+                field_index=d["field_index"],
+                aggregation=PivotAggregation(d["aggregation"]),
+                number_format=LIB.read_cstr(d["number_format"]),
+                show_as=PivotShowValuesAs(d["show_as"]),
+                show_as_base_field=d["show_as_base_field"],
+                show_as_base_item=d["show_as_base_item"],
+            )
+        finally:
+            LIB.free(ptr)
 
     def pivot_field_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of fields configured on the pivot."""

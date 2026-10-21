@@ -122,6 +122,58 @@ bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::ui
   return true;
 }
 
+namespace {
+
+constexpr pugi::xml_parse_status kNoParseError = pugi::status_ok;
+
+pugi::xml_node first_workbook_view(const pugi::xml_document& document) {
+  const pugi::xml_node root = document.document_element();
+  if (!root || std::string_view(root.name()) != "bookViews") {
+    return pugi::xml_node();
+  }
+  return root.child("workbookView");
+}
+
+}  // namespace
+
+std::uint32_t book_views_active_tab(const std::string& book_views_xml) {
+  pugi::xml_document document;
+  if (book_views_xml.empty() ||
+      document.load_buffer(book_views_xml.data(), book_views_xml.size(), pugi::parse_default, pugi::encoding_utf8)
+              .status != kNoParseError) {
+    return 0U;
+  }
+  std::uint32_t index = 0;
+  if (!io::parse_xsd_nonneg_int(first_workbook_view(document).attribute("activeTab").value(), &index)) {
+    return 0U;
+  }
+  return index;
+}
+
+void set_book_views_active_tab(std::string& book_views_xml, std::uint32_t index) {
+  pugi::xml_document document;
+  pugi::xml_node view;
+  if (!book_views_xml.empty() &&
+      document.load_buffer(book_views_xml.data(), book_views_xml.size(),
+                           pugi::parse_default | pugi::parse_comments | pugi::parse_pi | pugi::parse_ws_pcdata,
+                           pugi::encoding_utf8)
+              .status == kNoParseError) {
+    view = first_workbook_view(document);
+  }
+  if (!view) {
+    book_views_xml = "<bookViews><workbookView activeTab=\"" + std::to_string(index) + "\"/></bookViews>";
+    return;
+  }
+  pugi::xml_attribute active = view.attribute("activeTab");
+  (active ? active : view.append_attribute("activeTab")).set_value(index);
+  std::uint32_t first = 0;
+  if (pugi::xml_attribute first_attr = view.attribute("firstSheet");
+      first_attr && io::parse_xsd_nonneg_int(first_attr.value(), &first) && first > index) {
+    first_attr.set_value(index);
+  }
+  book_views_xml = io::raw_xml(document.document_element());
+}
+
 void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
                                      const std::vector<const parser::RefTransform*>& per_sheet,
                                      std::vector<TableMetadata>& tables,

@@ -29,10 +29,18 @@ namespace io {
 namespace xlsb {
 namespace {
 
+/// The style word handed to `EmitCellHeader` carries `fPhShow` in bit 24,
+/// above the 24-bit style index.
+constexpr std::uint32_t kShowPhoneticShift = 24U;
+
+std::uint32_t StyleWord(const Cell& cell) {
+  return (cell.xf_index & 0xFFFFFFU) | (cell.show_phonetic ? (1U << kShowPhoneticShift) : 0U);
+}
+
 /// Emits the standard XLSB cell-header (column, iStyleRef, fPhShow):
 ///   * column    : u32
 ///   * iStyleRef : 3 bytes, little-endian (index into the xf table)
-///   * fPhShow   : u8 (0)
+///   * fPhShow   : u8 (bit 0 = the style word's bit 24)
 ///
 /// `xf_index` is the cell's style-table index; it must round-trip so a
 /// styled cell keeps its formatting through `write_xlsb -> read_xlsb`.
@@ -45,7 +53,7 @@ void EmitCellHeader(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint
   emit_u8(dst, static_cast<std::uint8_t>(xf_index & 0xFFU));
   emit_u8(dst, static_cast<std::uint8_t>((xf_index >> 8) & 0xFFU));
   emit_u8(dst, static_cast<std::uint8_t>((xf_index >> 16) & 0xFFU));
-  emit_u8(dst, 0);  // fPhShow
+  emit_u8(dst, static_cast<std::uint8_t>((xf_index >> kShowPhoneticShift) & 0x01U));  // fPhShow
 }
 
 /// Returns the `BErr` byte a cell value of `e` is stored as (see
@@ -279,14 +287,14 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
       if (downgraded_formula_count != nullptr) {
         ++*downgraded_formula_count;
       }
-      EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
+      EmitLiteralCellRecord(dst, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
       return Expected<void, Error>::Ok();
     }
-    EmitFormulaCellRecord(dst, col, cell.xf_index, cell.cached_value, formula_or.value(), always_calculates);
+    EmitFormulaCellRecord(dst, col, StyleWord(cell), cell.cached_value, formula_or.value(), always_calculates);
     return Expected<void, Error>::Ok();
   }
 
-  EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
+  EmitLiteralCellRecord(dst, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
   return Expected<void, Error>::Ok();
 }
 
@@ -310,13 +318,13 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
     if (downgraded_to_literal != nullptr) {
       *downgraded_to_literal = true;
     }
-    EmitLiteralCellRecord(dst, col, cell.xf_index, anchor_value, cell.phonetic_runs, cell.phonetic_props, sst);
+    EmitLiteralCellRecord(dst, col, StyleWord(cell), anchor_value, cell.phonetic_runs, cell.phonetic_props, sst);
     return Expected<void, Error>::Ok();
   }
   // The anchor's own cell record is a PtgExp shell typed by the spilled
   // value at the anchor; the real tokens go into the following BrtArrFmla.
   const EncodedFormula shell = MakePtgExpShell(anchor_row, col);
-  EmitFormulaCellRecord(dst, col, cell.xf_index, anchor_value, shell, always_calculates);
+  EmitFormulaCellRecord(dst, col, StyleWord(cell), anchor_value, shell, always_calculates);
   EmitArrayFormulaRecord(dst, anchor_row, last_row, col, last_col, formula_or.value(), always_calculates);
   return Expected<void, Error>::Ok();
 }

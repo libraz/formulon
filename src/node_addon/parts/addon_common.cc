@@ -559,11 +559,9 @@ Napi::Value JsBool(Napi::Env env, int32_t v) {
 
 void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_spec_t& out,
                         std::string& name_buf, std::string& nfmt_buf, bool& has_nfmt) {
-  // `name` is required; an omitted key passes NULL through rather than
-  // the coerced literal string "undefined" `.ToString()` would otherwise
-  // produce, so the C ABI's own kBindingNullPointer check is what rejects
-  // the call. See the `sourceName` comment in `pivot_table.cc`'s
-  // `PivotFieldAdd`.
+  // An omitted `name` passes NULL through rather than the coerced literal
+  // string "undefined" `.ToString()` would otherwise produce, so the C ABI
+  // derives the data field's name from the workbook profile.
   const bool has_name = reader.String(spec, "name", &name_buf);
   has_nfmt = reader.String(spec, "numberFormat", &nfmt_buf);
   out.name = has_name ? name_buf.c_str() : nullptr;

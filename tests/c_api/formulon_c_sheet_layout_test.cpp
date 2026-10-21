@@ -37,11 +37,12 @@ static_assert(sizeof(fm_row_layout_t) == 40U);
 // the end of its own storage rather than getting a diagnosable error. Pin the
 // size here: changing the struct must break the build and be acknowledged,
 // not merely be reflected in the bindings afterwards.
-static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4U ? 44U : 48U));
+static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4U ? 60U : 64U));
 static_assert(offsetof(fm_sheet_view_t, tab_hidden) == 12U);
 static_assert(offsetof(fm_sheet_view_t, visibility) == 16U);
 static_assert(offsetof(fm_sheet_view_t, tab_selected) == 36U);
 static_assert(offsetof(fm_sheet_view_t, view_mode) == 40U);
+static_assert(offsetof(fm_sheet_view_t, top_left_row) == (sizeof(void*) == 4U ? 44U : 48U));
 
 /// The status every documented rejection on this surface returns. Pinning
 /// the value rather than "non-zero" is what makes the assertions below

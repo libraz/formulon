@@ -238,6 +238,15 @@ enum class SheetVisibility : std::uint8_t {
   kVeryHidden = 2,
 };
 
+/// One `<selection>` of a `<sheetView>`: the active cell and selected ranges
+/// of one pane. Stored as the OOXML spellings so unusual `sqref` forms
+/// (whole rows or columns, several ranges) round-trip verbatim.
+struct SheetSelection {
+  std::string pane;         ///< `pane`; empty is the schema default `topLeft`, as is "topLeft".
+  std::string active_cell;  ///< `activeCell` (A1 form); empty when absent.
+  std::string sqref;        ///< `sqref`, space-separated ranges; empty is the active cell alone.
+};
+
 /// Per-sheet view state (zoom, frozen panes, tab visibility).
 ///
 /// Mirrors the OOXML `<sheetView>` and `<sheetPr>` attributes that survive
@@ -273,6 +282,57 @@ struct SheetView {
   /// `view` mode: empty (== "normal"), "pageBreakPreview", or
   /// "pageLayout". Stored verbatim so unknown future values round-trip.
   std::string view_mode;
+  /// `<sheetView topLeftCell>`: the scroll origin of the top-left pane. Empty
+  /// is the default `A1`.
+  std::string top_left_cell;
+  /// `<pane topLeftCell>` and `activePane` of a frozen view. Empty means
+  /// derived: the first unfrozen cell, and the pane the splits imply
+  /// (`bottomRight`, `topRight` or `bottomLeft`). Meaningless without a freeze.
+  std::string pane_top_left_cell;
+  std::string active_pane;
+  /// Every `<selection>`, in document order (at most one per pane).
+  std::vector<SheetSelection> selections;
+
+  /// Panes compare by name with the default `topLeft` spelled out.
+  static std::string_view pane_key(std::string_view pane) noexcept {
+    return pane.empty() ? std::string_view("topLeft") : pane;
+  }
+
+  /// The pane a frozen view is active in: `active_pane` when stored, else
+  /// the pane the splits imply. Empty when nothing is frozen.
+  std::string_view effective_active_pane() const noexcept {
+    if (freeze_rows == 0U && freeze_cols == 0U) {
+      return {};
+    }
+    if (!active_pane.empty()) {
+      return active_pane;
+    }
+    return freeze_rows != 0U ? (freeze_cols != 0U ? "bottomRight" : "bottomLeft") : "topRight";
+  }
+
+  /// Freezes `rows` x `cols` (zero for none). A change re-derives the pane
+  /// origin and active pane, and re-homes the active selection to the new
+  /// active pane; the selections of the other panes are dropped.
+  void set_freeze(std::uint32_t rows, std::uint32_t cols) {
+    if (rows == freeze_rows && cols == freeze_cols) {
+      return;
+    }
+    std::vector<SheetSelection> kept;
+    for (SheetSelection& selection : selections) {
+      if (pane_key(selection.pane) == pane_key(effective_active_pane())) {
+        kept.push_back(std::move(selection));
+        break;
+      }
+    }
+    freeze_rows = rows;
+    freeze_cols = cols;
+    pane_top_left_cell.clear();
+    active_pane.clear();
+    selections = std::move(kept);
+    for (SheetSelection& selection : selections) {
+      selection.pane = pane_key(effective_active_pane());
+    }
+  }
 
   /// The one visibility state the two bits stand for.
   ///
@@ -821,7 +881,16 @@ class Sheet {
   /// the readings does not silently reset the guide's font, kana form and
   /// alignment. The writer emits the element only for a cell that has
   /// runs, so setting these on an unannotated cell has no on-disk effect.
-  void set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props);
+  ///
+  /// `explicit_pr` records whether the triple came from an explicit
+  /// `<phoneticPr>` (the default, and what every setter means) rather than
+  /// the all-zero state an absent element resolves to; it only feeds
+  /// `Cell::phonetic_present`.
+  void set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props, bool explicit_pr = true);
+
+  /// Sets the cell's "Show Phonetic" display flag (`<c ph="1">`),
+  /// materialising a blank cell when needed. Value writes leave it alone.
+  void set_cell_show_phonetic(std::uint32_t row, std::uint32_t col, bool show);
 
   /// Stores the cellXfs index for the cell at `(row, col)`, materialising a
   /// blank cell when needed. The assignment is tracked even for

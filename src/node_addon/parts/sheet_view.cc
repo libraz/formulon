@@ -32,6 +32,10 @@ Napi::Object DefaultSheetView(Napi::Env env) {
   view.Set("rightToLeft", Napi::Number::New(env, 0));
   view.Set("tabSelected", Napi::Number::New(env, 0));
   view.Set("viewMode", Napi::String::New(env, ""));
+  view.Set("topLeftRow", Napi::Number::New(env, 0));
+  view.Set("topLeftCol", Napi::Number::New(env, 0));
+  view.Set("paneTopLeftRow", Napi::Number::New(env, 0));
+  view.Set("paneTopLeftCol", Napi::Number::New(env, 0));
   return view;
 }
 
@@ -142,6 +146,10 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("rightToLeft", Napi::Number::New(env, v.right_to_left));
   view.Set("tabSelected", Napi::Number::New(env, v.tab_selected));
   view.Set("viewMode", JsString(env, v.view_mode));
+  view.Set("topLeftRow", Napi::Number::New(env, v.top_left_row));
+  view.Set("topLeftCol", Napi::Number::New(env, v.top_left_col));
+  view.Set("paneTopLeftRow", Napi::Number::New(env, v.pane_top_left_row));
+  view.Set("paneTopLeftCol", Napi::Number::New(env, v.pane_top_left_col));
   return MakeFieldResult(env, MakeOkStatus(env), "view", view);
 }
 
@@ -273,6 +281,71 @@ Napi::Value Workbook::SetSheetShowZeros(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetSheetRightToLeft(const Napi::CallbackInfo& info) {
   return InvokeSheetFlag(*this, info, &fm_sheet_set_right_to_left);
+}
+
+Napi::Value Workbook::SetSheetTopLeft(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_sheet_set_top_left);
+}
+
+Napi::Value Workbook::SetSheetPaneTopLeft(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_sheet_set_pane_top_left);
+}
+
+Napi::Value Workbook::GetSheetSelection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  uint32_t row = 0;
+  uint32_t col = 0;
+  std::size_t total = 0;
+  fm_status_t rc = handle_ != nullptr ? fm_sheet_get_selection(handle_, sheet, &row, &col, nullptr, 0, &total)
+                                      : kBindingInvalidHandle;
+  std::vector<fm_merge_range> found(total);
+  if (rc == 0) {
+    rc = fm_sheet_get_selection(handle_, sheet, &row, &col, found.data(), found.size(), &total);
+  }
+  Napi::Array ranges = Napi::Array::New(env);
+  for (std::size_t i = 0; rc == 0 && i < found.size(); ++i) {
+    ranges.Set(static_cast<uint32_t>(i), RangeToJs(env, found[i]));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("activeRow", Napi::Number::New(env, rc == 0 ? row : 0U));
+  out.Set("activeCol", Napi::Number::New(env, rc == 0 ? col : 0U));
+  out.Set("ranges", ranges);
+  return out;
+}
+
+Napi::Value Workbook::SetSheetSelection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  if (info.Length() < 2 || !info[1].IsObject()) {
+    return MakeBindingArgumentError(env, "setSheetSelection: `selection` must be an object");
+  }
+  const Napi::Object selection = info[1].As<Napi::Object>();
+  CheckedSpecReader reader(env);
+  const uint32_t row = reader.U32(selection, "activeRow", 0U);
+  const uint32_t col = reader.U32(selection, "activeCol", 0U);
+  std::vector<fm_merge_range> ranges;
+  Napi::Array array;
+  if (reader.Array(selection, "ranges", &array)) {
+    const uint32_t n = array.Length();
+    for (uint32_t i = 0; i < n && reader.ok(); ++i) {
+      Napi::Value value;
+      Napi::Object object;
+      fm_merge_range range{};
+      if (reader.ArrayElement(array, i, &value) && reader.Object(value, "ranges[]", &object) &&
+          ReadMergeRange(reader, object, &range)) {
+        ranges.push_back(range);
+      }
+    }
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fm_sheet_set_selection(handle_, sheet, row, col, ranges.data(), ranges.size()));
 }
 
 Napi::Value Workbook::SetSheetTabSelected(const Napi::CallbackInfo& info) {

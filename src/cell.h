@@ -101,18 +101,29 @@ struct Cell {
   PhoneticProperties phonetic_props;
   /// Dynamic-array formula: loaded from the file's array-formula form, set by
   /// `Workbook::set_cell_formula` through `eval::may_produce_spill`.
-  bool dynamic_array = false;
+  bool dynamic_array : 1;
   /// True when a caller or reader explicitly assigned this cell's style,
   /// including an assignment to the default XF (index zero). This keeps an
   /// explicit blank cell distinct from a row-vector gap materialised while
   /// growing storage for a later column.
-  bool has_explicit_xf = false;
+  bool has_explicit_xf : 1;
+  /// OOXML `<c ph="1">` ("Show Phonetic"): the cell displays its furigana.
+  /// A display property, so value writes leave it alone.
+  bool show_phonetic : 1;
+  /// True when `phonetic_props` came from an explicit `<phoneticPr>` element
+  /// (or a setter) rather than the all-zero state Excel infers for an absent
+  /// one. Reporting only; the writer spells the element out beside any runs.
+  bool phonetic_present : 1;
   /// Columns and rows of the legacy array formula (CSE) block anchored at
   /// this cell: the fixed rectangle the formula fills, which it never spills
   /// past. Zero rows for a cell that anchors none. Both fit the tail padding
   /// after the flags.
   std::uint16_t array_block_cols = 0;
   std::uint32_t array_block_rows = 0;
+
+  // The four flags above are bit-fields so they share one byte with room to
+  // spare; C++17 forbids their default member initializers.
+  Cell() noexcept : dynamic_array(false), has_explicit_xf(false), show_phonetic(false), phonetic_present(false) {}
 };
 
 }  // namespace formulon

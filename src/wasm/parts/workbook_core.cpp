@@ -274,6 +274,24 @@ JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
   return status_from_rc(fm_workbook_move_sheet(handle_, fromIdx, toIdx));
 }
 
+JsAddStyleResult JsWorkbook::activeSheet() const {
+  JsAddStyleResult r;
+  if (handle_ == nullptr) {
+    r.status = invalid_handle_status();
+    return r;
+  }
+  uint32_t out = 0;
+  const fm_status_t rc = fm_workbook_get_active_sheet(handle_, &out);
+  return index_result(rc, out);
+}
+
+JsStatus JsWorkbook::setActiveSheet(uint32_t sheet) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_workbook_set_active_sheet(handle_, sheet));
+}
+
 JsStatus JsWorkbook::removeSheet(uint32_t index) {
   if (handle_ == nullptr) {
     return invalid_handle_status();

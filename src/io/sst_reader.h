@@ -52,6 +52,9 @@ struct SharedStringTable {
   /// runs, defaulted when the entry carries none. Held parallel to
   /// `entries` under the same invariant as `phonetic_for_entries`.
   std::vector<PhoneticProperties> phonetic_props_for_entries;
+  /// `phonetic_pr_present_for_entries[i]` is true when the `i`-th `<si>`
+  /// carried an explicit `<phoneticPr>`. Parallel to `entries`.
+  std::vector<bool> phonetic_pr_present_for_entries;
 };
 
 /// Parses an OOXML shared-strings part.

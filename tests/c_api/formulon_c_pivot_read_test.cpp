@@ -266,3 +266,71 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   EXPECT_EQ(pivot_xml.find("<location ref=\"D1:E5\""), std::string::npos)
       << "the authored span no longer describes the report; xml=" << pivot_xml;
 }
+
+TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
+  const std::vector<std::uint8_t> bytes = BuildPivotWorkbookBytes();
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb.handle), 0) << fm_last_error_message();
+
+  std::uint32_t cache_id = 99;
+  ASSERT_EQ(fm_workbook_pivot_get_cache_id(wb.handle, 1, 0, &cache_id), 0) << fm_last_error_message();
+  EXPECT_EQ(cache_id, 0U);
+
+  const char* name = nullptr;
+  ASSERT_EQ(fm_workbook_pivot_get_name(wb.handle, 1, 0, &name), 0);
+  EXPECT_STREQ(name, "PivotTable1");
+
+  std::int32_t grand_rows = -1;
+  std::int32_t grand_cols = -1;
+  ASSERT_EQ(fm_workbook_pivot_get_grand_totals(wb.handle, 1, 0, &grand_rows, &grand_cols), 0);
+  EXPECT_EQ(grand_rows, 1);
+  EXPECT_EQ(grand_cols, 1);
+
+  fm_pivot_field_info_t region{};
+  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 1, 0, 0, &region), 0) << fm_last_error_message();
+  EXPECT_STREQ(region.source_name, "Region");
+  EXPECT_STREQ(region.custom_name, "Region");
+  EXPECT_EQ(region.axis, FM_PIVOT_AXIS_ROW);
+  EXPECT_EQ(region.subtotal_top, 1);
+  EXPECT_STREQ(region.number_format, "");
+  EXPECT_EQ(region.cache_field_index, 0);
+  // A field carrying an explicit item list sorts by it, as OOXML's default sortType does.
+  EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_MANUAL);
+  EXPECT_STREQ(region.sort_by_field, "");
+  EXPECT_EQ(region.has_date_group, 0);
+  EXPECT_EQ(region.date_start_year, -1);
+  EXPECT_EQ(region.date_end_serial, -1.0);
+
+  fm_pivot_field_info_t amount{};
+  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 1, 0, 1, &amount), 0);
+  EXPECT_EQ(amount.axis, FM_PIVOT_AXIS_VALUE);
+  EXPECT_EQ(amount.cache_field_index, 1);
+
+  std::size_t item_count = 99;
+  ASSERT_EQ(fm_workbook_pivot_field_item_count(wb.handle, 1, 0, 0, &item_count), 0);
+  ASSERT_GE(item_count, 2U);
+  for (std::size_t i = 0; i < 2U; ++i) {
+    fm_pivot_item_info_t item{};
+    ASSERT_EQ(fm_workbook_pivot_field_item_at(wb.handle, 1, 0, 0, i, &item), 0);
+    EXPECT_EQ(item.cache_index, static_cast<std::int32_t>(i));
+    EXPECT_EQ(item.visible, 1);
+    EXPECT_STREQ(item.name, i == 0 ? "North" : "South");
+  }
+
+  fm_pivot_data_field_spec_t data_field{};
+  ASSERT_EQ(fm_workbook_pivot_data_field_at(wb.handle, 1, 0, 0, &data_field), 0);
+  EXPECT_STREQ(data_field.name, "Sum of Amount");
+  EXPECT_EQ(data_field.field_index, 1U);
+  EXPECT_EQ(data_field.aggregation, FM_PIVOT_AGG_SUM);
+  EXPECT_EQ(data_field.show_as, FM_PIVOT_SHOW_AS_NORMAL);
+  EXPECT_EQ(data_field.show_as_base_field, -1);
+  EXPECT_EQ(data_field.show_as_base_item, -1);
+
+  const std::uint32_t* order = nullptr;
+  std::size_t order_count = 99;
+  ASSERT_EQ(fm_workbook_pivot_get_row_field_order(wb.handle, 1, 0, &order, &order_count), 0);
+  ASSERT_EQ(order_count, 1U);
+  EXPECT_EQ(order[0], 0U);
+  ASSERT_EQ(fm_workbook_pivot_get_col_field_order(wb.handle, 1, 0, &order, &order_count), 0);
+  EXPECT_EQ(order_count, 0U);
+}

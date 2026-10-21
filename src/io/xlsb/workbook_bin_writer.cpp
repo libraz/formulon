@@ -607,7 +607,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   //   * BrtFileVersion : appName "xl", lastEdited/lowestEdited "7", build.
   //   * BrtWbProp      : default flags + defaultThemeVersion 202300.
   //   * BrtWbView      : a single window view; itabCur (offset 24, u32) is
-  //                      patched below to the tab-selected sheet.
+  //                      patched below to the active sheet.
   // Omitting these produced a workbook stream Excel rejected.
   static const std::vector<std::uint8_t> kFileVersionPayload = {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
@@ -631,16 +631,10 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     return std::move(protection.error());
   }
   emit_record(body, kBrtBeginBookViews, ByteSpan{});
-  // itabCur (u32 at offset 24): equals the tab-selected sheet's
-  // index; a mismatch made Excel show every tab selected.
+  // itabCur (u32 at offset 24): the active sheet's index, which must be a
+  // tab-selected sheet; a mismatch made Excel show every tab selected.
   std::vector<std::uint8_t> wb_view_payload = kWbViewPayload;
-  std::uint32_t itab_cur = 0U;
-  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    if (wb.sheet(i).view().tab_selected) {
-      itab_cur = static_cast<std::uint32_t>(i);
-      break;
-    }
-  }
+  const std::uint32_t itab_cur = wb.active_sheet();
   wb_view_payload[24] = static_cast<std::uint8_t>(itab_cur & 0xFFU);
   wb_view_payload[25] = static_cast<std::uint8_t>((itab_cur >> 8) & 0xFFU);
   wb_view_payload[26] = static_cast<std::uint8_t>((itab_cur >> 16) & 0xFFU);

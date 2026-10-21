@@ -69,6 +69,13 @@ void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
       view.view_mode.assign(mode);
     }
   }
+  view.top_left_cell = attr_str(sheet_view, "topLeftCell");
+  for (pugi::xml_node sel = sheet_view.child("selection"); sel; sel = sel.next_sibling("selection")) {
+    const std::string_view pane_name = attr_str(sel, "pane");
+    view.selections.push_back(SheetSelection{pane_name.empty() ? std::string("topLeft") : std::string(pane_name),
+                                             std::string(attr_str(sel, "activeCell")),
+                                             std::string(attr_str(sel, "sqref"))});
+  }
   pugi::xml_node pane = sheet_view.child("pane");
   if (pane) {
     // `ST_PaneState` has three values; two of them freeze. `frozenSplit`
@@ -84,6 +91,8 @@ void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
       if (x > 0) {
         view.freeze_cols = static_cast<std::uint32_t>(x);
       }
+      view.pane_top_left_cell = attr_str(pane, "topLeftCell");
+      view.active_pane = attr_str(pane, "activePane");
     }
   }
 }
@@ -193,7 +202,9 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
     if (pugi::xml_attribute outline_attr = col.attribute("outlineLevel"); outline_attr) {
       entry.outline_level = parse_outline_level(outline_attr.value());
     }
-    if (!entry.has_width && !entry.has_style && !col.attribute("hidden") && !col.attribute("outlineLevel")) {
+    entry.show_phonetic = read_xsd_bool(col, "phonetic", false);
+    if (!entry.has_width && !entry.has_style && !col.attribute("hidden") && !col.attribute("outlineLevel") &&
+        !entry.show_phonetic) {
       // A span with only a marker such as `bestFit` has no observable
       // layout state in this model.
       continue;
@@ -228,7 +239,8 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     // all-defaults entry.
     double height = 0.0;
     const bool has_height = ht_attr && parse_xsd_nonneg_double(attr_str(row, "ht"), &height);
-    if (!has_height && !hidden_attr && !outline_attr && !custom_format) {
+    const bool show_phonetic = read_xsd_bool(row, "ph", false);
+    if (!has_height && !hidden_attr && !outline_attr && !custom_format && !show_phonetic) {
       continue;
     }
     if (!r_attr) {
@@ -244,6 +256,7 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     }
     RowLayout entry;
     entry.row = r_v - 1U;
+    entry.show_phonetic = show_phonetic;
     if (has_height) {
       entry.height = height;
       entry.has_height = true;

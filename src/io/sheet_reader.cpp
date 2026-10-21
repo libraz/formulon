@@ -290,7 +290,7 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     if (parsed.is_sst_index) {
       ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
     }
-    if (xf_index == 0U && !parsed.has_explicit_xf) {
+    if (xf_index == 0U && !parsed.has_explicit_xf && !parsed.show_phonetic) {
       return Expected<void, Error>::Ok();
     }
   } else {
@@ -324,7 +324,11 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
 
   if (!parsed.is_sst_index && phonetic_runs != nullptr && !phonetic_runs->empty()) {
     workbook.sheet(sheet_index).set_cell_phonetic_runs(parsed.row, parsed.col, *phonetic_runs);
-    workbook.sheet(sheet_index).set_cell_phonetic_props(parsed.row, parsed.col, phonetic_props);
+    workbook.sheet(sheet_index)
+        .set_cell_phonetic_props(parsed.row, parsed.col, phonetic_props, parsed.phonetic_pr_present);
+  }
+  if (parsed.show_phonetic) {
+    workbook.sheet(sheet_index).set_cell_show_phonetic(parsed.row, parsed.col, true);
   }
   return Expected<void, Error>::Ok();
 }
@@ -389,7 +393,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       // Charge a new coordinate before `ApplyParsedCell` materialises it; a
       // truly empty cell (matching its no-op condition) is never stored.
       const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index ||
-                                parsed.xf_index != 0U || parsed.has_explicit_xf;
+                                parsed.xf_index != 0U || parsed.has_explicit_xf || parsed.show_phonetic;
       if (materializes && !target_sheet.has_cell(parsed.row, parsed.col)) {
         std::string ctxs("context=sheet_reader row=");
         ctxs.append(std::to_string(parsed.row));
@@ -522,6 +526,8 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   cell.row = rec.row;
   cell.col = rec.col;
   cell.has_explicit_xf = !rec.s.empty();
+  cell.phonetic_pr_present = rec.phonetic_pr_present;
+  cell.show_phonetic = parse_xsd_bool(rec.ph, false);
 
   // Persist the cell's `s=` xf index when present. The SAX scanner
   // surfaces it as a string view; parse to integer here through the same
@@ -547,8 +553,8 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   const std::string& formula_text = formula;
 
   // Mirrors the DOM path's placement and no-op guard (see `read_sheet_data`).
-  const bool materializes =
-      !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || xf != 0U || cell.has_explicit_xf;
+  const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || xf != 0U ||
+                            cell.has_explicit_xf || cell.show_phonetic;
   if (materializes && !workbook.sheet(sheet_index).has_cell(rec.row, rec.col)) {
     std::string ctxs("context=sheet_reader_sax row=");
     ctxs.append(std::to_string(rec.row));
@@ -597,7 +603,8 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   const bool custom_format = !rec.custom_format.empty() && parse_xsd_bool(rec.custom_format, false);
   double height = 0.0;
   const bool has_height = parse_xsd_nonneg_double(rec.ht, &height);
-  if (!has_height && rec.hidden.empty() && rec.outline_level.empty() && !custom_format) {
+  const bool show_phonetic = parse_xsd_bool(rec.ph, false);
+  if (!has_height && rec.hidden.empty() && rec.outline_level.empty() && !custom_format && !show_phonetic) {
     return Expected<void, Error>::Ok();
   }
   if (rec.row_1based < 1U) {
@@ -605,6 +612,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   }
   RowLayout entry;
   entry.row = rec.row_1based - 1U;
+  entry.show_phonetic = show_phonetic;
   if (has_height) {
     entry.height = height;
     entry.has_height = true;

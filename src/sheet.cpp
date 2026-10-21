@@ -58,6 +58,7 @@ void reset_to_literal(Cell& slot) {
   slot.array_block_rows = 0U;
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
+  slot.phonetic_present = false;
 }
 
 /// The stored cell at `(row, col)` when it holds a formula, else null.
@@ -211,6 +212,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   slot.formula_text = std::move(formula);
   slot.phonetic_runs.clear();
   slot.phonetic_props = PhoneticProperties{};
+  slot.phonetic_present = false;
   slot.cached_value = Value::blank();
   slot.cached_text_owned.reset();
   index_formula_cell_locked(row, col, !slot.formula_text.empty());
@@ -342,13 +344,23 @@ void Sheet::set_cell_phonetic_runs(std::uint32_t row, std::uint32_t col, std::ve
   cell_enumeration_revision_.bump();
 }
 
-void Sheet::set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props) {
+void Sheet::set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props, bool explicit_pr) {
   assert(row < kMaxRows && col < kMaxCols);
 
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.phonetic_props = props;
+  slot.phonetic_present = explicit_pr;
+  cell_enumeration_revision_.bump();
+}
+
+void Sheet::set_cell_show_phonetic(std::uint32_t row, std::uint32_t col, bool show) {
+  assert(row < kMaxRows && col < kMaxCols);
+
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  RowCells& row_cells = rows_[row];
+  row_cells.ensure(col).show_phonetic = show;
   cell_enumeration_revision_.bump();
 }
 

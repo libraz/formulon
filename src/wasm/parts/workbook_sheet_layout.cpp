@@ -269,6 +269,10 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
   r.view.rightToLeft = v.right_to_left;
   r.view.tabSelected = v.tab_selected;
   r.view.viewMode = string_from_cstr(v.view_mode);
+  r.view.topLeftRow = v.top_left_row;
+  r.view.topLeftCol = v.top_left_col;
+  r.view.paneTopLeftRow = v.pane_top_left_row;
+  r.view.paneTopLeftCol = v.pane_top_left_col;
   r.status = ok_status();
   return r;
 }
@@ -423,6 +427,56 @@ JsStatus JsWorkbook::setSheetRightToLeft(uint32_t sheet, bool rightToLeft) {
     return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_right_to_left(handle_, sheet, rightToLeft ? 1 : 0));
+}
+
+JsStatus JsWorkbook::setSheetTopLeft(uint32_t sheet, uint32_t row, uint32_t col) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_top_left(handle_, sheet, row, col));
+}
+
+JsStatus JsWorkbook::setSheetPaneTopLeft(uint32_t sheet, uint32_t row, uint32_t col) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_pane_top_left(handle_, sheet, row, col));
+}
+
+emscripten::val JsWorkbook::getSheetSelection(uint32_t sheet) const {
+  emscripten::val o = emscripten::val::object();
+  emscripten::val ranges = emscripten::val::array();
+  uint32_t row = 0;
+  uint32_t col = 0;
+  size_t total = 0;
+  fm_status_t rc = handle_ != nullptr ? fm_sheet_get_selection(handle_, sheet, &row, &col, nullptr, 0, &total)
+                                      : kBindingInvalidHandle;
+  std::vector<fm_merge_range> found(total);
+  if (rc == 0) {
+    rc = fm_sheet_get_selection(handle_, sheet, &row, &col, found.data(), found.size(), &total);
+  }
+  for (size_t i = 0; rc == 0 && i < found.size(); ++i) {
+    ranges.call<void>("push", merge_range_to_val(found[i]));
+  }
+  o.set("status", status_from_rc(rc));
+  o.set("activeRow", rc == 0 ? row : 0U);
+  o.set("activeCol", rc == 0 ? col : 0U);
+  o.set("ranges", ranges);
+  return o;
+}
+
+JsStatus JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("setSheetSelection");
+  const uint32_t row = reader.u32(selection, "activeRow", 0U, "selection.activeRow");
+  const uint32_t col = reader.u32(selection, "activeCol", 0U, "selection.activeCol");
+  const std::vector<fm_merge_range> ranges = js_pull_ranges(selection, "ranges", &reader);
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(fm_sheet_set_selection(handle_, sheet, row, col, ranges.data(), ranges.size()));
 }
 
 JsStatus JsWorkbook::setSheetTabSelected(uint32_t sheet, bool selected) {

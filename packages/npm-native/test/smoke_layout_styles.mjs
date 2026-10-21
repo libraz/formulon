@@ -674,3 +674,121 @@ test('addXf rejects out-of-range font_index', async () => {
   });
   assert.ok(!r.status.ok, 'expected addXf to reject out-of-range font_index');
 });
+
+test('active sheet is recorded in bookViews and survives a round trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.addSheet('B').ok);
+  assert.ok(wb.addSheet('C').ok);
+  assert.equal(wb.activeSheet().index, 0);
+  assert.ok(wb.setActiveSheet(2).ok);
+  const active = wb.activeSheet();
+  assert.ok(active.status.ok, JSON.stringify(active.status));
+  assert.equal(active.index, 2);
+  assert.equal(wb.setActiveSheet(9).ok, false);
+  assert.equal(wb.activeSheet().index, 2);
+  const saved = wb.save();
+  assert.ok(saved.status.ok, JSON.stringify(saved.status));
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  try {
+    assert.equal(loaded.activeSheet().index, 2);
+  } finally {
+    loaded.dispose();
+    wb.dispose();
+  }
+});
+
+test('the show-phonetic flag survives value writes and a round trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, false);
+  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
+  assert.ok(wb.setCellShowPhonetic(0, 0, 0, true).ok);
+  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
+  assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, true);
+  const saved = wb.save();
+  assert.ok(saved.status.ok, JSON.stringify(saved.status));
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  try {
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, true);
+    assert.ok(loaded.setCellShowPhonetic(0, 0, 0, false).ok);
+    assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, false);
+    const rejected = loaded.getCellShowPhonetic(99, 0, 0);
+    assert.equal(rejected.status.ok, false);
+    assert.equal(rejected.show, false);
+    assert.equal(loaded.setCellShowPhonetic(99, 0, 0, true).ok, false);
+  } finally {
+    loaded.dispose();
+    wb.dispose();
+  }
+});
+
+test('an explicit all-zero phoneticPr is reported as present and survives a round trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setText(0, 0, 0, '漢字').ok);
+  assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]).ok);
+  assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, false);
+  assert.ok(wb.setCellPhoneticProperties(0, 0, 0, { fontId: 0, type: 0, alignment: 0 }).ok);
+  assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, true);
+  const saved = wb.save();
+  assert.ok(saved.status.ok, JSON.stringify(saved.status));
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  try {
+    const got = loaded.getCellPhoneticProperties(0, 0, 0);
+    assert.equal(got.present, true);
+    assert.deepEqual([got.fontId, got.type, got.alignment], [0, 0, 0]);
+  } finally {
+    loaded.dispose();
+    wb.dispose();
+  }
+});
+
+test('scroll origin, pane origin and selection round-trip through save', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setSheetFreeze(0, 2, 1).ok);
+  const view = wb.getSheetView(0).view;
+  assert.equal(view.paneTopLeftRow, 2);
+  assert.equal(view.paneTopLeftCol, 1);
+  assert.ok(wb.setSheetTopLeft(0, 5, 0).ok);
+  assert.ok(wb.setSheetPaneTopLeft(0, 40, 6).ok);
+  assert.equal(wb.setSheetPaneTopLeft(0, 1, 6).ok, false);
+  const ranges = [
+    { firstRow: 41, firstCol: 7, lastRow: 43, lastCol: 8 },
+    { firstRow: 50, firstCol: 9, lastRow: 50, lastCol: 9 },
+  ];
+  assert.ok(wb.setSheetSelection(0, { activeRow: 41, activeCol: 7, ranges }).ok);
+  assert.equal(
+    wb.setSheetSelection(0, {
+      activeRow: 0,
+      activeCol: 0,
+      ranges: [{ firstRow: 3, firstCol: 0, lastRow: 1, lastCol: 0 }],
+    }).ok,
+    false,
+  );
+  const saved = wb.save();
+  assert.ok(saved.status.ok, JSON.stringify(saved.status));
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  try {
+    const got = loaded.getSheetView(0).view;
+    assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
+    const selection = loaded.getSheetSelection(0);
+    assert.ok(selection.status.ok, JSON.stringify(selection.status));
+    assert.equal(selection.activeRow, 41);
+    assert.equal(selection.activeCol, 7);
+    assert.deepEqual(
+      selection.ranges.map((r) => [r.firstRow, r.firstCol, r.lastRow, r.lastCol]),
+      [
+        [41, 7, 43, 8],
+        [50, 9, 50, 9],
+      ],
+    );
+    const missing = loaded.getSheetSelection(99);
+    assert.equal(missing.status.ok, false);
+    assert.deepEqual(missing.ranges, []);
+  } finally {
+    loaded.dispose();
+    wb.dispose();
+  }
+});

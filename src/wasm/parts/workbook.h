@@ -76,6 +76,10 @@ class JsWorkbook {
 
   JsNumberResult sheetCount() const;
   JsStringResult sheetName(uint32_t idx) const;
+  /// The active sheet (`activeTab` of the first `<workbookView>`) as
+  /// `{ status, index }`, and its setter.
+  JsAddStyleResult activeSheet() const;
+  JsStatus setActiveSheet(uint32_t sheet);
 
   // ---- Cell value / formula ops ------------------------------------------
 
@@ -95,6 +99,8 @@ class JsWorkbook {
   /// `alignment` (0=no control, 1=left, 2=center, 3=distributed).
   /// Independent of the readings in both directions.
   JsStatus setCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val properties);
+  /// The cell's "Show Phonetic" display flag; value writes leave it alone.
+  JsStatus setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col, bool show);
   JsStatus setBlank(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula);
 
@@ -124,6 +130,7 @@ class JsWorkbook {
   /// Reads the guide's rendering back as `{ fontId, type, alignment }`.
   /// A cell with no annotation reports the all-zero triple.
   emscripten::val getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
@@ -276,6 +283,14 @@ class JsWorkbook {
   JsStatus setSheetShowZeros(uint32_t sheet, bool show);
   JsStatus setSheetRightToLeft(uint32_t sheet, bool rightToLeft);
   JsStatus setSheetTabSelected(uint32_t sheet, bool selected);
+  /// Scroll origin of the sheet view, and the first visible cell of a frozen
+  /// view's unfrozen pane (which must lie past the frozen rows and columns).
+  JsStatus setSheetTopLeft(uint32_t sheet, uint32_t row, uint32_t col);
+  JsStatus setSheetPaneTopLeft(uint32_t sheet, uint32_t row, uint32_t col);
+  /// The active pane's selection as `{ status, activeRow, activeCol, ranges }`,
+  /// and its setter taking `{ activeRow, activeCol, ranges }`.
+  emscripten::val getSheetSelection(uint32_t sheet) const;
+  JsStatus setSheetSelection(uint32_t sheet, emscripten::val selection);
   JsStatus setSheetViewMode(uint32_t sheet, std::string mode);
 
   emscripten::val getSheetColumns(uint32_t sheet) const;
@@ -534,9 +549,19 @@ class JsWorkbook {
   JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled);
   emscripten::val pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;
   JsStatus pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout);
+  /// Definition read-back; works for pivots created in-session and loaded
+  /// from a package alike. `pivotCacheId` returns `{ status, index: cacheId }`.
+  JsAddStyleResult pivotCacheId(uint32_t sheet, uint32_t pivotIdx) const;
+  JsStringResult pivotName(uint32_t sheet, uint32_t pivotIdx) const;
+  emscripten::val pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIdx) const;
+  emscripten::val pivotRowFieldOrder(uint32_t sheet, uint32_t pivotIdx) const;
+  emscripten::val pivotColFieldOrder(uint32_t sheet, uint32_t pivotIdx) const;
 
   JsNumberResult pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
   JsAddStyleResult pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
+  emscripten::val pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) const;
+  JsNumberResult pivotFieldItemCount(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) const;
+  emscripten::val pivotFieldItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx) const;
   JsStatus pivotFieldClear(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t axis);
   JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t order,
@@ -564,6 +589,7 @@ class JsWorkbook {
 
   JsNumberResult pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
   JsAddStyleResult pivotDataFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
+  emscripten::val pivotDataFieldAt(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx) const;
   JsStatus pivotDataFieldClear(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx, emscripten::val spec);
 

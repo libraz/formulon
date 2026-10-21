@@ -924,6 +924,17 @@ class Workbook {
   const std::string& book_views_xml() const noexcept { return book_views_xml_; }
   void set_book_views_xml(std::string xml) { book_views_xml_ = std::move(xml); }
 
+  /// Index of the sheet the first `<workbookView>` marks active (`activeTab`);
+  /// without `<bookViews>` (an XLSB load), the first `tabSelected` sheet. A
+  /// missing or out-of-range value reads as the first sheet.
+  std::uint32_t active_sheet() const;
+
+  /// Marks sheet `index` active in the first `<workbookView>`, synthesizing a
+  /// minimal `<bookViews>` when none exists and keeping `firstSheet` at or
+  /// below it, and makes it the only `tabSelected` sheet. Other attributes
+  /// survive verbatim. Requires `index < sheet_count()`.
+  void set_active_sheet(std::uint32_t index);
+
   /// Raw `<workbookProtection>` element captured from workbook.xml, or
   /// empty.
   const std::string& workbook_protection_xml() const noexcept { return workbook_protection_xml_; }

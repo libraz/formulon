@@ -208,9 +208,13 @@ emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t r
   uint32_t font_id = 0;
   uint32_t type = 0;
   uint32_t alignment = 0;
+  int32_t present = 0;
   const fm_status_t rc = handle_ != nullptr ? fm_workbook_get_cell_phonetic_properties(handle_, sheet, row, col,
                                                                                        &font_id, &type, &alignment)
                                             : kBindingInvalidHandle;
+  if (rc == 0) {
+    (void)fm_workbook_has_cell_phonetic_properties(handle_, sheet, row, col, &present);
+  }
   // The payload keys are declared unconditionally, so a failure reports the
   // defaults beside the status rather than dropping them.
   if (rc != 0) {
@@ -223,7 +227,25 @@ emscripten::val JsWorkbook::getCellPhoneticProperties(uint32_t sheet, uint32_t r
   o.set("fontId", font_id);
   o.set("type", type);
   o.set("alignment", alignment);
+  o.set("present", present != 0);
   return o;
+}
+
+emscripten::val JsWorkbook::getCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const {
+  int32_t show = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_show_phonetic(handle_, sheet, row, col, &show) : kBindingInvalidHandle;
+  emscripten::val o = emscripten::val::object();
+  o.set("status", rc == 0 ? ok_status() : error_status(rc));
+  o.set("show", rc == 0 && show != 0);
+  return o;
+}
+
+JsStatus JsWorkbook::setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col, bool show) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_workbook_set_cell_show_phonetic(handle_, sheet, row, col, show ? 1 : 0));
 }
 
 JsEvalResult JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col,

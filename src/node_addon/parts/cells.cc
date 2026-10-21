@@ -242,10 +242,14 @@ Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   uint32_t font_id = 0;
   uint32_t type = 0;
   uint32_t alignment = 0;
+  int32_t present = 0;
   const fm_status_t rc = handle_ != nullptr
                              ? fm_workbook_get_cell_phonetic_properties(handle_, address.sheet, address.row,
                                                                         address.col, &font_id, &type, &alignment)
                              : kBindingInvalidHandle;
+  if (rc == 0) {
+    (void)fm_workbook_has_cell_phonetic_properties(handle_, address.sheet, address.row, address.col, &present);
+  }
   // The payload keys are declared unconditionally, so a failure reports the
   // defaults beside the status rather than dropping them.
   if (rc != 0) {
@@ -257,8 +261,29 @@ Napi::Value Workbook::GetCellPhoneticProperties(const Napi::CallbackInfo& info) 
   out.Set("fontId", Napi::Number::New(env, font_id));
   out.Set("type", Napi::Number::New(env, type));
   out.Set("alignment", Napi::Number::New(env, alignment));
+  out.Set("present", Napi::Boolean::New(env, present != 0));
   out.Set("status", MakeStatus(env, rc));
   return out;
+}
+
+Napi::Value Workbook::GetCellShowPhonetic(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const CellAddressArgs address = ReadCellAddress(info);
+  int32_t show = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_get_cell_show_phonetic(handle_, address.sheet, address.row, address.col, &show)
+                         : kBindingInvalidHandle;
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("show", Napi::Boolean::New(env, rc == 0 && show != 0));
+  return out;
+}
+
+Napi::Value Workbook::SetCellShowPhonetic(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const CellAddressArgs address = ReadCellAddress(info);
+    return fm_workbook_set_cell_show_phonetic(handle, address.sheet, address.row, address.col, ArgFlag(info, 3));
+  });
 }
 
 Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {

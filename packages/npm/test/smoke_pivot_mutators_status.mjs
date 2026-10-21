@@ -140,6 +140,7 @@ const PIVOT_MUTATORS = [
     },
   ],
   ['pivotCacheIdAt', { act: (b) => b.wb.pivotCacheIdAt(0), expect: (b, r) => assert.equal(r.index, b.cacheId) }],
+  ['pivotCacheId', { act: (b) => b.wb.pivotCacheId(0, b.pivot), expect: (b, r) => assert.equal(r.index, b.cacheId) }],
   [
     'pivotCacheRemove',
     {
@@ -700,6 +701,8 @@ const STATUS_ACCESSORS = [
   ['pivotCacheFieldSharedItemCount', null, [9999, 0]],
   ['pivotCacheRecordCount', null, [9999]],
   ['pivotFieldCount', null, [99, 0]],
+  ['pivotFieldItemCount', null, [99, 0, 0]],
+  ['pivotName', null, [99, 0]],
   ['pivotDataFieldCount', null, [99, 0]],
   ['pivotFilterCount', null, [99, 0]],
   ['fontCount', [], null],

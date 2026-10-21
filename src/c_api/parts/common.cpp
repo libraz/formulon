@@ -441,9 +441,6 @@ fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api) {
 }
 
 fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
-  if (spec.name == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec->name is NULL", std::string(api));
-  }
   if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, api, "aggregation"); rc != 0) {
     return rc;
   }

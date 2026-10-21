@@ -26,6 +26,7 @@
 #include "phonetic.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
+#include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -345,12 +346,14 @@ struct CellHeaderInfo {
   /// value records skip storing it, blank and formula records store it as an
   /// explicit assignment.
   std::uint32_t xf_index = 0;
+  /// fPhShow: the cell shows its phonetic guide.
+  bool show_phonetic = false;
 };
 
 /// Reads the eight-byte cell header common to every cell record:
 ///   * column   : u32 (zero-based)
 ///   * iStyleRef: u24 (index into `StylesTable::cell_xfs`)
-///   * fPhShow  : u8  (Phonetic-text flag; ignored)
+///   * fPhShow  : u8  (Phonetic-text flag; bit 0)
 ///
 /// Returns the column index and style-xf index, and advances the
 /// cursor past the header.
@@ -368,9 +371,10 @@ Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor) {
   const std::uint32_t xf_index = static_cast<std::uint32_t>(cursor.data[0]) |
                                  (static_cast<std::uint32_t>(cursor.data[1]) << 8) |
                                  (static_cast<std::uint32_t>(cursor.data[2]) << 16);
+  const bool show_phonetic = (cursor.data[3] & 0x01U) != 0U;
   cursor.data += 4;
   cursor.size -= 4;
-  return CellHeaderInfo{col, xf_index};
+  return CellHeaderInfo{col, xf_index, show_phonetic};
 }
 
 /// Stores `xf_index` on `(sheet_index, row, col)` when it differs from
@@ -391,6 +395,9 @@ Expected<void, Error> CommitCell(Workbook& wb, std::size_t sheet_index, SheetDec
     RETURN_IF_ERROR(wb.set_cell_xf_index(sheet_index, state.current_row, header.col, header.xf_index));
   } else {
     RETURN_IF_ERROR(ApplyXfIndex(wb, sheet_index, state.current_row, header.col, header.xf_index));
+  }
+  if (header.show_phonetic) {
+    wb.sheet(sheet_index).set_cell_show_phonetic(state.current_row, header.col, true);
   }
   ++state.cells_decoded;
   return Expected<void, Error>::Ok();
@@ -485,23 +492,26 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
   switch (type) {
     case XlsbRecordType::BrtBeginWsView: {
       // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
-      // modelled by Formulon in its flags word and wScale.  Other viewport
-      // state is intentionally not represented by SheetView yet.
+      // modelled by Formulon in its flags word, rwTop / colLeft and wScale.
       ByteSpan p = rec.payload;
       auto flags_or = read_u16(p);
       auto skip_view = read_u32(p);
-      auto skip_top = read_u32(p);
-      auto skip_left = read_u32(p);
+      auto top_row_or = read_u32(p);
+      auto left_col_or = read_u32(p);
       auto skip_color = read_u8(p);
       auto skip_reserved8 = read_u8(p);
       auto skip_reserved16 = read_u16(p);
       auto zoom_or = read_u16(p);
-      if (!flags_or || !skip_view || !skip_top || !skip_left || !skip_color || !skip_reserved8 || !skip_reserved16 ||
-          !zoom_or) {
+      if (!flags_or || !skip_view || !top_row_or || !left_col_or || !skip_color || !skip_reserved8 ||
+          !skip_reserved16 || !zoom_or) {
         return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtBeginWsView truncated",
                           "context=xlsb_reader");
       }
       SheetView& view = wb.sheet(sheet_index).mutable_view();
+      if ((top_row_or.value() != 0U || left_col_or.value() != 0U) && top_row_or.value() < Sheet::kMaxRows &&
+          left_col_or.value() < Sheet::kMaxCols) {
+        view.top_left_cell = a1::encode_a1(top_row_or.value(), left_col_or.value());
+      }
       const std::uint16_t flags = flags_or.value();
       view.show_grid_lines = (flags & 0x0004U) != 0U;
       view.show_row_col_headers = (flags & 0x0008U) != 0U;
@@ -569,6 +579,13 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       SheetView& view = wb.sheet(sheet_index).mutable_view();
       view.freeze_rows = static_cast<std::uint32_t>(rows);
       view.freeze_cols = static_cast<std::uint32_t>(cols);
+      if (top_row_or.value() < Sheet::kMaxRows && left_col_or.value() < Sheet::kMaxCols) {
+        view.pane_top_left_cell = a1::encode_a1(top_row_or.value(), left_col_or.value());
+      }
+      static constexpr const char* kPaneNames[] = {"bottomRight", "topRight", "bottomLeft", "topLeft"};
+      if (active_pane_or.value() < 4U) {
+        view.active_pane = kPaneNames[active_pane_or.value()];
+      }
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtRowHdr: {
