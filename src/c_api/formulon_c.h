@@ -935,8 +935,9 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t 
  * The flag only says whether the guide is displayed. It is independent of the
  * readings and survives value writes, so re-entering a cell's value does not
  * clear it (the readings, by contrast, are cleared). A blank cell carrying
- * only the flag is kept and saved; a formula cell's flag is not saved, as
- * Excel keeps it on constants and blanks only. Row (`ph`) and column
+ * only the flag is kept and saved. A formula cell's flag is kept in memory,
+ * so it returns once the cell holds a constant again, but it is neither saved
+ * nor read from a file: Excel keeps it on constants and blanks only. Row (`ph`) and column
  * (`phonetic`) flags read from OOXML are preserved on save but have no setter
  * here.
  *
@@ -5080,7 +5081,7 @@ typedef struct {
   const char* view_mode;        /* "", "pageBreakPreview", or "pageLayout" */
   uint32_t top_left_row;        /* scroll origin of the sheet view (`topLeftCell`), 0-based */
   uint32_t top_left_col;
-  uint32_t pane_top_left_row; /* first visible cell of a frozen view's lower/right pane */
+  uint32_t pane_top_left_row; /* first visible cell of a frozen or split view's lower-right pane */
   uint32_t pane_top_left_col;
 } fm_sheet_view_t;
 
@@ -5192,17 +5193,18 @@ FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index
 FM_API fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
 
 /**
- * @brief Sets the first visible cell of a frozen view's unfrozen pane
- *        (`<pane topLeftCell>`).
+ * @brief Sets the first visible cell of a frozen or split view's lower-right
+ *        pane (`<pane topLeftCell>`).
  *
- * The cell must lie in the unfrozen area: `row >= freeze_rows` and
- * `col >= freeze_cols`. Changing the freeze with `fm_sheet_set_freeze`
+ * In a frozen view the cell must lie in the unfrozen area: `row >=
+ * freeze_rows` and `col >= freeze_cols`. Changing the freeze with `fm_sheet_set_freeze`
  * resets this to the first unfrozen cell.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` is `NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range, the sheet
- *         has no frozen panes, or the cell is not in the unfrozen area.
+ *         has neither frozen nor split panes, or the cell is not in the
+ *         unfrozen area.
  */
 FM_API fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
 
@@ -5211,10 +5213,12 @@ FM_API fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_in
  *
  * `*out_total` receives the number of selected ranges; at most `capacity` of
  * them are written to `out_ranges`, which may be `NULL` when `capacity` is
- * `0` (size the buffer first). A sheet that stores no selection reports `A1`
- * and one range, `A1`; a selection without an explicit `sqref` is the active
- * cell alone. Whole-row and whole-column references read as full-width /
- * full-height ranges.
+ * `0` (size the buffer first). The selection reads as it is saved: a pane
+ * that stores none reports `A1` and one range, `A1` (the pane's top-left
+ * cell for a frozen or split view's active pane); a selection without an
+ * explicit `sqref` is the active cell alone; an active cell outside every
+ * range moves to the first range's top-left. Whole-row and whole-column
+ * references read as full-width / full-height ranges.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `out_active_row`, `out_active_col`
@@ -5231,9 +5235,10 @@ FM_API fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_
  *        cell and the selected ranges (`sqref`). `count == 0` selects the
  *        active cell alone.
  *
- * The selection of a frozen view belongs to the pane it is active in
- * (`bottomRight`, `topRight` or `bottomLeft`, see `fm_sheet_set_freeze`);
- * other panes' selections are kept.
+ * The selection of a frozen or split view belongs to the pane it is active
+ * in (`bottomRight`, `topRight` or `bottomLeft`, see `fm_sheet_set_freeze`);
+ * other panes' selections are kept. An active cell outside every range is
+ * saved as the first range's top-left, as Excel does.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` is `NULL`, or `ranges` is `NULL` with

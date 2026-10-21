@@ -26,7 +26,8 @@ namespace {
 constexpr std::array<std::string_view, 4> kPaneNames = {"bottomRight", "topRight", "bottomLeft", "topLeft"};
 constexpr std::uint32_t kTopLeftPane = 3U;
 
-// BrtPane flags: fFrozen, and fFrozenNoSplit for Excel's ordinary freeze.
+// BrtPane flags: fFrozen, and fFrozenNoSplit for a freeze with no split
+// behind it (a `frozen` rather than `frozenSplit` pane).
 constexpr std::uint8_t kPaneFrozen = 0x01U;
 constexpr std::uint8_t kPaneFrozenNoSplit = 0x02U;
 
@@ -44,26 +45,15 @@ std::uint32_t pane_index(std::string_view pane) {
   return static_cast<std::uint32_t>(kPaneNames.size());
 }
 
-void emit_selection(std::vector<std::uint8_t>& dst, const SheetSelection& selection) {
-  std::vector<MergeRange> ranges;
-  parse_selection_sqref_text(selection.sqref, ranges);
-  std::uint32_t row = 0;
-  std::uint32_t col = 0;
-  if (!a1::parse_a1_ref(selection.active_cell, &row, &col) && !ranges.empty()) {
-    row = ranges.front().first_row;
-    col = ranges.front().first_col;
-  }
-  if (ranges.empty()) {
-    ranges.push_back({row, col, row, col});
-  }
+void emit_selection(std::vector<std::uint8_t>& dst, const ResolvedSelection& selection) {
   std::vector<std::uint8_t> payload;
   emit_u32(payload, pane_index(selection.pane));
-  emit_u32(payload, row);
-  emit_u32(payload, col);
+  emit_u32(payload, selection.active_row);
+  emit_u32(payload, selection.active_col);
   // Excel writes 0 here whichever range holds the active cell.
   emit_u32(payload, 0U);
-  emit_u32(payload, static_cast<std::uint32_t>(ranges.size()));
-  for (const MergeRange& range : ranges) {
+  emit_u32(payload, static_cast<std::uint32_t>(selection.ranges.size()));
+  for (const MergeRange& range : selection.ranges) {
     emit_u32(payload, range.first_row);
     emit_u32(payload, range.last_row);
     emit_u32(payload, range.first_col);
@@ -76,7 +66,8 @@ void emit_selection(std::vector<std::uint8_t>& dst, const SheetSelection& select
 
 Expected<bool, Error> decode_pane(const XlsbRecord& rec, SheetView& view) {
   // BrtPane: Xnum column and row splits, the lower-right pane's top-left
-  // cell, the active pane and the flags. A frozen pane's splits are counts.
+  // cell, the active pane and the flags. A frozen pane's splits are counts,
+  // a split's are twips.
   ByteSpan p = rec.payload;
   if (p.size < 29U) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", "context=xlsb_reader");
@@ -95,16 +86,23 @@ Expected<bool, Error> decode_pane(const XlsbRecord& rec, SheetView& view) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane fields truncated",
                       "context=xlsb_reader");
   }
+  const bool valid = std::isfinite(rows) && std::isfinite(cols) && rows >= 0.0 && cols >= 0.0;
   if ((flags_or.value() & kPaneFrozen) == 0U) {
-    return false;
+    if (!valid || (rows == 0.0 && cols == 0.0)) {
+      return false;
+    }
+    view.split_x = cols;
+    view.split_y = rows;
+  } else {
+    if (!valid || std::trunc(rows) != rows || std::trunc(cols) != cols || rows >= Sheet::kMaxRows ||
+        cols >= Sheet::kMaxCols) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtPane frozen counts invalid",
+                        "context=xlsb_reader");
+    }
+    view.freeze_rows = static_cast<std::uint32_t>(rows);
+    view.freeze_cols = static_cast<std::uint32_t>(cols);
+    view.frozen_split = view.is_frozen() && (flags_or.value() & kPaneFrozenNoSplit) == 0U;
   }
-  if (!std::isfinite(rows) || !std::isfinite(cols) || rows < 0.0 || cols < 0.0 || std::trunc(rows) != rows ||
-      std::trunc(cols) != cols || rows >= Sheet::kMaxRows || cols >= Sheet::kMaxCols) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtPane frozen counts invalid",
-                      "context=xlsb_reader");
-  }
-  view.freeze_rows = static_cast<std::uint32_t>(rows);
-  view.freeze_cols = static_cast<std::uint32_t>(cols);
   if (top_row_or.value() < Sheet::kMaxRows && left_col_or.value() < Sheet::kMaxCols) {
     view.pane_top_left_cell = a1::encode_a1(top_row_or.value(), left_col_or.value());
   }
@@ -141,61 +139,40 @@ bool decode_selection(const XlsbRecord& rec, SheetView& view) {
     }
     ranges.push_back(range);
   }
-  SheetSelection selection{std::string(kPaneNames[pane_or.value()]), std::string(), std::string()};
-  // A1 with the single range A1 is what Excel's XLSX spells as an empty
-  // `<selection pane="..."/>`, or omits altogether for the top-left pane.
-  const bool default_a1 = row_or.value() == 0U && col_or.value() == 0U && ranges.size() == 1U &&
-                          ranges.front().first_row == 0U && ranges.front().first_col == 0U &&
-                          ranges.front().last_row == 0U && ranges.front().last_col == 0U;
-  if (default_a1 && pane_or.value() == kTopLeftPane) {
+  // Excel's XLSX omits an A1 active cell and an A1 sqref, and the top-left
+  // pane's selection when both are A1; the model keeps that spelling.
+  const bool a1_active = row_or.value() == 0U && col_or.value() == 0U;
+  const bool a1_ranges = ranges.size() == 1U && ranges.front() == MergeRange{};
+  if (a1_active && a1_ranges && pane_or.value() == kTopLeftPane) {
     return true;
   }
-  if (!default_a1) {
-    selection.active_cell = a1::encode_a1(row_or.value(), col_or.value());
-    selection.sqref = format_sqref_text(ranges);
-  }
-  view.selections.push_back(std::move(selection));
+  view.selections.push_back(SheetSelection{std::string(kPaneNames[pane_or.value()]),
+                                           a1_active ? std::string() : a1::encode_a1(row_or.value(), col_or.value()),
+                                           a1_ranges ? std::string() : format_sqref_text(ranges)});
   return true;
 }
 
 void emit_pane_and_selections(std::vector<std::uint8_t>& dst, const SheetView& view) {
-  const bool frozen = view.freeze_rows != 0U || view.freeze_cols != 0U;
-  if (frozen) {
+  if (view.divides_rows() || view.divides_cols()) {
     std::vector<std::uint8_t> pane;
-    emit_double(pane, static_cast<double>(view.freeze_cols));
-    emit_double(pane, static_cast<double>(view.freeze_rows));
-    std::uint32_t pane_row = view.freeze_rows;
-    std::uint32_t pane_col = view.freeze_cols;
-    (void)a1::parse_a1_ref(view.pane_top_left_cell, &pane_row, &pane_col);
+    const bool frozen = view.is_frozen();
+    emit_double(pane, frozen ? static_cast<double>(view.freeze_cols) : view.split_x);
+    emit_double(pane, frozen ? static_cast<double>(view.freeze_rows) : view.split_y);
+    std::uint32_t pane_row = 0;
+    std::uint32_t pane_col = 0;
+    pane_origin(view, &pane_row, &pane_col);
     emit_u32(pane, pane_row);
     emit_u32(pane, pane_col);
-    const std::uint32_t active = pane_index(view.effective_active_pane());
-    emit_u32(pane, active < kPaneNames.size() ? active : 0U);
-    emit_u8(pane, kPaneFrozen | kPaneFrozenNoSplit);
+    emit_u32(pane, pane_index(view.effective_active_pane()));
+    std::uint8_t flags = 0U;
+    if (frozen) {
+      flags = view.frozen_split ? kPaneFrozen : static_cast<std::uint8_t>(kPaneFrozen | kPaneFrozenNoSplit);
+    }
+    emit_u8(pane, flags);
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtPane), pane);
   }
-  // Excel writes the top-left pane's selection first, A1 when none is stored.
-  const SheetSelection* top_left = nullptr;
-  for (const SheetSelection& selection : view.selections) {
-    if (SheetView::pane_key(selection.pane) == "topLeft") {
-      top_left = &selection;
-      break;
-    }
-  }
-  emit_selection(dst, top_left != nullptr ? *top_left : SheetSelection{"topLeft", "A1", "A1"});
-  // Panes only exist in a frozen view; an unfrozen one keeps the top-left
-  // selection only. One record per pane, the first stored one winning.
-  if (!frozen) {
-    return;
-  }
-  std::array<bool, kPaneNames.size()> emitted{};
-  emitted[kTopLeftPane] = true;
-  for (const SheetSelection& selection : view.selections) {
-    const std::uint32_t pane = pane_index(selection.pane);
-    if (pane < kPaneNames.size() && !emitted[pane]) {
-      emitted[pane] = true;
-      emit_selection(dst, selection);
-    }
+  for (const ResolvedSelection& selection : resolve_view_selections(view)) {
+    emit_selection(dst, selection);
   }
 }
 

@@ -999,6 +999,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->ph = AttrOfDecoded(cell_header, "ph", &scratch->c_attr_ph);
   record->formula = std::string_view{};
   record->f_t = std::string_view{};
+  record->has_formula = false;
   record->f_si = std::string_view{};
   record->f_ref = std::string_view{};
   record->value = std::string_view{};
@@ -1026,6 +1027,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       // exposing the record. A shared-formula follower is self-closing with
       // no body, but its `si` still has to reach the consumer so the group
       // master can be shifted into place.
+      record->has_formula = true;
       record->f_t = AttrOfDecoded(child, "t", &scratch->f_attr_t);
       record->f_si = AttrOfDecoded(child, "si", &scratch->f_attr_si);
       record->f_ref = AttrOfDecoded(child, "ref", &scratch->f_attr_ref);

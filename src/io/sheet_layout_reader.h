@@ -26,10 +26,9 @@ namespace io {
 ///   * `<sheetView zoomScale="...">` — clamped to `[10, 400]`, defaulting
 ///     to `SheetView::kDefaultZoomScale` when absent or out of range.
 ///   * `<sheetView><pane state="frozen" xSplit ySplit/></sheetView>` —
-///     populates `freeze_rows` / `freeze_cols`. `state="frozenSplit"`
-///     is equally frozen and is read the same way; the model does not
-///     carry the split position, so the writer re-emits both spellings
-///     as `state="frozen"`. A `state="split"` pane leaves both at `0`.
+///     populates `freeze_rows` / `freeze_cols`; `state="frozenSplit"`
+///     also sets `frozen_split`. A `split` pane (the default state)
+///     populates `split_x` / `split_y` in twips.
 ///   * `<sheetPr><tabHidden val="1"/></sheetPr>` — sets
 ///     `view().tab_hidden`. The workbook-side `<sheet state="hidden">`
 ///     path (handled in `read_ooxml`) merges OR-style: either signal

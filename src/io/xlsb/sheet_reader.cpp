@@ -555,12 +555,11 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       if (!state.in_main_ws_view) {
         return ResolveUnmodelledRecord(state, type, framed, framed_size);
       }
-      auto frozen_or = decode_pane(rec, wb.sheet(sheet_index).mutable_view());
-      if (!frozen_or) {
-        return std::move(frozen_or.error());
+      auto pane_or = decode_pane(rec, wb.sheet(sheet_index).mutable_view());
+      if (!pane_or) {
+        return std::move(pane_or.error());
       }
-      return frozen_or.value() ? RecordDisposition::kModelled
-                               : ResolveUnmodelledRecord(state, type, framed, framed_size);
+      return pane_or.value() ? RecordDisposition::kModelled : ResolveUnmodelledRecord(state, type, framed, framed_size);
     }
     case XlsbRecordType::BrtSel: {
       if (!state.in_main_ws_view) {
@@ -894,6 +893,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       if (!cached.is_blank()) {
         wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col.col, cached);
       }
+      // Excel drops a formula cell's phonetic flag on load.
+      col.show_phonetic = false;
       RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/true));
       return RecordDisposition::kModelled;
     }

@@ -18,19 +18,19 @@ struct SheetView;
 namespace io {
 namespace xlsb {
 
-/// Decodes one BrtPane into `view`'s frozen-pane fields. False for a pane
-/// that is not frozen (a split, which the model does not carry); an error
-/// when a frozen pane's counts are not whole in-grid row/column numbers.
+/// Decodes one BrtPane into `view`'s freeze or split fields. False for an
+/// unfrozen pane with no valid split; an error when a frozen pane's counts
+/// are not in-grid whole numbers.
 Expected<bool, Error> decode_pane(const XlsbRecord& rec, SheetView& view);
 
-/// Decodes one BrtSel and appends it to `view.selections`; the top-left
-/// pane's default A1 selection appends nothing, as Excel's XLSX omits it.
-/// False, appending nothing, when the record is truncated, inconsistent or
-/// leaves the grid.
+/// Decodes one BrtSel and appends it to `view.selections`, an A1 active cell
+/// or sqref left empty and the top-left pane's A1 selection not appended,
+/// as Excel's XLSX spells them. False, appending nothing, when the record is
+/// truncated, inconsistent or leaves the grid.
 bool decode_selection(const XlsbRecord& rec, SheetView& view);
 
-/// Emits a frozen view's BrtPane, then the top-left pane's BrtSel (A1 when
-/// none is stored) and, in a frozen view, every other pane's.
+/// Emits the BrtPane of a frozen or split view, then one BrtSel per pane
+/// the view has, as `resolve_view_selections` orders and fills them.
 void emit_pane_and_selections(std::vector<std::uint8_t>& dst, const SheetView& view);
 
 }  // namespace xlsb

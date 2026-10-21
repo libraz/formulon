@@ -19,6 +19,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -526,11 +527,11 @@ std::vector<std::uint8_t> WsPropPayload(std::uint16_t flags, std::uint8_t color_
 /// The flag word Excel writes, and the one `sheet_writer.cpp` re-derives.
 constexpr std::uint16_t kDefaultWsPropFlags = 0x04C9U;
 
-/// `BrtSel`, the per-view selection state: a record Excel writes into
-/// every worksheet prefix, and one the model has no field for.
+/// `BrtPane`, a sheet view's freeze or split.
 constexpr std::uint16_t kBrtPane = 151;
 
-// An unfrozen split, which the model does not carry.
+// An unfrozen split. Outside a sheet view no view owns it, so it is
+// unmodelled wherever it appears.
 std::vector<std::uint8_t> SplitPanePayload() {
   std::vector<std::uint8_t> p;
   AppendDouble(p, 2000.0);  // xnumXSplit (twips)
@@ -717,6 +718,26 @@ std::vector<std::uint8_t> FrozenPanePayload(double cols, double rows) {
   AppendU32(p, 0U);
   p.push_back(0x03U);
   return p;
+}
+
+// An unfrozen pane with no usable split is skipped like the XLSX reader skips
+// it, and a frozen flag on zero counts leaves no `frozenSplit` behind.
+TEST(XlsbSheetView, ABadSplitIsSkippedAndAnEmptyFreezeIsNotAFrozenSplit) {
+  std::vector<std::uint8_t> nan_split = SplitPanePayload();
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  std::memcpy(nan_split.data(), &nan, sizeof(nan));
+  std::vector<std::uint8_t> empty_frozen_split = FrozenPanePayload(0.0, 0.0);
+  empty_frozen_split.back() = 0x01U;
+  for (const std::vector<std::uint8_t>* pane : {&nan_split, &empty_frozen_split}) {
+    const std::vector<std::uint8_t> archive = BuildPackage(
+        SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""), {}, {}, {{kBrtPane, *pane}}));
+    auto result = io::xlsb::read_xlsb(test::span_of(archive));
+    ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+    const SheetView& view = result.value().workbook.sheet(0).view();
+    EXPECT_EQ(view.split_x, 0.0);
+    EXPECT_FALSE(view.frozen_split);
+    EXPECT_FALSE(view.divides_rows() || view.divides_cols());
+  }
 }
 
 TEST(XlsbSheetView, PaneAndSelectionOutsideTheMainViewAreNotFoldedIntoIt) {

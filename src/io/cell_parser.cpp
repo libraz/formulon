@@ -369,7 +369,8 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   out.formula = std::move(formula);
   out.xf_index = xf_index;
   out.has_explicit_xf = has_explicit_xf;
-  out.show_phonetic = read_xsd_bool(node, "ph", false);
+  // Excel drops a formula cell's phonetic flag on load.
+  out.show_phonetic = read_xsd_bool(node, "ph", false) && !node.child("f");
 
   // Capture <rPh> phonetic runs from the inline-string block (when
   // present). SST-referenced cells (t="s") carry their phonetic on the

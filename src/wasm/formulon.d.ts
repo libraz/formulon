@@ -956,9 +956,9 @@ export interface SheetView {
   /** Scroll origin of the sheet view (`topLeftCell`), 0-based; A1 by default. */
   topLeftRow: number;
   topLeftCol: number;
-  /** First visible cell of a frozen view's unfrozen pane (`<pane
-   *  topLeftCell>`): the first cell past the frozen rows and columns until a
-   *  host scrolls it. `0, 0` when nothing is frozen. */
+  /** First visible cell of a frozen or split view's lower-right pane
+   *  (`<pane topLeftCell>`): the first cell past the frozen rows and columns
+   *  (A1 for a split) until a host scrolls it. `0, 0` without panes. */
   paneTopLeftRow: number;
   paneTopLeftCol: number;
 }
@@ -972,8 +972,10 @@ export interface SheetSelection {
   ranges?: ReadonlyArray<MergeRange>;
 }
 
-/** Return type of `Workbook.getSheetSelection(sheet)`. A sheet that stores
- *  no selection reports A1 with the single range A1. */
+/** Return type of `Workbook.getSheetSelection(sheet)`, read as it is saved:
+ *  a pane that stores no selection reports A1 with the single range A1 (the
+ *  pane's top-left cell for a frozen or split view's active pane), and an
+ *  active cell outside every range moves to the first range's top-left. */
 export interface SheetSelectionResult {
   status: Status;
   activeRow: number;
@@ -3199,7 +3201,8 @@ export interface Workbook {
    *  absent cell. */
   getCellShowPhonetic(sheet: number, row: number, col: number): CellShowPhoneticResult;
   /** Sets the cell's "Show Phonetic" display flag. It is independent of the
-   *  readings and survives value writes; a formula cell's flag is not saved. */
+   *  readings and survives value writes; a formula cell's flag is neither
+   *  saved nor read from a file. */
   setCellShowPhonetic(sheet: number, row: number, col: number, show: boolean): Status;
 
   /** Recalculates all dirty cells serially on the caller thread.
@@ -3833,14 +3836,15 @@ export interface Workbook {
   setSheetTabSelected(sheet: number, selected: boolean): Status;
   /** Sets the sheet view's scroll origin (`<sheetView topLeftCell>`). */
   setSheetTopLeft(sheet: number, row: number, col: number): Status;
-  /** Sets the first visible cell of a frozen view's unfrozen pane. It must
-   *  lie past the frozen rows and columns; rejected when nothing is frozen.
-   *  Changing the freeze resets it to the first unfrozen cell. */
+  /** Sets the first visible cell of a frozen or split view's lower-right
+   *  pane. It must lie past any frozen rows and columns; rejected without
+   *  panes. Changing the freeze resets it to the first unfrozen cell. */
   setSheetPaneTopLeft(sheet: number, row: number, col: number): Status;
   /** Reads the active pane's selection (active cell and ranges). */
   getSheetSelection(sheet: number): SheetSelectionResult;
-  /** Replaces the active pane's selection. In a frozen view the selection
-   *  belongs to the pane the view is active in; other panes' are kept. */
+  /** Replaces the active pane's selection. In a frozen or split view the
+   *  selection belongs to the pane the view is active in; other panes' are
+   *  kept. */
   setSheetSelection(sheet: number, selection: SheetSelection): Status;
   /** Sets the sheet's `<sheetView view="...">` mode: `""`,
    *  `"pageBreakPreview"`, or `"pageLayout"`. Stored verbatim. */

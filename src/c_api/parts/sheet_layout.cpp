@@ -547,12 +547,7 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->top_left_row = 0;
   out->top_left_col = 0;
   (void)formulon::a1::parse_a1_ref(v.top_left_cell, &out->top_left_row, &out->top_left_col);
-  const bool frozen = v.freeze_rows != 0U || v.freeze_cols != 0U;
-  out->pane_top_left_row = frozen ? v.freeze_rows : 0U;
-  out->pane_top_left_col = frozen ? v.freeze_cols : 0U;
-  if (frozen) {
-    (void)formulon::a1::parse_a1_ref(v.pane_top_left_cell, &out->pane_top_left_row, &out->pane_top_left_col);
-  }
+  formulon::io::pane_origin(v, &out->pane_top_left_row, &out->pane_top_left_col);
   return 0;
 }
 
@@ -575,7 +570,7 @@ extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t shee
     return rc;
   }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
-  if ((view.freeze_rows == 0U && view.freeze_cols == 0U) || row < view.freeze_rows || col < view.freeze_cols ||
+  if ((!view.divides_rows() && !view.divides_cols()) || row < view.freeze_rows || col < view.freeze_cols ||
       !formulon::Sheet::coord_in_grid(row, col)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_set_pane_top_left: cell is not in the unfrozen area");
@@ -584,19 +579,6 @@ extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t shee
       row == view.freeze_rows && col == view.freeze_cols ? std::string() : formulon::a1::encode_a1(row, col);
   return 0;
 }
-
-namespace {
-
-const formulon::SheetSelection* active_selection(const formulon::SheetView& view) {
-  for (const formulon::SheetSelection& selection : view.selections) {
-    if (formulon::SheetView::pane_key(selection.pane) == formulon::SheetView::pane_key(view.effective_active_pane())) {
-      return &selection;
-    }
-  }
-  return nullptr;
-}
-
-}  // namespace
 
 extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sheet_index, uint32_t* out_active_row,
                                               uint32_t* out_active_col, fm_merge_range* out_ranges, size_t capacity,
@@ -609,20 +591,19 @@ extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_selection"); rc != 0) {
     return rc;
   }
-  std::vector<formulon::MergeRange> ranges;
-  *out_active_row = 0;
-  *out_active_col = 0;
-  if (const formulon::SheetSelection* selection = active_selection(wb->workbook().sheet(sheet_index).view());
-      selection != nullptr) {
-    formulon::io::parse_selection_sqref_text(selection->sqref, ranges);
-    if (!formulon::a1::parse_a1_ref(selection->active_cell, out_active_row, out_active_col) && !ranges.empty()) {
-      *out_active_row = ranges.front().first_row;
-      *out_active_col = ranges.front().first_col;
+  // The active pane's selection as it would be saved.
+  const formulon::SheetView& view = wb->workbook().sheet(sheet_index).view();
+  const std::string_view active_pane = formulon::SheetView::pane_key(view.effective_active_pane());
+  std::vector<formulon::io::ResolvedSelection> resolved = formulon::io::resolve_view_selections(view);
+  const formulon::io::ResolvedSelection* selection = &resolved.front();
+  for (const formulon::io::ResolvedSelection& candidate : resolved) {
+    if (candidate.pane == active_pane) {
+      selection = &candidate;
     }
   }
-  if (ranges.empty()) {
-    ranges.push_back({*out_active_row, *out_active_col, *out_active_row, *out_active_col});
-  }
+  *out_active_row = selection->active_row;
+  *out_active_col = selection->active_col;
+  const std::vector<formulon::MergeRange>& ranges = selection->ranges;
   *out_total = ranges.size();
   for (std::size_t i = 0; i < ranges.size() && i < capacity; ++i) {
     out_ranges[i] = {ranges[i].first_row, ranges[i].first_col, ranges[i].last_row, ranges[i].last_col};

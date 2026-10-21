@@ -527,7 +527,8 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   cell.col = rec.col;
   cell.has_explicit_xf = !rec.s.empty();
   cell.phonetic_pr_present = rec.phonetic_pr_present;
-  cell.show_phonetic = parse_xsd_bool(rec.ph, false);
+  // Excel drops a formula cell's phonetic flag on load.
+  cell.show_phonetic = parse_xsd_bool(rec.ph, false) && !rec.has_formula;
 
   // Persist the cell's `s=` xf index when present. The SAX scanner
   // surfaces it as a string view; parse to integer here through the same

@@ -4226,7 +4226,7 @@ class Workbook:
         """Set the cell's "Show Phonetic" display flag.
 
         Independent of the readings: value writes clear the readings but keep
-        this flag. A formula cell's flag is not saved.
+        this flag. A formula cell's flag is neither saved nor read from a file.
         """
         h = self._require()
         _check(
@@ -6950,10 +6950,11 @@ class Workbook:
         )
 
     def set_sheet_pane_top_left(self, sheet: int, row: int, col: int) -> None:
-        """Set the first visible cell of a frozen view's unfrozen pane.
+        """Set the first visible cell of a frozen or split view's lower-right pane.
 
-        The cell must lie past the frozen rows and columns, and the sheet must
-        be frozen. Changing the freeze resets it to the first unfrozen cell.
+        The cell must lie past any frozen rows and columns, and the sheet must
+        be frozen or split. Changing the freeze resets it to the first unfrozen
+        cell.
         """
         h = self._require()
         _check(
@@ -6964,7 +6965,10 @@ class Workbook:
     def get_sheet_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]:
         """Return ``((active_row, active_col), ranges)`` of the active pane's selection.
 
-        A sheet that stores no selection reports A1 with the single range A1.
+        The selection reads as it is saved: a pane that stores none reports A1
+        with the single range A1 (the pane's top-left cell for a frozen or split
+        view's active pane), and an active cell outside every range moves to the
+        first range's top-left.
         """
         h = self._require()
         row_ptr = _alloc_out_ptr()

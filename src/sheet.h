@@ -260,6 +260,13 @@ struct SheetView {
   std::uint32_t zoom_scale = kDefaultZoomScale;
   std::uint32_t freeze_rows = 0;  // 0 = no row freeze
   std::uint32_t freeze_cols = 0;  // 0 = no column freeze
+  /// A frozen view saved as `frozenSplit`: a freeze that also keeps a
+  /// movable split, restored when the panes are unfrozen in Excel.
+  bool frozen_split = false;
+  /// An unfrozen split's position in twips (`<pane xSplit ySplit>` with no
+  /// freeze state); 0 for no split on that axis. Ignored while frozen.
+  double split_x = 0.0;
+  double split_y = 0.0;
   bool tab_hidden = false;
   /// Refines `tab_hidden` to OOXML `veryHidden`. Visibility is three
   /// states but `tab_hidden` is the one bit every binding reads, so the
@@ -285,9 +292,11 @@ struct SheetView {
   /// `<sheetView topLeftCell>`: the scroll origin of the top-left pane. Empty
   /// is the default `A1`.
   std::string top_left_cell;
-  /// `<pane topLeftCell>` and `activePane` of a frozen view. Empty means
-  /// derived: the first unfrozen cell, and the pane the splits imply
-  /// (`bottomRight`, `topRight` or `bottomLeft`). Meaningless without a freeze.
+  /// `<pane topLeftCell>` and `activePane` of a frozen or split view. Empty
+  /// means derived: the first unfrozen cell (A1 for a split), and the pane
+  /// the splits imply (`bottomRight`, `topRight` or `bottomLeft`). A frozen
+  /// view's active pane is always derived, as Excel saves it; a split's
+  /// is derived only when it names a pane the view lacks.
   std::string pane_top_left_cell;
   std::string active_pane;
   /// Every `<selection>`, in document order (at most one per pane).
@@ -298,21 +307,44 @@ struct SheetView {
     return pane.empty() ? std::string_view("topLeft") : pane;
   }
 
-  /// The pane a frozen view is active in: `active_pane` when stored, else
-  /// the pane the splits imply. Empty when nothing is frozen.
-  std::string_view effective_active_pane() const noexcept {
-    if (freeze_rows == 0U && freeze_cols == 0U) {
-      return {};
+  bool is_frozen() const noexcept { return freeze_rows != 0U || freeze_cols != 0U; }
+  /// Whether a freeze or split divides the rows / the columns.
+  bool divides_rows() const noexcept { return is_frozen() ? freeze_rows != 0U : split_y > 0.0; }
+  bool divides_cols() const noexcept { return is_frozen() ? freeze_cols != 0U : split_x > 0.0; }
+
+  /// Whether the view has `pane`: `topLeft` always, the others only on the
+  /// axes a freeze or split divides. Excel refuses a file with a selection in
+  /// a pane the view lacks.
+  bool has_pane(std::string_view pane) const noexcept {
+    const std::string_view key = pane_key(pane);
+    if (key == "topLeft") {
+      return true;
     }
-    if (!active_pane.empty()) {
-      return active_pane;
+    if (key == "topRight") {
+      return divides_cols();
     }
-    return freeze_rows != 0U ? (freeze_cols != 0U ? "bottomRight" : "bottomLeft") : "topRight";
+    if (key == "bottomLeft") {
+      return divides_rows();
+    }
+    return key == "bottomRight" && divides_rows() && divides_cols();
   }
 
-  /// Freezes `rows` x `cols` (zero for none). A change re-derives the pane
-  /// origin and active pane, and re-homes the active selection to the new
-  /// active pane; the selections of the other panes are dropped.
+  /// The pane a frozen or split view is active in: the pane the splits
+  /// imply, or a split's `active_pane` when the view has it. Empty without
+  /// panes.
+  std::string_view effective_active_pane() const noexcept {
+    if (!divides_rows() && !divides_cols()) {
+      return {};
+    }
+    if (!is_frozen() && !active_pane.empty() && has_pane(active_pane)) {
+      return active_pane;
+    }
+    return divides_rows() ? (divides_cols() ? "bottomRight" : "bottomLeft") : "topRight";
+  }
+
+  /// Freezes `rows` x `cols` (zero for none). A change replaces any split,
+  /// re-derives the pane origin and active pane, and re-homes the active
+  /// selection to the new active pane; the other panes' selections are dropped.
   void set_freeze(std::uint32_t rows, std::uint32_t cols) {
     if (rows == freeze_rows && cols == freeze_cols) {
       return;
@@ -326,6 +358,9 @@ struct SheetView {
     }
     freeze_rows = rows;
     freeze_cols = cols;
+    frozen_split = false;
+    split_x = 0.0;
+    split_y = 0.0;
     pane_top_left_cell.clear();
     active_pane.clear();
     selections = std::move(kept);

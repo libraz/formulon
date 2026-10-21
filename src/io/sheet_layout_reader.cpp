@@ -5,6 +5,7 @@
 
 #include "io/sheet_layout_reader.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -33,11 +34,10 @@ namespace io {
 
 namespace {
 
-/// Parses `<sheetView zoomScale="...">` and `<pane state="frozen"
-/// xSplit="N" ySplit="M">` into `view`. Missing or out-of-range
-/// `zoomScale` falls back to `SheetView::kDefaultZoomScale`. A `<pane>`
-/// element whose `state` is neither `frozen` nor `frozenSplit` (or that
-/// is absent) leaves `freeze_rows` / `freeze_cols` at zero.
+/// Parses `<sheetView zoomScale="...">` and its `<pane>` into `view`.
+/// Missing or out-of-range `zoomScale` falls back to
+/// `SheetView::kDefaultZoomScale`. A `frozen` / `frozenSplit` pane's splits
+/// are row and column counts; a `split` pane's (the default state) twips.
 void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
   pugi::xml_node sheet_views = worksheet.child("sheetViews");
   if (!sheet_views) {
@@ -91,8 +91,20 @@ void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
       if (x > 0) {
         view.freeze_cols = static_cast<std::uint32_t>(x);
       }
+      view.frozen_split = state == "frozenSplit";
+    } else if (state.empty() || state == "split") {
+      const double y = attr_f64(pane, "ySplit", 0.0);
+      const double x = attr_f64(pane, "xSplit", 0.0);
+      view.split_y = std::isfinite(y) && y > 0.0 ? y : 0.0;
+      view.split_x = std::isfinite(x) && x > 0.0 ? x : 0.0;
+    }
+    if (view.divides_rows() || view.divides_cols()) {
       view.pane_top_left_cell = attr_str(pane, "topLeftCell");
-      view.active_pane = attr_str(pane, "activePane");
+      // An absent `activePane` is the schema default, `topLeft`.
+      const std::string_view active = attr_str(pane, "activePane");
+      view.active_pane = active.empty() ? std::string("topLeft") : std::string(active);
+    } else {
+      view.frozen_split = false;
     }
   }
 }

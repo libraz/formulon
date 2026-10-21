@@ -85,6 +85,8 @@ struct CellRecord {
   /// `"dataTable"`), or empty when the `<f>` has no `t=` (a plain formula)
   /// or no `<f>` child exists.
   std::string_view f_t;
+  /// Whether the cell has an `<f>` child, a body or not.
+  bool has_formula = false;
   /// Decoded `<f>` element's `si=` (shared-formula group index), or empty.
   std::string_view f_si;
   /// Decoded `<f>` element's `ref=` (shared-formula master range), or empty.

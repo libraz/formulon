@@ -92,4 +92,60 @@ std::string format_sqref_text(const std::vector<MergeRange>& ranges) {
   return out;
 }
 
+namespace {
+
+// Excel's save order of the four panes.
+constexpr std::string_view kSaveOrder[] = {"topLeft", "topRight", "bottomLeft", "bottomRight"};
+
+}  // namespace
+
+void pane_origin(const SheetView& view, std::uint32_t* row, std::uint32_t* col) {
+  *row = view.is_frozen() ? view.freeze_rows : 0U;
+  *col = view.is_frozen() ? view.freeze_cols : 0U;
+  if (view.divides_rows() || view.divides_cols()) {
+    (void)a1::parse_a1_ref(view.pane_top_left_cell, row, col);
+  }
+}
+
+std::vector<ResolvedSelection> resolve_view_selections(const SheetView& view) {
+  std::vector<ResolvedSelection> out;
+  for (std::string_view pane : kSaveOrder) {
+    if (!view.has_pane(pane)) {
+      continue;
+    }
+    ResolvedSelection resolved;
+    resolved.pane = pane;
+    const SheetSelection* stored = nullptr;
+    for (const SheetSelection& selection : view.selections) {
+      if (SheetView::pane_key(selection.pane) == pane) {
+        stored = &selection;
+        break;
+      }
+    }
+    bool has_active = false;
+    if (stored != nullptr) {
+      parse_selection_sqref_text(stored->sqref, resolved.ranges);
+      has_active = a1::parse_a1_ref(stored->active_cell, &resolved.active_row, &resolved.active_col);
+    } else if (pane == "bottomRight") {
+      pane_origin(view, &resolved.active_row, &resolved.active_col);
+      has_active = true;
+    } else if (pane != "topLeft") {
+      has_active = a1::parse_a1_ref(view.top_left_cell, &resolved.active_row, &resolved.active_col);
+    }
+    if (resolved.ranges.empty()) {
+      resolved.ranges.push_back({resolved.active_row, resolved.active_col, resolved.active_row, resolved.active_col});
+    }
+    const bool inside = std::any_of(resolved.ranges.begin(), resolved.ranges.end(), [&](const MergeRange& r) {
+      return resolved.active_row >= r.first_row && resolved.active_row <= r.last_row &&
+             resolved.active_col >= r.first_col && resolved.active_col <= r.last_col;
+    });
+    if (!has_active || !inside) {
+      resolved.active_row = resolved.ranges.front().first_row;
+      resolved.active_col = resolved.ranges.front().first_col;
+    }
+    out.push_back(std::move(resolved));
+  }
+  return out;
+}
+
 }  // namespace formulon::io

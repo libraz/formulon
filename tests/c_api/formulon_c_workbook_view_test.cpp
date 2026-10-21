@@ -410,7 +410,8 @@ TEST(FormulonCApiWorkbookView, SheetViewScrollAndSelectionRoundTripFromAPackage)
   EXPECT_NE(saved.find("topLeftCell=\"B20\" activePane=\"bottomRight\" state=\"frozen\""), std::string::npos) << saved;
   EXPECT_NE(saved.find("<selection pane=\"topRight\" activeCell=\"B1\" sqref=\"B1\"/>"), std::string::npos) << saved;
   EXPECT_NE(saved.find("<selection pane=\"bottomLeft\" activeCell=\"A3\" sqref=\"A3\"/>"), std::string::npos) << saved;
-  EXPECT_NE(saved.find("sqref=\"C22:D24 F30 3:4\""), std::string::npos) << saved;
+  // Whole rows are written the way Excel spells them.
+  EXPECT_NE(saved.find("sqref=\"C22:D24 F30 A3:XFD4\""), std::string::npos) << saved;
 }
 
 TEST(FormulonCApiWorkbookView, SelectionReadSkipsInvertedAndOffGridWholeRowsAndColumns) {
@@ -434,20 +435,116 @@ TEST(FormulonCApiWorkbookView, SelectionReadSkipsInvertedAndOffGridWholeRowsAndC
   EXPECT_EQ(ranges[0].last_col, 1U);
 }
 
-TEST(FormulonCApiWorkbookView, UnfrozenSplitViewSavesOnlyTheTopLeftSelection) {
+// Excel saves this input with every pane's selection, the missing ones as A1,
+// in its fixed pane order.
+TEST(FormulonCApiWorkbookView, UnfrozenSplitViewSavesEveryPaneSelectionTheExcelWay) {
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
       "<sheetViews><sheetView workbookViewId=\"0\">"
       "<pane xSplit=\"2000\" ySplit=\"1500\" topLeftCell=\"D10\" activePane=\"bottomRight\"/>"
-      "<selection activeCell=\"A2\" sqref=\"A2\"/>"
       "<selection pane=\"bottomRight\" activeCell=\"E12\" sqref=\"E12\"/>"
+      "<selection activeCell=\"B2\" sqref=\"B2\"/>"
       "</sheetView></sheetViews><sheetData/></worksheet>";
   WorkbookGuard wb;
   Load(BuildPackage("", sheet), wb);
-  const std::string saved = ExtractZipEntry(Save(wb.handle), "xl/worksheets/sheet1.xml");
-  EXPECT_NE(saved.find("<selection activeCell=\"A2\" sqref=\"A2\"/>"), std::string::npos) << saved;
-  EXPECT_EQ(saved.find("E12"), std::string::npos) << saved;
+  uint32_t row = 0;
+  uint32_t col = 0;
+  size_t total = 0;
+  ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 0, &total), 0);
+  EXPECT_EQ(row, 11U);
+  EXPECT_EQ(col, 4U);
+  fm_sheet_view_t view{};
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.pane_top_left_row, 9U);
+  EXPECT_EQ(view.pane_top_left_col, 3U);
+  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 9, 3), 0) << fm_last_error_message();
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    WorkbookGuard reloaded;
+    Load(Save(wb.handle, format), reloaded);
+    const std::string xml = ExtractZipEntry(Save(reloaded.handle), "xl/worksheets/sheet1.xml");
+    EXPECT_NE(xml.find("<pane xSplit=\"2000\" ySplit=\"1500\" topLeftCell=\"D10\" activePane=\"bottomRight\"/>"
+                       "<selection activeCell=\"B2\" sqref=\"B2\"/><selection pane=\"topRight\"/>"
+                       "<selection pane=\"bottomLeft\"/><selection pane=\"bottomRight\" activeCell=\"E12\" "
+                       "sqref=\"E12\"/></sheetView>"),
+              std::string::npos)
+        << "format " << format << ": " << xml;
+  }
+}
+
+// A freeze with no stored selection: Excel selects the active pane's top-left
+// cell and writes the other panes' default selections.
+TEST(FormulonCApiWorkbookView, FreezeWithoutASelectionSelectsThePaneOrigin) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
+  uint32_t row = 0;
+  uint32_t col = 0;
+  size_t total = 0;
+  ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 0, &total), 0);
+  EXPECT_EQ(row, 2U);
+  EXPECT_EQ(col, 1U);
+  const std::string xml = ExtractZipEntry(Save(wb.handle), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(xml.find("state=\"frozen\"/><selection pane=\"topRight\"/><selection pane=\"bottomLeft\"/>"
+                     "<selection pane=\"bottomRight\" activeCell=\"B3\" sqref=\"B3\"/></sheetView>"),
+            std::string::npos)
+      << xml;
+}
+
+// Excel moves an active cell outside every range to the first range's top-left.
+TEST(FormulonCApiWorkbookView, ActiveCellOutsideTheRangesReadsAndSavesAsTheFirstRangesCorner) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const fm_merge_range ranges[] = {{2, 2, 3, 3}, {9, 0, 9, 0}};
+  ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 0, 7, ranges, 2), 0);
+  uint32_t row = 99;
+  uint32_t col = 99;
+  size_t total = 0;
+  ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 0, &total), 0);
+  EXPECT_EQ(row, 2U);
+  EXPECT_EQ(col, 2U);
+  const std::string xml = ExtractZipEntry(Save(wb.handle), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(xml.find("<selection activeCell=\"C3\" sqref=\"C3:D4 A10\"/>"), std::string::npos) << xml;
+}
+
+// Excel refuses a file whose selection names a pane the view lacks.
+TEST(FormulonCApiWorkbookView, SelectionsOfPanesTheFreezeLacksAreNotSaved) {
+  const std::string sheet =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<sheetViews><sheetView workbookViewId=\"0\">"
+      "<pane ySplit=\"3\" topLeftCell=\"A4\" activePane=\"topRight\" state=\"frozen\"/>"
+      "<selection pane=\"topRight\" activeCell=\"C1\" sqref=\"C1\"/>"
+      "<selection pane=\"bottomRight\" activeCell=\"D9\" sqref=\"D9\"/>"
+      "<selection pane=\"bottomLeft\" activeCell=\"A7\" sqref=\"A7\"/>"
+      "</sheetView></sheetViews><sheetData/></worksheet>";
+  WorkbookGuard wb;
+  Load(BuildPackage("", sheet), wb);
+  const std::string xml = ExtractZipEntry(Save(wb.handle), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(xml.find("activePane=\"bottomLeft\" state=\"frozen\"/>"
+                     "<selection pane=\"bottomLeft\" activeCell=\"A7\" sqref=\"A7\"/></sheetView>"),
+            std::string::npos)
+      << xml;
+}
+
+TEST(FormulonCApiWorkbookView, AFileDropsTheShowPhoneticFlagOfFormulaCells) {
+  const std::string sheet =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\">"
+      "<c r=\"A1\" ph=\"1\"><v>1</v></c><c r=\"B1\" ph=\"1\"><f>1+1</f><v>2</v></c>"
+      "</row></sheetData></worksheet>";
+  WorkbookGuard wb;
+  Load(BuildPackage("", sheet), wb);
+  int32_t show = -1;
+  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  EXPECT_EQ(show, 1);
+  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 1, &show), 0);
+  EXPECT_EQ(show, 0);
+  // A flag set in memory survives a formula and returns with a constant.
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=2"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 5.0), 0);
+  ASSERT_EQ(fm_workbook_get_cell_show_phonetic(wb.handle, 0, 0, 0, &show), 0);
+  EXPECT_EQ(show, 1);
 }
 
 TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTrip) {

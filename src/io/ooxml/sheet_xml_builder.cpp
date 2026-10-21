@@ -25,6 +25,7 @@
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
+#include "io/sqref_text.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -377,18 +378,68 @@ std::string BuildPageBreaksXml(std::string_view element, const std::vector<Manua
 
 /// Emits `<sheetViews><sheetView>...</sheetView></sheetViews>` for the
 /// sheet's view state. Returns an empty string when every field is at
-/// its default (zoom 100, no freeze panes, tab not hidden) — Excel
+/// its default (zoom 100, no panes, tab not hidden) — Excel
 /// itself omits the element in that case.
 std::string BuildSheetViewXml(const SheetView& view) {
   const bool zoom_default = view.zoom_scale == SheetView::kDefaultZoomScale;
-  const bool no_freeze = view.freeze_rows == 0U && view.freeze_cols == 0U;
+  const bool has_panes = view.divides_rows() || view.divides_cols();
   const bool tab_default = !view.tab_hidden;
   // Display attributes at their schema defaults contribute nothing.
   const bool display_default = view.show_grid_lines && view.show_row_col_headers && view.show_zeros &&
                                !view.right_to_left && !view.tab_selected && view.view_mode.empty();
-  if (zoom_default && no_freeze && tab_default && display_default && view.top_left_cell.empty() &&
+  if (zoom_default && !has_panes && tab_default && display_default && view.top_left_cell.empty() &&
       view.selections.empty()) {
     return std::string();
+  }
+  std::string children;
+  if (has_panes) {
+    children.append("<pane");
+    if (view.is_frozen()) {
+      if (view.freeze_cols != 0U) {
+        append_xml_attr_uint(children, "xSplit", view.freeze_cols);
+      }
+      if (view.freeze_rows != 0U) {
+        append_xml_attr_uint(children, "ySplit", view.freeze_rows);
+      }
+    } else {
+      if (view.split_x > 0.0) {
+        append_xml_attr_number(children, "xSplit", view.split_x);
+      }
+      if (view.split_y > 0.0) {
+        append_xml_attr_number(children, "ySplit", view.split_y);
+      }
+    }
+    std::uint32_t pane_row = 0;
+    std::uint32_t pane_col = 0;
+    pane_origin(view, &pane_row, &pane_col);
+    append_xml_attr(children, "topLeftCell", a1::encode_a1(pane_row, pane_col));
+    // `topLeft` is the schema default, which Excel leaves unspelled.
+    if (view.effective_active_pane() != "topLeft") {
+      append_xml_attr(children, "activePane", view.effective_active_pane());
+    }
+    if (view.is_frozen()) {
+      append_xml_attr(children, "state", view.frozen_split ? "frozenSplit" : "frozen");
+    }
+    children.append("/>");
+  }
+  // Excel omits an A1 active cell, an A1 sqref, and a top-left selection that is both.
+  for (const ResolvedSelection& selection : resolve_view_selections(view)) {
+    const bool a1_active = selection.active_row == 0U && selection.active_col == 0U;
+    const bool a1_ranges = selection.ranges.size() == 1U && selection.ranges.front() == MergeRange{};
+    if (selection.pane == "topLeft" && a1_active && a1_ranges) {
+      continue;
+    }
+    children.append("<selection");
+    if (selection.pane != "topLeft") {
+      append_xml_attr(children, "pane", selection.pane);
+    }
+    if (!a1_active) {
+      append_xml_attr(children, "activeCell", a1::encode_a1(selection.active_row, selection.active_col));
+    }
+    if (!a1_ranges) {
+      append_xml_attr(children, "sqref", format_sqref_text(selection.ranges));
+    }
+    children.append("/>");
   }
   std::string out;
   out.reserve(224);
@@ -421,46 +472,12 @@ std::string BuildSheetViewXml(const SheetView& view) {
   if (!zoom_default) {
     append_xml_attr_uint(out, "zoomScale", view.zoom_scale);
   }
-  if (no_freeze && view.selections.empty()) {
+  if (children.empty()) {
     out.append("/></sheetViews>");
     return out;
   }
   out.push_back('>');
-  // A frozen view names the first unfrozen cell as the lower panes' origin
-  // and the pane the active cell lives in, as Excel does.
-  const std::string_view active_pane = view.effective_active_pane();
-  if (!no_freeze) {
-    out.append("<pane");
-    if (view.freeze_cols != 0U) {
-      append_xml_attr_uint(out, "xSplit", view.freeze_cols);
-    }
-    if (view.freeze_rows != 0U) {
-      append_xml_attr_uint(out, "ySplit", view.freeze_rows);
-    }
-    append_xml_attr(
-        out, "topLeftCell",
-        view.pane_top_left_cell.empty() ? a1::encode_a1(view.freeze_rows, view.freeze_cols) : view.pane_top_left_cell);
-    append_xml_attr(out, "activePane", active_pane);
-    append_xml_attr(out, "state", "frozen");
-    out.append("/>");
-  }
-  for (const SheetSelection& selection : view.selections) {
-    // Panes only exist in a frozen view; an unfrozen one keeps the top-left selection only.
-    if (no_freeze && SheetView::pane_key(selection.pane) != "topLeft") {
-      continue;
-    }
-    out.append("<selection");
-    if (!no_freeze && !selection.pane.empty() && selection.pane != "topLeft") {
-      append_xml_attr(out, "pane", selection.pane);
-    }
-    if (!selection.active_cell.empty()) {
-      append_xml_attr(out, "activeCell", selection.active_cell);
-    }
-    if (!selection.sqref.empty()) {
-      append_xml_attr(out, "sqref", selection.sqref);
-    }
-    out.append("/>");
-  }
+  out.append(children);
   out.append("</sheetView></sheetViews>");
   return out;
 }
