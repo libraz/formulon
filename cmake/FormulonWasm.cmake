@@ -172,6 +172,7 @@ endif()
 # Shared optimisation flags.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(_FM_WASM_OPT_FLAGS "-O0;-g")
+  set(_FM_WASM_GLUE_OPT_FLAGS "-O0;-g")
   set(_FM_WASM_LINK_OPT_FLAGS "-O0;-g;-sASSERTIONS=2")
 else()
   # -O3 outperforms -Oz on this codebase (measured 2026-05): -Oz with
@@ -186,6 +187,10 @@ else()
   # reclaims. Both LTO modes are therefore confirmed off-limits for this
   # codebase under current heuristics.
   set(_FM_WASM_OPT_FLAGS "-O3")
+  # The binding glue (formulon_wasm's own TUs) only marshals JS values, so it
+  # is built -Oz while formulon_core keeps -O3: raw -73 KB, Brotli -5 KB, bulk
+  # cell I/O timings unchanged (measured 2026-10-21).
+  set(_FM_WASM_GLUE_OPT_FLAGS "-Oz")
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
 endif()
 
@@ -258,7 +263,7 @@ if(FM_WASM_VARIANT STREQUAL "embind")
   # linker step (-sDISABLE_EXCEPTION_CATCHING=1), and the binding routes
   # every failure through the JsStatus envelope rather than throwing.
   target_compile_options(formulon_wasm PRIVATE
-    ${_FM_WASM_OPT_FLAGS}
+    ${_FM_WASM_GLUE_OPT_FLAGS}
     -fno-exceptions
     -frtti
   )
@@ -342,7 +347,7 @@ else()
   )
 
   target_compile_options(formulon_wasm PRIVATE
-    ${_FM_WASM_OPT_FLAGS}
+    ${_FM_WASM_GLUE_OPT_FLAGS}
     -fno-exceptions
     -fno-rtti
   )
