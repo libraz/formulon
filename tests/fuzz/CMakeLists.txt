@@ -168,8 +168,8 @@ set_tests_properties(FuzzXlsxSmoke PROPERTIES LABELS "SLOW")
 set_tests_properties(FuzzXlsxSmoke PROPERTIES ENVIRONMENT
   "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
-# The real XLSB fixture exercises the recorded Ptg / function coverage from
-# the first run. `seeds/` carries committed starting inputs — including a
+# The real XLSB fixtures exercise the recorded Ptg / function coverage and the
+# sheet-view records (freezes, splits, per-pane selections) from the first run. `seeds/` carries committed starting inputs — including a
 # portable deep-Ptg stream whose explicit textual prefix routes it straight to
 # the Ptg decoder — as opposed to `corpus/`, which holds locally grown corpora
 # and is not tracked.
@@ -182,8 +182,9 @@ set_tests_properties(FuzzXlsxSmoke PROPERTIES ENVIRONMENT
 set(_FORMULON_XLSB_CORPUS "${CMAKE_CURRENT_BINARY_DIR}/corpus_xlsb_seed")
 file(MAKE_DIRECTORY "${_FORMULON_XLSB_CORPUS}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/seeds/xlsb/" DESTINATION "${_FORMULON_XLSB_CORPUS}")
-file(COPY "${CMAKE_SOURCE_DIR}/tests/fixtures/excel/xlsb_fidelity_base.xlsb"
-     DESTINATION "${_FORMULON_XLSB_CORPUS}")
+file(GLOB _FORMULON_XLSB_SEEDS "${CMAKE_SOURCE_DIR}/tests/fixtures/excel/xlsb_fidelity_base.xlsb"
+     "${CMAKE_SOURCE_DIR}/tests/fixtures/excel/sheet_view_*.xlsb")
+file(COPY ${_FORMULON_XLSB_SEEDS} DESTINATION "${_FORMULON_XLSB_CORPUS}")
 
 add_test(
   NAME FuzzXlsbSmoke
