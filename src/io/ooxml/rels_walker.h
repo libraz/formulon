@@ -19,23 +19,24 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
 namespace ooxml {
 
-/// Reads and validates one relationship document. `label` and `context`
-/// retain the diagnostics used by the ZIP-backed visitor below.
-inline Expected<pugi::xml_document, Error> load_relationship_document(const ZipReader& zip, std::string_view rels_path,
-                                                                      std::string_view label,
-                                                                      std::string_view context) {
+/// Reads and validates one relationship document into `out`. `label` and
+/// `context` retain the diagnostics used by the ZIP-backed visitor below.
+inline Expected<void, Error> load_relationship_document(const ZipReader& zip, std::string_view rels_path,
+                                                        std::string_view label, std::string_view context,
+                                                        pugi::xml_document* out) {
   auto rels_bytes_or = zip.read_entry(rels_path);
   if (!rels_bytes_or) {
     return std::move(rels_bytes_or.error());
   }
   const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
 
-  pugi::xml_document doc;
+  pugi::xml_document& doc = *out;
   pugi::xml_parse_result parse =
       doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
   if (!parse) {
@@ -59,7 +60,7 @@ inline Expected<pugi::xml_document, Error> load_relationship_document(const ZipR
     message.append(": missing <Relationships>");
     return make_error(FormulonErrorCode::kIoRelationshipBroken, std::move(message), std::move(ctx));
   }
-  return std::move(doc);
+  return Expected<void, Error>::Ok();
 }
 
 /// Visits validated `<Relationship>` children in document order. The
@@ -86,11 +87,9 @@ Expected<void, Error> visit_relationship_nodes(const pugi::xml_document& doc, Fn
 template <typename Fn>
 Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
                                                std::string_view context, Fn&& fn) {
-  auto doc_or = load_relationship_document(zip, rels_path, label, context);
-  if (!doc_or) {
-    return std::move(doc_or.error());
-  }
-  return visit_relationship_nodes(doc_or.value(), std::forward<Fn>(fn));
+  pugi::xml_document doc;
+  RETURN_IF_ERROR(load_relationship_document(zip, rels_path, label, context, &doc));
+  return visit_relationship_nodes(doc, std::forward<Fn>(fn));
 }
 
 /// `visit_relationship_nodes` for the OOXML reader, which is the common

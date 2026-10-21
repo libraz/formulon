@@ -79,9 +79,9 @@ TEST(SheetRelsReuse, OneExtractionFeedsEveryCollectorAndPreservesOrderAndTargets
   ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(ByteSpan{package.data(), package.size()}, xml.size())));
 
-  auto document_or = load_relationship_document(zip, kSheetRelsPath, "sheet rels", "ooxml_reader");
+  pugi::xml_document document;
+  auto document_or = load_relationship_document(zip, kSheetRelsPath, "sheet rels", "ooxml_reader", &document);
   ASSERT_TRUE(static_cast<bool>(document_or)) << document_or.error().message;
-  pugi::xml_document document = document_or.take();
 
   auto tables_or = collect_sheet_table_targets(document, kSheetDir);
   ASSERT_TRUE(static_cast<bool>(tables_or)) << tables_or.error().message;
@@ -123,7 +123,8 @@ TEST(SheetRelsReuse, DocumentLoaderKeepsMalformedAndMissingEnvelopeErrors) {
   const std::vector<std::uint8_t> malformed = MakeZip(kSheetRelsPath, "<Relationships>");
   ZipReader malformed_zip;
   ASSERT_TRUE(static_cast<bool>(malformed_zip.open(ByteSpan{malformed.data(), malformed.size()})));
-  auto parse_or = load_relationship_document(malformed_zip, kSheetRelsPath, "sheet rels", "ooxml_reader");
+  pugi::xml_document parse_doc;
+  auto parse_or = load_relationship_document(malformed_zip, kSheetRelsPath, "sheet rels", "ooxml_reader", &parse_doc);
   ASSERT_FALSE(static_cast<bool>(parse_or));
   EXPECT_EQ(parse_or.error().code, FormulonErrorCode::kIoXmlParse);
   EXPECT_EQ(parse_or.error().message, "sheet rels: pugixml parse failed");
@@ -133,7 +134,9 @@ TEST(SheetRelsReuse, DocumentLoaderKeepsMalformedAndMissingEnvelopeErrors) {
   const std::vector<std::uint8_t> missing_root = MakeZip(kSheetRelsPath, "<wrongRoot/>");
   ZipReader missing_root_zip;
   ASSERT_TRUE(static_cast<bool>(missing_root_zip.open(ByteSpan{missing_root.data(), missing_root.size()})));
-  auto envelope_or = load_relationship_document(missing_root_zip, kSheetRelsPath, "sheet rels", "ooxml_reader");
+  pugi::xml_document envelope_doc;
+  auto envelope_or =
+      load_relationship_document(missing_root_zip, kSheetRelsPath, "sheet rels", "ooxml_reader", &envelope_doc);
   ASSERT_FALSE(static_cast<bool>(envelope_or));
   EXPECT_EQ(envelope_or.error().code, FormulonErrorCode::kIoRelationshipBroken);
   EXPECT_EQ(envelope_or.error().message, "sheet rels: missing <Relationships>");

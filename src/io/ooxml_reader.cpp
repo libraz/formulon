@@ -555,8 +555,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
     if (zip.has_entry(sheet_rels_path)) {
       const std::string sheet_dir = ooxml::dir_of(sheet_path);
-      ASSIGN_OR_RETURN(auto sheet_rels_doc,
-                       ooxml::load_relationship_document(zip, sheet_rels_path, "sheet rels", "ooxml_reader"));
+      pugi::xml_document sheet_rels_doc;
+      RETURN_IF_ERROR(
+          ooxml::load_relationship_document(zip, sheet_rels_path, "sheet rels", "ooxml_reader", &sheet_rels_doc));
       ASSIGN_OR_RETURN(auto targets, ooxml::collect_sheet_table_targets(sheet_rels_doc, sheet_dir));
       consumed_parts.insert(sheet_rels_path);
       for (const std::string& table_path : targets) {
