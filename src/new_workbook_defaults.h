@@ -55,6 +55,11 @@ const NewWorkbookDefaults& new_workbook_defaults(ExcelLocale locale);
 /// the sheet row metrics, page margins and `phoneticPr`.
 void apply_new_workbook_defaults(ExcelProfile profile, StylesTable& styles, Sheet& sheet);
 
+/// Applies the sheet half of `profile`'s row to a sheet added to a new
+/// workbook later: the row metrics, page margins and `phoneticPr` its
+/// first sheet received.
+void apply_new_sheet_defaults(ExcelProfile profile, Sheet& sheet);
+
 }  // namespace formulon
 
 #endif  // FORMULON_NEW_WORKBOOK_DEFAULTS_H_

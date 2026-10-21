@@ -306,6 +306,7 @@ Workbook Workbook::create() {
 Workbook Workbook::create_for_profile(const ExcelProfile& profile) {
   Workbook wb;
   wb.excel_profile_ = profile;
+  wb.new_sheet_profile_ = profile;
   wb.sheets_.emplace_back(Sheet{std::string(new_workbook_defaults(profile.locale).sheet_name)});
   seed_default_styles(wb.styles_);
   apply_new_workbook_defaults(profile, wb.styles_, wb.sheets_.front());
@@ -346,8 +347,11 @@ Expected<void, Error> check_sheet_headroom(std::size_t current_count) {
 // Appends a sheet and re-points formulas that already name it. The caller
 // holds the compound-mutation mutex.
 void append_sheet(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
-                  const Workbook& workbook, std::string name) {
+                  const Workbook& workbook, std::string name, const ExcelProfile* new_sheet_profile) {
   sheets.emplace_back(Sheet{std::move(name)});
+  if (new_sheet_profile != nullptr) {
+    apply_new_sheet_defaults(*new_sheet_profile, sheets.back());
+  }
   if (mutator.has_ever_registered_formula()) {
     reindex_formulas_referencing_sheet(sheets, mutator, workbook, sheets.back().name());
   }
@@ -361,14 +365,14 @@ std::size_t Workbook::add_sheet(std::string name) {
   if (!check_sheet_headroom(sheets_.size()).has_value()) {
     return kMaxSheets;
   }
-  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name));
+  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name), new_sheet_profile());
   return sheets_.size() - 1U;
 }
 
 Expected<std::size_t, Error> Workbook::add_sheet_checked(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
-  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name));
+  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name), new_sheet_profile());
   return sheets_.size() - 1U;
 }
 
@@ -382,7 +386,7 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
     }
   }
   RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
-  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name));
+  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name), new_sheet_profile());
   return &sheets_.back();
 }
 

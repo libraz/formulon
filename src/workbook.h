@@ -111,7 +111,9 @@ class Workbook {
   /// defaults. Windows values other than the size are estimated from the
   /// Mac values. No theme part is created; Excel reads its absence as
   /// the Office theme. The phonetic font (font 1) keeps the locale face
-  /// when font 0 is changed later.
+  /// when font 0 is changed later. Sheets added afterwards through any
+  /// `add_sheet*` receive the first sheet's row metrics, page margins and
+  /// `phoneticPr`.
   static Workbook create_for_profile(const ExcelProfile& profile);
 
   Workbook(const Workbook&) = delete;
@@ -1203,6 +1205,14 @@ class Workbook {
   std::string workbook_root_extra_attrs_;
   // Formula compatibility profile. Runtime default is `win-365-en_US`.
   ExcelProfile excel_profile_ = default_excel_profile();
+  // Set by `create_for_profile` and kept across `set_excel_profile`: sheets
+  // added later receive the same sheet defaults as the first one. Loaded
+  // and plain workbooks keep bare new sheets, since their Normal font need
+  // not be the profile's.
+  std::optional<ExcelProfile> new_sheet_profile_;
+  const ExcelProfile* new_sheet_profile() const noexcept {
+    return new_sheet_profile_.has_value() ? &*new_sheet_profile_ : nullptr;
+  }
   // Workbook-scoped style records (fonts, fills, borders, num fmts,
   // and the cellXfs index that ties them together). The default table
   // is empty and the writer falls back to a minimal-but-valid styles

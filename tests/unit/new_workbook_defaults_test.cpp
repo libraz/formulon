@@ -240,6 +240,59 @@ TEST(NewWorkbookDefaults, WindowsEstimateUsesBodySize11AndEngineRowMetrics) {
   CheckProfile(kMac[0], "win-365-en_US", /*mac=*/false);
 }
 
+TEST(NewWorkbookDefaults, AddedSheetsMatchTheFirstSheet) {
+  for (const char* id : {"mac-365-ja_JP", "mac-365-ko_KR", "mac-365-de_DE", "win-365-ja_JP"}) {
+    SCOPED_TRACE(id);
+    const ExcelProfile profile = ProfileOf(id);
+    const bool mac = profile.host == ExcelHost::kMac365;
+    const Captured* c = nullptr;
+    for (const Captured& row : kMac) {
+      if (ProfileOf(row.profile_id).locale == profile.locale) {
+        c = &row;
+      }
+    }
+    ASSERT_NE(c, nullptr);
+    Workbook wb = Workbook::create_for_profile(profile);
+    ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("Second")));
+    ASSERT_TRUE(static_cast<bool>(wb.add_sheet_checked("Third")));
+    const std::vector<std::uint8_t> pkg = Save(wb);
+    ASSERT_FALSE(pkg.empty());
+    for (const char* part : {"xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml"}) {
+      SCOPED_TRACE(part);
+      pugi::xml_document sheet;
+      LoadPart(pkg, part, &sheet);
+      ExpectSheetXml(sheet, *c, mac);
+    }
+  }
+}
+
+TEST(NewWorkbookDefaults, AddedSheetsKeepTheCreationProfileAfterAProfileSwitch) {
+  Workbook wb = Workbook::create_for_profile(ProfileOf("mac-365-ja_JP"));
+  wb.set_excel_profile(ProfileOf("win-365-en_US"));
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("Second")));
+  const Sheet& first = wb.sheet(0);
+  const Sheet& second = wb.sheet(1);
+  EXPECT_TRUE(second.format_defaults().has_default_row_height);
+  EXPECT_EQ(second.format_defaults().default_row_height, first.format_defaults().default_row_height);
+  EXPECT_EQ(second.print_settings().page_margins_xml, first.print_settings().page_margins_xml);
+  EXPECT_EQ(second.raw_extensions().size(), first.raw_extensions().size());
+}
+
+TEST(NewWorkbookDefaults, PlainAndLoadedWorkbooksAddBareSheets) {
+  Workbook plain = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(plain.add_sheet_validated("Second")));
+  EXPECT_FALSE(plain.sheet(1).format_defaults().has_default_row_height);
+  EXPECT_TRUE(plain.sheet(1).print_settings().page_margins_xml.empty());
+
+  const std::vector<std::uint8_t> pkg = Save(Workbook::create_for_profile(ProfileOf("mac-365-ja_JP")));
+  auto loaded = io::read_ooxml(io::ByteSpan{pkg.data(), pkg.size()});
+  ASSERT_TRUE(static_cast<bool>(loaded));
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("Second")));
+  EXPECT_FALSE(wb.sheet(1).format_defaults().has_default_row_height);
+  EXPECT_TRUE(wb.sheet(1).raw_extensions().empty());
+}
+
 TEST(NewWorkbookDefaults, CreateIsUnchanged) {
   const Workbook wb = Workbook::create();
   ASSERT_EQ(wb.styles().fonts.size(), 1U);
