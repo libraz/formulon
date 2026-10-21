@@ -601,7 +601,9 @@ FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index
  * A workbook with no `<bookViews>` (an XLSB load included) reports its first
  * `tabSelected` sheet, else `0`; an `activeTab` outside the sheet list
  * reports `0`. Inserting, removing and moving sheets keep the stored index
- * on the sheet it named.
+ * on the sheet it named; removing or hiding the active sheet activates the
+ * first visible sheet after it, else the nearest visible one before it, as
+ * Excel does.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
@@ -638,7 +640,8 @@ FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t inde
  * table sheet indices are remapped; pivot caches whose worksheet source was
  * removed, and the pivot tables bound to them, are dropped. The recalc
  * engine's dep-graph entries for cells on the removed sheet are
- * unregistered.
+ * unregistered. Removing the active sheet activates its visible successor
+ * (`fm_workbook_get_active_sheet`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -932,8 +935,10 @@ FM_API fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, size_t 
  * The flag only says whether the guide is displayed. It is independent of the
  * readings and survives value writes, so re-entering a cell's value does not
  * clear it (the readings, by contrast, are cleared). A blank cell carrying
- * only the flag is kept and saved. Row (`ph`) and column (`phonetic`) flags
- * read from OOXML are preserved on save but have no setter here.
+ * only the flag is kept and saved; a formula cell's flag is not saved, as
+ * Excel keeps it on constants and blanks only. Row (`ph`) and column
+ * (`phonetic`) flags read from OOXML are preserved on save but have no setter
+ * here.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` is `NULL`;
@@ -5209,8 +5214,7 @@ FM_API fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_in
  * `0` (size the buffer first). A sheet that stores no selection reports `A1`
  * and one range, `A1`; a selection without an explicit `sqref` is the active
  * cell alone. Whole-row and whole-column references read as full-width /
- * full-height ranges. The selection is carried by XLSX only: an XLSB load
- * reports the default and an XLSB save drops it.
+ * full-height ranges.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `out_active_row`, `out_active_col`
@@ -6027,7 +6031,8 @@ FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, ui
  * hidden state. A very-hidden sheet loaded from a file therefore keeps that
  * visibility on save unless this call shows it. To state the stronger
  * visibility, or to demote very-hidden to plain hidden, call
- * `fm_sheet_set_visibility`.
+ * `fm_sheet_set_visibility`. Hiding the active sheet activates its visible
+ * successor (`fm_workbook_get_active_sheet`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -6046,7 +6051,8 @@ FM_API fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index
  *
  * `visibility` is a raw signed 32-bit ordinal, not a validated enum type:
  * a value outside `fm_sheet_visibility_t` returns `kInvalidArgument` and
- * leaves the sheet unchanged.
+ * leaves the sheet unchanged. Hiding the active sheet activates its visible
+ * successor (`fm_workbook_get_active_sheet`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;

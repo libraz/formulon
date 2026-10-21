@@ -935,6 +935,11 @@ class Workbook {
   /// survive verbatim. Requires `index < sheet_count()`.
   void set_active_sheet(std::uint32_t index);
 
+  /// The sheet Excel activates when sheet `index` is hidden or deleted: the
+  /// first visible one after it, else the nearest visible one before it, else
+  /// `index` itself.
+  std::uint32_t nearest_visible_sheet(std::uint32_t index) const;
+
   /// Raw `<workbookProtection>` element captured from workbook.xml, or
   /// empty.
   const std::string& workbook_protection_xml() const noexcept { return workbook_protection_xml_; }

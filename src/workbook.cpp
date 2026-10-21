@@ -575,6 +575,20 @@ std::uint32_t Workbook::active_sheet() const {
   return index < sheets_.size() ? index : 0U;
 }
 
+std::uint32_t Workbook::nearest_visible_sheet(std::uint32_t index) const {
+  for (std::size_t i = static_cast<std::size_t>(index) + 1U; i < sheets_.size(); ++i) {
+    if (sheets_[i].view().visibility() == SheetVisibility::kVisible) {
+      return static_cast<std::uint32_t>(i);
+    }
+  }
+  for (std::size_t i = index; i > 0U; --i) {
+    if (sheets_[i - 1U].view().visibility() == SheetVisibility::kVisible) {
+      return static_cast<std::uint32_t>(i - 1U);
+    }
+  }
+  return index;
+}
+
 void Workbook::set_active_sheet(std::uint32_t index) {
   set_book_views_active_tab(book_views_xml_, index);
   for (std::size_t i = 0; i < sheets_.size(); ++i) {
@@ -599,16 +613,14 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   const std::string removed_name = sheets_[index].name();
 
   std::vector<std::uint32_t> old_to_new(sheets_.size());
-  const std::uint32_t new_last_index = static_cast<std::uint32_t>(sheets_.size() - 2U);
   for (std::uint32_t old_index = 0; old_index < old_to_new.size(); ++old_index) {
-    if (old_index < index) {
-      old_to_new[old_index] = old_index;
-    } else if (old_index > index) {
-      old_to_new[old_index] = old_index - 1U;
-    } else {
-      old_to_new[old_index] = std::min(index, new_last_index);
-    }
+    old_to_new[old_index] = old_index > index ? old_index - 1U : old_index;
   }
+  // A view naming the removed sheet moves to the sheet Excel activates in its place.
+  const std::uint32_t successor = nearest_visible_sheet(index);
+  const std::uint32_t new_last_index = static_cast<std::uint32_t>(sheets_.size() - 2U);
+  old_to_new[index] = successor != index ? old_to_new[successor] : std::min(index, new_last_index);
+  const bool removes_active = active_sheet() == index;
   remap_book_views_xml(book_views_xml_, old_to_new);
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
@@ -689,6 +701,9 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   // order. One and only one final reindex sees the final sheet/name/table/
   // cache topology and dirties every surviving formula consistently.
   sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
+  if (removes_active) {
+    set_active_sheet(old_to_new[index]);
+  }
   io::ooxml::remove_orphans(*this, std::move(drawing_candidates));
   reindex_all_formulas(sheets_, mutator, *this);
   return Expected<void, Error>::Ok();

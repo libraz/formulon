@@ -28,6 +28,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sst_writer.h"
+#include "io/xlsb/view_records.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "style_resolve.h"
@@ -168,26 +169,7 @@ void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const Sheet
   emit_u16(view, 0U);
   emit_u32(view, 0U);  // workbook view index
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView), view);
-  if (sheet_view.freeze_rows != 0U || sheet_view.freeze_cols != 0U) {
-    // BrtPane uses the frozen row and column counts in the two Xnum fields,
-    // and identifies the bottom-right pane as the active pane. fFrozenNoSplit
-    // represents Excel's ordinary "Freeze Panes" state.
-    std::vector<std::uint8_t> pane;
-    emit_double(pane, static_cast<double>(sheet_view.freeze_rows));
-    emit_double(pane, static_cast<double>(sheet_view.freeze_cols));
-    std::uint32_t pane_row = sheet_view.freeze_rows;
-    std::uint32_t pane_col = sheet_view.freeze_cols;
-    (void)a1::parse_a1_ref(sheet_view.pane_top_left_cell, &pane_row, &pane_col);
-    emit_u32(pane, pane_row);
-    emit_u32(pane, pane_col);
-    const std::string_view active_pane = sheet_view.effective_active_pane();
-    emit_u32(pane, active_pane == "topRight"     ? 1U
-                   : active_pane == "bottomLeft" ? 2U
-                   : active_pane == "topLeft"    ? 3U
-                                                 : 0U);
-    emit_u8(pane, 0x02U);
-    emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtPane), pane);
-  }
+  emit_pane_and_selections(dst, sheet_view);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsView), ByteSpan{});
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
 

@@ -89,6 +89,8 @@ enum class XlsbRecordType : std::uint16_t {
   BrtEndWsViews = 134,       ///< End of worksheet-view collection.
   BrtBeginWsView = 137,      ///< One worksheet view.
   BrtEndWsView = 138,        ///< End of one worksheet view.
+  BrtPane = 151,             ///< Split or frozen panes for a worksheet view.
+  BrtSel = 152,              ///< One pane's selection within a worksheet view.
   BrtWbProp = 153,           ///< Workbook properties, including the date system.
   BrtBeginBundleShs = 143,   ///< Start of the sheet-bundle list.
   BrtEndBundleShs = 144,     ///< End of the sheet-bundle list.
@@ -161,7 +163,6 @@ enum class XlsbRecordType : std::uint16_t {
   // leading `RfX` (row/col range).
   BrtArrFmla = 426,
   BrtWsFmtInfo = 485,  ///< Default row/column formatting for a worksheet.
-  BrtPane = 561,       ///< Split or frozen panes for a worksheet view.
 
   // Styles (`xl/styles.bin`): custom number formats and the font / fill
   // / border / xf tables `iStyleRef` (in the per-cell header) indexes

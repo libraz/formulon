@@ -528,15 +528,17 @@ constexpr std::uint16_t kDefaultWsPropFlags = 0x04C9U;
 
 /// `BrtSel`, the per-view selection state: a record Excel writes into
 /// every worksheet prefix, and one the model has no field for.
-constexpr std::uint16_t kBrtSel = 152;
+constexpr std::uint16_t kBrtPane = 151;
 
-std::vector<std::uint8_t> SelectionPayload() {
+// An unfrozen split, which the model does not carry.
+std::vector<std::uint8_t> SplitPanePayload() {
   std::vector<std::uint8_t> p;
-  AppendU32(p, 3U);  // pnn: bottom-right pane
-  AppendU32(p, 0U);  // rwAct
-  AppendU32(p, 0U);  // colAct
-  AppendU32(p, 0U);  // irefAct
-  AppendU32(p, 0U);  // cref
+  AppendDouble(p, 2000.0);  // xnumXSplit (twips)
+  AppendDouble(p, 1500.0);  // xnumYSplit (twips)
+  AppendU32(p, 9U);         // rwTop
+  AppendU32(p, 3U);         // colLeft
+  AppendU32(p, 0U);         // pnnAcct: bottom-right pane
+  p.push_back(0x00U);       // neither fFrozen nor fFrozenNoSplit
   return p;
 }
 
@@ -548,7 +550,9 @@ std::vector<std::uint8_t> SelectionPayload() {
 /// what happens to the records around it.
 std::vector<std::uint8_t> SheetBinFramed(const std::vector<std::uint8_t>& ws_prop,
                                          const std::vector<RawRecord>& prefix_extra = {},
-                                         const std::vector<RawRecord>& tail_extra = {}) {
+                                         const std::vector<RawRecord>& tail_extra = {},
+                                         const std::vector<RawRecord>& view_extra = {},
+                                         const std::vector<std::uint8_t>* ws_view = nullptr) {
   std::vector<std::uint8_t> body;
   AppendRecord(body, 129, {});       // BrtBeginSheet
   AppendRecord(body, 147, ws_prop);  // BrtWsProp
@@ -574,7 +578,10 @@ std::vector<std::uint8_t> SheetBinFramed(const std::vector<std::uint8_t>& ws_pro
     p.push_back(0);
     p.push_back(100U);  // wScale
     p.push_back(0);
-    AppendRecord(body, 137, p);  // BrtBeginWsView
+    AppendRecord(body, 137, ws_view != nullptr ? *ws_view : p);  // BrtBeginWsView
+  }
+  for (const RawRecord& record : view_extra) {
+    AppendRecord(body, record.type, record.payload);
   }
   AppendRecord(body, 138, {});  // BrtEndWsView
   AppendRecord(body, 134, {});  // BrtEndWsViews
@@ -615,7 +622,7 @@ TEST(XlsbRecordDisposition, APrefixRecordWithNoModelFieldIsCounted) {
   // splice foreign bytes into. A prefix record the reader does not decode
   // is therefore lost -- and has to say so.
   const std::vector<std::uint8_t> archive = BuildPackage(
-      SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""), {{kBrtSel, SelectionPayload()}}));
+      SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""), {{kBrtPane, SplitPanePayload()}}));
   auto result = io::xlsb::read_xlsb(test::span_of(archive));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().dropped_record_count, 1U);
@@ -626,7 +633,7 @@ TEST(XlsbRecordDisposition, TheSameRecordInTheTailIsRetainedInsteadOfCounted) {
   // Past the cell table the writer appends retained bytes verbatim, so the
   // record survives and nothing is reported lost.
   const std::vector<std::uint8_t> archive = BuildPackage(
-      SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""), {}, {{kBrtSel, SelectionPayload()}}));
+      SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""), {}, {{kBrtPane, SplitPanePayload()}}));
   auto result = io::xlsb::read_xlsb(test::span_of(archive));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().dropped_record_count, 0U);
@@ -640,15 +647,110 @@ TEST(XlsbRecordDisposition, TheSameRecordInTheTailIsRetainedInsteadOfCounted) {
             result.value().workbook.sheet(0).xlsb_tail().before_merges);
 }
 
-TEST(XlsbRecordDisposition, RealWorkbookCountsOnlyItsSelectionRecords) {
+std::vector<std::uint8_t> WsViewPayload(std::uint32_t top_row, std::uint32_t left_col) {
+  std::vector<std::uint8_t> p = {0x9CU, 0x03U};
+  AppendU32(p, 0U);  // view type
+  AppendU32(p, top_row);
+  AppendU32(p, left_col);
+  p.insert(p.end(), {0x40U, 0U, 0U, 0U, 100U, 0U, 0U, 0U, 0U, 0U, 0U, 0U});
+  AppendU32(p, 0U);  // iWbkView
+  return p;
+}
+
+std::vector<std::uint8_t> SelPayload(std::uint32_t pane, std::uint32_t row, std::uint32_t col,
+                                     const std::vector<std::array<std::uint32_t, 4>>& rfx) {
+  std::vector<std::uint8_t> p;
+  AppendU32(p, pane);
+  AppendU32(p, row);
+  AppendU32(p, col);
+  AppendU32(p, 0U);
+  AppendU32(p, static_cast<std::uint32_t>(rfx.size()));
+  for (const auto& r : rfx) {
+    for (std::uint32_t v : r) {
+      AppendU32(p, v);
+    }
+  }
+  return p;
+}
+
+TEST(XlsbSheetView, AnOffGridScrollOriginIsIgnored) {
+  const std::vector<std::uint8_t> ws_view = WsViewPayload(Sheet::kMaxRows, 2U);
+  const std::vector<std::uint8_t> archive =
+      BuildPackage(SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""), {}, {}, {}, &ws_view));
+  auto result = io::xlsb::read_xlsb(test::span_of(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().workbook.sheet(0).view().top_left_cell, "");
+}
+
+TEST(XlsbSheetView, AnInconsistentOrOffGridSelectionIsCountedNotKept) {
+  std::vector<std::uint8_t> short_count = SelPayload(3U, 1U, 1U, {{1U, 1U, 1U, 1U}});
+  short_count[16] = 2U;  // claims two ranges, carries one
+  // A count whose 16-byte ranges would wrap a 32-bit size back to this payload's size.
+  std::vector<std::uint8_t> wrapping_count = SelPayload(3U, 1U, 1U, {{1U, 1U, 1U, 1U}});
+  const std::uint32_t wrap = 0x10000001U;
+  std::memcpy(wrapping_count.data() + 16, &wrap, sizeof(wrap));
+  const std::vector<std::uint8_t> archive =
+      BuildPackage(SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""), {}, {},
+                                  {{152, short_count},
+                                   {152, wrapping_count},
+                                   {152, SelPayload(3U, 1U, 1U, {})},
+                                   {152, SelPayload(3U, 1U, 1U, {{1U, Sheet::kMaxRows, 1U, 1U}})},
+                                   {152, SelPayload(3U, 1U, 1U, {{3U, 1U, 1U, 1U}})},
+                                   {152, SelPayload(4U, 1U, 1U, {{1U, 1U, 1U, 1U}})},
+                                   {152, SelPayload(3U, 4U, 2U, {{4U, 6U, 0U, Sheet::kMaxCols - 1U}})}}));
+  auto result = io::xlsb::read_xlsb(test::span_of(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().dropped_record_count, 6U);
+  const std::vector<SheetSelection>& selections = result.value().workbook.sheet(0).view().selections;
+  ASSERT_EQ(selections.size(), 1U);
+  EXPECT_EQ(selections[0].pane, "topLeft");
+  EXPECT_EQ(selections[0].active_cell, "C5");
+  EXPECT_EQ(selections[0].sqref, "A5:XFD7");
+}
+
+std::vector<std::uint8_t> FrozenPanePayload(double cols, double rows) {
+  std::vector<std::uint8_t> p;
+  AppendDouble(p, cols);
+  AppendDouble(p, rows);
+  AppendU32(p, static_cast<std::uint32_t>(rows));
+  AppendU32(p, static_cast<std::uint32_t>(cols));
+  AppendU32(p, 0U);
+  p.push_back(0x03U);
+  return p;
+}
+
+TEST(XlsbSheetView, PaneAndSelectionOutsideTheMainViewAreNotFoldedIntoIt) {
+  // A second window's view, and pane / selection records in the tail (as a
+  // custom sheet view carries them), leave the main view alone.
+  const std::vector<std::uint8_t> archive = BuildPackage(
+      SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""),
+                     {{137, WsViewPayload(3U, 2U)},
+                      {kBrtPane, FrozenPanePayload(1.0, 2.0)},
+                      {152, SelPayload(3U, 5U, 5U, {{5U, 5U, 5U, 5U}})},
+                      {138, {}}},
+                     {{kBrtPane, FrozenPanePayload(1.0, 4.0)}, {152, SelPayload(0U, 7U, 7U, {{7U, 7U, 7U, 7U}})}},
+                     {{152, SelPayload(3U, 1U, 1U, {{1U, 1U, 1U, 1U}})}}));
+  auto result = io::xlsb::read_xlsb(test::span_of(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  const SheetView& view = result.value().workbook.sheet(0).view();
+  EXPECT_EQ(view.freeze_rows, 0U);
+  EXPECT_EQ(view.freeze_cols, 0U);
+  EXPECT_EQ(view.top_left_cell, "");
+  ASSERT_EQ(view.selections.size(), 1U);
+  EXPECT_EQ(view.selections[0].active_cell, "B2");
+  // The second view's three records are counted; the tail's two are retained.
+  EXPECT_EQ(result.value().dropped_record_count, 3U);
+  EXPECT_FALSE(result.value().workbook.sheet(0).xlsb_tail().empty());
+}
+
+TEST(XlsbRecordDisposition, RealWorkbookDropsNoRecords) {
   const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath("xlsb_fidelity_base.xlsb"));
   ASSERT_FALSE(bytes.empty());
   auto result = io::xlsb::read_xlsb(test::span_of(bytes));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  // Both sheets carry a `BrtSel` and nothing else the reader leaves
-  // behind. Pinning the exact number is the point: a record type that
-  // starts being dropped becomes visible here.
-  EXPECT_EQ(result.value().dropped_record_count, 2U);
+  // Pinning the exact number is the point: a record type that starts being
+  // dropped becomes visible here.
+  EXPECT_EQ(result.value().dropped_record_count, 0U);
 }
 
 // ---------------------------------------------------------------------------

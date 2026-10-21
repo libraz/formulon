@@ -323,7 +323,8 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // that tells Excel this `t="array"` is a modern spill rather than a
     // legacy CSE array on reopen; emitted only when the saved package
     // carries a resolved entry for it.
-    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell), cell.show_phonetic);
+    // Excel keeps `ph` on constants and blanks only.
+    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
     AppendFormulaValueType(out, cell.cached_value);
     if (dynamic) {
       append_xml_attr_uint(out, "cm", dynamic_array_cm_index);

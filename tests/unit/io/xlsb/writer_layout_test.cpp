@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <map>
 #include <string>
@@ -274,7 +275,13 @@ TEST(XlsbWriter, SheetViewAndFrozenPanesSurviveRoundTrip) {
     saw_pane = true;
     ByteSpan pane = rec_or.value().payload;
     ASSERT_EQ(pane.size, 29U);
-    pane.data += 16U;  // two Xnum frozen row/column counts
+    double cols = 0.0;
+    double rows = 0.0;
+    std::memcpy(&cols, pane.data, sizeof(cols));
+    std::memcpy(&rows, pane.data + sizeof(cols), sizeof(rows));
+    EXPECT_EQ(cols, 2.0);
+    EXPECT_EQ(rows, 3.0);
+    pane.data += 16U;  // Xnum column split, then row split
     pane.size -= 16U;
     auto top_row_or = read_u32(pane);
     auto left_col_or = read_u32(pane);
@@ -284,7 +291,7 @@ TEST(XlsbWriter, SheetViewAndFrozenPanesSurviveRoundTrip) {
     EXPECT_EQ(top_row_or.value(), 3U);
     EXPECT_EQ(left_col_or.value(), 2U);
     EXPECT_EQ(active_pane_or.value(), 0U);
-    EXPECT_EQ(flags_or.value(), 0x02U);
+    EXPECT_EQ(flags_or.value(), 0x03U);  // fFrozen | fFrozenNoSplit, as Excel writes a freeze
   }
   EXPECT_TRUE(saw_pane);
 

@@ -245,9 +245,10 @@ TEST(XlsbWriter, EmitsRequiredWorksheetPrefixInSpecificationOrder) {
 
   ByteSpan cursor = SpanOf(sheet_or.value());
   const std::vector<XlsbRecordType> expected = {
-      XlsbRecordType::BrtBeginSheet,   XlsbRecordType::BrtWsProp,      XlsbRecordType::BrtWsDim,
-      XlsbRecordType::BrtBeginWsViews, XlsbRecordType::BrtBeginWsView, XlsbRecordType::BrtEndWsView,
-      XlsbRecordType::BrtEndWsViews,   XlsbRecordType::BrtWsFmtInfo,   XlsbRecordType::BrtBeginSheetData,
+      XlsbRecordType::BrtBeginSheet,     XlsbRecordType::BrtWsProp,      XlsbRecordType::BrtWsDim,
+      XlsbRecordType::BrtBeginWsViews,   XlsbRecordType::BrtBeginWsView, XlsbRecordType::BrtSel,
+      XlsbRecordType::BrtEndWsView,      XlsbRecordType::BrtEndWsViews,  XlsbRecordType::BrtWsFmtInfo,
+      XlsbRecordType::BrtBeginSheetData,
   };
   for (const XlsbRecordType type : expected) {
     auto record_or = read_record(cursor);

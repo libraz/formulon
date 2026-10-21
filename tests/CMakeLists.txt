@@ -146,6 +146,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb/writer_formula_test.cpp
   unit/io/xlsb/writer_layout_test.cpp
+  unit/io/xlsb/sheet_view_excel_fixture_test.cpp
   unit/io/sheet_format_pr_roundtrip_test.cpp
   unit/io/xlsb/writer_metadata_test.cpp
   unit/io/xlsb_fidelity_test.cpp

@@ -34,7 +34,9 @@ namespace {
 constexpr std::uint32_t kShowPhoneticShift = 24U;
 
 std::uint32_t StyleWord(const Cell& cell) {
-  return (cell.xf_index & 0xFFFFFFU) | (cell.show_phonetic ? (1U << kShowPhoneticShift) : 0U);
+  // Excel keeps fPhShow on constants and blanks only.
+  const bool show_phonetic = cell.show_phonetic && cell.formula_text.empty();
+  return (cell.xf_index & 0xFFFFFFU) | (show_phonetic ? (1U << kShowPhoneticShift) : 0U);
 }
 
 /// Emits the standard XLSB cell-header (column, iStyleRef, fPhShow):

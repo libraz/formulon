@@ -154,6 +154,80 @@ TEST(FormulonCApiWorkbookView, SetActiveSheetRejectsHiddenSheets) {
   EXPECT_EQ(ActiveSheet(wb.handle), 0U);
 }
 
+// Excel moves the active tab to the next visible sheet on the right, else the
+// nearest visible one on the left, when the active sheet is hidden or deleted.
+TEST(FormulonCApiWorkbookView, HidingOrRemovingTheActiveSheetActivatesTheNextVisibleOne) {
+  const auto five_sheets = [](WorkbookGuard& wb) {
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    for (const char* name : {"S1", "S2", "S3", "S4"}) {
+      ASSERT_EQ(fm_workbook_add_sheet(wb.handle, name), 0);
+    }
+  };
+  const auto tab_selected = [](const WorkbookGuard& wb, std::size_t sheet) {
+    fm_sheet_view_t view{};
+    EXPECT_EQ(fm_sheet_get_view(wb.handle, sheet, &view), 0);
+    return view.tab_selected != 0;
+  };
+  {
+    WorkbookGuard wb;
+    five_sheets(wb);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), 0);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 1, FM_SHEET_HIDDEN), 0);
+    EXPECT_EQ(ActiveSheet(wb.handle), 3U);
+    EXPECT_TRUE(tab_selected(wb, 3));
+    EXPECT_FALSE(tab_selected(wb, 1));
+  }
+  {
+    WorkbookGuard wb;
+    five_sheets(wb);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_VERY_HIDDEN), 0);
+    ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 3), 0);
+    ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 3, 1), 0);
+    EXPECT_EQ(ActiveSheet(wb.handle), 2U);
+    EXPECT_TRUE(tab_selected(wb, 2));
+  }
+  {
+    WorkbookGuard wb;
+    five_sheets(wb);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 2, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 1), 0);
+    ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 1), 0);
+    // Old S3 (now index 2) became active; hidden old S2 (now index 1) was skipped.
+    EXPECT_EQ(ActiveSheet(wb.handle), 2U);
+    EXPECT_TRUE(tab_selected(wb, 2));
+  }
+  {
+    WorkbookGuard wb;
+    five_sheets(wb);
+    ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 4, FM_SHEET_HIDDEN), 0);
+    ASSERT_EQ(fm_workbook_set_active_sheet(wb.handle, 3), 0);
+    ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 3), 0);
+    EXPECT_EQ(ActiveSheet(wb.handle), 2U);
+    EXPECT_TRUE(tab_selected(wb, 2));
+  }
+}
+
+// Excel drops "Show Phonetic" from every formula cell on save, keeping it on
+// constants and blanks.
+TEST(FormulonCApiWorkbookView, SavesWriteShowPhoneticOnNonFormulaCellsOnly) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=1+1"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 1, 5.0), 0);
+  ASSERT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 0, 0, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_set_cell_show_phonetic(wb.handle, 0, 0, 1, 1), 0);
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    WorkbookGuard reloaded;
+    Load(Save(wb.handle, format), reloaded);
+    int32_t show = -1;
+    ASSERT_EQ(fm_workbook_get_cell_show_phonetic(reloaded.handle, 0, 0, 0, &show), 0);
+    EXPECT_EQ(show, 0) << "format " << format;
+    ASSERT_EQ(fm_workbook_get_cell_show_phonetic(reloaded.handle, 0, 0, 1, &show), 0);
+    EXPECT_EQ(show, 1) << "format " << format;
+  }
+}
+
 TEST(FormulonCApiWorkbookView, SheetEditsKeepTheActiveSheetValid) {
   WorkbookGuard wb;
   Load(BuildPackage("<bookViews><workbookView activeTab=\"2\"/></bookViews>"), wb);
@@ -417,16 +491,15 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
     EXPECT_EQ(view.top_left_row, 5U) << "format " << format;
     EXPECT_EQ(view.pane_top_left_row, 40U) << "format " << format;
     EXPECT_EQ(view.pane_top_left_col, 6U) << "format " << format;
-    EXPECT_EQ(view.freeze_rows, 2U);
-    if (format == FM_WORKBOOK_FORMAT_XLSX) {
-      uint32_t row = 0;
-      uint32_t col = 0;
-      size_t count = 0;
-      ASSERT_EQ(fm_sheet_get_selection(reloaded.handle, 0, &row, &col, nullptr, 0, &count), 0);
-      EXPECT_EQ(row, 41U);
-      EXPECT_EQ(col, 7U);
-      EXPECT_EQ(count, 2U);
-    }
+    EXPECT_EQ(view.freeze_rows, 2U) << "format " << format;
+    EXPECT_EQ(view.freeze_cols, 1U) << "format " << format;
+    uint32_t row = 0;
+    uint32_t col = 0;
+    size_t count = 0;
+    ASSERT_EQ(fm_sheet_get_selection(reloaded.handle, 0, &row, &col, nullptr, 0, &count), 0);
+    EXPECT_EQ(row, 41U) << "format " << format;
+    EXPECT_EQ(col, 7U) << "format " << format;
+    EXPECT_EQ(count, 2U) << "format " << format;
   }
 
   // Changing the freeze re-derives the pane and carries the active selection along.

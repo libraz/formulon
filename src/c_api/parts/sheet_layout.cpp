@@ -471,6 +471,21 @@ extern "C" fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index
   return 0;
 }
 
+namespace {
+
+// Hiding the active sheet hands the active tab on as Excel does. Kept out of
+// the Workbook setters so a load replaying a hidden active sheet keeps it.
+void activate_successor_if_hidden(formulon::Workbook& workbook, std::uint32_t index) {
+  if (workbook.sheet(index).view().visibility() != formulon::SheetVisibility::kVisible &&
+      workbook.active_sheet() == index) {
+    if (const std::uint32_t successor = workbook.nearest_visible_sheet(index); successor != index) {
+      workbook.set_active_sheet(successor);
+    }
+  }
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index, int32_t hidden) {
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_tab_hidden"); rc != 0) {
@@ -482,6 +497,7 @@ extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_i
     // cannot express the difference, so asking for "hidden" on a sheet
     // that is hidden says nothing new and must not quietly demote it.
     view.tab_hidden = true;
+    activate_successor_if_hidden(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
   } else {
     // Showing a sheet has to clear both bits, or the workbook would save
     // a state the caller just asked to leave.
@@ -501,6 +517,7 @@ extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_i
   }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
   view.set_visibility(static_cast<formulon::SheetVisibility>(visibility));
+  activate_successor_if_hidden(wb->workbook(), static_cast<std::uint32_t>(sheet_index));
   return 0;
 }
 
@@ -570,40 +587,6 @@ extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t shee
 
 namespace {
 
-// Appends the ranges of an `sqref`. A1 forms go through the shared parser;
-// whole-row (`3:4`) and whole-column (`A:B`) tokens, which it rejects, are
-// widened to the full sheet here.
-void parse_selection_sqref(std::string_view sqref, std::vector<formulon::MergeRange>* ranges) {
-  for (std::size_t at = 0; at < sqref.size();) {
-    const std::size_t end = std::min(sqref.find(' ', at), sqref.size());
-    const std::string_view token = sqref.substr(at, end - at);
-    at = end + 1U;
-    if (formulon::io::parse_sqref_text(token, *ranges)) {
-      continue;
-    }
-    const std::size_t colon = token.find(':');
-    std::size_t head_pos = 0;
-    std::size_t tail_pos = 0;
-    std::uint32_t first = 0;
-    std::uint32_t last = 0;
-    if (colon == std::string_view::npos) {
-      continue;
-    }
-    const std::string_view head = token.substr(0, colon);
-    const std::string_view tail = token.substr(colon + 1U);
-    if (formulon::a1::parse_column_letters(head, &head_pos, &first) && head_pos == head.size() &&
-        formulon::a1::parse_column_letters(tail, &tail_pos, &last) && tail_pos == tail.size()) {
-      if (first <= last && last <= formulon::Sheet::kMaxCols) {
-        ranges->push_back({0U, first - 1U, formulon::Sheet::kMaxRows - 1U, last - 1U});
-      }
-    } else if (head_pos = tail_pos = 0; formulon::a1::parse_uint(head, &head_pos, &first) && head_pos == head.size() &&
-                                        first != 0U && formulon::a1::parse_uint(tail, &tail_pos, &last) &&
-                                        tail_pos == tail.size() && first <= last && last <= formulon::Sheet::kMaxRows) {
-      ranges->push_back({first - 1U, 0U, last - 1U, formulon::Sheet::kMaxCols - 1U});
-    }
-  }
-}
-
 const formulon::SheetSelection* active_selection(const formulon::SheetView& view) {
   for (const formulon::SheetSelection& selection : view.selections) {
     if (formulon::SheetView::pane_key(selection.pane) == formulon::SheetView::pane_key(view.effective_active_pane())) {
@@ -631,7 +614,7 @@ extern "C" fm_status_t fm_sheet_get_selection(const fm_workbook_t* wb, size_t sh
   *out_active_col = 0;
   if (const formulon::SheetSelection* selection = active_selection(wb->workbook().sheet(sheet_index).view());
       selection != nullptr) {
-    parse_selection_sqref(selection->sqref, &ranges);
+    formulon::io::parse_selection_sqref_text(selection->sqref, ranges);
     if (!formulon::a1::parse_a1_ref(selection->active_cell, out_active_row, out_active_col) && !ranges.empty()) {
       *out_active_row = ranges.front().first_row;
       *out_active_col = ranges.front().first_col;

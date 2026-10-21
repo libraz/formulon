@@ -55,6 +55,10 @@ struct SheetDecodeState {
   /// True once `BrtEndSheetData` has been seen: everything from there to
   /// `BrtEndSheet` is tail.
   bool in_tail = false;
+  /// True between the first BrtBeginWsView and its BrtEndWsView, the one
+  /// view the model carries; later windows' views are not folded into it.
+  bool in_main_ws_view = false;
+  bool main_ws_view_seen = false;
   /// True once the merged-cell block, or any record of a later slot, has
   /// been passed. This is the fallback grammar phase for tail records not
   /// covered by an explicit slot id.

@@ -21,6 +21,7 @@
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/sheet_properties_records.h"
+#include "io/xlsb/view_records.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "phonetic.h"
@@ -491,6 +492,11 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
     std::uint32_t* undecoded_formula_count) {
   switch (type) {
     case XlsbRecordType::BrtBeginWsView: {
+      if (state.main_ws_view_seen) {
+        return ResolveUnmodelledRecord(state, type, framed, framed_size);
+      }
+      state.main_ws_view_seen = true;
+      state.in_main_ws_view = true;
       // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
       // modelled by Formulon in its flags word, rwTop / colLeft and wScale.
       ByteSpan p = rec.payload;
@@ -546,47 +552,23 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtPane: {
-      // BrtPane ([MS-XLSB] §2.4.723): two Xnum split positions, then
-      // the lower-right pane's top-left cell and the frozen-state flags.
-      // In a frozen pane the Xnum fields are integral row/column counts.
-      ByteSpan p = rec.payload;
-      if (p.size < 29U) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", "context=xlsb_reader");
+      if (!state.in_main_ws_view) {
+        return ResolveUnmodelledRecord(state, type, framed, framed_size);
       }
-      double rows = 0.0;
-      double cols = 0.0;
-      std::memcpy(&rows, p.data, sizeof(rows));
-      std::memcpy(&cols, p.data + sizeof(rows), sizeof(cols));
-      p.data += 16U;
-      p.size -= 16U;
-      auto top_row_or = read_u32(p);
-      auto left_col_or = read_u32(p);
-      auto active_pane_or = read_u32(p);
-      auto flags_or = read_u8(p);
-      if (!top_row_or || !left_col_or || !active_pane_or || !flags_or) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane fields truncated",
-                          "context=xlsb_reader");
+      auto frozen_or = decode_pane(rec, wb.sheet(sheet_index).mutable_view());
+      if (!frozen_or) {
+        return std::move(frozen_or.error());
       }
-      const std::uint8_t frozen_flags = static_cast<std::uint8_t>(flags_or.value() & 0x03U);
-      if (frozen_flags == 0U) {
-        return RecordDisposition::kAccounted;
+      return frozen_or.value() ? RecordDisposition::kModelled
+                               : ResolveUnmodelledRecord(state, type, framed, framed_size);
+    }
+    case XlsbRecordType::BrtSel: {
+      if (!state.in_main_ws_view) {
+        return ResolveUnmodelledRecord(state, type, framed, framed_size);
       }
-      if (frozen_flags == 0x03U || !std::isfinite(rows) || !std::isfinite(cols) || rows < 0.0 || cols < 0.0 ||
-          std::trunc(rows) != rows || std::trunc(cols) != cols || rows >= Sheet::kMaxRows || cols >= Sheet::kMaxCols) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtPane frozen counts invalid",
-                          "context=xlsb_reader");
-      }
-      SheetView& view = wb.sheet(sheet_index).mutable_view();
-      view.freeze_rows = static_cast<std::uint32_t>(rows);
-      view.freeze_cols = static_cast<std::uint32_t>(cols);
-      if (top_row_or.value() < Sheet::kMaxRows && left_col_or.value() < Sheet::kMaxCols) {
-        view.pane_top_left_cell = a1::encode_a1(top_row_or.value(), left_col_or.value());
-      }
-      static constexpr const char* kPaneNames[] = {"bottomRight", "topRight", "bottomLeft", "topLeft"};
-      if (active_pane_or.value() < 4U) {
-        view.active_pane = kPaneNames[active_pane_or.value()];
-      }
-      return RecordDisposition::kModelled;
+      return decode_selection(rec, wb.sheet(sheet_index).mutable_view())
+                 ? RecordDisposition::kModelled
+                 : ResolveUnmodelledRecord(state, type, framed, framed_size);
     }
     case XlsbRecordType::BrtRowHdr: {
       // BrtRowHdr ([MS-XLSB] §2.4.770): rw, ixfe, miyRw, two flag
@@ -1050,6 +1032,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     // opens.
     if (type == XlsbRecordType::BrtEndSheetData) {
       state.in_tail = true;
+    } else if (type == XlsbRecordType::BrtEndWsView) {
+      state.in_main_ws_view = false;
     } else if (type == XlsbRecordType::BrtEndMergeCells) {
       state.merges_seen = true;
     }

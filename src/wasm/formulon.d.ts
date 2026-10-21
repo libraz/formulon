@@ -973,8 +973,7 @@ export interface SheetSelection {
 }
 
 /** Return type of `Workbook.getSheetSelection(sheet)`. A sheet that stores
- *  no selection reports A1 with the single range A1. XLSX carries the
- *  selection; XLSB load and save do not. */
+ *  no selection reports A1 with the single range A1. */
 export interface SheetSelectionResult {
   status: Status;
   activeRow: number;
@@ -3090,7 +3089,8 @@ export interface Workbook {
   sheetName(idx: number): StringResult;
   /** Returns `{ status, index }`: the sheet the first `<workbookView>` marks
    *  active (`activeTab`); without workbook views (an XLSB load) the first
-   *  tab-selected sheet; `0` when neither is recorded. */
+   *  tab-selected sheet; `0` when neither is recorded. Removing or hiding the
+   *  active sheet activates the next visible sheet, else the previous one. */
   activeSheet(): AddStyleResult;
   /** Marks sheet `sheet` active so a save records it, creating a minimal
    *  `<bookViews>` when the workbook has none. Other `<workbookView>`
@@ -3199,7 +3199,7 @@ export interface Workbook {
    *  absent cell. */
   getCellShowPhonetic(sheet: number, row: number, col: number): CellShowPhoneticResult;
   /** Sets the cell's "Show Phonetic" display flag. It is independent of the
-   *  readings and survives value writes. */
+   *  readings and survives value writes; a formula cell's flag is not saved. */
   setCellShowPhonetic(sheet: number, row: number, col: number, show: boolean): Status;
 
   /** Recalculates all dirty cells serially on the caller thread.

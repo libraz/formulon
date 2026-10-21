@@ -3924,7 +3924,8 @@ class Workbook:
         """Index of the active sheet (``activeTab`` of the first workbook view).
 
         Without workbook views (an XLSB load) the first tab-selected sheet;
-        ``0`` when the workbook records neither.
+        ``0`` when the workbook records neither. Removing or hiding the
+        active sheet activates the next visible sheet, else the previous one.
         """
         h = self._require()
         return _read_count(LIB.fm_workbook_get_active_sheet, h)
@@ -4225,7 +4226,7 @@ class Workbook:
         """Set the cell's "Show Phonetic" display flag.
 
         Independent of the readings: value writes clear the readings but keep
-        this flag.
+        this flag. A formula cell's flag is not saved.
         """
         h = self._require()
         _check(
@@ -6964,7 +6965,6 @@ class Workbook:
         """Return ``((active_row, active_col), ranges)`` of the active pane's selection.
 
         A sheet that stores no selection reports A1 with the single range A1.
-        XLSX carries the selection; XLSB load and save do not.
         """
         h = self._require()
         row_ptr = _alloc_out_ptr()
