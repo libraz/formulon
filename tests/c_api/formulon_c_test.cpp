@@ -207,6 +207,27 @@ TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
             0);
 }
 
+TEST(FormulonCApi, TableNamesAndDisplayNamesShareTheCaseInsensitiveNamespace) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* columns[] = {"Product"};
+  size_t index = 99;
+  ASSERT_EQ(
+      fm_workbook_table_create(wb.handle, 0, "A1:A3", "SalesInternal", "SalesDisplay", columns, 1, "", 1, 0, &index),
+      0);
+  const char* identities[][2] = {
+      {"sALESinternal", "Other"}, {"sALESdisplay", "Other"}, {"Other", "sALESinternal"}, {"Other", "sALESdisplay"}};
+  for (const auto& identity : identities) {
+    SCOPED_TRACE(std::string(identity[0]) + "/" + identity[1]);
+    index = 99;
+    EXPECT_NE(fm_workbook_table_create(wb.handle, 0, "C1:C3", identity[0], identity[1], columns, 1, "", 1, 0, &index),
+              0);
+    EXPECT_STREQ(fm_last_error_message(), "fm_workbook_table_create: table name already exists");
+    EXPECT_EQ(index, 99U);
+    EXPECT_EQ(fm_workbook_table_count(wb.handle), 1U);
+  }
+}
+
 TEST(FormulonCApi, TableDuplicateColumnAtEndRejectsAtomicallyAndUniqueNamesRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

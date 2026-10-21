@@ -72,9 +72,8 @@ Expected<void, Error> validate_auto_filter(const AutoFilter& filter) {
   if (filter.is_opaque()) {
     return invalid("autoFilter: model holds an unparsed fragment");
   }
-  std::string probe;
   if (filter.range.first_row > filter.range.last_row || filter.range.first_col > filter.range.last_col ||
-      !append_a1_rectangle(probe, filter.range) || !parse_a1_rectangle(probe)) {
+      filter.range.last_row >= a1::kMaxRows || filter.range.last_col >= a1::kMaxCols) {
     return invalid("autoFilter: range is not an in-grid rectangle");
   }
   const std::uint64_t width = static_cast<std::uint64_t>(filter.range.last_col) - filter.range.first_col + 1U;

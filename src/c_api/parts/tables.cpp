@@ -11,11 +11,11 @@
 #include <unordered_set>
 #include <utility>
 
+#include "auto_filter.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "io/auto_filter_xml.h"
 #include "io/xml_escape.h"
-#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -44,22 +44,8 @@ std::string xml_attr_escape(std::string_view value) {
 /// A table whose column count disagrees with its range is a file Excel
 /// refuses to open without repair, so the span is checked up front.
 std::size_t table_ref_column_count(std::string_view ref) {
-  std::uint32_t first_row = 0;
-  std::uint32_t first_col = 0;
-  std::uint32_t last_row = 0;
-  std::uint32_t last_col = 0;
-  const std::size_t colon = ref.find(':');
-  if (colon == std::string_view::npos) {
-    return formulon::a1::parse_a1_ref(ref, &first_row, &first_col) ? 1U : 0U;
-  }
-  if (!formulon::a1::parse_a1_ref(ref.substr(0, colon), &first_row, &first_col) ||
-      !formulon::a1::parse_a1_ref(ref.substr(colon + 1), &last_row, &last_col)) {
-    return 0U;
-  }
-  if (last_col < first_col || last_row < first_row) {
-    return 0U;
-  }
-  return static_cast<std::size_t>(last_col - first_col) + 1U;
+  const auto rect = formulon::parse_a1_rectangle(ref);
+  return rect ? static_cast<std::size_t>(rect->last_col - rect->first_col) + 1U : 0U;
 }
 
 std::string table_style_xml(std::string_view style_name) {
@@ -229,10 +215,12 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
                              "ref=" + std::string(ref) + " column_count=" + std::to_string(column_count));
   }
   const std::string name_key = ascii_lower(name);
+  const std::string display_name_key = ascii_lower(display_name);
   for (const formulon::TableMetadata& existing : book.tables()) {
-    if (ascii_lower(existing.name) == name_key || ascii_lower(existing.display_name) == name_key ||
-        ascii_lower(existing.name) == ascii_lower(display_name) ||
-        ascii_lower(existing.display_name) == ascii_lower(display_name)) {
+    const std::string existing_name_key = ascii_lower(existing.name);
+    const std::string existing_display_name_key = ascii_lower(existing.display_name);
+    if (existing_name_key == name_key || existing_display_name_key == name_key ||
+        existing_name_key == display_name_key || existing_display_name_key == display_name_key) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                "fm_workbook_table_create: table name already exists");
     }
