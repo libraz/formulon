@@ -51,6 +51,33 @@ std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
   return strings::to_ascii_lower_owned(compose_jp_halfwidth_voicing(s));
 }
 
+template <typename CellAt>
+std::size_t scan_exact_text_lookup(std::string_view raw, ExcelProfile profile, std::size_t count, CellAt&& cell_at) {
+  if (!scan_has_wildcard(raw)) {
+    const std::string literal = unescape_wildcard_literal(raw);
+    for (std::size_t i = 0; i < count; ++i) {
+      const Value& cell = cell_at(i);
+      if (cell.is_text() && collate(cell.as_text(), literal, profile, CollationStrength::kClassicExact) == 0) {
+        return i;
+      }
+    }
+    return SIZE_MAX;
+  }
+
+  const std::string pat_lower = lookup_text_key(raw, profile);
+  for (std::size_t i = 0; i < count; ++i) {
+    const Value& cell = cell_at(i);
+    if (!cell.is_text()) {
+      continue;
+    }
+    const std::string cell_lower = lookup_text_key(cell.as_text(), profile);
+    if (wildcard_match(pat_lower, cell_lower)) {
+      return i;
+    }
+  }
+  return SIZE_MAX;
+}
+
 // ---------------------------------------------------------------------------
 // MATCH / VLOOKUP / HLOOKUP / LOOKUP (lookup & reference)
 // ---------------------------------------------------------------------------
@@ -186,35 +213,12 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
   };
 
   if (!approximate) {
-    // Exact match: first hit wins. Text vs Text is routed through the
-    // wildcard matcher unconditionally — with no metacharacters the match
-    // degenerates to case-insensitive byte equality, and `~X` is always
-    // treated as a literal X. Every other kind-pairing is a literal
-    // equality compare.
+    // Exact match: first hit wins. Text uses collation for literal patterns
+    // and the wildcard matcher when metacharacters are present. Every other
+    // kind-pairing uses literal equality.
     if (lookup_value.is_text()) {
       const std::string_view raw = lookup_value.as_text();
-      if (!scan_has_wildcard(raw)) {
-        const std::string literal = unescape_wildcard_literal(raw);
-        for (std::size_t i = 0; i < n; ++i) {
-          const Value& cell = cell_at(i);
-          if (cell.is_text() && collate(cell.as_text(), literal, profile, CollationStrength::kClassicExact) == 0) {
-            return i;
-          }
-        }
-        return SIZE_MAX;
-      }
-      const std::string pat_lower = lookup_text_key(raw, profile);
-      for (std::size_t i = 0; i < n; ++i) {
-        const Value& cell = cell_at(i);
-        if (!cell.is_text()) {
-          continue;
-        }
-        const std::string cell_lower = lookup_text_key(cell.as_text(), profile);
-        if (wildcard_match(pat_lower, cell_lower)) {
-          return i;
-        }
-      }
-      return SIZE_MAX;
+      return scan_exact_text_lookup(raw, profile, n, cell_at);
     }
     if (lookup_value.is_number() || lookup_value.is_blank()) {
       const double target = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
@@ -418,34 +422,14 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
     return Value::error(ErrorCode::NA);
   }
 
-  // Exact match (match_type == 0): honours wildcards for Text lookup,
-  // case-insensitive ASCII equality otherwise. Non-matching cell kinds do
-  // not count.
+  // Exact match (match_type == 0): honours wildcards for Text lookup and
+  // typed literal equality for other lookup kinds. Non-matching cell kinds
+  // do not count.
   if (match_type == 0) {
     if (lookup.is_text()) {
-      const std::string_view raw = lookup.as_text();
-      if (!scan_has_wildcard(raw)) {
-        const std::string literal = unescape_wildcard_literal(raw);
-        for (std::size_t i = 0; i < n; ++i) {
-          const Value& cell = cells[i];
-          if (cell.is_text() && collate(cell.as_text(), literal, profile, CollationStrength::kClassicExact) == 0) {
-            return Value::number(static_cast<double>(i + 1));
-          }
-        }
-        return Value::error(ErrorCode::NA);
-      }
-      const std::string pat_lower = lookup_text_key(raw, profile);
-      for (std::size_t i = 0; i < n; ++i) {
-        const Value& cell = cells[i];
-        if (!cell.is_text()) {
-          continue;
-        }
-        const std::string cell_lower = lookup_text_key(cell.as_text(), profile);
-        if (wildcard_match(pat_lower, cell_lower)) {
-          return Value::number(static_cast<double>(i + 1));
-        }
-      }
-      return Value::error(ErrorCode::NA);
+      const std::size_t index = scan_exact_text_lookup(lookup.as_text(), profile, n,
+                                                       [&cells](std::size_t i) -> const Value& { return cells[i]; });
+      return index == SIZE_MAX ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(index + 1));
     }
     if (lookup.is_number() || lookup.is_blank()) {
       // Blank as lookup_value never matches anything in exact mode (Excel

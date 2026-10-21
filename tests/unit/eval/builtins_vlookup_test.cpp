@@ -525,6 +525,57 @@ Value EvalWithProfile(const std::string& formula, ExcelProfile profile) {
   return ::testing::AssertionFailure() << "expected " << want << ", got " << v.debug_to_string();
 }
 
+TEST(BuiltinsLookupTextScanParity, SharedCasesAcrossFunctionsAndProfiles) {
+  struct ProfileCase {
+    ExcelProfile profile;
+  };
+  const ProfileCase profiles[] = {{mac_365_ja_jp_profile()}, {win_365_ja_jp_profile()}};
+
+  struct HitCase {
+    const char* formula;
+    bool returns_match_position;
+  };
+  const HitCase hits[] = {
+      {R"(=VLOOKUP("~*",{1,"skip";"*","first";"*","second"},2,FALSE))", false},
+      {R"(=HLOOKUP("~*",{"before",1,"*","*";"x",0,"first","second"},2,FALSE))", false},
+      {R"(=MATCH("~*",{1;"*";"*"},0))", true},
+      {R"(=VLOOKUP("A*",{1,"skip";"Alpha","first";"Atom","second"},2,FALSE))", false},
+      {R"(=HLOOKUP("A*",{"before",1,"Alpha","Atom";"x",0,"first","second"},2,FALSE))", false},
+      {R"(=MATCH("A*",{1;"Alpha";"Atom"},0))", true},
+  };
+  const char* misses[] = {
+      R"(=VLOOKUP("Missing",{1,"skip";"Alpha","first"},2,FALSE))",
+      R"(=HLOOKUP("Missing",{"before",1,"Alpha";"x",0,"first"},2,FALSE))",
+      R"(=MATCH("Missing",{1;"Alpha"},0))",
+      R"(=VLOOKUP("Z*",{1,"skip";"Alpha","first"},2,FALSE))",
+      R"(=HLOOKUP("Z*",{"before",1,"Alpha";"x",0,"first"},2,FALSE))",
+      R"(=MATCH("Z*",{1;"Alpha"},0))",
+  };
+
+  for (const ProfileCase& profile_case : profiles) {
+    const ExcelProfile profile = profile_case.profile;
+    ScopedEvalProfile scope(profile);
+    SCOPED_TRACE(excel_profile_id(profile));
+
+    for (const HitCase& hit : hits) {
+      const Value result = EvalWithProfile(hit.formula, profile);
+      if (hit.returns_match_position) {
+        ASSERT_TRUE(result.is_number()) << hit.formula << ": " << result.debug_to_string();
+        EXPECT_DOUBLE_EQ(result.as_number(), 2.0) << hit.formula;
+      } else {
+        ASSERT_TRUE(result.is_text()) << hit.formula << ": " << result.debug_to_string();
+        EXPECT_EQ(result.as_text(), "first") << hit.formula;
+      }
+    }
+
+    for (const char* formula : misses) {
+      const Value result = EvalWithProfile(formula, profile);
+      ASSERT_TRUE(result.is_error()) << formula << ": " << result.debug_to_string();
+      EXPECT_EQ(result.as_error(), ErrorCode::NA) << formula;
+    }
+  }
+}
+
 struct VLookupRow {
   const char* a;
   const char* b;
