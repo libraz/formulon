@@ -126,7 +126,6 @@ class Reader {
       gather_levels(r, want_display, out);
       return out;
     }
-    std::vector<Pos> positions;
     std::vector<SheetRect> trimmed;
     trimmed.reserve(areas.size());
     std::uint64_t cells = 0;
@@ -143,20 +142,31 @@ class Reader {
       cells += area_cells;
       trimmed.push_back(r);
     }
-    positions.reserve(static_cast<std::size_t>(cells));
+    out.had_cells = cells != 0;
+    Pos first{};
+    Pos second{};
+    bool has_first = false;
+    bool has_second = false;
     for (const SheetRect& r : trimmed) {
       for (std::uint32_t col = r.left; col <= r.right && r.top <= r.bottom; ++col) {
         for (std::uint32_t row = r.top; row <= r.bottom; ++row) {
-          positions.push_back(Pos{r.sheet, row, col});
+          const Pos p{r.sheet, row, col};
+          if (!has_first) {
+            first = p;
+            has_first = true;
+          } else if (!has_second) {
+            second = p;
+            has_second = true;
+            out.format_code = cell_format_code(second);
+          }
+          if (!hidden(p.sheet, p.row, p.col)) {
+            out.cells.push_back(read(p, want_display));
+          }
         }
       }
     }
-    out.had_cells = !positions.empty();
-    out.format_code = format_code_of(positions);
-    for (const Pos& p : positions) {
-      if (!hidden(p.sheet, p.row, p.col)) {
-        out.cells.push_back(read(p, want_display));
-      }
+    if (has_first && !has_second) {
+      out.format_code = cell_format_code(first);
     }
     return out;
   }
@@ -186,14 +196,6 @@ class Reader {
     const EffectiveXf choice = select_effective_xf(wb_.sheet(p.sheet), p.row, p.col);
     const CellXf* xf = &xfs[choice.xf_index < xfs.size() ? choice.xf_index : 0U];
     return std::string(text_format::number_format_code_for_xf(wb_.styles(), xf, wb_.excel_profile()));
-  }
-
-  /// The second point's format, or the only point's.
-  std::string format_code_of(const std::vector<Pos>& positions) const {
-    if (positions.empty()) {
-      return {};
-    }
-    return cell_format_code(positions[positions.size() >= 2 ? 1 : 0]);
   }
 
   Pt read(const Pos& p, bool want_display) const {
@@ -234,12 +236,9 @@ class Reader {
       return down ? Pos{r.sheet, point, level} : Pos{r.sheet, level, point};
     };
     out.levels.assign(lvl_last - lvl_first, {});
-    std::vector<Pos> lowest;
-    for (std::uint32_t i = first; i <= last; ++i) {
-      lowest.push_back(at(i, lvl_last));
-    }
     out.had_cells = true;
-    out.format_code = format_code_of(lowest);
+    const std::uint32_t format_point = first < last ? first + 1U : first;
+    out.format_code = cell_format_code(at(format_point, lvl_last));
     for (std::uint32_t i = first; i <= last; ++i) {
       const Sheet& sheet = wb_.sheet(r.sheet);
       if (plot_vis_only_ && (down ? row_hidden(sheet, i) : col_hidden(sheet, i))) {

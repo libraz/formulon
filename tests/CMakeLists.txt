@@ -18,6 +18,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/structured_log_test.cpp
   unit/strings_test.cpp
   unit/sheet_name_test.cpp
+  unit/sheet_name_comparison_test.cpp
   unit/arena_test.cpp
   unit/value_test.cpp
   unit/value_array_test.cpp
@@ -432,6 +433,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/chart/chart_source_test.cpp
   unit/chart/chart_template_test.cpp
   unit/chart/chart_data_test.cpp
+  unit/chart/chart_data_gather_test.cpp
   unit/chart/chart_structural_test.cpp
   unit/chart/chart_cache_test.cpp
   unit/chart/chart_edit_test.cpp

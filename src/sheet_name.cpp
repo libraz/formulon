@@ -44,11 +44,8 @@ bool valid_utf8(std::string_view name) noexcept {
 }
 
 bool equal(std::string_view lhs, std::string_view rhs) noexcept {
-  if (!valid_utf8(lhs) || !valid_utf8(rhs)) {
-    return false;
-  }
   if (lhs == rhs) {
-    return true;
+    return valid_utf8(lhs);
   }
   std::size_t lhs_offset = 0;
   std::size_t rhs_offset = 0;
@@ -62,10 +59,7 @@ bool equal(std::string_view lhs, std::string_view rhs) noexcept {
       return false;
     }
   }
-  if (lhs_offset != lhs.size() || rhs_offset != rhs.size()) {
-    return false;
-  }
-  return true;
+  return lhs_offset == lhs.size() && rhs_offset == rhs.size();
 }
 
 }  // namespace sheet_names

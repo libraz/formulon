@@ -745,7 +745,7 @@ TEST(ChartData, RejectsOutOfGridPointFromXmlCacheBeforeDenseAllocation) {
 TEST(ChartData, RejectsRectangularReferenceBeforePositionAllocation) {
   const Workbook wb = GridBook();
   // 16,383 columns by 1,000 rows exceeds the shared expansion budget. The
-  // source must fail before positions.reserve() or the nested walk.
+  // source must fail before materializing points in the nested walk.
   ChartModel model = OneSeries(ChartPlotType::kBar, "", "Sheet1!$A$1:$XFC$1000");
   auto data = resolve_chart_data(wb, 0U, model);
   ASSERT_FALSE(static_cast<bool>(data));
