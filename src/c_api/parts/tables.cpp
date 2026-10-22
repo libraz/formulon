@@ -2,7 +2,6 @@
 // C ABI - workbook tables: read-side iteration and create / update / remove.
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -21,6 +20,7 @@
 #include "io/xml_escape.h"
 #include "table.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -31,13 +31,6 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
-
-std::string ascii_lower(std::string value) {
-  for (char& ch : value) {
-    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-  }
-  return value;
-}
 
 std::string xml_attr_escape(std::string_view value) {
   std::string out;
@@ -139,26 +132,24 @@ fm_status_t check_table_names(const formulon::Workbook& book, std::string_view n
   if (name.empty() || display_name.empty()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api, "reason=empty table name");
   }
-  const std::string name_key = ascii_lower(std::string(name));
-  const std::string display_name_key = ascii_lower(std::string(display_name));
+  const auto collides = [name, display_name](const auto& existing) {
+    return formulon::strings::case_insensitive_eq(existing.name, name) ||
+           formulon::strings::case_insensitive_eq(existing.display_name, name) ||
+           formulon::strings::case_insensitive_eq(existing.name, display_name) ||
+           formulon::strings::case_insensitive_eq(existing.display_name, display_name);
+  };
   const auto& tables = book.tables();
   for (std::size_t i = 0; i < tables.size(); ++i) {
     if (i == self) {
       continue;
     }
-    const std::string existing_name_key = ascii_lower(tables[i].name);
-    const std::string existing_display_name_key = ascii_lower(tables[i].display_name);
-    if (existing_name_key == name_key || existing_display_name_key == name_key ||
-        existing_name_key == display_name_key || existing_display_name_key == display_name_key) {
+    if (collides(tables[i])) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api,
                                "reason=table name already exists name=" + std::string(name));
     }
   }
   for (const formulon::io::xlsb::XlsbRetainedTable& retained : formulon::io::xlsb::xlsb_retained_tables(book)) {
-    const std::string existing_name_key = ascii_lower(retained.name);
-    const std::string existing_display_name_key = ascii_lower(retained.display_name);
-    if (existing_name_key == name_key || existing_display_name_key == name_key ||
-        existing_name_key == display_name_key || existing_display_name_key == display_name_key) {
+    if (collides(retained)) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api,
                                "reason=table name already exists name=" + std::string(name));
     }
@@ -360,7 +351,7 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                "fm_workbook_table_create: column name is empty");
     }
-    std::string column_key = ascii_lower(column_names[i]);
+    std::string column_key = formulon::strings::to_ascii_lower(column_names[i]);
     if (!column_keys.insert(std::move(column_key)).second) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                "fm_workbook_table_create: column name is duplicated");
