@@ -127,12 +127,7 @@ MeanSS compute_mean_ss(const std::vector<double>& xs) {
     sum += x;
   }
   const double mean = sum / static_cast<double>(xs.size());
-  double ss = 0.0;
-  for (double x : xs) {
-    const double d = x - mean;
-    ss += flush_subnormal(d * d);
-  }
-  return {mean, ss};
+  return {mean, numeric_aggregate_kernels::squared_deviation_sum(xs, mean)};
 }
 
 Expected<CenteredScaled, ErrorCode> centered_and_scaled(const Value* args, std::uint32_t arity, std::size_t min_n,
