@@ -269,14 +269,16 @@ as the report that was asked for.
 The capture has two halves:
 
 1. `tools/oracle/print_roundtrip.py` drives Formulon's print-authoring
-   API from the case's `roundtrip` block and saves an xlsx. It runs on
-   the repo side, where the binding lives.
-2. The Windows driver opens those bytes with `books.open` and reports
-   what Excel resolved them to.
+   API from the case's `roundtrip` block and saves an xlsx per case into
+   `print_roundtrip/<case_id>.xlsx`, which is committed. It runs where
+   the binding lives; `print_roundtrip_test` fails under `make
+   python-test` once the writer's output no longer matches them.
+2. The capture reads the committed bytes, and the Windows driver opens
+   them with `books.open` and reports what Excel resolved them to.
 
 The fixture crosses to the driver base64-encoded inside the case
-payload. That keeps the Formulon dependency off the Excel host and needs
-no path translation through the WSL bridge.
+payload, so the capture host needs Excel and the repository but no
+Formulon binding, and no path translation through the WSL bridge.
 
 A `roundtrip` block states exactly what a caller would call, one member
 per print-authoring entry point:

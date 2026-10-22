@@ -85,32 +85,12 @@ DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 STAGING_ROOT = Path.home() / ".cache" / "formulon" / "oracle-capture"
 
 
-def _formulon_module() -> Any:
-    """Imports the Formulon Python binding for round-trip fixtures.
+def _dispatch_case(oracle: Any, case: Dict[str, Any], roundtrip_dir: Path) -> Dict[str, Any]:
+    """Runs one workbook case, attaching its committed input if it has one.
 
-    Deferred and wrapped so a suite that carries no `roundtrip` case never
-    needs the binding at all, and one that does gets told how to supply it
-    instead of an ImportError from three frames down.
-    """
-
-    try:
-        import formulon  # noqa: PLC0415 - deferred; only roundtrip cases need it
-    except ImportError as exc:
-        raise RuntimeError(
-            "a roundtrip case needs the Formulon Python binding, which is not importable; "
-            "from a source checkout export PYTHONPATH=packages/python"
-        ) from exc
-    return formulon
-
-
-def _dispatch_case(oracle: Any, case: Dict[str, Any]) -> Dict[str, Any]:
-    """Runs one workbook case, authoring its fixture first if it needs one.
-
-    A `roundtrip` case is captured against a workbook Formulon wrote, so
-    the bytes have to exist before the driver is called. They are authored
-    here rather than in the driver because the driver may be running on a
-    Windows host across the WSL bridge, where the repo -- and therefore
-    the binding -- is not necessarily installed.
+    A `roundtrip` case is captured against a workbook Formulon wrote. The
+    bytes are authored ahead of capture and committed under `roundtrip_dir`
+    (see `print_roundtrip`), so the capture host needs no Formulon binding.
 
     The payload is attached to a copy. The golden stores the case spec
     verbatim, and a base64 workbook has no business in a file people read.
@@ -119,9 +99,13 @@ def _dispatch_case(oracle: Any, case: Dict[str, Any]) -> Dict[str, Any]:
     spec = case.get("roundtrip")
     if not isinstance(spec, dict):
         return oracle.run_workbook_case(case)
-    payload = print_roundtrip.fixture_payload(case, module=_formulon_module())
+    path = roundtrip_dir / f"{case.get('id')}.xlsx"
+    if not path.is_file():
+        raise RuntimeError(
+            f"round-trip input {path} is missing; author it with tools/oracle/print_roundtrip.py --out-dir {roundtrip_dir}"
+        )
     prepared = dict(case)
-    prepared["roundtrip"] = {**spec, **payload}
+    prepared["roundtrip"] = {**spec, **print_roundtrip.fixture_payload(path.read_bytes())}
     return oracle.run_workbook_case(prepared)
 
 
@@ -540,6 +524,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         inventory: List[Dict[str, Any]] = []
         for path, case_doc in suites:
             suite_name = _suite_name(case_doc, path)
+            roundtrip_dir = path.parent / suite_name
             raw_cases = case_doc.get("cases") or []
             print(f"[workbook-oracle-gen] {suite_name}  ({len(raw_cases)} cases)")
             try:
@@ -568,7 +553,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         # two and either retires it or stamps it.
                         if cid in reprobes:
                             try:
-                                entry["observed"] = _dispatch_case(oracle, case)
+                                entry["observed"] = _dispatch_case(oracle, case, roundtrip_dir)
                             except Exception as exc:  # noqa: BLE001 - reported, not raised
                                 # One unobservable case must not sink an
                                 # otherwise complete capture.
@@ -579,7 +564,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         continue
                     # The driver evaluates the declarative workbook spec
                     # and returns the observed pivot / print result.
-                    expect = _dispatch_case(oracle, case)
+                    expect = _dispatch_case(oracle, case, roundtrip_dir)
                     out_cases.append(
                         {
                             "id": cid,

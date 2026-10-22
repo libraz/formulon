@@ -11,16 +11,17 @@ drives Formulon's own print-authoring API from the case spec and hands
 back the saved xlsx. The Windows driver is the second half; it opens
 those bytes with `books.open` and reports what Excel makes of them.
 
-The two halves are deliberately split across processes. Capture runs on
-a Windows host (or a WSL2 bridge to one), and shipping the fixture as
-bytes in the request payload keeps the Formulon dependency on the side
-that already has the repo, rather than requiring a wheel install next to
-Excel.
+The two halves are deliberately split across processes and hosts. The
+xlsx is authored on a host with the Formulon binding and committed next to
+the case file (`tests/oracle/cases_wb/<suite>/<case_id>.xlsx`); capture
+reads those bytes and ships them in the request payload, so the capture
+host needs Excel and the repository, not the binding. Re-author the inputs
+whenever the writer's output changes; `print_roundtrip_test` fails while
+they are stale.
 
 Usage:
     python3 tools/oracle/print_roundtrip.py \\
-        tests/oracle/cases_wb/<suite>.case.json --id <case_id> \\
-        --out /tmp/<case_id>.xlsx
+        tests/oracle/cases_wb/<suite>.case.json --out-dir tests/oracle/cases_wb/<suite>
 
 The module needs `formulon` importable. From a source checkout that is
 `PYTHONPATH=packages/python`; `--python-path` prepends a directory for
@@ -234,15 +235,20 @@ def author_case(case: Dict[str, Any], *, module: Any) -> bytes:
         return wb.save_as(module.WorkbookFormat.XLSX)
 
 
-def fixture_payload(case: Dict[str, Any], *, module: Any) -> Dict[str, Any]:
-    """Authors a case and wraps it for the driver request payload.
+def input_path(cases_dir: Path, suite: str, case_id: str) -> Path:
+    """The committed xlsx a round-trip case is captured against."""
+
+    return cases_dir / suite / f"{case_id}.xlsx"
+
+
+def fixture_payload(data: bytes) -> Dict[str, Any]:
+    """Wraps a case's xlsx for the driver request payload.
 
     The digest travels with the bytes so a golden can record which
     artefact Excel actually read. A round-trip golden that cannot name
     its input is not evidence about the writer that produced it.
     """
 
-    data = author_case(case, module=module)
     return {
         "xlsx_base64": base64.b64encode(data).decode("ascii"),
         "xlsx_sha256": hashlib.sha256(data).hexdigest(),
@@ -282,25 +288,22 @@ def _import_formulon(extra_path: Optional[str]) -> Any:
 def _main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("case_json", type=Path, help="tests/oracle/cases_wb/<suite>.case.json")
-    parser.add_argument("--id", required=True, help="case id inside that file")
-    parser.add_argument("--out", type=Path, help="write the xlsx here (default: print the digest only)")
+    parser.add_argument("--out-dir", type=Path, required=True, help="write <case_id>.xlsx for every case here")
     parser.add_argument("--python-path", help="directory to prepend to sys.path before importing formulon")
     args = parser.parse_args(argv)
 
     try:
         module = _import_formulon(args.python_path)
-        case = load_case(args.case_json, args.id)
-        data = author_case(case, module=module)
+        doc = json.loads(args.case_json.read_text(encoding="utf-8"))
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        for case_id in roundtrip_case_ids(doc):
+            data = author_case(load_case(args.case_json, case_id), module=module)
+            out = args.out_dir / f"{case_id}.xlsx"
+            out.write_bytes(data)
+            print(f"{out}: {len(data)} bytes, sha256 {hashlib.sha256(data).hexdigest()}")
     except RoundtripSpecError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-
-    digest = hashlib.sha256(data).hexdigest()
-    if args.out is not None:
-        args.out.write_bytes(data)
-        print(f"{args.out}: {len(data)} bytes, sha256 {digest}")
-    else:
-        print(f"{len(data)} bytes, sha256 {digest}")
     return 0
 
 

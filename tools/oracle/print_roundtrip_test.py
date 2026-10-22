@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Tests for the print round-trip fixture author.
 
-Split in two. The address and spec handling is pure Python and always
-runs. The authoring tests need the Formulon binding and skip without it,
-because this file also runs on the oracle venv, which deliberately does
-not install the wheel.
+Split in two. The address and spec handling and the committed inputs are
+checked in pure Python and always run. The authoring tests need the
+Formulon binding and skip without it, because this file also runs on the
+oracle venv, which deliberately does not install the wheel.
 """
 
 from __future__ import annotations
@@ -62,6 +62,18 @@ class SpecTest(unittest.TestCase):
             ]
         }
         self.assertEqual(rt.roundtrip_case_ids(doc), ["rt"])
+
+
+class PayloadTest(unittest.TestCase):
+    def test_payload_carries_the_digest_of_the_bytes(self):
+        import base64
+        import hashlib
+
+        data = b"PK\x03\x04 not really a workbook"
+        payload = rt.fixture_payload(data)
+        self.assertEqual(base64.b64decode(payload["xlsx_base64"]), data)
+        self.assertEqual(payload["xlsx_bytes"], len(data))
+        self.assertEqual(payload["xlsx_sha256"], hashlib.sha256(data).hexdigest())
 
 
 class _RecordingWorkbook:
@@ -216,16 +228,6 @@ class AuthoringTest(unittest.TestCase):
         with self.assertRaisesRegex(rt.RoundtripSpecError, "is not one of"):
             rt.author_case(_case({"sheet": "Nope"}), module=_formulon)
 
-    def test_payload_carries_the_digest_of_the_bytes(self):
-        import base64
-        import hashlib
-
-        case = _case({"sheet": "Sheet1", "page_setup": {"scale": 75}})
-        payload = rt.fixture_payload(case, module=_formulon)
-        raw = base64.b64decode(payload["xlsx_base64"])
-        self.assertEqual(payload["xlsx_bytes"], len(raw))
-        self.assertEqual(payload["xlsx_sha256"], hashlib.sha256(raw).hexdigest())
-
 
 def _target_sheet_index(case):
     """Resolves a case's `roundtrip.sheet` to the 0-based index it authors.
@@ -254,22 +256,18 @@ class CommittedSuiteTest(unittest.TestCase):
         ids = [c["id"] for c in doc["cases"]]
         self.assertEqual(rt.roundtrip_case_ids(doc), ids)
 
-    @unittest.skipIf(_formulon is None, "the Formulon Python binding is not importable here")
-    def test_every_case_authors_a_readable_workbook(self):
-        import base64
+    def test_every_case_has_a_readable_committed_input(self):
         import json
 
         doc = json.loads(self.CASE_FILE.read_text(encoding="utf-8"))
         for case in doc["cases"]:
             with self.subTest(case=case["id"]):
-                payload = rt.fixture_payload(case, module=_formulon)
-                self.assertGreater(payload["xlsx_bytes"], 0)
-                raw = base64.b64decode(payload["xlsx_base64"])
-                # `xlsx_bytes > 0` alone would still pass for a truncated or
-                # non-zip blob; open it as a zip and require the parts a
-                # reader actually needs -- the workbook manifest and the
-                # worksheet part the case's `roundtrip.sheet` targets.
-                with zipfile.ZipFile(BytesIO(raw)) as zf:
+                path = rt.input_path(self.CASE_FILE.parent, "print_roundtrip", case["id"])
+                self.assertTrue(path.is_file(), f"{path} is missing; author it with print_roundtrip.py --out-dir")
+                # Open it as a zip and require the parts a reader actually
+                # needs -- the workbook manifest and the worksheet part the
+                # case's `roundtrip.sheet` targets.
+                with zipfile.ZipFile(path) as zf:
                     names = zf.namelist()
                     self.assertIn("xl/workbook.xml", names)
                     sheet_part = f"xl/worksheets/sheet{_target_sheet_index(case) + 1}.xml"
@@ -280,6 +278,20 @@ class CommittedSuiteTest(unittest.TestCase):
                         f"but the archive has no {sheet_part}",
                     )
                     self.assertGreater(len(zf.read(sheet_part)), 0)
+
+    @unittest.skipIf(_formulon is None, "the Formulon Python binding is not importable here")
+    def test_committed_inputs_match_what_the_writer_authors_now(self):
+        import json
+
+        doc = json.loads(self.CASE_FILE.read_text(encoding="utf-8"))
+        for case in doc["cases"]:
+            with self.subTest(case=case["id"]):
+                path = rt.input_path(self.CASE_FILE.parent, "print_roundtrip", case["id"])
+                self.assertEqual(
+                    rt.author_case(case, module=_formulon),
+                    path.read_bytes(),
+                    f"{path} is stale; re-author with print_roundtrip.py --out-dir before the next capture",
+                )
 
 
 if __name__ == "__main__":
