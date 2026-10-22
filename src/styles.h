@@ -71,6 +71,16 @@ struct FontRecord {
   bool italic = false;
   bool has_strike = false;
   bool strike = false;
+  /// `<outline>`, `<shadow>`, `<condense>` and `<extend>` toggles, with the
+  /// same presence rule as `has_bold` / `bold`.
+  bool has_outline = false;
+  bool outline = false;
+  bool has_shadow = false;
+  bool shadow = false;
+  bool has_condense = false;
+  bool condense = false;
+  bool has_extend = false;
+  bool extend = false;
   /// 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting.
   std::uint8_t underline = 0;
   /// `<vertAlign>` run: 0=baseline (no element), 1=superscript,
@@ -96,11 +106,33 @@ struct FontRecord {
   ColorSpec color;
 };
 
+/// One `<stop>` of a `<gradientFill>`: a colour at a position in 0..1.
+struct GradientStop {
+  double position = 0.0;
+  /// Literal RGB for `color.kind == kRgb`, a compatibility fallback otherwise.
+  std::uint32_t argb = 0;
+  ColorSpec color;
+};
+
+/// A `<gradientFill>`. `left` / `right` / `top` / `bottom` locate a path
+/// gradient's focus (0..1); `degree` is a linear gradient's angle.
+struct GradientFill {
+  bool path = false;  ///< `type="path"`; false is the default `linear`.
+  double degree = 0.0;
+  double left = 0.0;
+  double right = 0.0;
+  double top = 0.0;
+  double bottom = 0.0;
+  std::vector<GradientStop> stops;
+};
+
 /// One `<fill>` entry inside `<fills>`.
 ///
 /// `pattern` is the OOXML pattern index. `0=none`, `1=solid`,
 /// `2..18` = the standard pattern set. `fg_argb` / `bg_argb` are literal
 /// RGB values for RGB selectors or compatibility fallbacks otherwise.
+/// When `has_gradient` is set the fill is a `<gradientFill>` described by
+/// `gradient`, and the pattern fields are unused.
 struct FillRecord {
   std::uint8_t pattern = 0;
   std::uint32_t fg_argb = 0;
@@ -110,6 +142,8 @@ struct FillRecord {
   /// and compatibility fallbacks otherwise, not resolved render colours.
   ColorSpec fg;
   ColorSpec bg;
+  bool has_gradient = false;
+  GradientFill gradient;
 };
 
 /// One side of a `<border>` (left/right/top/bottom/diagonal).
@@ -281,6 +315,37 @@ struct CellStyleRecord {
   bool custom_builtin = false;
 };
 
+/// One `<tableStyleElement>`: the differential format a custom table or
+/// PivotTable style applies to one region. `type` is the `ST_TableStyleType`
+/// token; `size` is the band height/width of a stripe region (1 elsewhere).
+struct TableStyleElement {
+  std::string type;
+  std::uint32_t size = 1;
+  std::optional<std::uint32_t> dxf_id;
+  /// Unmodelled attributes as escaped ` name="value"` pairs.
+  std::string extra_attrs;
+};
+
+/// One custom `<tableStyle>`. `pivot` / `table` say which object kinds may
+/// use it; both default to true as in the schema.
+struct CustomTableStyle {
+  std::string name;
+  bool pivot = true;
+  bool table = true;
+  std::vector<TableStyleElement> elements;
+  std::string extra_attrs;
+};
+
+/// `<tableStyles>`: the custom styles plus the workbook's default table and
+/// PivotTable style names (empty when the attribute is absent).
+struct TableStylesSection {
+  bool present = false;
+  std::string default_table_style;
+  std::string default_pivot_style;
+  std::vector<CustomTableStyle> styles;
+  std::string extra_attrs;
+};
+
 /// Flat in-memory representation of the parsed `xl/styles.xml`.
 ///
 /// Empty-document semantics: a `<styleSheet/>` (or any document missing
@@ -317,14 +382,15 @@ struct StylesTable {
   /// Namespace declarations and compatibility attributes from the
   /// `<styleSheet>` root that raw extension fragments depend on.
   std::string root_extra_attrs;
+  /// Custom table / PivotTable styles and the default style names.
+  TableStylesSection table_styles;
   /// Unmodelled top-level style sections retained verbatim. Their schema
   /// positions are fixed by `write_styles`, so a style-table edit does not
-  /// discard custom palettes, table/pivot style defaults, or extensions.
+  /// discard custom palettes or extensions.
   ///
   /// `colors_xml` holds the `<colors>` element minus its `<indexedColors>`
   /// child (for example `<mruColors>`); empty when nothing else is present.
   std::string colors_xml;
-  std::string table_styles_xml;
   std::string ext_lst_xml;
   /// Complete top-level `<styleSheet>` children which the style model does
   /// not recognise. Preserved in source order to avoid silent deletion of

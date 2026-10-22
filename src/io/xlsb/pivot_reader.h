@@ -20,6 +20,10 @@
 // is what every XLSB pivot did before this module existed. The parts stay
 // in the passthrough set either way, so a refusal costs no round-trip
 // fidelity.
+//
+// The style (BrtTableStyleClient) and advanced-filter (SXFILTERS) records
+// follow [MS-XLSB] 2.1.7.40 instead: each filter is spelled as its OOXML
+// `<filter>` element and decoded by the same code as an `.xlsx` pivot's.
 
 #ifndef FORMULON_IO_XLSB_PIVOT_READER_H_
 #define FORMULON_IO_XLSB_PIVOT_READER_H_

@@ -61,7 +61,9 @@ std::string pivot_item_label(const PivotCache& cache, std::size_t field_index, c
 ///   * each `PivotField::source_name` that is still empty, from the
 ///     positionally-matching cache field's name; and
 ///   * each `PivotItem::name` that is still empty, from
-///     `pivot_item_label`.
+///     `pivot_item_label`; and
+///   * each decoded `PivotFilter::field_name` that is still empty, from
+///     the source name of the field its `PivotFilterSource` points at.
 ///
 /// Names already set (e.g. through the C API, or a `<pivotField name=...>`
 /// captured as `custom_name`) are left untouched. Fields the cache does

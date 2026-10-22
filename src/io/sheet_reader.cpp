@@ -30,6 +30,7 @@
 #include "io/array_anchor_budget.h"
 #include "io/cell_parser.h"
 #include "io/cf_reader.h"
+#include "io/data_table_xml.h"
 #include "io/future_functions.h"
 #include "io/sax_xml_reader.h"
 #include "io/xml_escape.h"
@@ -155,6 +156,31 @@ void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_
   ctx.array_anchors.push_back(ArrayAnchor{anchor_row, anchor_col, last_row, last_col});
 }
 
+/// Models the `<f t="dataTable">` at `(row, col)` as a table of `sheet`. A
+/// table whose `ref` does not parse stays a bare cached value, and
+/// `diagnostics` (when non-null) counts the drop via `skipped_feature_count`.
+void RegisterDataTable(Sheet& sheet, std::uint32_t row, std::uint32_t col, const DataTableAttrs& attrs,
+                       ReadDiagnostics* diagnostics) {
+  DataTable table;
+  if (parse_data_table(attrs, &table)) {
+    // The anchor must stay a stored cell for the writer to find it.
+    const Cell* anchor = sheet.cell_at(table.ref.first_row, table.ref.first_col);
+    if (anchor == nullptr || anchor->cached_value.is_blank()) {
+      sheet.set_cell_value(table.ref.first_row, table.ref.first_col, Value::number(0.0));
+    }
+    sheet.mutable_data_tables().push_back(table);
+    return;
+  }
+  StructuredLog("io.sheet.formula.data_table_skip")
+      .field("row", std::to_string(row))
+      .field("col", std::to_string(col))
+      .error_code(FormulonErrorCode::kIoSheetCorrupt)
+      .warn();
+  if (diagnostics != nullptr) {
+    ++diagnostics->skipped_feature_count;
+  }
+}
+
 /// Reads the `<f>` child of `c_node` and updates `formula_out`. Returns
 /// `false` and surfaces an error when a slave occurrence references an
 /// unknown `si`. `shared` is the per-sheet map of master formulas.
@@ -169,16 +195,12 @@ void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_
 ///   * `<f t="array">BODY</f>` (CSE array) is accepted but treated as a
 ///     plain formula: we read the body as the formula text. CSE-array
 ///     detail will land in a later bundle.
-///   * `<f t="dataTable" .../>` carries no body at all (its geometry
-///     lives in `r1`/`r2`/`dt2D`/`dtr` attributes, which are not read),
-///     so `formula_out` comes out empty and the cell falls back to its
-///     cached `<v>` like any formula-less cell. `diagnostics` (when
-///     non-null) counts the drop via `skipped_feature_count` so a
-///     What-If data table is never silently frozen into constants with
-///     no record of the loss.
+///   * `<f t="dataTable" .../>` carries no body (its geometry lives in the
+///     `ref`/`r1`/`r2`/`dt2D`/`dtr` attributes, read by `RegisterDataTable`),
+///     so `formula_out` comes out empty and the cell keeps its cached `<v>`.
 Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
                                      std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared, std::uint32_t row,
-                                     std::uint32_t col, std::string& formula_out, ReadDiagnostics* diagnostics) {
+                                     std::uint32_t col, std::string& formula_out) {
   pugi::xml_node f_node = c_node.child("f");
   if (!f_node) {
     formula_out.clear();
@@ -187,14 +209,6 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   const std::string_view ftype = f_node.attribute("t").value();
   if (ftype == "dataTable") {
     formula_out.clear();
-    StructuredLog("io.sheet.formula.data_table_skip")
-        .field("row", std::to_string(row))
-        .field("col", std::to_string(col))
-        .error_code(FormulonErrorCode::kIoSheetCorrupt)
-        .warn();
-    if (diagnostics != nullptr) {
-      ++diagnostics->skipped_feature_count;
-    }
     return Expected<void, Error>::Ok();
   }
   if (ftype != "shared") {
@@ -384,7 +398,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       // Resolve formula text (handling shared-formula reuse).
       std::string formula_text;
       {
-        auto resolved = ResolveFormula(c, shared_formulas, parsed.row, parsed.col, formula_text, diagnostics);
+        auto resolved = ResolveFormula(c, shared_formulas, parsed.row, parsed.col, formula_text);
         if (!resolved) {
           return std::move(resolved.error());
         }
@@ -415,6 +429,12 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       // read back as blocking literals (see `RegisterArraySpills`).
       if (pugi::xml_node f = c.child("f"); f && std::string_view(f.attribute("t").value()) == "array") {
         RecordArrayAnchor(ctx, f.attribute("ref").value(), parsed.row, parsed.col);
+      }
+      if (pugi::xml_node f = c.child("f"); f && std::string_view(f.attribute("t").value()) == "dataTable") {
+        const DataTableAttrs attrs{f.attribute("ref").value(),  f.attribute("r1").value(),  f.attribute("r2").value(),
+                                   f.attribute("dt2D").value(), f.attribute("dtr").value(), f.attribute("del1").value(),
+                                   f.attribute("del2").value(), f.attribute("ca").value(),  f.attribute("aca").value()};
+        RegisterDataTable(workbook.sheet(sheet_index), parsed.row, parsed.col, attrs, diagnostics);
       }
       if (const pugi::xml_attribute cm = c.attribute("cm"); cm && !formula_text.empty()) {
         std::uint32_t cm_idx = 0;
@@ -510,10 +530,8 @@ Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
 /// Shared-formula groups (`<f t="shared" si=>`) are resolved through
 /// `shared` so followers recover the shifted master body — matching the
 /// DOM path. Array formulas are read as plain (body verbatim).
-/// `<f t="dataTable">` also reads as an empty body (matching the DOM
-/// path's fallback to the cached `<v>`), but is additionally counted
-/// via `diagnostics->skipped_feature_count` so the drop is never silent
-/// -- see `ResolveFormula`.
+/// `<f t="dataTable">` reads as an empty body (matching the DOM path's
+/// fallback to the cached `<v>`) and is modelled by `RegisterDataTable`.
 Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_index, Workbook& workbook,
                                       SheetReadContext& ctx, std::deque<std::string>& text_storage,
                                       std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared,
@@ -538,16 +556,6 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   std::uint32_t xf = 0;
   if (!parse_xsd_nonneg_int(rec.s, &xf)) {
     xf = 0;
-  }
-  if (rec.f_t == "dataTable") {
-    StructuredLog("io.sheet.formula.data_table_skip")
-        .field("row", std::to_string(rec.row))
-        .field("col", std::to_string(rec.col))
-        .error_code(FormulonErrorCode::kIoSheetCorrupt)
-        .warn();
-    if (diagnostics != nullptr) {
-      ++diagnostics->skipped_feature_count;
-    }
   }
   // Resolve shared-formula groups (plain formulas pass straight through).
   ASSIGN_OR_RETURN(auto formula, ResolveSharedFromRecord(rec, shared));
@@ -579,6 +587,12 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   if (rec.f_t == "array" && !rec.f_ref.empty()) {
     RecordArrayAnchor(ctx, rec.f_ref, rec.row, rec.col);
   }
+  if (rec.f_t == "dataTable") {
+    RegisterDataTable(workbook.sheet(sheet_index), rec.row, rec.col,
+                      DataTableAttrs{rec.f_ref, rec.f_r1, rec.f_r2, rec.f_dt2d, rec.f_dtr, rec.f_del1, rec.f_del2,
+                                     rec.f_ca, rec.f_aca},
+                      diagnostics);
+  }
   if (!rec.cm.empty() && !formula_text.empty()) {
     std::uint32_t cm = 0;
     if (!parse_xsd_nonneg_int(rec.cm, &cm)) {
@@ -605,7 +619,9 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   double height = 0.0;
   const bool has_height = parse_xsd_nonneg_double(rec.ht, &height);
   const bool show_phonetic = parse_xsd_bool(rec.ph, false);
-  if (!has_height && rec.hidden.empty() && rec.outline_level.empty() && !custom_format && !show_phonetic) {
+  const bool collapsed = parse_xsd_bool(rec.collapsed, false);
+  if (!has_height && rec.hidden.empty() && rec.outline_level.empty() && !custom_format && !show_phonetic &&
+      !collapsed) {
     return Expected<void, Error>::Ok();
   }
   if (rec.row_1based < 1U) {
@@ -614,6 +630,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   RowLayout entry;
   entry.row = rec.row_1based - 1U;
   entry.show_phonetic = show_phonetic;
+  entry.collapsed = collapsed;
   if (has_height) {
     entry.height = height;
     entry.has_height = true;

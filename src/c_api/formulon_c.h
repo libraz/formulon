@@ -714,6 +714,23 @@ FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* n
 FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const char* name, const char* formula,
                                                        int32_t local_sheet_id);
 
+/**
+ * @brief Sets the `comment` and `hidden` attributes of an existing defined
+ *        name.
+ *
+ * `local_sheet_id` selects the scope as in
+ * `fm_workbook_set_defined_name_scoped`. A NULL `comment` leaves the comment
+ * unchanged and an empty one clears it; a negative `hidden` leaves the flag
+ * unchanged, otherwise non-zero hides the name from the Name Manager.
+ * Replacing a name's formula keeps both attributes.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
+ *         `kInvalidArgument` when no such name exists in that scope.
+ */
+FM_API fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const char* name, int32_t local_sheet_id,
+                                                      const char* comment, int32_t hidden);
+
 /* -------------------------------------------------------------------------- */
 /* Row / column structural edits                                              */
 /* -------------------------------------------------------------------------- */
@@ -1363,7 +1380,10 @@ FM_API fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_ind
  *
  * The text is the stored formula verbatim, leading `=` included, as
  * `fm_workbook_cell_at` reports it. A cell that holds no formula (a literal,
- * a spill phantom, or no cell at all) yields `""`.
+ * a spill phantom, or no cell at all) yields `""`. A data table's result
+ * cell yields the table's formula, `=TABLE(row_input,col_input)` with an
+ * absent input left empty (`=TABLE(,B3)`) and a deleted one as `#REF!`; the
+ * formula bar shows it in braces, as for a legacy array formula.
  *
  * The text is returned as entered. A formula loaded from a file shows the
  * formula-bar spelling: external references name the book (`[Book.xlsx]Sheet1!A1`),
@@ -1552,6 +1572,21 @@ FM_API fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t i
                                                const char** out_formula, int32_t* out_local_sheet_id);
 
 /**
+ * @brief Reads the `comment` and `hidden` attributes of the `idx`-th defined
+ *        name (the entry `fm_workbook_defined_name_at` returns for `idx`).
+ *
+ * `*out_comment` is a model-backed view with the lifetime of
+ * `fm_workbook_defined_name_at`'s strings, `""` when the name has no comment.
+ * `*out_hidden` is 0/1.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_defined_name_attrs_at(const fm_workbook_t* wb, size_t idx, const char** out_comment,
+                                                     int32_t* out_hidden);
+
+/**
  * @brief Returns the number of tables attached to the workbook.
  *
  * @return `0` when `wb == NULL`; otherwise the size of the workbook's
@@ -1589,16 +1624,137 @@ FM_API fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_inde
                                             int32_t totals_row, size_t* out_index);
 
 /** Replaces a table's range and optional visual style. `ref` is required;
- * `style_name == NULL` preserves the existing raw style payload, while an
+ * `style_name == NULL` preserves the existing style, a non-empty name
+ * replaces the style name and keeps the four `fm_table_info_t` toggles
+ * (a table without `<tableStyleInfo>` gets the creation defaults), and an
  * empty style removes `<tableStyleInfo>`. Negative `header_row` and
  * `totals_row` preserve their existing flags; zero and positive values set
  * them false and true respectively. `ref` must keep the width the table's
- * column list already describes. */
+ * column list already describes. Turning the totals row on writes each
+ * column's totals cell (`fm_workbook_table_set_column_totals`) on the last
+ * row of `ref`. */
 FM_API fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index, const char* ref, const char* style_name,
                                             int32_t header_row, int32_t totals_row);
 
 /** Removes the table at `index`. */
 FM_API fm_status_t fm_workbook_table_remove(fm_workbook_t* wb, size_t index);
+
+/**
+ * @brief Table metadata beyond its identity (`fm_workbook_table_get_info`).
+ *
+ *   * `style_name`    — model-backed view, empty when the table has no style
+ *                       element or the element names no style. It may name a
+ *                       built-in style or a custom one (`fm_table_style_t`).
+ *   * `style_present` — non-zero when the table has `<tableStyleInfo>`.
+ *   * the `show_*` toggles are `0` or `1`, and `0` without the element.
+ *   * `header_row_count` / `totals_row_count` are `0` or `1`.
+ *   * `column_count` bounds `fm_workbook_table_get_column`'s `column`.
+ *
+ * Views share the lifetime of `fm_workbook_table_at`'s.
+ */
+typedef struct {
+  const char* style_name;
+  int32_t style_present;
+  int32_t show_first_column;
+  int32_t show_last_column;
+  int32_t show_row_stripes;
+  int32_t show_column_stripes;
+  uint32_t header_row_count;
+  uint32_t totals_row_count;
+  uint32_t column_count;
+} fm_table_info_t;
+
+/**
+ * @brief One table column (`fm_workbook_table_get_column`).
+ *
+ *   * `totals_row_function` — the `ST_TotalsRowFunction` token: `none`, `sum`,
+ *                             `min`, `max`, `average`, `count`, `countNums`,
+ *                             `stdDev`, `var` or `custom`.
+ *   * `totals_row_label`    — the totals-row label, empty when absent.
+ *   * `totals_row_formula`  — the `custom` function's formula without a
+ *                             leading `=`, empty otherwise.
+ *
+ * Views share the lifetime of `fm_workbook_table_at`'s; none is `NULL`.
+ */
+typedef struct {
+  const char* name;
+  const char* totals_row_function;
+  const char* totals_row_label;
+  const char* totals_row_formula;
+} fm_table_column_info_t;
+
+/**
+ * @brief Reads the style, row counts and column count of table `index`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_table_get_info(const fm_workbook_t* wb, size_t index, fm_table_info_t* out);
+
+/**
+ * @brief Reads column `column` (0-based, left to right) of table `index`.
+ *
+ * @return As `fm_workbook_table_get_info`, with `kInvalidArgument` also for an
+ *         out-of-range `column`.
+ */
+FM_API fm_status_t fm_workbook_table_get_column(const fm_workbook_t* wb, size_t index, size_t column,
+                                                fm_table_column_info_t* out);
+
+/**
+ * @brief Sets the table's style name and toggles, making `<tableStyleInfo>`
+ *        present. A `NULL` or empty `style_name` writes the element without a
+ *        style name (no style, toggles kept); the toggles are `0` or non-zero.
+ *        `fm_workbook_table_create` starts a styled table with row stripes on
+ *        and the other three off.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_table_set_style_info(fm_workbook_t* wb, size_t index, const char* style_name,
+                                                    int32_t show_first_column, int32_t show_last_column,
+                                                    int32_t show_row_stripes, int32_t show_column_stripes);
+
+/**
+ * @brief Renames table `index`. `display_name == NULL` uses `name` for both.
+ *
+ * Both names follow `fm_workbook_table_create`'s rules: non-empty, and unique
+ * case-insensitively against every other table's name and display name.
+ * Structured references naming the old name or display name are rewritten to
+ * the new display name wherever formulas live: cells, defined names,
+ * conditional formats, data validations, calculated-column and totals-row
+ * formulas, and chart series. A pivot cache sourced from the table follows.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
+ *         `kInvalidArgument` when `index` is out of range or a name is empty
+ *         or taken.
+ */
+FM_API fm_status_t fm_workbook_table_rename(fm_workbook_t* wb, size_t index, const char* name,
+                                            const char* display_name);
+
+/**
+ * @brief Sets column `column`'s totals-row function and label.
+ *
+ * `function` is an `ST_TotalsRowFunction` token (see `fm_table_column_info_t`);
+ * `NULL` means `none`. `formula` is required for `custom` and ignored
+ * otherwise; it is stored without a leading `=`. `label` may be `NULL` or
+ * empty for none.
+ *
+ * While the totals row is shown its cell on the last row of the table's
+ * range follows, as the desktop application writes it: a built-in function
+ * becomes `SUBTOTAL(<101..110>,Table[Column])`, `custom` becomes `formula`,
+ * otherwise the label is written as text, or the cell is cleared.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `index` or `column` is out of range, the
+ *         token is unknown, or `custom` has no formula;
+ *         `kParserUnexpectedToken` when `formula` does not parse.
+ */
+FM_API fm_status_t fm_workbook_table_set_column_totals(fm_workbook_t* wb, size_t index, size_t column,
+                                                       const char* function, const char* label, const char* formula);
 
 /**
  * @brief Returns the number of passthrough OOXML parts the reader
@@ -1853,6 +2009,141 @@ FM_API fm_status_t fm_sheet_merges_in_range(fm_workbook_t* wb, uint32_t sheet, f
  */
 FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         const char* author, const char* text);
+
+/**
+ * @brief Reads whether the note at `(row, col)` is shown without hovering
+ *        (`visibility:visible` in the note's VML shape).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_visible` is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range;
+ *         `kNotFound` when no note is anchored at the cell.
+ */
+FM_API fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                                int32_t* out_visible);
+
+/**
+ * @brief Shows (`visible != 0`) or hides the note at `(row, col)`. The note's
+ *        box geometry is kept.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range;
+ *         `kNotFound` when no note is anchored at the cell.
+ */
+FM_API fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                                int32_t visible);
+
+/* -------------------------------------------------------------------------- */
+/* Protection records                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief `<workbookProtection>`. The host computes every hash; the engine
+ *        stores the strings as given. On input a `NULL` string and an empty
+ *        string both mean absent, and a zero spin count means absent. On
+ *        output the strings are views valid until the next successful
+ *        scratch-backed read on the handle.
+ */
+typedef struct {
+  int32_t lock_structure;
+  int32_t lock_windows;
+  int32_t lock_revision;
+  uint32_t workbook_spin_count;
+  uint32_t revisions_spin_count;
+  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  const char* workbook_password;
+  const char* workbook_algorithm_name;
+  const char* workbook_hash_value;
+  const char* workbook_salt_value;
+  const char* revisions_password;
+  const char* revisions_algorithm_name;
+  const char* revisions_hash_value;
+  const char* revisions_salt_value;
+} fm_workbook_protection_t;
+
+/**
+ * @brief Reads the workbook's `<workbookProtection>`; every field is zero or
+ *        empty when the workbook has none.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook_protection_t* out);
+
+/**
+ * @brief Replaces the modelled attributes of `<workbookProtection>`. A record
+ *        with every field zero or empty removes the element. Attributes the
+ *        record does not model (the password character sets) are kept.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `protection` is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_set_protection(fm_workbook_t* wb, const fm_workbook_protection_t* protection);
+
+/**
+ * @brief One `<protectedRange>`: a named range users may edit on a protected
+ *        sheet. `sqref` is the A1 range list (`B2:C3 E5`). Input handling and
+ *        output lifetime follow `fm_workbook_protection_t`.
+ */
+typedef struct {
+  uint32_t spin_count;
+  const char* name;
+  const char* sqref;
+  const char* password;
+  const char* algorithm_name;
+  const char* hash_value;
+  const char* salt_value;
+  const char* security_descriptor;
+} fm_protected_range_t;
+
+/**
+ * @brief Number of protected ranges on `sheet`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_count` is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_protected_range_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+
+/**
+ * @brief Reads protected range `index` in file order.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
+                                                fm_protected_range_t* out);
+
+/**
+ * @brief Appends a protected range. The range follows row and column edits
+ *        like any other sheet range and disappears when an edit deletes all
+ *        of it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `range` is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range, `name` is empty or
+ *         already names another range of the sheet, or `sqref` does not parse
+ *         as an A1 range list.
+ */
+FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, uint32_t sheet, const fm_protected_range_t* range);
+
+/**
+ * @brief Replaces protected range `index`; the argument checks of
+ *        `fm_sheet_add_protected_range` apply, with `index` also validated.
+ */
+FM_API fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index,
+                                                   const fm_protected_range_t* range);
+
+/**
+ * @brief Removes protected range `index`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_protected_range(fm_workbook_t* wb, uint32_t sheet, uint32_t index);
 
 /** @brief Data-validation error style (`fm_data_validation::error_style`, `fm_validation_outcome::error_style`). */
 typedef enum {
@@ -2341,6 +2632,62 @@ FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t
  */
 FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, int32_t mode);
 
+/** @brief `<calcPr refMode>`: the reference notation the host shows formulas in. */
+typedef enum {
+  FM_REF_MODE_A1 = 0,
+  FM_REF_MODE_R1C1 = 1,
+} fm_ref_mode_t;
+
+/**
+ * @brief Reads `<calcPr fullPrecision>`: 1 for full precision (the default),
+ *        0 for "set precision as displayed".
+ *
+ * Plain metadata like the calc mode: the engine evaluates at full precision
+ * whatever this holds.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is NULL.
+ */
+FM_API fm_status_t fm_workbook_full_precision(const fm_workbook_t* wb, int32_t* out);
+
+/** @brief Sets `<calcPr fullPrecision>` (non-zero = full precision). @return `kOk`, or `kBindingNullPointer` if `wb` is
+ * NULL. */
+FM_API fm_status_t fm_workbook_set_full_precision(fm_workbook_t* wb, int32_t full_precision);
+
+/** @brief Reads `<calcPr calcOnSave>` (default 1). @return `kOk`, or `kBindingNullPointer` if `wb` or `out` is NULL. */
+FM_API fm_status_t fm_workbook_calc_on_save(const fm_workbook_t* wb, int32_t* out);
+
+/** @brief Sets `<calcPr calcOnSave>` (non-zero = recalculate before saving). @return `kOk`, or `kBindingNullPointer` if
+ * `wb` is NULL. */
+FM_API fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, int32_t calc_on_save);
+
+/** @brief Reads `<calcPr refMode>` as an `fm_ref_mode_t`. @return `kOk`, or `kBindingNullPointer` if `wb` or `out` is
+ * NULL. */
+FM_API fm_status_t fm_workbook_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out);
+
+/**
+ * @brief Sets `<calcPr refMode>` from a raw `fm_ref_mode_t` ordinal.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` if `mode` is not a documented value.
+ */
+FM_API fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, int32_t mode);
+
+/** @brief Reads the workbook's 1904 date system flag (`<workbookPr date1904>`). @return `kOk`, or `kBindingNullPointer`
+ * if `wb` or `out` is NULL. */
+FM_API fm_status_t fm_workbook_date1904(const fm_workbook_t* wb, int32_t* out);
+
+/**
+ * @brief Sets the 1904 date system flag.
+ *
+ * Existing date serials keep their numbers, so every date shifts by 1462
+ * days; cached results depending on the date system are invalidated.
+ *
+ * @return `kOk`, or `kBindingNullPointer` if `wb` is NULL.
+ */
+FM_API fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, int32_t date1904);
+
 /* -------------------------------------------------------------------------- */
 /* Clock seam (`NOW` / `TODAY` and pivot relative-period filters)             */
 /* -------------------------------------------------------------------------- */
@@ -2637,6 +2984,19 @@ typedef struct {
   uint8_t b;
   uint8_t a;
 } fm_cf_color_t;
+
+/**
+ * @brief The icon drawn for one level of a custom icon set (x14 `cfIcon`).
+ *
+ * `icon_set` is the `ST_IconSetType` spelling of the set the icon comes
+ * from: a built-in name such as `"3Arrows"`, `"3Triangles"`, `"3Stars"`,
+ * `"5Boxes"`, or `"NoIcons"` for a level that draws nothing (`icon_id` 0).
+ * `icon_id` is the zero-based icon within that set.
+ */
+typedef struct {
+  const char* icon_set;
+  int32_t icon_id;
+} fm_cf_icon_t;
 
 /**
  * @brief Resolved CF match for one rule on one cell.
@@ -3516,6 +3876,13 @@ typedef struct {
   fm_cfvo_t icon_set_floor;
   uint8_t data_bar_direction;
   uint8_t _pad4[3];
+
+  /* Custom icons of the icon set (x14 `cfIcon`), appended for the same
+   * reason: one entry per icon of the set, or none when the set draws its
+   * own icons. `icon_set_icons` may be NULL only with a zero count. On
+   * output it points into `fm_sheet_cf_get_at`'s handle-owned storage. */
+  const fm_cf_icon_t* icon_set_icons;
+  uint32_t icon_set_icon_count;
 } fm_cf_rule_t;
 
 /**
@@ -3889,7 +4256,7 @@ typedef enum {
 } fm_pivot_show_as_t;
 
 /**
- * @brief Filter type for an active (slicer-applied) filter.
+ * @brief Filter type of a pivot label / value / date filter.
  *        Numbering mirrors `formulon::pivot::FilterType`.
  */
 typedef enum {
@@ -4027,6 +4394,14 @@ typedef struct {
  *     `date_end_serial` — the arguments of
  *                           `fm_workbook_pivot_field_set_date_group`; an
  *                           unset year or serial reads `-1`.
+ *   * `default_subtotal`  — non-zero when the field shows the automatic
+ *                           subtotal (OOXML `defaultSubtotal`). Custom
+ *                           functions replace it, so it reads `0` whenever
+ *                           `subtotal_fns` is non-zero.
+ *   * `subtotal_fns`      — bit `1u << agg` is set for each
+ *                           `fm_pivot_aggregation_t` selected through
+ *                           `fm_workbook_pivot_field_add_subtotal_fn` or read
+ *                           from the `*Subtotal` attributes; `0` for none.
  */
 typedef struct {
   const char* source_name;
@@ -4045,6 +4420,8 @@ typedef struct {
   uint32_t date_interval_days;
   double date_start_serial;
   double date_end_serial;
+  int32_t default_subtotal;
+  uint32_t subtotal_fns;
 } fm_pivot_field_info_t;
 
 /**
@@ -4062,6 +4439,25 @@ typedef struct {
   int32_t cache_index;
   int32_t visible;
 } fm_pivot_item_info_t;
+
+/**
+ * @brief Read-back of a pivot table's `<pivotTableStyleInfo>`
+ *        (`fm_workbook_pivot_get_style_info`).
+ *
+ *   * `name`    — the table style name, a model-backed view that is empty
+ *                 when the element carries no name or is absent.
+ *   * `present` — non-zero when the definition has a style element at all.
+ *   * the `show_*` flags are `0` or `1`, and `0` when `present` is `0`.
+ */
+typedef struct {
+  const char* name;
+  int32_t present;
+  int32_t show_row_headers;
+  int32_t show_col_headers;
+  int32_t show_row_stripes;
+  int32_t show_col_stripes;
+  int32_t show_last_column;
+} fm_pivot_style_info_t;
 
 /**
  * @brief Plain-data spec for `fm_workbook_pivot_filter_add`.
@@ -4294,6 +4690,19 @@ FM_API fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, size_t sheet_
 FM_API fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                       int32_t rows_enabled, int32_t cols_enabled);
 
+/**
+ * @brief Sets the pivot's table style and toggles, making the style element
+ *        present. A `NULL` or empty `utf8_style_name` writes the element
+ *        without a style name (no table style); the flags are `0` or non-zero.
+ *        A pivot built by `fm_workbook_pivot_create` starts as
+ *        `PivotStyleLight16` with row / column headers and last column on,
+ *        banded rows / columns off.
+ */
+FM_API fm_status_t fm_workbook_pivot_set_style_info(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    const char* utf8_style_name, int32_t show_row_headers,
+                                                    int32_t show_col_headers, int32_t show_row_stripes,
+                                                    int32_t show_col_stripes, int32_t show_last_column);
+
 /** @brief Reads the pivot's compact / tabular / outline report layout. */
 FM_API fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                 fm_pivot_layout_t* out_layout);
@@ -4313,10 +4722,18 @@ FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t
                                                  size_t* out_count);
 
 /**
- * @brief Appends a new field to the pivot. `spec->source_name` must be
- *        non-NULL; the other string fields are nullable. `out_field_idx`
- *        receives the new field's index. A field added on the row or column
- *        axis is appended to that axis's field order.
+ * @brief Places a field on the pivot. `spec->source_name` must be non-NULL;
+ *        the other string fields are nullable.
+ *
+ * A pivot's field list is positional over its cache's fields: pivot field
+ * `i` is cache field `i`. When `source_name` names a field of the bound
+ * cache, the pivot first gets one bare field (no axis) per cache field, and
+ * the named one is configured in place; `*out_field_idx` is that cache
+ * field's position, and adding a field that is already there updates it
+ * rather than adding a second. A name the cache does not carry (or a pivot
+ * whose cache has no fields) appends a new field at the end instead.
+ * A field placed on the row or column axis is appended to that axis's field
+ * order.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `spec`, `out_field_idx` or
@@ -4337,6 +4754,12 @@ FM_API fm_status_t fm_workbook_pivot_field_clear(fm_workbook_t* wb, size_t sheet
  * `kInvalidArgument`. Moving a field onto the row or column axis appends it
  * to that axis's field order (a field already there keeps its place);
  * moving it off removes it from the order it was in.
+ *
+ * `-1` takes the field off every axis, as unchecking it in a field list
+ * does. The data fields aggregating it are removed (later data-field
+ * indices shift down), as are the filters naming the field and the
+ * value filters scoring a removed data field; the field's item visibility
+ * is kept.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t field_idx, int32_t axis);
@@ -4407,7 +4830,8 @@ FM_API fm_status_t fm_workbook_pivot_field_set_item_visible(fm_workbook_t* wb, s
  * @brief Appends a subtotal-fn entry to pivot field `field_idx`.
  *
  * `agg` is a raw signed 32-bit ordinal; unknown values return
- * `kInvalidArgument`.
+ * `kInvalidArgument`. The selection reads back through
+ * `fm_pivot_field_info_t::subtotal_fns`.
  */
 FM_API fm_status_t fm_workbook_pivot_field_add_subtotal_fn(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                            size_t field_idx, int32_t agg);
@@ -4544,6 +4968,16 @@ FM_API fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* wb, s
                                                       int32_t* out_rows, int32_t* out_cols);
 
 /**
+ * @brief Reads the pivot's table style into `out`, the values
+ *        `fm_workbook_pivot_set_style_info` writes.
+ *
+ * @return As `fm_workbook_pivot_get_grand_totals`, with `out` in place of
+ *         `out_rows` / `out_cols`.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_style_info(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    fm_pivot_style_info_t* out);
+
+/**
  * @brief Reads the definition of pivot field `field_idx` into `out`.
  *
  * @return `kOk` on success;
@@ -4607,31 +5041,32 @@ FM_API fm_status_t fm_workbook_pivot_get_col_field_order(const fm_workbook_t* wb
                                                          size_t* out_count);
 
 /*
- * Session-state contract shared by the whole pivot-filter family
+ * Persistence contract shared by the whole pivot-filter family
  * (`fm_workbook_pivot_filter_count`, `_at`, `_add`, `_clear`,
  * `_remove_at`):
  *
- * This filter list is session state. Entries added here shape evaluation for
- * as long as the workbook handle lives and are not written to the package by
- * `fm_workbook_save*`. Conversely a `<filters>` block authored by Excel is
- * preserved verbatim on save but does not appear here, so
- * `fm_workbook_pivot_filter_count` reports only what this session added. The
- * persisted filter surface is pivot-field item visibility
- * (`fm_workbook_pivot_field_set_item_visible`).
+ * The list is the pivot's label / value / date filters and is saved as the
+ * definition's `<filters>` block. A loaded file's entries that this
+ * vocabulary expresses appear here: caption contains / begins-with, a top-N
+ * item count from the top, value greater-than and between, and date between.
+ * The rest of a loaded block (other caption and value comparisons, Bottom N,
+ * percent / sum top-N, relative and recurring dates, unknown types) is not
+ * listed, still filters, and is re-emitted verbatim on save; `_clear` and
+ * `_remove_at` leave it in place. A loaded entry is saved byte-for-byte while
+ * it still applies to the field and data field it was read with. An entry
+ * whose field no longer resolves filters nothing and is not saved.
  */
 
-/** @brief Number of active (slicer-applied) filters on the pivot.
- *
- * Counts only filters this session added; see the session-state contract
+/** @brief Number of filters on the pivot; see the persistence contract
  * above. */
 FM_API fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                   size_t* out_count);
 
 /**
- * @brief Reads the active filter at `filter_idx` without mutating the pivot.
+ * @brief Reads the filter at `filter_idx` without mutating the pivot.
  *
- * Reaches only filters this session added; see the session-state contract
- * above.
+ * See the persistence contract above. A loaded entry names its field by
+ * source name and reads back the axis its field sits on.
  *
  * `out` reuses the `fm_pivot_filter_spec_t` shape accepted by
  * `fm_workbook_pivot_filter_add`. `field_name` and (for a text primary
@@ -4659,9 +5094,7 @@ FM_API fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, size_t s
  *        upper-bound payload is honoured only for range filter types
  *        (`VALUE_BETWEEN`, `LABEL_DATE`).
  *
- * The appended entry is session state and is not saved; see the
- * session-state contract above. To persist a filtered view, drive
- * pivot-field item visibility instead.
+ * The entry is saved with the pivot; see the persistence contract above.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `spec`, `spec->field_name` or a
@@ -4675,16 +5108,11 @@ FM_API fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, size_t s
 FM_API fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                 const fm_pivot_filter_spec_t* spec);
 
-/** @brief Drops every active filter from the pivot.
- *
- * Affects only filters this session added; a `<filters>` block authored by
- * Excel is untouched and still round-trips. See the session-state contract
- * above. */
+/** @brief Drops every listed filter from the pivot. Loaded entries outside
+ * the list are kept; see the persistence contract above. */
 FM_API fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
-/** @brief Removes the active filter at `filter_idx`.
- *
- * Indexes only filters this session added; see the session-state contract
+/** @brief Removes the filter at `filter_idx`; see the persistence contract
  * above. */
 FM_API fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                       size_t filter_idx);
@@ -5060,6 +5488,10 @@ typedef enum {
  * frozen rows and columns until a host scrolls it; `0, 0` when nothing is
  * frozen.
  *
+ * `split_x` / `split_y` are an unfrozen split's position in twips (`<pane
+ * xSplit ySplit>`); `0` for no split on that axis, and always `0` while the
+ * view is frozen.
+ *
  * `view_mode` is a model-backed NUL-terminated UTF-8 view from the workbook
  * handle. It remains valid until a mutation of this sheet's view record
  * (including `fm_sheet_set_view_mode` or another sheet-view setter) or
@@ -5083,6 +5515,10 @@ typedef struct {
   uint32_t top_left_col;
   uint32_t pane_top_left_row; /* first visible cell of a frozen or split view's lower-right pane */
   uint32_t pane_top_left_col;
+  double split_x; /* unfrozen split position in twips; 0 = none on that axis */
+  double split_y;
+  int32_t show_formulas;        /* 0/1; OOXML default 0 */
+  int32_t show_outline_symbols; /* 0/1; OOXML default 1 */
 } fm_sheet_view_t;
 
 /**
@@ -5101,7 +5537,8 @@ typedef struct {
   double width;
   int32_t hidden; /* 0/1 */
   uint8_t outline_level;
-  uint8_t _pad[3];
+  uint8_t collapsed; /* 0/1; `collapsed` attribute of the span */
+  uint8_t _pad[2];
   /* Attribute-presence flags. has_width distinguishes width="0" from an
    * omitted width and is normalized true for legacy non-zero widths;
    * has_style keeps an explicit style="0". */
@@ -5127,7 +5564,8 @@ typedef struct {
   double height;
   int32_t hidden; /* 0/1 */
   uint8_t outline_level;
-  uint8_t _pad[3];
+  uint8_t collapsed; /* 0/1; `collapsed` attribute of the row */
+  uint8_t _pad[2];
   /* Row s= is effective only when customFormat=1 in OOXML. */
   int32_t has_style; /* 0/1 */
   uint32_t style_xf;
@@ -5207,6 +5645,22 @@ FM_API fm_status_t fm_sheet_set_top_left(fm_workbook_t* wb, size_t sheet_index, 
  *         unfrozen area.
  */
 FM_API fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
+
+/**
+ * @brief Splits the sheet view at `x_twips` / `y_twips` (`<pane xSplit
+ *        ySplit>` without a freeze state); `0` for no split on that axis.
+ *
+ * A split replaces any freeze, as `fm_sheet_set_freeze` replaces a split;
+ * `(0, 0)` removes it. A change resets the pane origin and active pane and
+ * keeps only the active selection, re-homed to the new active pane. Setting
+ * the current split is a no-op.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or a value is
+ *         negative or not finite (the view is left unchanged).
+ */
+FM_API fm_status_t fm_sheet_set_split(fm_workbook_t* wb, size_t sheet_index, double x_twips, double y_twips);
 
 /**
  * @brief Reads the active pane's selection: the active cell and its ranges.
@@ -5660,6 +6114,19 @@ FM_API fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_i
                                                uint8_t level);
 
 /**
+ * @brief Sets or clears the `collapsed` flag (the outline group summarised by
+ *        the span is collapsed) for the inclusive column span `[first, last]`.
+ *        See `fm_sheet_set_column_width` for the merge semantics.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range,
+ *         `last < first`, or `last` is past the last column (16383).
+ */
+FM_API fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
+                                                 int32_t collapsed);
+
+/**
  * @brief Sets or replaces the cell-style XF for the inclusive column span
  *        `[first, last]`.
  *
@@ -5718,6 +6185,17 @@ FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index
  *         is past the last row (1048575).
  */
 FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
+
+/**
+ * @brief Sets or clears the `collapsed` flag (the outline group summarised by
+ *        the row is collapsed) for `row`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or `row`
+ *         is past the last row (1048575).
+ */
+FM_API fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t collapsed);
 
 /**
  * @brief Sets or replaces the cell-style XF for the inclusive row span
@@ -5868,6 +6346,11 @@ FM_API fm_status_t fm_sheet_clear_row_height(fm_workbook_t* wb, size_t sheet_ind
  * the sheet's zeroHeight hides rows by default. They are filled by
  * `fm_sheet_get_format_defaults` and ignored by
  * `fm_sheet_set_format_defaults`.
+ *
+ * `custom_height` is `<sheetFormatPr customHeight>`: the stated
+ * `default_row_height` is an explicit override that stays as written, rather
+ * than a cached figure Excel recomputes from the Normal font. `zero_height`
+ * is `<sheetFormatPr zeroHeight>`: rows are hidden unless they say otherwise.
  */
 typedef struct {
   double default_col_width;
@@ -5875,6 +6358,8 @@ typedef struct {
   double base_col_width;
   int32_t has_default_col_width;  /* 0/1 */
   int32_t has_default_row_height; /* 0/1 */
+  int32_t custom_height;          /* 0/1; `customHeight` */
+  int32_t zero_height;            /* 0/1; `zeroHeight` */
   double effective_default_col_width;
   double effective_default_row_height;
 } fm_sheet_format_defaults;
@@ -5893,8 +6378,9 @@ FM_API fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, size_t 
  * @brief Replaces the sheet's default column / row metrics.
  *
  * A value whose `has_*` flag is zero is ignored and stored as `0`; the
- * `effective_*` fields are read-only and ignored. A
- * rejected call leaves the sheet unchanged.
+ * `effective_*` fields are read-only and ignored. `custom_height` and
+ * `zero_height` replace the stored flags, so read the current record first to
+ * keep them. A rejected call leaves the sheet unchanged.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -6105,6 +6591,24 @@ FM_API fm_status_t fm_sheet_set_show_row_col_headers(fm_workbook_t* wb, size_t s
  *         `kInvalidArgument` when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_show_zeros(fm_workbook_t* wb, size_t sheet_index, int32_t show);
+
+/**
+ * @brief Sets the sheet's formula-text display flag (`showFormulas`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_show_formulas(fm_workbook_t* wb, size_t sheet_index, int32_t show);
+
+/**
+ * @brief Sets the sheet's outline-symbol display flag (`showOutlineSymbols`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_show_outline_symbols(fm_workbook_t* wb, size_t sheet_index, int32_t show);
 
 /**
  * @brief Sets the sheet's right-to-left display flag (`rightToLeft`).
@@ -6351,6 +6855,9 @@ typedef struct {
  * means "switch bold off"; on a cell font a `has_*` flag without its
  * value emits the explicit-off form.
  *
+ * `outline`, `shadow`, `condense` and `extend` are the matching toggle
+ * elements and follow the same `has_*` rule as `bold`.
+ *
  * `has_size` is honoured by `fm_styles_add_dxf` alone: a differential font
  * with `has_size == 0` leaves the size unchanged, while every cell-font
  * entry point writes `size` regardless.
@@ -6367,22 +6874,46 @@ typedef struct {
   /* Literal RGB for color.kind == kFmColorRgb; compatibility fallback for
    * theme/indexed/auto selectors (not an Excel-rendered colour). */
   uint32_t color_argb;
-  int32_t bold;        /* 0=false, 1=true */
-  int32_t italic;      /* 0=false, 1=true */
-  int32_t strike;      /* 0=false, 1=true */
-  int32_t has_bold;    /* 0= no `<b>` element, 1= element present */
-  int32_t has_italic;  /* 0= no `<i>` element, 1= element present */
-  int32_t has_strike;  /* 0= no `<strike>` element, 1= element present */
-  int32_t has_family;  /* 0= no `<family>` element, 1= element present */
-  int32_t has_charset; /* 0= no `<charset>` element, 1= element present */
-  int32_t has_size;    /* 0= no `<sz>` element, 1= element present */
-  uint8_t underline;   /* 0=none, 1=single, 2=double, 3/4=accounting variants */
-  uint8_t vert_align;  /* 0=baseline, 1=superscript, 2=subscript */
-  uint8_t family;      /* `<family>` font-family class (0..5) */
-  uint8_t charset;     /* `<charset>` codepage id (e.g. 128 = Shift_JIS) */
-  uint8_t scheme;      /* `<scheme>` theme link: 0=absent, 1=major, 2=minor */
+  int32_t bold;         /* 0=false, 1=true */
+  int32_t italic;       /* 0=false, 1=true */
+  int32_t strike;       /* 0=false, 1=true */
+  int32_t has_bold;     /* 0= no `<b>` element, 1= element present */
+  int32_t has_italic;   /* 0= no `<i>` element, 1= element present */
+  int32_t has_strike;   /* 0= no `<strike>` element, 1= element present */
+  int32_t has_family;   /* 0= no `<family>` element, 1= element present */
+  int32_t has_charset;  /* 0= no `<charset>` element, 1= element present */
+  int32_t has_size;     /* 0= no `<sz>` element, 1= element present */
+  int32_t outline;      /* 0=false, 1=true */
+  int32_t shadow;       /* 0=false, 1=true */
+  int32_t condense;     /* 0=false, 1=true */
+  int32_t extend;       /* 0=false, 1=true */
+  int32_t has_outline;  /* 0= no `<outline>` element, 1= element present */
+  int32_t has_shadow;   /* 0= no `<shadow>` element, 1= element present */
+  int32_t has_condense; /* 0= no `<condense>` element, 1= element present */
+  int32_t has_extend;   /* 0= no `<extend>` element, 1= element present */
+  uint8_t underline;    /* 0=none, 1=single, 2=double, 3/4=accounting variants */
+  uint8_t vert_align;   /* 0=baseline, 1=superscript, 2=subscript */
+  uint8_t family;       /* `<family>` font-family class (0..5) */
+  uint8_t charset;      /* `<charset>` codepage id (e.g. 128 = Shift_JIS) */
+  uint8_t scheme;       /* `<scheme>` theme link: 0=absent, 1=major, 2=minor */
   fm_color_spec color;
 } fm_font_record;
+
+/**
+ * @brief One `<stop>` of a gradient fill: a colour at `position` (0..1).
+ *
+ * `color_argb` is literal RGB when `color.kind` is kFmColorRgb and a
+ * compatibility fallback otherwise.
+ */
+typedef struct {
+  double position;
+  uint32_t color_argb;
+  fm_color_spec color;
+} fm_gradient_stop;
+
+/** `fm_fill_record::gradient_type` values. */
+#define FM_GRADIENT_LINEAR 0
+#define FM_GRADIENT_PATH 1
 
 /**
  * @brief Plain-data projection of a `formulon::io::FillRecord`.
@@ -6391,6 +6922,15 @@ typedef struct {
  * `2..18=standard pattern set`. `fg_argb` and `bg_argb` are AARRGGBB
  * packed literal RGB or compatibility fallback values; `fg` and `bg` carry
  * the authoritative `<fgColor>` / `<bgColor>` specifications.
+ *
+ * With `has_gradient` set the record is a `<gradientFill>` and the pattern
+ * fields are ignored: `gradient_type` is FM_GRADIENT_LINEAR or
+ * FM_GRADIENT_PATH, `gradient_degree` is a linear gradient's angle,
+ * `gradient_left/right/top/bottom` (0..1) locate a path gradient's focus.
+ * `gradient_stops` points at `gradient_stop_count` stops; on a read it is
+ * valid until the next `fm_styles_get_fill` / `fm_styles_get_dxf` call, a
+ * mutation or handle destruction, on a write it is borrowed for the call. A non-finite number
+ * is stored as 0 and at most 1024 stops are kept.
  */
 typedef struct {
   uint8_t pattern; /* 0=none, 1=solid, 2..18=standard pattern set */
@@ -6400,6 +6940,15 @@ typedef struct {
   uint32_t bg_argb;
   fm_color_spec fg;
   fm_color_spec bg;
+  int32_t has_gradient;  /* 0=pattern fill, 1=`<gradientFill>` */
+  int32_t gradient_type; /* FM_GRADIENT_LINEAR / FM_GRADIENT_PATH */
+  double gradient_degree;
+  double gradient_left;
+  double gradient_right;
+  double gradient_top;
+  double gradient_bottom;
+  const fm_gradient_stop* gradient_stops;
+  size_t gradient_stop_count;
 } fm_fill_record;
 
 /**
@@ -6693,6 +7242,115 @@ FM_API fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_d
  *         `kBindingNullPointer` if `wb` or `out_dxf_index` is `NULL`.
  */
 FM_API fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record, uint32_t* out_dxf_index);
+
+/**
+ * @brief One region of a custom table style (`fm_table_style_t`).
+ *
+ *   * `type`   — the `ST_TableStyleType` token: `wholeTable`, `headerRow`,
+ *                `totalRow`, `firstColumn`, `lastColumn`, `firstRowStripe`,
+ *                `secondRowStripe`, `firstColumnStripe`, `secondColumnStripe`,
+ *                `firstHeaderCell`, `lastHeaderCell`, `firstTotalCell`,
+ *                `lastTotalCell`, `firstSubtotalColumn`,
+ *                `secondSubtotalColumn`, `thirdSubtotalColumn`,
+ *                `firstSubtotalRow`, `secondSubtotalRow`, `thirdSubtotalRow`,
+ *                `blankRow`, `firstColumnSubheading`,
+ *                `secondColumnSubheading`, `thirdColumnSubheading`,
+ *                `firstRowSubheading`, `secondRowSubheading`,
+ *                `thirdRowSubheading`, `pageFieldLabels`, `pageFieldValues`.
+ *   * `size`   — stripe band size, at least 1 (1 for non-stripe regions).
+ *   * `dxf_id` — read only when `has_dxf_id`; indexes `<dxfs>`
+ *                (`fm_styles_add_dxf`).
+ */
+typedef struct {
+  const char* type;
+  uint32_t size;
+  int32_t has_dxf_id;
+  uint32_t dxf_id;
+} fm_table_style_element_t;
+
+/**
+ * @brief A custom table / PivotTable style from `<tableStyles>`.
+ *
+ * `pivot` / `table` are non-zero when PivotTables / tables may use the style.
+ * On read, `name` and the element `type`s are model-backed views valid until
+ * the next styles mutation, and `elements` is a read-scratch-backed array.
+ */
+typedef struct {
+  const char* name;
+  int32_t pivot;
+  int32_t table;
+  const fm_table_style_element_t* elements;
+  uint32_t element_count;
+} fm_table_style_t;
+
+/**
+ * @brief Returns the number of custom table / PivotTable styles.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_table_style_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Reads the `index`-th custom table style.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `index` is out of range.
+ */
+FM_API fm_status_t fm_styles_get_table_style(fm_workbook_t* wb, uint32_t index, fm_table_style_t* out);
+
+/**
+ * @brief Adds a custom table style, or replaces the one with the same name
+ *        (case-insensitive) in place.
+ *
+ * The name must be non-empty and must not be a built-in style name
+ * (`TableStyleLight1`, `PivotStyleMedium2`, ...). Each element type may
+ * appear once. A table's style name or a pivot's style name may then name it.
+ * The first style added to a workbook without `<tableStyles>` sets the
+ * defaults to `TableStyleMedium2` / `PivotStyleLight16`, as the desktop
+ * application writes them.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `style` or `style->name` is `NULL`,
+ *         or `elements` is `NULL` with a non-zero count;
+ *         `kInvalidArgument` for an invalid name, an unknown or repeated
+ *         element type, a zero `size`, or a `dxf_id` past `<dxfs>`.
+ */
+FM_API fm_status_t fm_styles_set_table_style(fm_workbook_t* wb, const fm_table_style_t* style);
+
+/**
+ * @brief Removes the custom table style `name` (case-insensitive).
+ *
+ * A default naming it reverts to the built-in default. Tables and pivots
+ * naming it keep the name, which the desktop application then renders
+ * unstyled.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any argument is `NULL`;
+ *         `kInvalidArgument` when no custom style has that name.
+ */
+FM_API fm_status_t fm_styles_remove_table_style(fm_workbook_t* wb, const char* name);
+
+/**
+ * @brief Reads the default table and PivotTable style names (model-backed
+ *        views, empty when unset).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_table_style_defaults(fm_workbook_t* wb, const char** out_table_style,
+                                                      const char** out_pivot_style);
+
+/**
+ * @brief Sets the default table and PivotTable style names. `NULL` keeps a
+ *        default, an empty string removes it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`.
+ */
+FM_API fm_status_t fm_styles_set_table_style_defaults(fm_workbook_t* wb, const char* table_style,
+                                                      const char* pivot_style);
 
 /**
  * @brief Returns the number of font records currently registered in the
@@ -7613,6 +8271,436 @@ FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t she
  */
 FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,
                                             uint32_t flags, uint32_t* out_object_id);
+
+/* -------------------------------------------------------------------------- */
+/* Drawing shapes                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** @brief How a shape's fill or outline is specified (`fm_shape::fill_kind`, `line_kind`). */
+typedef enum {
+  FM_SHAPE_PAINT_UNSET = 0, /**< No fill or outline element. */
+  FM_SHAPE_PAINT_SOLID = 1, /**< Solid `srgbClr`; the colour is `fill_rgb` / `line_rgb`. */
+  FM_SHAPE_PAINT_NONE = 2,  /**< `noFill`. */
+  FM_SHAPE_PAINT_OTHER = 3, /**< Gradient, pattern, picture or theme colour; read only. */
+} fm_shape_paint_t;
+
+/** @brief `fm_shape::fields` bits: the fields an insert or update applies. */
+#define FM_SHAPE_FIELD_NAME 0x1u
+#define FM_SHAPE_FIELD_PRST 0x2u
+#define FM_SHAPE_FIELD_ANCHOR 0x4u /* anchor_kind, edit_as, from_*, to_*, cx, cy */
+#define FM_SHAPE_FIELD_TEXT 0x8u
+#define FM_SHAPE_FIELD_TEXT_BOX 0x10u
+#define FM_SHAPE_FIELD_FILL 0x20u /* fill_kind (SOLID or NONE) and fill_rgb */
+#define FM_SHAPE_FIELD_LINE 0x40u /* line_kind (SOLID or NONE) and line_rgb */
+#define FM_SHAPE_FIELD_LINE_WIDTH 0x80u
+#define FM_SHAPE_FIELD_ROTATION 0x100u
+#define FM_SHAPE_FIELD_HIDDEN 0x200u
+
+/**
+ * @brief A shape, connector or group of a sheet's drawing; the record
+ *        `fm_sheet_shape_at` reads and the insert / update calls take.
+ *
+ * The anchor fields read as `fm_drawing_object` does: `kind` is an
+ * `fm_drawing_object_kind_t` (shape, connector or group), an absolute anchor
+ * reports its position as `from_col_off` = x and `from_row_off` = y, and
+ * `cx`/`cy` are the size in EMU. `fill_kind` / `line_kind` are
+ * `fm_shape_paint_t`; `fill_rgb` / `line_rgb` are 0xRRGGBB when the kind is
+ * solid. `rotation` is in 60000ths of a degree and `line_width_emu` is `0`
+ * without a width. `prst` is the preset geometry, empty for custom geometry
+ * or a group; `text` joins paragraphs with `\n`.
+ *
+ * `fields` is zero on read. On insert and update it is a mask of
+ * `FM_SHAPE_FIELD_*`: only the named fields are applied (an insert
+ * defaults `prst` to `rect` and `name` to `Shape <id>`); `object_id`, `kind`
+ * and the other fields are ignored. A two-cell anchor's size is its box and
+ * its `cx`/`cy` are ignored; an update cannot change the anchor kind. The
+ * strings are read-scratch-backed views on read and may be `NULL` (empty) on
+ * input.
+ */
+typedef struct {
+  uint32_t fields;
+  uint32_t object_id;
+  int32_t kind;
+  int32_t anchor_kind;
+  int32_t edit_as;
+  uint32_t from_row;
+  uint32_t from_col;
+  uint32_t to_row;
+  uint32_t to_col;
+  int32_t fill_kind;
+  uint32_t fill_rgb;
+  int32_t line_kind;
+  uint32_t line_rgb;
+  int32_t rotation;
+  int32_t hidden;
+  int32_t text_box;
+  int64_t from_row_off;
+  int64_t from_col_off;
+  int64_t to_row_off;
+  int64_t to_col_off;
+  int64_t cx;
+  int64_t cy;
+  int64_t line_width_emu;
+  const char* name;
+  const char* prst;
+  const char* text;
+} fm_shape;
+
+/**
+ * @brief Number of shapes, connectors and groups in the sheet's drawing; `0`
+ *        for a sheet without a drawing. Pictures, charts and other frames are
+ *        not counted; children of a group are not listed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out_count == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_shape_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads shape `idx` of the sheet's drawing, in z-order (0 is the back).
+ *
+ * Fields the model does not express read as `FM_SHAPE_PAINT_OTHER` or empty
+ * and pass through a save untouched. The three strings are read-scratch-backed
+ * views.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out == NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_shape_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_shape* out);
+
+/**
+ * @brief Appends a shape on top of the sheet's drawing and returns its id.
+ *
+ * `FM_SHAPE_FIELD_ANCHOR` is required. A `prst` naming a line or connector
+ * geometry (`line`, `straightConnector1`, `bentConnector*`,
+ * `curvedConnector*`) inserts a connector, which holds no text. A sheet
+ * without a drawing gets one; existing drawing content is kept.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `spec` or `out_object_id` is `NULL`;
+ *         `kInvalidArgument` for a bad sheet or enumeration, a missing anchor,
+ *         a `prst` that is not an alphanumeric token, an offset or size
+ *         outside [0, 2^31) EMU, a cell outside the sheet, a two-cell `to`
+ *         before `from`, a fill or outline that is neither solid nor none,
+ *         or text with control characters;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package.
+ */
+FM_API fm_status_t fm_sheet_insert_shape(fm_workbook_t* wb, size_t sheet_index, const fm_shape* spec,
+                                         uint32_t* out_object_id);
+
+/**
+ * @brief Applies the fields `spec->fields` names to the shape, connector or
+ *        group `object_id`, keeping the rest of its XML.
+ *
+ * Text applies to a shape only and keeps the first paragraph's properties and
+ * first run's formatting. Fails like `fm_sheet_insert_shape`, and with
+ * `kInvalidArgument` for an unknown id or a changed anchor kind.
+ */
+FM_API fm_status_t fm_sheet_update_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                         const fm_shape* spec);
+
+/**
+ * @brief Removes the shape, connector or group `object_id` with its children.
+ *
+ * @return `kOk` on success;
+ *         `kInvalidArgument` when the sheet has no such shape;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_remove_shape(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id);
+
+/* -------------------------------------------------------------------------- */
+/* Table slicers                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** @brief `fm_slicer::sort_order`. */
+typedef enum {
+  FM_SLICER_SORT_ASCENDING = 0,
+  FM_SLICER_SORT_DESCENDING = 1,
+} fm_slicer_sort_t;
+
+/** @brief `fm_slicer::cross_filter`. */
+typedef enum {
+  FM_SLICER_CROSS_SHOW_ITEMS_WITH_DATA_AT_TOP = 0,
+  FM_SLICER_CROSS_SHOW_ITEMS_WITH_NO_DATA = 1,
+  FM_SLICER_CROSS_NONE = 2,
+} fm_slicer_cross_filter_t;
+
+/** @brief `fm_slicer::fields` bits: the fields an add or update applies. */
+#define FM_SLICER_FIELD_NAME 0x1u /* add only */
+#define FM_SLICER_FIELD_CAPTION 0x2u
+#define FM_SLICER_FIELD_STYLE 0x4u /* an empty style removes it */
+#define FM_SLICER_FIELD_COLUMN_COUNT 0x8u
+#define FM_SLICER_FIELD_ROW_HEIGHT 0x10u
+#define FM_SLICER_FIELD_ANCHOR 0x20u /* from_*, to_*; required by add */
+#define FM_SLICER_FIELD_SORT_ORDER 0x40u
+#define FM_SLICER_FIELD_CROSS_FILTER 0x80u
+
+/**
+ * @brief A table slicer; the record `fm_sheet_slicer_at` reads and the add /
+ *        update calls take.
+ *
+ * `object_id` is the slicer's frame in the sheet's drawing (`0` when the
+ * drawing holds none). `anchor_kind` is an `fm_anchor_kind_t`; `from_*` and
+ * `to_*` are the frame's markers (`to_*` is zero unless the anchor is
+ * two-cell) and an add or update always writes a two-cell anchor. `row_height`
+ * is in EMU. `sort_order` is an `fm_slicer_sort_t` and `cross_filter` an
+ * `fm_slicer_cross_filter_t`. `cache_name`, `table_name` and `column_name`
+ * identify the slicer cache and the table column it filters; the selection
+ * itself lives in the table's AutoFilter, not here. `style` is empty without
+ * a style.
+ *
+ * `fields` is zero on read. On add and update it is a mask of
+ * `FM_SLICER_FIELD_*`: only the named fields are applied. An add defaults
+ * `name` and `caption` to the column name (the name is made unique), `row_height`
+ * to 241300 and `column_count` to 1. The strings are read-scratch-backed
+ * views on read and may be `NULL` (empty) on input; `object_id`,
+ * `anchor_kind`, `cache_name`, `table_name` and `column_name` are ignored on
+ * input.
+ */
+typedef struct {
+  uint32_t fields;
+  uint32_t object_id;
+  uint32_t column_count;
+  int32_t sort_order;
+  int32_t cross_filter;
+  int32_t anchor_kind;
+  uint32_t from_row;
+  uint32_t from_col;
+  uint32_t to_row;
+  uint32_t to_col;
+  int64_t from_row_off;
+  int64_t from_col_off;
+  int64_t to_row_off;
+  int64_t to_col_off;
+  int64_t row_height;
+  const char* name;
+  const char* caption;
+  const char* cache_name;
+  const char* table_name;
+  const char* column_name;
+  const char* style;
+} fm_slicer;
+
+/**
+ * @brief Number of table slicers hosted by the sheet; `0` for a sheet without
+ *        any. Slicers over a pivot cache are not counted.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out_count == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kIoDrawingUnparseable` (5024) when the sheet's drawing does not parse.
+ */
+FM_API fm_status_t fm_sheet_slicer_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads slicer `idx` of the sheet. The strings are read-scratch-backed
+ *        views.
+ *
+ * @return As `fm_sheet_slicer_count`, with `kInvalidArgument` also for an
+ *         out-of-range `idx`.
+ */
+FM_API fm_status_t fm_sheet_slicer_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, fm_slicer* out);
+
+/**
+ * @brief Adds a slicer on the sheet over column `column_index` (0-based) of
+ *        table `table_index` and returns its frame id.
+ *
+ * Creates the slicer and cache parts, their relationships and content types,
+ * the `Slicer_*` defined name and the drawing frame (with its fallback shape),
+ * or extends the sheet's existing slicer part. `FM_SLICER_FIELD_ANCHOR` is
+ * required. The table may live on another sheet.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `spec` or `out_object_id` is `NULL`;
+ *         `kInvalidArgument` for a bad sheet, table, column, field bit,
+ *         anchor, column count, row height or text with control characters;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package.
+ */
+FM_API fm_status_t fm_sheet_add_slicer(fm_workbook_t* wb, size_t sheet_index, size_t table_index, size_t column_index,
+                                       const fm_slicer* spec, uint32_t* out_object_id);
+
+/**
+ * @brief Applies the fields `spec->fields` names (all but the name) to slicer
+ *        `idx`, keeping the rest of its XML.
+ *
+ * @return As `fm_sheet_add_slicer`, with `kInvalidArgument` also for an
+ *         out-of-range `idx`, a name field, or an anchor update of a slicer
+ *         whose frame is missing or not two-cell.
+ */
+FM_API fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_index, size_t idx, const fm_slicer* spec);
+
+/**
+ * @brief Removes slicer `idx` with its drawing frame, and its cache when no
+ *        other slicer uses it, and the sheet's drawing when it held nothing
+ *        else. Removing a table or a sheet, or deleting the rows or columns
+ *        under a slicer's frame, removes the slicers bound to it the same way.
+ *
+ * @return `kOk` on success;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range;
+ *         `kIoDrawingUnparseable` (5024) when the sheet's drawing does not parse.
+ */
+FM_API fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_index, size_t idx);
+
+/* -------------------------------------------------------------------------- */
+/* Sparkline groups                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** @brief `fm_sparkline_group::type`. */
+typedef enum {
+  FM_SPARKLINE_LINE = 0,
+  FM_SPARKLINE_COLUMN = 1,
+  FM_SPARKLINE_STACKED = 2,
+} fm_sparkline_type_t;
+
+/** @brief `fm_sparkline_group::min_axis_type` and `max_axis_type`. */
+typedef enum {
+  FM_SPARKLINE_AXIS_INDIVIDUAL = 0,
+  FM_SPARKLINE_AXIS_GROUP = 1,
+  FM_SPARKLINE_AXIS_CUSTOM = 2,
+} fm_sparkline_axis_type_t;
+
+/** @brief `fm_sparkline_group::empty_cells_as`. */
+typedef enum {
+  FM_SPARKLINE_EMPTY_GAP = 0,
+  FM_SPARKLINE_EMPTY_ZERO = 1,
+  FM_SPARKLINE_EMPTY_SPAN = 2,
+} fm_sparkline_empty_cells_t;
+
+/**
+ * @brief One sparkline: the data `formula` (`xm:f`, a sheet-qualified range
+ *        without `=`) and the single-cell `location` (`xm:sqref`, A1 text)
+ *        that shows it. Read-scratch-backed views on read.
+ */
+typedef struct {
+  const char* formula;
+  const char* location;
+} fm_sparkline;
+
+/**
+ * @brief A sparkline group (`x14:sparklineGroup`) of the sheet's worksheet
+ *        extension list.
+ *
+ * Each colour has `kind == kFmColorNone` when the element is absent.
+ * `has_manual_min` / `has_manual_max` say whether `manualMin` / `manualMax`
+ * are present. `date_axis_ref` is the group's own `xm:f` date range, empty
+ * when absent. `line_weight` is in points (default 0.75). `sparkline_count`
+ * is filled on read and ignored on input. Enumerations are the
+ * `fm_sparkline_*_t` types; flags are 0/1.
+ */
+typedef struct {
+  fm_color_spec color_series;
+  fm_color_spec color_negative;
+  fm_color_spec color_axis;
+  fm_color_spec color_markers;
+  fm_color_spec color_first;
+  fm_color_spec color_last;
+  fm_color_spec color_high;
+  fm_color_spec color_low;
+  double manual_min;
+  double manual_max;
+  double line_weight;
+  int32_t type;
+  int32_t markers;
+  int32_t high;
+  int32_t low;
+  int32_t first;
+  int32_t last;
+  int32_t negative;
+  int32_t display_x_axis;
+  int32_t display_hidden;
+  int32_t min_axis_type;
+  int32_t max_axis_type;
+  int32_t has_manual_min;
+  int32_t has_manual_max;
+  int32_t date_axis;
+  int32_t empty_cells_as;
+  const char* date_axis_ref;
+  size_t sparkline_count;
+} fm_sparkline_group;
+
+/**
+ * @brief Number of sparkline groups in the sheet's worksheet extension list.
+ *
+ * Groups are addressed by their position in document order; adding or
+ * removing one shifts the later indices. Groups of a workbook loaded from
+ * `.xlsb` are listed and editable the same way; a group the reader cannot
+ * decode stays a binary record and is not listed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out_count == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_sparkline_group_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count);
+
+/**
+ * @brief Reads sparkline group `idx`; `date_axis_ref` is a read-scratch-backed view.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out == NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_sparkline_group_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                               fm_sparkline_group* out);
+
+/**
+ * @brief Reads sparkline `idx` of group `group_idx`; both strings are
+ *        read-scratch-backed views.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out == NULL`;
+ *         `kInvalidArgument` when `sheet_index`, `group_idx` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_sparkline_at(const fm_workbook_t* wb, size_t sheet_index, size_t group_idx, size_t idx,
+                                         fm_sparkline* out);
+
+/**
+ * @brief Appends a sparkline group with `count` sparklines.
+ *
+ * Attributes and children outside the model are not written. A sheet without
+ * a worksheet extension list gets one; other extensions are kept.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `group` or `items` is `NULL`;
+ *         `kInvalidArgument` for a bad sheet, `count == 0`, a sparkline whose
+ *         location is not one A1 cell or whose formula is empty, a
+ *         non-finite number, a negative line weight, or an enumeration out of
+ *         range.
+ */
+FM_API fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sheet_index, const fm_sparkline_group* group,
+                                                const fm_sparkline* items, size_t count);
+
+/**
+ * @brief Rewrites the modelled attributes, colours and date-axis reference of
+ *        group `idx` from `group`; its sparklines and every attribute or
+ *        child outside the model are kept.
+ *
+ * @return `kOk` on success; failures as `fm_sheet_add_sparkline_group`, and
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                   const fm_sparkline_group* group);
+
+/**
+ * @brief Replaces the sparklines of group `idx` with `count` new ones.
+ *
+ * @return `kOk` on success; failures as `fm_sheet_update_sparkline_group`.
+ */
+FM_API fm_status_t fm_sheet_set_sparkline_group_sparklines(fm_workbook_t* wb, size_t sheet_index, size_t idx,
+                                                           const fm_sparkline* items, size_t count);
+
+/**
+ * @brief Removes sparkline group `idx`.
+ *
+ * @return `kOk` on success;
+ *         `kInvalidArgument` when `sheet_index` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_sheet_remove_sparkline_group(fm_workbook_t* wb, size_t sheet_index, size_t idx);
 
 /* -------------------------------------------------------------------------- */
 /* Charts                                                                     */
@@ -8739,6 +9827,92 @@ FM_API fm_status_t fm_sheet_remove_chart_series(fm_workbook_t* wb, size_t sheet_
 FM_API fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                              const char* source, int32_t direction, int32_t header_row,
                                              int32_t header_column);
+
+/* -------------------------------------------------------------------------- */
+/* What-If data tables                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief A What-If data table (`TABLE()`): the record `fm_sheet_data_table_at`
+ *        reads and `fm_sheet_add_data_table` takes.
+ *
+ * `first_row`..`last_col` is the result range (0-based, inclusive); the
+ * formulas and substitution values sit in the row above and the column left
+ * of it. The row input cell receives the values of the top row, the column
+ * input cell those of the left column: a one-variable table has one of them
+ * (`row_oriented` says which, on read), a two-variable table both
+ * (`two_dimensional`). A flag is `0` or `1`.
+ *
+ * On add only the range and the `has_*` flags and inputs are read; the
+ * result cells are set to 0 and filled by the next recalc. On read
+ * `row_input_deleted` / `col_input_deleted` mark an input cell removed by a
+ * row or column delete; the table then evaluates to `#REF!`. An input that is
+ * absent reads as row and column 0.
+ */
+typedef struct {
+  uint32_t first_row;
+  uint32_t first_col;
+  uint32_t last_row;
+  uint32_t last_col;
+  uint32_t row_input_row;
+  uint32_t row_input_col;
+  uint32_t col_input_row;
+  uint32_t col_input_col;
+  int32_t has_row_input;
+  int32_t has_col_input;
+  int32_t two_dimensional;
+  int32_t row_oriented;
+  int32_t row_input_deleted;
+  int32_t col_input_deleted;
+} fm_data_table;
+
+/**
+ * @brief Creates a data table over the result range of `spec`. Cells in the
+ *        range may no longer be written, except by removing the table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `spec == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or a
+ *         coordinate is outside the grid;
+ *         `kDataTableInvalid` (8005) when neither input is given, the range
+ *         has no row above or column left of it, an input lies inside the
+ *         range, or the range overlaps another data table.
+ */
+FM_API fm_status_t fm_sheet_add_data_table(fm_workbook_t* wb, size_t sheet_index, const fm_data_table* spec);
+
+/**
+ * @brief Reads the data table whose result range contains `(row, col)`.
+ *        `*out_present` is `1` and `*out` filled when there is one, else `0`
+ *        and `*out` zeroed (still `kOk`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `out_present` or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_data_table_at(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                          int32_t* out_present, fm_data_table* out);
+
+/**
+ * @brief Removes the data table whose result range contains `(row, col)` and
+ *        blanks its result cells.
+ *
+ * @return `kOk` on success;
+ *         `kInvalidArgument` when `sheet_index` is out of range;
+ *         `kDataTableInvalid` (8005) when no data table covers the cell.
+ */
+FM_API fm_status_t fm_sheet_remove_data_table(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col);
+
+/**
+ * @brief Recomputes every data table now, whatever the calc mode. A recalc
+ *        does this itself after a pass that had a dirty cell or a volatile
+ *        formula, except under
+ *        `FM_CALC_MODE_AUTO_NO_TABLE`, which leaves it to this call.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         a `kEval*` / `kGraph*` code on engine failure.
+ */
+FM_API fm_status_t fm_workbook_recalc_data_tables(fm_workbook_t* wb);
 
 /* -------------------------------------------------------------------------- */
 /* Version                                                                    */

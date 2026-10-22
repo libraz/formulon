@@ -374,12 +374,25 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   // each cache definition starts after the styles relationship: sheets
   // occupy rId1..rId(N), styles uses rId(N+1), pivot caches use
   // rId(N+2)+. The numeric_id drives the package-relative path.
+  //
+  // A cache no pivot table draws from is not written: the desktop
+  // spreadsheet drops it on save, and removing a pivot leaves its cache in
+  // the model so an undo can recreate the pivot against the same cache id.
   plan.pivot_caches.reserve(wb.pivot_caches().size());
-  for (std::size_t i = 0; i < wb.pivot_caches().size(); ++i) {
-    const pivot::PivotCache* cache = wb.pivot_caches()[i].get();
-    if (cache == nullptr) {
+  std::unordered_set<std::uint32_t> used_cache_ids;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const std::unique_ptr<pivot::PivotTable>& table : wb.sheet(s).pivot_tables()) {
+      if (table != nullptr) {
+        used_cache_ids.insert(table->pivot_cache_id());
+      }
+    }
+  }
+  for (std::size_t source = 0; source < wb.pivot_caches().size(); ++source) {
+    const pivot::PivotCache* cache = wb.pivot_caches()[source].get();
+    if (cache == nullptr || used_cache_ids.count(cache->cache_id()) == 0U) {
       continue;
     }
+    const std::size_t i = plan.pivot_caches.size();
     EmissionPlan::PivotCachePlan entry;
     entry.cache = cache;
     entry.numeric_id = static_cast<std::uint32_t>(i + 1);
@@ -473,7 +486,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     // preceding commented sheet renumbers output parts but must not discard
     // the surviving sheet's shape geometry. Bytes whose shapes no longer
     // match the comment anchors are regenerated instead.
-    if (!sheet.comment_vml_path().empty() && sheet.comment_vml_anchors() == sheet.comment_anchor_set()) {
+    if (!sheet.comment_vml_path().empty() && sheet.comment_vml_shapes() == sheet.comment_shapes()) {
       entry.vml_source = source_passthrough_index.find(source_passthrough, sheet.comment_vml_path());
     }
     plan.comments_by_sheet[s] = std::move(entry);

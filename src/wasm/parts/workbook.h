@@ -68,6 +68,9 @@ class JsWorkbook {
 
   JsStatus setDefinedName(const std::string& name, const std::string& formula);
   JsStatus setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId);
+  /// Sets the `comment` and / or `hidden` of an existing defined name; an
+  /// absent key in `attrs` leaves that attribute unchanged.
+  JsStatus setDefinedNameAttrs(const std::string& name, int32_t localSheetId, emscripten::val attrs);
 
   JsStatus insertRows(uint32_t sheet, uint32_t row, uint32_t count);
   JsStatus deleteRows(uint32_t sheet, uint32_t row, uint32_t count);
@@ -170,6 +173,14 @@ class JsWorkbook {
   emscripten::val getIterative() const;
   JsNumberResult calcMode() const;
   JsStatus setCalcMode(uint32_t mode);
+  JsNumberResult fullPrecision() const;
+  JsStatus setFullPrecision(bool fullPrecision);
+  JsNumberResult calcOnSave() const;
+  JsStatus setCalcOnSave(bool calcOnSave);
+  JsNumberResult refMode() const;
+  JsStatus setRefMode(uint32_t mode);
+  JsNumberResult date1904() const;
+  JsStatus setDate1904(bool date1904);
   /// `{status, now}` where `now` is the pinned wall-clock reading as
   /// `{year, month, day, hour, minute, second}`, or `null` when the workbook
   /// follows the host clock. `null` rather than a flag beside the fields
@@ -200,6 +211,9 @@ class JsWorkbook {
   JsAddStyleResult createTable(emscripten::val spec);
   JsStatus updateTable(uint32_t idx, emscripten::val spec);
   JsStatus removeTable(uint32_t idx);
+  /// Sets column `column`'s totals-row function / label from
+  /// `{ function?, label?, formula? }`.
+  JsStatus setTableColumnTotals(uint32_t idx, uint32_t column, emscripten::val totals);
 
   JsNumberResult passthroughCount() const;
   emscripten::val passthroughAt(uint32_t idx) const;
@@ -281,12 +295,15 @@ class JsWorkbook {
   JsStatus setSheetShowGridLines(uint32_t sheet, bool show);
   JsStatus setSheetShowRowColHeaders(uint32_t sheet, bool show);
   JsStatus setSheetShowZeros(uint32_t sheet, bool show);
+  JsStatus setSheetShowFormulas(uint32_t sheet, bool show);
+  JsStatus setSheetShowOutlineSymbols(uint32_t sheet, bool show);
   JsStatus setSheetRightToLeft(uint32_t sheet, bool rightToLeft);
   JsStatus setSheetTabSelected(uint32_t sheet, bool selected);
   /// Scroll origin of the sheet view, and the first visible cell of a frozen
   /// view's unfrozen pane (which must lie past the frozen rows and columns).
   JsStatus setSheetTopLeft(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus setSheetPaneTopLeft(uint32_t sheet, uint32_t row, uint32_t col);
+  JsStatus setSheetSplit(uint32_t sheet, double xTwips, double yTwips);
   /// The active pane's selection as `{ status, activeRow, activeCol, ranges }`,
   /// and its setter taking `{ activeRow, activeCol, ranges }`.
   emscripten::val getSheetSelection(uint32_t sheet) const;
@@ -297,6 +314,7 @@ class JsWorkbook {
   JsStatus setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width);
   JsStatus setColumnHidden(uint32_t sheet, uint32_t first, uint32_t last, bool hidden);
   JsStatus setColumnOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level);
+  JsStatus setColumnCollapsed(uint32_t sheet, uint32_t first, uint32_t last, bool collapsed);
   JsStatus setColumnStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex);
   JsStatus clearColumnStyle(uint32_t sheet, uint32_t first, uint32_t last);
 
@@ -304,6 +322,7 @@ class JsWorkbook {
   JsStatus setRowHeight(uint32_t sheet, uint32_t row, double height);
   JsStatus setRowHidden(uint32_t sheet, uint32_t row, bool hidden);
   JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level);
+  JsStatus setRowCollapsed(uint32_t sheet, uint32_t row, bool collapsed);
   JsStatus setRowStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex);
   JsStatus clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last);
   emscripten::val rangeStyleBases(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
@@ -380,6 +399,14 @@ class JsWorkbook {
   JsStatus setCellStyle(emscripten::val record);
   /// Removes the named style; cell formats that used it fall back to Normal.
   JsStatus removeCellStyle(const std::string& name);
+  /// Custom table / PivotTable styles (`<tableStyles>`) and the default
+  /// style names.
+  JsNumberResult tableStyleCount() const;
+  emscripten::val getTableStyle(uint32_t index) const;
+  JsStatus setTableStyle(emscripten::val style);
+  JsStatus removeTableStyle(const std::string& name);
+  emscripten::val getTableStyleDefaults() const;
+  JsStatus setTableStyleDefaults(emscripten::val defaults);
 
   // ---- Theme, colour resolution and effective style ----------------------
 
@@ -407,6 +434,18 @@ class JsWorkbook {
   emscripten::val getCommentResult(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getComments(uint32_t sheet) const;
   JsStatus setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
+  /// `{ status, value }`: whether the note at the cell is shown without hovering (0 or 1).
+  JsNumberResult getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const;
+  JsStatus setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, bool visible);
+
+  /// `{ status, protection }`: the workbook's `<workbookProtection>`.
+  emscripten::val getWorkbookProtection() const;
+  JsStatus setWorkbookProtection(emscripten::val protection);
+  /// The sheet's `<protectedRange>` entries, in file order.
+  emscripten::val getProtectedRanges(uint32_t sheet) const;
+  JsStatus addProtectedRange(uint32_t sheet, emscripten::val range);
+  JsStatus updateProtectedRange(uint32_t sheet, uint32_t index, emscripten::val range);
+  JsStatus removeProtectedRange(uint32_t sheet, uint32_t index);
 
   JsStatus addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
                         const std::string& display, const std::string& tooltip, const std::string& location);
@@ -457,6 +496,26 @@ class JsWorkbook {
   JsStatus setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t index);
   emscripten::val snapshotDrawing(uint32_t sheet, uint32_t objectId) const;
   emscripten::val restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
+
+  emscripten::val listShapes(uint32_t sheet) const;
+  emscripten::val insertShape(uint32_t sheet, emscripten::val spec);
+  JsStatus updateShape(uint32_t sheet, uint32_t objectId, emscripten::val spec);
+  JsStatus removeShape(uint32_t sheet, uint32_t objectId);
+
+  emscripten::val listSlicers(uint32_t sheet) const;
+  emscripten::val addSlicer(uint32_t sheet, uint32_t table, uint32_t column, emscripten::val spec);
+  JsStatus updateSlicer(uint32_t sheet, uint32_t index, emscripten::val spec);
+  JsStatus removeSlicer(uint32_t sheet, uint32_t index);
+  JsStatus addDataTable(uint32_t sheet, emscripten::val spec);
+  emscripten::val getDataTable(uint32_t sheet, uint32_t row, uint32_t col) const;
+  JsStatus removeDataTable(uint32_t sheet, uint32_t row, uint32_t col);
+  JsStatus recalcDataTables();
+
+  emscripten::val listSparklineGroups(uint32_t sheet) const;
+  JsStatus addSparklineGroup(uint32_t sheet, emscripten::val spec);
+  JsStatus updateSparklineGroup(uint32_t sheet, uint32_t index, emscripten::val spec);
+  JsStatus setSparklineGroupSparklines(uint32_t sheet, uint32_t index, emscripten::val sparklines);
+  JsStatus removeSparklineGroup(uint32_t sheet, uint32_t index);
 
   emscripten::val getChart(uint32_t sheet, uint32_t objectId) const;
   emscripten::val getChartData(uint32_t sheet, uint32_t objectId) const;
@@ -547,6 +606,7 @@ class JsWorkbook {
   JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, uint32_t anchorRow, uint32_t anchorCol, uint32_t spanRows,
                           uint32_t spanCols);
   JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled);
+  JsStatus pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIdx, emscripten::val info);
   emscripten::val pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;
   JsStatus pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout);
   /// Definition read-back; works for pivots created in-session and loaded
@@ -554,6 +614,7 @@ class JsWorkbook {
   JsAddStyleResult pivotCacheId(uint32_t sheet, uint32_t pivotIdx) const;
   JsStringResult pivotName(uint32_t sheet, uint32_t pivotIdx) const;
   emscripten::val pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIdx) const;
+  emscripten::val pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIdx) const;
   emscripten::val pivotRowFieldOrder(uint32_t sheet, uint32_t pivotIdx) const;
   emscripten::val pivotColFieldOrder(uint32_t sheet, uint32_t pivotIdx) const;
 
@@ -563,7 +624,7 @@ class JsWorkbook {
   JsNumberResult pivotFieldItemCount(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) const;
   emscripten::val pivotFieldItemAt(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx) const;
   JsStatus pivotFieldClear(uint32_t sheet, uint32_t pivotIdx);
-  JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t axis);
+  JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, int32_t axis);
   JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t order,
                              const std::string& byField);
   JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool top);

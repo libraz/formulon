@@ -98,8 +98,7 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, const Style
     if (!widths_v->is_object()) {
       return invalid("'column_widths' must be an object");
     }
-    const print::ColumnWidthModel display_model =
-        print::resolve_column_width_model(styles, print::GeometryMode::kDisplay);
+    const ColumnWidthModel display_model = resolve_column_width_model(styles, GeometryMode::kDisplay);
     for (const auto& [key, value] : widths_v->as_object()) {
       if (!value.is_number()) {
         return invalid("column_widths/" + key + ": width must be a number");
@@ -125,8 +124,8 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, const Style
       col.last = std::max(first, last) - 1U;
       // A case width is Excel's `ColumnWidth` (displayed characters); the
       // layout holds the stored width Excel writes for it.
-      col.width = print::column_points_to_chars(
-          value.as_number() * display_model.points_per_char + display_model.padding_pt, display_model);
+      col.width = column_points_to_chars(value.as_number() * display_model.points_per_char + display_model.padding_pt,
+                                         display_model);
       sheet->mutable_layout().columns.push_back(col);
     }
   }

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "io/xlsb/ptg_reader.h"
+#include "io/xlsb/workbook_props_records.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -43,7 +44,19 @@ struct WorkbookBinInfo {
   /// `<workbookProtection>` rebuilt from BrtBookProtection(Iso); empty
   /// when the book is unprotected or the records were not decodable.
   std::string protection_xml;
+  /// `<workbookPr>` rebuilt from BrtWbProp; empty when every field holds
+  /// its default.
+  std::string workbook_pr_xml;
+  /// `<bookViews>` rebuilt from the BrtBookView records; empty when none.
+  std::string book_views_xml;
+  /// BrtCalcProp, when the stream carries one.
+  bool has_calc_props = false;
+  XlsbCalcProps calc_props;
 };
+
+/// Installs the workbook globals of `info` (date system, `<workbookPr>`,
+/// protection, windows, calc settings) on `wb`.
+void ApplyWorkbookBinInfo(const WorkbookBinInfo& info, Workbook& wb);
 
 /// Decodes the supporting-book list from `xl/workbook.bin` into one
 /// entry per book, in `BrtExternSheet`'s `iSupBook` order. The value is
@@ -73,7 +86,7 @@ struct XlsbSupBook {
 };
 
 /// Decodes `xl/workbook.bin` to extract the ordered sheet-bundle list and
-/// workbook date system and protection. Other records are skipped.
+/// the workbook globals. Other records are skipped.
 Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_t>& body);
 
 /// Decodes the workbook-scope `BrtName` table (declaration order).

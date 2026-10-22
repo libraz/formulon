@@ -9,7 +9,7 @@
 // hand-written `<workbookProtection>` elements (`*.input.xlsx`) that Excel
 // opened and re-saved. Excel keeps lockStructure and the SHA-512 password and
 // drops lockWindows, lockRevision and revisionsPassword on both paths, in
-// both formats: no BrtBookProtection bit or field for them is ever written.
+// both formats, although BrtBookProtection defines a field for each.
 
 #include <cstdint>
 #include <cstdio>
@@ -224,15 +224,31 @@ TEST(XlsbBookProtectionFixture, RecordsWriteAsExcel) {
   }
 }
 
-// A hand-written element carrying the flags Excel drops loses them in our
-// .xlsb exactly as in Excel's, and the loss is reported.
-TEST(XlsbBookProtectionFixture, DroppedFlagsMatchExcelsOwnSave) {
-  for (const char* name : {"hand_lockAll", "hand_lockRevision", "hand_lockWindows", "hand_revisionsPassword"}) {
-    const std::string base(name);
-    auto saved = write_xlsb_with_result(LoadXlsx(base + ".input.xlsx"));
-    ASSERT_TRUE(static_cast<bool>(saved)) << name;
-    EXPECT_EQ(BookProtectionRecords(saved.value().bytes), BookProtectionRecords(ReadFixture(base + ".xlsb"))) << name;
-    EXPECT_EQ(ProtectionDeferrals(LoadXlsx(base + ".input.xlsx")), 1U) << name;
+// A hand-written element carrying the fields Excel drops on its own save
+// keeps them in BrtBookProtection's protpwdRev and BookProtectionFlags, and
+// reads back as the element it was written from.
+TEST(XlsbBookProtectionFixture, FieldsExcelDropsSurviveOurSave) {
+  struct Case {
+    const char* name;
+    std::vector<std::uint8_t> payload;
+  };
+  const Case cases[] = {{"hand_lockAll", {0x00, 0x00, 0x00, 0x00, 0x07, 0x00}},
+                        {"hand_lockRevision", {0x00, 0x00, 0x00, 0x00, 0x04, 0x00}},
+                        {"hand_lockWindows", {0x00, 0x00, 0x00, 0x00, 0x02, 0x00}},
+                        {"hand_revisionsPassword", {0x00, 0x00, 0x4B, 0xCC, 0x00, 0x00}}};
+  for (const Case& c : cases) {
+    const std::string base(c.name);
+    const Workbook source = LoadXlsx(base + ".input.xlsx");
+    auto saved = write_xlsb_with_result(source);
+    ASSERT_TRUE(static_cast<bool>(saved)) << c.name;
+    const auto records = BookProtectionRecords(saved.value().bytes);
+    EXPECT_EQ(records.count(677U), 0U) << c.name;
+    ASSERT_EQ(records.count(534U), 1U) << c.name;
+    EXPECT_EQ(records.at(534U), c.payload) << c.name;
+    EXPECT_EQ(ProtectionDeferrals(LoadXlsx(base + ".input.xlsx")), 0U) << c.name;
+    auto back = read_xlsb(ByteSpan{saved.value().bytes.data(), saved.value().bytes.size()});
+    ASSERT_TRUE(static_cast<bool>(back)) << c.name;
+    EXPECT_EQ(back.value().workbook.workbook_protection_xml(), source.workbook_protection_xml()) << c.name;
   }
 }
 

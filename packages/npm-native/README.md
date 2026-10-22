@@ -43,20 +43,19 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 328 instance methods plus the four static factories. Of those
-instance methods, 326 are shared with WASM; six remain WASM-only, while
+register 379 instance methods plus the four static factories. Of those
+instance methods, 377 are shared with WASM; three remain WASM-only, while
 `dispose()` and `memoryUsage()` are native-only lifecycle helpers.
 The shared `Workbook` methods use the same status-bearing result envelopes
 and field shapes; switching packages still requires updating the module
 import and validating the target platform's native prebuild. The additional
-native-only methods are operational helpers; the six
+native-only methods are operational helpers; the three
 WASM-only methods remain available through the WASM package.
 
 The WASM-only methods are, in full:
 
 ```
 addCellStyleXf
-createTable, updateTable, removeTable
 getSheetAutoFilterXml, setSheetAutoFilterXml
 ```
 
@@ -92,11 +91,12 @@ Cells & recalc
   dispose, memoryUsage
   setNumber, setBool, setText, setBlank, setFormula
   getValue, getLambdaText
-  recalc, recalcParallel, partialRecalc, setIterative, setIterativeProgress, save,
+  recalc, recalcParallel, partialRecalc, recalcDataTables, setIterative, setIterativeProgress, save,
   saveAs, saveWithDiagnostics, readDiagnostics
 
 Workbook policy / catalog
-  calcMode, setCalcMode, excelProfileId, setExcelProfileId
+  calcMode, setCalcMode, fullPrecision, setFullPrecision, calcOnSave, setCalcOnSave,
+  refMode, setRefMode, date1904, setDate1904, excelProfileId, setExcelProfileId
   functionMetadata, functionNames,
   localizeFunctionName, canonicalizeFunctionName,
   localizeFormula, canonicalizeFormula, localeFacts,
@@ -109,14 +109,16 @@ Sheets & structure
   insertRows, deleteRows, insertCols, deleteCols
   cellCount, cellAt, definedNameCount, definedNameAt,
   tableCount, tableAt, passthroughCount, passthroughAt
-  setDefinedName
+  createTable, updateTable, removeTable, setTableColumnTotals
+  setDefinedName, setDefinedNameScoped, setDefinedNameAttrs
 
 Sheet view / layout / protection
   getSheetView, setSheetZoom, setSheetFreeze, setSheetTabHidden
-  setSheetTopLeft, setSheetPaneTopLeft, getSheetSelection, setSheetSelection
+  setSheetTopLeft, setSheetPaneTopLeft, setSheetSplit, getSheetSelection, setSheetSelection
   getSheetProtection, setSheetProtection
-  getSheetColumns, setColumnWidth, setColumnHidden, setColumnOutline
-  getSheetRowOverrides, setRowHeight, setRowHidden, setRowOutline
+  getSheetColumns, setColumnWidth, setColumnHidden, setColumnOutline, setColumnCollapsed
+  getSheetRowOverrides, setRowHeight, setRowHidden, setRowOutline, setRowCollapsed
+  setSheetShowFormulas, setSheetShowOutlineSymbols
   setColumnStyle, clearColumnStyle, setRowStyle, clearRowStyle
   rangeStyleBases, remapRangeStyle, snapshotRangeStyle, restoreRangeStyle
 
@@ -126,18 +128,28 @@ Styles
   addFont, addFill, addBorder, addNumFmt, addXf
   fontCount, fillCount, borderCount, xfCount
   cellStyleCount, cellStyleXfCount, getCellStyle, getCellStyleXf, setCellStyle, removeCellStyle
+  tableStyleCount, getTableStyle, setTableStyle, removeTableStyle,
+  getTableStyleDefaults, setTableStyleDefaults
   getTheme, setThemeColors, setThemeFonts, setThemeScriptFont, resolveColor, getEffectiveStyle
 
 Merges / comments / hyperlinks / validations
   addMerge, removeMerge, removeMergeAt, clearMerges, getMerges
-  getComment, setComment
+  getComment, setComment, getCommentVisible, setCommentVisible
   addHyperlink, getHyperlinks, removeHyperlink,
   removeHyperlinkAt, clearHyperlinks
   getValidations, addValidation, removeValidationAt, clearValidations
 
+Protection records
+  getWorkbookProtection, setWorkbookProtection
+  getProtectedRanges, addProtectedRange, updateProtectedRange, removeProtectedRange
+
 Drawings & charts
   probeImage, listDrawingObjects, getImage, insertImage
   removeDrawing, setDrawingAnchor, setDrawingZOrder, snapshotDrawing, restoreDrawing
+  listShapes, insertShape, updateShape, removeShape
+  listSlicers, addSlicer, updateSlicer, removeSlicer
+  addDataTable, getDataTable, removeDataTable
+  listSparklineGroups, addSparklineGroup, updateSparklineGroup, setSparklineGroupSparklines, removeSparklineGroup
   getChart, getChartData, previewChartData, insertChart
   setChartType, setChartTitle, setChartLegend, setChartAxis, setChartDisplay,
   setChartSeries, setChartPoint, setChartPlot, setChartFilter,
@@ -149,11 +161,11 @@ Conditional formatting
 
 PivotTables & pivot caches
   pivotCount, pivotCreate, pivotRemove, pivotLayout
-  pivotCacheId, pivotName, pivotGetGrandTotals, pivotRowFieldOrder,
+  pivotCacheId, pivotName, pivotGetGrandTotals, pivotGetStyleInfo, pivotRowFieldOrder,
   pivotColFieldOrder, pivotFieldAt, pivotFieldItemCount, pivotFieldItemAt,
   pivotDataFieldAt                             (definition read-back)
   pivotFilterCount, pivotFilterAdd, pivotFilterAt,
-  pivotFilterClear, pivotFilterRemoveAt        (session state, not saved)
+  pivotFilterClear, pivotFilterRemoveAt        (saved with the pivot)
   ... (full pivot cache + table mutation surface; see dist/index.d.ts)
 
 Top-level: evalFormula, version, versionString, lastErrorMessage,

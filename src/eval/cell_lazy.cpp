@@ -10,6 +10,7 @@
 
 #include "eval/cell_lazy.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -17,6 +18,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "column_width.h"
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
@@ -328,12 +330,11 @@ std::string_view cell_format_code(const CellXf* xf) {
   }
 }
 
-// Builds CELL("width")'s 1x2 result. The first member is the effective
-// column width; the second tells callers whether that width came from the
-// sheet default rather than an explicit <col> override.
-Value build_width_result(const Sheet& sheet, std::uint32_t col, Arena& arena) {
-  double width = sheet.format_defaults().has_default_col_width ? sheet.format_defaults().default_col_width
-                                                               : sheet.format_defaults().base_col_width;
+// Builds CELL("width")'s 1x2 result. The first member is the displayed
+// column width rounded to a whole character; the second tells callers whether
+// that width came from the sheet default rather than an explicit <col>.
+Value build_width_result(const Sheet& sheet, std::uint32_t col, const ColumnWidthModel& model, Arena& arena) {
+  double width = default_column_width_chars(sheet, model);
   bool is_default = true;
   for (const ColumnLayout& layout : sheet.layout().columns) {
     if (layout.first <= col && col <= layout.last) {
@@ -350,7 +351,8 @@ Value build_width_result(const Sheet& sheet, std::uint32_t col, Arena& arena) {
   if (arr == nullptr) {
     return Value::error(ErrorCode::Value);
   }
-  cells[0] = Value::number(width);
+  // Half rounds up: a column shown as 1.57 reports 2, one shown as 0.5 reports 1.
+  cells[0] = Value::number(std::floor(column_display_chars(width, model) + 0.5));
   cells[1] = Value::boolean(is_default);
   return Value::array(arr);
 }
@@ -360,7 +362,11 @@ Value resolve_cell_width(std::string_view sheet_name, std::uint32_t col, Arena& 
   if (target == nullptr) {
     return Value::error(ErrorCode::Ref);
   }
-  return build_width_result(*target, col, arena);
+  const Workbook* workbook = ctx.workbook();
+  static const StylesTable kNoStyles{};
+  const StylesTable& styles = workbook != nullptr ? workbook->styles() : kNoStyles;
+  const ColumnWidthModel model = resolve_column_width_model(styles, GeometryMode::kDisplay);
+  return build_width_result(*target, col, model, arena);
 }
 
 // Builds the `"address"` answer: an A1 absolute address (`$Col$Row`)

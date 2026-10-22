@@ -254,7 +254,7 @@ test('pivotFilterAt reads back an added filter field for field', async () => {
   }
 });
 
-test('pivotFilterCount reports only what this session added', async () => {
+test('pivotFilterCount counts the filters on the pivot', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
@@ -266,7 +266,7 @@ test('pivotFilterCount reports only what this session added', async () => {
   }
 });
 
-test('active filters are session state and do not survive save/load', async () => {
+test('pivot filters survive save/load', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   let bytes;
@@ -282,8 +282,14 @@ test('active filters are session state and do not survive save/load', async () =
   const reloaded = Module.Workbook.loadBytes(bytes);
   try {
     assert.equal(reloaded.pivotCount(0).value, 1);
-    // The pivot round-trips; its active-filter list deliberately does not.
-    assert.equal(reloaded.pivotFilterCount(0, 0).value, 0);
+    // The filter is written as `<filters>` and decodes back into the list.
+    assert.equal(reloaded.pivotFilterCount(0, 0).value, 1);
+    const got = reloaded.pivotFilterAt(0, 0, 0);
+    assert.ok(got.status.ok, JSON.stringify(got.status));
+    assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
+    assert.equal(got.type, PIVOT_FILTER.type);
+    assert.equal(got.valueKind, PIVOT_FILTER.valueKind);
+    assert.equal(got.valueDouble, PIVOT_FILTER.valueDouble);
   } finally {
     reloaded.delete();
   }
@@ -515,6 +521,52 @@ test('pivot definition read-backs report what the setters wrote', async () => {
   }
 });
 
+test('pivot style info defaults on create, reads back what the setter wrote and rejects bad arguments', async () => {
+  const Module = await getModule();
+  const { wb, pivot } = makePivotWorkbook(Module.Workbook);
+  try {
+    const initial = wb.pivotGetStyleInfo(0, pivot);
+    assert.ok(initial.status.ok, JSON.stringify(initial.status));
+    assert.equal(initial.present, true);
+    assert.equal(initial.name, 'PivotStyleLight16');
+    assert.deepEqual(
+      [initial.showRowHeaders, initial.showColHeaders, initial.showRowStripes, initial.showColStripes],
+      [true, true, false, false],
+    );
+    assert.equal(initial.showLastColumn, true);
+
+    assert.ok(wb.pivotSetStyleInfo(0, pivot, { name: 'PivotStyleDark3', showRowStripes: true }).ok);
+    const set = wb.pivotGetStyleInfo(0, pivot);
+    assert.equal(set.name, 'PivotStyleDark3');
+    assert.deepEqual(
+      [set.showRowHeaders, set.showColHeaders, set.showRowStripes, set.showColStripes, set.showLastColumn],
+      [false, false, true, false, false],
+    );
+
+    // Survives a save/load.
+    const saved = wb.save();
+    assert.ok(saved.status.ok, JSON.stringify(saved.status));
+    const reloaded = Module.Workbook.loadBytes(saved.bytes);
+    try {
+      assert.equal(reloaded.pivotGetStyleInfo(0, 0).name, 'PivotStyleDark3');
+      assert.equal(reloaded.pivotGetStyleInfo(0, 0).showRowStripes, true);
+    } finally {
+      reloaded.delete();
+    }
+
+    // An omitted name keeps the element without a style name.
+    assert.ok(wb.pivotSetStyleInfo(0, pivot, {}).ok);
+    const bare = wb.pivotGetStyleInfo(0, pivot);
+    assert.equal(bare.present, true);
+    assert.equal(bare.name, '');
+
+    assert.equal(wb.pivotGetStyleInfo(0, 9).status.ok, false);
+    assert.equal(wb.pivotSetStyleInfo(0, 9, { name: 'X' }).ok, false);
+  } finally {
+    wb.delete();
+  }
+});
+
 test('pivot definition read-backs reject out-of-range indices', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
@@ -679,6 +731,73 @@ test('scroll origin, pane origin and selection round-trip through save', async (
     assert.deepEqual(missing.ranges, []);
   } finally {
     loaded.delete();
+    wb.delete();
+  }
+});
+
+test('sheet split reads back, round-trips and exchanges with the freeze', async () => {
+  const Module = await getModule();
+  const wb = Module.Workbook.createDefault();
+  try {
+    assert.deepEqual([wb.getSheetView(0).view.splitX, wb.getSheetView(0).view.splitY], [0, 0]);
+    assert.ok(wb.setSheetSplit(0, 2000, 1500).ok);
+    const view = wb.getSheetView(0).view;
+    assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
+    const saved = wb.save();
+    assert.ok(saved.status.ok, JSON.stringify(saved.status));
+    const loaded = Module.Workbook.loadBytes(saved.bytes);
+    try {
+      const got = loaded.getSheetView(0).view;
+      assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
+    } finally {
+      loaded.delete();
+    }
+    assert.ok(wb.setSheetFreeze(0, 2, 1).ok);
+    assert.deepEqual([wb.getSheetView(0).view.splitX, wb.getSheetView(0).view.splitY], [0, 0]);
+    assert.ok(wb.setSheetSplit(0, 0, 900).ok);
+    const split = wb.getSheetView(0).view;
+    assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
+    assert.equal(wb.setSheetSplit(0, -1, 0).ok, false);
+    assert.equal(wb.setSheetSplit(0, 0, Number.NaN).ok, false);
+    assert.equal(wb.setSheetSplit(0, Number.POSITIVE_INFINITY, 0).ok, false);
+    assert.equal(wb.getSheetView(0).view.splitY, 900);
+    assert.ok(wb.setSheetSplit(0, 0, 0).ok);
+    assert.equal(wb.getSheetView(0).view.splitY, 0);
+  } finally {
+    wb.delete();
+  }
+});
+
+test('pivotFieldAdd binds by cache column name and axis -1 takes a field off the report', async () => {
+  const Module = await getModule();
+  const wb = Module.Workbook.createDefault();
+  try {
+    const cacheId = wb.pivotCacheCreate(0).index;
+    assert.ok(wb.pivotCacheSetWorksheetSource(cacheId, { present: true, ref: 'A1:D3', sheet: 'Sheet1' }).ok);
+    for (const name of ['Region', 'Product', 'Sales', 'Qty']) assert.ok(wb.pivotCacheFieldAdd(cacheId, name).status.ok);
+    for (const sales of [100, 200]) {
+      const rec = wb.pivotCacheRecordAdd(cacheId).index;
+      for (const [col, value] of [0, 0, sales, 1].entries())
+        assert.ok(wb.pivotCacheRecordSetNumber(cacheId, rec, col, value).ok);
+    }
+    const pivot = wb.pivotCreate(0, 'PT', cacheId, 0, 6).index;
+    const region = wb.pivotFieldAdd(0, pivot, { sourceName: 'Region', axis: 0 });
+    const sales = wb.pivotFieldAdd(0, pivot, { sourceName: 'Sales', axis: 2 });
+    assert.equal(region.index, 0);
+    assert.equal(sales.index, 2);
+    assert.equal(wb.pivotFieldCount(0, pivot).value, 4);
+    assert.equal(wb.pivotFieldAt(0, pivot, 1).axis, -1);
+    assert.ok(wb.pivotDataFieldAdd(0, pivot, { fieldIndex: 2, aggregation: 0 }).status.ok);
+    assert.equal(wb.pivotDataFieldCount(0, pivot).value, 1);
+
+    assert.ok(wb.pivotFieldSetAxis(0, pivot, 2, -1).ok);
+    assert.equal(wb.pivotFieldAt(0, pivot, 2).axis, -1);
+    assert.equal(wb.pivotDataFieldCount(0, pivot).value, 0);
+    assert.ok(wb.pivotFieldSetAxis(0, pivot, 0, -1).ok);
+    assert.deepEqual(wb.pivotRowFieldOrder(0, pivot).indices, []);
+    assert.equal(wb.pivotFieldSetAxis(0, pivot, 0, 4).ok, false);
+    assert.equal(wb.pivotFieldSetAxis(0, pivot, 0, -2).ok, false);
+  } finally {
     wb.delete();
   }
 });

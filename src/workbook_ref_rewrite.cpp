@@ -287,6 +287,7 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     rewrite_field(table.ref, transform);
     for (TableColumn& column : table.columns) {
       rewrite_field(column.calculated_column_formula, transform);
+      rewrite_field(column.totals_row_formula, transform);
     }
   }
 

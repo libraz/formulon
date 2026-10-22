@@ -31,7 +31,8 @@ struct ResolvedSelection {
   std::string_view pane;  ///< `SheetView::pane_key` form.
   std::uint32_t active_row = 0;
   std::uint32_t active_col = 0;
-  std::vector<MergeRange> ranges;  ///< Never empty.
+  std::vector<MergeRange> ranges;    ///< Never empty.
+  std::uint32_t active_cell_id = 0;  ///< Index of the range holding the active cell.
 };
 
 /// Every pane `view` has, in Excel's save order (topLeft, topRight,

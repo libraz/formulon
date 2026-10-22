@@ -326,7 +326,8 @@ class Workbook {
   /// Returns `kInvalidArgument` when `sheet_index >= sheet_count()`, and
   /// `kPreconditionFailed`, changing nothing, when the cell is a non-anchor
   /// cell of a legacy array formula block; a write to the anchor replaces
-  /// the whole block.
+  /// the whole block. A cell inside a data table's result range is refused
+  /// the same way, anchor included.
   Expected<void, Error> set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
 
   /// Stores a text literal whose bytes are copied into the destination cell.
@@ -422,6 +423,39 @@ class Workbook {
   /// Removes all merges from a sheet and wakes all of that sheet's blocked
   /// spill anchors.
   Expected<void, Error> clear_merges(std::size_t sheet_index);
+
+  // ---------------------------------------------------------------------------
+  // What-If data tables
+  // ---------------------------------------------------------------------------
+
+  /// Creates a data table whose result range is `ref` (the cells of its
+  /// top row and left column outside `ref` hold the formulas and the
+  /// substitution values). `row_input` / `col_input` name the input cells
+  /// the values of the top row / left column are substituted into: one input
+  /// gives a one-variable table, both a two-variable one. The result cells
+  /// are set to 0 until the next recalc fills them.
+  ///
+  /// Returns `kInvalidArgument` for a bad sheet index, a `ref` or input
+  /// outside the grid, and `kDataTableInvalid` when no input is given, `ref`
+  /// has no row above or column left of it, an input lies inside `ref`, or
+  /// `ref` overlaps another table.
+  Expected<void, Error> add_data_table(std::size_t sheet_index, MergeRange ref, DataTableInput row_input,
+                                       DataTableInput col_input);
+
+  /// The data table whose result range contains `(row, col)`, or null.
+  const DataTable* data_table_at(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// Removes the table containing `(row, col)` and blanks its result cells.
+  /// `kDataTableInvalid` when no table covers the cell.
+  Expected<void, Error> remove_data_table(std::size_t sheet_index, std::uint32_t row, std::uint32_t col);
+
+  /// Recomputes every data table now, whatever the calc mode: the explicit
+  /// calculation that `kAutoNoTable` leaves to the host. `recalc()` and
+  /// `recalc_parallel()` do the same after a pass that had a dirty cell or a
+  /// volatile formula, except under `kAutoNoTable`. Each result cell is found by
+  /// substituting into the input cell(s), recalculating the cells that read
+  /// them, and restoring the inputs; `partial_recalc` leaves tables alone.
+  Expected<void, Error> recalc_data_tables(const eval::FunctionRegistry& registry);
 
   /// Drives a full incremental recalc using the embedded recalc engine.
   ///
@@ -553,6 +587,12 @@ class Workbook {
   /// such name exists.
   Expected<void, Error> set_defined_name_hidden(std::string_view name, std::int32_t local_sheet_id, bool hidden);
 
+  /// Sets the Name Manager comment of the defined name `name` in
+  /// `local_sheet_id` scope (`-1` for workbook scope); empty clears it.
+  /// Returns `kInvalidArgument` when no such name exists.
+  Expected<void, Error> set_defined_name_comment(std::string_view name, std::int32_t local_sheet_id,
+                                                 std::string comment);
+
   // --- AutoFilter ---
   // Every change below dirties row-visibility dependents, since whether a
   // sheet carries filter criteria decides which hidden rows are filtered.
@@ -600,6 +640,14 @@ class Workbook {
   /// `StructuredRef` resolves to a static rectangle at registration time
   /// the same way a `NameRef` does. An empty `table_names` is a no-op.
   void reindex_formulas_for_table_change(const std::vector<std::string>& table_names);
+
+  /// Renames table `index` and rewrites every structured reference naming its
+  /// old name or display name (case-insensitive) to `display_name`: cell,
+  /// defined-name, metadata (CF, DV, calculated-column, totals-row) and chart
+  /// formulas, plus a pivot cache sourced from the table by name. Name
+  /// validity and uniqueness are the caller's; returns `kInvalidArgument`
+  /// only for an out-of-range `index`.
+  Expected<void, Error> rename_table(std::size_t index, std::string name, std::string display_name);
 
   /// Read-only access to the verbatim parts the reader did not model.
   /// The writer emits each entry as-is. `<Override>`-listed parts
@@ -836,11 +884,11 @@ class Workbook {
   // Excel's "Calculation options" workbook setting. `kAuto` is the
   // default; `kManual` suppresses automatic recalc on input, leaving
   // it to the host UI to drive `recalc()` explicitly; `kAutoNoTable`
-  // recalcs everything except data-table cells. The engine itself
-  // does not gate evaluation on this setting (every `recalc()` call
-  // honours all dirty cells); it is preserved as round-trip metadata
-  // and surfaced through the bindings so the host UI can mirror
-  // Excel's user-visible state.
+  // recalcs everything except data-table cells, which `recalc()` then
+  // leaves to `recalc_data_tables()`. Apart from that the engine does
+  // not gate evaluation on this setting (every `recalc()` call honours
+  // all dirty cells); it is round-trip metadata surfaced through the
+  // bindings so the host UI can mirror Excel's user-visible state.
 
   /// Workbook-level calc-mode enum. Type-aliased from `CalcMode`
   /// (declared in `calc_settings.h`) so the C ABI, the OOXML
@@ -852,9 +900,14 @@ class Workbook {
   /// Returns the workbook-level calc mode. Defaults to `kAuto`.
   CalcMode calc_mode() const noexcept { return calc_mode_; }
 
-  /// Sets the workbook-level calc mode. Plain metadata — does not
-  /// affect the recalc engine's evaluation policy.
+  /// Sets the workbook-level calc mode. Only `kAutoNoTable` changes what
+  /// `recalc()` does: it skips the data tables.
   void set_calc_mode(CalcMode mode) noexcept { calc_mode_ = mode; }
+
+  /// The remaining `<calcPr>` attributes (`fullPrecision`, `calcOnSave`,
+  /// `refMode`, `calcId`, ...). Plain metadata, like `calc_mode`.
+  const CalcOptions& calc_options() const noexcept { return calc_options_; }
+  CalcOptions& mutable_calc_options() noexcept { return calc_options_; }
 
   // ---------------------------------------------------------------------------
   // Date system (`<workbookPr date1904>`)
@@ -955,6 +1008,11 @@ class Workbook {
   void set_file_sharing_xml(std::string xml) { file_sharing_xml_ = std::move(xml); }
   const std::string& workbook_ext_lst_xml() const noexcept { return workbook_ext_lst_xml_; }
   void set_workbook_ext_lst_xml(std::string xml) { workbook_ext_lst_xml_ = std::move(xml); }
+  /// Framed `xl/workbook.bin` future-record blocks an `.xlsb` source carried
+  /// that the model does not own (the slicer cache lists), naming the source
+  /// workbook relationship ids; see `io/xlsb/slicer_records.h`.
+  const std::vector<std::uint8_t>& xlsb_book_frt() const noexcept { return xlsb_book_frt_; }
+  void set_xlsb_book_frt(std::vector<std::uint8_t> records) { xlsb_book_frt_ = std::move(records); }
 
   /// Extra namespace declarations (and `mc:Ignorable`) captured from the
   /// source `<workbook>` root element, serialised as ` name="value"`
@@ -1136,6 +1194,13 @@ class Workbook {
  private:
   Workbook();
 
+  // `set_cell_value` without the array / data-table write refusals.
+  void put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
+  void put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  // The data-table step of `recalc()` / `recalc_parallel()`.
+  Expected<void, Error> recalc_data_tables_after_pass(bool evaluated_any, const eval::FunctionRegistry& registry);
+  Expected<void, Error> compute_data_tables(const eval::FunctionRegistry& registry);
+
   // `bind_external_books` for a caller already holding the engine mutex.
   void bind_external_books_unlocked(const parser::AstNode& root);
   void bind_external_books_unlocked(std::string_view formula);
@@ -1179,6 +1244,9 @@ class Workbook {
   // calcMode=...>`. Default `kAuto` matches a freshly created
   // workbook in Excel.
   CalcMode calc_mode_ = CalcMode::kAuto;
+  CalcOptions calc_options_;
+  // A data table was created or skipped since the last table pass.
+  bool data_tables_pending_ = false;
   // 1904 date system flag parsed from `<workbookPr date1904>`. Default
   // false (1900 system).
   bool date1904_ = false;
@@ -1199,6 +1267,7 @@ class Workbook {
   std::string file_version_xml_;
   std::string file_sharing_xml_;
   std::string workbook_ext_lst_xml_;
+  std::vector<std::uint8_t> xlsb_book_frt_;
   // Extra `<workbook>` root namespace declarations (xmlns:mc / xmlns:xr* /
   // x15 + mc:Ignorable) captured for verbatim re-emission so namespaced
   // attributes in the raw captures above resolve. Empty by default.

@@ -37,6 +37,7 @@ fm_workbook_remove_sheet
 fm_workbook_rename_sheet
 fm_workbook_set_defined_name
 fm_workbook_set_defined_name_scoped
+fm_workbook_set_defined_name_attrs
 
 # -- Row / column structural edits -----------------------------------------------
 fm_workbook_insert_rows
@@ -85,11 +86,17 @@ fm_cell_range_next_cursor
 fm_cell_range_destroy
 fm_workbook_defined_name_count
 fm_workbook_defined_name_at
+fm_workbook_defined_name_attrs_at
 fm_workbook_table_count
 fm_workbook_table_at
 fm_workbook_table_create
 fm_workbook_table_update
 fm_workbook_table_remove
+fm_workbook_table_get_info
+fm_workbook_table_get_column
+fm_workbook_table_set_style_info
+fm_workbook_table_rename
+fm_workbook_table_set_column_totals
 fm_workbook_passthrough_count
 fm_workbook_passthrough_at
 
@@ -99,9 +106,18 @@ fm_workbook_set_iterative
 fm_workbook_set_iterative_enabled
 fm_workbook_get_iterative
 fm_workbook_partial_recalc
+fm_workbook_recalc_data_tables
 fm_workbook_set_iterative_progress
 fm_workbook_calc_mode
 fm_workbook_set_calc_mode
+fm_workbook_full_precision
+fm_workbook_set_full_precision
+fm_workbook_calc_on_save
+fm_workbook_set_calc_on_save
+fm_workbook_ref_mode
+fm_workbook_set_ref_mode
+fm_workbook_date1904
+fm_workbook_set_date1904
 fm_workbook_pinned_now
 fm_workbook_set_pinned_now
 fm_workbook_clear_pinned_now
@@ -126,6 +142,8 @@ fm_sheet_get_comment_at
 fm_sheet_get_comment_count
 fm_sheet_get_comment_at_index
 fm_sheet_set_comment
+fm_sheet_get_comment_visible
+fm_sheet_set_comment_visible
 
 # -- Threaded comments / persons -------------------------------------------------
 fm_sheet_threaded_comment_count
@@ -151,6 +169,13 @@ fm_sheet_list_invalid_cells
 # -- Sheet protection ------------------------------------------------------------
 fm_sheet_get_protection
 fm_sheet_set_protection
+fm_workbook_get_protection
+fm_workbook_set_protection
+fm_sheet_protected_range_count
+fm_sheet_get_protected_range
+fm_sheet_add_protected_range
+fm_sheet_update_protected_range
+fm_sheet_remove_protected_range
 
 # -- Sheet view / layout ---------------------------------------------------------
 fm_sheet_get_auto_filter_xml
@@ -175,10 +200,13 @@ fm_sheet_set_visibility
 fm_sheet_set_show_grid_lines
 fm_sheet_set_show_row_col_headers
 fm_sheet_set_show_zeros
+fm_sheet_set_show_formulas
+fm_sheet_set_show_outline_symbols
 fm_sheet_set_right_to_left
 fm_sheet_set_tab_selected
 fm_sheet_set_top_left
 fm_sheet_set_pane_top_left
+fm_sheet_set_split
 fm_sheet_get_selection
 fm_sheet_set_selection
 fm_sheet_set_view_mode
@@ -187,6 +215,7 @@ fm_sheet_get_column
 fm_sheet_set_column_width
 fm_sheet_set_column_hidden
 fm_sheet_set_column_outline
+fm_sheet_set_column_collapsed
 fm_sheet_set_column_style
 fm_sheet_clear_column_style
 fm_sheet_get_row_override_count
@@ -194,6 +223,7 @@ fm_sheet_get_row_override
 fm_sheet_set_row_height
 fm_sheet_set_row_hidden
 fm_sheet_set_row_outline
+fm_sheet_set_row_collapsed
 fm_sheet_set_row_style
 fm_sheet_clear_row_style
 fm_sheet_range_style_bases
@@ -262,6 +292,12 @@ fm_styles_add_dxf
 fm_styles_add_cell_style_xf
 fm_styles_set_cell_style
 fm_styles_remove_cell_style
+fm_styles_get_table_style_count
+fm_styles_get_table_style
+fm_styles_set_table_style
+fm_styles_remove_table_style
+fm_styles_get_table_style_defaults
+fm_styles_set_table_style_defaults
 fm_styles_set_font
 fm_workbook_set_default_font
 fm_workbook_get_theme_colors
@@ -316,11 +352,13 @@ fm_workbook_pivot_remove
 fm_workbook_pivot_set_name
 fm_workbook_pivot_set_anchor
 fm_workbook_pivot_set_grand_totals
+fm_workbook_pivot_set_style_info
 fm_workbook_pivot_get_layout
 fm_workbook_pivot_set_layout
 fm_workbook_pivot_get_cache_id
 fm_workbook_pivot_get_name
 fm_workbook_pivot_get_grand_totals
+fm_workbook_pivot_get_style_info
 fm_workbook_pivot_get_row_field_order
 fm_workbook_pivot_get_col_field_order
 fm_workbook_pivot_field_count
@@ -483,6 +521,28 @@ fm_sheet_set_chart_filter
 fm_sheet_add_chart_series
 fm_sheet_remove_chart_series
 fm_sheet_set_chart_source
+
+# -- Drawing shapes, table slicers and sparkline groups ---------------------------
+fm_sheet_shape_count
+fm_sheet_shape_at
+fm_sheet_insert_shape
+fm_sheet_update_shape
+fm_sheet_remove_shape
+fm_sheet_slicer_count
+fm_sheet_slicer_at
+fm_sheet_add_slicer
+fm_sheet_update_slicer
+fm_sheet_remove_slicer
+fm_sheet_sparkline_group_count
+fm_sheet_sparkline_group_at
+fm_sheet_sparkline_at
+fm_sheet_add_sparkline_group
+fm_sheet_update_sparkline_group
+fm_sheet_set_sparkline_group_sparklines
+fm_sheet_remove_sparkline_group
+fm_sheet_add_data_table
+fm_sheet_data_table_at
+fm_sheet_remove_data_table
 
 # -- Version ---------------------------------------------------------------------
 fm_version_string

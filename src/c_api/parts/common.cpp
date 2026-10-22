@@ -359,6 +359,24 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
         return rc;
       }
     }
+    if (rule.icon_set_icon_count != 0U) {
+      // One icon per level, each naming an icon its source set has.
+      const std::size_t levels = cf::icon_count(static_cast<cf::IconSetName>(rule.icon_set_name));
+      if (rule.icon_set_icons == nullptr || rule.icon_set_icon_count != levels) {
+        return set_binding_error(
+            formulon::FormulonErrorCode::kInvalidArgument, "icon_set_icons must hold one icon per level",
+            std::string(api) + ": icon_set_icons count=" + std::to_string(rule.icon_set_icon_count) +
+                " levels=" + std::to_string(levels));
+      }
+      for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
+        const fm_cf_icon_t& icon = rule.icon_set_icons[i];
+        const std::size_t available = icon.icon_set == nullptr ? 0U : cf::cf_icon_set_icon_count(icon.icon_set);
+        if (available == 0U || icon.icon_id < 0 || static_cast<std::size_t>(icon.icon_id) >= available) {
+          return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "icon_set_icons entry names no icon",
+                                   std::string(api) + ": icon_set_icons[" + std::to_string(i) + "]");
+        }
+      }
+    }
   }
   // The id reaches the file as `<x14:cfRule id="...">` and `<x14:id>`,
   // both of schema type `ST_Guid`. Excel repairs a workbook whose

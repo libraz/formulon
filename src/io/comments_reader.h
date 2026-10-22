@@ -15,6 +15,8 @@
 #define FORMULON_IO_COMMENTS_READER_H_
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "sheet.h"
@@ -31,7 +33,15 @@ namespace formulon::io {
 ///   * `kIoXmlParse` on malformed XML.
 ///   * `kIoSheetCorrupt` on a missing root, missing `ref=`, or
 ///     unparseable A1 cell reference.
-Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::uint8_t>& bytes);
+///
+/// When `authors` is non-null it receives the `<authors>` table in order.
+Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::uint8_t>& bytes,
+                                                        std::vector<std::string>* authors = nullptr);
+
+/// Copies visibility, box geometry and the shape's element text from the note
+/// shapes of a comment VML drawing onto the `comments` anchored at the same cells. The drawing is
+/// scanned as text, since Excel's VML is not always well-formed XML.
+void apply_vml_note_shapes(std::string_view vml, std::vector<CellComment>& comments);
 
 }  // namespace formulon::io
 

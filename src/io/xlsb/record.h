@@ -162,6 +162,9 @@ enum class XlsbRecordType : std::uint16_t {
   // record supplies them, keyed by the anchor's `(row, col)` via its
   // leading `RfX` (row/col range).
   BrtArrFmla = 426,
+  /// What-If data table over a result range; precedes the anchor cell's
+  /// plain value record (TABLECELL). No result cell carries a formula.
+  BrtTable = 428,
   BrtWsFmtInfo = 485,  ///< Default row/column formatting for a worksheet.
 
   // Styles (`xl/styles.bin`): custom number formats and the font / fill

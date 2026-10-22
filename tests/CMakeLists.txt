@@ -80,6 +80,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_table_reader_test.cpp
   unit/io/pivot_table_reader_corruption_test.cpp
   unit/io/pivot_table_reader_filters_test.cpp
+  unit/io/pivot_table_filters_roundtrip_test.cpp
   unit/io/pivot_table_reader_attributes_test.cpp
   unit/io/pivot_table_writer_test.cpp
   unit/io/part_dom_test.cpp
@@ -119,6 +120,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb_roundtrip_defined_names_test.cpp
   unit/io/xlsb_roundtrip_numeric_layout_test.cpp
   unit/io/xlsb/book_protection_fixture_test.cpp
+  unit/io/xlsb/workbook_fidelity_test.cpp
+  unit/io/xlsb/data_table_test.cpp
+  unit/io/data_table_xml_test.cpp
+  unit/workbook_data_table_test.cpp
   unit/io/xlsb/feature_records_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
@@ -146,10 +151,17 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/sst_writer_test.cpp
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb/writer_formula_test.cpp
+  unit/io/xlsb/styles_fidelity_test.cpp
   unit/io/xlsb/writer_layout_test.cpp
   unit/io/xlsb/sheet_view_excel_fixture_test.cpp
+  unit/io/xlsb/sheet_fidelity_test.cpp
   unit/io/sheet_format_pr_roundtrip_test.cpp
   unit/io/xlsb/writer_metadata_test.cpp
+  unit/io/xlsb/cf_icons_fidelity_test.cpp
+  unit/io/xlsb/sparkline_fidelity_test.cpp
+  unit/io/xlsb/table_fidelity_test.cpp
+  unit/io/xlsb/pivot_fidelity_test.cpp
+  unit/io/xlsb/slicer_fidelity_test.cpp
   unit/io/xlsb_fidelity_test.cpp
   unit/io/xlsb_phonetic_test.cpp
   unit/io/external_link_fixture_test.cpp

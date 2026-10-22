@@ -210,6 +210,165 @@ JsStatus JsWorkbook::setComment(uint32_t sheet, uint32_t row, uint32_t col, cons
   return status_from_rc(rc);
 }
 
+JsNumberResult JsWorkbook::getCommentVisible(uint32_t sheet, uint32_t row, uint32_t col) const {
+  if (handle_ == nullptr) {
+    return number_result(kBindingInvalidHandle, 0);
+  }
+  int32_t visible = 0;
+  const fm_status_t rc = fm_sheet_get_comment_visible(handle_, sheet, row, col, &visible);
+  return number_result(rc, visible);
+}
+
+JsStatus JsWorkbook::setCommentVisible(uint32_t sheet, uint32_t row, uint32_t col, bool visible) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_comment_visible(handle_, sheet, row, col, visible ? 1 : 0));
+}
+
+// ---- Protection records ------------------------------------------------
+
+emscripten::val JsWorkbook::getWorkbookProtection() const {
+  emscripten::val out = emscripten::val::object();
+  fm_workbook_protection_t p{};
+  if (handle_ == nullptr) {
+    out.set("status", invalid_handle_status());
+    out.set("protection", emscripten::val::null());
+    return out;
+  }
+  const fm_status_t rc = fm_workbook_get_protection(handle_, &p);
+  if (rc != 0) {
+    out.set("status", status_from_rc(rc));
+    out.set("protection", emscripten::val::null());
+    return out;
+  }
+  emscripten::val protection = emscripten::val::object();
+  protection.set("lockStructure", p.lock_structure);
+  protection.set("lockWindows", p.lock_windows);
+  protection.set("lockRevision", p.lock_revision);
+  protection.set("workbookSpinCount", p.workbook_spin_count);
+  protection.set("revisionsSpinCount", p.revisions_spin_count);
+  js_set_cstr_fields(protection, {{"workbookPassword", p.workbook_password},
+                                  {"workbookAlgorithmName", p.workbook_algorithm_name},
+                                  {"workbookHashValue", p.workbook_hash_value},
+                                  {"workbookSaltValue", p.workbook_salt_value},
+                                  {"revisionsPassword", p.revisions_password},
+                                  {"revisionsAlgorithmName", p.revisions_algorithm_name},
+                                  {"revisionsHashValue", p.revisions_hash_value},
+                                  {"revisionsSaltValue", p.revisions_salt_value}});
+  out.set("status", ok_status());
+  out.set("protection", protection);
+  return out;
+}
+
+JsStatus JsWorkbook::setWorkbookProtection(emscripten::val protection) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("setWorkbookProtection");
+  fm_workbook_protection_t p{};
+  p.lock_structure = reader.i32(protection, "lockStructure", 0, "protection.lockStructure");
+  p.lock_windows = reader.i32(protection, "lockWindows", 0, "protection.lockWindows");
+  p.lock_revision = reader.i32(protection, "lockRevision", 0, "protection.lockRevision");
+  p.workbook_spin_count = reader.u32(protection, "workbookSpinCount", 0U, "protection.workbookSpinCount");
+  p.revisions_spin_count = reader.u32(protection, "revisionsSpinCount", 0U, "protection.revisionsSpinCount");
+  std::string text[8];
+  p.workbook_password = reader.optional_string(protection, "workbookPassword", text[0], "protection.workbookPassword");
+  p.workbook_algorithm_name =
+      reader.optional_string(protection, "workbookAlgorithmName", text[1], "protection.workbookAlgorithmName");
+  p.workbook_hash_value =
+      reader.optional_string(protection, "workbookHashValue", text[2], "protection.workbookHashValue");
+  p.workbook_salt_value =
+      reader.optional_string(protection, "workbookSaltValue", text[3], "protection.workbookSaltValue");
+  p.revisions_password =
+      reader.optional_string(protection, "revisionsPassword", text[4], "protection.revisionsPassword");
+  p.revisions_algorithm_name =
+      reader.optional_string(protection, "revisionsAlgorithmName", text[5], "protection.revisionsAlgorithmName");
+  p.revisions_hash_value =
+      reader.optional_string(protection, "revisionsHashValue", text[6], "protection.revisionsHashValue");
+  p.revisions_salt_value =
+      reader.optional_string(protection, "revisionsSaltValue", text[7], "protection.revisionsSaltValue");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(fm_workbook_set_protection(handle_, &p));
+}
+
+namespace {
+
+fm_status_t protected_range_item(fm_workbook_t* wb, uint32_t sheet, uint32_t index, emscripten::val* out) {
+  fm_protected_range_t r{};
+  const fm_status_t rc = fm_sheet_get_protected_range(wb, sheet, index, &r);
+  if (rc != 0) {
+    return rc;
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("spinCount", r.spin_count);
+  js_set_cstr_fields(o, {{"name", r.name},
+                         {"sqref", r.sqref},
+                         {"password", r.password},
+                         {"algorithmName", r.algorithm_name},
+                         {"hashValue", r.hash_value},
+                         {"saltValue", r.salt_value},
+                         {"securityDescriptor", r.security_descriptor}});
+  *out = o;
+  return 0;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::getProtectedRanges(uint32_t sheet) const {
+  return sheet_list(handle_, sheet, &fm_sheet_protected_range_count, &protected_range_item);
+}
+
+namespace {
+
+// Hands the range described by `range` to `edit`, the add or update half of the protected-range API.
+template <typename Edit>
+JsStatus edit_protected_range(fm_workbook_t* wb, const emscripten::val& range, const char* operation, Edit edit) {
+  if (wb == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader(operation);
+  std::string text[7];
+  fm_protected_range_t r{};
+  r.spin_count = reader.u32(range, "spinCount", 0U, "range.spinCount");
+  r.name = reader.optional_string(range, "name", text[0], "range.name");
+  r.sqref = reader.optional_string(range, "sqref", text[1], "range.sqref");
+  r.password = reader.optional_string(range, "password", text[2], "range.password");
+  r.algorithm_name = reader.optional_string(range, "algorithmName", text[3], "range.algorithmName");
+  r.hash_value = reader.optional_string(range, "hashValue", text[4], "range.hashValue");
+  r.salt_value = reader.optional_string(range, "saltValue", text[5], "range.saltValue");
+  r.security_descriptor = reader.optional_string(range, "securityDescriptor", text[6], "range.securityDescriptor");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(edit(wb, r));
+}
+
+}  // namespace
+
+JsStatus JsWorkbook::addProtectedRange(uint32_t sheet, emscripten::val range) {
+  return edit_protected_range(handle_, range, "addProtectedRange",
+                              [sheet](fm_workbook_t* wb, const fm_protected_range_t& r) {
+                                return fm_sheet_add_protected_range(wb, sheet, &r);
+                              });
+}
+
+JsStatus JsWorkbook::updateProtectedRange(uint32_t sheet, uint32_t index, emscripten::val range) {
+  return edit_protected_range(handle_, range, "updateProtectedRange",
+                              [sheet, index](fm_workbook_t* wb, const fm_protected_range_t& r) {
+                                return fm_sheet_update_protected_range(wb, sheet, index, &r);
+                              });
+}
+
+JsStatus JsWorkbook::removeProtectedRange(uint32_t sheet, uint32_t index) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_remove_protected_range(handle_, sheet, index));
+}
+
 // ---- Hyperlinks --------------------------------------------------------
 
 JsStatus JsWorkbook::addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,

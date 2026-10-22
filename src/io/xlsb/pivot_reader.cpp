@@ -1,13 +1,19 @@
 #include "io/xlsb/pivot_reader.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "io/auto_filter_xml.h"
+#include "io/pivot_table_reader.h"
+#include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/record.h"
+#include "io/xml_utils.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -61,6 +67,93 @@ enum : std::uint16_t {
   kEndPivotDataField = 294,
   kPivotTableLocation = 314,
 };
+
+/// Pivot style and filter records, named and laid out per [MS-XLSB]
+/// 2.1.7.40 (PIVOTTABLE: ... BrtTableStyleClient [SXFILTERS] ...).
+enum : std::uint16_t {
+  kFrtBegin = 35,           // BrtFRTBegin
+  kFrtEnd = 36,             // BrtFRTEnd
+  kBeginAFilter = 161,      // BrtBeginAFilter
+  kTableStyleClient = 513,  // BrtTableStyleClient
+  kBeginSXFilters = 599,    // BrtBeginSXFilters
+  kEndSXFilters = 600,      // BrtEndSXFilters
+  kBeginSXFilter = 601,     // BrtBeginSXFILTER
+  kEndSXFilter = 602,       // BrtEndSXFilter
+  kSxFilter15 = 2079,       // BrtSxFilter15
+};
+
+/// `ST_PivotFilterType` spellings indexed by `PivotFilterType` (2.5.104),
+/// which numbers the same list in the same order.
+constexpr const char* kPivotFilterTypes[] = {
+    "unknown",
+    "count",
+    "percent",
+    "sum",
+    "captionEqual",
+    "captionNotEqual",
+    "captionBeginsWith",
+    "captionNotBeginsWith",
+    "captionEndsWith",
+    "captionNotEndsWith",
+    "captionContains",
+    "captionNotContains",
+    "captionGreaterThan",
+    "captionGreaterThanOrEqual",
+    "captionLessThan",
+    "captionLessThanOrEqual",
+    "captionBetween",
+    "captionNotBetween",
+    "valueEqual",
+    "valueNotEqual",
+    "valueGreaterThan",
+    "valueGreaterThanOrEqual",
+    "valueLessThan",
+    "valueLessThanOrEqual",
+    "valueBetween",
+    "valueNotBetween",
+    "dateEqual",
+    "dateOlderThan",
+    "dateNewerThan",
+    "dateBetween",
+    "tomorrow",
+    "today",
+    "yesterday",
+    "nextWeek",
+    "thisWeek",
+    "lastWeek",
+    "nextMonth",
+    "thisMonth",
+    "lastMonth",
+    "nextQuarter",
+    "thisQuarter",
+    "lastQuarter",
+    "nextYear",
+    "thisYear",
+    "lastYear",
+    "yearToDate",
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6",
+    "M7",
+    "M8",
+    "M9",
+    "M10",
+    "M11",
+    "M12",
+    "dateNotEqual",
+    "dateOlderThanOrEqual",
+    "dateNewerThanOrEqual",
+    "dateNotBetween",
+};
+
+constexpr std::uint32_t kNoIndex = 0xFFFFFFFFU;
 
 /// `BrtPivotTableLocation`: an `RfX` (first row, last row, first column,
 /// last column) followed by the `<location>` offsets. Only the rectangle
@@ -302,6 +395,109 @@ Expected<void, Error> DecodeCacheRecords(ByteSpan cursor, const std::vector<Cell
   return Expected<void, Error>::Ok();
 }
 
+/// BrtTableStyleClient as `<pivotTableStyleInfo>`; fFirstColumn does not
+/// apply to a pivot.
+pivot::PivotStyleInfo DecodeStyleClient(ByteSpan payload) {
+  pivot::PivotStyleInfo info;
+  auto flags = read_u16(payload);
+  auto name = read_xlnullablewidestring(payload);
+  if (flags) {
+    info.show_last_column = (flags.value() & 0x02U) != 0U;
+    info.show_row_stripes = (flags.value() & 0x04U) != 0U;
+    info.show_col_stripes = (flags.value() & 0x08U) != 0U;
+    info.show_row_headers = (flags.value() & 0x10U) != 0U;
+    info.show_col_headers = (flags.value() & 0x20U) != 0U;
+  }
+  if (name) {
+    info.name = std::move(name.value());
+  }
+  return info;
+}
+
+void AppendIndexAttr(std::string& out, const char* name, std::uint32_t value) {
+  if (value != kNoIndex) {
+    append_xml_attr_uint(out, name, value);
+  }
+}
+
+/// Spells one SXFILTER (BrtBeginSXFILTER, payload `begin`, just read) as its
+/// OOXML `<filter>` element, consuming through BrtEndSXFilter.
+Expected<void, Error> AppendFilterXml(ByteSpan& cursor, ByteSpan begin, std::string& out) {
+  ASSIGN_OR_RETURN(const std::uint32_t fld, read_u32(begin));
+  ASSIGN_OR_RETURN(const std::uint32_t mp_fld, read_u32(begin));
+  ASSIGN_OR_RETURN(const std::uint32_t type, read_u32(begin));
+  // Documented as unused; Excel stores the filter's evalOrder there.
+  ASSIGN_OR_RETURN(const std::uint32_t eval_order, read_u32(begin));
+  ASSIGN_OR_RETURN(const std::uint32_t id, read_u32(begin));
+  ASSIGN_OR_RETURN(const std::uint32_t measure_fld, read_u32(begin));
+  ASSIGN_OR_RETURN(const std::uint32_t measure_hier, read_u32(begin));
+  ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(begin));
+  if (type == 0U || type >= std::size(kPivotFilterTypes) || fld >= 0xFFFFFFFEU) {
+    return CorruptError("xlsb pivot filter has an unknown type or field");
+  }
+  out.append("<filter");
+  append_xml_attr_uint(out, "fld", fld);
+  AppendIndexAttr(out, "mpFld", mp_fld);
+  append_xml_attr(out, "type", kPivotFilterTypes[type]);
+  append_xml_attr_int(out, "evalOrder", static_cast<std::int32_t>(eval_order));
+  append_xml_attr_uint(out, "id", id);
+  AppendIndexAttr(out, "iMeasureHier", measure_hier);
+  AppendIndexAttr(out, "iMeasureFld", measure_fld);
+  const char* const string_attrs[] = {"name", "description", "stringValue1", "stringValue2"};
+  for (std::uint32_t bit = 0; bit < 4U; ++bit) {
+    if ((flags & (1U << bit)) != 0U) {
+      ASSIGN_OR_RETURN(auto text, read_xlwidestring(begin));
+      append_xml_attr(out, string_attrs[bit], text);
+    }
+  }
+  out.push_back('>');
+  ASSIGN_OR_RETURN(const XlsbRecord afilter, read_record(cursor));
+  if (afilter.type != kBeginAFilter) {
+    return CorruptError("xlsb pivot filter carries no AutoFilter");
+  }
+  ASSIGN_OR_RETURN(const AutoFilter criteria, read_auto_filter_block(cursor, afilter.payload));
+  out.append(serialize_auto_filter(criteria));
+  for (;;) {
+    ASSIGN_OR_RETURN(const XlsbRecord rec, read_record(cursor));
+    if (rec.type == kEndSXFilter) {
+      break;
+    }
+    // FRTSXFILTER: only a BrtSxFilter15 with fWholeDay clear says nothing
+    // the OOXML element would not.
+    if (rec.type != kFrtBegin) {
+      return CorruptError("xlsb pivot filter carries an uncharacterised record");
+    }
+    ASSIGN_OR_RETURN(const XlsbRecord inner, read_record(cursor));
+    ASSIGN_OR_RETURN(const XlsbRecord end, read_record(cursor));
+    const bool whole_day = std::any_of(inner.payload.data, inner.payload.data + inner.payload.size,
+                                       [](std::uint8_t b) { return b != 0U; });
+    if (inner.type != kSxFilter15 || end.type != kFrtEnd || whole_day) {
+      return CorruptError("xlsb pivot filter carries a future record this reader does not model");
+    }
+  }
+  out.append("</filter>");
+  return Expected<void, Error>::Ok();
+}
+
+/// Reads SXFILTERS after its BrtBeginSXFilters (payload `begin`) into
+/// `out`'s `<filter>` list.
+Expected<void, Error> AppendFiltersXml(ByteSpan& cursor, ByteSpan begin, std::string& out) {
+  ASSIGN_OR_RETURN(const std::uint32_t declared, read_u32(begin));
+  for (std::uint32_t seen = 0;; ++seen) {
+    ASSIGN_OR_RETURN(const XlsbRecord rec, read_record(cursor));
+    if (rec.type == kEndSXFilters) {
+      if (seen != declared) {
+        return CorruptError("xlsb pivot filter count does not match the filters decoded");
+      }
+      return Expected<void, Error>::Ok();
+    }
+    if (rec.type != kBeginSXFilter) {
+      return CorruptError("xlsb pivot filter list carries an uncharacterised record");
+    }
+    RETURN_IF_ERROR(AppendFilterXml(cursor, rec.payload, out));
+  }
+}
+
 }  // namespace
 
 Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, ByteSpan records) {
@@ -326,6 +522,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
   std::size_t declared_field_count = 0;
   bool in_definition = false;
   bool in_field_items = false;
+  std::string filters_xml;
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
@@ -454,6 +651,14 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
         table.mutable_data_fields().push_back(std::move(data_field));
         break;
       }
+      case kTableStyleClient:
+        table.set_style_info(DecodeStyleClient(rec.payload));
+        break;
+      case kBeginSXFilters:
+        if (auto status = AppendFiltersXml(cursor, rec.payload, filters_xml); !status) {
+          return std::move(status.error());
+        }
+        break;
       default:
         break;
     }
@@ -489,6 +694,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_bin(ByteSpan cursor) {
   }
   table.mutable_row_field_order() = std::move(row_order);
   table.mutable_col_field_order() = std::move(col_order);
+  // The filters decode against the field axes, exactly as `<filters>` does.
+  if (!filters_xml.empty() && !read_pivot_filters_xml("<filters>" + filters_xml + "</filters>", &table)) {
+    return CorruptError("xlsb pivot filters do not spell as OOXML");
+  }
   return table;
 }
 

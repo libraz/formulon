@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -48,8 +49,31 @@ struct TableColumn {
   /// when the element was absent in the source XML; structured-
   /// references inside the text are NOT parsed or evaluated here.
   std::string calculated_column_formula;
+  /// Text of `<totalsRowFormula>` (no leading `=`), the formula a `custom`
+  /// totals-row function stands for. Empty when the element was absent.
+  std::string totals_row_formula;
+  /// Whether `<totalsRowFormula>` carried `array="1"`.
+  bool totals_row_formula_array = false;
+  /// `<xmlColumnPr>` and `<extLst>` children, retained verbatim in their
+  /// schema positions after the two formula children.
+  std::string trailing_children_xml;
   /// Attributes not represented by the table model (notably data/header/
   /// totals-row dxf ids) retained as escaped ` name="value"` pairs.
+  std::string extra_attrs;
+};
+
+/// A table's `<tableStyleInfo>`: its style name and the four toggles that
+/// pick which of the style's regions apply. Absent toggles read as false.
+struct TableStyleInfo {
+  /// Whether the table carries the element at all.
+  bool present = false;
+  /// Built-in or custom (`<tableStyles>`) style name; empty for no style.
+  std::string name;
+  bool show_first_column = false;
+  bool show_last_column = false;
+  bool show_row_stripes = false;
+  bool show_column_stripes = false;
+  /// Unmodelled attributes as escaped ` name="value"` pairs.
   std::string extra_attrs;
 };
 
@@ -70,12 +94,12 @@ struct TableMetadata {
   std::size_t sheet_index = 0;
   bool header_row = true;
   bool totals_row = false;
+  /// `totalsRowShown`: whether a totals row has ever been shown, which keeps
+  /// the columns' totals settings while the row is off. `nullopt` when the
+  /// attribute is absent (its default is true).
+  std::optional<bool> totals_row_shown;
   std::vector<TableColumn> columns;
-  /// Raw `<tableStyleInfo>` element (style name + banded-row flags), or
-  /// empty when the table carries none. Captured verbatim so the table's
-  /// visual style survives a save cycle; the engine does not model table
-  /// styles.
-  std::string table_style_info_xml;
+  TableStyleInfo style_info;
   /// Table AutoFilter. Keeps the name of the raw element it replaced;
   /// `io/auto_filter_xml.h` reads and writes the element.
   /// `Workbook::set_table_auto_filter` also dirties row-visibility dependents.

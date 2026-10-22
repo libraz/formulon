@@ -22,6 +22,7 @@
 #include "chart/chart_ref.h"
 #include "defined_name.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/slicer_edit.h"
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -122,6 +123,17 @@ Expected<void, Error> check_not_part_of_array(const char* op, const Sheet& sheet
   const std::optional<SpillFootprint> block = sheet.array_block_covering(row, col);
   if (block.has_value() && (block->anchor_row != row || block->anchor_col != col)) {
     return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": cannot change part of an array",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+// `op`-prefixed refusal of a write into a What-If data table's result range:
+// unlike an array, the whole table is only ever replaced or removed as one.
+Expected<void, Error> check_not_part_of_data_table(const char* op, const Sheet& sheet, std::uint32_t row,
+                                                   std::uint32_t col) {
+  if (sheet.data_table_covering(row, col) != nullptr) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": cannot change part of a data table",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   return Expected<void, Error>::Ok();
@@ -430,6 +442,20 @@ bool erase_filter_database_name(std::vector<DefinedName>& names, std::size_t she
   return true;
 }
 
+/// Removes the workbook-scoped names listed in `cache_names` (slicer cache
+/// names, matched case-insensitively). Returns true when any was removed.
+bool erase_slicer_cache_names(std::vector<DefinedName>& names, const std::vector<std::string>& cache_names) {
+  const auto it = std::remove_if(names.begin(), names.end(), [&cache_names](const DefinedName& entry) {
+    return entry.local_sheet_id == -1 &&
+           std::any_of(cache_names.begin(), cache_names.end(), [&entry](const std::string& cache_name) {
+             return strings::case_insensitive_eq(entry.name, cache_name);
+           });
+  });
+  const bool removed = it != names.end();
+  names.erase(it, names.end());
+  return removed;
+}
+
 namespace {
 
 // Excel's structural validation for sheet names: strict UTF-8, non-empty,
@@ -615,6 +641,7 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   }
 
   const std::string removed_name = sheets_[index].name();
+  erase_slicer_cache_names(defined_names_, remove_sheet_slicers(*this, index));
 
   std::vector<std::uint32_t> old_to_new(sheets_.size());
   for (std::uint32_t old_index = 0; old_index < old_to_new.size(); ++old_index) {
@@ -902,6 +929,19 @@ Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, s
                     "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
 }
 
+Expected<void, Error> Workbook::set_defined_name_comment(std::string_view name, std::int32_t local_sheet_id,
+                                                         std::string comment) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  for (DefinedName& entry : defined_names_) {
+    if (entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name)) {
+      entry.comment = std::move(comment);
+      return Expected<void, Error>::Ok();
+    }
+  }
+  return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_comment: no such defined name",
+                    "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
+}
+
 Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, AutoFilter filter) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(check_sheet_index("set_sheet_auto_filter", sheet_index, sheets_.size()));
@@ -980,6 +1020,67 @@ void Workbook::reindex_formulas_for_table_change(const std::vector<std::string>&
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   reindex_formulas_referencing_table(sheets_, mutator, *this, table_names);
+}
+
+namespace {
+
+/// Maps a structured reference's table name from either of a table's old
+/// names to its new display name.
+class TableRenameTransform final : public parser::RefTransform {
+ public:
+  TableRenameTransform(std::string_view old_name, std::string_view old_display_name, std::string_view new_name)
+      : old_name_(old_name), old_display_name_(old_display_name), new_name_(new_name) {}
+
+  std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return ref; }
+
+  std::string_view apply_structured_ref_table(std::string_view table) const override {
+    if (strings::case_insensitive_eq(table, old_name_) || strings::case_insensitive_eq(table, old_display_name_)) {
+      return new_name_;
+    }
+    return table;
+  }
+
+ private:
+  std::string_view old_name_;
+  std::string_view old_display_name_;
+  std::string_view new_name_;
+};
+
+}  // namespace
+
+Expected<void, Error> Workbook::rename_table(std::size_t index, std::string name, std::string display_name) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (index >= tables_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "rename_table: index out of range",
+                      "index=" + std::to_string(index) + " table_count=" + std::to_string(tables_.size()));
+  }
+  const std::string old_name = tables_[index].name;
+  const std::string old_display_name = tables_[index].display_name;
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  const TableRenameTransform transform(old_name, old_display_name, display_name);
+  std::vector<std::uint32_t> ignored_cache_ids;
+  bool defined_names_changed = false;
+  rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
+                              ignored_cache_ids, defined_names_changed);
+  RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
+  for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches_) {
+    if (cache == nullptr) {
+      continue;
+    }
+    pivot::WorksheetSource& source = cache->mutable_worksheet_source();
+    if (!source.name.empty() && (strings::case_insensitive_eq(source.name, old_name) ||
+                                 strings::case_insensitive_eq(source.name, old_display_name))) {
+      source.name = display_name;
+    }
+  }
+  tables_[index].name = std::move(name);
+  tables_[index].display_name = std::move(display_name);
+  if (defined_names_changed) {
+    mark_all_formulas_dirty_locked(sheets_, mutator);
+  }
+  reindex_formulas_referencing_table(sheets_, mutator, *this,
+                                     {old_name, old_display_name, tables_[index].name, tables_[index].display_name});
+  return Expected<void, Error>::Ok();
 }
 
 const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
@@ -1180,7 +1281,12 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
                                                Value value) {
   RETURN_IF_ERROR(check_cell_target("set_cell_value", sheet_index, sheets_.size(), row, col));
   RETURN_IF_ERROR(check_not_part_of_array("set_cell_value", sheets_[sheet_index], row, col));
+  RETURN_IF_ERROR(check_not_part_of_data_table("set_cell_value", sheets_[sheet_index], row, col));
+  put_cell_value(sheet_index, row, col, value);
+  return Expected<void, Error>::Ok();
+}
 
+void Workbook::put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value) {
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 
   // The cell is becoming a literal: drop outgoing edges (the old formula's
@@ -1211,14 +1317,18 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
     mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
     sheets_[sheet_index].set_cell_value(row, col, value);
   }
-  return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                               std::string_view text) {
   RETURN_IF_ERROR(check_cell_target("set_cell_text", sheet_index, sheets_.size(), row, col));
   RETURN_IF_ERROR(check_not_part_of_array("set_cell_text", sheets_[sheet_index], row, col));
+  RETURN_IF_ERROR(check_not_part_of_data_table("set_cell_text", sheets_[sheet_index], row, col));
+  put_cell_text(sheet_index, row, col, text);
+  return Expected<void, Error>::Ok();
+}
 
+void Workbook::put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text) {
   const eval::CellNodeId node = make_node(sheet_index, row, col);
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
@@ -1228,7 +1338,6 @@ Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint
   mutator.clear_cell_dependencies(node);
   mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
   sheets_[sheet_index].set_cell_text(row, col, text);
-  return Expected<void, Error>::Ok();
 }
 
 void Workbook::apply_legacy_implicit_intersections() {
@@ -1555,6 +1664,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
                                                  std::string formula, FormulaSource source) {
   RETURN_IF_ERROR(check_cell_target("set_cell_formula", sheet_index, sheets_.size(), row, col));
   RETURN_IF_ERROR(check_not_part_of_array("set_cell_formula", sheets_[sheet_index], row, col));
+  RETURN_IF_ERROR(check_not_part_of_data_table("set_cell_formula", sheets_[sheet_index], row, col));
 
   // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
   // storage prefixes to the canonical formula-bar form at the single
@@ -1693,12 +1803,23 @@ Expected<void, Error> Workbook::clear_merges(std::size_t sheet_index) {
 }
 
 Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry& registry) {
-  return engine_->recalc(*this, registry);
+  // A write that dirtied only a data table's header or input cell evaluates nothing, yet changes the table.
+  const bool had_dirty = engine_->dirty().size() != 0U;
+  auto result = engine_->recalc(*this, registry);
+  if (!result) {
+    return result;
+  }
+  RETURN_IF_ERROR(recalc_data_tables_after_pass(had_dirty || result.value().cells_evaluated != 0U, registry));
+  return result;
 }
 
 Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& registry,
                                                 const eval::SchedulerConfig& cfg, eval::SchedulerStats* stats) {
-  return eval::recalc_parallel(*this, registry, cfg, stats);
+  eval::SchedulerStats local_stats;
+  eval::SchedulerStats& pass_stats = stats != nullptr ? *stats : local_stats;
+  const bool had_dirty = engine_->dirty().size() != 0U;
+  RETURN_IF_ERROR(eval::recalc_parallel(*this, registry, cfg, &pass_stats));
+  return recalc_data_tables_after_pass(had_dirty || pass_stats.cells_evaluated != 0U, registry);
 }
 
 namespace {

@@ -11,6 +11,7 @@
 #define FORMULON_IO_PIVOT_TABLE_READER_H_
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "pivot/pivot_table.h"
@@ -91,6 +92,12 @@ namespace formulon::io {
 ///     `<dataField>` has no `name`, or an `<item x>` index is not an unsigned
 ///     32-bit integer.
 Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector<std::uint8_t>& definition_bytes);
+
+/// Decodes a `<filters>` element into `table`'s filter lists exactly as
+/// `read_pivot_table_definition` does; `table`'s fields and axis orders must
+/// already be in place. Used by the XLSB reader, which spells each binary
+/// filter as its OOXML element. Returns false when the text does not parse.
+bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table);
 
 }  // namespace formulon::io
 

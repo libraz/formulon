@@ -102,10 +102,10 @@ Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayA
 ///     `(row, col, sst_index)` is queued in `ctx.pending_sst_cells` for
 ///     a later resolution pass.
 ///   * `<f t="dataTable">` (What-If data table): the element carries no
-///     body, so the cell falls back to its cached `<v>` like any other
-///     formula-less cell; `diagnostics->skipped_feature_count` (when
-///     `diagnostics` is non-null) counts the drop so it is never silent,
-///     matching every other unmodelled-feature drop in this reader.
+///     body; the result cells keep their cached `<v>` and the table is
+///     modelled on the sheet (`Sheet::data_tables`). A table whose `ref`
+///     does not parse is counted in `diagnostics->skipped_feature_count`
+///     (when `diagnostics` is non-null) and left as cached values.
 ///
 /// `sheet_doc` is the parsed pugixml document for this sheet; `sheet_index`
 /// must be `< workbook.sheet_count()`. Returns `kIoSheetCorrupt` on any

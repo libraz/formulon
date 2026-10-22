@@ -50,7 +50,7 @@ int main(void) {
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf) == 128, "fm_cell_xf ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_t) == 40, "fm_row_layout_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4 ? 60 : 64), "fm_sheet_view_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_t) == 88, "fm_sheet_view_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_print_range_t` from
   // pagination, and `fm_styles_batch` is passed in by pointer with fifteen
@@ -65,7 +65,7 @@ int main(void) {
                  "fm_styles_batch.num_fmt_ids offset changed");
   // Records the geometry, display and pagination-detail entry points write
   // through caller pointers. All but the width model are target-independent.
-  _Static_assert(sizeof(fm_sheet_format_defaults) == 48, "fm_sheet_format_defaults ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_format_defaults) == 56, "fm_sheet_format_defaults ABI layout changed");
   _Static_assert(sizeof(fm_rect_pt) == 32, "fm_rect_pt ABI layout changed");
   _Static_assert(sizeof(fm_width_model) == (sizeof(void*) == 4 ? 40 : 48), "fm_width_model ABI layout changed");
   _Static_assert(sizeof(fm_paper_info) == 24, "fm_paper_info ABI layout changed");
@@ -92,6 +92,23 @@ int main(void) {
   _Static_assert(sizeof(fm_image_insert) == (sizeof(void*) == 4 ? 56 : 64), "fm_image_insert ABI layout changed");
   _Static_assert(sizeof(fm_drawing_anchor) == 48, "fm_drawing_anchor ABI layout changed");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
+  _Static_assert(sizeof(fm_shape) == (sizeof(void*) == 4 ? 136 : 144), "fm_shape ABI layout changed");
+  _Static_assert(sizeof(fm_slicer) == (sizeof(void*) == 4 ? 104 : 128), "fm_slicer ABI layout changed");
+  _Static_assert(sizeof(fm_data_table) == 56, "fm_data_table ABI layout changed");
+  _Static_assert(sizeof(fm_sparkline) == 2 * sizeof(void*), "fm_sparkline ABI layout changed");
+  _Static_assert(sizeof(fm_sparkline_group) == (sizeof(void*) == 4 ? 288 : 296),
+                 "fm_sparkline_group ABI layout changed");
+  // Table and custom table-style records, pinned per target.
+  _Static_assert(sizeof(fm_table_info_t) == (sizeof(void*) == 4 ? 36 : 40), "fm_table_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_column_info_t) == 4 * sizeof(void*), "fm_table_column_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_style_element_t) == (sizeof(void*) == 4 ? 16 : 24),
+                 "fm_table_style_element_t ABI layout changed");
+  _Static_assert(sizeof(fm_table_style_t) == (sizeof(void*) == 4 ? 20 : 32), "fm_table_style_t ABI layout changed");
+  // Protection records, pinned per target.
+  _Static_assert(sizeof(fm_workbook_protection_t) == (sizeof(void*) == 4 ? 52 : 88),
+                 "fm_workbook_protection_t ABI layout changed");
+  _Static_assert(sizeof(fm_protected_range_t) == (sizeof(void*) == 4 ? 32 : 64),
+                 "fm_protected_range_t ABI layout changed");
   fm_status_t (*get_auto_filter)(const fm_workbook_t*, size_t, fm_auto_filter*, int32_t*) = fm_sheet_get_auto_filter;
   fm_status_t (*set_table_auto_filter)(fm_workbook_t*, size_t, const fm_auto_filter*) = fm_table_set_auto_filter;
   fm_status_t (*evaluate_auto_filter)(const fm_workbook_t*, size_t, uint8_t*, size_t, size_t*, uint32_t*) =
@@ -117,7 +134,12 @@ int main(void) {
   fm_status_t (*restore_drawing)(fm_workbook_t*, size_t, const uint8_t*, size_t, uint32_t, uint32_t*) =
       fm_sheet_restore_drawing;
   fm_status_t (*reset_theme)(fm_workbook_t*) = fm_workbook_reset_theme;
+  fm_status_t (*set_table_style)(fm_workbook_t*, const fm_table_style_t*) = fm_styles_set_table_style;
+  fm_status_t (*set_column_totals)(fm_workbook_t*, size_t, size_t, const char*, const char*, const char*) =
+      fm_workbook_table_set_column_totals;
   (void)cells_in_range;
+  (void)set_table_style;
+  (void)set_column_totals;
   (void)format_value;
   (void)get_auto_filter;
   (void)set_table_auto_filter;

@@ -121,6 +121,28 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> Sheet::comment_anchor_set()
   return anchors;
 }
 
+std::vector<CommentShape> Sheet::comment_shapes() const {
+  std::vector<CommentShape> shapes;
+  const auto anchors = comment_anchor_set();
+  shapes.reserve(anchors.size());
+  for (const auto& [row, col] : anchors) {
+    CommentShape shape;
+    shape.row = row;
+    shape.col = col;
+    for (const CellComment& c : comments_) {
+      if (c.row == row && c.col == col) {
+        shape.visible = c.visible;
+        shape.has_box = c.has_box;
+        shape.box = c.box;
+        shape.xml = c.vml_shape;
+        break;
+      }
+    }
+    shapes.push_back(shape);
+  }
+  return shapes;
+}
+
 Cell& RowCells::ensure(std::uint32_t col) {
   assert(col < a1::kMaxCols);
   // Right-append fast path: rows are mostly written left to right.
@@ -150,6 +172,15 @@ void RowCells::shift_cols_from(std::uint32_t col, std::uint32_t count) {
   }
   cols_.resize(kept);
   cells_.erase(cells_.begin() + static_cast<std::ptrdiff_t>(kept), cells_.end());
+}
+
+void RowCells::erase(std::uint32_t col) {
+  const std::size_t index = index_of(col);
+  if (index == kNpos) {
+    return;
+  }
+  cols_.erase(cols_.begin() + static_cast<std::ptrdiff_t>(index));
+  cells_.erase(cells_.begin() + static_cast<std::ptrdiff_t>(index));
 }
 
 void RowCells::erase_cols(std::uint32_t col, std::uint32_t count) {
@@ -418,6 +449,17 @@ const Cell* Sheet::cell_at_locked(std::uint32_t row, std::uint32_t col) const no
     return nullptr;
   }
   return it->second.find(col);
+}
+
+void Sheet::erase_cell(std::uint32_t row, std::uint32_t col) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const auto it = rows_.find(row);
+  if (it == rows_.end()) {
+    return;
+  }
+  it->second.erase(col);
+  index_formula_cell_locked(row, col, false);
+  cell_enumeration_revision_.bump();
 }
 
 bool Sheet::has_cell(std::uint32_t row, std::uint32_t col) const noexcept {

@@ -9,6 +9,7 @@
 #ifndef FORMULON_PIVOT_PIVOT_TYPES_H_
 #define FORMULON_PIVOT_PIVOT_TYPES_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -133,6 +134,27 @@ struct PivotItem {
   /// both at their defaults.
   bool has_cache_index = false;
   std::uint32_t cache_index = 0;
+
+  /// `<item>` attributes the model does not represent (`n`, `sd`, `s`, `f`,
+  /// `m`, `c`, `d`, `e`), captured as `(name, value)` pairs so the writer
+  /// re-emits them verbatim.
+  std::vector<std::pair<std::string, std::string>> passthrough_attrs{};
+};
+
+/// A non-data `<item t="...">` of a `<pivotField>`'s `<items>`: a subtotal
+/// marker (`default`, `sum`, `countA`, ...), `grand` or `blank`, kept
+/// verbatim so its attributes survive a save.
+///
+/// The subtotal markers restate `PivotField::default_subtotal` /
+/// `subtotal_fns`; the writer re-emits them only while they still agree with
+/// that selection and regenerates them otherwise.
+struct PivotMarkerItem {
+  std::string xml;
+  /// The `t` attribute.
+  std::string type;
+  /// Number of real items that preceded it. Anchors `blank` among the items;
+  /// subtotal markers and `grand` always close the list.
+  std::size_t after_items = 0;
 };
 
 /// One entry of the OOXML `<pageFields>` block: a field placed on the page
@@ -183,6 +205,22 @@ struct PivotDateGroup {
   std::optional<double> end_serial;
 };
 
+/// The `<filter>` element a loaded `PivotFilter` was decoded from.
+///
+/// The writer re-emits `xml` verbatim while the entry still designates the
+/// field and data field it was read with, so a load -> save cycle keeps
+/// Excel's own bytes (`evalOrder`, `id`, `stringValue1`, ...). Once either
+/// index moves the entry is re-serialised from the model instead.
+struct PivotFilterSource {
+  std::string xml;
+  /// Source `fld`: the index into `<pivotFields>` the filter applies to.
+  std::uint32_t field_index = 0;
+  /// Source `iMeasureFld`, or 0 when absent.
+  std::uint32_t data_field_index = 0;
+  /// Source `id`, kept so generated siblings never reuse it.
+  std::uint32_t id = 0;
+};
+
 /// Single filter clause attached to a pivot field.
 ///
 /// The `value` payload covers the common Top-N, threshold, and label
@@ -207,6 +245,24 @@ struct PivotFilter {
   /// value filter. Label/date filters ignore this selector. Keeping the
   /// default at zero preserves the original single-measure behaviour.
   std::uint32_t data_field_index = 0;
+  /// Set for an entry decoded from a file's `<filters>`; empty for one added
+  /// through the API.
+  std::optional<PivotFilterSource> source{};
+};
+
+/// A loaded `<filter>` the `PivotFilter` vocabulary cannot express (the
+/// caption comparisons beyond contains / begins-with, Bottom N, the percent
+/// and sum top-N flavours, the remaining value comparisons, the
+/// relative-period and recurring date families, and any type this version
+/// does not know). Kept verbatim so a save never drops it; the evaluable
+/// families are also decoded into the `PivotTable::authored_*` lists.
+struct RetainedPivotFilter {
+  std::string xml;
+  /// Number of `PivotTable::active_filters()` entries that preceded this one
+  /// in the source block, which fixes its slot on save.
+  std::size_t active_before = 0;
+  /// Source `id`, kept so generated siblings never reuse it.
+  std::uint32_t id = 0;
 };
 
 /// Comparison an authored OOXML `<filters>` caption filter applies to a
@@ -322,6 +378,10 @@ struct AuthoredValueFilter {
   /// (Excel's "Bottom N" dialog option). Only meaningful when `type` is
   /// `ValueTop10`; defaults to `true`, matching the schema default.
   bool top = true;
+  /// Number of `PivotTable::active_filters()` entries that preceded this one
+  /// in the source block. Value filters prune in sequence, so the value pass
+  /// interleaves the two lists by it to keep document order.
+  std::size_t active_before = 0;
 };
 
 /// A date window named relative to when the pivot is computed.
@@ -402,6 +462,11 @@ struct SortSpec {
   /// field's display name or source/custom field name and sorts sibling items
   /// by that field's aggregate.
   std::string by_field;
+  /// True when the order was stated rather than defaulted: read from an
+  /// explicit `sortType`, or set through `fm_workbook_pivot_field_set_sort`.
+  /// The writer spells `sortType` out for a field on an axis or one whose
+  /// order was stated, so a sorted field taken off the report keeps its order.
+  bool stated = false;
 };
 
 /// Sentinel `field x=` value on `<rowFields>`/`<colFields>` naming the
@@ -503,6 +568,16 @@ struct PivotDataField {
   ///   * `kShowAsBaseNext` (1048829) — "(next)"
   /// Any other value is a position in the base field's `items[]` list.
   std::optional<std::uint32_t> show_as_base_item;
+
+  /// `<ext>` children of the element's `<extLst>` other than the show-as
+  /// extension the model decodes, verbatim.
+  std::string raw_ext_xml{};
+
+  /// The rest of the show-as extension's `<x14:dataField>`: its attributes
+  /// other than `pivotShowAs` (`sourceField`, `uniqueName`, ...) and its
+  /// children, verbatim.
+  std::vector<std::pair<std::string, std::string>> x14_attrs{};
+  std::string x14_children_xml{};
 };
 
 /// Field-level configuration as authored in the OOXML pivot definition.
@@ -538,7 +613,18 @@ struct PivotField {
   /// `includeNewItemsInFilter`), captured as `(name, value)` pairs so the
   /// writer re-emits them verbatim. Rendering keys off `PivotTable::layout`,
   /// so these are preserved for round-trip only.
+  ///
+  /// `compact` / `outline` land here only when they depart from the form the
+  /// table's `layout` implies (a field Excel's field settings gave its own
+  /// form); the writer then emits them instead of the derived pair.
   std::vector<std::pair<std::string, std::string>> passthrough_attrs;
+
+  /// Children after `<items>` the model does not represent (`<autoSortScope>`,
+  /// `<extLst>`), verbatim and in document order.
+  std::string raw_children_xml{};
+
+  /// The non-data entries of `<items>`, in document order.
+  std::vector<PivotMarkerItem> marker_items{};
 };
 
 /// The field's custom subtotal functions in the fixed order Excel lists

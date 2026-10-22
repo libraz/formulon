@@ -77,6 +77,13 @@ void resolve_pivot_names(PivotTable& table, const PivotCache& cache) {
       }
     }
   }
+  // A filter decoded from `<filters>` names its field by index; the public
+  // shape names it, and the name is known only now.
+  for (PivotFilter& filter : table.mutable_active_filters()) {
+    if (filter.field_name.empty() && filter.source.has_value() && filter.source->field_index < fields.size()) {
+      filter.field_name = fields[filter.source->field_index].source_name;
+    }
+  }
 }
 
 void resolve_all_pivot_names(Workbook& wb) {

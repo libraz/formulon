@@ -357,9 +357,10 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
       "<autoFilter ref=\"A1:C5\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
       "</autoFilter>"));
   table.sort_state_xml = "<sortState ref=\"A1:C5\"><sortCondition ref=\"C2:C5\" descending=\"1\"/></sortState>";
-  table.table_style_info_xml =
-      "<tableStyleInfo name=\"TableStyleMedium2\" showFirstColumn=\"0\" showLastColumn=\"1\" "
-      "showRowStripes=\"1\" showColumnStripes=\"0\"/>";
+  table.style_info.present = true;
+  table.style_info.name = "TableStyleMedium2";
+  table.style_info.show_last_column = true;
+  table.style_info.show_row_stripes = true;
   table.ext_lst_xml = "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>";
 
   std::vector<TableMetadata> tables;
@@ -390,9 +391,16 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
       "<autoFilter ref=\"A1:C5\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
       "</autoFilter>");
   EXPECT_EQ(got.sort_state_xml, "<sortState ref=\"A1:C5\"><sortCondition ref=\"C2:C5\" descending=\"1\"/></sortState>");
-  EXPECT_EQ(got.table_style_info_xml,
-            "<tableStyleInfo name=\"TableStyleMedium2\" showFirstColumn=\"0\" showLastColumn=\"1\" "
-            "showRowStripes=\"1\" showColumnStripes=\"0\"/>");
+  EXPECT_TRUE(got.style_info.present);
+  EXPECT_EQ(got.style_info.name, "TableStyleMedium2");
+  EXPECT_FALSE(got.style_info.show_first_column);
+  EXPECT_TRUE(got.style_info.show_last_column);
+  EXPECT_TRUE(got.style_info.show_row_stripes);
+  EXPECT_FALSE(got.style_info.show_column_stripes);
+  EXPECT_NE(ExtractEntry(bytes, "xl/tables/table1.xml")
+                .find("<tableStyleInfo name=\"TableStyleMedium2\" showFirstColumn=\"0\" showLastColumn=\"1\" "
+                      "showRowStripes=\"1\" showColumnStripes=\"0\"/>"),
+            std::string::npos);
   EXPECT_EQ(got.ext_lst_xml, "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>");
 
   const std::string table_xml = ExtractEntry(bytes, "xl/tables/table1.xml");

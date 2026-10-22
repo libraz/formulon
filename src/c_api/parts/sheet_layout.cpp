@@ -17,6 +17,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/xml_fragment.h"
+#include "column_width.h"
 #include "io/auto_filter_xml.h"
 #include "io/sqref_text.h"
 #include "print/sheet_geometry.h"
@@ -108,6 +109,7 @@ extern "C" fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet
   out->width = cols[idx].width;
   out->hidden = cols[idx].hidden ? 1 : 0;
   out->outline_level = cols[idx].outline_level;
+  out->collapsed = cols[idx].collapsed ? 1 : 0;
   out->has_width = formulon::HasExplicitColumnWidth(cols[idx]) ? 1 : 0;
   out->has_style = cols[idx].has_style ? 1 : 0;
   out->style_xf = cols[idx].style_xf;
@@ -146,6 +148,7 @@ extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t
   out->height = rows[idx].height;
   out->hidden = rows[idx].hidden ? 1 : 0;
   out->outline_level = rows[idx].outline_level;
+  out->collapsed = rows[idx].collapsed ? 1 : 0;
   out->has_style = rows[idx].has_style ? 1 : 0;
   out->style_xf = rows[idx].style_xf;
   out->has_height = rows[idx].has_height ? 1 : 0;
@@ -204,6 +207,21 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
   }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
                       [level](formulon::ColumnLayout& entry) { entry.outline_level = level; });
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t first,
+                                                     uint32_t last, int32_t collapsed) {
+  clear_last_error();
+  if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_collapsed"); rc != 0) {
+    return rc;
+  }
+  formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
+  overlay_column_span(layout, first, last,
+                      [collapsed](formulon::ColumnLayout& entry) { entry.collapsed = (collapsed != 0); });
+  if (collapsed == 0) {
+    drop_stateless_columns(layout);
+  }
   return 0;
 }
 
@@ -289,6 +307,31 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
   formulon::RowLayout* entry =
       &formulon::upsert_row_override(sheet.mutable_layout(), row, sheet.format_defaults().zero_height);
   entry->outline_level = level;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_row_collapsed(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                  int32_t collapsed) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_collapsed"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_row_index(row, "fm_sheet_set_row_collapsed"); rc != 0) {
+    return rc;
+  }
+  formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  if (collapsed != 0) {
+    formulon::upsert_row_override(sheet.mutable_layout(), row, sheet.format_defaults().zero_height).collapsed = true;
+    return 0;
+  }
+  formulon::SheetLayout& layout = sheet.mutable_layout();
+  const auto it = formulon::row_override_lower_bound(layout, row);
+  if (it != layout.row_overrides.end() && it->row == row) {
+    it->collapsed = false;
+    if (formulon::should_erase_row_override(*it, sheet.format_defaults().zero_height, true)) {
+      layout.row_overrides.erase(it);
+    }
+  }
   return 0;
 }
 
@@ -548,6 +591,10 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->top_left_col = 0;
   (void)formulon::a1::parse_a1_ref(v.top_left_cell, &out->top_left_row, &out->top_left_col);
   formulon::io::pane_origin(v, &out->pane_top_left_row, &out->pane_top_left_col);
+  out->split_x = v.is_frozen() ? 0.0 : v.split_x;
+  out->split_y = v.is_frozen() ? 0.0 : v.split_y;
+  out->show_formulas = v.show_formulas ? 1 : 0;
+  out->show_outline_symbols = v.show_outline_symbols ? 1 : 0;
   return 0;
 }
 
@@ -577,6 +624,18 @@ extern "C" fm_status_t fm_sheet_set_pane_top_left(fm_workbook_t* wb, size_t shee
   }
   view.pane_top_left_cell =
       row == view.freeze_rows && col == view.freeze_cols ? std::string() : formulon::a1::encode_a1(row, col);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_split(fm_workbook_t* wb, size_t sheet_index, double x_twips, double y_twips) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_split"); rc != 0) {
+    return rc;
+  }
+  if (!wb->workbook().sheet(sheet_index).mutable_view().set_split(x_twips, y_twips)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_set_split: split must be finite and non-negative");
+  }
   return 0;
 }
 
@@ -720,6 +779,17 @@ extern "C" fm_status_t fm_sheet_set_show_zeros(fm_workbook_t* wb, size_t sheet_i
   return set_view_flag(wb, sheet_index, "fm_sheet_set_show_zeros", &formulon::SheetView::show_zeros, show);
 }
 
+extern "C" fm_status_t fm_sheet_set_show_formulas(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
+  clear_last_error();
+  return set_view_flag(wb, sheet_index, "fm_sheet_set_show_formulas", &formulon::SheetView::show_formulas, show);
+}
+
+extern "C" fm_status_t fm_sheet_set_show_outline_symbols(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
+  clear_last_error();
+  return set_view_flag(wb, sheet_index, "fm_sheet_set_show_outline_symbols", &formulon::SheetView::show_outline_symbols,
+                       show);
+}
+
 extern "C" fm_status_t fm_sheet_set_right_to_left(fm_workbook_t* wb, size_t sheet_index, int32_t right_to_left) {
   clear_last_error();
   return set_view_flag(wb, sheet_index, "fm_sheet_set_right_to_left", &formulon::SheetView::right_to_left,
@@ -760,10 +830,11 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
   out->base_col_width = defaults.base_col_width;
   out->has_default_col_width = defaults.has_default_col_width ? 1 : 0;
   out->has_default_row_height = defaults.has_default_row_height ? 1 : 0;
+  out->custom_height = defaults.custom_height ? 1 : 0;
+  out->zero_height = defaults.zero_height ? 1 : 0;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  out->effective_default_col_width = formulon::print::default_column_width_chars(
-      sheet,
-      formulon::print::resolve_column_width_model(wb->workbook().styles(), formulon::print::GeometryMode::kDisplay));
+  out->effective_default_col_width = formulon::default_column_width_chars(
+      sheet, formulon::resolve_column_width_model(wb->workbook().styles(), formulon::GeometryMode::kDisplay));
   out->effective_default_row_height = defaults.zero_height ? 0.0 : formulon::print::default_row_height_pt(sheet);
   return 0;
 }
@@ -800,6 +871,14 @@ extern "C" fm_status_t fm_sheet_set_format_defaults(fm_workbook_t* wb, size_t sh
   target.base_col_width = defaults->base_col_width;
   target.has_default_col_width = has_col_width;
   target.has_default_row_height = has_row_height;
+  target.custom_height = defaults->custom_height != 0;
+  // Hidden-row state (SUBTOTAL / AGGREGATE) depends on the default.
+  const bool zero_height = defaults->zero_height != 0;
+  const bool zero_height_changed = target.zero_height != zero_height;
+  target.zero_height = zero_height;
+  if (zero_height_changed) {
+    wb->workbook().mark_row_visibility_dependents_dirty();
+  }
   return 0;
 }
 
@@ -813,9 +892,8 @@ fm_status_t check_geometry_args(const fm_workbook_t* wb, size_t sheet_index, int
   return check_enum_domain(mode, FM_GEOMETRY_PRINT, api, "mode");
 }
 
-formulon::print::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode) {
-  return formulon::print::resolve_column_width_model(wb->workbook().styles(),
-                                                     static_cast<formulon::print::GeometryMode>(mode));
+formulon::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode) {
+  return formulon::resolve_column_width_model(wb->workbook().styles(), static_cast<formulon::GeometryMode>(mode));
 }
 
 }  // namespace
@@ -834,10 +912,10 @@ extern "C" fm_status_t fm_sheet_cell_rect_pt(const fm_workbook_t* wb, size_t she
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  const formulon::print::ColumnWidthModel model = width_model_for(wb, mode);
+  const formulon::ColumnWidthModel model = width_model_for(wb, mode);
   double width = 0.0;
   for (const double chars : formulon::print::column_widths_chars(sheet, first_col, last_col, model)) {
-    width += formulon::print::column_chars_to_points(chars, model);
+    width += formulon::column_chars_to_points(chars, model);
   }
   const double y = formulon::print::row_offset_pt(sheet, first_row);
   *out = fm_rect_pt{};
@@ -892,7 +970,7 @@ extern "C" fm_status_t fm_sheet_width_model(const fm_workbook_t* wb, size_t shee
   if (auto rc = check_geometry_args(wb, sheet_index, mode, "fm_sheet_width_model"); rc != 0) {
     return rc;
   }
-  const formulon::print::ColumnWidthModel model = width_model_for(wb, mode);
+  const formulon::ColumnWidthModel model = width_model_for(wb, mode);
   fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
   mutable_wb->read_scratch.clear();
   mutable_wb->read_scratch.emplace_back(model.normal_font_name);
@@ -919,7 +997,7 @@ extern "C" fm_status_t fm_sheet_column_chars_to_pt(const fm_workbook_t* wb, size
   if (auto rc = check_finite_non_negative(chars, "fm_sheet_column_chars_to_pt", "chars"); rc != 0) {
     return rc;
   }
-  *out_pt = formulon::print::column_chars_to_points(chars, width_model_for(wb, mode));
+  *out_pt = formulon::column_chars_to_points(chars, width_model_for(wb, mode));
   return 0;
 }
 
@@ -936,6 +1014,6 @@ extern "C" fm_status_t fm_sheet_column_pt_to_chars(const fm_workbook_t* wb, size
   if (auto rc = check_finite_non_negative(pt, "fm_sheet_column_pt_to_chars", "pt"); rc != 0) {
     return rc;
   }
-  *out_chars = formulon::print::column_points_to_chars(pt, width_model_for(wb, mode));
+  *out_chars = formulon::column_points_to_chars(pt, width_model_for(wb, mode));
   return 0;
 }

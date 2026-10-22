@@ -23,9 +23,9 @@
 //                  u16 sss (vertical alignment), u8 uls (underline),
 //                  u8 bFamily, u8 bCharSet, u8 unused, BrtColor,
 //                  u8 bFontScheme, XLWideString name.
-//   BrtFill  (45): u32 fls (pattern), BrtColor foreground, BrtColor
-//                  background, then the gradient tail (u32 type,
-//                  5 x double, u32 stop count).
+//   BrtFill  (45): u32 fls (pattern; 0x28 gradient), BrtColor foreground,
+//                  BrtColor background, then the gradient tail (u32 type,
+//                  5 x Xnum, u32 cNumStop, GradientStop x cNumStop).
 //   BrtBorder(46): u8 diagonal flags (bit 0 down, bit 1 up), then five
 //                  sides in the order top, bottom, left, right,
 //                  diagonal, each u8 style + u8 unused + BrtColor.
@@ -41,6 +41,7 @@
 
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -153,7 +154,8 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
   }
   FontRecord rec;
   rec.size = static_cast<double>(height_or.value()) / 20.0;
-  // `grbit` carries italic in bit 1 and strikethrough in bit 3. Weight is
+  // `grbit` carries italic in bit 1, strikethrough in bit 3 and outline,
+  // shadow, condense and extend in bits 4 to 7. Weight is
   // its own field (400 normal, 700 bold), and Excel sets grbit bit 0
   // alongside a bold weight, so bold is read from `bls` and the redundant
   // flag bit ignored. The presence bits follow the OOXML reader's rule --
@@ -165,6 +167,14 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
   rec.has_italic = rec.italic;
   rec.strike = (grbit_or.value() & 0x0008U) != 0U;
   rec.has_strike = rec.strike;
+  rec.outline = (grbit_or.value() & 0x0010U) != 0U;
+  rec.has_outline = rec.outline;
+  rec.shadow = (grbit_or.value() & 0x0020U) != 0U;
+  rec.has_shadow = rec.shadow;
+  rec.condense = (grbit_or.value() & 0x0040U) != 0U;
+  rec.has_condense = rec.condense;
+  rec.extend = (grbit_or.value() & 0x0080U) != 0U;
+  rec.has_extend = rec.extend;
   switch (underline_or.value()) {
     case 0x01U:
       rec.underline = 1U;  // single
@@ -219,6 +229,69 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
   return Expected<void, Error>::Ok();
 }
 
+/// Decodes a property colour. Unlike a table entry, a property exists only
+/// because the dxf states it, so the automatic selector is a real `auto`
+/// colour rather than the absent-element idiom.
+Expected<void, Error> DecodeStatedColor(ByteSpan& p, std::uint32_t unset_argb, std::uint32_t& argb, ColorSpec& spec) {
+  const bool automatic = p.size > 0U && (p.data[0] >> 1U) == 0U;
+  if (auto color = DecodeColor(p, unset_argb, argb, spec); !color) {
+    return std::move(color.error());
+  }
+  if (automatic && spec.kind == ColorSpec::Kind::kNone) {
+    spec.kind = ColorSpec::Kind::kAuto;
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// Reads the gradient type and its degree, left, right, top, bottom Xnums,
+/// the layout BrtFill and XFPropGradient share. Only the fields the type
+/// uses are kept, matching what an OOXML `<gradientFill>` can state.
+Expected<void, Error> DecodeGradientGeometry(ByteSpan& p, GradientFill& gradient) {
+  ASSIGN_OR_RETURN(const std::uint32_t type, read_u32(p));
+  ASSIGN_OR_RETURN(const double degree, read_double(p));
+  ASSIGN_OR_RETURN(const double left, read_double(p));
+  ASSIGN_OR_RETURN(const double right, read_double(p));
+  ASSIGN_OR_RETURN(const double top, read_double(p));
+  ASSIGN_OR_RETURN(const double bottom, read_double(p));
+  gradient.path = type == 1U;
+  if (gradient.path) {
+    gradient.left = left;
+    gradient.right = right;
+    gradient.top = top;
+    gradient.bottom = bottom;
+  } else {
+    gradient.degree = degree;
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// BrtFill with `fls` 0x28 ([MS-XLSB] 2.4.681): the pattern colours are
+/// ignored, then the geometry, `cNumStop`, and GradientStop (2.5.68) entries.
+Expected<void, Error> DecodeGradientFill(ByteSpan& p, FillRecord& rec) {
+  std::uint32_t ignored_argb = 0;
+  ColorSpec ignored;
+  for (int i = 0; i < 2; ++i) {
+    if (auto color = DecodeColor(p, /*unset_argb=*/0U, ignored_argb, ignored); !color) {
+      return std::move(color.error());
+    }
+  }
+  rec.has_gradient = true;
+  if (auto geometry = DecodeGradientGeometry(p, rec.gradient); !geometry) {
+    return std::move(geometry.error());
+  }
+  // A count past the 256 the spec allows is still bounded by the payload.
+  ASSIGN_OR_RETURN(const std::uint32_t stops, read_u32(p));
+  for (std::uint32_t i = 0; i < stops; ++i) {
+    GradientStop stop;
+    if (auto color = DecodeStatedColor(p, /*unset_argb=*/0U, stop.argb, stop.color); !color) {
+      return std::move(color.error());
+    }
+    ASSIGN_OR_RETURN(stop.position, read_double(p));
+    rec.gradient.stops.push_back(stop);
+  }
+  return Expected<void, Error>::Ok();
+}
+
 Expected<void, Error> DecodeFill(ByteSpan payload, StylesTable& table) {
   ByteSpan p = payload;
   auto pattern_or = read_u32(p);
@@ -227,9 +300,15 @@ Expected<void, Error> DecodeFill(ByteSpan payload, StylesTable& table) {
                       "context=xlsb_styles_reader");
   }
   FillRecord rec;
-  // `fls` beyond the 19 OOXML pattern values names a gradient fill, whose
-  // stops the shared model does not carry; it degrades to "no pattern"
-  // the same way an unrecognised `patternType` does on the OOXML side.
+  if (pattern_or.value() == kBrtFillGradient) {
+    if (auto r = DecodeGradientFill(p, rec); !r) {
+      return std::move(r.error());
+    }
+    table.fills.push_back(std::move(rec));
+    return Expected<void, Error>::Ok();
+  }
+  // Any other `fls` beyond the 19 OOXML pattern values degrades to "no
+  // pattern", as an unrecognised `patternType` does on the OOXML side.
   rec.pattern = pattern_or.value() <= 18U ? static_cast<std::uint8_t>(pattern_or.value()) : std::uint8_t{0};
   // A `none` fill carries the placeholder indexed 64 / 65 pair on the wire
   // but no `<fgColor>` / `<bgColor>` in OOXML. Leaving the colours unset
@@ -392,20 +471,6 @@ std::uint8_t UnderlineOrdinal(std::uint16_t wire) {
   return 0U;
 }
 
-/// Decodes a property colour. Unlike a table entry, a property exists only
-/// because the dxf states it, so the automatic selector is a real `auto`
-/// colour rather than the absent-element idiom.
-Expected<void, Error> DecodeStatedColor(ByteSpan& p, std::uint32_t unset_argb, std::uint32_t& argb, ColorSpec& spec) {
-  const bool automatic = p.size > 0U && (p.data[0] >> 1U) == 0U;
-  if (auto color = DecodeColor(p, unset_argb, argb, spec); !color) {
-    return std::move(color.error());
-  }
-  if (automatic && spec.kind == ColorSpec::Kind::kNone) {
-    spec.kind = ColorSpec::Kind::kAuto;
-  }
-  return Expected<void, Error>::Ok();
-}
-
 Expected<void, Error> DecodeDxfBorderSide(ByteSpan& d, BorderSide& side) {
   std::uint32_t argb = 0;
   ColorSpec spec;
@@ -459,6 +524,25 @@ Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialF
     case kDxfPropFillBg:
       dxf.has_fill = true;
       return DecodeStatedColor(d, /*unset_argb=*/0U, fill.bg_argb, fill.bg);
+    case kDxfPropFillGradient:
+      dxf.has_fill = true;
+      fill.has_gradient = true;
+      return DecodeGradientGeometry(d, fill.gradient);
+    case kDxfPropGradientStop: {
+      ASSIGN_OR_RETURN(const std::uint16_t unused, read_u16(d));
+      static_cast<void>(unused);
+      GradientStop stop;
+      ASSIGN_OR_RETURN(stop.position, read_double(d));
+      if (auto color = DecodeStatedColor(d, /*unset_argb=*/0U, stop.argb, stop.color); !color) {
+        return std::move(color.error());
+      }
+      dxf.has_fill = true;
+      fill.has_gradient = true;
+      if (fill.gradient.stops.size() < kMaxBrtGradientStops) {
+        fill.gradient.stops.push_back(stop);
+      }
+      break;
+    }
     case kDxfPropFontColor:
       dxf.has_font = true;
       return DecodeStatedColor(d, /*unset_argb=*/font.color_argb, font.color_argb, font.color);
@@ -521,6 +605,20 @@ Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialF
       dxf.has_font = true;
       font.has_strike = true;
       font.strike = flag != 0U;
+      break;
+    }
+    case kDxfPropOutline:
+    case kDxfPropShadow:
+    case kDxfPropCondense:
+    case kDxfPropExtend: {
+      ASSIGN_OR_RETURN(const std::uint8_t flag, read_u8(d));
+      dxf.has_font = true;
+      auto [stated, on] = type == kDxfPropOutline    ? std::tie(font.has_outline, font.outline)
+                          : type == kDxfPropShadow   ? std::tie(font.has_shadow, font.shadow)
+                          : type == kDxfPropCondense ? std::tie(font.has_condense, font.condense)
+                                                     : std::tie(font.has_extend, font.extend);
+      stated = true;
+      on = flag != 0U;
       break;
     }
     case kDxfPropFontSize: {

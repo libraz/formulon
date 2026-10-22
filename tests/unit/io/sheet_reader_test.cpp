@@ -142,11 +142,9 @@ TEST(SheetReader, FormulaCachedValueSurvivesLoadBeforeRecalc) {
   EXPECT_EQ(StoredValue(wb, 0U, 0U, 1U).as_text(), "Excel cache");
 }
 
-// A What-If data table's `<f t="dataTable" .../>` carries no body (its
-// geometry lives in attributes this reader does not decode), so the
-// cell falls back to its cached `<v>` like any formula-less cell -- but
-// the drop must be counted, not silent.
-TEST(SheetReader, DataTableFormulaFallsBackToCachedValueAndIsCounted) {
+// A What-If data table's `<f t="dataTable" .../>` carries no body: the
+// anchor keeps its cached `<v>` and the table is modelled on the sheet.
+TEST(SheetReader, DataTableFormulaKeepsCachedValueAndModelsTheTable) {
   pugi::xml_document doc;
   ASSERT_TRUE(doc.load_string(
       "<worksheet><sheetData><row r=\"1\">"
@@ -162,18 +160,34 @@ TEST(SheetReader, DataTableFormulaFallsBackToCachedValueAndIsCounted) {
   EXPECT_EQ(StoredFormula(wb, 0U, 0U, 0U), "");
   ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_number());
   EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 0U).as_number(), 42.0);
-  EXPECT_EQ(diagnostics.skipped_feature_count, 1U);
+  EXPECT_EQ(diagnostics.skipped_feature_count, 0U);
+  ASSERT_EQ(wb.sheet(0).data_tables().size(), 1U);
+  const DataTable& table = wb.sheet(0).data_tables()[0];
+  EXPECT_EQ(table.ref, (MergeRange{0U, 0U, 1U, 1U}));
+  EXPECT_TRUE(table.two_dimensional);
+  EXPECT_FALSE(table.row_oriented);
+  EXPECT_EQ(table.r1.row, 0U);
+  EXPECT_EQ(table.r1.col, 2U);
+  EXPECT_EQ(table.r2.row, 1U);
+  EXPECT_EQ(table.r2.col, 2U);
 }
 
-// A null `diagnostics` (the default) must not crash -- callers that do
-// not track read diagnostics still get the fallback-to-cached-value
-// behaviour above.
-TEST(SheetReader, DataTableFormulaWithNullDiagnosticsDoesNotCrash) {
+// A `ref` that does not parse leaves bare cached values, counted in the diagnostics; a null
+// `diagnostics` (the default) must not crash.
+TEST(SheetReader, DataTableFormulaWithUnparseableRefIsCounted) {
   pugi::xml_document doc;
   ASSERT_TRUE(
       doc.load_string("<worksheet><sheetData><row r=\"1\">"
-                      "<c r=\"A1\"><f t=\"dataTable\" ref=\"A1:B2\"/><v>7</v></c>"
+                      "<c r=\"A1\"><f t=\"dataTable\" ref=\"not-a-range\"/><v>7</v></c>"
                       "</row></sheetData></worksheet>"));
+
+  Workbook counted = Workbook::create();
+  SheetReadContext counted_ctx;
+  std::deque<std::string> counted_storage;
+  ReadDiagnostics diagnostics;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, counted, counted_ctx, counted_storage, &diagnostics)));
+  EXPECT_EQ(diagnostics.skipped_feature_count, 1U);
+  EXPECT_TRUE(counted.sheet(0).data_tables().empty());
 
   Workbook wb = Workbook::create();
   SheetReadContext ctx;

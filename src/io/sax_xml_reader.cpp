@@ -851,12 +851,14 @@ struct CellScratch {
   std::string f_attr_t;
   std::string f_attr_si;
   std::string f_attr_ref;
+  std::string f_attr_dt[8];
   std::string row_attr_r;
   std::string row_attr_ht;
   std::string row_attr_hidden;
   std::string row_attr_custom_height;
   std::string row_attr_outline_level;
   std::string row_attr_ph;
+  std::string row_attr_collapsed;
   std::string row_attr_custom_format;
   std::string row_attr_style;
 };
@@ -1002,6 +1004,8 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->has_formula = false;
   record->f_si = std::string_view{};
   record->f_ref = std::string_view{};
+  record->f_r1 = record->f_r2 = record->f_dt2d = record->f_dtr = std::string_view{};
+  record->f_del1 = record->f_del2 = record->f_ca = record->f_aca = std::string_view{};
   record->value = std::string_view{};
   record->is_inline_string = false;
   record->phonetic = nullptr;
@@ -1031,6 +1035,16 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       record->f_t = AttrOfDecoded(child, "t", &scratch->f_attr_t);
       record->f_si = AttrOfDecoded(child, "si", &scratch->f_attr_si);
       record->f_ref = AttrOfDecoded(child, "ref", &scratch->f_attr_ref);
+      if (record->f_t == "dataTable") {
+        record->f_r1 = AttrOfDecoded(child, "r1", &scratch->f_attr_dt[0]);
+        record->f_r2 = AttrOfDecoded(child, "r2", &scratch->f_attr_dt[1]);
+        record->f_dt2d = AttrOfDecoded(child, "dt2D", &scratch->f_attr_dt[2]);
+        record->f_dtr = AttrOfDecoded(child, "dtr", &scratch->f_attr_dt[3]);
+        record->f_del1 = AttrOfDecoded(child, "del1", &scratch->f_attr_dt[4]);
+        record->f_del2 = AttrOfDecoded(child, "del2", &scratch->f_attr_dt[5]);
+        record->f_ca = AttrOfDecoded(child, "ca", &scratch->f_attr_dt[6]);
+        record->f_aca = AttrOfDecoded(child, "aca", &scratch->f_attr_dt[7]);
+      }
       if (child.self_closing) {
         continue;
       }
@@ -1109,6 +1123,7 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
     rec.custom_format = AttrOfDecoded(row_header, "customFormat", &scratch->row_attr_custom_format);
     rec.style = AttrOfDecoded(row_header, "s", &scratch->row_attr_style);
     rec.ph = AttrOfDecoded(row_header, "ph", &scratch->row_attr_ph);
+    rec.collapsed = AttrOfDecoded(row_header, "collapsed", &scratch->row_attr_collapsed);
     auto rs = cb.on_row_start(cb.user_data, rec);
     if (!rs) {
       *err = std::move(rs.error());

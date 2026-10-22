@@ -807,13 +807,21 @@ Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::Co
     ranges.push_back(MergeRange{r.first.row, r.first.col, r.last.row, r.last.col});
   }
   const MergeRange base = sqref_base(ranges);
+  const auto legacy = static_cast<std::size_t>(std::count_if(
+      format.rules.begin(), format.rules.end(), [](const cf::CFRule& r) { return !is_x14_icon_set_rule(r); }));
+  if (legacy == 0U) {
+    return Expected<void, Error>::Ok();
+  }
   std::vector<std::uint8_t> head;
-  emit_u32(head, static_cast<std::uint32_t>(format.rules.size()));
+  emit_u32(head, static_cast<std::uint32_t>(legacy));
   emit_u32(head, format.pivot_scope ? 1U : 0U);
   emit_sqref(head, ranges);
   std::vector<std::uint8_t> body;
   emit_record(body, kBrtBeginConditionalFormatting, head);
   for (const cf::CFRule& rule : format.rules) {
+    if (is_x14_icon_set_rule(rule)) {
+      continue;
+    }
     if (auto s = EmitRule(body, rule, base, ctx, !rule.id.empty() && linked.count(rule.id) != 0U); !s) {
       return s;
     }

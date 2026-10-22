@@ -7,6 +7,7 @@
 #ifndef FORMULON_SHEET_LAYOUT_H_
 #define FORMULON_SHEET_LAYOUT_H_
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -34,6 +35,8 @@ struct ColumnLayout {
   std::uint32_t style_xf = 0;
   /// OOXML `<col phonetic="1">`: cells in the span show their phonetic guide.
   bool show_phonetic = false;
+  /// OOXML `<col collapsed="1">`: the outline group this span summarises is collapsed.
+  bool collapsed = false;
 };
 
 /// Returns whether a column has a logically explicit width.
@@ -67,6 +70,8 @@ struct RowLayout {
   std::uint32_t style_xf = 0;
   /// OOXML `<row ph="1">`: cells in the row show their phonetic guide.
   bool show_phonetic = false;
+  /// OOXML `<row collapsed="1">`: the outline group this row summarises is collapsed.
+  bool collapsed = false;
 };
 
 /// Aggregate of per-sheet layout overrides (column spans + row overrides).
@@ -136,6 +141,21 @@ struct SheetFormatDefaults {
   std::uint8_t outline_level_row = 0;   ///< `outlineLevelRow`: highest row outline level in use.
   std::uint8_t outline_level_col = 0;   ///< `outlineLevelCol`: highest column outline level in use.
 };
+
+/// Returns `defaults` with `outline_level_row` / `outline_level_col` set to the
+/// deepest level any row or column override carries, which is what the
+/// outline gutter is sized from.
+inline SheetFormatDefaults WithDerivedOutlineLevels(SheetFormatDefaults defaults, const SheetLayout& layout) {
+  defaults.outline_level_row = 0;
+  defaults.outline_level_col = 0;
+  for (const RowLayout& row : layout.row_overrides) {
+    defaults.outline_level_row = std::max(defaults.outline_level_row, std::min<std::uint8_t>(row.outline_level, 7U));
+  }
+  for (const ColumnLayout& col : layout.columns) {
+    defaults.outline_level_col = std::max(defaults.outline_level_col, std::min<std::uint8_t>(col.outline_level, 7U));
+  }
+  return defaults;
+}
 
 /// A single manual page break.
 ///

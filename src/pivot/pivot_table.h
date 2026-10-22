@@ -21,6 +21,17 @@
 
 namespace formulon::pivot {
 
+/// `<pivotTableStyleInfo>`: the table style and its banding / header toggles.
+/// An empty `name` means the element carries no style name.
+struct PivotStyleInfo {
+  std::string name;
+  bool show_row_headers = false;
+  bool show_col_headers = false;
+  bool show_row_stripes = false;
+  bool show_col_stripes = false;
+  bool show_last_column = false;
+};
+
 /// One pivot table definition + most recent evaluation result.
 ///
 /// Move-only. Designed to be held by the owning `Sheet` via
@@ -135,7 +146,17 @@ class PivotTable {
   // Layout / location --------------------------------------------------------
 
   PivotLayout layout() const { return layout_; }
-  void set_layout(PivotLayout l) { layout_ = l; }
+
+  /// Sets the report form of the table and of every field, as Excel's report
+  /// layout command does: a per-field or table-level form read from a file
+  /// (kept in `passthrough_attrs`) is dropped in favour of the derived one.
+  void set_layout(PivotLayout l) {
+    layout_ = l;
+    erase_form_attrs(passthrough_attrs_);
+    for (PivotField& field : fields_) {
+      erase_form_attrs(field.passthrough_attrs);
+    }
+  }
 
   std::uint32_t anchor_row() const { return anchor_row_; }
   std::uint32_t anchor_col() const { return anchor_col_; }
@@ -206,39 +227,57 @@ class PivotTable {
     return row >= anchor_row_ && row < anchor_row_ + span_rows_ && col >= anchor_col_ && col < anchor_col_ + span_cols_;
   }
 
-  // Transient slicer-applied filters ----------------------------------------
+  // Label / value / date filters (`<filters>`) ------------------------------
   //
-  // Kept separate from `PivotField::items` (which is the XML-defined manual
-  // filter state). Folding slicer state into `items` would make the
-  // `evaluator -> XML round-trip` path overwrite the authored definition.
+  // Kept separate from `PivotField::items` (which is the manual item
+  // filter state).
   //
-  // This list is session state, deliberately, in both directions:
-  //
-  //   * it is never serialised — `write_pivot_table_definition` emits no
-  //     `<filters>` block, so entries added here shape every evaluation for
-  //     as long as this object lives and are gone after a save + reload;
-  //   * it is never populated by the reader — an authored `<filters>` block
-  //     decodes into `authored_caption_filters()` instead, so a slicer
-  //     selection and a persisted filter never overwrite one another.
+  // `<filters>` is owned by two lists. `active_filters()` holds every entry
+  // the public `PivotFilter` vocabulary expresses: the ones added through
+  // the API and the ones the reader decoded (each carrying its
+  // `PivotFilterSource`). `retained_filters()` holds the rest of a loaded
+  // block verbatim. The writer serialises both, interleaved back into
+  // document order, so an API filter survives a save + reload and a loaded
+  // block is re-emitted byte-for-byte while nothing in it changed.
   const std::vector<PivotFilter>& active_filters() const { return active_filters_; }
   std::vector<PivotFilter>& mutable_active_filters() { return active_filters_; }
 
-  // Authored `<filters>` caption filters ------------------------------------
+  const std::vector<RetainedPivotFilter>& retained_filters() const { return retained_filters_; }
+  std::vector<RetainedPivotFilter>& mutable_retained_filters() { return retained_filters_; }
+
+  /// Removes every active filter `remove` returns true for (it may also edit
+  /// the ones it keeps), re-anchoring each retained and authored value entry
+  /// after the same surviving public entries so document order holds.
+  /// Appending needs no such care and goes through `mutable_active_filters`.
+  template <typename Remove>
+  void erase_active_filters_if(Remove remove) {
+    const std::size_t n = active_filters_.size();
+    std::vector<std::size_t> kept_before(n + 1U, 0U);
+    std::vector<PivotFilter> kept;
+    for (std::size_t i = 0; i < n; ++i) {
+      kept_before[i] = kept.size();
+      if (!remove(active_filters_[i])) {
+        kept.push_back(std::move(active_filters_[i]));
+      }
+    }
+    kept_before[n] = kept.size();
+    active_filters_ = std::move(kept);
+    for (RetainedPivotFilter& entry : retained_filters_) {
+      entry.active_before = kept_before[entry.active_before < n ? entry.active_before : n];
+    }
+    for (AuthoredValueFilter& entry : authored_value_filters_) {
+      entry.active_before = kept_before[entry.active_before < n ? entry.active_before : n];
+    }
+  }
+
+  // Authored `<filters>` entries outside the public vocabulary ---------------
   //
-  // Decoded from the OOXML `<filters>` block for evaluation only. The
-  // block itself stays in the verbatim tail bin (`raw_passthrough_xml_`)
-  // and the writer re-emits it from there, so this list is read-side
-  // state: populating it does not change a single byte of the round trip,
-  // and clearing it would not remove the filter from a saved file.
+  // The evaluation-side decode of `retained_filters()`. Read-side state: the
+  // writer re-emits the retained XML, so populating these lists changes no
+  // byte of the round trip and clearing them would not remove a filter from
+  // a saved file.
   //
-  // Splitting the decode from the serialisation is what makes modelling
-  // `<filters>` affordable. Owning the block outright would mean
-  // authoring filter XML — including the nested `<autoFilter>` criteria —
-  // which this version has no Excel-produced reference file to check
-  // against. Reading it needs no such reference: the criteria reduce to a
-  // predicate the bound cache already spells out.
-  //
-  // The two lists split by when the rule can be decided. A caption or
+  // The caption and value lists split by when the rule can be decided. A caption or
   // date criterion is a property of one source record, so it prunes
   // before aggregation; a value criterion ranks an axis leaf by its
   // aggregate, so it cannot be decided until the aggregates exist. That
@@ -294,10 +333,10 @@ class PivotTable {
 
   // OOXML round-trip passthrough --------------------------------------------
   //
-  // OOXML pivot definitions can carry several elements that v1.0 does
+  // OOXML pivot definitions can carry several elements this version does
   // not model structurally — `<rowItems>`, `<colItems>`, `<pageFields>`,
-  // `<calculatedFields>`, `<calculatedItems>`, `<pivotTableStyleInfo>`,
-  // `<chartFormats>`, `<formats>`, etc. The reader captures them as
+  // `<calculatedFields>`, `<calculatedItems>`, `<chartFormats>`,
+  // `<formats>`, etc. The reader captures them as
   // concatenated raw XML so the writer can emit them back verbatim,
   // keeping a round trip stable for files that depend on those features.
   //
@@ -307,14 +346,20 @@ class PivotTable {
   // three are the only unmodelled elements the schema places *before*
   // `<dataFields>`, so the reader bins them by name into the two
   // pre-dataFields slots (rowItems after `<rowFields>`; colItems and
-  // pageFields after `<colFields>`) and routes everything else — formats,
-  // style info, extLst, ... — into the tail bin `raw_passthrough_xml_`.
-  // The writer flushes each bin at the matching slot so schema order is
-  // preserved. Mutating the structured state does not invalidate these
+  // pageFields after `<colFields>`). `<pivotTableStyleInfo>` is modelled
+  // (`style_info`) and splits the post-dataFields elements: formats,
+  // conditionalFormats, chartFormats and pivotHierarchies go to
+  // `raw_passthrough_before_style_info_`; everything else — hierarchy
+  // usage, extLst, ... — goes to the tail bin `raw_passthrough_xml_`, which
+  // the writer flushes after the modelled `<filters>`. It flushes each bin at the matching
+  // slot so schema order is preserved. Mutating the structured state does not invalidate these
   // buffers; consumers that need exact bit parity should regenerate or
   // strip them.
   const std::string& raw_passthrough_xml() const { return raw_passthrough_xml_; }
   std::string& mutable_raw_passthrough_xml() { return raw_passthrough_xml_; }
+
+  const std::string& raw_passthrough_before_style_info() const { return raw_passthrough_before_style_info_; }
+  std::string& mutable_raw_passthrough_before_style_info() { return raw_passthrough_before_style_info_; }
 
   const std::string& raw_passthrough_after_row_fields() const { return raw_passthrough_after_row_fields_; }
   std::string& mutable_raw_passthrough_after_row_fields() { return raw_passthrough_after_row_fields_; }
@@ -322,11 +367,17 @@ class PivotTable {
   const std::string& raw_passthrough_after_col_fields() const { return raw_passthrough_after_col_fields_; }
   std::string& mutable_raw_passthrough_after_col_fields() { return raw_passthrough_after_col_fields_; }
 
+  /// `<pivotTableStyleInfo>`; nullopt when the definition has none.
+  const std::optional<PivotStyleInfo>& style_info() const { return style_info_; }
+  void set_style_info(PivotStyleInfo info) { style_info_ = std::move(info); }
+
   // Unmodelled `<pivotTableDefinition>` root attributes (`updatedVersion`,
   // `createdVersion`, `itemPrintTitles`, `indent`, ...), captured as
   // `(name, value)` pairs so the writer re-emits them verbatim. Modelled
-  // attributes (name / cacheId / dataCaption / grand totals / compact /
-  // outline) are excluded and written from the structured state.
+  // attributes (name / cacheId / dataCaption / grand totals) are excluded
+  // and written from the structured state. The form attributes (`compact`,
+  // `compactData`, `outline`, `outlineData`) are captured only when they
+  // depart from what `layout()` derives, and then replace the derived set.
   const std::vector<std::pair<std::string, std::string>>& passthrough_attrs() const { return passthrough_attrs_; }
   std::vector<std::pair<std::string, std::string>>& mutable_passthrough_attrs() { return passthrough_attrs_; }
 
@@ -345,6 +396,17 @@ class PivotTable {
   void set_subtotal_hidden_items(bool on) { subtotal_hidden_items_ = on; }
 
  private:
+  static void erase_form_attrs(std::vector<std::pair<std::string, std::string>>& attrs) {
+    std::vector<std::pair<std::string, std::string>> kept;
+    for (auto& attr : attrs) {
+      if (attr.first != "compact" && attr.first != "compactData" && attr.first != "outline" &&
+          attr.first != "outlineData") {
+        kept.push_back(std::move(attr));
+      }
+    }
+    attrs = std::move(kept);
+  }
+
   std::string name_;
   std::string data_caption_ = "Values";
   std::uint32_t pivot_cache_id_ = 0;
@@ -370,11 +432,14 @@ class PivotTable {
   bool grand_totals_cols_ = true;
   bool subtotal_hidden_items_ = false;
   std::vector<PivotFilter> active_filters_;
+  std::vector<RetainedPivotFilter> retained_filters_;
   std::vector<AuthoredCaptionFilter> authored_caption_filters_;
   std::vector<AuthoredValueFilter> authored_value_filters_;
   std::vector<AuthoredPeriodFilter> authored_period_filters_;
   std::vector<AuthoredRecurringFilter> authored_recurring_filters_;
+  std::optional<PivotStyleInfo> style_info_;
   std::string raw_passthrough_xml_;
+  std::string raw_passthrough_before_style_info_;
   std::string raw_passthrough_after_row_fields_;
   std::string raw_passthrough_after_col_fields_;
   std::vector<std::pair<std::string, std::string>> passthrough_attrs_;

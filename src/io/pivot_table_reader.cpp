@@ -4,12 +4,16 @@
 
 #include "io/pivot_table_reader.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "io/cell_parser.h"
@@ -52,7 +56,7 @@ Expected<void, Error> DecodeLocationRef(std::string_view ref, pivot::PivotTable*
 /// Walks the `<items>` child of a `<pivotField>` and populates
 /// `field.items`. `<item t="default">` and `<item t="grand">` are
 /// subtotal / grand-total markers in the OOXML schema, NOT real items;
-/// they are skipped here. For real items we capture visibility from
+/// they go to `field.marker_items` instead. For real items we capture visibility from
 /// `h="1"` (hidden -> `visible = false`) and the `x` attribute, which
 /// indexes the bound cache's `shared_items`. `name` is left empty here
 /// and resolved against the cache after both parts are loaded (see
@@ -69,11 +73,14 @@ Expected<void, Error> ParseItems(const pugi::xml_node& items_node, pivot::PivotF
       is_marker = is_marker || t == e.item;
     }
     if (is_marker) {
-      // Subtotal / grand-total marker; not a real item.
+      // Subtotal / grand-total / blank marker; not a real item, but kept so
+      // its attributes survive.
+      field->marker_items.push_back(pivot::PivotMarkerItem{raw_xml(it), std::string(t), ordinal});
       continue;
     }
     pivot::PivotItem entry;
     entry.visible = !parse_xml_bool_attr(it.attribute("h"));
+    capture_unknown_attrs(it, {"x", "h", "t"}, entry.passthrough_attrs);
     if (pugi::xml_attribute x = it.attribute("x"); x) {
       const std::optional<std::uint32_t> cache_index = parse_xml_u32_attr_strict(x);
       if (!cache_index.has_value()) {
@@ -137,6 +144,7 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     // An absent `sortType` is the schema's "manual" default, so
     // the field follows its `<items>` document order.
     if (pugi::xml_attribute sort_attr = f.attribute("sortType"); sort_attr) {
+      field.sort.stated = true;
       const std::string_view value = sort_attr.value();
       if (value == "descending") {
         field.sort.ascending = false;
@@ -150,9 +158,10 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
       RETURN_IF_ERROR(ParseItems(items_node, &field));
     }
     // Preserve unmodelled `<pivotField>` attributes (`showAll`,
-    // `includeNewItemsInFilter`, ...) for verbatim round-trip. `compact` /
-    // `outline` are the report form, which the writer derives from the
-    // table's layout.
+    // `includeNewItemsInFilter`, ...) and children for verbatim round-trip.
+    // `compact` / `outline` are the report form, which the writer derives
+    // from the table's layout; `CaptureFormOverride` keeps them once the
+    // layout is known and they depart from it.
     capture_unknown_attrs(f, {"axis",          "dataField",      "name",
                               "numFmtId",      "subtotalTop",    "defaultSubtotal",
                               "sumSubtotal",   "countASubtotal", "avgSubtotal",
@@ -161,6 +170,7 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
                               "varSubtotal",   "varPSubtotal",   "sortType",
                               "compact",       "outline"},
                           field.passthrough_attrs);
+    capture_unknown_children(f, {"items"}, field.raw_children_xml);
     out->mutable_fields().push_back(std::move(field));
   }
   return Expected<void, Error>::Ok();
@@ -243,10 +253,18 @@ Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::Pivot
     }
     for (pugi::xml_node ext : df.child("extLst").children("ext")) {
       if (ext.attribute("uri").as_string() != kPivotDataFieldExtUri) {
+        append_raw_xml(entry.raw_ext_xml, ext);
         continue;
       }
-      if (pugi::xml_attribute sa = ext.child("x14:dataField").attribute("pivotShowAs"); sa) {
+      const pugi::xml_node x14 = ext.child("x14:dataField");
+      if (pugi::xml_attribute sa = x14.attribute("pivotShowAs"); sa) {
         entry.show_as = enum_from_name(kPivotShowAsX14Names, sa.as_string(), entry.show_as);
+      }
+      capture_unknown_attrs(x14, {"pivotShowAs"}, entry.x14_attrs);
+      for (pugi::xml_node child = x14.first_child(); child; child = child.next_sibling()) {
+        if (child.type() == pugi::node_element) {
+          append_raw_xml(entry.x14_children_xml, child);
+        }
       }
     }
     out->mutable_data_fields().push_back(std::move(entry));
@@ -396,14 +414,6 @@ std::optional<double> ParseCriterionNumber(std::string_view text) {
   return parsed;
 }
 
-/// Decodes the value and date entries of an authored `<filters>` block.
-///
-/// Unlike a caption filter, these carry no `stringValue*` shorthand: the
-/// criteria live only in the nested `<autoFilter>`, as one
-/// `<customFilter val="...">` for a threshold and two for a range. Date
-/// bounds are written as serials, which is the form the evaluation pass
-/// wants anyway — the rendered label would lose both precision and
-/// locale.
 /// Which quantity a top-N entry counts out.
 ///
 /// The three flavours share one element shape, so only the type name
@@ -494,85 +504,84 @@ std::optional<std::pair<unsigned, unsigned>> ParseRecurringMonths(std::string_vi
   return std::pair<unsigned, unsigned>{first, first + 2U};
 }
 
-/// Decodes the recurring-period entries of a `<filters>` block.
-void ParseAuthoredRecurringFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
-  for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
-    const auto months_or = ParseRecurringMonths(attr_str(node, "type"));
-    if (!months_or) {
-      continue;
-    }
-    pivot::AuthoredRecurringFilter entry;
-    entry.field_index = attr_u32(node, "fld");
-    entry.month_low = months_or->first;
-    entry.month_high = months_or->second;
-    out->mutable_authored_recurring_filters().push_back(entry);
+/// Decodes a recurring-period `<filter>` (`M1`..`M12`, `Q1`..`Q4`).
+std::optional<pivot::AuthoredRecurringFilter> DecodeRecurringFilter(const pugi::xml_node& node) {
+  const auto months_or = ParseRecurringMonths(attr_str(node, "type"));
+  if (!months_or) {
+    return std::nullopt;
   }
+  pivot::AuthoredRecurringFilter entry;
+  entry.field_index = attr_u32(node, "fld");
+  entry.month_low = months_or->first;
+  entry.month_high = months_or->second;
+  return entry;
 }
 
-/// Decodes the relative-period entries of a `<filters>` block.
-void ParseAuthoredPeriodFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
-  for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
-    const auto period_or = ParseRelativePeriod(attr_str(node, "type"));
-    if (!period_or) {
-      continue;
-    }
-    pivot::AuthoredPeriodFilter entry;
-    entry.field_index = attr_u32(node, "fld");
-    entry.period = *period_or;
-    out->mutable_authored_period_filters().push_back(entry);
+/// Decodes a relative-period `<filter>` (`thisMonth`, `yearToDate`, ...).
+std::optional<pivot::AuthoredPeriodFilter> DecodePeriodFilter(const pugi::xml_node& node) {
+  const auto period_or = ParseRelativePeriod(attr_str(node, "type"));
+  if (!period_or) {
+    return std::nullopt;
   }
+  pivot::AuthoredPeriodFilter entry;
+  entry.field_index = attr_u32(node, "fld");
+  entry.period = *period_or;
+  return entry;
 }
 
-void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
-  for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
-    const auto type_or = ParseValueFilterType(attr_str(node, "type"));
-    if (!type_or) {
-      continue;
-    }
-    pivot::AuthoredValueFilter entry;
-    entry.field_index = attr_u32(node, "fld");
-    entry.data_field_index = attr_u32(node, "iMeasureFld");
-    entry.type = *type_or;
-    entry.top_n_basis = ParseTopNBasis(attr_str(node, "type"));
-
-    if (*type_or == pivot::FilterType::ValueTop10) {
-      const auto count_or = CollectTopCount(node);
-      if (!count_or) {
-        continue;
-      }
-      entry.value = *count_or;
-      entry.top = CollectTopDirection(node);
-    } else {
-      const bool ranged = *type_or == pivot::FilterType::ValueBetween ||
-                          *type_or == pivot::FilterType::ValueNotBetween || *type_or == pivot::FilterType::LabelDate;
-      const std::vector<std::string_view> criteria = CollectFilterCriteria(node);
-      if (criteria.size() < (ranged ? 2U : 1U)) {
-        continue;
-      }
-      const auto low_or = ParseCriterionNumber(criteria[0]);
-      if (!low_or) {
-        continue;
-      }
-      entry.value = *low_or;
-      if (ranged) {
-        const auto high_or = ParseCriterionNumber(criteria[1]);
-        if (!high_or) {
-          continue;
-        }
-        entry.value_high = *high_or;
-      }
-    }
-    out->mutable_authored_value_filters().push_back(entry);
-  }
-}
-
-/// Decodes the caption entries of an authored `<filters>` block.
+/// Decodes a value or date `<filter>`.
 ///
-/// The block stays in the verbatim passthrough tail regardless — this
-/// only populates the evaluation-side view, so a decode that drops an
-/// entry costs fidelity on save nothing. An entry is dropped when its
-/// type is outside the caption family or when it carries no criterion
-/// (`Between` needs two, everything else one).
+/// Unlike a caption filter, these carry no `stringValue*` shorthand: the
+/// criteria live only in the nested `<autoFilter>`, as one
+/// `<customFilter val="...">` for a threshold and two for a range. Date
+/// bounds are written as serials, which is the form the evaluation pass
+/// wants anyway — the rendered label would lose both precision and
+/// locale.
+std::optional<pivot::AuthoredValueFilter> DecodeValueFilter(const pugi::xml_node& node) {
+  const auto type_or = ParseValueFilterType(attr_str(node, "type"));
+  if (!type_or) {
+    return std::nullopt;
+  }
+  pivot::AuthoredValueFilter entry;
+  entry.field_index = attr_u32(node, "fld");
+  entry.data_field_index = attr_u32(node, "iMeasureFld");
+  entry.type = *type_or;
+  entry.top_n_basis = ParseTopNBasis(attr_str(node, "type"));
+
+  if (*type_or == pivot::FilterType::ValueTop10) {
+    const auto count_or = CollectTopCount(node);
+    if (!count_or) {
+      return std::nullopt;
+    }
+    entry.value = *count_or;
+    entry.top = CollectTopDirection(node);
+    return entry;
+  }
+  const bool ranged = *type_or == pivot::FilterType::ValueBetween || *type_or == pivot::FilterType::ValueNotBetween ||
+                      *type_or == pivot::FilterType::LabelDate;
+  const std::vector<std::string_view> criteria = CollectFilterCriteria(node);
+  if (criteria.size() < (ranged ? 2U : 1U)) {
+    return std::nullopt;
+  }
+  const auto low_or = ParseCriterionNumber(criteria[0]);
+  if (!low_or) {
+    return std::nullopt;
+  }
+  entry.value = *low_or;
+  if (ranged) {
+    const auto high_or = ParseCriterionNumber(criteria[1]);
+    if (!high_or) {
+      return std::nullopt;
+    }
+    entry.value_high = *high_or;
+  }
+  return entry;
+}
+
+/// Decodes a caption `<filter>`.
+///
+/// An entry is dropped when its type is outside the caption family or when
+/// it carries no criterion (`Between` needs two, everything else one).
 ///
 /// Excel writes the criterion twice. `stringValue1` / `stringValue2` on
 /// the `<filter>` element carry it as entered, while the nested
@@ -582,56 +591,213 @@ void ParseAuthoredValueFilters(const pugi::xml_node& parent, pivot::PivotTable* 
 /// `stringValue1` is the fallback, wrapped into the same pattern. The
 /// other predicates prefer the direct attributes, falling back to the
 /// nested criterion.
-void ParseAuthoredFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
-  for (pugi::xml_node f = parent.child("filter"); f; f = f.next_sibling("filter")) {
-    const auto predicate_or = ParseCaptionPredicate(attr_str(f, "type"));
-    if (!predicate_or) {
+std::optional<pivot::AuthoredCaptionFilter> DecodeCaptionFilter(const pugi::xml_node& f) {
+  const auto predicate_or = ParseCaptionPredicate(attr_str(f, "type"));
+  if (!predicate_or) {
+    return std::nullopt;
+  }
+  const bool ranged =
+      *predicate_or == pivot::CaptionPredicate::Between || *predicate_or == pivot::CaptionPredicate::NotBetween;
+  const pugi::xml_attribute direct_low = f.attribute("stringValue1");
+  const pugi::xml_attribute direct_high = f.attribute("stringValue2");
+  const bool direct = direct_low && (!ranged || direct_high);
+  std::optional<std::string> direct_pattern = pivot::caption_wildcard_pattern(*predicate_or, direct_low.value());
+
+  std::string low;
+  std::string high;
+  if (direct_pattern) {
+    const std::vector<std::string_view> criteria = CollectFilterCriteria(f);
+    if (!criteria.empty()) {
+      low.assign(criteria[0]);
+    } else if (direct_low) {
+      low = std::move(*direct_pattern);
+    } else {
+      return std::nullopt;
+    }
+  } else if (direct) {
+    low.assign(direct_low.value());
+    if (ranged) {
+      high.assign(direct_high.value());
+    }
+  } else {
+    const std::vector<std::string_view> criteria = CollectFilterCriteria(f);
+    if (criteria.size() < (ranged ? 2U : 1U)) {
+      return std::nullopt;
+    }
+    low.assign(criteria[0]);
+    if (ranged) {
+      high.assign(criteria[1]);
+    }
+  }
+
+  pivot::AuthoredCaptionFilter entry;
+  entry.field_index = attr_u32(f, "fld");
+  entry.predicate = *predicate_or;
+  entry.value = std::move(low);
+  entry.value_high = std::move(high);
+  return entry;
+}
+
+/// A top-N count as the public `PivotFilter` stores it: an `int` when the
+/// file spells a whole number in range, so it reads back the way the API
+/// takes it.
+std::variant<int, double, std::string> TopCountValue(double count) {
+  if (count >= 0.0 && count <= static_cast<double>(std::numeric_limits<int>::max()) &&
+      count == static_cast<double>(static_cast<int>(count))) {
+    return static_cast<int>(count);
+  }
+  return count;
+}
+
+/// Decodes a `<filter>` into the public `PivotFilter` vocabulary, or returns
+/// `nullopt` when the entry needs something that vocabulary lacks.
+///
+/// Only an exact match is taken, so the entry evaluates the same either way:
+/// a top-N must count items from the top, and a contains / begins-with entry
+/// must carry a `stringValue1` whose pattern is the nested criterion. A value
+/// entry must sit on the row or column axis, which is where both passes look
+/// for it. `field_name` is left empty and filled from the cache by
+/// `pivot::resolve_pivot_names`.
+std::optional<pivot::PivotFilter> DecodePublicFilter(const pugi::xml_node& node, const pivot::PivotTable& table) {
+  const std::optional<std::uint32_t> fld = parse_xml_u32_attr_strict(node.attribute("fld"));
+  if (!fld.has_value() || *fld >= table.fields().size()) {
+    return std::nullopt;
+  }
+  const auto on = [&](const std::vector<std::uint32_t>& order) {
+    return std::find(order.begin(), order.end(), *fld) != order.end();
+  };
+  const std::optional<pivot::PivotAxis> report_axis =
+      on(table.row_field_order())   ? std::optional<pivot::PivotAxis>(pivot::PivotAxis::Row)
+      : on(table.col_field_order()) ? std::optional<pivot::PivotAxis>(pivot::PivotAxis::Col)
+                                    : std::nullopt;
+  pivot::PivotFilter out;
+  out.data_field_index = attr_u32(node, "iMeasureFld");
+  const std::string_view type = attr_str(node, "type");
+  const bool caption = type == "captionContains" || type == "captionBeginsWith";
+  if (caption) {
+    const pugi::xml_attribute operand = node.attribute("stringValue1");
+    if (!operand) {
+      return std::nullopt;
+    }
+    const pivot::CaptionPredicate predicate =
+        type == "captionContains" ? pivot::CaptionPredicate::Contains : pivot::CaptionPredicate::BeginsWith;
+    const std::vector<std::string_view> criteria = CollectFilterCriteria(node);
+    if (!criteria.empty() && criteria[0] != *pivot::caption_wildcard_pattern(predicate, operand.value())) {
+      return std::nullopt;
+    }
+    out.type = predicate == pivot::CaptionPredicate::Contains ? pivot::FilterType::LabelContains
+                                                              : pivot::FilterType::LabelBeginsWith;
+    out.value = std::string(operand.value());
+  } else {
+    const std::optional<pivot::AuthoredValueFilter> decoded = DecodeValueFilter(node);
+    if (!decoded) {
+      return std::nullopt;
+    }
+    switch (decoded->type) {
+      case pivot::FilterType::ValueTop10:
+        if (decoded->top_n_basis != pivot::TopNBasis::Items || !decoded->top) {
+          return std::nullopt;
+        }
+        out.value = TopCountValue(decoded->value);
+        break;
+      case pivot::FilterType::ValueGreaterThan:
+        out.value = decoded->value;
+        break;
+      case pivot::FilterType::ValueBetween:
+      case pivot::FilterType::LabelDate:
+        out.value = decoded->value;
+        out.value_high = *decoded->value_high;
+        break;
+      default:
+        return std::nullopt;
+    }
+    out.type = decoded->type;
+  }
+  if (pivot::is_value_filter_type(out.type)) {
+    if (!report_axis) {
+      return std::nullopt;
+    }
+    out.axis = *report_axis;
+  } else {
+    const pivot::PivotAxis field_axis = table.fields()[*fld].axis;
+    out.axis = report_axis.value_or(field_axis == pivot::PivotAxis::None ? pivot::PivotAxis::Row : field_axis);
+  }
+  out.source = pivot::PivotFilterSource{raw_xml(node), *fld, out.data_field_index, attr_u32(node, "id")};
+  return out;
+}
+
+/// Splits a `<filters>` block between the public `active_filters()` and the
+/// verbatim `retained_filters()`, decoding the evaluable retained entries
+/// into the matching `authored_*` list. The authored type sets are disjoint,
+/// so at most one decoder claims an entry; one no decoder claims is kept
+/// for the round trip only.
+void ParseFilters(const pugi::xml_node& parent, pivot::PivotTable* out) {
+  for (pugi::xml_node node = parent.child("filter"); node; node = node.next_sibling("filter")) {
+    if (std::optional<pivot::PivotFilter> entry = DecodePublicFilter(node, *out)) {
+      out->mutable_active_filters().push_back(std::move(*entry));
       continue;
     }
-    const bool ranged =
-        *predicate_or == pivot::CaptionPredicate::Between || *predicate_or == pivot::CaptionPredicate::NotBetween;
-    const pugi::xml_attribute direct_low = f.attribute("stringValue1");
-    const pugi::xml_attribute direct_high = f.attribute("stringValue2");
-    const bool direct = direct_low && (!ranged || direct_high);
-    std::optional<std::string> direct_pattern = pivot::caption_wildcard_pattern(*predicate_or, direct_low.value());
-
-    std::string low;
-    std::string high;
-    if (direct_pattern) {
-      const std::vector<std::string_view> criteria = CollectFilterCriteria(f);
-      if (!criteria.empty()) {
-        low.assign(criteria[0]);
-      } else if (direct_low) {
-        low = std::move(*direct_pattern);
-      } else {
-        continue;
-      }
-    } else if (direct) {
-      low.assign(direct_low.value());
-      if (ranged) {
-        high.assign(direct_high.value());
-      }
-    } else {
-      const std::vector<std::string_view> criteria = CollectFilterCriteria(f);
-      if (criteria.size() < (ranged ? 2U : 1U)) {
-        continue;
-      }
-      low.assign(criteria[0]);
-      if (ranged) {
-        high.assign(criteria[1]);
-      }
+    const std::size_t active_before = out->active_filters().size();
+    out->mutable_retained_filters().push_back(
+        pivot::RetainedPivotFilter{raw_xml(node), active_before, attr_u32(node, "id")});
+    if (std::optional<pivot::AuthoredCaptionFilter> caption = DecodeCaptionFilter(node)) {
+      out->mutable_authored_caption_filters().push_back(std::move(*caption));
+    } else if (std::optional<pivot::AuthoredValueFilter> value = DecodeValueFilter(node)) {
+      value->active_before = active_before;
+      out->mutable_authored_value_filters().push_back(*value);
+    } else if (std::optional<pivot::AuthoredPeriodFilter> period = DecodePeriodFilter(node)) {
+      out->mutable_authored_period_filters().push_back(*period);
+    } else if (std::optional<pivot::AuthoredRecurringFilter> recurring = DecodeRecurringFilter(node)) {
+      out->mutable_authored_recurring_filters().push_back(*recurring);
     }
+  }
+}
 
-    pivot::AuthoredCaptionFilter entry;
-    entry.field_index = attr_u32(f, "fld");
-    entry.predicate = *predicate_or;
-    entry.value = std::move(low);
-    entry.value_high = std::move(high);
-    out->mutable_authored_caption_filters().push_back(std::move(entry));
+/// Keeps `node`'s report-form attributes in `out` when they depart from what
+/// the writer derives for `layout`, so they are re-emitted instead of it.
+///
+/// `root` selects the `<pivotTableDefinition>` set (`compact`, `compactData`,
+/// `outline`, `outlineData`, the form new fields take) over the
+/// `<pivotField>` pair (`compact`, `outline`). Each attribute is compared at
+/// its schema default when absent.
+void CaptureFormOverride(const pugi::xml_node& node, pivot::PivotLayout layout, bool root,
+                         std::vector<std::pair<std::string, std::string>>& out) {
+  const bool compact = layout == pivot::PivotLayout::Compact;
+  const bool outline = layout != pivot::PivotLayout::Tabular;
+  bool matches = attr_bool(node, "compact", true) == compact && attr_bool(node, "outline", !root) == outline;
+  if (root) {
+    matches =
+        matches && attr_bool(node, "compactData", true) == compact && attr_bool(node, "outlineData", false) == outline;
+  }
+  if (matches) {
+    return;
+  }
+  // Every attribute of the set is spelled out, an absent one at its default,
+  // since the writer emits these in place of the whole derived set.
+  struct FormAttr {
+    const char* name;
+    bool fallback;
+  };
+  const FormAttr root_attrs[] = {{"compact", true}, {"compactData", true}, {"outline", false}, {"outlineData", false}};
+  const FormAttr field_attrs[] = {{"compact", true}, {"outline", true}};
+  const std::size_t count = root ? 4U : 2U;
+  for (std::size_t i = 0; i < count; ++i) {
+    const FormAttr& entry = root ? root_attrs[i] : field_attrs[i];
+    const pugi::xml_attribute attr = node.attribute(entry.name);
+    out.emplace_back(entry.name, attr ? std::string(attr.value()) : std::string(entry.fallback ? "1" : "0"));
   }
 }
 
 }  // namespace
+
+bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table) {
+  pugi::xml_document doc;
+  if (!doc.load_buffer(filters_xml.data(), filters_xml.size(), pugi::parse_default, pugi::encoding_utf8)) {
+    return false;
+  }
+  ParseFilters(doc.child("filters"), table);
+  return true;
+}
 
 Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector<std::uint8_t>& definition_bytes) {
   pugi::xml_document doc;
@@ -742,6 +908,14 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       }
     }
   }
+  CaptureFormOverride(root, table.layout(), /*root=*/true, table.mutable_passthrough_attrs());
+  {
+    std::size_t index = 0;
+    for (pugi::xml_node f = root.child("pivotFields").child("pivotField"); f && index < table.fields().size();
+         f = f.next_sibling("pivotField"), ++index) {
+      CaptureFormOverride(f, table.layout(), /*root=*/false, table.mutable_fields()[index].passthrough_attrs);
+    }
+  }
   if (pugi::xml_node cols = root.child("colFields"); cols) {
     std::optional<std::size_t> values_position;
     ParseFieldOrder(cols, &table.mutable_col_field_order(), &values_position);
@@ -760,17 +934,11 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       return std::move(status.error());
     }
   }
-  // `<filters>` is decoded for evaluation but deliberately left out of
-  // `kRecognized` below, so the block still reaches the passthrough tail
-  // and the writer keeps re-emitting it byte-for-byte. See
-  // `PivotTable::authored_caption_filters`. The two decoders read the
-  // same elements and each keeps only the families it can evaluate, so an
-  // entry outside both is simply passthrough.
+  // `<filters>` is owned by the model: the public entries and the retained
+  // rest are written back from `active_filters()` / `retained_filters()`.
+  // Decoded after the axis orders, which a value entry's axis follows.
   if (pugi::xml_node filters = root.child("filters"); filters) {
-    ParseAuthoredFilters(filters, &table);
-    ParseAuthoredValueFilters(filters, &table);
-    ParseAuthoredPeriodFilters(filters, &table);
-    ParseAuthoredRecurringFilters(filters, &table);
+    ParseFilters(filters, &table);
   }
   // Capture any remaining direct children of <pivotTableDefinition> that
   // we do not model structurally into position-keyed raw-XML buffers, so
@@ -783,9 +951,13 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // and pageFields after `<colFields>`). Every other unmodelled element
   // (`<formats>`, `<conditionalFormats>`, `<chartFormats>`,
   // `<calculatedFields>`, `<calculatedItems>`, `<pivotTableStyleInfo>`,
-  // `<extLst>`, ...) belongs after `<dataFields>` and goes to the tail
-  // buffer. Relative order within each bin follows document order.
-  static const std::string_view kRecognized[] = {"location", "pivotFields", "rowFields", "colFields", "dataFields"};
+  // `<extLst>`, ...) belongs after `<dataFields>`. `<pivotTableStyleInfo>`
+  // and `<filters>` are decoded into the structured state; the
+  // post-dataFields elements the schema places before the style go to their
+  // own bin, the rest to the tail buffer. Relative order within each bin
+  // follows document order.
+  static const std::string_view kRecognized[] = {"location",  "pivotFields", "rowFields",
+                                                 "colFields", "dataFields",  "filters"};
   for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
     if (child.type() != pugi::node_element) {
       continue;
@@ -801,11 +973,25 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     if (recognised) {
       continue;
     }
+    if (name == "pivotTableStyleInfo") {
+      pivot::PivotStyleInfo info;
+      info.name = child.attribute("name").as_string();
+      info.show_row_headers = child.attribute("showRowHeaders").as_bool(false);
+      info.show_col_headers = child.attribute("showColHeaders").as_bool(false);
+      info.show_row_stripes = child.attribute("showRowStripes").as_bool(false);
+      info.show_col_stripes = child.attribute("showColStripes").as_bool(false);
+      info.show_last_column = child.attribute("showLastColumn").as_bool(false);
+      table.set_style_info(std::move(info));
+      continue;
+    }
     std::string* bucket = nullptr;
     if (name == "rowItems") {
       bucket = &table.mutable_raw_passthrough_after_row_fields();
     } else if (name == "colItems" || name == "pageFields") {
       bucket = &table.mutable_raw_passthrough_after_col_fields();
+    } else if (name == "formats" || name == "conditionalFormats" || name == "chartFormats" ||
+               name == "pivotHierarchies") {
+      bucket = &table.mutable_raw_passthrough_before_style_info();
     } else {
       bucket = &table.mutable_raw_passthrough_xml();
     }

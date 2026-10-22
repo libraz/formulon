@@ -42,6 +42,8 @@ from formulon import (
     PivotFilterType,
     PivotFilterValueKind,
     PivotWorksheetSource,
+    TableStyle,
+    TableStyleElement,
     ValueKind,
     Workbook,
     _c,
@@ -597,6 +599,84 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             wb.table_remove(index)
             self.assertEqual(list(wb.iter_tables()), [])
 
+    def test_table_style_toggles_survive_a_style_name_change(self) -> None:
+        with Workbook.create_default() as wb:
+            index = wb.table_create(0, "A1:B3", "Sales", "Sales", ["A", "B"], "TableStyleLight9")
+            table = list(wb.iter_tables())[0]
+            self.assertEqual(table.style_name, "TableStyleLight9")
+            self.assertTrue(table.has_style_info)
+            self.assertTrue(table.show_row_stripes)
+            self.assertFalse(table.show_first_column)
+            self.assertEqual((table.header_row_count, table.totals_row_count), (1, 0))
+            self.assertEqual([c.name for c in table.columns], ["A", "B"])
+
+            wb.table_update(index, "A1:B3", show_first_column=True, show_row_stripes=False)
+            wb.table_update(index, "A1:B3", "TableStyleMedium4")
+            with Workbook.load(wb.save()) as reloaded:
+                table = list(reloaded.iter_tables())[0]
+                self.assertEqual(table.style_name, "TableStyleMedium4")
+                self.assertTrue(table.show_first_column)
+                self.assertFalse(table.show_row_stripes)
+
+    def test_table_column_totals_write_the_totals_row(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "Product")
+            wb.set_text(0, 0, 1, "Amount")
+            wb.set_number(0, 1, 1, 10.0)
+            wb.set_number(0, 2, 1, 20.0)
+            index = wb.table_create(0, "A1:B4", "Sales", "Sales", ["Product", "Amount"], totals_row=True)
+            wb.table_set_column_totals(index, 0, label="Total")
+            wb.table_set_column_totals(index, 1, "sum")
+            self.assertEqual(wb.get_formula(0, 3, 1), "=SUBTOTAL(109,Sales[Amount])")
+            wb.recalc()
+            self.assertEqual(wb.get_value(0, 3, 1).number, 30.0)
+            with self.assertRaises(FormulonError):
+                wb.table_set_column_totals(index, 1, "median")
+            with Workbook.load(wb.save()) as reloaded:
+                columns = list(reloaded.iter_tables())[0].columns
+                self.assertEqual(columns[0].totals_row_label, "Total")
+                self.assertEqual(columns[1].totals_row_function, "sum")
+
+    def test_table_rename_rewrites_structured_references(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "Amount")
+            wb.set_number(0, 1, 0, 5.0)
+            index = wb.table_create(0, "A1:A2", "Sales", "Sales", ["Amount"])
+            wb.set_formula(0, 0, 3, "=SUM(Sales[Amount])")
+            wb.table_update(index, "A1:A2", name="Revenue")
+            self.assertEqual(wb.get_formula(0, 0, 3), "=SUM(Revenue[Amount])")
+            self.assertEqual(list(wb.iter_tables())[0].display_name, "Revenue")
+            other = wb.table_create(0, "C1:C2", "Other", "Other", ["X"])
+            with self.assertRaises(FormulonError):
+                wb.table_rename(other, "revenue")
+
+    def test_custom_table_style_round_trips(self) -> None:
+        with Workbook.create_default() as wb:
+            dxf = wb.add_dxf(DifferentialFormat())
+            style = TableStyle(
+                name="Corporate",
+                pivot=False,
+                elements=(
+                    TableStyleElement("wholeTable", dxf_id=dxf),
+                    TableStyleElement("firstRowStripe", size=2, dxf_id=dxf),
+                    TableStyleElement("totalRow"),
+                ),
+            )
+            wb.set_table_style(style)
+            self.assertEqual(wb.table_style_count(), 1)
+            self.assertEqual(wb.table_style_defaults(), ("TableStyleMedium2", "PivotStyleLight16"))
+            index = wb.table_create(0, "A1:A2", "T", "T", ["X"], "Corporate")
+            with self.assertRaises(FormulonError):
+                wb.set_table_style(TableStyle(name="TableStyleMedium2"))
+            with Workbook.load(wb.save()) as reloaded:
+                self.assertEqual(reloaded.get_table_style(0), style)
+                self.assertEqual(list(reloaded.iter_tables())[index].style_name, "Corporate")
+                reloaded.set_table_style_defaults(table_style="Corporate")
+                self.assertEqual(reloaded.table_style_defaults()[0], "Corporate")
+                reloaded.remove_table_style("corporate")
+                self.assertEqual(reloaded.table_style_count(), 0)
+                self.assertEqual(reloaded.table_style_defaults()[0], "TableStyleMedium2")
+
     def test_table_create_rejects_a_column_count_that_does_not_match_ref(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
@@ -666,12 +746,12 @@ class OneShotEvaluationTests(unittest.TestCase):
         self.assertEqual(formulon.eval_formula("=SEQUENCE(2,3)").number, 1.0)
 
 
-class PivotFilterSessionStateTests(unittest.TestCase):
-    """The active-filter list lives only as long as the handle.
+class PivotFilterPersistenceTests(unittest.TestCase):
+    """The filter list is saved with the pivot and reads back after a load.
 
     The npm and npm-native packages assert the same three properties, so a
-    surface that started persisting (or dropping) filters would break here
-    and there together.
+    surface that stopped persisting (or started dropping) filters would break
+    here and there together.
     """
 
     @staticmethod
@@ -721,7 +801,7 @@ class PivotFilterSessionStateTests(unittest.TestCase):
         self.assertEqual(got.value_kind, PivotFilterValueKind.DOUBLE)
         self.assertEqual(got.value_double, 15.0)
 
-    def test_count_reports_only_what_this_session_added(self) -> None:
+    def test_count_reports_the_filters_on_the_pivot(self) -> None:
         wb, pivot = self._workbook_with_pivot()
         try:
             self.assertEqual(wb.pivot_filter_count(0, pivot), 0)
@@ -730,8 +810,8 @@ class PivotFilterSessionStateTests(unittest.TestCase):
         finally:
             wb.close()
 
-    def test_filters_do_not_survive_save_and_load(self) -> None:
-        """The core of the contract: the list is not written by save()."""
+    def test_filters_survive_save_and_load(self) -> None:
+        """The list is written by save() and decodes back on load."""
         wb, pivot = self._workbook_with_pivot()
         try:
             wb.pivot_filter_add(0, pivot, self._filter())
@@ -741,7 +821,10 @@ class PivotFilterSessionStateTests(unittest.TestCase):
             wb.close()
         with Workbook.load(data) as reloaded:
             self.assertEqual(reloaded.pivot_count(0), 1)
-            self.assertEqual(reloaded.pivot_filter_count(0, 0), 0)
+            self.assertEqual(reloaded.pivot_filter_count(0, 0), 1)
+            got = reloaded.pivot_filter_at(0, 0, 0)
+            self.assertEqual((got.field_name, got.type), ("Region", PivotFilterType.VALUE_GREATER_THAN))
+            self.assertEqual((got.value_kind, got.value_double), (PivotFilterValueKind.DOUBLE, 15.0))
 
     def test_out_of_range_index_is_rejected(self) -> None:
         wb, pivot = self._workbook_with_pivot()
@@ -756,7 +839,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     """The definition read-backs report persisted state, unlike the filter list."""
 
     def test_definition_survives_save_and_load(self) -> None:
-        wb, pivot = PivotFilterSessionStateTests._workbook_with_pivot()
+        wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
             wb.pivot_set_grand_totals(0, pivot, True, False)
             cache_id = wb.pivot_cache_id(0, pivot)
@@ -772,7 +855,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self.assertEqual(reloaded.pivot_data_field_at(0, 0, 0).name, "Sum of Amount")
 
     def test_out_of_range_index_is_rejected(self) -> None:
-        wb, pivot = PivotFilterSessionStateTests._workbook_with_pivot()
+        wb, pivot = PivotFilterPersistenceTests._workbook_with_pivot()
         try:
             with self.assertRaises(FormulonError):
                 wb.pivot_field_at(0, pivot, 99)
@@ -851,6 +934,30 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
                 (5, 0, 40, 6),
             )
             self.assertEqual(reloaded.get_sheet_selection(0), ((41, 7), ranges))
+
+    def test_split_reads_back_round_trips_and_exchanges_with_freeze(self) -> None:
+        with Workbook.create_default() as wb:
+            view = wb.get_sheet_view(0)
+            self.assertEqual((view.split_x, view.split_y), (0.0, 0.0))
+            wb.set_sheet_split(0, 2000, 1500)
+            view = wb.get_sheet_view(0)
+            self.assertEqual((view.split_x, view.split_y, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0))
+            data = wb.save()
+            wb.set_sheet_freeze(0, 2, 1)
+            view = wb.get_sheet_view(0)
+            self.assertEqual((view.split_x, view.split_y), (0.0, 0.0))
+            wb.set_sheet_split(0, 0, 900)
+            view = wb.get_sheet_view(0)
+            self.assertEqual((view.split_y, view.freeze_rows, view.freeze_cols), (900.0, 0, 0))
+            for bad in ((-1, 0), (0, float("nan")), (float("inf"), 0)):
+                with self.assertRaises(FormulonError):
+                    wb.set_sheet_split(0, *bad)
+            self.assertEqual(wb.get_sheet_view(0).split_y, 900.0)
+            wb.set_sheet_split(0, 0, 0)
+            self.assertEqual(wb.get_sheet_view(0).split_y, 0.0)
+        with Workbook.load(data) as reloaded:
+            view = reloaded.get_sheet_view(0)
+            self.assertEqual((view.split_x, view.split_y, view.freeze_rows, view.freeze_cols), (2000.0, 1500.0, 0, 0))
 
     def test_unset_selection_reads_as_a1(self) -> None:
         with Workbook.create_default() as wb:

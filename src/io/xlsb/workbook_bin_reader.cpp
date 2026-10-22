@@ -32,10 +32,23 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 
+void ApplyWorkbookBinInfo(const WorkbookBinInfo& info, Workbook& wb) {
+  wb.set_date1904(info.date1904);
+  wb.set_workbook_pr_xml(info.workbook_pr_xml);
+  wb.set_workbook_protection_xml(info.protection_xml);
+  wb.set_book_views_xml(info.book_views_xml);
+  if (info.has_calc_props) {
+    wb.set_calc_mode(info.calc_props.mode);
+    wb.set_iterative_options(info.calc_props.iterative);
+    wb.mutable_calc_options() = info.calc_props.options;
+  }
+}
+
 /// Decodes `xl/workbook.bin` to extract the ordered sheet-bundle list and
-/// workbook date system and protection. Other records are skipped.
+/// the workbook globals. Other records are skipped.
 Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_t>& body) {
   WorkbookBinInfo info;
+  std::string book_views;
   ByteSpan protection_iso{};
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -45,12 +58,25 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
     }
     const XlsbRecord& rec = rec_or.value();
     if (rec.type == static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp)) {
-      // BrtWbProp ([MS-XLSB] §2.4.866) begins with a u32 grbit; bit 0
-      // is f1904. The following theme-version and optional code-name
-      // fields are irrelevant to the workbook model.
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto flags, read_u32(p));
-      info.date1904 = (flags & 0x00000001U) != 0U;
+      // BrtWbProp ([MS-XLSB] 2.4.868): flags, dwThemeVersion, CodeName.
+      if (!decode_wb_prop(rec.payload, info.workbook_pr_xml, info.date1904)) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "workbook.bin: BrtWbProp truncated",
+                          "context=xlsb_reader");
+      }
+      continue;
+    }
+    if (rec.type == kBrtBookView) {
+      // BrtBookView ([MS-XLSB] 2.4.313): one `<workbookView>` each.
+      if (!decode_book_view(rec.payload, book_views)) {
+        StructuredLog("xlsb.book_view.not_decoded").warn();
+      }
+      continue;
+    }
+    if (rec.type == kBrtCalcProp) {
+      info.has_calc_props = decode_calc_prop(rec.payload, info.calc_props);
+      if (!info.has_calc_props) {
+        StructuredLog("xlsb.calc_prop.not_decoded").warn();
+      }
       continue;
     }
     if (rec.type == kBrtBookProtectionIso) {
@@ -103,6 +129,9 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
         break;
     }
     info.sheets.push_back(std::move(entry));
+  }
+  if (!book_views.empty()) {
+    info.book_views_xml = "<bookViews>" + book_views + "</bookViews>";
   }
   if (info.sheets.empty()) {
     return make_error(FormulonErrorCode::kIoXlsbCorrupt, "workbook.bin: no BrtBundleSh records",
@@ -402,7 +431,8 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     p.data += cb;
     p.size -= cb;
     Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
-    auto ast_or = decode_ptgs(rgce, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books);
+    auto ast_or = decode_ptgs(rgce, rgcb, arena, sheet_names, name_table, sheet_ranges, external_books,
+                              /*host_itab=*/-1, std::nullopt, nullptr, &wb.tables());
     if (!ast_or) {
       StructuredLog("xlsb.defined_name.not_decoded")
           .field("name", entry.name)

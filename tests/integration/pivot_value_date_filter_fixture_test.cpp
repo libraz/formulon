@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -155,20 +156,26 @@ std::vector<std::pair<std::string, double>> EvaluateRows(const Workbook& wb, std
 // (a) The decode, against Excel's own attribute spelling.
 // ---------------------------------------------------------------------------
 
+// The public-vocabulary entries decode into `active_filters()`, where the
+// API reads and edits them, naming their field by source name.
 TEST(PivotValueDateFilterFixture, TopCountDecodesFromTheNestedTop10Element) {
   Workbook wb = LoadFixture();
   const pivot::PivotTable* table = PivotOn(wb, kTopCountSheet);
   ASSERT_NE(table, nullptr);
-  ASSERT_EQ(table->authored_value_filters().size(), 1U);
-  const pivot::AuthoredValueFilter& filter = table->authored_value_filters().front();
-  EXPECT_EQ(filter.field_index, 0U);  // Region
+  ASSERT_EQ(table->active_filters().size(), 1U);
+  const pivot::PivotFilter& filter = table->active_filters().front();
+  EXPECT_EQ(filter.field_name, "Region");
+  EXPECT_EQ(filter.axis, pivot::PivotAxis::Row);
   EXPECT_EQ(filter.type, pivot::FilterType::ValueTop10);
-  EXPECT_DOUBLE_EQ(filter.value, 2.0);
-  EXPECT_FALSE(filter.value_high.has_value());
+  EXPECT_EQ(std::get<int>(filter.value), 2);
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(filter.value_high));
   EXPECT_EQ(filter.data_field_index, 0U);  // iMeasureFld
-  // A slicer selection is a different list and must stay empty.
-  EXPECT_TRUE(table->active_filters().empty());
-  // The caption decoder must not also claim these entries.
+  ASSERT_TRUE(filter.source.has_value());
+  EXPECT_EQ(filter.source->field_index, 0U);
+  EXPECT_EQ(filter.source->id, 2U);
+  // Nothing is left for the retained / authored lists to claim.
+  EXPECT_TRUE(table->retained_filters().empty());
+  EXPECT_TRUE(table->authored_value_filters().empty());
   EXPECT_TRUE(table->authored_caption_filters().empty());
 }
 
@@ -177,32 +184,46 @@ TEST(PivotValueDateFilterFixture, ThresholdAndRangeDecodeFromTheNestedCustomFilt
 
   const pivot::PivotTable* greater = PivotOn(wb, kGreaterThanSheet);
   ASSERT_NE(greater, nullptr);
-  ASSERT_EQ(greater->authored_value_filters().size(), 1U);
-  EXPECT_EQ(greater->authored_value_filters().front().type, pivot::FilterType::ValueGreaterThan);
-  EXPECT_DOUBLE_EQ(greater->authored_value_filters().front().value, kEast);
-  EXPECT_FALSE(greater->authored_value_filters().front().value_high.has_value());
+  ASSERT_EQ(greater->active_filters().size(), 1U);
+  EXPECT_EQ(greater->active_filters().front().type, pivot::FilterType::ValueGreaterThan);
+  EXPECT_DOUBLE_EQ(std::get<double>(greater->active_filters().front().value), kEast);
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(greater->active_filters().front().value_high));
 
   const pivot::PivotTable* between = PivotOn(wb, kBetweenSheet);
   ASSERT_NE(between, nullptr);
-  ASSERT_EQ(between->authored_value_filters().size(), 1U);
-  const pivot::AuthoredValueFilter& range = between->authored_value_filters().front();
+  ASSERT_EQ(between->active_filters().size(), 1U);
+  const pivot::PivotFilter& range = between->active_filters().front();
   EXPECT_EQ(range.type, pivot::FilterType::ValueBetween);
-  EXPECT_DOUBLE_EQ(range.value, kEast);
-  ASSERT_TRUE(range.value_high.has_value());
-  EXPECT_DOUBLE_EQ(*range.value_high, kWest);
+  EXPECT_DOUBLE_EQ(std::get<double>(range.value), kEast);
+  EXPECT_DOUBLE_EQ(std::get<double>(range.value_high), kWest);
 }
 
 TEST(PivotValueDateFilterFixture, DateBoundsDecodeAsSerialsOnTheDateField) {
   Workbook wb = LoadFixture();
   const pivot::PivotTable* table = PivotOn(wb, kDateBetweenSheet);
   ASSERT_NE(table, nullptr);
-  ASSERT_EQ(table->authored_value_filters().size(), 1U);
-  const pivot::AuthoredValueFilter& filter = table->authored_value_filters().front();
-  EXPECT_EQ(filter.field_index, 2U);  // Date
+  ASSERT_EQ(table->active_filters().size(), 1U);
+  const pivot::PivotFilter& filter = table->active_filters().front();
+  EXPECT_EQ(filter.field_name, "Date");
   EXPECT_EQ(filter.type, pivot::FilterType::LabelDate);
-  EXPECT_DOUBLE_EQ(filter.value, kQ1Start);
-  ASSERT_TRUE(filter.value_high.has_value());
-  EXPECT_DOUBLE_EQ(*filter.value_high, kQ1End);
+  EXPECT_DOUBLE_EQ(std::get<double>(filter.value), kQ1Start);
+  EXPECT_DOUBLE_EQ(std::get<double>(filter.value_high), kQ1End);
+  ASSERT_TRUE(filter.source.has_value());
+  EXPECT_EQ(filter.source->field_index, 2U);
+}
+
+// Percent and sum top-N have no public spelling: they stay retained and
+// decoded into the authored list, which still evaluates them.
+TEST(PivotValueDateFilterFixture, TopPercentAndSumStayRetained) {
+  Workbook wb = LoadFixture();
+  for (const std::size_t sheet : {kTopPercentSheet, kTopSumSheet}) {
+    const pivot::PivotTable* table = PivotOn(wb, sheet);
+    ASSERT_NE(table, nullptr);
+    EXPECT_TRUE(table->active_filters().empty());
+    ASSERT_EQ(table->retained_filters().size(), 1U);
+    EXPECT_EQ(table->retained_filters()[0].active_before, 0U);
+    ASSERT_EQ(table->authored_value_filters().size(), 1U);
+  }
 }
 
 // The rule is not mirrored into item visibility, so an engine that only

@@ -20,12 +20,15 @@
 #include "external_link.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
+#include "io/sparkline_groups.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/table_records.h"
+#include "io/xlsb/workbook_props_records.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -45,9 +48,6 @@ namespace {
 // from `XlsbRecordType`) but the writer must emit for a well-formed stream.
 // Workbook-globals structural records Excel expects before the sheet bundle.
 constexpr std::uint16_t kBrtFileVersion = 128;
-constexpr std::uint16_t kBrtBeginBookViews = 135;
-constexpr std::uint16_t kBrtWbView = 158;
-constexpr std::uint16_t kBrtEndBookViews = 136;
 // Opens a future-record block in a sheet tail (x14 extensions).
 constexpr std::uint16_t kBrtFrtBegin = 35;
 
@@ -170,6 +170,7 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
         visit_cfvo(rule.data_bar->max);
       }
       if (rule.icon_set) {
+        visit_cfvo(rule.icon_set->floor);
         std::for_each(rule.icon_set->thresholds.begin(), rule.icon_set->thresholds.end(), visit_cfvo);
       }
     }
@@ -177,6 +178,12 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
   for (const DataValidation& dv : sheet.validations()) {
     visit_text(dv.formula1);
     visit_text(dv.formula2);
+  }
+  for (const SparklineGroup& group : read_sparkline_groups(sheet.ext_lst_xml())) {
+    visit_text(group.date_axis_ref);
+    for (const SparklineItem& item : group.items) {
+      visit_text(item.formula);
+    }
   }
 }
 
@@ -441,6 +448,9 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
   if (!collected.links.empty()) {
     collected.indexer = wb.external_book_indexer();
   }
+  if (!wb.tables().empty()) {
+    collected.tables = &wb.tables();
+  }
   std::unordered_set<std::uint64_t> seen;
   for (const DefinedName& dn : wb.defined_names()) {
     CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen);
@@ -449,6 +459,13 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
     ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
       CollectSheetRangesFromFormula(formula, sheet_names, collected, seen);
     });
+  }
+  // A table part's own formulas are encoded against the same tables.
+  for (const TableMetadata& table : wb.tables()) {
+    for (const TableColumn& column : table.columns) {
+      CollectSheetRangesFromFormula(column.calculated_column_formula, sheet_names, collected, seen);
+      CollectSheetRangesFromFormula(column.totals_row_formula, sheet_names, collected, seen);
+    }
   }
   auto ranges = SeedFromRetainedTails(wb, collected.links);
   if (!ranges) {
@@ -462,6 +479,8 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
   }
   ranges.value().links = std::move(collected.links);
   ranges.value().indexer = collected.indexer;
+  ranges.value().tables = collected.tables;
+  ranges.value().reserved_table_ids = xlsb_retained_table_ids(wb);
   return ranges;
 }
 
@@ -605,42 +624,23 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   // known-valid default payloads (byte layout captured from a real Excel 365
   // `xl/workbook.bin`):
   //   * BrtFileVersion : appName "xl", lastEdited/lowestEdited "7", build.
-  //   * BrtWbProp      : default flags + defaultThemeVersion 202300.
-  //   * BrtWbView      : a single window view; itabCur (offset 24, u32) is
-  //                      patched below to the active sheet.
+  //   * BrtWbProp      : from `<workbookPr>`; see `emit_wb_prop`.
+  //   * BrtBookView    : one per `<workbookView>`; see `emit_book_views`.
   // Omitting these produced a workbook stream Excel rejected.
   static const std::vector<std::uint8_t> kFileVersionPayload = {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
       0x00, 0x00, 0x00, 0x78, 0x00, 0x6c, 0x00, 0x01, 0x00, 0x00, 0x00, 0x37, 0x00, 0x01, 0x00, 0x00, 0x00,
       0x37, 0x00, 0x05, 0x00, 0x00, 0x00, 0x31, 0x00, 0x30, 0x00, 0x36, 0x00, 0x32, 0x00, 0x38, 0x00};
-  static const std::vector<std::uint8_t> kDefaultWbPropPayload = {0x20, 0x00, 0x01, 0x00, 0x3c, 0x16,
-                                                                  0x03, 0x00, 0x00, 0x00, 0x00, 0x00};
-  static const std::vector<std::uint8_t> kWbViewPayload = {0x10, 0x4f, 0x00, 0x00, 0x18, 0x15, 0x00, 0x00, 0x8c, 0x6e,
-                                                           0x00, 0x00, 0xd0, 0x43, 0x00, 0x00, 0x58, 0x02, 0x00, 0x00,
-                                                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78};
   emit_record(body, kBrtFileVersion, kFileVersionPayload);
-  std::vector<std::uint8_t> wb_prop_payload = kDefaultWbPropPayload;
-  // BrtWbProp ([MS-XLSB] §2.4.866): f1904 is bit 0 of the leading
-  // little-endian u32 grbit. Preserve Excel's captured default flags.
-  if (wb.date1904()) {
-    wb_prop_payload[0] |= 0x01U;
-  }
-  emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp), wb_prop_payload);
+  // A `<workbookPr>` attribute without a field is reported by the writer.
+  emit_wb_prop(body, wb.workbook_pr_xml(), wb.date1904());
   // Excel places the protection records between BrtWbProp and the views.
   if (auto protection = emit_book_protection(body, wb.workbook_protection_xml()); !protection) {
     return std::move(protection.error());
   }
-  emit_record(body, kBrtBeginBookViews, ByteSpan{});
-  // itabCur (u32 at offset 24): the active sheet's index, which must be a
-  // tab-selected sheet; a mismatch made Excel show every tab selected.
-  std::vector<std::uint8_t> wb_view_payload = kWbViewPayload;
-  const std::uint32_t itab_cur = wb.active_sheet();
-  wb_view_payload[24] = static_cast<std::uint8_t>(itab_cur & 0xFFU);
-  wb_view_payload[25] = static_cast<std::uint8_t>((itab_cur >> 8) & 0xFFU);
-  wb_view_payload[26] = static_cast<std::uint8_t>((itab_cur >> 16) & 0xFFU);
-  wb_view_payload[27] = static_cast<std::uint8_t>((itab_cur >> 24) & 0xFFU);
-  emit_record(body, kBrtWbView, wb_view_payload);
-  emit_record(body, kBrtEndBookViews, ByteSpan{});
+  // The first window's itabCur is the active sheet, which must be a
+  // tab-selected one; a mismatch made Excel show every tab selected.
+  emit_book_views(body, wb.book_views_xml(), wb.active_sheet(), wb.sheet_count());
 
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBundleShs), ByteSpan{});
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
@@ -735,6 +735,12 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
         return std::move(r.error());
       }
     }
+  }
+
+  // BrtCalcProp follows the BrtName table; omitted like a default `<calcPr>`.
+  const XlsbCalcProps calc_props{wb.calc_mode(), wb.iterative_options(), wb.calc_options()};
+  if (!calc_props_are_default(calc_props)) {
+    emit_calc_prop(body, calc_props);
   }
 
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndBook), ByteSpan{});

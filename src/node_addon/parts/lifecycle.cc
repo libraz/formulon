@@ -76,6 +76,60 @@ Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+namespace {
+
+/// Reads one boolean workbook flag as a `{ status, value }` NumberResult.
+Napi::Value FlagResult(Napi::Env env, fm_workbook_t* handle, fm_status_t (*read)(const fm_workbook_t*, int32_t*)) {
+  if (handle == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  int32_t value = 0;
+  const fm_status_t rc = read(handle, &value);
+  return MakeNumberResult(env, rc, value);
+}
+
+}  // namespace
+
+Napi::Value Workbook::FullPrecision(const Napi::CallbackInfo& info) {
+  return FlagResult(info.Env(), handle_, &fm_workbook_full_precision);
+}
+
+Napi::Value Workbook::SetFullPrecision(const Napi::CallbackInfo& info) {
+  return StatusCall(info,
+                    [&](fm_workbook_t* handle) { return fm_workbook_set_full_precision(handle, ArgFlag(info, 0)); });
+}
+
+Napi::Value Workbook::CalcOnSave(const Napi::CallbackInfo& info) {
+  return FlagResult(info.Env(), handle_, &fm_workbook_calc_on_save);
+}
+
+Napi::Value Workbook::SetCalcOnSave(const Napi::CallbackInfo& info) {
+  return StatusCall(info,
+                    [&](fm_workbook_t* handle) { return fm_workbook_set_calc_on_save(handle, ArgFlag(info, 0)); });
+}
+
+Napi::Value Workbook::RefMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  fm_ref_mode_t mode = FM_REF_MODE_A1;
+  const fm_status_t rc = fm_workbook_ref_mode(handle_, &mode);
+  return MakeNumberResult(env, rc, static_cast<int32_t>(mode));
+}
+
+Napi::Value Workbook::SetRefMode(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) { return fm_workbook_set_ref_mode(handle, ArgI32(info, 0)); });
+}
+
+Napi::Value Workbook::Date1904(const Napi::CallbackInfo& info) {
+  return FlagResult(info.Env(), handle_, &fm_workbook_date1904);
+}
+
+Napi::Value Workbook::SetDate1904(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) { return fm_workbook_set_date1904(handle, ArgFlag(info, 0)); });
+}
+
 Napi::Value Workbook::PinnedNow(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

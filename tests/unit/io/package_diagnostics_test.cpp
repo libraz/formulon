@@ -331,28 +331,32 @@ TEST(XlsbWriteDiagnostics, EnabledSheetProtectionIsWritten) {
   EXPECT_TRUE(back.value().workbook.sheet(0).protection().enabled);
 }
 
-TEST(XlsbWriteDiagnostics, WorkbookLockWindowsCountsAsDeferred) {
+TEST(XlsbWriteDiagnostics, WorkbookLockWindowsIsWritten) {
   Workbook wb = OneSheetWorkbook();
   wb.set_workbook_protection_xml("<workbookProtection lockStructure=\"1\" lockWindows=\"1\"/>");
 
   auto result = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
   auto back = xlsb::read_xlsb(ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
   ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
-  EXPECT_EQ(back.value().workbook.workbook_protection_xml(), "<workbookProtection lockStructure=\"1\"/>");
+  EXPECT_EQ(back.value().workbook.workbook_protection_xml(),
+            "<workbookProtection lockStructure=\"1\" lockWindows=\"1\"/>");
 }
 
-TEST(XlsbWriteDiagnostics, NonAutoCalcModeCountsAsDeferred) {
+TEST(XlsbWriteDiagnostics, NonAutoCalcModeIsWritten) {
   Workbook wb = OneSheetWorkbook();
   wb.set_calc_mode(Workbook::CalcMode::kManual);
 
   auto result = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
+  auto back = xlsb::read_xlsb(ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_EQ(back.value().workbook.calc_mode(), Workbook::CalcMode::kManual);
 }
 
-TEST(XlsbWriteDiagnostics, EnabledIterativeCalcCountsAsDeferred) {
+TEST(XlsbWriteDiagnostics, EnabledIterativeCalcIsWritten) {
   Workbook wb = OneSheetWorkbook();
   IterativeOptions opts;
   opts.enabled = true;
@@ -360,7 +364,10 @@ TEST(XlsbWriteDiagnostics, EnabledIterativeCalcCountsAsDeferred) {
 
   auto result = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
+  auto back = xlsb::read_xlsb(ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_TRUE(back.value().workbook.iterative_options().enabled);
 }
 
 TEST(XlsbWriteDiagnostics, PivotTableWithNoSurvivingPassthroughPartCountsAsDeferred) {

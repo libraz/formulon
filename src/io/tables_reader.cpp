@@ -29,7 +29,8 @@ std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
     for (pugi::xml_attribute attr : node.attributes()) {
       const std::string_view name(attr.name());
       const bool is_known_root = name == "id" || name == "name" || name == "displayName" || name == "ref" ||
-                                 name == "headerRowCount" || name == "totalsRowCount" || name == "xmlns";
+                                 name == "headerRowCount" || name == "totalsRowCount" || name == "totalsRowShown" ||
+                                 name == "xmlns";
       if (is_known_root) {
         continue;
       }
@@ -147,6 +148,9 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
   if (attr_u32(root, "totalsRowCount") >= 1U) {
     table.totals_row = true;
   }
+  if (pugi::xml_attribute shown = root.attribute("totalsRowShown"); shown) {
+    table.totals_row_shown = parse_xml_bool_attr(shown);
+  }
 
   if (pugi::xml_node cols_node = root.child("tableColumns"); cols_node) {
     for (pugi::xml_node col = cols_node.child("tableColumn"); col; col = col.next_sibling("tableColumn")) {
@@ -166,15 +170,31 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
       if (pugi::xml_node fn_node = col.child("calculatedColumnFormula"); fn_node) {
         AppendOoxmlTextUnescaped(entry.calculated_column_formula, fn_node.text().as_string());
       }
+      if (pugi::xml_node totals_node = col.child("totalsRowFormula"); totals_node) {
+        AppendOoxmlTextUnescaped(entry.totals_row_formula, totals_node.text().as_string());
+        entry.totals_row_formula_array = attr_bool(totals_node, "array", false);
+      }
+      for (const char* tail : {"xmlColumnPr", "extLst"}) {
+        if (pugi::xml_node node = col.child(tail); node) {
+          append_raw_xml(entry.trailing_children_xml, node);
+        }
+      }
       table.columns.push_back(std::move(entry));
     }
   }
 
-  // `<tableStyleInfo>` (style name + banded-row flags) follows
-  // `<tableColumns>`. Captured verbatim; the engine does not model table
-  // styles but must not drop them on save.
   if (pugi::xml_node style_info = root.child("tableStyleInfo"); style_info) {
-    table.table_style_info_xml = raw_xml(style_info);
+    TableStyleInfo& info = table.style_info;
+    info.present = true;
+    info.name = attr_str(style_info, "name");
+    info.show_first_column = attr_bool(style_info, "showFirstColumn");
+    info.show_last_column = attr_bool(style_info, "showLastColumn");
+    info.show_row_stripes = attr_bool(style_info, "showRowStripes");
+    info.show_column_stripes = attr_bool(style_info, "showColumnStripes");
+    std::vector<std::pair<std::string, std::string>> extra;
+    capture_unknown_attrs(style_info,
+                          {"name", "showFirstColumn", "showLastColumn", "showRowStripes", "showColumnStripes"}, extra);
+    append_raw_attrs(info.extra_attrs, extra);
   }
   if (pugi::xml_node auto_filter = root.child("autoFilter"); auto_filter) {
     table.auto_filter_xml.set(auto_filter_from_node(auto_filter));

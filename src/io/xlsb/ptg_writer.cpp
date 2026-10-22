@@ -21,6 +21,7 @@
 #include "io/future_functions.h"
 #include "io/xlsb/func_id_table.h"
 #include "io/xlsb/ptg.h"
+#include "io/xlsb/ptg_list.h"
 #include "io/xlsb/ptg_operand_class.h"
 #include "io/xlsb/ptg_space.h"
 #include "io/xlsb/ptg_targets.h"
@@ -716,7 +717,7 @@ class Encoder {
             node, cls(node.as_external_ref_name().empty() ? shapes_.of(node) != Shape::kScalar : measured_calls_),
             promote);
       case parser::NodeKind::StructuredRef:
-        return unsupported_node("StructuredRef");
+        return encode_ptg_list(out_, node, cls(true), sheet_ranges_);
       case parser::NodeKind::SpillRef:
         return emit_spill_ref(node, HiddenCallClass(node, slot, promote, reference_slot));
       case parser::NodeKind::ImplicitIntersection:

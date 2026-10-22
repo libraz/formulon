@@ -436,8 +436,41 @@ TEST(BuiltinsCellWidth, ExplicitColumnLayoutIsReported) {
   wb.sheet(0).mutable_layout().columns.push_back(ColumnLayout{0U, 0U, 12.5, false, 0U});
   const Value v = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_array());
-  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 12.5);
+  // Stored 12.5 snaps to 87 px and shows as 11.71.
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 12.0);
   EXPECT_FALSE(v.as_array()->cells[1].as_boolean());
+}
+
+TEST(BuiltinsCellWidth, RoundsDisplayedWidthHalfUp) {
+  // Stored Calibri 11 widths and the whole number Excel reports for each.
+  struct Case {
+    double stored;
+    double expected;
+  };
+  const Case cases[] = {
+      {9.140625, 8.0},      // shown as 8.43
+      {2.28515625, 2.0},    // shown as 1.57
+      {10.140625, 9.0},     // shown as 9.43
+      {0.85546875, 1.0},    // shown as 0.5
+      {255.7109375, 255.0}  // the widest column
+  };
+  for (const Case& c : cases) {
+    Workbook wb = Workbook::create();
+    wb.sheet(0).mutable_layout().columns.push_back(ColumnLayout{0U, 0U, c.stored, false, 0U});
+    const Value v = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_array());
+    EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), c.expected) << c.stored;
+  }
+}
+
+TEST(BuiltinsCellWidth, DefaultFollowsBaseColumnWidth) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).mutable_format_defaults().base_col_width = 10.0;
+  // Base 10 rounds up to 80 px, shown as 10.71.
+  const Value v = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 11.0);
+  EXPECT_TRUE(v.as_array()->cells[1].as_boolean());
 }
 
 TEST(BuiltinsCellWidth, ExplicitZeroAndStyleOnlyColumnLayoutsRemainDistinct) {

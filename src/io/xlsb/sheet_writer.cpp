@@ -18,6 +18,7 @@
 #include "cell.h"
 #include "cf/cf_types.h"
 #include "io/dynamic_array_formula.h"
+#include "io/protection_xml.h"
 #include "io/xlsb/cell_writer.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
@@ -27,7 +28,9 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_properties_records.h"
+#include "io/xlsb/sparkline_records.h"
 #include "io/xlsb/sst_writer.h"
+#include "io/xlsb/table_records.h"
 #include "io/xlsb/view_records.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
@@ -79,6 +82,9 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   if (layout != nullptr ? layout->hidden : default_hidden) {
     flags2 |= 0x10U;  // fDyZero
   }
+  if (layout != nullptr && layout->collapsed) {
+    flags2 |= 0x08U;  // fCollapsed
+  }
   if (layout != nullptr && layout->custom_height) {
     flags2 |= 0x20U;  // fUnsynced
   }
@@ -121,6 +127,9 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
       flags |= 0x0001U;
     }
     flags |= static_cast<std::uint16_t>((column.outline_level & 0x07U) << 8U);
+    if (column.collapsed) {
+      flags |= 0x0800U;  // fCollapsed
+    }
     emit_u16(p, flags);
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtColInfo), p);
   }
@@ -133,44 +142,10 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
 /// worksheet: visible grid/headings and 100% zoom. The default metrics come
 /// from the sheet's modelled `<sheetFormatPr>` values.
 void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const SheetView& sheet_view,
-                                     const SheetFormatDefaults& defaults) {
+                                     const SheetFormatDefaults& defaults, std::uint32_t workbook_views) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsViews), ByteSpan{});
-  std::vector<std::uint8_t> view;
-  std::uint16_t flags = 0x0380U;  // ruler, outline symbols, default gridline color
-  if (sheet_view.show_grid_lines) {
-    flags |= 0x0004U;
-  }
-  if (sheet_view.show_row_col_headers) {
-    flags |= 0x0008U;
-  }
-  if (sheet_view.show_zeros) {
-    flags |= 0x0010U;
-  }
-  if (sheet_view.right_to_left) {
-    flags |= 0x0020U;
-  }
-  if (sheet_view.tab_selected) {
-    flags |= 0x0040U;
-  }
-  emit_u16(view, flags);
-  emit_u32(view, 0U);  // XLVNORMAL
-  std::uint32_t top_row = 0U;
-  std::uint32_t left_col = 0U;
-  (void)a1::parse_a1_ref(sheet_view.top_left_cell, &top_row, &left_col);
-  emit_u32(view, top_row);   // rwTop
-  emit_u32(view, left_col);  // colLeft
-  emit_u8(view, 0x40U);      // default gridline color
-  emit_u8(view, 0U);
-  emit_u16(view, 0U);
-  const std::uint32_t zoom = std::clamp(sheet_view.zoom_scale, 10U, 400U);
-  emit_u16(view, static_cast<std::uint16_t>(zoom));
-  emit_u16(view, 0U);
-  emit_u16(view, 0U);
-  emit_u16(view, 0U);
-  emit_u32(view, 0U);  // workbook view index
-  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView), view);
-  emit_pane_and_selections(dst, sheet_view);
-  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsView), ByteSpan{});
+  emit_ws_view(dst, sheet_view, 0U);
+  emit_extra_ws_views(dst, sheet_view, workbook_views);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
 
   emit_ws_fmt_info(dst, defaults);
@@ -295,6 +270,12 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
 
 }  // namespace
 
+std::size_t unwritten_protected_range_count(const Sheet& sheet) {
+  const std::vector<ProtectedRange> ranges = read_protected_ranges(sheet.raw_extensions());
+  return static_cast<std::size_t>(std::count_if(ranges.begin(), ranges.end(),
+                                                [](const ProtectedRange& r) { return !range_protection_writable(r); }));
+}
+
 std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
   std::unordered_set<std::string> used;
   std::unordered_map<std::string, std::string> assigned_targets;
@@ -344,11 +325,11 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
   return ids;
 }
 
-Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
-                                                      const std::vector<std::string>& sheet_names,
-                                                      const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                                      std::uint32_t* downgraded_formula_count,
-                                                      std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes) {
+Expected<std::vector<std::uint8_t>, Error> emit_sheet(
+    const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
+    const SheetRangeTable& sheet_ranges, const NameTable& name_table, std::uint32_t* downgraded_formula_count,
+    std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes, const std::vector<std::string>& table_part_rel_ids,
+    std::uint32_t workbook_views, std::uint32_t* deferred_sparkline_groups) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -358,12 +339,12 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   EmitWorksheetDimensions(body, sheet);
   // BrtWsFmtInfo always carries a row height, so an unset default is written
   // as Excel's standard row height.
-  SheetFormatDefaults format_defaults = sheet.format_defaults();
+  SheetFormatDefaults format_defaults = WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout());
   if (!format_defaults.has_default_row_height) {
     format_defaults.default_row_height = ooxml_defaults::kStandardRowHeightPt;
     format_defaults.has_default_row_height = true;
   }
-  EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults);
+  EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views);
   EmitColumnInfos(body, sheet.layout());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 
@@ -533,6 +514,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
           if (downgraded_to_literal) {
             downgraded_array_anchors.insert(anchor_key(row, col));
           }
+        } else if (const DataTable* table = sheet.data_table_anchored_at(row, col);
+                   table != nullptr && cell->formula_text.empty()) {
+          emit_data_table_anchor(body, *cell, col, *table, sst);
         } else if (auto r = emit_cell(body, *cell, row, col, always, sst, sheet_names, sheet_ranges, name_table,
                                       downgraded_formula_count, name_shapes);
                    !r) {
@@ -567,12 +551,27 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   if (auto added = add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked); !added) {
     return std::move(added.error());
   }
+  // Custom icon sets and sparkline groups are model-owned future records.
+  const FeatureFormulaWriteContext frt_ctx{sheet_names, sheet_ranges, name_table};
+  if (auto icons = add_x14_icon_sets(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx); !icons) {
+    return std::move(icons.error());
+  }
+  if (auto sparklines = add_sparkline_groups(tail.after_hyperlinks, sheet.ext_lst_xml(), frt_ctx, sheet.name(),
+                                             deferred_sparkline_groups);
+      !sparklines) {
+    return std::move(sparklines.error());
+  }
+  // Table parts are model-owned; their BrtListPart records join the tail.
+  splice_list_parts(tail.after_hyperlinks, table_part_rel_ids);
   const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
-  // Protection, conditional formatting and data validation are emitted
-  // from the model. Protection leads the tail: the one record the grammar
+  // Sheet and range protection, conditional formatting and data validation
+  // are emitted from the model. Protection leads the tail: the one record the grammar
   // puts ahead of it (BrtSheetCalcProp) is one Excel does not persist.
   if (auto protection = emit_sheet_protection(body, sheet.protection()); !protection) {
     return std::move(protection.error());
+  }
+  if (auto ranges = emit_range_protections(body, read_protected_ranges(sheet.raw_extensions())); !ranges) {
+    return std::move(ranges.error());
   }
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);

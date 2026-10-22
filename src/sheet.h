@@ -17,7 +17,9 @@
 #define FORMULON_SHEET_H_
 
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -34,6 +36,7 @@
 
 #include "auto_filter.h"
 #include "cell.h"
+#include "data_table.h"
 #include "merge_range.h"
 #include "sheet_layout.h"
 #include "sheet_passthrough.h"
@@ -149,6 +152,34 @@ struct CellComment {
   std::string author;
   std::string text;
   std::string uid;
+  /// The note box is shown without hovering (`visibility:visible` in the VML).
+  bool visible = false;
+  /// The VML `x:Anchor` box when the source carried one: left column and
+  /// offset, top row and offset, right column and offset, bottom row and
+  /// offset. Columns and rows are relative to the note's cell so the box
+  /// follows the note through row and column edits.
+  bool has_box = false;
+  std::array<std::int32_t, 8> box{};
+  /// The source `<v:shape>` element text, empty for a note authored here. A
+  /// regenerated VML drawing re-emits it with only the anchor, visibility and
+  /// cell patched.
+  std::string vml_shape;
+};
+
+/// What a comment VML drawing says about one note shape, compared to decide
+/// whether the source VML can be re-emitted as it was.
+struct CommentShape {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  bool visible = false;
+  bool has_box = false;
+  std::array<std::int32_t, 8> box{};
+  std::string xml;  ///< `CellComment::vml_shape` of the note, empty for none.
+
+  friend bool operator==(const CommentShape& lhs, const CommentShape& rhs) noexcept {
+    return lhs.row == rhs.row && lhs.col == rhs.col && lhs.visible == rhs.visible && lhs.has_box == rhs.has_box &&
+           lhs.box == rhs.box && lhs.xml == rhs.xml;
+  }
 };
 
 /// One `<dataValidation>` block: a list of cell ranges that share a
@@ -242,9 +273,10 @@ enum class SheetVisibility : std::uint8_t {
 /// of one pane. Stored as the OOXML spellings so unusual `sqref` forms
 /// (whole rows or columns, several ranges) round-trip verbatim.
 struct SheetSelection {
-  std::string pane;         ///< `pane`; empty is the schema default `topLeft`, as is "topLeft".
-  std::string active_cell;  ///< `activeCell` (A1 form); empty when absent.
-  std::string sqref;        ///< `sqref`, space-separated ranges; empty is the active cell alone.
+  std::string pane;                  ///< `pane`; empty is the schema default `topLeft`, as is "topLeft".
+  std::string active_cell;           ///< `activeCell` (A1 form); empty when absent.
+  std::string sqref;                 ///< `sqref`, space-separated ranges; empty is the active cell alone.
+  std::uint32_t active_cell_id = 0;  ///< `activeCellId`: the `sqref` range holding the active cell.
 };
 
 /// Per-sheet view state (zoom, frozen panes, tab visibility).
@@ -286,6 +318,26 @@ struct SheetView {
   bool show_zeros = true;            ///< `showZeros` (default true).
   bool right_to_left = false;        ///< `rightToLeft` (default false).
   bool tab_selected = false;         ///< `tabSelected` (default false).
+  bool window_protection = false;    ///< `windowProtection` (default false).
+  bool show_formulas = false;        ///< `showFormulas`: cells show their formula text (default false).
+  bool show_ruler = true;            ///< `showRuler` (default true).
+  bool show_outline_symbols = true;  ///< `showOutlineSymbols` (default true).
+  bool default_grid_color = true;    ///< `defaultGridColor` (default true).
+  bool show_white_space = true;      ///< `showWhiteSpace` (default true).
+  /// `colorId`: palette index of a custom grid colour (default 64, automatic).
+  static constexpr std::uint32_t kDefaultColorId = 64U;
+  std::uint32_t color_id = kDefaultColorId;
+  /// `zoomScaleNormal` / `zoomScaleSheetLayoutView` / `zoomScalePageLayoutView`;
+  /// 0 is absent.
+  std::uint32_t zoom_scale_normal = 0;
+  std::uint32_t zoom_scale_sheet_layout_view = 0;
+  std::uint32_t zoom_scale_page_layout_view = 0;
+  /// Raw `<pivotSelection>` and `<extLst>` children of `<sheetView>`, kept
+  /// verbatim and re-emitted after the selections.
+  std::string tail_xml;
+  /// Raw `<sheetView>` elements after the first (one per extra workbook
+  /// window), kept verbatim and re-emitted after the modelled view.
+  std::string extra_views_xml;
   /// `view` mode: empty (== "normal"), "pageBreakPreview", or
   /// "pageLayout". Stored verbatim so unknown future values round-trip.
   std::string view_mode;
@@ -349,24 +401,33 @@ struct SheetView {
     if (rows == freeze_rows && cols == freeze_cols) {
       return;
     }
-    std::vector<SheetSelection> kept;
-    for (SheetSelection& selection : selections) {
-      if (pane_key(selection.pane) == pane_key(effective_active_pane())) {
-        kept.push_back(std::move(selection));
-        break;
-      }
+    replace_panes([&] {
+      freeze_rows = rows;
+      freeze_cols = cols;
+      split_x = 0.0;
+      split_y = 0.0;
+    });
+  }
+
+  /// Splits the view at `x` / `y` twips (zero for none on that axis; both zero
+  /// removes the split). A negative or non-finite value is rejected and leaves
+  /// the view unchanged. A change replaces any freeze and re-derives the panes
+  /// as `set_freeze` does.
+  /// @return false when an argument was rejected.
+  bool set_split(double x, double y) {
+    if (!std::isfinite(x) || !std::isfinite(y) || x < 0.0 || y < 0.0) {
+      return false;
     }
-    freeze_rows = rows;
-    freeze_cols = cols;
-    frozen_split = false;
-    split_x = 0.0;
-    split_y = 0.0;
-    pane_top_left_cell.clear();
-    active_pane.clear();
-    selections = std::move(kept);
-    for (SheetSelection& selection : selections) {
-      selection.pane = pane_key(effective_active_pane());
+    if (!is_frozen() && x == split_x && y == split_y) {
+      return true;
     }
+    replace_panes([&] {
+      freeze_rows = 0;
+      freeze_cols = 0;
+      split_x = x;
+      split_y = y;
+    });
+    return true;
   }
 
   /// The one visibility state the two bits stand for.
@@ -387,6 +448,28 @@ struct SheetView {
   void set_visibility(SheetVisibility state) noexcept {
     tab_hidden = state != SheetVisibility::kVisible;
     tab_very_hidden = state == SheetVisibility::kVeryHidden;
+  }
+
+ private:
+  /// Runs `change` on the pane layout, then re-derives the pane origin and
+  /// active pane and re-homes the active selection to the new active pane.
+  template <typename Change>
+  void replace_panes(Change&& change) {
+    std::vector<SheetSelection> kept;
+    for (SheetSelection& selection : selections) {
+      if (pane_key(selection.pane) == pane_key(effective_active_pane())) {
+        kept.push_back(std::move(selection));
+        break;
+      }
+    }
+    change();
+    frozen_split = false;
+    pane_top_left_cell.clear();
+    active_pane.clear();
+    selections = std::move(kept);
+    for (SheetSelection& selection : selections) {
+      selection.pane = pane_key(effective_active_pane());
+    }
   }
 };
 
@@ -578,6 +661,9 @@ class RowCells {
   /// Adds `count` to every key at or after `col`; keys pushed to `kMaxCols` or
   /// beyond are dropped with their cells.
   void shift_cols_from(std::uint32_t col, std::uint32_t count);
+
+  /// Drops the cell stored at `col`, leaving the other keys where they are.
+  void erase(std::uint32_t col);
 
   /// Drops the keys in `[col, col + count)` with their cells and subtracts
   /// `count` from every key after the band.
@@ -973,6 +1059,11 @@ class Sheet {
   /// moves. Naming the rehash would send a caller to guard the one operation
   /// that is safe while leaving `ensure` — the one that is not — unguarded.
   const Cell* cell_at(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// Drops the stored cell at `(row, col)`, if any, so the coordinate reads as
+  /// never written. Does not touch the dependency graph or spill state; use
+  /// `Workbook` setters for a user-visible edit.
+  void erase_cell(std::uint32_t row, std::uint32_t col);
 
   /// Convenience predicate equivalent to `cell_at(row, col) != nullptr`.
   bool has_cell(std::uint32_t row, std::uint32_t col) const noexcept;
@@ -1442,6 +1533,40 @@ class Sheet {
   std::vector<MergeRange>& mutable_merges() noexcept { return merges_; }
 
   // ---------------------------------------------------------------------------
+  // What-If data tables
+  // ---------------------------------------------------------------------------
+
+  /// The data tables of this sheet. Their result cells are literal cells in
+  /// each table's `ref`; `Workbook` refuses writes into them and recomputes
+  /// them on recalc.
+  const std::vector<DataTable>& data_tables() const noexcept { return data_tables_; }
+
+  /// Mutable access for the readers and the `Workbook` mutators, which keep
+  /// the tables non-overlapping.
+  std::vector<DataTable>& mutable_data_tables() noexcept { return data_tables_; }
+
+  /// The data table whose result range starts at `(row, col)`, or null: the
+  /// cell the table's formula is stored on.
+  const DataTable* data_table_anchored_at(std::uint32_t row, std::uint32_t col) const noexcept {
+    for (const DataTable& table : data_tables_) {
+      if (table.ref.first_row == row && table.ref.first_col == col) {
+        return &table;
+      }
+    }
+    return nullptr;
+  }
+
+  /// The data table whose result range contains `(row, col)`, or null.
+  const DataTable* data_table_covering(std::uint32_t row, std::uint32_t col) const noexcept {
+    for (const DataTable& table : data_tables_) {
+      if (table.contains(row, col)) {
+        return &table;
+      }
+    }
+    return nullptr;
+  }
+
+  // ---------------------------------------------------------------------------
   // Hyperlinks
   // ---------------------------------------------------------------------------
 
@@ -1478,6 +1603,15 @@ class Sheet {
   /// Sorted, de-duplicated `(row, col)` anchors of every note and thread.
   /// These are the cells the comment VML drawing carries a shape for.
   std::vector<std::pair<std::uint32_t, std::uint32_t>> comment_anchor_set() const;
+
+  /// One `CommentShape` per anchor of `comment_anchor_set()`, in the same
+  /// order. A thread's legacy stub note carries no visibility or box.
+  std::vector<CommentShape> comment_shapes() const;
+
+  /// The `<authors>` table of the source comments part, minus thread stubs.
+  /// Kept so authors no remaining note names still survive a save.
+  const std::vector<std::string>& comment_authors() const noexcept { return comment_authors_; }
+  void set_comment_authors(std::vector<std::string> authors) { comment_authors_ = std::move(authors); }
 
   // ---------------------------------------------------------------------------
   // Data validations
@@ -1577,15 +1711,11 @@ class Sheet {
   const std::string& comment_vml_path() const noexcept { return comment_vml_path_; }
   void set_comment_vml_path(std::string path) { comment_vml_path_ = std::move(path); }
 
-  /// `comment_anchor_set()` as it stood when the VML at `comment_vml_path()`
-  /// was read. The writer re-emits that VML verbatim only while the anchors
+  /// `comment_shapes()` as it stood when the VML at `comment_vml_path()`
+  /// was read. The writer re-emits that VML verbatim only while the shapes
   /// still match, and regenerates it from the model otherwise.
-  const std::vector<std::pair<std::uint32_t, std::uint32_t>>& comment_vml_anchors() const noexcept {
-    return comment_vml_anchors_;
-  }
-  void set_comment_vml_anchors(std::vector<std::pair<std::uint32_t, std::uint32_t>> anchors) {
-    comment_vml_anchors_ = std::move(anchors);
-  }
+  const std::vector<CommentShape>& comment_vml_shapes() const noexcept { return comment_vml_shapes_; }
+  void set_comment_vml_shapes(std::vector<CommentShape> shapes) { comment_vml_shapes_ = std::move(shapes); }
 
   /// Relationships from this worksheet's `.rels` part that Formulon does
   /// not otherwise model (OLE objects, controls, slicers, and so on).
@@ -1809,6 +1939,8 @@ class Sheet {
   // Merge ranges from `<mergeCells>`. Empty by default; populated by the
   // OOXML reader and round-tripped through the writer.
   std::vector<MergeRange> merges_;
+  // What-If data tables (`<f t="dataTable">`), shifted with row/column edits.
+  std::vector<DataTable> data_tables_;
   // Hyperlinks from `<hyperlinks>` plus the sheet's rels file. Empty by default.
   std::vector<Hyperlink> hyperlinks_;
   // Per-cell text comments aggregated from `xl/comments<N>.xml`. Empty by default.
@@ -1842,8 +1974,9 @@ class Sheet {
   // writer may assign a new output filename, but uses this path to find the
   // original bytes in passthrough storage.
   std::string comment_vml_path_;
-  // Comment anchors the source VML at `comment_vml_path_` was read with.
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> comment_vml_anchors_;
+  // Comment shapes the source VML at `comment_vml_path_` was read with.
+  std::vector<CommentShape> comment_vml_shapes_;
+  std::vector<std::string> comment_authors_;
   // Unmodelled entries from `xl/worksheets/_rels/sheetN.xml.rels`.
   std::vector<UnknownRelationship> unknown_relationships_;
   // Sheet AutoFilter, or empty.

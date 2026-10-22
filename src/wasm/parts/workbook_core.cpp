@@ -320,6 +320,24 @@ JsStatus JsWorkbook::setDefinedNameScoped(const std::string& name, const std::st
   return status_from_rc(fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId));
 }
 
+JsStatus JsWorkbook::setDefinedNameAttrs(const std::string& name, int32_t localSheetId, emscripten::val attrs) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("setDefinedNameAttrs");
+  const emscripten::val comment_value = reader.value(attrs, "comment", "attrs.comment");
+  const emscripten::val hidden_value = reader.value(attrs, "hidden", "attrs.hidden");
+  const bool has_comment = js_value_present(comment_value);
+  const std::string comment = has_comment ? reader.string(attrs, "comment", "attrs.comment") : std::string();
+  const int32_t hidden =
+      js_value_present(hidden_value) ? (reader.boolean_value(hidden_value, false, "attrs.hidden") ? 1 : 0) : -1;
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(fm_workbook_set_defined_name_attrs(handle_, name.c_str(), localSheetId,
+                                                           has_comment ? comment.c_str() : nullptr, hidden));
+}
+
 // ---- Row / column edits --------------------------------------------------
 
 JsStatus JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {
@@ -470,6 +488,70 @@ JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
     return invalid_handle_status();
   }
   return status_from_rc(fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode)));
+}
+
+JsNumberResult JsWorkbook::fullPrecision() const {
+  if (handle_ == nullptr) {
+    return number_result(kBindingInvalidHandle, 0.0);
+  }
+  std::int32_t value = 1;
+  const fm_status_t rc = fm_workbook_full_precision(handle_, &value);
+  return number_result(rc, static_cast<double>(value));
+}
+
+JsStatus JsWorkbook::setFullPrecision(bool fullPrecision) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_workbook_set_full_precision(handle_, fullPrecision ? 1 : 0));
+}
+
+JsNumberResult JsWorkbook::calcOnSave() const {
+  if (handle_ == nullptr) {
+    return number_result(kBindingInvalidHandle, 0.0);
+  }
+  std::int32_t value = 1;
+  const fm_status_t rc = fm_workbook_calc_on_save(handle_, &value);
+  return number_result(rc, static_cast<double>(value));
+}
+
+JsStatus JsWorkbook::setCalcOnSave(bool calcOnSave) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_workbook_set_calc_on_save(handle_, calcOnSave ? 1 : 0));
+}
+
+JsNumberResult JsWorkbook::refMode() const {
+  if (handle_ == nullptr) {
+    return number_result(kBindingInvalidHandle, 0.0);
+  }
+  fm_ref_mode_t mode = FM_REF_MODE_A1;
+  const fm_status_t rc = fm_workbook_ref_mode(handle_, &mode);
+  return number_result(rc, static_cast<double>(mode));
+}
+
+JsStatus JsWorkbook::setRefMode(uint32_t mode) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_workbook_set_ref_mode(handle_, static_cast<std::int32_t>(mode)));
+}
+
+JsNumberResult JsWorkbook::date1904() const {
+  if (handle_ == nullptr) {
+    return number_result(kBindingInvalidHandle, 0.0);
+  }
+  std::int32_t value = 0;
+  const fm_status_t rc = fm_workbook_date1904(handle_, &value);
+  return number_result(rc, static_cast<double>(value));
+}
+
+JsStatus JsWorkbook::setDate1904(bool date1904) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_workbook_set_date1904(handle_, date1904 ? 1 : 0));
 }
 
 emscripten::val JsWorkbook::pinnedNow() const {

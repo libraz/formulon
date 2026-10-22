@@ -792,3 +792,36 @@ test('scroll origin, pane origin and selection round-trip through save', async (
     wb.dispose();
   }
 });
+
+test('sheet split reads back, round-trips and exchanges with the freeze', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    assert.deepEqual([wb.getSheetView(0).view.splitX, wb.getSheetView(0).view.splitY], [0, 0]);
+    assert.ok(wb.setSheetSplit(0, 2000, 1500).ok);
+    const view = wb.getSheetView(0).view;
+    assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
+    const saved = wb.save();
+    assert.ok(saved.status.ok, JSON.stringify(saved.status));
+    const loaded = mod.Workbook.loadBytes(saved.bytes);
+    try {
+      const got = loaded.getSheetView(0).view;
+      assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
+    } finally {
+      loaded.dispose();
+    }
+    assert.ok(wb.setSheetFreeze(0, 2, 1).ok);
+    assert.deepEqual([wb.getSheetView(0).view.splitX, wb.getSheetView(0).view.splitY], [0, 0]);
+    assert.ok(wb.setSheetSplit(0, 0, 900).ok);
+    const split = wb.getSheetView(0).view;
+    assert.deepEqual([split.splitX, split.splitY, split.freezeRows, split.freezeCols], [0, 900, 0, 0]);
+    assert.equal(wb.setSheetSplit(0, -1, 0).ok, false);
+    assert.equal(wb.setSheetSplit(0, 0, Number.NaN).ok, false);
+    assert.equal(wb.setSheetSplit(0, Number.POSITIVE_INFINITY, 0).ok, false);
+    assert.equal(wb.getSheetView(0).view.splitY, 900);
+    assert.ok(wb.setSheetSplit(0, 0, 0).ok);
+    assert.equal(wb.getSheetView(0).view.splitY, 0);
+  } finally {
+    wb.dispose();
+  }
+});

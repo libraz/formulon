@@ -74,12 +74,48 @@ class DefinedName(NamedTuple):
     name: str
     formula: str
     local_sheet_id: int
+    comment: str = ...
+    hidden: bool = ...
+
+class TableColumn(NamedTuple):
+    name: str
+    totals_row_function: str = ...
+    totals_row_label: str = ...
+    totals_row_formula: str = ...
 
 class Table(NamedTuple):
     name: str
     display_name: str
     ref: str
     sheet_index: int
+    style_name: str = ...
+    has_style_info: bool = ...
+    show_first_column: bool = ...
+    show_last_column: bool = ...
+    show_row_stripes: bool = ...
+    show_column_stripes: bool = ...
+    header_row_count: int = ...
+    totals_row_count: int = ...
+    columns: Tuple[TableColumn, ...] = ...
+
+class TableStyleElement:
+    type: str
+    size: int
+    dxf_id: Optional[int]
+    def __init__(self, type: str, size: int = ..., dxf_id: Optional[int] = ...) -> None: ...
+
+class TableStyle:
+    name: str
+    pivot: bool
+    table: bool
+    elements: Tuple[TableStyleElement, ...]
+    def __init__(
+        self,
+        name: str,
+        pivot: bool = ...,
+        table: bool = ...,
+        elements: Tuple[TableStyleElement, ...] = ...,
+    ) -> None: ...
 
 class PassthroughPart(NamedTuple):
     path: str
@@ -160,6 +196,8 @@ class SheetFormatDefaults:
     has_default_row_height: bool
     effective_default_col_width: float
     effective_default_row_height: float
+    custom_height: Optional[bool]
+    zero_height: Optional[bool]
     def __init__(
         self,
         default_col_width: float = ...,
@@ -169,6 +207,8 @@ class SheetFormatDefaults:
         has_default_row_height: bool = ...,
         effective_default_col_width: float = ...,
         effective_default_row_height: float = ...,
+        custom_height: Optional[bool] = ...,
+        zero_height: Optional[bool] = ...,
     ) -> None: ...
 
 class WidthModel:
@@ -386,6 +426,36 @@ class AnchorEditAs(IntEnum):
     ONE_CELL = 1
     ABSOLUTE = 2
 
+class ShapePaint(IntEnum):
+    UNSET = 0
+    SOLID = 1
+    NONE = 2
+    OTHER = 3
+
+class SlicerSortOrder(IntEnum):
+    ASCENDING = 0
+    DESCENDING = 1
+
+class SlicerCrossFilter(IntEnum):
+    SHOW_ITEMS_WITH_DATA_AT_TOP = 0
+    SHOW_ITEMS_WITH_NO_DATA = 1
+    NONE = 2
+
+class SparklineType(IntEnum):
+    LINE = 0
+    COLUMN = 1
+    STACKED = 2
+
+class SparklineAxisType(IntEnum):
+    INDIVIDUAL = 0
+    GROUP = 1
+    CUSTOM = 2
+
+class SparklineEmptyCells(IntEnum):
+    GAP = 0
+    ZERO = 1
+    SPAN = 2
+
 class ColorResolution(IntEnum):
     EXACT = 0
     DEFAULT_THEME = 1
@@ -408,6 +478,10 @@ class CalcMode(IntEnum):
     AUTO = 0
     MANUAL = 1
     AUTO_NO_TABLE = 2
+
+class RefMode(IntEnum):
+    A1 = 0
+    R1C1 = 1
 
 class SheetVisibility(IntEnum):
     VISIBLE = 0
@@ -794,6 +868,195 @@ class DrawingObject:
         name: str,
         descr: str,
         media_path: str,
+    ) -> None: ...
+
+class Shape:
+    object_id: int
+    kind: Union[DrawingObjectKind, int]
+    anchor_kind: Union[AnchorKind, int]
+    edit_as: Union[AnchorEditAs, int]
+    from_row: int
+    from_col: int
+    from_row_off: int
+    from_col_off: int
+    to_row: int
+    to_col: int
+    to_row_off: int
+    to_col_off: int
+    cx: int
+    cy: int
+    name: str
+    prst: str
+    text: str
+    text_box: bool
+    fill_kind: Union[ShapePaint, int]
+    fill_rgb: int
+    line_kind: Union[ShapePaint, int]
+    line_rgb: int
+    line_width_emu: int
+    rotation: int
+    hidden: bool
+    def __init__(
+        self,
+        object_id: int,
+        kind: Union[DrawingObjectKind, int],
+        anchor_kind: Union[AnchorKind, int],
+        edit_as: Union[AnchorEditAs, int],
+        from_row: int,
+        from_col: int,
+        from_row_off: int,
+        from_col_off: int,
+        to_row: int,
+        to_col: int,
+        to_row_off: int,
+        to_col_off: int,
+        cx: int,
+        cy: int,
+        name: str,
+        prst: str,
+        text: str,
+        text_box: bool,
+        fill_kind: Union[ShapePaint, int],
+        fill_rgb: int,
+        line_kind: Union[ShapePaint, int],
+        line_rgb: int,
+        line_width_emu: int,
+        rotation: int,
+        hidden: bool,
+    ) -> None: ...
+
+class Slicer:
+    object_id: int
+    name: str
+    caption: str
+    cache_name: str
+    table_name: str
+    column_name: str
+    style: str
+    column_count: int
+    row_height: int
+    sort_order: Union[SlicerSortOrder, int]
+    cross_filter: Union[SlicerCrossFilter, int]
+    anchor_kind: Union[AnchorKind, int]
+    from_row: int
+    from_col: int
+    from_row_off: int
+    from_col_off: int
+    to_row: int
+    to_col: int
+    to_row_off: int
+    to_col_off: int
+    def __init__(
+        self,
+        object_id: int,
+        name: str,
+        caption: str,
+        cache_name: str,
+        table_name: str,
+        column_name: str,
+        style: str,
+        column_count: int,
+        row_height: int,
+        sort_order: Union[SlicerSortOrder, int],
+        cross_filter: Union[SlicerCrossFilter, int],
+        anchor_kind: Union[AnchorKind, int],
+        from_row: int,
+        from_col: int,
+        from_row_off: int,
+        from_col_off: int,
+        to_row: int,
+        to_col: int,
+        to_row_off: int,
+        to_col_off: int,
+    ) -> None: ...
+
+class DataTableInput:
+    row: int
+    col: int
+    deleted: bool
+    def __init__(self, row: int, col: int, deleted: bool) -> None: ...
+
+class DataTable:
+    first_row: int
+    first_col: int
+    last_row: int
+    last_col: int
+    two_dimensional: bool
+    row_oriented: bool
+    row_input: Optional[DataTableInput]
+    col_input: Optional[DataTableInput]
+    def __init__(
+        self,
+        first_row: int,
+        first_col: int,
+        last_row: int,
+        last_col: int,
+        two_dimensional: bool,
+        row_oriented: bool,
+        row_input: Optional[DataTableInput],
+        col_input: Optional[DataTableInput],
+    ) -> None: ...
+
+class Sparkline:
+    formula: str
+    location: str
+    def __init__(self, formula: str, location: str) -> None: ...
+
+class SparklineGroup:
+    type: Union[SparklineType, int]
+    color_series: ColorSpec
+    color_negative: ColorSpec
+    color_axis: ColorSpec
+    color_markers: ColorSpec
+    color_first: ColorSpec
+    color_last: ColorSpec
+    color_high: ColorSpec
+    color_low: ColorSpec
+    markers: bool
+    high: bool
+    low: bool
+    first: bool
+    last: bool
+    negative: bool
+    display_x_axis: bool
+    display_hidden: bool
+    min_axis_type: Union[SparklineAxisType, int]
+    max_axis_type: Union[SparklineAxisType, int]
+    manual_min: Optional[float]
+    manual_max: Optional[float]
+    date_axis: bool
+    date_axis_ref: str
+    line_weight: float
+    empty_cells_as: Union[SparklineEmptyCells, int]
+    sparklines: List[Sparkline]
+    def __init__(
+        self,
+        type: Union[SparklineType, int] = ...,
+        color_series: ColorSpec = ...,
+        color_negative: ColorSpec = ...,
+        color_axis: ColorSpec = ...,
+        color_markers: ColorSpec = ...,
+        color_first: ColorSpec = ...,
+        color_last: ColorSpec = ...,
+        color_high: ColorSpec = ...,
+        color_low: ColorSpec = ...,
+        markers: bool = ...,
+        high: bool = ...,
+        low: bool = ...,
+        first: bool = ...,
+        last: bool = ...,
+        negative: bool = ...,
+        display_x_axis: bool = ...,
+        display_hidden: bool = ...,
+        min_axis_type: Union[SparklineAxisType, int] = ...,
+        max_axis_type: Union[SparklineAxisType, int] = ...,
+        manual_min: Optional[float] = ...,
+        manual_max: Optional[float] = ...,
+        date_axis: bool = ...,
+        date_axis_ref: str = ...,
+        line_weight: float = ...,
+        empty_cells_as: Union[SparklineEmptyCells, int] = ...,
+        sparklines: List[Sparkline] = ...,
     ) -> None: ...
 
 class ChartPlotType(IntEnum):
@@ -1228,6 +1491,58 @@ class DataValidationInput:
         prompt_message: str = ...,
     ) -> None: ...
 
+class WorkbookProtection:
+    lock_structure: bool
+    lock_windows: bool
+    lock_revision: bool
+    workbook_password: str
+    workbook_algorithm_name: str
+    workbook_hash_value: str
+    workbook_salt_value: str
+    workbook_spin_count: int
+    revisions_password: str
+    revisions_algorithm_name: str
+    revisions_hash_value: str
+    revisions_salt_value: str
+    revisions_spin_count: int
+    def __init__(
+        self,
+        lock_structure: bool = ...,
+        lock_windows: bool = ...,
+        lock_revision: bool = ...,
+        workbook_password: str = ...,
+        workbook_algorithm_name: str = ...,
+        workbook_hash_value: str = ...,
+        workbook_salt_value: str = ...,
+        workbook_spin_count: int = ...,
+        revisions_password: str = ...,
+        revisions_algorithm_name: str = ...,
+        revisions_hash_value: str = ...,
+        revisions_salt_value: str = ...,
+        revisions_spin_count: int = ...,
+    ) -> None: ...
+
+class ProtectedRange:
+    name: str
+    sqref: str
+    password: str
+    algorithm_name: str
+    hash_value: str
+    salt_value: str
+    spin_count: int
+    security_descriptor: str
+    def __init__(
+        self,
+        name: str,
+        sqref: str,
+        password: str = ...,
+        algorithm_name: str = ...,
+        hash_value: str = ...,
+        salt_value: str = ...,
+        spin_count: int = ...,
+        security_descriptor: str = ...,
+    ) -> None: ...
+
 class SheetProtection:
     enabled: bool
     algorithm_name: str
@@ -1301,6 +1616,10 @@ class SheetView:
     top_left_col: int
     pane_top_left_row: int
     pane_top_left_col: int
+    split_x: float
+    split_y: float
+    show_formulas: bool
+    show_outline_symbols: bool
 
 class ColumnLayout:
     first: int
@@ -1312,6 +1631,7 @@ class ColumnLayout:
     has_width: bool
     has_style: bool
     style_xf: int
+    collapsed: bool
 
 class RowLayout:
     row: int
@@ -1322,6 +1642,7 @@ class RowLayout:
     style_xf: int
     has_height: bool
     custom_height: bool
+    collapsed: bool
 
 class CfMatch:
     kind: int
@@ -1400,6 +1721,11 @@ class DataBar:
         direction: int = ...,
     ) -> None: ...
 
+class CfIcon:
+    icon_set: str
+    icon_id: int
+    def __init__(self, icon_set: str, icon_id: int = ...) -> None: ...
+
 class IconSet:
     name: int
     thresholds: List[CfValueObject]
@@ -1411,6 +1737,9 @@ class IconSet:
     # Lower bound of the lowest icon's bucket; a cell below it gets no icon.
     # `None` means Excel's default, `percent 0`.
     floor: Optional[CfValueObject]
+    # Custom icon set: the icon drawn for each level; empty when the set
+    # draws its own icons.
+    icons: List[CfIcon]
     def __init__(
         self,
         name: int,
@@ -1419,6 +1748,7 @@ class IconSet:
         show_value: bool = ...,
         percent: bool = ...,
         floor: Optional[CfValueObject] = ...,
+        icons: List[CfIcon] = ...,
     ) -> None: ...
 
 class ConditionalFormat:
@@ -1657,6 +1987,14 @@ class FontRecord:
     has_bold: bool
     has_italic: bool
     has_strike: bool
+    outline: bool
+    shadow: bool
+    condense: bool
+    extend: bool
+    has_outline: bool
+    has_shadow: bool
+    has_condense: bool
+    has_extend: bool
     underline: int
     vert_align: int
     has_family: bool
@@ -1677,6 +2015,14 @@ class FontRecord:
         has_bold: bool = ...,
         has_italic: bool = ...,
         has_strike: bool = ...,
+        outline: bool = ...,
+        shadow: bool = ...,
+        condense: bool = ...,
+        extend: bool = ...,
+        has_outline: bool = ...,
+        has_shadow: bool = ...,
+        has_condense: bool = ...,
+        has_extend: bool = ...,
         underline: int = ...,
         vert_align: int = ...,
         has_family: bool = ...,
@@ -1688,12 +2034,38 @@ class FontRecord:
         color: ColorSpec = ...,
     ) -> None: ...
 
+class GradientStop:
+    position: float
+    color_argb: int
+    color: ColorSpec
+    def __init__(self, position: float = ..., color_argb: int = ..., color: ColorSpec = ...) -> None: ...
+
+class GradientFill:
+    type: int
+    degree: float
+    left: float
+    right: float
+    top: float
+    bottom: float
+    stops: List[GradientStop]
+    def __init__(
+        self,
+        type: int = ...,
+        degree: float = ...,
+        left: float = ...,
+        right: float = ...,
+        top: float = ...,
+        bottom: float = ...,
+        stops: List[GradientStop] = ...,
+    ) -> None: ...
+
 class FillRecord:
     pattern: int
     fg_argb: int
     bg_argb: int
     fg: ColorSpec
     bg: ColorSpec
+    gradient: Optional[GradientFill]
     def __init__(
         self,
         pattern: int = ...,
@@ -1701,6 +2073,7 @@ class FillRecord:
         bg_argb: int = ...,
         fg: ColorSpec = ...,
         bg: ColorSpec = ...,
+        gradient: Optional[GradientFill] = ...,
     ) -> None: ...
 
 class DifferentialFormat:
@@ -1885,11 +2258,22 @@ class PivotFieldInfo:
     date_interval_days: int
     date_start_serial: float
     date_end_serial: float
+    default_subtotal: bool
+    subtotal_fns: Tuple[PivotAggregation, ...]
 
 class PivotItemInfo:
     name: str
     cache_index: int
     visible: bool
+
+class PivotStyleInfo:
+    present: bool
+    name: str
+    show_row_headers: bool
+    show_col_headers: bool
+    show_row_stripes: bool
+    show_col_stripes: bool
+    show_last_column: bool
 
 class PivotDataFieldSpec:
     name: Optional[str]
@@ -1991,6 +2375,14 @@ class Workbook:
     # Defined names.
     def set_defined_name(self, name: str, formula: str) -> None: ...
     def set_defined_name_scoped(self, name: str, formula: str, local_sheet_id: int) -> None: ...
+    def set_defined_name_attrs(
+        self,
+        name: str,
+        local_sheet_id: int = ...,
+        *,
+        comment: Optional[str] = ...,
+        hidden: Optional[bool] = ...,
+    ) -> None: ...
 
     # Row / column structural edits.
     def insert_rows(self, sheet: int, row: int, count: int) -> None: ...
@@ -2012,6 +2404,14 @@ class Workbook:
         last_col: int,
     ) -> int: ...
     def calc_mode(self) -> CalcMode: ...
+    def full_precision(self) -> bool: ...
+    def set_full_precision(self, full_precision: bool) -> None: ...
+    def calc_on_save(self) -> bool: ...
+    def set_calc_on_save(self, calc_on_save: bool) -> None: ...
+    def ref_mode(self) -> RefMode: ...
+    def set_ref_mode(self, mode: Union[RefMode, int]) -> None: ...
+    def date1904(self) -> bool: ...
+    def set_date1904(self, date1904: bool) -> None: ...
     def set_calc_mode(self, mode: Union[CalcMode, int]) -> None: ...
     def pinned_now(self) -> Optional[CivilTime]: ...
     def set_pinned_now(
@@ -2054,7 +2454,30 @@ class Workbook:
         style_name: str = ...,
         header_row: bool = ...,
         totals_row: bool = ...,
+        *,
+        show_first_column: Optional[bool] = ...,
+        show_last_column: Optional[bool] = ...,
+        show_row_stripes: Optional[bool] = ...,
+        show_column_stripes: Optional[bool] = ...,
     ) -> int: ...
+    def table_set_style_info(
+        self,
+        index: int,
+        style_name: Optional[str],
+        show_first_column: bool = ...,
+        show_last_column: bool = ...,
+        show_row_stripes: bool = ...,
+        show_column_stripes: bool = ...,
+    ) -> None: ...
+    def table_rename(self, index: int, name: str, display_name: Optional[str] = ...) -> None: ...
+    def table_set_column_totals(
+        self,
+        index: int,
+        column: int,
+        function: Optional[str] = ...,
+        label: Optional[str] = ...,
+        formula: Optional[str] = ...,
+    ) -> None: ...
     def table_update(
         self,
         index: int,
@@ -2062,6 +2485,13 @@ class Workbook:
         style_name: Optional[str] = ...,
         header_row: Optional[bool] = ...,
         totals_row: Optional[bool] = ...,
+        *,
+        name: Optional[str] = ...,
+        display_name: Optional[str] = ...,
+        show_first_column: Optional[bool] = ...,
+        show_last_column: Optional[bool] = ...,
+        show_row_stripes: Optional[bool] = ...,
+        show_column_stripes: Optional[bool] = ...,
     ) -> None: ...
     def table_remove(self, index: int) -> None: ...
 
@@ -2105,6 +2535,15 @@ class Workbook:
     # Comments.
     def get_comment(self, sheet: int, row: int, col: int) -> Optional[Comment]: ...
     def set_comment(self, sheet: int, row: int, col: int, author: str, text: str) -> None: ...
+    def get_comment_visible(self, sheet: int, row: int, col: int) -> Optional[bool]: ...
+    def set_comment_visible(self, sheet: int, row: int, col: int, visible: bool) -> None: ...
+    def get_workbook_protection(self) -> WorkbookProtection: ...
+    def set_workbook_protection(self, protection: WorkbookProtection) -> None: ...
+    def protected_range_count(self, sheet: int) -> int: ...
+    def get_protected_ranges(self, sheet: int) -> List[ProtectedRange]: ...
+    def add_protected_range(self, sheet: int, protected: ProtectedRange) -> None: ...
+    def update_protected_range(self, sheet: int, index: int, protected: ProtectedRange) -> None: ...
+    def remove_protected_range(self, sheet: int, index: int) -> None: ...
     def comment_count(self, sheet: int) -> int: ...
     def get_comments(self, sheet: int) -> List[CommentEntry]: ...
 
@@ -2135,10 +2574,13 @@ class Workbook:
     def set_sheet_show_grid_lines(self, sheet: int, show: bool) -> None: ...
     def set_sheet_show_row_col_headers(self, sheet: int, show: bool) -> None: ...
     def set_sheet_show_zeros(self, sheet: int, show: bool) -> None: ...
+    def set_sheet_show_formulas(self, sheet: int, show: bool) -> None: ...
+    def set_sheet_show_outline_symbols(self, sheet: int, show: bool) -> None: ...
     def set_sheet_right_to_left(self, sheet: int, right_to_left: bool) -> None: ...
     def set_sheet_tab_selected(self, sheet: int, selected: bool) -> None: ...
     def set_sheet_top_left(self, sheet: int, row: int, col: int) -> None: ...
     def set_sheet_pane_top_left(self, sheet: int, row: int, col: int) -> None: ...
+    def set_sheet_split(self, sheet: int, x_twips: float, y_twips: float) -> None: ...
     def get_sheet_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]: ...
     def set_sheet_selection(
         self, sheet: int, active_row: int, active_col: int, ranges: Sequence[MergeRange] = ...
@@ -2222,6 +2664,7 @@ class Workbook:
     def set_column_width(self, sheet: int, first: int, last: int, width: float) -> None: ...
     def set_column_hidden(self, sheet: int, first: int, last: int, hidden: bool) -> None: ...
     def set_column_outline(self, sheet: int, first: int, last: int, level: int) -> None: ...
+    def set_column_collapsed(self, sheet: int, first: int, last: int, collapsed: bool) -> None: ...
     def get_sheet_row_overrides(self, sheet: int) -> List[RowLayout]: ...
     def set_row_height(self, sheet: int, row: int, height: float) -> None: ...
     def clear_row_height(self, sheet: int, row: int) -> None: ...
@@ -2320,6 +2763,114 @@ class Workbook:
     def set_drawing_z_order(self, sheet: int, object_id: int, index: int) -> None: ...
     def snapshot_drawing(self, sheet: int, object_id: int) -> bytes: ...
     def restore_drawing(self, sheet: int, data: Union[bytes, bytearray, memoryview], *, new_id: bool = ...) -> int: ...
+    def list_shapes(self, sheet: int) -> List[Shape]: ...
+    def insert_shape(
+        self,
+        sheet: int,
+        *,
+        anchor_kind: Union[AnchorKind, int],
+        edit_as: Union[AnchorEditAs, int] = ...,
+        from_row: int = ...,
+        from_col: int = ...,
+        from_row_off: int = ...,
+        from_col_off: int = ...,
+        to_row: int = ...,
+        to_col: int = ...,
+        to_row_off: int = ...,
+        to_col_off: int = ...,
+        cx: int = ...,
+        cy: int = ...,
+        name: Optional[str] = ...,
+        prst: Optional[str] = ...,
+        text: Optional[str] = ...,
+        text_box: Optional[bool] = ...,
+        fill_kind: Optional[Union[ShapePaint, int]] = ...,
+        fill_rgb: int = ...,
+        line_kind: Optional[Union[ShapePaint, int]] = ...,
+        line_rgb: int = ...,
+        line_width_emu: Optional[int] = ...,
+        rotation: Optional[int] = ...,
+        hidden: Optional[bool] = ...,
+    ) -> int: ...
+    def update_shape(
+        self,
+        sheet: int,
+        object_id: int,
+        *,
+        anchor_kind: Optional[Union[AnchorKind, int]] = ...,
+        edit_as: Union[AnchorEditAs, int] = ...,
+        from_row: int = ...,
+        from_col: int = ...,
+        from_row_off: int = ...,
+        from_col_off: int = ...,
+        to_row: int = ...,
+        to_col: int = ...,
+        to_row_off: int = ...,
+        to_col_off: int = ...,
+        cx: int = ...,
+        cy: int = ...,
+        name: Optional[str] = ...,
+        prst: Optional[str] = ...,
+        text: Optional[str] = ...,
+        text_box: Optional[bool] = ...,
+        fill_kind: Optional[Union[ShapePaint, int]] = ...,
+        fill_rgb: int = ...,
+        line_kind: Optional[Union[ShapePaint, int]] = ...,
+        line_rgb: int = ...,
+        line_width_emu: Optional[int] = ...,
+        rotation: Optional[int] = ...,
+        hidden: Optional[bool] = ...,
+    ) -> None: ...
+    def remove_shape(self, sheet: int, object_id: int) -> None: ...
+    def list_slicers(self, sheet: int) -> List[Slicer]: ...
+    def add_slicer(
+        self,
+        sheet: int,
+        table: int,
+        column: int,
+        *,
+        anchor: Sequence[int],
+        name: Optional[str] = ...,
+        caption: Optional[str] = ...,
+        style: Optional[str] = ...,
+        column_count: Optional[int] = ...,
+        row_height: Optional[int] = ...,
+        sort_order: Optional[Union[SlicerSortOrder, int]] = ...,
+        cross_filter: Optional[Union[SlicerCrossFilter, int]] = ...,
+    ) -> int: ...
+    def update_slicer(
+        self,
+        sheet: int,
+        index: int,
+        *,
+        anchor: Optional[Sequence[int]] = ...,
+        caption: Optional[str] = ...,
+        style: Optional[str] = ...,
+        column_count: Optional[int] = ...,
+        row_height: Optional[int] = ...,
+        sort_order: Optional[Union[SlicerSortOrder, int]] = ...,
+        cross_filter: Optional[Union[SlicerCrossFilter, int]] = ...,
+    ) -> None: ...
+    def remove_slicer(self, sheet: int, index: int) -> None: ...
+    def add_data_table(
+        self,
+        sheet: int,
+        first_row: int,
+        first_col: int,
+        last_row: int,
+        last_col: int,
+        *,
+        row_input: Optional[Tuple[int, int]] = ...,
+        col_input: Optional[Tuple[int, int]] = ...,
+    ) -> None: ...
+    def get_data_table(self, sheet: int, row: int, col: int) -> Optional[DataTable]: ...
+    def remove_data_table(self, sheet: int, row: int, col: int) -> None: ...
+    def recalc_data_tables(self) -> None: ...
+    def list_sparkline_groups(self, sheet: int) -> List[SparklineGroup]: ...
+    def add_sparkline_group(self, sheet: int, group: SparklineGroup) -> None: ...
+    def update_sparkline_group(self, sheet: int, index: int, group: SparklineGroup) -> None: ...
+    def set_sparkline_group_sparklines(self, sheet: int, index: int, sparklines: Sequence[Sparkline]) -> None: ...
+    def remove_sparkline_group(self, sheet: int, index: int) -> None: ...
     def get_chart(self, sheet: int, object_id: int) -> ChartInfo: ...
     def get_chart_data(self, sheet: int, object_id: int) -> ChartData: ...
     def preview_chart_data(
@@ -2399,6 +2950,7 @@ class Workbook:
     def format_value(self, value: Value, format_code: str = ...) -> Tuple[str, DisplayStatus]: ...
     def set_row_hidden(self, sheet: int, row: int, hidden: bool) -> None: ...
     def set_row_outline(self, sheet: int, row: int, level: int) -> None: ...
+    def set_row_collapsed(self, sheet: int, row: int, collapsed: bool) -> None: ...
 
     # Conditional formatting.
     def evaluate_cf_range(
@@ -2457,6 +3009,12 @@ class Workbook:
     def add_dxf(self, record: DifferentialFormat) -> int: ...
     def set_cell_style(self, record: CellStyle) -> None: ...
     def remove_cell_style(self, name: str) -> None: ...
+    def table_style_count(self) -> int: ...
+    def get_table_style(self, index: int) -> TableStyle: ...
+    def set_table_style(self, style: TableStyle) -> None: ...
+    def remove_table_style(self, name: str) -> None: ...
+    def table_style_defaults(self) -> Tuple[str, str]: ...
+    def set_table_style_defaults(self, table_style: Optional[str] = ..., pivot_style: Optional[str] = ...) -> None: ...
     def get_theme(self) -> Theme: ...
     def set_theme_colors(self, colors: Sequence[int]) -> None: ...
     def set_theme_fonts(self, fonts: ThemeFonts) -> None: ...
@@ -2514,9 +3072,22 @@ class Workbook:
         span_cols: int,
     ) -> None: ...
     def pivot_set_grand_totals(self, sheet: int, pivot_index: int, rows_enabled: bool, cols_enabled: bool) -> None: ...
+    def pivot_set_style_info(
+        self,
+        sheet: int,
+        pivot_index: int,
+        name: Optional[str] = None,
+        *,
+        show_row_headers: bool = False,
+        show_col_headers: bool = False,
+        show_row_stripes: bool = False,
+        show_col_stripes: bool = False,
+        show_last_column: bool = False,
+    ) -> None: ...
     def pivot_cache_id(self, sheet: int, pivot_index: int) -> int: ...
     def pivot_name(self, sheet: int, pivot_index: int) -> str: ...
     def pivot_grand_totals(self, sheet: int, pivot_index: int) -> Tuple[bool, bool]: ...
+    def pivot_style_info(self, sheet: int, pivot_index: int) -> PivotStyleInfo: ...
     def pivot_row_field_order(self, sheet: int, pivot_index: int) -> List[int]: ...
     def pivot_col_field_order(self, sheet: int, pivot_index: int) -> List[int]: ...
     def pivot_field_at(self, sheet: int, pivot_index: int, field_idx: int) -> PivotFieldInfo: ...

@@ -650,11 +650,20 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // read with let the writer tell whether those bytes are still current.
       if (!aux.comments_path.empty() && zip.has_entry(aux.comments_path)) {
         ASSIGN_OR_RETURN(auto cb, zip.read_entry(aux.comments_path));
-        ASSIGN_OR_RETURN(auto comments, read_comments(cb));
+        std::vector<std::string> authors;
+        ASSIGN_OR_RETURN(auto comments, read_comments(cb, &authors));
         drop_thread_stubs(comments, wb.sheet(i).threaded_comments());
+        if (!aux.vml_path.empty() && zip.has_entry(aux.vml_path)) {
+          ASSIGN_OR_RETURN(auto vb, zip.read_entry(aux.vml_path));
+          apply_vml_note_shapes(std::string_view(reinterpret_cast<const char*>(vb.data()), vb.size()), comments);
+        }
         wb.sheet(i).mutable_comments() = std::move(comments);
+        authors.erase(std::remove_if(authors.begin(), authors.end(),
+                                     [](const std::string& a) { return is_thread_stub_author(a); }),
+                      authors.end());
+        wb.sheet(i).set_comment_authors(std::move(authors));
         wb.sheet(i).set_comment_vml_path(aux.vml_path);
-        wb.sheet(i).set_comment_vml_anchors(wb.sheet(i).comment_anchor_set());
+        wb.sheet(i).set_comment_vml_shapes(wb.sheet(i).comment_shapes());
         consumed_parts.insert(aux.comments_path);
       }
 

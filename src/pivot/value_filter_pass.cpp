@@ -338,22 +338,30 @@ void apply_value_filters(const PivotTable& table, const PivotCache& cache, const
   state.surviving_col_leaves.resize(col_leaf_count);
   std::iota(state.surviving_col_leaves.begin(), state.surviving_col_leaves.end(), std::size_t{0});
 
-  for (const PivotFilter& f : table.active_filters()) {
-    const std::optional<std::size_t> field_index = resolve_field_by_any_name(table, f.field_name);
-    // An unresolved active filter has no field to act on. Treat it as the
-    // no-op promised by PreparedRecordFilter instead of allowing a value
-    // filter to fall back to the innermost axis field.
-    if (!field_index.has_value()) {
-      continue;
+  // Each filter prunes what the previous ones left, so the two lists run
+  // interleaved in the document order `active_before` records.
+  const std::vector<PivotFilter>& active = table.active_filters();
+  std::size_t next_active = 0;
+  const auto apply_active_until = [&](std::size_t end) {
+    for (; next_active < end && next_active < active.size(); ++next_active) {
+      const PivotFilter& f = active[next_active];
+      const std::optional<std::size_t> field_index = resolve_field_by_any_name(table, f.field_name);
+      // An unresolved active filter has no field to act on. Treat it as the
+      // no-op promised by PreparedRecordFilter instead of allowing a value
+      // filter to fall back to the innermost axis field.
+      if (field_index.has_value()) {
+        ApplyValueFilter(state, f, field_index);
+      }
     }
-    ApplyValueFilter(state, f, field_index);
-  }
+  };
   for (const AuthoredValueFilter& authored : table.authored_value_filters()) {
+    apply_active_until(authored.active_before);
     if (const auto projected = authored_value_filter_as_pivot_filter(table, authored)) {
       ApplyValueFilter(state, *projected, static_cast<std::size_t>(authored.field_index), authored.top_n_basis,
                        authored.top);
     }
   }
+  apply_active_until(active.size());
   if (state.any_applied) {
     ReaggregateTotalsAfterValueFilter(table, cache, buckets, state.surviving_row_leaves, state.surviving_col_leaves,
                                       row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);

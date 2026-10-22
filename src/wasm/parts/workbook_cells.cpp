@@ -370,6 +370,12 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   js_set_cstr(o, "name", name);
   js_set_cstr(o, "formula", formula);
   o.set("localSheetId", local_sheet_id);
+  const char* comment = nullptr;
+  int32_t hidden = 0;
+  if (fm_workbook_defined_name_attrs_at(handle_, idx, &comment, &hidden) == 0) {
+    js_set_cstr(o, "comment", comment);
+    o.set("hidden", hidden != 0);
+  }
   return o;
 }
 
@@ -388,13 +394,91 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
     o.set("status", error_status(rc));
     return o;
   }
+  fm_table_info_t info{};
+  rc = fm_workbook_table_get_info(handle_, idx, &info);
+  emscripten::val columns = emscripten::val::array();
+  for (uint32_t i = 0; rc == 0 && i < info.column_count; ++i) {
+    fm_table_column_info_t column{};
+    rc = fm_workbook_table_get_column(handle_, idx, i, &column);
+    if (rc == 0) {
+      emscripten::val c = emscripten::val::object();
+      js_set_cstr(c, "name", column.name);
+      js_set_cstr(c, "totalsRowFunction", column.totals_row_function);
+      js_set_cstr(c, "totalsRowLabel", column.totals_row_label);
+      js_set_cstr(c, "totalsRowFormula", column.totals_row_formula);
+      columns.call<void>("push", c);
+    }
+  }
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    return o;
+  }
   o.set("status", ok_status());
   js_set_cstr(o, "name", name);
   js_set_cstr(o, "displayName", display);
   js_set_cstr(o, "ref", ref);
   o.set("sheetIndex", static_cast<uint32_t>(sheet_index));
+  js_set_cstr(o, "styleName", info.style_name);
+  o.set("hasStyleInfo", info.style_present != 0);
+  o.set("showFirstColumn", info.show_first_column != 0);
+  o.set("showLastColumn", info.show_last_column != 0);
+  o.set("showRowStripes", info.show_row_stripes != 0);
+  o.set("showColumnStripes", info.show_column_stripes != 0);
+  o.set("headerRowCount", info.header_row_count);
+  o.set("totalsRowCount", info.totals_row_count);
+  o.set("columns", columns);
   return o;
 }
+
+namespace {
+
+/// The four `<tableStyleInfo>` toggles of a table input, each `-1` when the
+/// input omits it.
+struct JsTableStyleToggles {
+  int32_t first_column = -1;
+  int32_t last_column = -1;
+  int32_t row_stripes = -1;
+  int32_t column_stripes = -1;
+
+  bool any() const { return first_column >= 0 || last_column >= 0 || row_stripes >= 0 || column_stripes >= 0; }
+};
+
+int32_t js_optional_bool(JsNarrowNumericReader& reader, const emscripten::val& spec, const char* key,
+                         const char* field) {
+  const emscripten::val value = reader.value(spec, key, field);
+  if (!reader.ok() || !js_value_present(value)) {
+    return -1;
+  }
+  return reader.boolean_value(value, false, field) ? 1 : 0;
+}
+
+JsTableStyleToggles js_table_style_toggles(JsNarrowNumericReader& reader, const emscripten::val& spec) {
+  JsTableStyleToggles toggles;
+  toggles.first_column = js_optional_bool(reader, spec, "showFirstColumn", "table.showFirstColumn");
+  toggles.last_column = js_optional_bool(reader, spec, "showLastColumn", "table.showLastColumn");
+  toggles.row_stripes = js_optional_bool(reader, spec, "showRowStripes", "table.showRowStripes");
+  toggles.column_stripes = js_optional_bool(reader, spec, "showColumnStripes", "table.showColumnStripes");
+  return toggles;
+}
+
+/// Applies the supplied toggles over the table's current ones, keeping its
+/// style name.
+fm_status_t apply_table_style_toggles(fm_workbook_t* handle, uint32_t idx, const JsTableStyleToggles& toggles) {
+  fm_table_info_t info{};
+  if (const fm_status_t rc = fm_workbook_table_get_info(handle, idx, &info); rc != 0) {
+    return rc;
+  }
+  // A table without the element takes the creation defaults underneath.
+  const bool present = info.style_present != 0;
+  const std::string name = info.style_name != nullptr ? info.style_name : "";
+  const auto pick = [](int32_t supplied, int32_t current) { return supplied >= 0 ? supplied : current; };
+  return fm_workbook_table_set_style_info(handle, idx, name.c_str(), pick(toggles.first_column, info.show_first_column),
+                                          pick(toggles.last_column, info.show_last_column),
+                                          pick(toggles.row_stripes, present ? info.show_row_stripes : 1),
+                                          pick(toggles.column_stripes, info.show_column_stripes));
+}
+
+}  // namespace
 
 JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   JsAddStyleResult out;
@@ -414,6 +498,7 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   const bool header_row = reader.boolean(spec, "headerRow", true, "createTable.headerRow");
   const bool totals_row = reader.boolean(spec, "totalsRow", false, "createTable.totalsRow");
   const emscripten::val columns = reader.value(spec, "columns", "createTable.columns");
+  const JsTableStyleToggles toggles = js_table_style_toggles(reader, spec);
   if (!reader.ok()) {
     out.status = binding_error_status(kInvalidArgument, reader.message().c_str());
     return out;
@@ -452,6 +537,14 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
     out.status = error_status(rc);
     return out;
   }
+  if (toggles.any()) {
+    if (const fm_status_t style_rc = apply_table_style_toggles(handle_, static_cast<uint32_t>(index), toggles);
+        style_rc != 0) {
+      fm_workbook_table_remove(handle_, index);
+      out.status = error_status(style_rc);
+      return out;
+    }
+  }
   out.status = ok_status();
   out.index = static_cast<uint32_t>(index);
   return out;
@@ -470,34 +563,69 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   std::string style_name;
   const char* ref_ptr = reader.optional_string(spec, "ref", ref, "updateTable.ref");
   const char* style_name_ptr = reader.optional_string(spec, "styleName", style_name, "updateTable.styleName");
-  const auto optional_bool = [&reader, &spec](const char* key, const char* field) {
-    const emscripten::val value = reader.value(spec, key, field);
-    if (!reader.ok() || !js_value_present(value)) {
-      return int32_t{-1};
-    }
-    return reader.boolean_value(value, false, field) ? int32_t{1} : int32_t{0};
-  };
-  const int32_t header_row = optional_bool("headerRow", "updateTable.headerRow");
-  const int32_t totals_row = optional_bool("totalsRow", "updateTable.totalsRow");
+  std::string name;
+  std::string display_name;
+  const char* name_ptr = reader.optional_string(spec, "name", name, "updateTable.name");
+  const char* display_name_ptr = reader.optional_string(spec, "displayName", display_name, "updateTable.displayName");
+  const int32_t header_row = js_optional_bool(reader, spec, "headerRow", "updateTable.headerRow");
+  const int32_t totals_row = js_optional_bool(reader, spec, "totalsRow", "updateTable.totalsRow");
+  const JsTableStyleToggles toggles = js_table_style_toggles(reader, spec);
   if (!reader.ok()) {
     return binding_error_status(kInvalidArgument, reader.message().c_str());
   }
 
-  std::string effective_ref;
-  if (ref_ptr == nullptr) {
-    const char* current_ref = nullptr;
-    const char* ignored_name = nullptr;
-    const char* ignored_display_name = nullptr;
-    std::size_t ignored_sheet = 0;
-    const fm_status_t lookup_rc =
-        fm_workbook_table_at(handle_, idx, &ignored_name, &ignored_display_name, &current_ref, &ignored_sheet);
-    if (lookup_rc != 0) {
-      return status_from_rc(lookup_rc);
-    }
-    effective_ref = current_ref != nullptr ? current_ref : std::string();
-    ref_ptr = effective_ref.c_str();
+  const char* current_name = nullptr;
+  const char* current_display_name = nullptr;
+  const char* current_ref = nullptr;
+  std::size_t ignored_sheet = 0;
+  if (const fm_status_t lookup_rc =
+          fm_workbook_table_at(handle_, idx, &current_name, &current_display_name, &current_ref, &ignored_sheet);
+      lookup_rc != 0) {
+    return status_from_rc(lookup_rc);
   }
-  return status_from_rc(fm_workbook_table_update(handle_, idx, ref_ptr, style_name_ptr, header_row, totals_row));
+  const std::string old_name = current_name != nullptr ? current_name : "";
+  const std::string old_display_name = current_display_name != nullptr ? current_display_name : "";
+  const std::string effective_ref = ref_ptr != nullptr ? std::string(ref_ptr) : std::string(current_ref);
+
+  // The rename goes first because it is the step a name clash can refuse;
+  // a later failure renames back so the update stays all-or-nothing.
+  const bool renaming = name_ptr != nullptr || display_name_ptr != nullptr;
+  if (renaming) {
+    const std::string next_name = name_ptr != nullptr ? name : old_name;
+    const std::string next_display_name =
+        display_name_ptr != nullptr ? display_name : (name_ptr != nullptr ? name : old_display_name);
+    if (const fm_status_t rc = fm_workbook_table_rename(handle_, idx, next_name.c_str(), next_display_name.c_str());
+        rc != 0) {
+      return status_from_rc(rc);
+    }
+  }
+  fm_status_t rc =
+      fm_workbook_table_update(handle_, idx, effective_ref.c_str(), style_name_ptr, header_row, totals_row);
+  if (rc == 0 && toggles.any()) {
+    rc = apply_table_style_toggles(handle_, idx, toggles);
+  }
+  if (rc != 0 && renaming) {
+    fm_workbook_table_rename(handle_, idx, old_name.c_str(), old_display_name.c_str());
+  }
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setTableColumnTotals(uint32_t idx, uint32_t column, emscripten::val totals) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("setTableColumnTotals");
+  std::string function;
+  std::string label;
+  std::string formula;
+  const char* function_ptr = reader.optional_string(totals, "function", function, "totals.function");
+  const char* label_ptr = reader.optional_string(totals, "label", label, "totals.label");
+  const char* formula_ptr = reader.optional_string(totals, "formula", formula, "totals.formula");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(
+      fm_workbook_table_set_column_totals(handle_, idx, column, function_ptr, label_ptr, formula_ptr));
 }
 
 JsStatus JsWorkbook::removeTable(uint32_t idx) {

@@ -105,20 +105,25 @@ class _PivotFixture:
 
     def grid(self, pivot: int = 0) -> List[str]:
         """The projected grid as one ``|``-joined string per sheet row."""
-        layout = self.wb.pivot_layout(0, pivot)
-        rows: Dict[int, List[str]] = {}
-        for cell in layout.cells:
-            v = cell.value
-            if v.kind == ValueKind.NUMBER:
-                text = "%.15g" % v.number
-            elif v.kind == ValueKind.TEXT:
-                text = v.text
-            elif v.kind == ValueKind.ERROR:
-                text = f"#{v.error_code}"
-            else:
-                text = ""
-            rows.setdefault(cell.row, [""] * layout.cols)[cell.col - layout.left] = text
-        return ["|".join(rows[r]) for r in sorted(rows)]
+        return _grid(self.wb, pivot)
+
+
+def _grid(wb: Workbook, pivot: int = 0) -> List[str]:
+    """The projected grid of ``pivot`` on sheet 0, one ``|``-joined string per row."""
+    layout = wb.pivot_layout(0, pivot)
+    rows: Dict[int, List[str]] = {}
+    for cell in layout.cells:
+        v = cell.value
+        if v.kind == ValueKind.NUMBER:
+            text = "%.15g" % v.number
+        elif v.kind == ValueKind.TEXT:
+            text = v.text
+        elif v.kind == ValueKind.ERROR:
+            text = f"#{v.error_code}"
+        else:
+            text = ""
+        rows.setdefault(cell.row, [""] * layout.cols)[cell.col - layout.left] = text
+    return ["|".join(rows[r]) for r in sorted(rows)]
 
 
 _BASE_GRID = ["行ラベル|Sum of Amount", "East|15", "West|37", "総計|52"]
@@ -170,6 +175,7 @@ _PIVOT_READERS = {
     "pivot_cache_id",
     "pivot_name",
     "pivot_grand_totals",
+    "pivot_style_info",
     "pivot_row_field_order",
     "pivot_col_field_order",
     "pivot_field_at",
@@ -262,6 +268,16 @@ class PivotMutatorTableTests(unittest.TestCase):
             part = _package_part(f.wb.save(), "xl/pivotTables/pivotTable1.xml")
             self.assertRegex(part, r'<pivotTableDefinition [^>]*name="Renamed"')
 
+        def set_style_info(t: Any, f: _PivotFixture, r: None) -> None:
+            style = f.wb.pivot_style_info(0, f.pivot)
+            eq((style.present, style.name), (True, "PivotStyleMedium9"))
+            eq(
+                (style.show_row_headers, style.show_col_headers, style.show_row_stripes, style.show_col_stripes),
+                (False, True, True, False),
+            )
+            self.assertTrue(style.show_last_column)
+            eq(f.grid(), _BASE_GRID)
+
         def set_anchor(t: Any, f: _PivotFixture, r: None) -> None:
             layout = f.wb.pivot_layout(0, f.pivot)
             eq((layout.top, layout.left), (10, 2))
@@ -272,7 +288,8 @@ class PivotMutatorTableTests(unittest.TestCase):
             eq(f.grid(), ["Region|Sum of Amount", "East|15", "West|37", "総計|52"])
 
         def field_add(t: Any, f: _PivotFixture, r: int) -> None:
-            eq(r, 4)
+            # Product is a cache column the fixture already added, so it is updated in place.
+            eq(r, f.product)
             eq(f.grid(), ["Fruit|(すべて)", "|", *_BASE_GRID])
 
         def field_clear(t: Any, f: _PivotFixture, r: None) -> None:
@@ -424,6 +441,19 @@ class PivotMutatorTableTests(unittest.TestCase):
                 lambda f: f.wb.pivot_set_grand_totals(0, f.pivot, False, True),
                 None,
                 grid_is(["Sum of Amount|列ラベル|", "行ラベル|Apple|Pear", "East|10|5", "West|30|7", "総計|40|12"]),
+            ),
+            "pivot_set_style_info": (
+                None,
+                lambda f: f.wb.pivot_set_style_info(
+                    0,
+                    f.pivot,
+                    "PivotStyleMedium9",
+                    show_col_headers=True,
+                    show_row_stripes=True,
+                    show_last_column=True,
+                ),
+                None,
+                set_style_info,
             ),
             "set_pivot_report_layout": (
                 None,
@@ -699,6 +729,42 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self.assertEqual(wb.pivot_row_field_order(0, f.pivot), [f.product, f.region])
             self.assertEqual(wb.pivot_col_field_order(0, f.pivot), [])
 
+    def test_style_info_defaults_on_create_and_round_trips(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            style = wb.pivot_style_info(0, f.pivot)
+            self.assertTrue(style.present)
+            self.assertEqual(style.name, "PivotStyleLight16")
+            self.assertEqual(
+                (
+                    style.show_row_headers,
+                    style.show_col_headers,
+                    style.show_row_stripes,
+                    style.show_col_stripes,
+                    style.show_last_column,
+                ),
+                (True, True, False, False, True),
+            )
+            wb.pivot_set_style_info(0, f.pivot, "PivotStyleDark3", show_row_stripes=True)
+            data = wb.save()
+            # An omitted name keeps the element without a style name.
+            wb.pivot_set_style_info(0, f.pivot)
+            bare = wb.pivot_style_info(0, f.pivot)
+            self.assertEqual((bare.present, bare.name), (True, ""))
+        with Workbook.load(data) as loaded:
+            style = loaded.pivot_style_info(0, 0)
+            self.assertEqual(style.name, "PivotStyleDark3")
+            self.assertEqual(
+                (style.show_row_headers, style.show_row_stripes, style.show_last_column),
+                (False, True, False),
+            )
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            with self.assertRaises(FormulonError):
+                wb.pivot_style_info(0, 9)
+            with self.assertRaises(FormulonError):
+                wb.pivot_set_style_info(0, 9, "X")
+
     def test_reads_back_a_saved_and_reloaded_pivot(self) -> None:
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
@@ -707,6 +773,34 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             self.assertEqual(loaded.pivot_count(0), 1)
             self.assertEqual(loaded.pivot_cache_id(0, 0), f.cache)
             self._assert_fixture_definition(loaded, f, 0)
+
+    def test_filters_and_subtotal_functions_survive_save_and_reload(self) -> None:
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            wb.pivot_filter_add(0, f.pivot, _GREATER_THAN_20)
+            wb.pivot_field_add_subtotal_fn(0, f.pivot, f.region, PivotAggregation.AVERAGE)
+            wb.pivot_field_add_subtotal_fn(0, f.pivot, f.region, PivotAggregation.SUM)
+            region = wb.pivot_field_at(0, f.pivot, f.region)
+            self.assertFalse(region.default_subtotal)
+            self.assertEqual(region.subtotal_fns, (PivotAggregation.SUM, PivotAggregation.AVERAGE))
+            amount = wb.pivot_field_at(0, f.pivot, f.amount)
+            self.assertEqual((amount.default_subtotal, amount.subtotal_fns), (True, ()))
+            data = wb.save()
+        self.assertIn(
+            '<filters count="1"><filter fld="0" type="valueGreaterThan"',
+            _package_part(data, "xl/pivotTables/pivotTable1.xml"),
+        )
+        with Workbook.load(data) as loaded:
+            loaded.set_excel_profile_id("win-365-ja_JP")
+            self.assertEqual(loaded.pivot_filter_count(0, 0), 1)
+            spec = loaded.pivot_filter_at(0, 0, 0)
+            self.assertEqual((spec.type, spec.field_name, spec.value_double), (_GREATER_THAN_20.type, "Region", 20.0))
+            self.assertEqual(_grid(loaded), _WEST_ONLY)
+            region = loaded.pivot_field_at(0, 0, f.region)
+            self.assertFalse(region.default_subtotal)
+            self.assertEqual(region.subtotal_fns, (PivotAggregation.SUM, PivotAggregation.AVERAGE))
+            loaded.pivot_filter_clear(0, 0)
+            self.assertNotIn("<filters", _package_part(loaded.save(), "xl/pivotTables/pivotTable1.xml"))
 
     def test_out_of_range_indices_raise(self) -> None:
         with Workbook.create_default() as wb:
@@ -748,6 +842,53 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.pivot_data_field_add(0, f.pivot, PivotDataFieldSpec(name="", field_index=99))
             self.assertEqual(wb.pivot_data_field_count(0, f.pivot), 1)
+
+
+class PivotFieldBindingTests(unittest.TestCase):
+    def _wide_pivot(self, wb: Workbook) -> int:
+        cache = wb.pivot_cache_create()
+        wb.set_pivot_cache_worksheet_source(cache, PivotWorksheetSource(ref="A1:D3", sheet="Sheet1"))
+        for name in ("Region", "Product", "Sales", "Qty"):
+            wb.pivot_cache_field_add(cache, name)
+        for sales in (100, 200):
+            rec = wb.pivot_cache_record_add(cache)
+            for col, value in enumerate((0, 0, sales, 1)):
+                wb.pivot_cache_record_set_number(cache, rec, col, value)
+        return wb.pivot_create(0, "PT", cache, 0, 6)
+
+    def test_field_add_binds_to_the_cache_column_by_name(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._wide_pivot(wb)
+            self.assertEqual(wb.pivot_field_add(0, pivot, PivotFieldSpec(source_name="Region", axis=PivotAxis.ROW)), 0)
+            sales = wb.pivot_field_add(0, pivot, PivotFieldSpec(source_name="Sales", axis=PivotAxis.VALUE))
+            self.assertEqual(sales, 2)
+            self.assertEqual(wb.pivot_field_count(0, pivot), 4)
+            self.assertIsNone(wb.pivot_field_at(0, pivot, 1).axis)
+            # Adding a field again updates it instead of appending another.
+            self.assertEqual(wb.pivot_field_add(0, pivot, PivotFieldSpec(source_name="Sales", axis=PivotAxis.VALUE)), 2)
+            self.assertEqual(wb.pivot_field_count(0, pivot), 4)
+
+    def test_axis_none_takes_a_field_off_the_report(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._wide_pivot(wb)
+            wb.pivot_field_add(0, pivot, PivotFieldSpec(source_name="Region", axis=PivotAxis.ROW))
+            sales = wb.pivot_field_add(0, pivot, PivotFieldSpec(source_name="Sales", axis=PivotAxis.VALUE))
+            wb.pivot_data_field_add(0, pivot, PivotDataFieldSpec(name="Total", field_index=sales))
+            wb.pivot_field_set_axis(0, pivot, sales, -1)
+            self.assertIsNone(wb.pivot_field_at(0, pivot, sales).axis)
+            self.assertEqual(wb.pivot_data_field_count(0, pivot), 0)
+            wb.pivot_field_set_axis(0, pivot, 0, -1)
+            self.assertEqual(wb.pivot_row_field_order(0, pivot), [])
+            with self.assertRaises(FormulonError):
+                wb.pivot_field_set_axis(0, pivot, 0, 4)
+
+    def test_save_drops_a_cache_no_pivot_uses(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._wide_pivot(wb)
+            self.assertIn(b"pivotCacheDefinition1.xml", wb.save())
+            wb.pivot_remove(0, pivot)
+            self.assertEqual(wb.pivot_cache_count(), 1)
+            self.assertNotIn(b"pivotCacheDefinition1.xml", wb.save())
 
 
 if __name__ == "__main__":

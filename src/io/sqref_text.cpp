@@ -142,6 +142,8 @@ std::vector<ResolvedSelection> resolve_view_selections(const SheetView& view) {
     if (!has_active || !inside) {
       resolved.active_row = resolved.ranges.front().first_row;
       resolved.active_col = resolved.ranges.front().first_col;
+    } else if (stored != nullptr && stored->active_cell_id < resolved.ranges.size()) {
+      resolved.active_cell_id = stored->active_cell_id;
     }
     out.push_back(std::move(resolved));
   }

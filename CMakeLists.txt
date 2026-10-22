@@ -141,6 +141,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook.cpp
   src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
+  src/workbook_data_table.cpp
   src/workbook_row_col_edit.cpp
   src/io/auto_filter_xml.cpp
   src/io/cell_parser.cpp
@@ -152,9 +153,12 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_reader.cpp
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
+  src/io/data_table_xml.cpp
   src/io/dynamic_array_formula.cpp
   src/io/ext_lst_refs.cpp
+  src/io/sparkline_groups.cpp
   src/io/sqref_text.cpp
+  src/io/protection_xml.cpp
   src/io/worksheet_child_refs.cpp
   src/io/future_functions.cpp
   src/io/iso_date.cpp
@@ -186,6 +190,7 @@ set(FORMULON_CORE_SOURCES
   src/io/format_detect.cpp
   src/io/sax_xml_reader.cpp
   src/io/sheet_layout_reader.cpp
+  src/io/sheet_view_xml.cpp
   src/io/sheet_overlay_reader.cpp
   src/io/sheet_reader.cpp
   src/io/sst_reader.cpp
@@ -197,6 +202,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xml_utils.cpp
   src/io/xsd_double.cpp
   src/io/zip_reader.cpp
+  src/io/xlsb/auto_filter_records.cpp
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/cf_records.cpp
   src/io/xlsb/cf_x14_records.cpp
@@ -204,6 +210,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/external_link_reader.cpp
   src/io/xlsb/external_link_writer.cpp
   src/io/xlsb/feature_formula.cpp
+  src/io/xlsb/frt_formula.cpp
   src/io/xlsb/func_id_table.cpp
   src/io/xlsb/hyperlink_records.cpp
   src/io/xlsb/view_records.cpp
@@ -211,6 +218,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/ptg.cpp
   src/io/xlsb/ptg_declarations.cpp
   src/io/xlsb/ptg_formula_flags.cpp
+  src/io/xlsb/ptg_list.cpp
   src/io/xlsb/ptg_operand_class.cpp
   src/io/xlsb/ptg_reader.cpp
   src/io/xlsb/ptg_writer.cpp
@@ -223,13 +231,17 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/sheet_properties_records.cpp
   src/io/xlsb/sheet_reader.cpp
   src/io/xlsb/sheet_writer.cpp
+  src/io/xlsb/slicer_records.cpp
+  src/io/xlsb/sparkline_records.cpp
   src/io/xlsb/sst_reader.cpp
   src/io/xlsb/sst_writer.cpp
   src/io/xlsb/styles_reader.cpp
   src/io/xlsb/styles_writer.cpp
+  src/io/xlsb/table_records.cpp
   src/io/xlsb/tail_refs.cpp
   src/io/xlsb/workbook_bin_reader.cpp
   src/io/xlsb/workbook_bin_writer.cpp
+  src/io/xlsb/workbook_props_records.cpp
   src/io/xlsb/writer.cpp
   src/cf/auto_filter_eval.cpp
   src/cf/cf_authoring.cpp
@@ -266,10 +278,13 @@ set(FORMULON_CORE_SOURCES
   src/print/page_setup.cpp
   src/print/print_area.cpp
   src/print/pagination.cpp
+  src/column_width.cpp
   src/print/sheet_geometry.cpp
   src/drawing/drawing_xml.cpp
   src/drawing/image_header.cpp
   src/drawing/drawing_edit.cpp
+  src/drawing/shape_edit.cpp
+  src/drawing/slicer_edit.cpp
   src/chart/chart_xml.cpp
   src/chart/chart_ref.cpp
   src/chart/chart_source.cpp
@@ -465,11 +480,17 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/pagination.cpp
   src/c_api/parts/print_area_titles.cpp
   src/c_api/parts/print_settings.cpp
+  src/c_api/parts/protection.cpp
+  src/c_api/parts/shapes.cpp
+  src/c_api/parts/data_tables.cpp
+  src/c_api/parts/slicers.cpp
+  src/c_api/parts/sparklines.cpp
   src/c_api/parts/xml_fragment.cpp
   src/c_api/parts/sheet_layout.cpp
   src/c_api/parts/sheets_ui.cpp
   src/c_api/parts/styles.cpp
   src/c_api/parts/styles_mutate.cpp
+  src/c_api/parts/table_styles.cpp
   src/c_api/parts/trace.cpp
   src/c_api/parts/version.cpp
   src/c_api/parts/workbook.cpp

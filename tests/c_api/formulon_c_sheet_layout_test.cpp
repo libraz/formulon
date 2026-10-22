@@ -37,7 +37,7 @@ static_assert(sizeof(fm_row_layout_t) == 40U);
 // the end of its own storage rather than getting a diagnosable error. Pin the
 // size here: changing the struct must break the build and be acknowledged,
 // not merely be reflected in the bindings afterwards.
-static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4U ? 60U : 64U));
+static_assert(sizeof(fm_sheet_view_t) == 88U);
 static_assert(offsetof(fm_sheet_view_t, tab_hidden) == 12U);
 static_assert(offsetof(fm_sheet_view_t, visibility) == 16U);
 static_assert(offsetof(fm_sheet_view_t, tab_selected) == 36U);

@@ -13,6 +13,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_corpus_test.cpp
   ooxml_corpus_cases.cpp
   ooxml_corpus_package_support.cpp
+  ooxml_data_table_test.cpp
   ooxml_default_passthrough_test.cpp
   ooxml_metadata_test.cpp
   ooxml_minimal_writer_test.cpp
@@ -20,10 +21,14 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_phonetic_roundtrip_test.cpp
   ooxml_pivot_test.cpp
   ooxml_print_authoring_test.cpp
+  ooxml_protection_fidelity_test.cpp
   ooxml_pivot_names_roundtrip_test.cpp
   ooxml_roundtrip_test.cpp
   ooxml_sax_metadata_test.cpp
   ooxml_sheet_features_batch_test.cpp
+  ooxml_shapes_sparklines_notes_test.cpp
+  ooxml_slicer_test.cpp
+  ooxml_view_style_fidelity_test.cpp
   ooxml_workbook_pr_roundtrip_test.cpp
   ooxml_writer_pivot_test.cpp
   pivot_aggregation_fixture_test.cpp

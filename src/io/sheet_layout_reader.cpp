@@ -12,6 +12,7 @@
 #include <string_view>
 #include <utility>
 
+#include "io/sheet_view_xml.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
@@ -34,78 +35,16 @@ namespace io {
 
 namespace {
 
-/// Parses `<sheetView zoomScale="...">` and its `<pane>` into `view`.
-/// Missing or out-of-range `zoomScale` falls back to
-/// `SheetView::kDefaultZoomScale`. A `frozen` / `frozenSplit` pane's splits
-/// are row and column counts; a `split` pane's (the default state) twips.
+/// Parses the first `<sheetView>` into `view` and keeps the later ones (extra
+/// workbook windows) verbatim.
 void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
-  pugi::xml_node sheet_views = worksheet.child("sheetViews");
-  if (!sheet_views) {
-    return;
-  }
-  pugi::xml_node sheet_view = sheet_views.child("sheetView");
+  pugi::xml_node sheet_view = worksheet.child("sheetViews").child("sheetView");
   if (!sheet_view) {
     return;
   }
-  if (sheet_view.attribute("zoomScale")) {
-    const std::int32_t raw = attr_i32(sheet_view, "zoomScale", 0);
-    if (raw >= 10 && raw <= 400) {
-      view.zoom_scale = static_cast<std::uint32_t>(raw);
-    }
-  }
-  // Display attributes. Three default to true in the schema, so absence
-  // means "shown"; the tri-state reader applies each attribute's real
-  // default rather than a blanket false.
-  view.show_grid_lines = read_xsd_bool(sheet_view, "showGridLines", true);
-  view.show_row_col_headers = read_xsd_bool(sheet_view, "showRowColHeaders", true);
-  view.show_zeros = read_xsd_bool(sheet_view, "showZeros", true);
-  view.right_to_left = read_xsd_bool(sheet_view, "rightToLeft", false);
-  view.tab_selected = read_xsd_bool(sheet_view, "tabSelected", false);
-  if (pugi::xml_attribute v = sheet_view.attribute("view"); v) {
-    const std::string_view mode = v.value();
-    // "normal" is the schema default; keep the model empty for it so a
-    // default sheet stays byte-clean on re-emit.
-    if (mode != "normal") {
-      view.view_mode.assign(mode);
-    }
-  }
-  view.top_left_cell = attr_str(sheet_view, "topLeftCell");
-  for (pugi::xml_node sel = sheet_view.child("selection"); sel; sel = sel.next_sibling("selection")) {
-    const std::string_view pane_name = attr_str(sel, "pane");
-    view.selections.push_back(SheetSelection{pane_name.empty() ? std::string("topLeft") : std::string(pane_name),
-                                             std::string(attr_str(sel, "activeCell")),
-                                             std::string(attr_str(sel, "sqref"))});
-  }
-  pugi::xml_node pane = sheet_view.child("pane");
-  if (pane) {
-    // `ST_PaneState` has three values; two of them freeze. `frozenSplit`
-    // is a frozen pane that also remembers a movable split position, so
-    // its xSplit/ySplit bind the frozen extent exactly like `frozen`.
-    const std::string_view state = attr_str(pane, "state");
-    if (state == "frozen" || state == "frozenSplit") {
-      const std::int32_t y = attr_i32(pane, "ySplit", 0);
-      const std::int32_t x = attr_i32(pane, "xSplit", 0);
-      if (y > 0) {
-        view.freeze_rows = static_cast<std::uint32_t>(y);
-      }
-      if (x > 0) {
-        view.freeze_cols = static_cast<std::uint32_t>(x);
-      }
-      view.frozen_split = state == "frozenSplit";
-    } else if (state.empty() || state == "split") {
-      const double y = attr_f64(pane, "ySplit", 0.0);
-      const double x = attr_f64(pane, "xSplit", 0.0);
-      view.split_y = std::isfinite(y) && y > 0.0 ? y : 0.0;
-      view.split_x = std::isfinite(x) && x > 0.0 ? x : 0.0;
-    }
-    if (view.divides_rows() || view.divides_cols()) {
-      view.pane_top_left_cell = attr_str(pane, "topLeftCell");
-      // An absent `activePane` is the schema default, `topLeft`.
-      const std::string_view active = attr_str(pane, "activePane");
-      view.active_pane = active.empty() ? std::string("topLeft") : std::string(active);
-    } else {
-      view.frozen_split = false;
-    }
+  read_sheet_view_element(sheet_view, view);
+  for (pugi::xml_node extra = sheet_view.next_sibling("sheetView"); extra; extra = extra.next_sibling("sheetView")) {
+    append_raw_xml(view.extra_views_xml, extra);
   }
 }
 
@@ -215,8 +154,9 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
       entry.outline_level = parse_outline_level(outline_attr.value());
     }
     entry.show_phonetic = read_xsd_bool(col, "phonetic", false);
+    entry.collapsed = read_xsd_bool(col, "collapsed", false);
     if (!entry.has_width && !entry.has_style && !col.attribute("hidden") && !col.attribute("outlineLevel") &&
-        !entry.show_phonetic) {
+        !entry.show_phonetic && !entry.collapsed) {
       // A span with only a marker such as `bestFit` has no observable
       // layout state in this model.
       continue;
@@ -252,7 +192,8 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     double height = 0.0;
     const bool has_height = ht_attr && parse_xsd_nonneg_double(attr_str(row, "ht"), &height);
     const bool show_phonetic = read_xsd_bool(row, "ph", false);
-    if (!has_height && !hidden_attr && !outline_attr && !custom_format && !show_phonetic) {
+    const bool collapsed = read_xsd_bool(row, "collapsed", false);
+    if (!has_height && !hidden_attr && !outline_attr && !custom_format && !show_phonetic && !collapsed) {
       continue;
     }
     if (!r_attr) {
@@ -269,6 +210,7 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     RowLayout entry;
     entry.row = r_v - 1U;
     entry.show_phonetic = show_phonetic;
+    entry.collapsed = collapsed;
     if (has_height) {
       entry.height = height;
       entry.has_height = true;

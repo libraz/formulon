@@ -91,6 +91,9 @@ struct CellRecord {
   std::string_view f_si;
   /// Decoded `<f>` element's `ref=` (shared-formula master range), or empty.
   std::string_view f_ref;
+  /// Decoded `<f t="dataTable">` attributes `r1`, `r2`, `dt2D`, `dtr`, `del1`,
+  /// `del2`, `ca`, `aca`; empty when absent or for any other `<f>`.
+  std::string_view f_r1, f_r2, f_dt2d, f_dtr, f_del1, f_del2, f_ca, f_aca;
   /// Decoded text content of the cell:
   ///   * For `t="inlineStr"`: concatenation of all `<is><t>` and
   ///     `<is><r><t>` text nodes (rich-text formatting dropped). Any
@@ -138,6 +141,7 @@ struct RowRecord {
   std::string_view custom_format;  ///< Decoded `customFormat=` (XSD boolean).
   std::string_view style;          ///< Decoded `s=` (row style xf index).
   std::string_view ph;             ///< Decoded `ph=` (XSD boolean, show phonetic).
+  std::string_view collapsed;      ///< Decoded `collapsed=` (XSD boolean).
 };
 
 /// Callback bundle handed to `scan_sheet_data`. Each callback returns

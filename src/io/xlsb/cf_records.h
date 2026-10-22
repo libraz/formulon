@@ -62,6 +62,26 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
                                         const std::vector<cf::ConditionalFormat>& formats,
                                         std::unordered_set<std::string>& linked);
 
+/// True for an icon-set rule with per-level custom icons. Such a rule has no
+/// legacy record form: it is written as a standalone x14 rule
+/// (BrtBeginCFRule14 with iPri > 0) and never as a BrtBeginCFRule.
+bool is_x14_icon_set_rule(const cf::CFRule& rule);
+
+/// Moves every custom icon-set x14 rule of the retained tail `records` into
+/// `formats` (appended to a block with the same ranges, or a new one) and
+/// drops its records, along with a block or container left empty. A rule
+/// holding anything outside the supported shape stays retained.
+void take_x14_icon_sets(std::vector<std::uint8_t>& records, const FeatureFormulaReadContext& ctx,
+                        std::vector<cf::ConditionalFormat>& formats);
+
+/// Adds the x14 rule of every custom icon-set rule in `formats` to the tail
+/// slot `records`, one x14 block per model block. Fails for a threshold or
+/// icon the records cannot carry, or a level count that does not match the
+/// set.
+Expected<void, Error> add_x14_icon_sets(std::vector<std::uint8_t>& records,
+                                        const std::vector<cf::ConditionalFormat>& formats,
+                                        const FeatureFormulaWriteContext& ctx);
+
 /// Emits `format` as one framed block. A data bar whose id is in `linked`
 /// has an x14 counterpart carrying its lengths, and keeps the pre-2010
 /// 10/90 in the legacy record as Excel does. Fails on a rule the records

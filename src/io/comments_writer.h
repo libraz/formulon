@@ -23,19 +23,22 @@
 namespace formulon::io {
 
 /// Serialises a `CellComment` list into a complete `xl/comments<N>.xml`
-/// document. The author table is built from the unique `author` strings
-/// present in `comments` (in first-occurrence order); each `<comment>`
-/// references its author by index. Empty `comments` returns the empty
+/// document. The author table starts with `known_authors` (in order) and is
+/// extended with the unique `author` strings of `comments` in
+/// first-occurrence order; each `<comment>` references its author by index. Empty `comments` returns the empty
 /// string — the writer must NOT emit an empty comments part. A non-empty
 /// `uid` is written as the comment's `xr:uid` attribute.
-std::string write_comments(const std::vector<CellComment>& comments);
+std::string write_comments(const std::vector<CellComment>& comments,
+                           const std::vector<std::string>& known_authors = {});
 
-/// Serialises a VML drawing with one hidden note shape per `(row, col)` in
-/// `anchors`. `drawing_id` (1-based, unique per package) sets the shape-id
-/// block: `<o:idmap data>` is `drawing_id` and shapes are numbered from
-/// `1024 * drawing_id + 1`.
-std::string write_vml_drawing(const std::vector<std::pair<std::uint32_t, std::uint32_t>>& anchors,
-                              std::uint32_t drawing_id);
+/// Serialises a VML drawing with one note shape per entry of `shapes`. A shape
+/// with source `xml` is re-emitted as it was with only its anchor, visibility
+/// and cell patched; any other is laid out in Excel's default box unless it
+/// carries its own, and hidden unless it is marked visible. `drawing_id`
+/// (1-based, unique per package) sets the shape-id block: `<o:idmap data>` is
+/// `drawing_id` and new shapes are numbered from `1024 * drawing_id + 1`,
+/// skipping the ids source shapes carry.
+std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint32_t drawing_id);
 
 /// A VML drawing with no shapes (`write_vml_drawing({}, 1)`).
 std::string write_vml_drawing_stub();

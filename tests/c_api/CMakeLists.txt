@@ -30,6 +30,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_authoring_test.cpp
   formulon_c_pivot_definition_test.cpp
   formulon_c_pivot_filters_test.cpp
+  formulon_c_pivot_filter_persistence_test.cpp
   formulon_c_pivot_grouping_test.cpp
   formulon_c_pivot_lifecycle_test.cpp
   formulon_c_pivot_read_test.cpp
@@ -48,13 +49,19 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_styles_lifetime_test.cpp
   formulon_c_styles_mutation_test.cpp
   formulon_c_styles_num_formats_test.cpp
+  formulon_c_table_test.cpp
   formulon_c_test.cpp
   formulon_c_theme_test.cpp
   formulon_c_threaded_comments_test.cpp
+  formulon_c_view_style_fidelity_test.cpp
   formulon_c_workbook_view_test.cpp
   formulon_c_validation_test.cpp
+  formulon_c_workbook_protection_test.cpp
   formulon_c_values_test.cpp
   formulon_c_save_test.cpp
+  formulon_c_shapes_sparklines_test.cpp
+  formulon_c_data_table_test.cpp
+  formulon_c_slicers_test.cpp
   formulon_c_trace_test.cpp
   formulon_c_zip_budget_test.cpp
   partial_recalc_test.cpp

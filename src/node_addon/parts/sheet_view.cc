@@ -36,6 +36,10 @@ Napi::Object DefaultSheetView(Napi::Env env) {
   view.Set("topLeftCol", Napi::Number::New(env, 0));
   view.Set("paneTopLeftRow", Napi::Number::New(env, 0));
   view.Set("paneTopLeftCol", Napi::Number::New(env, 0));
+  view.Set("splitX", Napi::Number::New(env, 0));
+  view.Set("splitY", Napi::Number::New(env, 0));
+  view.Set("showFormulas", Napi::Number::New(env, 0));
+  view.Set("showOutlineSymbols", Napi::Number::New(env, 1));
   return view;
 }
 
@@ -76,6 +80,7 @@ Napi::Object ColumnLayoutToJs(Napi::Env env, const fm_column_layout_t& entry) {
   col.Set("width", Napi::Number::New(env, entry.width));
   col.Set("hidden", Napi::Number::New(env, entry.hidden));
   col.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+  col.Set("collapsed", Napi::Number::New(env, static_cast<int32_t>(entry.collapsed)));
   // The C getter reports logical presence, including legacy aggregate
   // layouts with a non-zero width but a clear raw presence bit. Keep the
   // binding defensive in case an older ABI implementation is loaded.
@@ -93,6 +98,7 @@ Napi::Object RowLayoutToJs(Napi::Env env, const fm_row_layout_t& entry) {
   row.Set("customHeight", Napi::Number::New(env, entry.custom_height));
   row.Set("hidden", Napi::Number::New(env, entry.hidden));
   row.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+  row.Set("collapsed", Napi::Number::New(env, static_cast<int32_t>(entry.collapsed)));
   row.Set("hasStyle", Napi::Number::New(env, entry.has_style));
   row.Set("styleXf", Napi::Number::New(env, entry.style_xf));
   return row;
@@ -150,6 +156,10 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("topLeftCol", Napi::Number::New(env, v.top_left_col));
   view.Set("paneTopLeftRow", Napi::Number::New(env, v.pane_top_left_row));
   view.Set("paneTopLeftCol", Napi::Number::New(env, v.pane_top_left_col));
+  view.Set("splitX", Napi::Number::New(env, v.split_x));
+  view.Set("splitY", Napi::Number::New(env, v.split_y));
+  view.Set("showFormulas", Napi::Number::New(env, v.show_formulas));
+  view.Set("showOutlineSymbols", Napi::Number::New(env, v.show_outline_symbols));
   return MakeFieldResult(env, MakeOkStatus(env), "view", view);
 }
 
@@ -279,6 +289,14 @@ Napi::Value Workbook::SetSheetShowZeros(const Napi::CallbackInfo& info) {
   return InvokeSheetFlag(*this, info, &fm_sheet_set_show_zeros);
 }
 
+Napi::Value Workbook::SetSheetShowFormulas(const Napi::CallbackInfo& info) {
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_formulas);
+}
+
+Napi::Value Workbook::SetSheetShowOutlineSymbols(const Napi::CallbackInfo& info) {
+  return InvokeSheetFlag(*this, info, &fm_sheet_set_show_outline_symbols);
+}
+
 Napi::Value Workbook::SetSheetRightToLeft(const Napi::CallbackInfo& info) {
   return InvokeSheetFlag(*this, info, &fm_sheet_set_right_to_left);
 }
@@ -289,6 +307,10 @@ Napi::Value Workbook::SetSheetTopLeft(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetSheetPaneTopLeft(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_pane_top_left);
+}
+
+Napi::Value Workbook::SetSheetSplit(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_sheet_set_split);
 }
 
 Napi::Value Workbook::GetSheetSelection(const Napi::CallbackInfo& info) {
@@ -381,6 +403,15 @@ Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_column_outline);
 }
 
+Napi::Value Workbook::SetColumnCollapsed(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const uint32_t first = ArgU32(info, 1);
+    const uint32_t last = ArgU32(info, 2);
+    return fm_sheet_set_column_collapsed(handle, sheet, first, last, ArgFlag(info, 3));
+  });
+}
+
 Napi::Value Workbook::SetColumnStyle(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_column_style);
 }
@@ -421,6 +452,8 @@ Napi::Value Workbook::GetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   out.Set("baseColWidth", Napi::Number::New(env, d.base_col_width));
   out.Set("hasDefaultColWidth", Napi::Boolean::New(env, d.has_default_col_width != 0));
   out.Set("hasDefaultRowHeight", Napi::Boolean::New(env, d.has_default_row_height != 0));
+  out.Set("customHeight", Napi::Boolean::New(env, d.custom_height != 0));
+  out.Set("zeroHeight", Napi::Boolean::New(env, d.zero_height != 0));
   out.Set("effectiveDefaultColWidth", Napi::Number::New(env, d.effective_default_col_width));
   out.Set("effectiveDefaultRowHeight", Napi::Number::New(env, d.effective_default_row_height));
   return out;
@@ -438,12 +471,18 @@ Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   CheckedSpecReader reader(env);
   bool has_default_col_width = false;
   bool has_default_row_height = false;
+  // An omitted flag keeps the stored one.
   fm_sheet_format_defaults d{};
+  if (fm_sheet_get_format_defaults(handle_, ArgU32(info, 0), &d) != 0) {
+    d = fm_sheet_format_defaults{};
+  }
   d.default_col_width = reader.Double(spec, "defaultColWidth", 0.0, &has_default_col_width);
   d.default_row_height = reader.Double(spec, "defaultRowHeight", 0.0, &has_default_row_height);
   d.base_col_width = reader.Double(spec, "baseColWidth", 8.0);
   d.has_default_col_width = reader.Bool(spec, "hasDefaultColWidth", has_default_col_width) ? 1 : 0;
   d.has_default_row_height = reader.Bool(spec, "hasDefaultRowHeight", has_default_row_height) ? 1 : 0;
+  d.custom_height = reader.Bool(spec, "customHeight", d.custom_height != 0) ? 1 : 0;
+  d.zero_height = reader.Bool(spec, "zeroHeight", d.zero_height != 0) ? 1 : 0;
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -543,6 +582,14 @@ Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_row_outline);
+}
+
+Napi::Value Workbook::SetRowCollapsed(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+    const uint32_t row = ArgU32(info, 1);
+    return fm_sheet_set_row_collapsed(handle, sheet, row, ArgFlag(info, 2));
+  });
 }
 
 Napi::Value Workbook::SetRowStyle(const Napi::CallbackInfo& info) {

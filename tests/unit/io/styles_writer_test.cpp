@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -57,7 +58,7 @@ TEST(StylesWriter, RetainsUnmodelledTopLevelStyleSections) {
       "xmlns:x14=\"urn:test:x14\" mc:Ignorable=\"x14\" "
       "xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\">"
       "<colors><indexedColors><rgbColor rgb=\"FF112233\"/></indexedColors></colors>"
-      "<tableStyles count=\"1\" defaultTableStyle=\"TableStyleMedium2\" defaultPivotStyle=\"PivotStyleLight16\"/>"
+      "<tableStyles count=\"0\" defaultTableStyle=\"TableStyleMedium2\" defaultPivotStyle=\"PivotStyleLight16\"/>"
       "<futureStyles vendor=\"example\"><futureStyle id=\"7\"/></futureStyles>"
       "<extLst><ext uri=\"urn:test\"><x14:future/></ext></extLst>"
       "</styleSheet>";
@@ -69,16 +70,70 @@ TEST(StylesWriter, RetainsUnmodelledTopLevelStyleSections) {
   EXPECT_NE(xml.find("mc:Ignorable=\"x14\""), std::string::npos);
   EXPECT_NE(xml.find("<colors><indexedColors><rgbColor rgb=\"FF112233\"/></indexedColors></colors>"),
             std::string::npos);
-  EXPECT_NE(xml.find("<tableStyles count=\"1\""), std::string::npos);
+  EXPECT_NE(xml.find("<tableStyles count=\"0\" defaultTableStyle=\"TableStyleMedium2\" "
+                     "defaultPivotStyle=\"PivotStyleLight16\"/>"),
+            std::string::npos);
   EXPECT_NE(xml.find("<futureStyles vendor=\"example\"><futureStyle id=\"7\"/></futureStyles>"), std::string::npos);
   EXPECT_NE(xml.find("<extLst><ext uri=\"urn:test\"><x14:future/></ext></extLst>"), std::string::npos);
 
   auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
   ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
   EXPECT_EQ(round_or.value().colors_xml, read_or.value().colors_xml);
-  EXPECT_EQ(round_or.value().table_styles_xml, read_or.value().table_styles_xml);
+  EXPECT_TRUE(round_or.value().table_styles.present);
+  EXPECT_EQ(round_or.value().table_styles.default_table_style, "TableStyleMedium2");
+  EXPECT_EQ(round_or.value().table_styles.default_pivot_style, "PivotStyleLight16");
   EXPECT_EQ(round_or.value().ext_lst_xml, read_or.value().ext_lst_xml);
   EXPECT_EQ(round_or.value().unknown_top_level_xml, read_or.value().unknown_top_level_xml);
+}
+
+TEST(StylesWriter, CustomTableStylesRoundTripAfterDxfsBeforeColors) {
+  const std::string source =
+      "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:xr9=\"http://schemas.microsoft.com/office/spreadsheetml/2016/revision9\">"
+      "<dxfs count=\"2\"><dxf><font><b/></font></dxf><dxf><fill><patternFill><bgColor rgb=\"FFDDEBF7\"/>"
+      "</patternFill></fill></dxf></dxfs>"
+      "<tableStyles count=\"2\" defaultTableStyle=\"Corporate\" defaultPivotStyle=\"PivotStyleLight16\">"
+      "<tableStyle name=\"Corporate\" pivot=\"0\" count=\"3\" xr9:uid=\"{00000000-0000-0000-0000-000000000001}\">"
+      "<tableStyleElement type=\"wholeTable\" dxfId=\"1\"/>"
+      "<tableStyleElement type=\"headerRow\" dxfId=\"0\"/>"
+      "<tableStyleElement type=\"firstRowStripe\" size=\"2\" dxfId=\"1\"/>"
+      "</tableStyle>"
+      "<tableStyle name=\"PivotOnly\" table=\"0\" count=\"1\"><tableStyleElement type=\"pageFieldLabels\"/>"
+      "</tableStyle></tableStyles>"
+      "<colors><mruColors><color rgb=\"FF112233\"/></mruColors></colors>"
+      "</styleSheet>";
+  auto read_or = read_styles(std::vector<std::uint8_t>(source.begin(), source.end()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const TableStylesSection& section = read_or.value().table_styles;
+  EXPECT_EQ(section.default_table_style, "Corporate");
+  ASSERT_EQ(section.styles.size(), 2U);
+  const CustomTableStyle& corporate = section.styles[0];
+  EXPECT_EQ(corporate.name, "Corporate");
+  EXPECT_FALSE(corporate.pivot);
+  EXPECT_TRUE(corporate.table);
+  ASSERT_EQ(corporate.elements.size(), 3U);
+  EXPECT_EQ(corporate.elements[2].type, "firstRowStripe");
+  EXPECT_EQ(corporate.elements[2].size, 2U);
+  EXPECT_EQ(corporate.elements[2].dxf_id, std::optional<std::uint32_t>(1U));
+  EXPECT_FALSE(section.styles[1].table);
+  EXPECT_FALSE(section.styles[1].elements[0].dxf_id.has_value());
+
+  const std::string xml = write_styles(read_or.value());
+  const std::size_t dxfs_end = xml.find("</dxfs>");
+  const std::size_t table_styles = xml.find("<tableStyles count=\"2\"");
+  const std::size_t colors = xml.find("<colors>");
+  ASSERT_NE(dxfs_end, std::string::npos);
+  ASSERT_NE(table_styles, std::string::npos);
+  ASSERT_NE(colors, std::string::npos);
+  EXPECT_LT(dxfs_end, table_styles);
+  EXPECT_LT(table_styles, colors);
+  EXPECT_NE(xml.find("<tableStyle name=\"Corporate\" pivot=\"0\" count=\"3\""), std::string::npos);
+  EXPECT_NE(xml.find("xr9:uid=\"{00000000-0000-0000-0000-000000000001}\">"), std::string::npos);
+  EXPECT_NE(xml.find("<tableStyleElement type=\"firstRowStripe\" size=\"2\" dxfId=\"1\"/>"), std::string::npos);
+
+  auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
+  ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+  EXPECT_EQ(write_styles(round_or.value()), xml);
 }
 
 TEST(StylesWriter, EmitsExplicitFalseFontTogglesForDifferentialFormat) {

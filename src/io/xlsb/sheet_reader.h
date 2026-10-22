@@ -17,6 +17,7 @@
 #include "io/array_anchor_budget.h"
 #include "io/xlsb/ptg_reader.h"
 #include "phonetic.h"
+#include "protection.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -55,10 +56,20 @@ struct SheetDecodeState {
   /// True once `BrtEndSheetData` has been seen: everything from there to
   /// `BrtEndSheet` is tail.
   bool in_tail = false;
-  /// True between the first BrtBeginWsView and its BrtEndWsView, the one
-  /// view the model carries; later windows' views are not folded into it.
+  /// True between the first BrtBeginWsView and its BrtEndWsView, the view
+  /// the model carries.
   bool in_main_ws_view = false;
   bool main_ws_view_seen = false;
+  /// A later BrtBeginWsView's view (another workbook window) and its
+  /// iWbkView, open until its BrtEndWsView appends it to `extra_views_xml`.
+  bool in_extra_ws_view = false;
+  SheetView extra_view;
+  std::uint32_t extra_workbook_view = 0;
+
+  /// The view a BrtPane / BrtSel belongs to, or null outside a view.
+  SheetView* open_view(Sheet& sheet) {
+    return in_main_ws_view ? &sheet.mutable_view() : in_extra_ws_view ? &extra_view : nullptr;
+  }
   /// True once the merged-cell block, or any record of a later slot, has
   /// been passed. This is the fallback grammar phase for tail records not
   /// covered by an explicit slot id.
@@ -68,6 +79,9 @@ struct SheetDecodeState {
   /// are never retained, but this marker keeps unrelated records after them
   /// in the correct post-hyperlink buffer.
   bool hyperlinks_seen = false;
+  /// Decoded BrtRangeProtection records, stored as `<protectedRanges>` once
+  /// the sheet is read.
+  std::vector<ProtectedRange> protected_ranges;
   /// Source records this sheet could not carry whole (see
   /// `RecordDisposition::kAccounted`).
   std::uint32_t dropped_records = 0;

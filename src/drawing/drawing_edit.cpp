@@ -47,7 +47,7 @@ Error unparseable(const char* message, std::string_view detail) {
 class Geometry {
  public:
   Geometry(const Workbook& wb, const Sheet& sheet)
-      : sheet_(sheet), model_(print::resolve_column_width_model(wb.styles(), print::GeometryMode::kDisplay)) {}
+      : sheet_(sheet), model_(resolve_column_width_model(wb.styles(), GeometryMode::kDisplay)) {}
 
   std::int64_t size(bool row_axis, std::uint32_t index) const {
     const double pt = row_axis ? print::effective_row_height_pt(sheet_, index)
@@ -91,7 +91,7 @@ class Geometry {
 
  private:
   const Sheet& sheet_;
-  print::ColumnWidthModel model_;
+  ColumnWidthModel model_;
 };
 
 template <typename Fn>

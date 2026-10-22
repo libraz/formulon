@@ -293,7 +293,8 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
       "<autoFilter ref=\"A1:B3\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
       "</autoFilter>"));
   table.sort_state_xml = "<sortState ref=\"A1:B3\"><sortCondition ref=\"B2:B3\" descending=\"1\"/></sortState>";
-  table.table_style_info_xml = "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>";
+  table.style_info.show_row_stripes = false;
+  table.style_info.extra_attrs = " futureFlag=\"kept\"";
   table.ext_lst_xml = "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>";
 
   ASSERT_EQ(fm_workbook_table_update(wb.handle, index, "A1:B4", nullptr, -1, -1), 0);
@@ -304,7 +305,9 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   EXPECT_NE(formulon::io::auto_filter_xml(table.auto_filter_xml.get()).find("filterColumn"), std::string::npos);
   EXPECT_NE(table.sort_state_xml.find("ref=\"A1:B3\""), std::string::npos);
   EXPECT_NE(table.sort_state_xml.find("sortCondition"), std::string::npos);
-  EXPECT_EQ(table.table_style_info_xml, "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>");
+  EXPECT_EQ(table.style_info.name, "CustomStyle");
+  EXPECT_FALSE(table.style_info.show_row_stripes);
+  EXPECT_EQ(table.style_info.extra_attrs, " futureFlag=\"kept\"");
   EXPECT_EQ(table.ext_lst_xml,
             "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>");
 
@@ -321,7 +324,10 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   EXPECT_NE(formulon::io::auto_filter_xml(reloaded.auto_filter_xml.get()).find("West"), std::string::npos);
   EXPECT_EQ(reloaded.sort_state_xml,
             "<sortState ref=\"A1:B3\"><sortCondition ref=\"B2:B3\" descending=\"1\"/></sortState>");
-  EXPECT_EQ(reloaded.table_style_info_xml, "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>");
+  EXPECT_TRUE(reloaded.style_info.present);
+  EXPECT_EQ(reloaded.style_info.name, "CustomStyle");
+  EXPECT_FALSE(reloaded.style_info.show_row_stripes);
+  EXPECT_EQ(reloaded.style_info.extra_attrs, " futureFlag=\"kept\"");
   EXPECT_EQ(reloaded.ext_lst_xml,
             "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>");
 

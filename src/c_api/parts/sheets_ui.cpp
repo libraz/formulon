@@ -363,10 +363,61 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t she
   c.text = std::string(text);
   if (found < list.size()) {
     c.uid = std::move(list[found].uid);
+    c.visible = list[found].visible;
+    c.has_box = list[found].has_box;
+    c.box = list[found].box;
+    c.vml_shape = std::move(list[found].vml_shape);
     list[found] = std::move(c);
   } else {
     list.push_back(std::move(c));
   }
+  return 0;
+}
+
+namespace {
+
+formulon::CellComment* FindNote(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row, std::uint32_t col) {
+  for (formulon::CellComment& c : wb->workbook().sheet(sheet).mutable_comments()) {
+    if (c.row == row && c.col == col) {
+      return &c;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                                    std::uint32_t col, std::int32_t* out_visible) {
+  clear_last_error();
+  if (out_visible == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_comment_visible: out_visible is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_visible"); rc != 0) {
+    return rc;
+  }
+  const formulon::CellComment* note = FindNote(wb, sheet, row, col);
+  if (note == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "fm_sheet_get_comment_visible: no comment at cell",
+                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  *out_visible = note->visible ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                                    std::uint32_t col, std::int32_t visible) {
+  clear_last_error();
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_set_comment_visible"); rc != 0) {
+    return rc;
+  }
+  formulon::CellComment* note = FindNote(wb, sheet, row, col);
+  if (note == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kNotFound, "fm_sheet_set_comment_visible: no comment at cell",
+                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+  note->visible = visible != 0;
   return 0;
 }
 

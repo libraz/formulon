@@ -3,12 +3,13 @@
 // (`xl/worksheets/sheet*.xml`). Walks the worksheet DOM and decodes
 // every CF block into `cf::ConditionalFormat` records. Consults the
 // worksheet-level `<extLst><ext><x14:conditionalFormattings>` overlay
-// (Excel 2010+) for `dataBar` rules only: negative-fill / negative-
+// (Excel 2010+) for `dataBar` and `iconSet` rules: negative-fill / negative-
 // border / axis colour+position / gradient-vs-solid have no
 // representation in the legacy `<dataBar>` schema and are only ever
 // expressed there, cross-referenced to the legacy `<cfRule id="...">`
-// GUID. Other x14 rule types (icon-set custom criteria, data-bar
-// exponential scaling beyond what's modelled here) are not consulted.
+// GUID. Other x14 rule types and settings (data-bar exponential scaling
+// beyond what's modelled here) are not consulted. The x14 `iconSet` of a
+// linked icon-set rule supplies its custom icons.
 //
 // Design references:
 //   * src/io/pivot_table_reader.h (sister reader, similar style)
@@ -106,6 +107,10 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source);
 /// lengths). Attributes and colours the element omits leave `out`
 /// unchanged.
 void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out);
+
+/// The per-level `<x14:cfIcon>` children of an `<x14:iconSet>` element, in
+/// document order; empty for a null node or one without them.
+std::vector<cf::CfIcon> read_x14_icon_set_icons(const pugi::xml_node& x14_icon_set);
 
 }  // namespace formulon::io
 

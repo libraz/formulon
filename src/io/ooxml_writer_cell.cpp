@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/data_table_xml.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/external_link_writer.h"
@@ -272,6 +273,21 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     return false;
   }
 
+  // The anchor of a What-If data table carries the `<f t="dataTable">`; the
+  // other result cells are plain values.
+  if (const DataTable* table = has_formula ? nullptr : sheet.data_table_anchored_at(row, col)) {
+    out.append("<c r=\"");
+    out.append(a1::encode_a1(row, col));
+    out.append("\"");
+    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
+    AppendFormulaValueType(out, cell.cached_value);
+    out.push_back('>');
+    append_data_table_formula(out, *table);
+    AppendFormulaValue(out, cell.cached_value);
+    out.append("</c>");
+    return true;
+  }
+
   // Pre-screen NaN/Inf number literals so we never half-emit a cell tag.
   // Formula cells with non-finite cached values still emit the <f>; only
   // the <v> is downgraded.
@@ -433,6 +449,9 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool defa
   }
   if (layout.outline_level != 0U) {
     append_xml_attr_uint(out, "outlineLevel", layout.outline_level);
+  }
+  if (layout.collapsed) {
+    out.append(" collapsed=\"1\"");
   }
   if (layout.show_phonetic) {
     out.append(" ph=\"1\"");

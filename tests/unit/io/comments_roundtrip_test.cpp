@@ -162,6 +162,31 @@ TEST(CommentsRoundTrip, VmlStubIsValidXml) {
   EXPECT_NE(vml.find("urn:schemas-microsoft-com:vml"), std::string::npos);
 }
 
+TEST(CommentsRoundTrip, KeptShapeOutsideDrawingIdBlockIsRenumbered) {
+  const auto shape_with = [](const char* id, std::uint32_t row) {
+    CommentShape shape;
+    shape.row = row;
+    shape.xml = std::string("<v:shape id=\"") + id +
+                "\" type=\"#_x0000_t202\"><x:ClientData ObjectType=\"Note\"><x:Row>0</x:Row>"
+                "<x:Column>0</x:Column></x:ClientData></v:shape>";
+    return shape;
+  };
+  // Drawing 2 owns ids 2049..2071; 1025 belongs to drawing 1, and the repeated 2050 collides.
+  const std::vector<CommentShape> shapes = {shape_with("_x0000_s1025", 0), shape_with("_x0000_s2050", 1),
+                                            shape_with("_x0000_s2050", 2)};
+  const std::string vml = write_vml_drawing(shapes, 2U);
+  EXPECT_EQ(vml.find("_x0000_s1025"), std::string::npos) << vml;
+  const auto count = [&](const std::string& needle) {
+    std::size_t n = 0;
+    for (std::size_t at = vml.find(needle); at != std::string::npos; at = vml.find(needle, at + 1U)) {
+      ++n;
+    }
+    return n;
+  };
+  EXPECT_EQ(count("id=\"_x0000_s2050\""), 1U) << vml;
+  EXPECT_EQ(count("<v:shape id=\"_x0000_s20"), 3U) << vml;
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon

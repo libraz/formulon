@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "node_addon/parts/workbook_class.h"
 
@@ -61,6 +63,14 @@ Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record& f) {
   out.Set("charset", Napi::Number::New(env, static_cast<uint32_t>(f.charset)));
   out.Set("hasSize", Napi::Boolean::New(env, f.has_size != 0));
   out.Set("scheme", Napi::Number::New(env, static_cast<uint32_t>(f.scheme)));
+  out.Set("outline", Napi::Boolean::New(env, f.outline != 0));
+  out.Set("shadow", Napi::Boolean::New(env, f.shadow != 0));
+  out.Set("condense", Napi::Boolean::New(env, f.condense != 0));
+  out.Set("extend", Napi::Boolean::New(env, f.extend != 0));
+  out.Set("hasOutline", Napi::Boolean::New(env, f.has_outline != 0));
+  out.Set("hasShadow", Napi::Boolean::New(env, f.has_shadow != 0));
+  out.Set("hasCondense", Napi::Boolean::New(env, f.has_condense != 0));
+  out.Set("hasExtend", Napi::Boolean::New(env, f.has_extend != 0));
   out.Set("color", ColorSpecToJs(env, f.color));
   return out;
 }
@@ -88,6 +98,14 @@ void PullFontRecord(CheckedSpecReader& reader, const Napi::Object& record, std::
   // An omitted size means "leave the size unchanged" unless hasSize says otherwise.
   out->has_size = reader.Bool(record, "hasSize", size_present) ? 1 : 0;
   out->scheme = reader.U8(record, "scheme", 0U);
+  out->outline = reader.Bool(record, "outline", false) ? 1 : 0;
+  out->shadow = reader.Bool(record, "shadow", false) ? 1 : 0;
+  out->condense = reader.Bool(record, "condense", false) ? 1 : 0;
+  out->extend = reader.Bool(record, "extend", false) ? 1 : 0;
+  out->has_outline = reader.Bool(record, "hasOutline", false) ? 1 : 0;
+  out->has_shadow = reader.Bool(record, "hasShadow", false) ? 1 : 0;
+  out->has_condense = reader.Bool(record, "hasCondense", false) ? 1 : 0;
+  out->has_extend = reader.Bool(record, "hasExtend", false) ? 1 : 0;
   out->color_argb = reader.U32(record, "colorArgb", 0xFF000000U);
   out->color = PullColorSpec(reader, record, "color");
 }
@@ -99,16 +117,70 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record& f) {
   out.Set("bgArgb", Napi::Number::New(env, f.bg_argb));
   out.Set("fg", ColorSpecToJs(env, f.fg));
   out.Set("bg", ColorSpecToJs(env, f.bg));
+  if (f.has_gradient != 0) {
+    Napi::Object gradient = Napi::Object::New(env);
+    gradient.Set("type", Napi::Number::New(env, f.gradient_type));
+    gradient.Set("degree", Napi::Number::New(env, f.gradient_degree));
+    gradient.Set("left", Napi::Number::New(env, f.gradient_left));
+    gradient.Set("right", Napi::Number::New(env, f.gradient_right));
+    gradient.Set("top", Napi::Number::New(env, f.gradient_top));
+    gradient.Set("bottom", Napi::Number::New(env, f.gradient_bottom));
+    Napi::Array stops = Napi::Array::New(env, f.gradient_stop_count);
+    for (std::size_t i = 0; i < f.gradient_stop_count; ++i) {
+      Napi::Object stop = Napi::Object::New(env);
+      stop.Set("position", Napi::Number::New(env, f.gradient_stops[i].position));
+      stop.Set("colorArgb", Napi::Number::New(env, f.gradient_stops[i].color_argb));
+      stop.Set("color", ColorSpecToJs(env, f.gradient_stops[i].color));
+      stops.Set(static_cast<uint32_t>(i), stop);
+    }
+    gradient.Set("stops", stops);
+    out.Set("gradient", gradient);
+  }
   return out;
 }
 
-fm_fill_record PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record) {
+/// Reads a fill record out of a JS object. `stops` owns the gradient stops
+/// for the duration of the C ABI call, which borrows the pointer.
+fm_fill_record PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
+                              std::vector<fm_gradient_stop>* stops) {
   fm_fill_record out{};
   out.pattern = reader.U8(record, "pattern", 0U);
   out.fg_argb = reader.U32(record, "fgArgb", 0U);
   out.bg_argb = reader.U32(record, "bgArgb", 0U);
   out.fg = PullColorSpec(reader, record, "fg");
   out.bg = PullColorSpec(reader, record, "bg");
+  Napi::Object gradient;
+  if (reader.Object(record, "gradient", &gradient)) {
+    out.has_gradient = 1;
+    out.gradient_type = static_cast<int32_t>(reader.U32(gradient, "type", 0U));
+    out.gradient_degree = reader.Double(gradient, "degree", 0.0);
+    out.gradient_left = reader.Double(gradient, "left", 0.0);
+    out.gradient_right = reader.Double(gradient, "right", 0.0);
+    out.gradient_top = reader.Double(gradient, "top", 0.0);
+    out.gradient_bottom = reader.Double(gradient, "bottom", 0.0);
+    Napi::Array list;
+    if (reader.Array(gradient, "stops", &list)) {
+      const uint32_t n = list.Length();
+      stops->reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        Napi::Value element;
+        if (!reader.ArrayElement(list, i, &element)) {
+          continue;
+        }
+        Napi::Object item;
+        if (!reader.Object(element, "stops[]", &item)) {
+          continue;
+        }
+        fm_gradient_stop stop{};
+        stop.position = reader.Double(item, "position", 0.0);
+        stop.color_argb = reader.U32(item, "colorArgb", 0U);
+        stop.color = PullColorSpec(reader, item, "color");
+        stops->push_back(stop);
+      }
+    }
+    out.gradient_stops = stops->empty() ? nullptr : stops->data();
+    out.gradient_stop_count = stops->size();
+  }
   return out;
 }
 
@@ -440,8 +512,9 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   fm_fill_record fr{};
+  std::vector<fm_gradient_stop> stops;
   return AddStyleRecord(
-      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record); },
+      info, [&](CheckedSpecReader& reader, const Napi::Object& record) { fr = PullFillRecord(reader, record, &stops); },
       [&](fm_workbook_t* handle, uint32_t* idx) { return fm_styles_add_fill(handle, fr, idx); });
 }
 
@@ -548,6 +621,7 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   std::string num_fmt_code;
   std::string alignment_xml;
   std::string protection_xml;
+  std::vector<fm_gradient_stop> fill_stops;
   fm_dxf_record dxf{};
   return AddStyleRecord(
       info,
@@ -561,7 +635,7 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
         Napi::Object fill;
         if (reader.Object(record, "fill", &fill)) {
           dxf.fill_engaged = 1;
-          dxf.fill = PullFillRecord(reader, fill);
+          dxf.fill = PullFillRecord(reader, fill, &fill_stops);
         }
 
         Napi::Object border;
@@ -661,6 +735,127 @@ Napi::Value Workbook::RemoveCellStyle(const Napi::CallbackInfo& info) {
   }
   const std::string name = ArgString(info, 0);
   return MakeStatus(env, fm_styles_remove_cell_style(handle_, name.c_str()));
+}
+
+// ---- Custom table / PivotTable styles --------------------------------
+
+Napi::Value Workbook::TableStyleCount(const Napi::CallbackInfo& info) {
+  return StyleCountResult(info, handle_, &fm_styles_get_table_style_count);
+}
+
+Napi::Value Workbook::GetTableStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  const uint32_t index = ArgU32(info, 0);
+  fm_table_style_t style{};
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_table_style(handle_, index, &style) : kBindingInvalidHandle;
+  if (rc != 0) {
+    style = fm_table_style_t{};
+  }
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("name", JsString(env, style.name));
+  out.Set("pivot", JsBool(env, style.pivot));
+  out.Set("table", JsBool(env, style.table));
+  Napi::Array elements = Napi::Array::New(env, style.element_count);
+  for (uint32_t i = 0; i < style.element_count; ++i) {
+    const fm_table_style_element_t& element = style.elements[i];
+    Napi::Object e = Napi::Object::New(env);
+    e.Set("type", JsString(env, element.type));
+    e.Set("size", Napi::Number::New(env, element.size));
+    if (element.has_dxf_id != 0) {
+      e.Set("dxfId", Napi::Number::New(env, element.dxf_id));
+    }
+    elements.Set(i, e);
+  }
+  out.Set("elements", elements);
+  return out;
+}
+
+Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const Napi::Object record = ArgObjectOrEmpty(info, 0);
+  CheckedSpecReader reader(env);
+  std::string name;
+  reader.String(record, "name", &name);
+  const bool pivot = reader.Bool(record, "pivot", true);
+  const bool table = reader.Bool(record, "table", true);
+  Napi::Array elements;
+  const bool has_elements = reader.Array(record, "elements", &elements);
+  std::vector<std::string> types;
+  std::vector<fm_table_style_element_t> records;
+  for (uint32_t i = 0; has_elements && reader.ok() && i < elements.Length(); ++i) {
+    Napi::Value value;
+    Napi::Object element;
+    if (!reader.ArrayElement(elements, i, &value) || !reader.Object(value, "elements[]", &element)) {
+      continue;
+    }
+    std::string type;
+    reader.String(element, "type", &type);
+    types.push_back(std::move(type));
+    fm_table_style_element_t out{};
+    out.size = reader.U32(element, "size", 1U);
+    bool has_dxf = false;
+    out.dxf_id = reader.U32(element, "dxfId", 0U, &has_dxf);
+    out.has_dxf_id = has_dxf ? 1 : 0;
+    records.push_back(out);
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  // `types` has stopped growing, so its `c_str()` views stay put.
+  for (std::size_t i = 0; i < records.size(); ++i) {
+    records[i].type = types[i].c_str();
+  }
+  fm_table_style_t style{};
+  style.name = name.c_str();
+  style.pivot = pivot ? 1 : 0;
+  style.table = table ? 1 : 0;
+  style.elements = records.empty() ? nullptr : records.data();
+  style.element_count = static_cast<uint32_t>(records.size());
+  return MakeStatus(env, fm_styles_set_table_style(handle_, &style));
+}
+
+Napi::Value Workbook::RemoveTableStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::string name = ArgString(info, 0);
+  return MakeStatus(env, fm_styles_remove_table_style(handle_, name.c_str()));
+}
+
+Napi::Value Workbook::GetTableStyleDefaults(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const char* table = nullptr;
+  const char* pivot = nullptr;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_styles_get_table_style_defaults(handle_, &table, &pivot) : kBindingInvalidHandle;
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("tableStyle", JsString(env, rc == 0 ? table : nullptr));
+  out.Set("pivotStyle", JsString(env, rc == 0 ? pivot : nullptr));
+  return out;
+}
+
+Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const Napi::Object defaults = ArgObjectOrEmpty(info, 0);
+  CheckedSpecReader reader(env);
+  std::string table;
+  std::string pivot;
+  const bool has_table = reader.String(defaults, "tableStyle", &table);
+  const bool has_pivot = reader.String(defaults, "pivotStyle", &pivot);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fm_styles_set_table_style_defaults(handle_, has_table ? table.c_str() : nullptr,
+                                                            has_pivot ? pivot.c_str() : nullptr));
 }
 
 // ---- Theme, colour resolution, effective style ----------------------

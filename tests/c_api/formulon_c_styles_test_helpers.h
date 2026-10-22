@@ -43,12 +43,16 @@ static_assert(offsetof(fm_cell_xf, apply_number_format) == 88U, "fm_cell_xf.appl
 static_assert(offsetof(fm_cell_xf, quote_prefix) == 112U, "fm_cell_xf.quote_prefix offset changed");
 static_assert(offsetof(fm_cell_xf, has_protection) == 116U, "fm_cell_xf.has_protection offset changed");
 static_assert(offsetof(fm_cell_xf, hidden) == 124U, "fm_cell_xf.hidden offset changed");
-static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 368U : 376U), "fm_dxf_record ABI layout changed");
-static_assert(offsetof(fm_dxf_record, num_fmt_code) == 352U, "fm_dxf_record.num_fmt_code offset changed");
-static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 356U : 360U),
+static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 456U : 472U), "fm_dxf_record ABI layout changed");
+static_assert(offsetof(fm_dxf_record, num_fmt_code) == (sizeof(void*) == 4U ? 440U : 448U),
+              "fm_dxf_record.num_fmt_code offset changed");
+static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 444U : 456U),
               "fm_dxf_record.alignment_xml offset changed");
-static_assert(offsetof(fm_dxf_record, protection_xml) == (sizeof(void*) == 4U ? 360U : 368U),
+static_assert(offsetof(fm_dxf_record, protection_xml) == (sizeof(void*) == 4U ? 448U : 464U),
               "fm_dxf_record.protection_xml offset changed");
+static_assert(sizeof(fm_font_record) == 120U, "fm_font_record ABI layout changed");
+static_assert(sizeof(fm_fill_record) == (sizeof(void*) == 4U ? 120U : 128U), "fm_fill_record ABI layout changed");
+static_assert(sizeof(fm_gradient_stop) == 40U, "fm_gradient_stop ABI layout changed");
 
 // `fm_styles_batch` is fifteen pointer-width slots: five (array, count,
 // out-indices) triples whose `size_t` counts are the same width as a pointer on

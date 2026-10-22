@@ -123,20 +123,63 @@ void PatchX14DataBar(pugi::xml_node captured, const cf::DataBarSpec& bar) {
   }
 }
 
+/// True when `a` and `b` name the same icon for every level.
+bool SameCustomIcons(const std::vector<cf::CfIcon>& a, const std::vector<cf::CfIcon>& b) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (a[i].icon_set != b[i].icon_set || a[i].icon_id != b[i].icon_id) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Brings a captured `<x14:iconSet>` in line with the model's custom icons:
+/// rebuilt from the model when it has any, stripped of its `custom` flag and
+/// `<x14:cfIcon>` children when it has none. Returns whether anything changed.
+bool PatchX14IconSet(pugi::xml_node x14_rule, const cf::IconSetSpec& spec, const parser::ExternalBookIndexer* indexer) {
+  pugi::xml_node captured = x14_rule.child("x14:iconSet");
+  if (!captured) {
+    return false;
+  }
+  if (SameCustomIcons(read_x14_icon_set_icons(captured), spec.custom_icons)) {
+    return false;
+  }
+  if (spec.custom_icons.empty()) {
+    captured.remove_attribute("custom");
+    RemoveMatchingChildren(captured, "x14:cfIcon", [](const pugi::xml_node&) { return true; });
+    return true;
+  }
+  pugi::xml_document built_doc;
+  const std::string built_xml = build_x14_icon_set_element(spec, indexer);
+  if (!built_doc.load_string(built_xml.c_str())) {
+    return false;
+  }
+  x14_rule.insert_copy_before(built_doc.child("x14:iconSet"), captured);
+  x14_rule.remove_child(captured);
+  return true;
+}
+
 }  // namespace
 
 std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vector<cf::ConditionalFormat>& formats,
                                  const parser::ExternalBookIndexer* indexer) {
   const std::string entries = build_x14_cf_overlay_entries(formats, indexer);
   std::unordered_map<std::string, const cf::DataBarSpec*> model_bars;
+  std::unordered_map<std::string, const cf::IconSetSpec*> model_icon_sets;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
       if (!rule.id.empty() && rule.data_bar.has_value()) {
         model_bars.emplace(rule.id, &*rule.data_bar);
       }
+      if (!rule.id.empty() && rule.icon_set.has_value()) {
+        model_icon_sets.emplace(rule.id, &*rule.icon_set);
+      }
     }
   }
-  if (entries.empty() && (ext_lst_xml.empty() || model_bars.empty())) {
+  if (entries.empty() && (ext_lst_xml.empty() || (model_bars.empty() && model_icon_sets.empty()))) {
     return ext_lst_xml;
   }
 
@@ -171,6 +214,10 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
       for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
            block = block.next_sibling("x14:conditionalFormatting")) {
         for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+          if (const auto icons = model_icon_sets.find(rule.attribute("id").value()); icons != model_icon_sets.end()) {
+            changed |= PatchX14IconSet(rule, *icons->second, indexer);
+            continue;
+          }
           const auto it = model_bars.find(rule.attribute("id").value());
           const pugi::xml_node bar = rule.child("x14:dataBar");
           if (it == model_bars.end() || !bar) {

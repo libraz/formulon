@@ -360,6 +360,36 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
+    'pivotSetStyleInfo',
+    {
+      act: (b) =>
+        b.wb.pivotSetStyleInfo(0, b.pivot, {
+          name: 'PivotStyleMedium9',
+          showRowHeaders: false,
+          showColHeaders: true,
+          showRowStripes: true,
+          showColStripes: false,
+          showLastColumn: true,
+        }),
+      expect: (b) => {
+        const style = b.wb.pivotGetStyleInfo(0, b.pivot);
+        assert.ok(style.status.ok);
+        assert.equal(style.name, 'PivotStyleMedium9');
+        assert.deepEqual(
+          [
+            style.showRowHeaders,
+            style.showColHeaders,
+            style.showRowStripes,
+            style.showColStripes,
+            style.showLastColumn,
+          ],
+          [false, true, true, false, true],
+        );
+        assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
+      },
+    },
+  ],
+  [
     'pivotSetLayout',
     {
       act: (b) => b.wb.pivotSetLayout(0, b.pivot, 1),
@@ -374,7 +404,8 @@ const PIVOT_MUTATORS = [
     {
       act: (b) => b.wb.pivotFieldAdd(0, b.pivot, { sourceName: 'Product', customName: 'Fruit', axis: 3 }),
       expect: (b, r) => {
-        assert.equal(r.index, 4);
+        // Product is a cache column the fixture already added, so it is updated in place.
+        assert.equal(r.index, b.product);
         assert.deepEqual(pivotGrid(b.wb), ['Fruit|(すべて)', '|', ...BASE_GRID]);
       },
     },
@@ -682,6 +713,49 @@ test('manual pivot sort order keeps item order and rejects bad arguments', async
   }
 });
 
+test('pivot filters and subtotal functions survive save and reload', async () => {
+  const mod = await getModule();
+  const b = buildPivot(mod);
+  try {
+    assert.ok(b.wb.pivotFilterAdd(0, b.pivot, GREATER_THAN_20).ok);
+    assert.ok(b.wb.pivotFieldAddSubtotalFn(0, b.pivot, b.region, 2).ok);
+    assert.ok(b.wb.pivotFieldAddSubtotalFn(0, b.pivot, b.region, 0).ok);
+    const region = b.wb.pivotFieldAt(0, b.pivot, b.region);
+    assert.equal(region.defaultSubtotal, false);
+    assert.deepEqual(region.subtotalFns, [0, 2]);
+    assert.equal(b.wb.pivotFieldAt(0, b.pivot, b.amount).defaultSubtotal, true);
+    assert.deepEqual(b.wb.pivotFieldAt(0, b.pivot, b.amount).subtotalFns, []);
+
+    const saved = b.wb.save();
+    assert.ok(saved.status.ok, JSON.stringify(saved.status));
+    assert.match(
+      packagePart(saved.bytes, 'xl/pivotTables/pivotTable1.xml'),
+      /<filters count="1"><filter fld="0" type="valueGreaterThan" evalOrder="-1" id="1" iMeasureFld="0">/,
+    );
+    const back = mod.Workbook.loadBytes(saved.bytes);
+    try {
+      assert.ok(back.setExcelProfileId('win-365-ja_JP').ok);
+      assert.equal(back.pivotFilterCount(0, 0).value, 1);
+      const filter = back.pivotFilterAt(0, 0, 0);
+      assert.ok(filter.status.ok, JSON.stringify(filter.status));
+      assert.equal(filter.type, 1);
+      assert.equal(filter.fieldName, 'Region');
+      assert.equal(filter.valueKind, 1);
+      assert.equal(filter.valueDouble, 20);
+      assert.deepEqual(pivotGrid(back), WEST_ONLY);
+      const field = back.pivotFieldAt(0, 0, 0);
+      assert.equal(field.defaultSubtotal, false);
+      assert.deepEqual(field.subtotalFns, [0, 2]);
+      assert.ok(back.pivotFilterClear(0, 0).ok);
+      assert.doesNotMatch(packagePart(back.save().bytes, 'xl/pivotTables/pivotTable1.xml'), /<filters/);
+    } finally {
+      back.delete();
+    }
+  } finally {
+    b.wb.delete();
+  }
+});
+
 // ---- Status on the fallible accessors ----------------------------------
 //
 // Every accessor backed by a status-returning C ABI call carries that
@@ -711,8 +785,14 @@ const STATUS_ACCESSORS = [
   ['xfCount', [], null],
   ['dxfCount', [], null],
   ['cellStyleCount', [], null],
+  ['tableStyleCount', [], null],
   ['cellStyleXfCount', [], null],
   ['calcMode', [], null],
+  ['fullPrecision', [], null],
+  ['calcOnSave', [], null],
+  ['getCommentVisible', null, [99, 0, 0]],
+  ['refMode', [], null],
+  ['date1904', [], null],
   ['excelProfileId', [], null],
   ['localizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],
   ['canonicalizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],

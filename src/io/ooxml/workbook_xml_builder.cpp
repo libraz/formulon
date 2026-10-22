@@ -375,6 +375,37 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
   return out;
 }
 
+namespace {
+
+// Rewrites each `r:id` in raw workbook XML from its source relationship id to the id the writer assigns.
+std::string RemapRelationshipIds(const Workbook& wb, const EmissionPlan& plan, const std::string& xml) {
+  constexpr std::string_view kAttr = " r:id=\"";
+  if (xml.find(kAttr) == std::string::npos) {
+    return xml;
+  }
+  std::vector<std::pair<std::string, std::string>> id_map;
+  BuildWorkbookRels(wb.sheet_count(), plan, wb, nullptr, &id_map);
+  std::string out;
+  out.reserve(xml.size());
+  std::size_t pos = 0;
+  for (std::size_t at = xml.find(kAttr); at != std::string::npos; at = xml.find(kAttr, pos)) {
+    const std::size_t begin = at + kAttr.size();
+    const std::size_t end = xml.find('"', begin);
+    if (end == std::string::npos) {
+      break;
+    }
+    const std::string_view id(xml.data() + begin, end - begin);
+    out.append(xml, pos, begin - pos);
+    const auto hit = std::find_if(id_map.begin(), id_map.end(), [&id](const auto& entry) { return entry.first == id; });
+    out.append(hit != id_map.end() ? std::string_view(hit->second) : id);
+    pos = end;
+  }
+  out.append(xml, pos, std::string::npos);
+  return out;
+}
+
+}  // namespace
+
 std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   std::string out;
   out.reserve(512 + wb.sheet_count() * 96 + wb.defined_names().size() * 96 + plan.pivot_caches.size() * 64);
@@ -485,12 +516,22 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     const bool calc_mode_default = calc_mode == Workbook::CalcMode::kAuto;
     const bool iterate_default =
         !iter.enabled && iter.max_iterations == kDefaultMaxIterations && iter.max_change == kDefaultMaxChange;
-    if (!calc_mode_default || !iterate_default) {
+    const CalcOptions& calc = wb.calc_options();
+    if (!calc_mode_default || !iterate_default || !calc.is_default()) {
       out.append("  <calcPr");
+      if (calc.has_calc_id) {
+        append_xml_attr_uint(out, "calcId", calc.calc_id);
+      }
       if (calc_mode == Workbook::CalcMode::kManual) {
         append_xml_attr(out, "calcMode", "manual");
       } else if (calc_mode == Workbook::CalcMode::kAutoNoTable) {
         append_xml_attr(out, "calcMode", "autoNoTable");
+      }
+      if (calc.full_calc_on_load) {
+        emit_xsd_bool_attr(out, "fullCalcOnLoad", true);
+      }
+      if (calc.ref_mode == RefMode::kR1C1) {
+        append_xml_attr(out, "refMode", "R1C1");
       }
       if (iter.enabled) {
         emit_xsd_bool_attr(out, "iterate", true);
@@ -502,6 +543,24 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
         out.append(" iterateDelta=\"");
         format_double(out, iter.max_change);
         out.push_back('"');
+      }
+      if (!calc.full_precision) {
+        emit_xsd_bool_attr(out, "fullPrecision", false);
+      }
+      if (!calc.calc_completed) {
+        emit_xsd_bool_attr(out, "calcCompleted", false);
+      }
+      if (!calc.calc_on_save) {
+        emit_xsd_bool_attr(out, "calcOnSave", false);
+      }
+      if (!calc.concurrent_calc) {
+        emit_xsd_bool_attr(out, "concurrentCalc", false);
+      }
+      if (calc.has_concurrent_manual_count) {
+        append_xml_attr_uint(out, "concurrentManualCount", calc.concurrent_manual_count);
+      }
+      if (calc.force_full_calc) {
+        emit_xsd_bool_attr(out, "forceFullCalc", true);
       }
       out.append("/>\n");
     }
@@ -520,7 +579,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   }
   if (!wb.workbook_ext_lst_xml().empty()) {
     out.append("  ");
-    out.append(wb.workbook_ext_lst_xml());
+    out.append(RemapRelationshipIds(wb, plan, wb.workbook_ext_lst_xml()));
     out.push_back('\n');
   }
   out.append("</workbook>\n");
@@ -528,7 +587,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
 }
 
 std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan, const Workbook& wb,
-                              WriteDiagnostics* diagnostics) {
+                              WriteDiagnostics* diagnostics, std::vector<std::pair<std::string, std::string>>* id_map) {
   std::string out;
   out.reserve(256 + sheet_count * 192 + plan.pivot_caches.size() * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
@@ -627,6 +686,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
       continue;
     }
     const std::string target = r.target_external ? r.target : TargetRelativeToWorkbook(r.target);
+    if (id_map != nullptr) {
+      id_map->emplace_back(r.id, "rId" + std::to_string(next_rid));
+    }
     AppendRelationship(out, next_rid++, std::string_view(r.type), target, r.target_external,
                        /*escape_target=*/true);
   }

@@ -5,17 +5,22 @@
 
 #include "io/pivot_table_writer.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "io/pivot_attr_names.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "pivot/field_lookup.h"
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "utils/a1_ref.h"
@@ -70,6 +75,13 @@ bool HasRawAttr(const std::vector<std::pair<std::string, std::string>>& attrs, s
   return false;
 }
 
+/// True when `attrs` carries any of the report-form attributes the reader
+/// keeps only as an override of the form `layout` derives.
+bool HasFormOverride(const std::vector<std::pair<std::string, std::string>>& attrs) {
+  return HasRawAttr(attrs, "compact") || HasRawAttr(attrs, "outline") || HasRawAttr(attrs, "compactData") ||
+         HasRawAttr(attrs, "outlineData");
+}
+
 /// Emits one `<pivotField>` element. Self-closing when there are no
 /// items; open/close pair otherwise.
 ///
@@ -118,44 +130,90 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::P
     out.append(names->attr);
     out.append("=\"1\"");
   }
-  // An absent `sortType` reads back as manual (`<items>` order), so only
-  // label-sorted axis fields spell their direction out.
+  // An absent `sortType` reads back as manual (`<items>` order), so a
+  // label-sorted axis field spells its direction out, as does a field off
+  // the axes whose order was stated rather than defaulted.
   const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
                        field.axis == pivot::PivotAxis::Page;
-  if (on_axis && !field.sort.manual) {
+  if ((on_axis || field.sort.stated) && !field.sort.manual) {
     out.append(field.sort.ascending ? " sortType=\"ascending\"" : " sortType=\"descending\"");
   }
   // The report form is per field in Excel (`compact` / `outline` default to
-  // true); every field carries the table's form, as Excel writes it.
-  if (layout == pivot::PivotLayout::Tabular) {
-    out.append(" compact=\"0\" outline=\"0\"");
-  } else if (layout == pivot::PivotLayout::Outline) {
-    out.append(" compact=\"0\"");
+  // true); every field carries the table's form, as Excel writes it, unless
+  // the field was read with a form of its own (kept in `passthrough_attrs`).
+  if (!HasFormOverride(field.passthrough_attrs)) {
+    if (layout == pivot::PivotLayout::Tabular) {
+      out.append(" compact=\"0\" outline=\"0\"");
+    } else if (layout == pivot::PivotLayout::Outline) {
+      out.append(" compact=\"0\"");
+    }
   }
   // Re-emit any unmodelled `<pivotField>` attributes captured on read.
   append_raw_attrs(out, field.passthrough_attrs);
-  if (field.items.empty()) {
-    out.append("/>");
+  if (field.items.empty() && field.marker_items.empty()) {
+    if (field.raw_children_xml.empty()) {
+      out.append("/>");
+    } else {
+      out.push_back('>');
+      out.append(field.raw_children_xml);
+      out.append("</pivotField>");
+    }
     return;
   }
   // Excel closes a field's `<items>` with one entry per subtotal it shows:
   // `<item t="default"/>` for the implicit one, or a token per explicitly
-  // selected function. The reader drops these on the way in because they
-  // are not real items -- the selection lives in `default_subtotal` /
-  // `subtotal_fns` -- so the writer has to put them back. Excel treats a
-  // field whose items lack its subtotal entry as damaged and offers to
-  // repair the file, and every part of that file is otherwise valid, so
-  // nothing short of Excel's own verdict reports it.
-  std::size_t subtotal_markers = automatic_subtotal ? 1U : 0U;
+  // selected function. Excel treats a field whose items lack its subtotal
+  // entry as damaged and offers to repair the file, so the markers follow
+  // `default_subtotal` / `subtotal_fns`: the ones read from the file are
+  // re-emitted while they still spell that selection, and regenerated once
+  // it changed. `grand` and `blank` have no model and are always kept.
+  std::vector<std::string_view> expected;
+  if (automatic_subtotal) {
+    expected.emplace_back("default");
+  }
   for (const pivot::SubtotalFn fn : subtotal_fns) {
-    if (find_pivot_subtotal_name(fn) != nullptr) {
-      ++subtotal_markers;
+    if (const PivotSubtotalName* names = find_pivot_subtotal_name(fn); names != nullptr) {
+      expected.push_back(names->item);
     }
   }
+  const auto is_subtotal = [](std::string_view type) {
+    if (type == "default") {
+      return true;
+    }
+    for (const PivotSubtotalName& e : kPivotSubtotalNames) {
+      if (type == e.item) {
+        return true;
+      }
+    }
+    return false;
+  };
+  std::vector<std::string_view> authored;
+  for (const pivot::PivotMarkerItem& marker : field.marker_items) {
+    if (is_subtotal(marker.type)) {
+      authored.emplace_back(marker.type);
+    }
+  }
+  const bool keep_subtotals = authored == expected;
+  const auto closes_list = [&](const pivot::PivotMarkerItem& marker) {
+    return is_subtotal(marker.type) || marker.type == "grand";
+  };
+  std::size_t count = field.items.size() + (keep_subtotals ? 0U : expected.size());
+  for (const pivot::PivotMarkerItem& marker : field.marker_items) {
+    count += keep_subtotals || !is_subtotal(marker.type) ? 1U : 0U;
+  }
   out.append("><items count=\"");
-  out.append(std::to_string(field.items.size() + subtotal_markers));
+  out.append(std::to_string(count));
   out.append("\">");
+  const auto append_blanks_at = [&](std::size_t position) {
+    for (const pivot::PivotMarkerItem& marker : field.marker_items) {
+      const std::size_t anchor = std::min(marker.after_items, field.items.size());
+      if (!closes_list(marker) && anchor == position) {
+        out.append(marker.xml);
+      }
+    }
+  };
   for (std::size_t i = 0; i < field.items.size(); ++i) {
+    append_blanks_at(i);
     const pivot::PivotItem& item = field.items[i];
     // Re-emit the cache index the reader captured from `<item x="N">` so
     // the item still points at the same `shared_items` entry after a
@@ -170,21 +228,31 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, pivot::P
     if (!item.visible) {
       out.append(" h=\"1\"");
     }
+    append_raw_attrs(out, item.passthrough_attrs);
     out.append("/>");
   }
-  if (automatic_subtotal) {
-    out.append("<item t=\"default\"/>");
-  }
-  for (const pivot::SubtotalFn fn : subtotal_fns) {
-    const PivotSubtotalName* names = find_pivot_subtotal_name(fn);
-    if (names == nullptr) {
-      continue;
+  append_blanks_at(field.items.size());
+  if (keep_subtotals) {
+    for (const pivot::PivotMarkerItem& marker : field.marker_items) {
+      if (is_subtotal(marker.type)) {
+        out.append(marker.xml);
+      }
     }
-    out.append("<item t=\"");
-    out.append(names->item);
-    out.append("\"/>");
+  } else {
+    for (const std::string_view type : expected) {
+      out.append("<item t=\"");
+      out.append(type);
+      out.append("\"/>");
+    }
   }
-  out.append("</items></pivotField>");
+  for (const pivot::PivotMarkerItem& marker : field.marker_items) {
+    if (marker.type == "grand") {
+      out.append(marker.xml);
+    }
+  }
+  out.append("</items>");
+  out.append(field.raw_children_xml);
+  out.append("</pivotField>");
 }
 
 /// Emits `<rowFields>` or `<colFields>` block. Only called when `order`
@@ -216,6 +284,28 @@ void AppendFieldOrder(std::string& out, std::string_view tag, const std::vector<
   out.append("</");
   out.append(tag);
   out.push_back('>');
+}
+
+/// Emits `<pivotTableStyleInfo>`; the name attribute is omitted when empty.
+void AppendStyleInfo(std::string& out, const pivot::PivotStyleInfo& info) {
+  const auto flag = [](bool on) { return on ? "1" : "0"; };
+  out.append("<pivotTableStyleInfo");
+  if (!info.name.empty()) {
+    out.append(" name=\"");
+    AppendXmlAttrEscaped(out, info.name);
+    out.push_back('"');
+  }
+  out.append(" showRowHeaders=\"");
+  out.append(flag(info.show_row_headers));
+  out.append("\" showColHeaders=\"");
+  out.append(flag(info.show_col_headers));
+  out.append("\" showRowStripes=\"");
+  out.append(flag(info.show_row_stripes));
+  out.append("\" showColStripes=\"");
+  out.append(flag(info.show_col_stripes));
+  out.append("\" showLastColumn=\"");
+  out.append(flag(info.show_last_column));
+  out.append("\"/>");
 }
 
 /// Emits the `<dataFields>` block. Only called when
@@ -256,18 +346,247 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
     if (df.show_as_base_item.has_value()) {
       append_xml_attr_uint(out, "baseItem", *df.show_as_base_item);
     }
-    if (x14_show_as.empty()) {
+    // The show-as extension carries the x14 mode plus whatever else the
+    // source's `<x14:dataField>` held.
+    const bool x14_ext = !x14_show_as.empty() || !df.x14_attrs.empty() || !df.x14_children_xml.empty();
+    if (!x14_ext && df.raw_ext_xml.empty()) {
       out.append("/>");
-    } else {
-      out.append("><extLst><ext uri=\"");
+      continue;
+    }
+    out.append("><extLst>");
+    if (x14_ext) {
+      out.append("<ext uri=\"");
       out.append(kPivotDataFieldExtUri);
       out.append("\" xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">");
-      out.append("<x14:dataField pivotShowAs=\"");
-      out.append(x14_show_as);
-      out.append("\"/></ext></extLst></dataField>");
+      out.append("<x14:dataField");
+      if (!x14_show_as.empty()) {
+        append_xml_attr(out, "pivotShowAs", x14_show_as);
+      }
+      append_raw_attrs(out, df.x14_attrs);
+      if (df.x14_children_xml.empty()) {
+        out.append("/></ext>");
+      } else {
+        out.push_back('>');
+        out.append(df.x14_children_xml);
+        out.append("</x14:dataField></ext>");
+      }
     }
+    out.append(df.raw_ext_xml);
+    out.append("</extLst></dataField>");
   }
   out.append("</dataFields>");
+}
+
+/// The `<pivotFields>` index a public filter is written against, or
+/// `nullopt` when it designates nothing a file can name.
+///
+/// A value filter prunes the leaves of its axis: the named field when it sits
+/// on that axis, otherwise the axis's innermost field, which is how the value
+/// pass reads it. Label and date filters apply to the field they name.
+std::optional<std::uint32_t> FilterFieldIndex(const pivot::PivotTable& table, const pivot::PivotFilter& filter) {
+  const std::optional<std::size_t> named = pivot::resolve_field_by_any_name(table, filter.field_name);
+  if (!named.has_value()) {
+    return std::nullopt;
+  }
+  if (!pivot::is_value_filter_type(filter.type)) {
+    return static_cast<std::uint32_t>(*named);
+  }
+  if (filter.data_field_index >= table.data_fields().size()) {
+    return std::nullopt;
+  }
+  const std::vector<std::uint32_t>& order =
+      filter.axis == pivot::PivotAxis::Row ? table.row_field_order() : table.col_field_order();
+  if (order.empty()) {
+    return std::nullopt;
+  }
+  if (std::find(order.begin(), order.end(), *named) != order.end()) {
+    return static_cast<std::uint32_t>(*named);
+  }
+  return order.back();
+}
+
+/// A filter payload as the value pass reads it: `int` / `double` as-is,
+/// anything else as zero. Empty when the number is not finite, which no
+/// file can spell.
+std::optional<double> FilterNumber(const std::variant<int, double, std::string>& value) {
+  double number = 0.0;
+  if (const auto* d = std::get_if<double>(&value)) {
+    number = *d;
+  } else if (const auto* i = std::get_if<int>(&value)) {
+    number = static_cast<double>(*i);
+  }
+  return std::isfinite(number) ? std::optional<double>(number) : std::nullopt;
+}
+
+/// The upper bound of a range filter; empty when unset or not finite.
+std::optional<double> FilterNumberHigh(const std::variant<std::monostate, int, double>& value) {
+  if (const auto* d = std::get_if<double>(&value)) {
+    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
+  }
+  if (const auto* i = std::get_if<int>(&value)) {
+    return static_cast<double>(*i);
+  }
+  return std::nullopt;
+}
+
+/// Appends `<customFilter operator="..." val="..."/>`; an empty `op` is the
+/// schema's default `equal` and is omitted, as Excel does for a pattern.
+void AppendCustomFilter(std::string& out, std::string_view op, std::string_view text) {
+  out.append("<customFilter");
+  if (!op.empty()) {
+    append_xml_attr(out, "operator", op);
+  }
+  append_xml_attr(out, "val", text);
+  out.append("/>");
+}
+
+void AppendCustomFilter(std::string& out, std::string_view op, double number) {
+  out.append("<customFilter");
+  append_xml_attr(out, "operator", op);
+  append_xml_attr_number(out, "val", number);
+  out.append("/>");
+}
+
+/// Serialises one public filter as Excel writes it from the filter dialogs.
+/// Returns false, emitting nothing, for an entry that filters nothing and
+/// that the file has no spelling for: a range with no upper bound, a
+/// non-finite bound, a date bound given as text.
+bool AppendGeneratedFilter(std::string& out, const pivot::PivotFilter& filter, std::uint32_t field_index,
+                           std::uint32_t id) {
+  std::string_view type;
+  switch (filter.type) {
+    case pivot::FilterType::ValueTop10:
+      type = "count";
+      break;
+    case pivot::FilterType::ValueGreaterThan:
+      type = "valueGreaterThan";
+      break;
+    case pivot::FilterType::ValueBetween:
+      type = "valueBetween";
+      break;
+    case pivot::FilterType::LabelContains:
+      type = "captionContains";
+      break;
+    case pivot::FilterType::LabelBeginsWith:
+      type = "captionBeginsWith";
+      break;
+    case pivot::FilterType::LabelDate:
+      type = "dateBetween";
+      break;
+    default:
+      return false;  // Outside the public vocabulary; never added through the API.
+  }
+  const bool ranged = filter.type == pivot::FilterType::ValueBetween || filter.type == pivot::FilterType::LabelDate;
+  const bool caption =
+      filter.type == pivot::FilterType::LabelContains || filter.type == pivot::FilterType::LabelBeginsWith;
+  // A date bound has no zero fallback: a text payload leaves the date filter
+  // inert, and a written zero would not.
+  const bool text_payload = std::holds_alternative<std::string>(filter.value);
+  const std::optional<double> low = caption ? std::optional<double>(0.0)
+                                    : filter.type == pivot::FilterType::LabelDate && text_payload
+                                        ? std::nullopt
+                                        : FilterNumber(filter.value);
+  const std::optional<double> high = ranged ? FilterNumberHigh(filter.value_high) : std::optional<double>(0.0);
+  if (!low || !high) {
+    return false;
+  }
+  out.append("<filter");
+  append_xml_attr_uint(out, "fld", field_index);
+  append_xml_attr(out, "type", type);
+  out.append(" evalOrder=\"-1\"");
+  append_xml_attr_uint(out, "id", id);
+  if (pivot::is_value_filter_type(filter.type)) {
+    append_xml_attr_uint(out, "iMeasureFld", filter.data_field_index);
+  }
+  std::string_view operand;
+  if (const auto* text = std::get_if<std::string>(&filter.value); text != nullptr && caption) {
+    operand = *text;
+  }
+  if (caption) {
+    append_xml_attr(out, "stringValue1", operand);
+  }
+  out.append("><autoFilter ref=\"A1\"><filterColumn colId=\"0\">");
+  if (filter.type == pivot::FilterType::ValueTop10) {
+    out.append("<top10");
+    append_xml_attr_number(out, "val", *low);
+    append_xml_attr_number(out, "filterVal", *low);
+    out.append("/>");
+  } else if (caption) {
+    const pivot::CaptionPredicate predicate = filter.type == pivot::FilterType::LabelContains
+                                                  ? pivot::CaptionPredicate::Contains
+                                                  : pivot::CaptionPredicate::BeginsWith;
+    out.append("<customFilters>");
+    AppendCustomFilter(out, {}, *pivot::caption_wildcard_pattern(predicate, operand));
+    out.append("</customFilters>");
+  } else if (ranged) {
+    out.append("<customFilters and=\"1\">");
+    AppendCustomFilter(out, "greaterThanOrEqual", *low);
+    AppendCustomFilter(out, "lessThanOrEqual", *high);
+    out.append("</customFilters>");
+  } else {
+    out.append("<customFilters>");
+    AppendCustomFilter(out, "greaterThan", *low);
+    out.append("</customFilters>");
+  }
+  out.append("</filterColumn></autoFilter></filter>");
+  return true;
+}
+
+/// Emits `<filters>`: the public entries and the retained ones, interleaved
+/// back into the order they were read in. A decoded entry that still points
+/// at the field and data field it was read with re-emits its source bytes;
+/// so does one whose field name never resolved (the pivot had no cache to
+/// name it from). Every other public entry is serialised from the model under
+/// an `id` no sibling uses. Nothing is written when no entry survives.
+void AppendFilters(std::string& out, const pivot::PivotTable& table) {
+  const std::vector<pivot::PivotFilter>& active = table.active_filters();
+  const std::vector<pivot::RetainedPivotFilter>& retained = table.retained_filters();
+  if (active.empty() && retained.empty()) {
+    return;
+  }
+  std::uint32_t next_id = 1;
+  for (const pivot::PivotFilter& filter : active) {
+    if (filter.source.has_value()) {
+      next_id = std::max(next_id, filter.source->id + 1U);
+    }
+  }
+  for (const pivot::RetainedPivotFilter& entry : retained) {
+    next_id = std::max(next_id, entry.id + 1U);
+  }
+  std::string body;
+  std::size_t count = 0;
+  std::size_t next_retained = 0;
+  const auto flush_retained = [&](std::size_t active_index) {
+    for (; next_retained < retained.size() && retained[next_retained].active_before <= active_index; ++next_retained) {
+      body.append(retained[next_retained].xml);
+      ++count;
+    }
+  };
+  for (std::size_t i = 0; i < active.size(); ++i) {
+    flush_retained(i);
+    const pivot::PivotFilter& filter = active[i];
+    const std::optional<std::uint32_t> field_index = FilterFieldIndex(table, filter);
+    if (filter.source.has_value() &&
+        (filter.field_name.empty() ||
+         (field_index == filter.source->field_index && filter.data_field_index == filter.source->data_field_index))) {
+      body.append(filter.source->xml);
+      ++count;
+      continue;
+    }
+    if (field_index.has_value() && AppendGeneratedFilter(body, filter, *field_index, next_id)) {
+      ++next_id;
+      ++count;
+    }
+  }
+  flush_retained(retained.size() + active.size());
+  if (count == 0) {
+    return;
+  }
+  out.append("<filters count=\"");
+  out.append(std::to_string(count));
+  out.append("\">");
+  out.append(body);
+  out.append("</filters>");
 }
 
 /// Location attributes Excel derives from the report shape, used when the
@@ -335,17 +654,20 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
     out.append(" subtotalHiddenItems=\"1\"");
   }
   // Report layout as Excel writes it at table level, where it is the form
-  // new fields take (`compact` defaults to true, `outline` to false).
-  switch (table.layout()) {
-    case pivot::PivotLayout::Compact:
-      out.append(" outline=\"1\" outlineData=\"1\"");
-      break;
-    case pivot::PivotLayout::Tabular:
-      out.append(" compact=\"0\" compactData=\"0\"");
-      break;
-    case pivot::PivotLayout::Outline:
-      out.append(" compact=\"0\" compactData=\"0\" outline=\"1\" outlineData=\"1\"");
-      break;
+  // new fields take (`compact` defaults to true, `outline` to false). A form
+  // read back that departs from it is re-emitted from `passthrough_attrs`.
+  if (!HasFormOverride(table.passthrough_attrs())) {
+    switch (table.layout()) {
+      case pivot::PivotLayout::Compact:
+        out.append(" outline=\"1\" outlineData=\"1\"");
+        break;
+      case pivot::PivotLayout::Tabular:
+        out.append(" compact=\"0\" compactData=\"0\"");
+        break;
+      case pivot::PivotLayout::Outline:
+        out.append(" compact=\"0\" compactData=\"0\" outline=\"1\" outlineData=\"1\"");
+        break;
+    }
   }
   // Without `updatedVersion` Excel adds a stray caption row above the
   // pivot on refresh; a captured value is re-emitted below.
@@ -459,12 +781,19 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
     AppendDataFields(out, table.data_fields());
   }
 
-  // Re-emit the tail bin: unmodelled elements the reader captured after
-  // `<dataFields>` (`<formats>`, `<conditionalFormats>`, `<chartFormats>`,
-  // `<pivotTableStyleInfo>`, `<extLst>`, ...). The bytes are owned by the
-  // table and re-appended verbatim so a read -> write round trip preserves
-  // features v1.0 does not model structurally. Tables built from scratch
-  // leave every bin empty.
+  // Re-emit the post-dataFields bins around `<pivotTableStyleInfo>`: the
+  // unmodelled elements the schema places before it (`<formats>`,
+  // `<conditionalFormats>`, `<chartFormats>`, `<pivotHierarchies>`), then
+  // the style, the modelled `<filters>`, then the rest (hierarchy usage,
+  // `<extLst>`, ...). The bin bytes are owned by the table and re-appended
+  // verbatim so a read -> write round trip preserves features this version
+  // does not model structurally. Tables built from scratch leave every bin
+  // empty.
+  out.append(table.raw_passthrough_before_style_info());
+  if (table.style_info().has_value()) {
+    AppendStyleInfo(out, *table.style_info());
+  }
+  AppendFilters(out, table);
   if (!table.raw_passthrough_xml().empty()) {
     out.append(table.raw_passthrough_xml());
   }

@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -382,14 +383,14 @@ std::string ReadX14RuleId(const pugi::xml_node& rule) {
   return std::string(attr_str(rule, "id"));
 }
 
-/// Builds an `id -> <x14:dataBar>` lookup from the worksheet-level
+/// Builds an `id -> <x14:cfRule>` lookup from the worksheet-level
 /// `<extLst><ext><x14:conditionalFormattings>` overlay (Excel 2010+).
-/// Each `<x14:cfRule type="dataBar" id="{GUID}">` cross-references a
+/// Each `<x14:cfRule type="dataBar|iconSet" id="{GUID}">` cross-references a
 /// legacy `<cfRule id="{GUID}">` (see `CFRule::id`); `read_conditional_
-/// formats` applies the match via `ApplyX14DataBarOverlay`. Returns an
-/// empty map when the sheet carries no such overlay (pre-2010 files, or
-/// files with no DataBar rules at all).
-std::unordered_map<std::string, pugi::xml_node> CollectX14DataBarOverlay(const pugi::xml_node& worksheet) {
+/// formats` applies the match via `ApplyX14DataBarOverlay` or
+/// `ApplyX14IconSetOverlay`. Returns an empty map when the sheet carries no
+/// such overlay (pre-2010 files, or files with no such rules at all).
+std::unordered_map<std::string, pugi::xml_node> CollectX14RuleOverlay(const pugi::xml_node& worksheet) {
   std::unordered_map<std::string, pugi::xml_node> out;
   const pugi::xml_node ext_lst = worksheet.child("extLst");
   if (!ext_lst) {
@@ -403,17 +404,34 @@ std::unordered_map<std::string, pugi::xml_node> CollectX14DataBarOverlay(const p
     for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
          block = block.next_sibling("x14:conditionalFormatting")) {
       for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
-        if (attr_str(rule, "type") != "dataBar") {
-          continue;
-        }
-        const pugi::xml_node bar = rule.child("x14:dataBar");
         const std::string id(attr_str(rule, "id"));
-        if (bar && !id.empty()) {
-          out.emplace(id, bar);
+        if (!id.empty()) {
+          out.emplace(id, rule);
         }
       }
     }
   }
+  return out;
+}
+
+/// Reads the per-level `<x14:cfIcon>` children of an `<x14:iconSet>`.
+std::vector<cf::CfIcon> ReadX14CfIcons(const pugi::xml_node& x14_icon_set) {
+  std::vector<cf::CfIcon> icons;
+  for (pugi::xml_node icon = x14_icon_set.child("x14:cfIcon"); icon; icon = icon.next_sibling("x14:cfIcon")) {
+    icons.push_back(cf::CfIcon{std::string(attr_str(icon, "iconSet")), attr_i32(icon, "iconId", 0)});
+  }
+  return icons;
+}
+
+/// Reads an `<x14:cfvo>`: its value is an `<xm:f>` child, not a `val` attribute.
+cf::CfValueObject ReadX14Cfvo(const pugi::xml_node& cfvo) {
+  cf::CfValueObject out{};
+  out.type = enum_from_name(kCfvoTypeNames, attr_str(cfvo, "type"), cf::CfvoType::Number);
+  AppendOoxmlTextUnescaped(out.value, cfvo.child("xm:f").text().get());
+  if (out.type == cf::CfvoType::Formula) {
+    out.value = canonical_feature_formula(out.value);
+  }
+  out.gte = attr_bool(cfvo, "gte", true);
   return out;
 }
 
@@ -544,7 +562,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
 Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet,
                                                                              ReadDiagnostics* diagnostics) {
   std::vector<cf::ConditionalFormat> out;
-  const std::unordered_map<std::string, pugi::xml_node> x14_data_bars = CollectX14DataBarOverlay(worksheet);
+  const std::unordered_map<std::string, pugi::xml_node> x14_rules = CollectX14RuleOverlay(worksheet);
   for (pugi::xml_node block = worksheet.child("conditionalFormatting"); block;
        block = block.next_sibling("conditionalFormatting")) {
     // A conditional-formatting block is a presentation-only overlay; a
@@ -581,9 +599,15 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     cfmt.pivot_scope = attr_bool(block, "pivot");
     for (pugi::xml_node rule = block.child("cfRule"); rule; rule = rule.next_sibling("cfRule")) {
       cf::CFRule parsed = ReadCfRule(rule);
-      if (parsed.type == cf::RuleType::DataBar && parsed.data_bar.has_value() && !parsed.id.empty()) {
-        if (const auto it = x14_data_bars.find(parsed.id); it != x14_data_bars.end()) {
-          ApplyX14DataBarOverlay(it->second, &*parsed.data_bar);
+      if (!parsed.id.empty()) {
+        if (const auto it = x14_rules.find(parsed.id); it != x14_rules.end()) {
+          if (parsed.type == cf::RuleType::DataBar && parsed.data_bar.has_value()) {
+            if (const pugi::xml_node bar = it->second.child("x14:dataBar"); bar) {
+              ApplyX14DataBarOverlay(bar, &*parsed.data_bar);
+            }
+          } else if (parsed.type == cf::RuleType::IconSet && parsed.icon_set.has_value()) {
+            parsed.icon_set->custom_icons = read_x14_icon_set_icons(it->second.child("x14:iconSet"));
+          }
         }
       }
       cfmt.rules.push_back(std::move(parsed));
@@ -595,6 +619,46 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
       cfmt.ext_lst_raw = raw_xml(ext_lst);
     }
     out.push_back(std::move(cfmt));
+  }
+  // An icon-set rule Excel stores only in the x14 extension (custom icons)
+  // has no legacy counterpart to carry it.
+  std::unordered_set<std::string> linked;
+  for (const cf::ConditionalFormat& cfmt : out) {
+    for (const cf::CFRule& rule : cfmt.rules) {
+      linked.insert(rule.id);
+    }
+  }
+  for (pugi::xml_node ext : worksheet.child("extLst").children("ext")) {
+    for (pugi::xml_node block : ext.child("x14:conditionalFormattings").children("x14:conditionalFormatting")) {
+      auto ranges_or = ParseSqref(block.child("xm:sqref").text().get());
+      for (pugi::xml_node rule : block.children("x14:cfRule")) {
+        const std::string id(attr_str(rule, "id"));
+        const pugi::xml_node iset = rule.child("x14:iconSet");
+        if (!ranges_or || id.empty() || !iset || attr_str(rule, "type") != "iconSet" || !linked.insert(id).second) {
+          continue;
+        }
+        cf::CFRule parsed;
+        parsed.type = cf::RuleType::IconSet;
+        parsed.priority = attr_i32(rule, "priority", 1);
+        parsed.id = id;
+        cf::IconSetSpec spec;
+        spec.name = ParseIconSetName(attr_str(iset, "iconSet"));
+        spec.reverse = attr_bool(iset, "reverse", spec.reverse);
+        spec.show_value = attr_bool(iset, "showValue", spec.show_value);
+        spec.percent = attr_bool(iset, "percent", spec.percent);
+        bool floor_read = false;
+        for (pugi::xml_node cfvo : iset.children("x14:cfvo")) {
+          (floor_read ? spec.thresholds.emplace_back() : spec.floor) = ReadX14Cfvo(cfvo);
+          floor_read = true;
+        }
+        spec.custom_icons = ReadX14CfIcons(iset);
+        parsed.icon_set = std::move(spec);
+        cf::ConditionalFormat cfmt;
+        cfmt.sqref = ranges_or.value();
+        cfmt.rules.push_back(std::move(parsed));
+        out.push_back(std::move(cfmt));
+      }
+    }
   }
   return out;
 }
@@ -650,6 +714,10 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
 
 void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out) {
   ApplyX14DataBarOverlay(x14_bar, out);
+}
+
+std::vector<cf::CfIcon> read_x14_icon_set_icons(const pugi::xml_node& x14_icon_set) {
+  return ReadX14CfIcons(x14_icon_set);
 }
 
 void normalize_cf_dxf_ids(std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count) {

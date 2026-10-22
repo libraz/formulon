@@ -32,6 +32,7 @@
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
+#include "table.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -176,6 +177,10 @@ using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 /// parenthesis (type 2), written first, precede its `(`. Any other
 /// placement, type or sequence is dropped.
 ///
+/// `tables`, when given, resolves a PtgList table reference by id into a
+/// structured reference (`io/xlsb/ptg_list.h`); without it one is
+/// `kIoXlsbUnsupportedPtg`.
+///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set
 ///     (PtgTbl/PtgNameX/PtgMemFunc materialisation/...), or a 3-D
@@ -191,7 +196,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
                                               const XlsbExternalBooks& external_books, std::int32_t host_itab = -1,
                                               std::optional<PtgBaseCell> base = std::nullopt,
-                                              parser::FormulaWhitespace* whitespace = nullptr);
+                                              parser::FormulaWhitespace* whitespace = nullptr,
+                                              const std::vector<TableMetadata>* tables = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

@@ -8,8 +8,10 @@
 
 #include <emscripten/val.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "utils/error.h"
@@ -152,6 +154,14 @@ emscripten::val js_font_record(const fm_font_record& f) {
   o.set("charset", static_cast<std::uint32_t>(f.charset));
   o.set("hasSize", f.has_size != 0);
   o.set("scheme", static_cast<std::uint32_t>(f.scheme));
+  o.set("outline", f.outline != 0);
+  o.set("shadow", f.shadow != 0);
+  o.set("condense", f.condense != 0);
+  o.set("extend", f.extend != 0);
+  o.set("hasOutline", f.has_outline != 0);
+  o.set("hasShadow", f.has_shadow != 0);
+  o.set("hasCondense", f.has_condense != 0);
+  o.set("hasExtend", f.has_extend != 0);
   o.set("color", js_color_spec(f.color));
   return o;
 }
@@ -179,6 +189,14 @@ void js_pull_font_record(const emscripten::val& record, std::string* name_storag
   out->has_size =
       reader.boolean(record, "hasSize", reader.has_own(record, "size", "font.size"), "font.hasSize") ? 1 : 0;
   out->scheme = reader.u8(record, "scheme", 0U, "font.scheme");
+  out->outline = reader.boolean(record, "outline", false, "font.outline") ? 1 : 0;
+  out->shadow = reader.boolean(record, "shadow", false, "font.shadow") ? 1 : 0;
+  out->condense = reader.boolean(record, "condense", false, "font.condense") ? 1 : 0;
+  out->extend = reader.boolean(record, "extend", false, "font.extend") ? 1 : 0;
+  out->has_outline = reader.boolean(record, "hasOutline", false, "font.hasOutline") ? 1 : 0;
+  out->has_shadow = reader.boolean(record, "hasShadow", false, "font.hasShadow") ? 1 : 0;
+  out->has_condense = reader.boolean(record, "hasCondense", false, "font.hasCondense") ? 1 : 0;
+  out->has_extend = reader.boolean(record, "hasExtend", false, "font.hasExtend") ? 1 : 0;
   out->color_argb = reader.u32(record, "colorArgb", 0xFF000000U, "font.colorArgb");
   out->color = js_pull_color_spec(record, "color", &reader);
 }
@@ -190,16 +208,63 @@ emscripten::val js_fill_record(const fm_fill_record& f) {
   o.set("bgArgb", f.bg_argb);
   o.set("fg", js_color_spec(f.fg));
   o.set("bg", js_color_spec(f.bg));
+  if (f.has_gradient != 0) {
+    emscripten::val gradient = emscripten::val::object();
+    gradient.set("type", static_cast<std::int32_t>(f.gradient_type));
+    gradient.set("degree", f.gradient_degree);
+    gradient.set("left", f.gradient_left);
+    gradient.set("right", f.gradient_right);
+    gradient.set("top", f.gradient_top);
+    gradient.set("bottom", f.gradient_bottom);
+    emscripten::val stops = emscripten::val::array();
+    for (std::size_t i = 0; i < f.gradient_stop_count; ++i) {
+      emscripten::val stop = emscripten::val::object();
+      stop.set("position", f.gradient_stops[i].position);
+      stop.set("colorArgb", f.gradient_stops[i].color_argb);
+      stop.set("color", js_color_spec(f.gradient_stops[i].color));
+      stops.set(static_cast<std::uint32_t>(i), stop);
+    }
+    gradient.set("stops", stops);
+    o.set("gradient", gradient);
+  }
   return o;
 }
 
-fm_fill_record js_pull_fill_record(const emscripten::val& record, JsNarrowNumericReader& reader) {
+/// Reads a fill record out of a JS object. `stops` owns the gradient stops
+/// for the duration of the C ABI call, which borrows the pointer.
+fm_fill_record js_pull_fill_record(const emscripten::val& record, std::vector<fm_gradient_stop>* stops,
+                                   JsNarrowNumericReader& reader) {
   fm_fill_record fr{};
   fr.pattern = reader.u8(record, "pattern", 0U, "fill.pattern");
   fr.fg_argb = reader.u32(record, "fgArgb", 0U, "fill.fgArgb");
   fr.bg_argb = reader.u32(record, "bgArgb", 0U, "fill.bgArgb");
   fr.fg = js_pull_color_spec(record, "fg", &reader);
   fr.bg = js_pull_color_spec(record, "bg", &reader);
+  const emscripten::val gradient = reader.value(record, "gradient", "fill.gradient");
+  if (js_value_present(gradient)) {
+    fr.has_gradient = 1;
+    fr.gradient_type = static_cast<std::int32_t>(reader.u32(gradient, "type", 0U, "fill.gradient.type"));
+    fr.gradient_degree = reader.number(gradient, "degree", 0.0, "fill.gradient.degree");
+    fr.gradient_left = reader.number(gradient, "left", 0.0, "fill.gradient.left");
+    fr.gradient_right = reader.number(gradient, "right", 0.0, "fill.gradient.right");
+    fr.gradient_top = reader.number(gradient, "top", 0.0, "fill.gradient.top");
+    fr.gradient_bottom = reader.number(gradient, "bottom", 0.0, "fill.gradient.bottom");
+    const emscripten::val list = reader.value(gradient, "stops", "fill.gradient.stops");
+    if (reader.is_array(list, "fill.gradient.stops")) {
+      const uint32_t n = reader.length(list, "fill.gradient.stops");
+      stops->reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        const emscripten::val item = reader.array_element(list, i, "fill.gradient.stops[]");
+        fm_gradient_stop stop{};
+        stop.position = reader.number(item, "position", 0.0, "fill.gradient.stops[].position");
+        stop.color_argb = reader.u32(item, "colorArgb", 0U, "fill.gradient.stops[].colorArgb");
+        stop.color = js_pull_color_spec(item, "color", &reader);
+        stops->push_back(stop);
+      }
+    }
+    fr.gradient_stops = stops->empty() ? nullptr : stops->data();
+    fr.gradient_stop_count = stops->size();
+  }
   return fr;
 }
 
@@ -472,7 +537,8 @@ JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
     return r;
   }
   JsNarrowNumericReader reader("addFill");
-  const fm_fill_record fr = js_pull_fill_record(record, reader);
+  std::vector<fm_gradient_stop> stops;
+  const fm_fill_record fr = js_pull_fill_record(record, &stops, reader);
   if (!reader.ok()) {
     r.status = binding_error_status(kInvalidArgument, reader.message().c_str());
     return r;
@@ -545,6 +611,7 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   std::string num_fmt_code;
   std::string alignment_xml;
   std::string protection_xml;
+  std::vector<fm_gradient_stop> fill_stops;
   fm_dxf_record dxf{};
   JsNarrowNumericReader reader("addDxf");
 
@@ -557,7 +624,7 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   emscripten::val fill = reader.value(record, "fill", "dxf.fill");
   if (js_value_present(fill)) {
     dxf.fill_engaged = 1;
-    dxf.fill = js_pull_fill_record(fill, reader);
+    dxf.fill = js_pull_fill_record(fill, &fill_stops, reader);
   }
 
   emscripten::val border = reader.value(record, "border", "dxf.border");
@@ -689,6 +756,122 @@ JsStatus JsWorkbook::removeCellStyle(const std::string& name) {
     return invalid_handle_status();
   }
   return status_from_rc(fm_styles_remove_cell_style(handle_, name.c_str()));
+}
+
+JsNumberResult JsWorkbook::tableStyleCount() const {
+  if (handle_ == nullptr) {
+    return number_result(kBindingInvalidHandle, 0.0);
+  }
+  uint32_t n = 0;
+  const fm_status_t rc = fm_styles_get_table_style_count(handle_, &n);
+  return number_result(rc, static_cast<double>(n));
+}
+
+emscripten::val JsWorkbook::getTableStyle(uint32_t index) const {
+  emscripten::val o = emscripten::val::object();
+  fm_table_style_t style{};
+  const fm_status_t rc = handle_ != nullptr ? fm_styles_get_table_style(handle_, index, &style) : kBindingInvalidHandle;
+  if (rc != 0) {
+    style = fm_table_style_t{};
+  }
+  o.set("status", status_from_rc(rc));
+  js_set_cstr(o, "name", style.name);
+  o.set("pivot", style.pivot != 0);
+  o.set("table", style.table != 0);
+  emscripten::val elements = emscripten::val::array();
+  for (uint32_t i = 0; i < style.element_count; ++i) {
+    const fm_table_style_element_t& element = style.elements[i];
+    emscripten::val e = emscripten::val::object();
+    js_set_cstr(e, "type", element.type);
+    e.set("size", element.size);
+    if (element.has_dxf_id != 0) {
+      e.set("dxfId", element.dxf_id);
+    }
+    elements.call<void>("push", e);
+  }
+  o.set("elements", elements);
+  return o;
+}
+
+JsStatus JsWorkbook::setTableStyle(emscripten::val style) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("setTableStyle");
+  const std::string name = reader.string(style, "name", "style.name");
+  const bool pivot = reader.boolean(style, "pivot", true, "style.pivot");
+  const bool table = reader.boolean(style, "table", true, "style.table");
+  const emscripten::val elements = reader.value(style, "elements", "style.elements");
+  std::vector<std::string> types;
+  std::vector<fm_table_style_element_t> records;
+  if (reader.ok() && js_value_present(elements)) {
+    if (!reader.is_array(elements, "style.elements")) {
+      return binding_error_status(kInvalidArgument, "setTableStyle: `elements` must be an array");
+    }
+    const uint32_t count = reader.length(elements, "style.elements.length");
+    types.reserve(count);
+    records.reserve(count);
+    for (uint32_t i = 0; i < count && reader.ok(); ++i) {
+      const emscripten::val element = reader.array_element(elements, i, "style.elements[]");
+      types.push_back(reader.string(element, "type", "style.elements[].type"));
+      fm_table_style_element_t record{};
+      record.size = reader.u32(element, "size", 1U, "style.elements[].size");
+      const emscripten::val dxf = reader.value(element, "dxfId", "style.elements[].dxfId");
+      if (reader.ok() && js_value_present(dxf)) {
+        record.has_dxf_id = 1;
+        record.dxf_id = reader.u32_value(dxf, 0U, "style.elements[].dxfId");
+      }
+      records.push_back(record);
+    }
+  }
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  // `types` has stopped growing, so its `c_str()` views stay put.
+  for (std::size_t i = 0; i < records.size(); ++i) {
+    records[i].type = types[i].c_str();
+  }
+  fm_table_style_t record{};
+  record.name = name.c_str();
+  record.pivot = pivot ? 1 : 0;
+  record.table = table ? 1 : 0;
+  record.elements = records.empty() ? nullptr : records.data();
+  record.element_count = static_cast<uint32_t>(records.size());
+  return status_from_rc(fm_styles_set_table_style(handle_, &record));
+}
+
+JsStatus JsWorkbook::removeTableStyle(const std::string& name) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_styles_remove_table_style(handle_, name.c_str()));
+}
+
+emscripten::val JsWorkbook::getTableStyleDefaults() const {
+  emscripten::val o = emscripten::val::object();
+  const char* table = nullptr;
+  const char* pivot = nullptr;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_styles_get_table_style_defaults(handle_, &table, &pivot) : kBindingInvalidHandle;
+  o.set("status", status_from_rc(rc));
+  js_set_cstr(o, "tableStyle", rc == 0 ? table : nullptr);
+  js_set_cstr(o, "pivotStyle", rc == 0 ? pivot : nullptr);
+  return o;
+}
+
+JsStatus JsWorkbook::setTableStyleDefaults(emscripten::val defaults) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  JsNarrowNumericReader reader("setTableStyleDefaults");
+  std::string table;
+  std::string pivot;
+  const char* table_ptr = reader.optional_string(defaults, "tableStyle", table, "defaults.tableStyle");
+  const char* pivot_ptr = reader.optional_string(defaults, "pivotStyle", pivot, "defaults.pivotStyle");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(fm_styles_set_table_style_defaults(handle_, table_ptr, pivot_ptr));
 }
 
 namespace {

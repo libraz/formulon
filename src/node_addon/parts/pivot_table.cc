@@ -84,6 +84,34 @@ Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
   });
 }
 
+Napi::Value Workbook::PivotSetStyleInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  if (info.Length() < 3 || !info[2].IsObject()) {
+    return MakeBindingArgumentError(env, "pivotSetStyleInfo: `info` must be an object");
+  }
+  const Napi::Object style = info[2].As<Napi::Object>();
+  CheckedSpecReader reader(env);
+  std::string name;
+  const bool has_name = reader.String(style, "name", &name);
+  const bool row_headers = reader.Bool(style, "showRowHeaders", false);
+  const bool col_headers = reader.Bool(style, "showColHeaders", false);
+  const bool row_stripes = reader.Bool(style, "showRowStripes", false);
+  const bool col_stripes = reader.Bool(style, "showColStripes", false);
+  const bool last_column = reader.Bool(style, "showLastColumn", false);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return MakeStatus(env, fm_workbook_pivot_set_style_info(handle_, sheet, pivot_idx, has_name ? name.c_str() : nullptr,
+                                                          row_headers ? 1 : 0, col_headers ? 1 : 0,
+                                                          row_stripes ? 1 : 0, col_stripes ? 1 : 0,
+                                                          last_column ? 1 : 0));
+}
+
 Napi::Value Workbook::PivotGetLayout(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -167,6 +195,28 @@ Napi::Value Workbook::PivotRowFieldOrder(const Napi::CallbackInfo& info) {
   return GetPivotFieldOrder(info, handle_, &fm_workbook_pivot_get_row_field_order);
 }
 
+Napi::Value Workbook::PivotGetStyleInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_pivot_style_info_t style{};
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_get_style_info(handle_, sheet, pivot_idx, &style)
+                                            : kBindingInvalidHandle;
+  if (rc != 0) {
+    style = fm_pivot_style_info_t{};
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("present", Napi::Boolean::New(env, style.present != 0));
+  out.Set("name", JsString(env, style.name));
+  out.Set("showRowHeaders", Napi::Boolean::New(env, style.show_row_headers != 0));
+  out.Set("showColHeaders", Napi::Boolean::New(env, style.show_col_headers != 0));
+  out.Set("showRowStripes", Napi::Boolean::New(env, style.show_row_stripes != 0));
+  out.Set("showColStripes", Napi::Boolean::New(env, style.show_col_stripes != 0));
+  out.Set("showLastColumn", Napi::Boolean::New(env, style.show_last_column != 0));
+  return out;
+}
+
 Napi::Value Workbook::PivotColFieldOrder(const Napi::CallbackInfo& info) {
   return GetPivotFieldOrder(info, handle_, &fm_workbook_pivot_get_col_field_order);
 }
@@ -209,6 +259,14 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   out.Set("dateIntervalDays", Napi::Number::New(env, field.date_interval_days));
   out.Set("dateStartSerial", Napi::Number::New(env, field.date_start_serial));
   out.Set("dateEndSerial", Napi::Number::New(env, field.date_end_serial));
+  out.Set("defaultSubtotal", Napi::Boolean::New(env, field.default_subtotal != 0));
+  Napi::Array fns = Napi::Array::New(env);
+  for (std::uint32_t agg = 0; agg < 32U; ++agg) {
+    if ((field.subtotal_fns & (1U << agg)) != 0U) {
+      fns.Set(fns.Length(), Napi::Number::New(env, agg));
+    }
+  }
+  out.Set("subtotalFns", fns);
   return out;
 }
 

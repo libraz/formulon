@@ -54,9 +54,12 @@ __all__ = [
     "CellXf",
     "CfCellResult",
     "CfColor",
+    "CfIcon",
     "CfMatch",
     "CfValueObject",
     "ColorContext",
+    "GradientFill",
+    "GradientStop",
     "ImageFormat",
     "DrawingObjectKind",
     "AnchorKind",
@@ -108,6 +111,7 @@ __all__ = [
     "FilterKind",
     "FilterOperator",
     "DynamicFilterType",
+    "RefMode",
     "SortBy",
     "SortMethod",
     "DateTimeGrouping",
@@ -156,6 +160,7 @@ __all__ = [
     "PivotFilterType",
     "PivotFilterValueKind",
     "PivotItemInfo",
+    "PivotStyleInfo",
     "PivotLayout",
     "PivotReportLayout",
     "PivotShowValuesAs",
@@ -168,9 +173,22 @@ __all__ = [
     "SaveDiagnostics",
     "ResolvedColor",
     "SheetFormatDefaults",
+    "ProtectedRange",
     "SheetProtection",
     "SheetView",
+    "Shape",
+    "ShapePaint",
+    "DataTable",
+    "DataTableInput",
+    "Slicer",
+    "SlicerCrossFilter",
+    "SlicerSortOrder",
     "SheetVisibility",
+    "Sparkline",
+    "SparklineAxisType",
+    "SparklineEmptyCells",
+    "SparklineGroup",
+    "SparklineType",
     "SpillInfo",
     "EffectiveStyleSource",
     "Table",
@@ -182,6 +200,7 @@ __all__ = [
     "ValueKind",
     "WidthModel",
     "Workbook",
+    "WorkbookProtection",
     "AutoFilter",
     "AutoFilterSortState",
     "AutoFilterDateGroup",
@@ -400,15 +419,71 @@ class DefinedName(NamedTuple):
     name: str
     formula: str
     local_sheet_id: int
+    #: The note Excel shows in the Name Manager; empty when none.
+    comment: str = ""
+    #: Whether the name is hidden from the Name Manager.
+    hidden: bool = False
+
+
+class TableColumn(NamedTuple):
+    """One column of :attr:`Table.columns`.
+
+    ``totals_row_function`` is the ``ST_TotalsRowFunction`` token (``"none"``
+    when absent); ``totals_row_formula`` is the ``custom`` function's formula.
+    """
+
+    name: str
+    totals_row_function: str = "none"
+    totals_row_label: str = ""
+    totals_row_formula: str = ""
 
 
 class Table(NamedTuple):
-    """One row of ``Workbook.iter_tables()``."""
+    """One row of ``Workbook.iter_tables()``.
+
+    ``style_name`` may name a custom style (:meth:`Workbook.get_table_style`);
+    ``has_style_info`` is false without ``<tableStyleInfo>``, when the four
+    toggles read false. The row counts are 0 or 1.
+    """
 
     name: str
     display_name: str
     ref: str
     sheet_index: int
+    style_name: str = ""
+    has_style_info: bool = False
+    show_first_column: bool = False
+    show_last_column: bool = False
+    show_row_stripes: bool = False
+    show_column_stripes: bool = False
+    header_row_count: int = 1
+    totals_row_count: int = 0
+    columns: Tuple[TableColumn, ...] = ()
+
+
+@dataclass(frozen=True)
+class TableStyleElement:
+    """One region of a custom table style.
+
+    ``type`` is the ``ST_TableStyleType`` token (``"wholeTable"``,
+    ``"firstRowStripe"``, ``"pageFieldLabels"``, ...); ``size`` is the stripe
+    band size; ``dxf_id`` indexes the differential formats, ``None`` for a
+    region listed without formatting.
+    """
+
+    type: str
+    size: int = 1
+    dxf_id: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class TableStyle:
+    """A custom table / PivotTable style from ``<tableStyles>``."""
+
+    name: str
+    pivot: bool = True
+    table: bool = True
+    elements: Tuple[TableStyleElement, ...] = ()
 
 
 class PassthroughPart(NamedTuple):
@@ -609,6 +684,54 @@ class AnchorEditAs(IntEnum):
     ABSOLUTE = 2
 
 
+class ShapePaint(IntEnum):
+    """How a shape's fill or outline is specified (``fm_shape_paint_t``)."""
+
+    UNSET = 0
+    SOLID = 1
+    NONE = 2
+    OTHER = 3
+
+
+class SlicerSortOrder(IntEnum):
+    """Item sort order of a table slicer (``fm_slicer_sort_t``)."""
+
+    ASCENDING = 0
+    DESCENDING = 1
+
+
+class SlicerCrossFilter(IntEnum):
+    """How a table slicer shows items the other filters exclude (``fm_slicer_cross_filter_t``)."""
+
+    SHOW_ITEMS_WITH_DATA_AT_TOP = 0
+    SHOW_ITEMS_WITH_NO_DATA = 1
+    NONE = 2
+
+
+class SparklineType(IntEnum):
+    """Sparkline group type (``fm_sparkline_type_t``)."""
+
+    LINE = 0
+    COLUMN = 1
+    STACKED = 2
+
+
+class SparklineAxisType(IntEnum):
+    """Sparkline axis scaling (``fm_sparkline_axis_type_t``)."""
+
+    INDIVIDUAL = 0
+    GROUP = 1
+    CUSTOM = 2
+
+
+class SparklineEmptyCells(IntEnum):
+    """How a sparkline plots empty cells (``fm_sparkline_empty_cells_t``)."""
+
+    GAP = 0
+    ZERO = 1
+    SPAN = 2
+
+
 class ColorResolution(IntEnum):
     """How a colour was resolved (``fm_color_resolution_t``)."""
 
@@ -639,13 +762,22 @@ class EffectiveStyleSource(IntEnum):
 class CalcMode(IntEnum):
     """Workbook-level calc mode (``<calcPr calcMode>`` policy).
 
-    Plain round-trip metadata: the engine recalcs all dirty cells on every
-    :meth:`Workbook.recalc` regardless of this value.
+    Round-trip metadata apart from ``AUTO_NO_TABLE``: the engine recalcs all
+    dirty cells on every :meth:`Workbook.recalc` regardless of this value,
+    except that ``AUTO_NO_TABLE`` leaves the What-If data tables to
+    :meth:`Workbook.recalc_data_tables`.
     """
 
     AUTO = 0
     MANUAL = 1
     AUTO_NO_TABLE = 2
+
+
+class RefMode(IntEnum):
+    """Reference notation formulas are shown in (``<calcPr refMode>``)."""
+
+    A1 = 0
+    R1C1 = 1
 
 
 class SheetVisibility(IntEnum):
@@ -1116,6 +1248,150 @@ class DrawingObject:
     name: str
     descr: str
     media_path: str
+
+
+@dataclass
+class Shape:
+    """A shape, connector or group of a sheet's drawing; sizes and offsets are in EMU.
+
+    The anchor fields read as in :class:`DrawingObject`. ``fill_rgb`` and
+    ``line_rgb`` are ``0xRRGGBB`` when the matching kind is ``ShapePaint.SOLID``.
+    ``rotation`` is in 60000ths of a degree; ``prst`` is empty for custom
+    geometry or a group.
+    """
+
+    object_id: int
+    kind: Union[DrawingObjectKind, int]
+    anchor_kind: Union[AnchorKind, int]
+    edit_as: Union[AnchorEditAs, int]
+    from_row: int
+    from_col: int
+    from_row_off: int
+    from_col_off: int
+    to_row: int
+    to_col: int
+    to_row_off: int
+    to_col_off: int
+    cx: int
+    cy: int
+    name: str
+    prst: str
+    text: str
+    text_box: bool
+    fill_kind: Union[ShapePaint, int]
+    fill_rgb: int
+    line_kind: Union[ShapePaint, int]
+    line_rgb: int
+    line_width_emu: int
+    rotation: int
+    hidden: bool
+
+
+@dataclass
+class Slicer:
+    """A table slicer of a worksheet; sizes and offsets are in EMU.
+
+    ``object_id`` is the slicer's frame in the sheet's drawing (``0`` without
+    one); the anchor fields read as in :class:`DrawingObject`, and ``to_*`` is
+    zero unless the anchor is two-cell. ``cache_name``, ``table_name`` and
+    ``column_name`` identify the slicer cache and the table column it filters;
+    the selection itself lives in the table's AutoFilter. ``style`` is empty
+    without a style.
+    """
+
+    object_id: int
+    name: str
+    caption: str
+    cache_name: str
+    table_name: str
+    column_name: str
+    style: str
+    column_count: int
+    row_height: int
+    sort_order: Union[SlicerSortOrder, int]
+    cross_filter: Union[SlicerCrossFilter, int]
+    anchor_kind: Union[AnchorKind, int]
+    from_row: int
+    from_col: int
+    from_row_off: int
+    from_col_off: int
+    to_row: int
+    to_col: int
+    to_row_off: int
+    to_col_off: int
+
+
+@dataclass
+class DataTableInput:
+    """An input cell of a data table; ``deleted`` marks one removed by a row or column delete."""
+
+    row: int
+    col: int
+    deleted: bool
+
+
+@dataclass
+class DataTable:
+    """A What-If data table (``TABLE()``): its result range and input cells, all 0-based.
+
+    The row input cell receives the values of the row above the range, the column input cell those of the column
+    left of it. A one-variable table has one input (``row_oriented`` says which, the other is ``None``), a
+    two-variable table both. A deleted input makes the table evaluate to ``#REF!``.
+    """
+
+    first_row: int
+    first_col: int
+    last_row: int
+    last_col: int
+    two_dimensional: bool
+    row_oriented: bool
+    row_input: Optional[DataTableInput]
+    col_input: Optional[DataTableInput]
+
+
+@dataclass
+class Sparkline:
+    """One sparkline: the data ``formula`` (a sheet-qualified range without ``=``) and its single A1 ``location``."""
+
+    formula: str
+    location: str
+
+
+@dataclass
+class SparklineGroup:
+    """A sparkline group of a sheet's worksheet extension list.
+
+    A colour with ``kind=0`` is absent; ``manual_min`` / ``manual_max`` are
+    ``None`` when the axis bound is not set. ``date_axis_ref`` is the group's
+    date range, empty when absent.
+    """
+
+    type: Union[SparklineType, int] = SparklineType.LINE
+    color_series: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_negative: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_axis: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_markers: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_first: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_last: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_high: ColorSpec = field(default_factory=lambda: ColorSpec())
+    color_low: ColorSpec = field(default_factory=lambda: ColorSpec())
+    markers: bool = False
+    high: bool = False
+    low: bool = False
+    first: bool = False
+    last: bool = False
+    negative: bool = False
+    display_x_axis: bool = False
+    display_hidden: bool = False
+    min_axis_type: Union[SparklineAxisType, int] = SparklineAxisType.INDIVIDUAL
+    max_axis_type: Union[SparklineAxisType, int] = SparklineAxisType.INDIVIDUAL
+    manual_min: Optional[float] = None
+    manual_max: Optional[float] = None
+    date_axis: bool = False
+    date_axis_ref: str = ""
+    line_weight: float = 0.75
+    empty_cells_as: Union[SparklineEmptyCells, int] = SparklineEmptyCells.GAP
+    sparklines: List[Sparkline] = field(default_factory=list)
 
 
 class ChartPlotType(IntEnum):
@@ -1653,6 +1929,39 @@ class ChartPreviewOverrides(TypedDict, total=False):
 
 
 @dataclass
+class WorkbookProtection:
+    """Workbook ``<workbookProtection>``. Hash fields are stored as given; the host computes them."""
+
+    lock_structure: bool = False
+    lock_windows: bool = False
+    lock_revision: bool = False
+    workbook_password: str = ""
+    workbook_algorithm_name: str = ""
+    workbook_hash_value: str = ""
+    workbook_salt_value: str = ""
+    workbook_spin_count: int = 0
+    revisions_password: str = ""
+    revisions_algorithm_name: str = ""
+    revisions_hash_value: str = ""
+    revisions_salt_value: str = ""
+    revisions_spin_count: int = 0
+
+
+@dataclass
+class ProtectedRange:
+    """A sheet ``<protectedRange>``; ``sqref`` is the A1 range list (``"B2:C3 E5"``)."""
+
+    name: str
+    sqref: str
+    password: str = ""
+    algorithm_name: str = ""
+    hash_value: str = ""
+    salt_value: str = ""
+    spin_count: int = 0
+    security_descriptor: str = ""
+
+
+@dataclass
 class SheetProtection:
     """Sheet ``<sheetProtection>`` flags. Booleans are real ``bool``."""
 
@@ -1722,6 +2031,10 @@ class SheetView:
     top_left_col: int = 0
     pane_top_left_row: int = 0
     pane_top_left_col: int = 0
+    split_x: float = 0.0
+    split_y: float = 0.0
+    show_formulas: bool = False
+    show_outline_symbols: bool = True
 
 
 @dataclass(frozen=True)
@@ -1741,6 +2054,8 @@ class ColumnLayout:
     has_width: bool = False
     has_style: bool = False
     style_xf: int = 0
+    #: ``collapsed="1"``: the outline group this span summarises is collapsed.
+    collapsed: bool = False
 
 
 @dataclass(frozen=True)
@@ -1757,6 +2072,8 @@ class RowLayout:
     has_height: bool = False
     #: ``customHeight="1"``: an explicit override rather than a cached auto height.
     custom_height: bool = False
+    #: ``collapsed="1"``: the outline group this row summarises is collapsed.
+    collapsed: bool = False
 
 
 class IterativeSettings(NamedTuple):
@@ -1880,6 +2197,13 @@ class SheetFormatDefaults:
     has_default_row_height: bool = False
     effective_default_col_width: float = 0.0
     effective_default_row_height: float = 0.0
+    #: ``customHeight``: ``default_row_height`` is an explicit override rather
+    #: than a cached figure Excel recomputes from the Normal font. ``None``
+    #: keeps the stored flag when setting.
+    custom_height: Optional[bool] = None
+    #: ``zeroHeight``: rows are hidden unless they say otherwise. ``None``
+    #: keeps the stored flag when setting.
+    zero_height: Optional[bool] = None
 
 
 @dataclass(frozen=True)
@@ -2066,6 +2390,22 @@ class IconSet:
     show_value: bool = True
     percent: bool = True
     floor: Optional[CfValueObject] = None
+    #: Custom icon set: the icon drawn for each level, empty when the set
+    #: draws its own icons.
+    icons: List["CfIcon"] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class CfIcon:
+    """One level of a custom icon set.
+
+    ``icon_set`` is the ``ST_IconSetType`` spelling of the set the icon comes
+    from (``"3Arrows"``, ``"3Triangles"``, ``"5Boxes"``, ``"NoIcons"`` for a
+    level that draws nothing, ...); ``icon_id`` is the zero-based icon within it.
+    """
+
+    icon_set: str
+    icon_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -2334,6 +2674,16 @@ class FontRecord:
     has_bold: bool = False
     has_italic: bool = False
     has_strike: bool = False
+    #: ``<outline>`` / ``<shadow>`` / ``<condense>`` / ``<extend>`` toggles,
+    #: with the same ``has_*`` rule as ``bold``.
+    outline: bool = False
+    shadow: bool = False
+    condense: bool = False
+    extend: bool = False
+    has_outline: bool = False
+    has_shadow: bool = False
+    has_condense: bool = False
+    has_extend: bool = False
     underline: int = 0
     #: 0=baseline, 1=superscript, 2=subscript.
     vert_align: int = 0
@@ -2349,12 +2699,41 @@ class FontRecord:
 
 
 @dataclass
+class GradientStop:
+    """One ``<stop>`` of a gradient fill: a colour at ``position`` (0..1)."""
+
+    position: float = 0.0
+    color_argb: int = 0
+    color: ColorSpec = field(default_factory=ColorSpec)
+
+
+@dataclass
+class GradientFill:
+    """A ``<gradientFill>``.
+
+    ``type`` is 0 for linear and 1 for path. ``degree`` is a linear
+    gradient's angle; ``left`` / ``right`` / ``top`` / ``bottom`` (0..1)
+    locate a path gradient's focus.
+    """
+
+    type: int = 0
+    degree: float = 0.0
+    left: float = 0.0
+    right: float = 0.0
+    top: float = 0.0
+    bottom: float = 0.0
+    stops: List[GradientStop] = field(default_factory=list)
+
+
+@dataclass
 class FillRecord:
     """A fill record.
 
     ``fg`` and ``bg`` carry the authoritative OOXML colour selectors. Their
     sibling ``*_argb`` fields are literal RGB for ``kind=1`` or compatibility
-    fallbacks otherwise; ``kind=0`` writes the sibling as ``rgb``.
+    fallbacks otherwise; ``kind=0`` writes the sibling as ``rgb``. A
+    ``gradient`` makes the record a ``<gradientFill>`` and the pattern fields
+    are ignored.
     """
 
     pattern: int = 0
@@ -2362,6 +2741,7 @@ class FillRecord:
     bg_argb: int = 0
     fg: ColorSpec = field(default_factory=ColorSpec)
     bg: ColorSpec = field(default_factory=ColorSpec)
+    gradient: Optional[GradientFill] = None
 
 
 @dataclass
@@ -2415,6 +2795,14 @@ def _decode_font(ptr: int) -> FontRecord:
         has_bold=bool(d["has_bold"]),
         has_italic=bool(d["has_italic"]),
         has_strike=bool(d["has_strike"]),
+        outline=bool(d["outline"]),
+        shadow=bool(d["shadow"]),
+        condense=bool(d["condense"]),
+        extend=bool(d["extend"]),
+        has_outline=bool(d["has_outline"]),
+        has_shadow=bool(d["has_shadow"]),
+        has_condense=bool(d["has_condense"]),
+        has_extend=bool(d["has_extend"]),
         underline=d["underline"],
         vert_align=d["vert_align"],
         has_family=bool(d["has_family"]),
@@ -2440,6 +2828,14 @@ def _pack_font(ptr: int, record: FontRecord, owned: List[int]) -> None:
             "has_bold": 1 if record.has_bold else 0,
             "has_italic": 1 if record.has_italic else 0,
             "has_strike": 1 if record.has_strike else 0,
+            "outline": 1 if record.outline else 0,
+            "shadow": 1 if record.shadow else 0,
+            "condense": 1 if record.condense else 0,
+            "extend": 1 if record.extend else 0,
+            "has_outline": 1 if record.has_outline else 0,
+            "has_shadow": 1 if record.has_shadow else 0,
+            "has_condense": 1 if record.has_condense else 0,
+            "has_extend": 1 if record.has_extend else 0,
             "underline": _uint(record.underline, "underline", 8),
             "vert_align": _uint(record.vert_align, "vert_align", 8),
             "has_family": 1 if record.has_family else 0,
@@ -2456,25 +2852,75 @@ def _pack_font(ptr: int, record: FontRecord, owned: List[int]) -> None:
 
 def _decode_fill(ptr: int) -> FillRecord:
     d = S.FILL_RECORD.unpack(LIB, ptr)
+    gradient = None
+    if d["has_gradient"]:
+        stop_size = S.GRADIENT_STOP.size
+        stops = []
+        for i in range(d["gradient_stop_count"]):
+            stop_ptr = d["gradient_stops"] + i * stop_size
+            stop = S.GRADIENT_STOP.unpack(LIB, stop_ptr)
+            stops.append(
+                GradientStop(
+                    position=stop["position"],
+                    color_argb=stop["color_argb"],
+                    color=_decode_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1]),
+                )
+            )
+        gradient = GradientFill(
+            type=d["gradient_type"],
+            degree=d["gradient_degree"],
+            left=d["gradient_left"],
+            right=d["gradient_right"],
+            top=d["gradient_top"],
+            bottom=d["gradient_bottom"],
+            stops=stops,
+        )
     return FillRecord(
         pattern=d["pattern"],
         fg_argb=d["fg_argb"],
         bg_argb=d["bg_argb"],
         fg=_decode_color(ptr + S.FILL_RECORD.offsets["fg"][1]),
         bg=_decode_color(ptr + S.FILL_RECORD.offsets["bg"][1]),
+        gradient=gradient,
     )
 
 
-def _pack_fill(ptr: int, record: FillRecord) -> None:
-    S.FILL_RECORD.pack(
-        LIB,
-        ptr,
-        {
-            "pattern": _uint(record.pattern, "pattern", 8),
-            "fg_argb": _uint(record.fg_argb, "fg_argb"),
-            "bg_argb": _uint(record.bg_argb, "bg_argb"),
-        },
-    )
+def _pack_fill(ptr: int, record: FillRecord, owned: List[int]) -> None:
+    """Write ``record`` into the ``fm_fill_record`` at ``ptr``; the gradient
+    stops are allocated into ``owned`` for the caller to release."""
+    values: Dict[str, object] = {
+        "pattern": _uint(record.pattern, "pattern", 8),
+        "fg_argb": _uint(record.fg_argb, "fg_argb"),
+        "bg_argb": _uint(record.bg_argb, "bg_argb"),
+    }
+    gradient = record.gradient
+    stops_ptr = 0
+    if gradient is not None:
+        stop_size = S.GRADIENT_STOP.size
+        if gradient.stops:
+            stops_ptr = LIB.alloc(stop_size * len(gradient.stops))
+            owned.append(stops_ptr)
+            LIB.write_bytes(stops_ptr, b"\x00" * (stop_size * len(gradient.stops)))
+            for i, stop in enumerate(gradient.stops):
+                stop_ptr = stops_ptr + i * stop_size
+                S.GRADIENT_STOP.pack(
+                    LIB,
+                    stop_ptr,
+                    {"position": float(stop.position), "color_argb": _uint(stop.color_argb, "color_argb")},
+                )
+                _pack_color(stop_ptr + S.GRADIENT_STOP.offsets["color"][1], stop.color)
+        values.update(
+            has_gradient=1,
+            gradient_type=_sint(gradient.type, "gradient.type"),
+            gradient_degree=float(gradient.degree),
+            gradient_left=float(gradient.left),
+            gradient_right=float(gradient.right),
+            gradient_top=float(gradient.top),
+            gradient_bottom=float(gradient.bottom),
+            gradient_stops=stops_ptr,
+            gradient_stop_count=len(gradient.stops),
+        )
+    S.FILL_RECORD.pack(LIB, ptr, values)
     _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg)
     _pack_color(ptr + S.FILL_RECORD.offsets["bg"][1], record.bg)
 
@@ -2680,6 +3126,9 @@ class PivotFieldInfo:
     ``i``), ``-1`` when the cache does not cover the field. The ``date_*``
     members describe the field's date grouping and are only meaningful when
     ``has_date_group`` is true; an unset year or serial reads ``-1``.
+    ``subtotal_fns`` lists the custom subtotal functions in ascending
+    aggregation order; ``default_subtotal`` is false whenever it is non-empty,
+    since custom functions replace the automatic subtotal.
     """
 
     source_name: str
@@ -2698,6 +3147,8 @@ class PivotFieldInfo:
     date_interval_days: int
     date_start_serial: float
     date_end_serial: float
+    default_subtotal: bool
+    subtotal_fns: Tuple[PivotAggregation, ...]
 
 
 @dataclass(frozen=True)
@@ -2712,6 +3163,23 @@ class PivotItemInfo:
     name: str
     cache_index: int
     visible: bool
+
+
+@dataclass(frozen=True)
+class PivotStyleInfo:
+    """A pivot table's style, as read by :meth:`Workbook.pivot_style_info`.
+
+    ``present`` is false when the definition has no style element; ``name``
+    is empty when the element carries no style name.
+    """
+
+    present: bool
+    name: str
+    show_row_headers: bool
+    show_col_headers: bool
+    show_row_stripes: bool
+    show_col_stripes: bool
+    show_last_column: bool
 
 
 @dataclass
@@ -2879,6 +3347,221 @@ def _read_cstr_out(fn, *args, default_op: str = "text") -> str:
         return LIB.read_cstr(LIB.read_u32(out))
     finally:
         LIB.free(out)
+
+
+_SHAPE_FIELDS = {
+    "name": 0x1,
+    "prst": 0x2,
+    "anchor": 0x4,
+    "text": 0x8,
+    "text_box": 0x10,
+    "fill": 0x20,
+    "line": 0x40,
+    "line_width": 0x80,
+    "rotation": 0x100,
+    "hidden": 0x200,
+}
+
+
+def _pack_shape(
+    owned: List[int],
+    name,
+    prst,
+    text,
+    text_box,
+    anchor_kind,
+    edit_as,
+    from_row,
+    from_col,
+    from_row_off,
+    from_col_off,
+    to_row,
+    to_col,
+    to_row_off,
+    to_col_off,
+    cx,
+    cy,
+    fill_kind,
+    fill_rgb,
+    line_kind,
+    line_rgb,
+    line_width_emu,
+    rotation,
+    hidden,
+) -> int:
+    """Build an ``fm_shape`` input block; a ``None`` argument is a field left out of the mask."""
+    ptr = _alloc_struct_array(S.SHAPE, 1, owned)
+    mask = 0
+    values: Dict[str, int] = {}
+    if text_box is not None:
+        mask |= _SHAPE_FIELDS["text_box"]
+        values["text_box"] = 1 if text_box else 0
+    if anchor_kind is not None:
+        mask |= _SHAPE_FIELDS["anchor"]
+        values.update(
+            anchor_kind=_sint(anchor_kind, "anchor_kind"),
+            edit_as=_sint(edit_as, "edit_as"),
+            from_row=_uint(from_row, "from_row"),
+            from_col=_uint(from_col, "from_col"),
+            from_row_off=int(from_row_off),
+            from_col_off=int(from_col_off),
+            to_row=_uint(to_row, "to_row"),
+            to_col=_uint(to_col, "to_col"),
+            to_row_off=int(to_row_off),
+            to_col_off=int(to_col_off),
+            cx=int(cx),
+            cy=int(cy),
+        )
+    if fill_kind is not None:
+        mask |= _SHAPE_FIELDS["fill"]
+        values.update(fill_kind=_sint(fill_kind, "fill_kind"), fill_rgb=_uint(fill_rgb, "fill_rgb"))
+    if line_kind is not None:
+        mask |= _SHAPE_FIELDS["line"]
+        values.update(line_kind=_sint(line_kind, "line_kind"), line_rgb=_uint(line_rgb, "line_rgb"))
+    if line_width_emu is not None:
+        mask |= _SHAPE_FIELDS["line_width"]
+        values["line_width_emu"] = int(line_width_emu)
+    if rotation is not None:
+        mask |= _SHAPE_FIELDS["rotation"]
+        values["rotation"] = _sint(rotation, "rotation")
+    if hidden is not None:
+        mask |= _SHAPE_FIELDS["hidden"]
+        values["hidden"] = 1 if hidden else 0
+    for key, text_value in (("name", name), ("prst", prst), ("text", text)):
+        if text_value is not None:
+            mask |= _SHAPE_FIELDS[key]
+            S.write_str_field(LIB, ptr, S.SHAPE, key, text_value, owned, allow_empty=True)
+    values["fields"] = mask
+    # `write_str_field` patched the pointer slots in place; pack the scalars around them.
+    raw = bytearray(LIB.read_bytes(ptr, S.SHAPE.size))
+    S.SHAPE.pack_into(raw, 0, values)
+    LIB.write_bytes(ptr, bytes(raw))
+    return ptr
+
+
+_SLICER_FIELDS = {
+    "name": 0x1,
+    "caption": 0x2,
+    "style": 0x4,
+    "column_count": 0x8,
+    "row_height": 0x10,
+    "anchor": 0x20,
+    "sort_order": 0x40,
+    "cross_filter": 0x80,
+}
+
+
+def _pack_slicer(
+    owned: List[int],
+    name,
+    caption,
+    style,
+    column_count,
+    row_height,
+    anchor,
+    sort_order,
+    cross_filter,
+) -> int:
+    """Build an ``fm_slicer`` input block; a ``None`` argument is a field left out of the mask.
+
+    ``anchor`` is ``None`` or ``(from_row, from_col, to_row, to_col)`` with optional trailing
+    ``(from_row_off, from_col_off, to_row_off, to_col_off)``.
+    """
+    ptr = _alloc_struct_array(S.SLICER, 1, owned)
+    mask = 0
+    values: Dict[str, int] = {}
+    if column_count is not None:
+        mask |= _SLICER_FIELDS["column_count"]
+        values["column_count"] = _uint(column_count, "column_count")
+    if row_height is not None:
+        mask |= _SLICER_FIELDS["row_height"]
+        values["row_height"] = int(row_height)
+    if anchor is not None:
+        mask |= _SLICER_FIELDS["anchor"]
+        corner, offsets = tuple(anchor[:4]), tuple(anchor[4:]) or (0, 0, 0, 0)
+        if len(corner) != 4 or len(offsets) != 4:
+            raise TypeError("anchor must be (from_row, from_col, to_row, to_col) plus optional EMU offsets")
+        values.update(
+            from_row=_uint(corner[0], "from_row"),
+            from_col=_uint(corner[1], "from_col"),
+            to_row=_uint(corner[2], "to_row"),
+            to_col=_uint(corner[3], "to_col"),
+            from_row_off=int(offsets[0]),
+            from_col_off=int(offsets[1]),
+            to_row_off=int(offsets[2]),
+            to_col_off=int(offsets[3]),
+        )
+    if sort_order is not None:
+        mask |= _SLICER_FIELDS["sort_order"]
+        values["sort_order"] = _sint(sort_order, "sort_order")
+    if cross_filter is not None:
+        mask |= _SLICER_FIELDS["cross_filter"]
+        values["cross_filter"] = _sint(cross_filter, "cross_filter")
+    for key, text_value in (("name", name), ("caption", caption), ("style", style)):
+        if text_value is not None:
+            mask |= _SLICER_FIELDS[key]
+            S.write_str_field(LIB, ptr, S.SLICER, key, text_value, owned, allow_empty=True)
+    values["fields"] = mask
+    # `write_str_field` patched the pointer slots in place; pack the scalars around them.
+    raw = bytearray(LIB.read_bytes(ptr, S.SLICER.size))
+    S.SLICER.pack_into(raw, 0, values)
+    LIB.write_bytes(ptr, bytes(raw))
+    return ptr
+
+
+_SPARKLINE_COLORS = (
+    "color_series",
+    "color_negative",
+    "color_axis",
+    "color_markers",
+    "color_first",
+    "color_last",
+    "color_high",
+    "color_low",
+)
+
+
+def _pack_sparkline_group(owned: List[int], group: SparklineGroup) -> int:
+    """Build an ``fm_sparkline_group`` input block from ``group`` (``sparklines`` is passed separately)."""
+    ptr = _alloc_struct_array(S.SPARKLINE_GROUP, 1, owned)
+    S.SPARKLINE_GROUP.pack(
+        LIB,
+        ptr,
+        {
+            "type": _sint(group.type, "type"),
+            "markers": 1 if group.markers else 0,
+            "high": 1 if group.high else 0,
+            "low": 1 if group.low else 0,
+            "first": 1 if group.first else 0,
+            "last": 1 if group.last else 0,
+            "negative": 1 if group.negative else 0,
+            "display_x_axis": 1 if group.display_x_axis else 0,
+            "display_hidden": 1 if group.display_hidden else 0,
+            "min_axis_type": _sint(group.min_axis_type, "min_axis_type"),
+            "max_axis_type": _sint(group.max_axis_type, "max_axis_type"),
+            "has_manual_min": 0 if group.manual_min is None else 1,
+            "has_manual_max": 0 if group.manual_max is None else 1,
+            "manual_min": float(group.manual_min or 0.0),
+            "manual_max": float(group.manual_max or 0.0),
+            "date_axis": 1 if group.date_axis else 0,
+            "line_weight": float(group.line_weight),
+            "empty_cells_as": _sint(group.empty_cells_as, "empty_cells_as"),
+        },
+    )
+    for key in _SPARKLINE_COLORS:
+        _pack_color(ptr + S.SPARKLINE_GROUP.offsets[key][1], getattr(group, key))
+    S.write_str_field(LIB, ptr, S.SPARKLINE_GROUP, "date_axis_ref", group.date_axis_ref, owned)
+    return ptr
+
+
+def _pack_sparklines(owned: List[int], sparklines: Sequence[Sparkline]) -> int:
+    """Build an ``fm_sparkline`` array; an empty list still gets a valid block (the core rejects a zero count)."""
+    ptr = _alloc_struct_array(S.SPARKLINE, max(len(sparklines), 1), owned)
+    for i, item in enumerate(sparklines):
+        base = ptr + i * S.SPARKLINE.size
+        S.write_str_field(LIB, base, S.SPARKLINE, "formula", item.formula, owned)
+        S.write_str_field(LIB, base, S.SPARKLINE, "location", item.location, owned)
+    return ptr
 
 
 def _image_anchor_fields(
@@ -4556,19 +5239,33 @@ class Workbook:
         name_ptr = _alloc_out_ptr()
         formula_ptr = _alloc_out_ptr()
         local_sheet_ptr = _alloc_out_ptr()
+        comment_ptr = _alloc_out_ptr()
+        hidden_ptr = _alloc_out_ptr()
         try:
             for i in range(n):
                 h = self._check_live()
                 status = LIB.fm_workbook_defined_name_at(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
                 _check(status, "fm_workbook_defined_name_at")
+                _check(
+                    LIB.fm_workbook_defined_name_attrs_at(h, _uint(i, "idx"), comment_ptr, hidden_ptr),
+                    "fm_workbook_defined_name_attrs_at",
+                )
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 formula = LIB.read_cstr(LIB.read_u32(formula_ptr))
                 local_sheet_id = LIB.read_i32(local_sheet_ptr)
-                yield DefinedName(name=name, formula=formula, local_sheet_id=local_sheet_id)
+                yield DefinedName(
+                    name=name,
+                    formula=formula,
+                    local_sheet_id=local_sheet_id,
+                    comment=LIB.read_cstr(LIB.read_u32(comment_ptr)) or "",
+                    hidden=bool(LIB.read_i32(hidden_ptr)),
+                )
         finally:
             LIB.free(name_ptr)
             LIB.free(formula_ptr)
             LIB.free(local_sheet_ptr)
+            LIB.free(comment_ptr)
+            LIB.free(hidden_ptr)
 
     def iter_tables(self) -> Iterator[Table]:
         """Iterate over every table in declaration order."""
@@ -4579,6 +5276,8 @@ class Workbook:
         display_ptr = _alloc_out_ptr()
         ref_ptr = _alloc_out_ptr()
         sheet_ptr = _alloc_out_ptr()
+        info_ptr = S.alloc_struct(LIB, S.TABLE_INFO)
+        column_ptr = S.alloc_struct(LIB, S.TABLE_COLUMN_INFO)
         try:
             for i in range(n):
                 h = self._check_live()
@@ -4588,12 +5287,47 @@ class Workbook:
                 display = LIB.read_cstr(LIB.read_u32(display_ptr))
                 ref = LIB.read_cstr(LIB.read_u32(ref_ptr))
                 sheet = LIB.read_u32(sheet_ptr)
-                yield Table(name=name, display_name=display, ref=ref, sheet_index=sheet)
+                S.zero_struct(LIB, S.TABLE_INFO, info_ptr)
+                _check(LIB.fm_workbook_table_get_info(h, _uint(i, "index"), info_ptr), "fm_workbook_table_get_info")
+                info = S.TABLE_INFO.unpack(LIB, info_ptr)
+                columns = []
+                for c in range(info["column_count"]):
+                    S.zero_struct(LIB, S.TABLE_COLUMN_INFO, column_ptr)
+                    _check(
+                        LIB.fm_workbook_table_get_column(h, _uint(i, "index"), _uint(c, "column"), column_ptr),
+                        "fm_workbook_table_get_column",
+                    )
+                    col = S.TABLE_COLUMN_INFO.unpack(LIB, column_ptr)
+                    columns.append(
+                        TableColumn(
+                            name=LIB.read_cstr(col["name"]),
+                            totals_row_function=LIB.read_cstr(col["totals_row_function"]),
+                            totals_row_label=LIB.read_cstr(col["totals_row_label"]),
+                            totals_row_formula=LIB.read_cstr(col["totals_row_formula"]),
+                        )
+                    )
+                yield Table(
+                    name=name,
+                    display_name=display,
+                    ref=ref,
+                    sheet_index=sheet,
+                    style_name=LIB.read_cstr(info["style_name"]),
+                    has_style_info=info["style_present"] != 0,
+                    show_first_column=info["show_first_column"] != 0,
+                    show_last_column=info["show_last_column"] != 0,
+                    show_row_stripes=info["show_row_stripes"] != 0,
+                    show_column_stripes=info["show_column_stripes"] != 0,
+                    header_row_count=info["header_row_count"],
+                    totals_row_count=info["totals_row_count"],
+                    columns=tuple(columns),
+                )
         finally:
             LIB.free(name_ptr)
             LIB.free(display_ptr)
             LIB.free(ref_ptr)
             LIB.free(sheet_ptr)
+            LIB.free(info_ptr)
+            LIB.free(column_ptr)
 
     def table_create(
         self,
@@ -4605,14 +5339,22 @@ class Workbook:
         style_name: str = "",
         header_row: bool = True,
         totals_row: bool = False,
+        *,
+        show_first_column: Optional[bool] = None,
+        show_last_column: Optional[bool] = None,
+        show_row_stripes: Optional[bool] = None,
+        show_column_stripes: Optional[bool] = None,
     ) -> int:
         """Create a worksheet table and return its index.
 
         ``column_names`` must hold one non-empty, table-unique header per
         column in ``ref``, and its length must equal the width of ``ref``.
-        An empty ``style_name`` omits ``<tableStyleInfo>``. With
-        ``header_row`` set, the caller still owns the header cells: Excel
-        expects the first row of ``ref`` to hold exactly these names.
+        An empty ``style_name`` omits ``<tableStyleInfo>``; a styled table
+        starts with row stripes on and the other toggles off, and a supplied
+        ``show_*`` overrides that (without a style name it writes an unnamed
+        style element). With ``header_row`` set, the caller still owns the
+        header cells: Excel expects the first row of ``ref`` to hold exactly
+        these names.
         """
         h = self._require()
         owned: List[int] = []
@@ -4645,7 +5387,119 @@ class Workbook:
                 ),
                 "fm_workbook_table_create",
             )
-            return LIB.read_u32(out)
+            index = LIB.read_u32(out)
+        finally:
+            for ptr in owned:
+                LIB.free(ptr)
+        toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
+        if any(t is not None for t in toggles):
+            try:
+                self._table_apply_style_toggles(index, toggles)
+            except BaseException:
+                self.table_remove(index)
+                raise
+        return index
+
+    def _table_apply_style_toggles(self, index: int, toggles: Sequence[Optional[bool]]) -> None:
+        """Set the supplied ``show_*`` toggles over the table's current ones."""
+        current = next(t for i, t in enumerate(self.iter_tables()) if i == index)
+        existing = (
+            current.show_first_column,
+            current.show_last_column,
+            current.show_row_stripes if current.has_style_info else True,
+            current.show_column_stripes,
+        )
+        merged = [existing[i] if t is None else t for i, t in enumerate(toggles)]
+        self.table_set_style_info(index, current.style_name, *merged)
+
+    def table_set_style_info(
+        self,
+        index: int,
+        style_name: Optional[str],
+        show_first_column: bool = False,
+        show_last_column: bool = False,
+        show_row_stripes: bool = True,
+        show_column_stripes: bool = False,
+    ) -> None:
+        """Set the table's style name and toggles, making the style element present.
+
+        ``None`` or an empty ``style_name`` writes the element without a
+        style name, keeping the toggles.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            _check(
+                LIB.fm_workbook_table_set_style_info(
+                    h,
+                    _uint(index, "index"),
+                    _opt_str_ptr(style_name, owned),
+                    1 if show_first_column else 0,
+                    1 if show_last_column else 0,
+                    1 if show_row_stripes else 0,
+                    1 if show_column_stripes else 0,
+                ),
+                "fm_workbook_table_set_style_info",
+            )
+        finally:
+            for ptr in owned:
+                LIB.free(ptr)
+
+    def table_rename(self, index: int, name: str, display_name: Optional[str] = None) -> None:
+        """Rename table ``index``; ``display_name=None`` uses ``name`` for both.
+
+        Names must be non-empty and unique case-insensitively across tables.
+        Structured references to the old name are rewritten in cell,
+        defined-name, conditional-format, validation and chart formulas; a
+        bare table name used as a reference is not rewritten.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            name_ptr, _ = LIB.alloc_utf8(name)
+            owned.append(name_ptr)
+            display_ptr = 0
+            if display_name is not None:
+                display_ptr, _ = LIB.alloc_utf8(display_name)
+                owned.append(display_ptr)
+            _check(
+                LIB.fm_workbook_table_rename(h, _uint(index, "index"), name_ptr, display_ptr),
+                "fm_workbook_table_rename",
+            )
+        finally:
+            for ptr in owned:
+                LIB.free(ptr)
+
+    def table_set_column_totals(
+        self,
+        index: int,
+        column: int,
+        function: Optional[str] = None,
+        label: Optional[str] = None,
+        formula: Optional[str] = None,
+    ) -> None:
+        """Set column ``column``'s totals-row function and label.
+
+        ``function`` is an ``ST_TotalsRowFunction`` token (``None`` means
+        ``"none"``); ``formula`` is required for ``"custom"``. While the
+        totals row is shown its cell follows: ``SUBTOTAL(109,Table[Column])``
+        and the other 1xx codes for a built-in function, the formula for
+        ``"custom"``, else the label as text, else nothing.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            _check(
+                LIB.fm_workbook_table_set_column_totals(
+                    h,
+                    _uint(index, "index"),
+                    _uint(column, "column"),
+                    _opt_str_ptr(function, owned),
+                    _opt_str_ptr(label, owned),
+                    _opt_str_ptr(formula, owned),
+                ),
+                "fm_workbook_table_set_column_totals",
+            )
         finally:
             for ptr in owned:
                 LIB.free(ptr)
@@ -4657,14 +5511,52 @@ class Workbook:
         style_name: Optional[str] = None,
         header_row: Optional[bool] = None,
         totals_row: Optional[bool] = None,
+        *,
+        name: Optional[str] = None,
+        display_name: Optional[str] = None,
+        show_first_column: Optional[bool] = None,
+        show_last_column: Optional[bool] = None,
+        show_row_stripes: Optional[bool] = None,
+        show_column_stripes: Optional[bool] = None,
     ) -> None:
         """Replace a table's range and optional visual style.
 
         ``ref`` is required and must keep the width the table's column
         list already describes. ``style_name=None`` preserves the existing
-        style payload; an empty string removes ``<tableStyleInfo>``.
-        ``header_row=None`` / ``totals_row=None`` preserve those flags.
+        style; a new name keeps the four toggles, and an empty string removes
+        ``<tableStyleInfo>``. ``header_row=None`` / ``totals_row=None``
+        preserve those flags; turning the totals row on writes each column's
+        totals cell. ``name`` / ``display_name`` rename the table as
+        :meth:`table_rename` does (``display_name`` follows ``name`` unless
+        given). The update is all-or-nothing.
         """
+        renaming = name is not None or display_name is not None
+        if renaming:
+            current = next(t for i, t in enumerate(self.iter_tables()) if i == index)
+            next_name = name if name is not None else current.name
+            if display_name is not None:
+                next_display = display_name
+            else:
+                next_display = name if name is not None else current.display_name
+            self.table_rename(index, next_name, next_display)
+        try:
+            self._table_update(index, ref, style_name, header_row, totals_row)
+            toggles = (show_first_column, show_last_column, show_row_stripes, show_column_stripes)
+            if any(t is not None for t in toggles):
+                self._table_apply_style_toggles(index, toggles)
+        except BaseException:
+            if renaming:
+                self.table_rename(index, current.name, current.display_name)
+            raise
+
+    def _table_update(
+        self,
+        index: int,
+        ref: str,
+        style_name: Optional[str],
+        header_row: Optional[bool],
+        totals_row: Optional[bool],
+    ) -> None:
         h = self._require()
         owned: List[int] = []
         try:
@@ -4771,6 +5663,40 @@ class Workbook:
             LIB.free(name_ptr)
             LIB.free(formula_ptr)
 
+    def set_defined_name_attrs(
+        self,
+        name: str,
+        local_sheet_id: int = -1,
+        *,
+        comment: Optional[str] = None,
+        hidden: Optional[bool] = None,
+    ) -> None:
+        """Set the ``comment`` and / or ``hidden`` attribute of an existing defined name.
+
+        ``None`` leaves that attribute unchanged and an empty ``comment``
+        clears it. Replacing the name's formula keeps both attributes.
+        """
+        h = self._require()
+        name_ptr, _ = LIB.alloc_utf8(name)
+        comment_ptr = 0
+        if comment is not None:
+            comment_ptr, _ = LIB.alloc_utf8(comment)
+        try:
+            _check(
+                LIB.fm_workbook_set_defined_name_attrs(
+                    h,
+                    name_ptr,
+                    _sint(local_sheet_id, "local_sheet_id"),
+                    comment_ptr,
+                    _sint(-1 if hidden is None else int(bool(hidden)), "hidden"),
+                ),
+                "fm_workbook_set_defined_name_attrs",
+            )
+        finally:
+            LIB.free(name_ptr)
+            if comment_ptr:
+                LIB.free(comment_ptr)
+
     # -- Row / column structural edits -------------------------------------
     #
     # The four edits below move every structure the engine models: cells,
@@ -4850,6 +5776,60 @@ class Workbook:
         """Set the workbook's calc mode."""
         h = self._require()
         _check(LIB.fm_workbook_set_calc_mode(h, _sint(mode, "mode")), "fm_workbook_set_calc_mode")
+
+    def _read_flag(self, fn, op: str) -> bool:
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(fn(h, out), op)
+            return bool(LIB.read_i32(out))
+        finally:
+            LIB.free(out)
+
+    def full_precision(self) -> bool:
+        """Return ``<calcPr fullPrecision>``; false is "set precision as displayed" (metadata only)."""
+        return self._read_flag(LIB.fm_workbook_full_precision, "fm_workbook_full_precision")
+
+    def set_full_precision(self, full_precision: bool) -> None:
+        """Set ``<calcPr fullPrecision>``."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_set_full_precision(h, 1 if full_precision else 0),
+            "fm_workbook_set_full_precision",
+        )
+
+    def calc_on_save(self) -> bool:
+        """Return ``<calcPr calcOnSave>`` (default true)."""
+        return self._read_flag(LIB.fm_workbook_calc_on_save, "fm_workbook_calc_on_save")
+
+    def set_calc_on_save(self, calc_on_save: bool) -> None:
+        """Set ``<calcPr calcOnSave>``."""
+        h = self._require()
+        _check(LIB.fm_workbook_set_calc_on_save(h, 1 if calc_on_save else 0), "fm_workbook_set_calc_on_save")
+
+    def ref_mode(self) -> RefMode:
+        """Return ``<calcPr refMode>``: the reference notation formulas are shown in."""
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(LIB.fm_workbook_ref_mode(h, out), "fm_workbook_ref_mode")
+            return RefMode(LIB.read_i32(out))
+        finally:
+            LIB.free(out)
+
+    def set_ref_mode(self, mode: "RefMode | int") -> None:
+        """Set ``<calcPr refMode>``."""
+        h = self._require()
+        _check(LIB.fm_workbook_set_ref_mode(h, _sint(mode, "mode")), "fm_workbook_set_ref_mode")
+
+    def date1904(self) -> bool:
+        """Return whether the workbook uses the 1904 date system."""
+        return self._read_flag(LIB.fm_workbook_date1904, "fm_workbook_date1904")
+
+    def set_date1904(self, date1904: bool) -> None:
+        """Switch the date system. Stored serials keep their numbers, so every date shifts by 1462 days."""
+        h = self._require()
+        _check(LIB.fm_workbook_set_date1904(h, 1 if date1904 else 0), "fm_workbook_set_date1904")
 
     def pinned_now(self) -> "CivilTime | None":
         """Return the pinned wall-clock reading, or ``None`` when the
@@ -5275,6 +6255,162 @@ class Workbook:
             LIB.free(ptr)
         return out
 
+    def get_comment_visible(self, sheet: int, row: int, col: int) -> Optional[bool]:
+        """Return whether the note at the cell is shown without hovering, or ``None`` if absent."""
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            status = LIB.fm_sheet_get_comment_visible(
+                h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out
+            )
+            if status == _STATUS_NOT_FOUND:
+                return None
+            _check(status, "fm_sheet_get_comment_visible")
+            return LIB.read_u32(out) != 0
+        finally:
+            LIB.free(out)
+
+    def set_comment_visible(self, sheet: int, row: int, col: int, visible: bool) -> None:
+        """Show or hide the note at the cell; its box geometry is kept."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_comment_visible(
+                h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), 1 if visible else 0
+            ),
+            "fm_sheet_set_comment_visible",
+        )
+
+    # -- Protection records ------------------------------------------------
+    _WORKBOOK_PROTECTION_TEXT = (
+        "workbook_password",
+        "workbook_algorithm_name",
+        "workbook_hash_value",
+        "workbook_salt_value",
+        "revisions_password",
+        "revisions_algorithm_name",
+        "revisions_hash_value",
+        "revisions_salt_value",
+    )
+    _PROTECTED_RANGE_TEXT = (
+        "name",
+        "sqref",
+        "password",
+        "algorithm_name",
+        "hash_value",
+        "salt_value",
+        "security_descriptor",
+    )
+
+    def get_workbook_protection(self) -> WorkbookProtection:
+        """Read the workbook's ``<workbookProtection>``; every field is false, empty or zero when absent."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.WORKBOOK_PROTECTION)
+        try:
+            _check(LIB.fm_workbook_get_protection(h, ptr), "fm_workbook_get_protection")
+            d = S.WORKBOOK_PROTECTION.unpack(LIB, ptr)
+            prot = WorkbookProtection(
+                lock_structure=bool(d["lock_structure"]),
+                lock_windows=bool(d["lock_windows"]),
+                lock_revision=bool(d["lock_revision"]),
+                workbook_spin_count=d["workbook_spin_count"],
+                revisions_spin_count=d["revisions_spin_count"],
+            )
+            for fld in self._WORKBOOK_PROTECTION_TEXT:
+                setattr(prot, fld, LIB.read_cstr(d[fld]))
+            return prot
+        finally:
+            LIB.free(ptr)
+
+    def set_workbook_protection(self, protection: WorkbookProtection) -> None:
+        """Replace the modelled ``<workbookProtection>`` attributes; an all-empty record removes the element."""
+        h = self._require()
+        owned: List[int] = []
+        ptr = S.alloc_struct(LIB, S.WORKBOOK_PROTECTION)
+        try:
+            S.WORKBOOK_PROTECTION.pack(
+                LIB,
+                ptr,
+                {
+                    "lock_structure": 1 if protection.lock_structure else 0,
+                    "lock_windows": 1 if protection.lock_windows else 0,
+                    "lock_revision": 1 if protection.lock_revision else 0,
+                    "workbook_spin_count": _uint(protection.workbook_spin_count, "workbook_spin_count"),
+                    "revisions_spin_count": _uint(protection.revisions_spin_count, "revisions_spin_count"),
+                },
+            )
+            for fld in self._WORKBOOK_PROTECTION_TEXT:
+                S.write_str_field(LIB, ptr, S.WORKBOOK_PROTECTION, fld, getattr(protection, fld), owned)
+            _check(LIB.fm_workbook_set_protection(h, ptr), "fm_workbook_set_protection")
+        finally:
+            LIB.free(ptr)
+            for p in owned:
+                LIB.free(p)
+
+    def protected_range_count(self, sheet: int) -> int:
+        """Return the number of protected ranges on ``sheet``."""
+        h = self._require()
+        return _read_count(LIB.fm_sheet_protected_range_count, h, _uint(sheet, "sheet"))
+
+    def get_protected_ranges(self, sheet: int) -> List[ProtectedRange]:
+        """Return the protected ranges of ``sheet`` in file order."""
+        h = self._require()
+        out: List[ProtectedRange] = []
+        ptr = S.alloc_struct(LIB, S.PROTECTED_RANGE)
+        try:
+            for index in range(self.protected_range_count(sheet)):
+                S.zero_struct(LIB, S.PROTECTED_RANGE, ptr)
+                _check(
+                    LIB.fm_sheet_get_protected_range(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
+                    "fm_sheet_get_protected_range",
+                )
+                d = S.PROTECTED_RANGE.unpack(LIB, ptr)
+                out.append(
+                    ProtectedRange(
+                        spin_count=d["spin_count"],
+                        **{fld: LIB.read_cstr(d[fld]) for fld in self._PROTECTED_RANGE_TEXT},
+                    )
+                )
+        finally:
+            LIB.free(ptr)
+        return out
+
+    def _protected_range_call(self, fn, name: str, leading: tuple, protected: ProtectedRange) -> None:
+        h = self._require()
+        owned: List[int] = []
+        ptr = S.alloc_struct(LIB, S.PROTECTED_RANGE)
+        try:
+            S.PROTECTED_RANGE.pack(LIB, ptr, {"spin_count": _uint(protected.spin_count, "spin_count")})
+            for fld in self._PROTECTED_RANGE_TEXT:
+                S.write_str_field(LIB, ptr, S.PROTECTED_RANGE, fld, getattr(protected, fld), owned)
+            _check(fn(h, *leading, ptr), name)
+        finally:
+            LIB.free(ptr)
+            for p in owned:
+                LIB.free(p)
+
+    def add_protected_range(self, sheet: int, protected: ProtectedRange) -> None:
+        """Append a protected range; ``name`` must be non-empty and unique on the sheet."""
+        self._protected_range_call(
+            LIB.fm_sheet_add_protected_range, "fm_sheet_add_protected_range", (_uint(sheet, "sheet"),), protected
+        )
+
+    def update_protected_range(self, sheet: int, index: int, protected: ProtectedRange) -> None:
+        """Replace the ``index``-th protected range of ``sheet``."""
+        self._protected_range_call(
+            LIB.fm_sheet_update_protected_range,
+            "fm_sheet_update_protected_range",
+            (_uint(sheet, "sheet"), _uint(index, "index")),
+            protected,
+        )
+
+    def remove_protected_range(self, sheet: int, index: int) -> None:
+        """Remove the ``index``-th protected range of ``sheet``."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_protected_range(h, _uint(sheet, "sheet"), _uint(index, "index")),
+            "fm_sheet_remove_protected_range",
+        )
+
     # -- Data validations --------------------------------------------------
     def validation_count(self, sheet: int) -> int:
         """Return the number of data-validation rules on ``sheet``."""
@@ -5485,6 +6621,8 @@ class Workbook:
                 base_col_width=d["base_col_width"],
                 has_default_col_width=bool(d["has_default_col_width"]),
                 has_default_row_height=bool(d["has_default_row_height"]),
+                custom_height=bool(d["custom_height"]),
+                zero_height=bool(d["zero_height"]),
                 effective_default_col_width=d["effective_default_col_width"],
                 effective_default_row_height=d["effective_default_row_height"],
             )
@@ -5492,8 +6630,14 @@ class Workbook:
             LIB.free(ptr)
 
     def set_sheet_format_defaults(self, sheet: int, defaults: SheetFormatDefaults) -> None:
-        """Replace the sheet's default column / row metrics."""
+        """Replace the sheet's default column / row metrics; a ``None`` flag keeps the stored one."""
         h = self._require()
+        if defaults.custom_height is None or defaults.zero_height is None:
+            stored = self.get_sheet_format_defaults(sheet)
+            custom_height = stored.custom_height if defaults.custom_height is None else defaults.custom_height
+            zero_height = stored.zero_height if defaults.zero_height is None else defaults.zero_height
+        else:
+            custom_height, zero_height = defaults.custom_height, defaults.zero_height
         ptr = S.alloc_struct(LIB, S.SHEET_FORMAT_DEFAULTS)
         try:
             S.SHEET_FORMAT_DEFAULTS.pack(
@@ -5505,6 +6649,8 @@ class Workbook:
                     "base_col_width": float(defaults.base_col_width),
                     "has_default_col_width": 1 if defaults.has_default_col_width else 0,
                     "has_default_row_height": 1 if defaults.has_default_row_height else 0,
+                    "custom_height": 1 if custom_height else 0,
+                    "zero_height": 1 if zero_height else 0,
                 },
             )
             _check(
@@ -6199,6 +7345,488 @@ class Workbook:
             LIB.free(out)
             LIB.free(buf)
 
+    def list_shapes(self, sheet: int) -> List[Shape]:
+        """Return the shapes, connectors and groups of the sheet's drawing in z-order (back first).
+
+        Children of a group are not listed.
+        """
+        h = self._require()
+        n = _read_count(LIB.fm_sheet_shape_count, h, _uint(sheet, "sheet_index"))
+        ptr = S.alloc_struct(LIB, S.SHAPE)
+        out: List[Shape] = []
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.SHAPE, ptr)
+                _check(LIB.fm_sheet_shape_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr), "fm_sheet_shape_at")
+                d = S.SHAPE.unpack(LIB, ptr)
+                out.append(
+                    Shape(
+                        object_id=d["object_id"],
+                        kind=d["kind"],
+                        anchor_kind=d["anchor_kind"],
+                        edit_as=d["edit_as"],
+                        from_row=d["from_row"],
+                        from_col=d["from_col"],
+                        from_row_off=d["from_row_off"],
+                        from_col_off=d["from_col_off"],
+                        to_row=d["to_row"],
+                        to_col=d["to_col"],
+                        to_row_off=d["to_row_off"],
+                        to_col_off=d["to_col_off"],
+                        cx=d["cx"],
+                        cy=d["cy"],
+                        name=LIB.read_cstr(d["name"]),
+                        prst=LIB.read_cstr(d["prst"]),
+                        text=LIB.read_cstr(d["text"]),
+                        text_box=bool(d["text_box"]),
+                        fill_kind=d["fill_kind"],
+                        fill_rgb=d["fill_rgb"],
+                        line_kind=d["line_kind"],
+                        line_rgb=d["line_rgb"],
+                        line_width_emu=d["line_width_emu"],
+                        rotation=d["rotation"],
+                        hidden=bool(d["hidden"]),
+                    )
+                )
+        finally:
+            LIB.free(ptr)
+        return out
+
+    def insert_shape(
+        self,
+        sheet: int,
+        *,
+        anchor_kind: Union[AnchorKind, int],
+        edit_as: Union[AnchorEditAs, int] = AnchorEditAs.TWO_CELL,
+        from_row: int = 0,
+        from_col: int = 0,
+        from_row_off: int = 0,
+        from_col_off: int = 0,
+        to_row: int = 0,
+        to_col: int = 0,
+        to_row_off: int = 0,
+        to_col_off: int = 0,
+        cx: int = 0,
+        cy: int = 0,
+        name: Optional[str] = None,
+        prst: Optional[str] = None,
+        text: Optional[str] = None,
+        text_box: Optional[bool] = None,
+        fill_kind: Optional[Union[ShapePaint, int]] = None,
+        fill_rgb: int = 0,
+        line_kind: Optional[Union[ShapePaint, int]] = None,
+        line_rgb: int = 0,
+        line_width_emu: Optional[int] = None,
+        rotation: Optional[int] = None,
+        hidden: Optional[bool] = None,
+    ) -> int:
+        """Append a shape on top of the sheet's drawing and return its object id.
+
+        A ``None`` argument is not applied. ``prst`` defaults to ``rect`` and
+        ``name`` to ``Shape <id>``; a ``prst`` naming a line or connector
+        geometry makes a connector, which holds no text. A two-cell anchor's
+        size is its box (``cx`` / ``cy`` are ignored); an absolute anchor's
+        position is ``from_col_off`` (x) and ``from_row_off`` (y). ``fill_kind``
+        and ``line_kind`` must be ``SOLID`` (with the rgb) or ``NONE``.
+        """
+        h = self._require()
+        owned: List[int] = []
+        out = _alloc_out_ptr()
+        try:
+            owned.append(out)
+            ptr = _pack_shape(
+                owned, name, prst, text, text_box, anchor_kind, edit_as, from_row, from_col, from_row_off,
+                from_col_off, to_row, to_col, to_row_off, to_col_off, cx, cy, fill_kind, fill_rgb, line_kind,
+                line_rgb, line_width_emu, rotation, hidden,
+            )  # fmt: skip
+            _check(LIB.fm_sheet_insert_shape(h, _uint(sheet, "sheet_index"), ptr, out), "fm_sheet_insert_shape")
+            return LIB.read_u32(out)
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def update_shape(
+        self,
+        sheet: int,
+        object_id: int,
+        *,
+        anchor_kind: Optional[Union[AnchorKind, int]] = None,
+        edit_as: Union[AnchorEditAs, int] = AnchorEditAs.TWO_CELL,
+        from_row: int = 0,
+        from_col: int = 0,
+        from_row_off: int = 0,
+        from_col_off: int = 0,
+        to_row: int = 0,
+        to_col: int = 0,
+        to_row_off: int = 0,
+        to_col_off: int = 0,
+        cx: int = 0,
+        cy: int = 0,
+        name: Optional[str] = None,
+        prst: Optional[str] = None,
+        text: Optional[str] = None,
+        text_box: Optional[bool] = None,
+        fill_kind: Optional[Union[ShapePaint, int]] = None,
+        fill_rgb: int = 0,
+        line_kind: Optional[Union[ShapePaint, int]] = None,
+        line_rgb: int = 0,
+        line_width_emu: Optional[int] = None,
+        rotation: Optional[int] = None,
+        hidden: Optional[bool] = None,
+    ) -> None:
+        """Apply the arguments that are not ``None`` to the shape ``object_id``; the rest of its XML is kept.
+
+        The anchor is applied as a whole when ``anchor_kind`` is given, and its
+        kind cannot change. Text applies to a shape only and keeps the first
+        paragraph's properties and first run's formatting.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _pack_shape(
+                owned, name, prst, text, text_box, anchor_kind, edit_as, from_row, from_col, from_row_off,
+                from_col_off, to_row, to_col, to_row_off, to_col_off, cx, cy, fill_kind, fill_rgb, line_kind,
+                line_rgb, line_width_emu, rotation, hidden,
+            )  # fmt: skip
+            _check(
+                LIB.fm_sheet_update_shape(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
+                "fm_sheet_update_shape",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def remove_shape(self, sheet: int, object_id: int) -> None:
+        """Remove the shape, connector or group ``object_id`` with its children."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_shape(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id")),
+            "fm_sheet_remove_shape",
+        )
+
+    def list_slicers(self, sheet: int) -> List[Slicer]:
+        """Return the table slicers hosted by the sheet; slicers over a pivot cache are not listed."""
+        h = self._require()
+        n = _read_count(LIB.fm_sheet_slicer_count, h, _uint(sheet, "sheet_index"))
+        ptr = S.alloc_struct(LIB, S.SLICER)
+        out: List[Slicer] = []
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.SLICER, ptr)
+                _check(
+                    LIB.fm_sheet_slicer_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr), "fm_sheet_slicer_at"
+                )
+                d = S.SLICER.unpack(LIB, ptr)
+                out.append(
+                    Slicer(
+                        object_id=d["object_id"],
+                        name=LIB.read_cstr(d["name"]),
+                        caption=LIB.read_cstr(d["caption"]),
+                        cache_name=LIB.read_cstr(d["cache_name"]),
+                        table_name=LIB.read_cstr(d["table_name"]),
+                        column_name=LIB.read_cstr(d["column_name"]),
+                        style=LIB.read_cstr(d["style"]),
+                        column_count=d["column_count"],
+                        row_height=d["row_height"],
+                        sort_order=d["sort_order"],
+                        cross_filter=d["cross_filter"],
+                        anchor_kind=d["anchor_kind"],
+                        from_row=d["from_row"],
+                        from_col=d["from_col"],
+                        from_row_off=d["from_row_off"],
+                        from_col_off=d["from_col_off"],
+                        to_row=d["to_row"],
+                        to_col=d["to_col"],
+                        to_row_off=d["to_row_off"],
+                        to_col_off=d["to_col_off"],
+                    )
+                )
+        finally:
+            LIB.free(ptr)
+        return out
+
+    def add_slicer(
+        self,
+        sheet: int,
+        table: int,
+        column: int,
+        *,
+        anchor: Sequence[int],
+        name: Optional[str] = None,
+        caption: Optional[str] = None,
+        style: Optional[str] = None,
+        column_count: Optional[int] = None,
+        row_height: Optional[int] = None,
+        sort_order: Optional[Union[SlicerSortOrder, int]] = None,
+        cross_filter: Optional[Union[SlicerCrossFilter, int]] = None,
+    ) -> int:
+        """Add a slicer over column ``column`` of table ``table`` and return its frame's object id.
+
+        ``anchor`` is ``(from_row, from_col, to_row, to_col)`` (0-based cells), optionally followed by the four
+        EMU offsets ``(from_row_off, from_col_off, to_row_off, to_col_off)``. The name and caption default to
+        the column name (the name is made unique), ``row_height`` to 241300 EMU and ``column_count`` to 1. The
+        table may live on another sheet.
+        """
+        h = self._require()
+        owned: List[int] = []
+        out = _alloc_out_ptr()
+        try:
+            owned.append(out)
+            ptr = _pack_slicer(owned, name, caption, style, column_count, row_height, anchor, sort_order, cross_filter)
+            _check(
+                LIB.fm_sheet_add_slicer(
+                    h, _uint(sheet, "sheet_index"), _uint(table, "table_index"), _uint(column, "column_index"), ptr, out
+                ),
+                "fm_sheet_add_slicer",
+            )
+            return LIB.read_u32(out)
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def update_slicer(
+        self,
+        sheet: int,
+        index: int,
+        *,
+        anchor: Optional[Sequence[int]] = None,
+        caption: Optional[str] = None,
+        style: Optional[str] = None,
+        column_count: Optional[int] = None,
+        row_height: Optional[int] = None,
+        sort_order: Optional[Union[SlicerSortOrder, int]] = None,
+        cross_filter: Optional[Union[SlicerCrossFilter, int]] = None,
+    ) -> None:
+        """Apply the arguments that are not ``None`` to slicer ``index``; the rest of its XML is kept.
+
+        An empty ``style`` removes the style. ``anchor`` moves the slicer's two-cell frame (see :meth:`add_slicer`).
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _pack_slicer(owned, None, caption, style, column_count, row_height, anchor, sort_order, cross_filter)
+            _check(
+                LIB.fm_sheet_update_slicer(h, _uint(sheet, "sheet_index"), _uint(index, "idx"), ptr),
+                "fm_sheet_update_slicer",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def remove_slicer(self, sheet: int, index: int) -> None:
+        """Remove slicer ``index`` with its drawing frame, and its cache when no other slicer uses it."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_slicer(h, _uint(sheet, "sheet_index"), _uint(index, "idx")),
+            "fm_sheet_remove_slicer",
+        )
+
+    def add_data_table(
+        self,
+        sheet: int,
+        first_row: int,
+        first_col: int,
+        last_row: int,
+        last_col: int,
+        *,
+        row_input: Optional[Tuple[int, int]] = None,
+        col_input: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        """Create a data table whose result range is ``first_row``..``last_col`` (0-based, inclusive).
+
+        The formulas sit in the row above the range and the substitution values in the column left of it (a
+        one-variable table), or the other way round; ``row_input`` / ``col_input`` are the ``(row, col)`` input
+        cells that receive the values of the row above / the column left. Give one for a one-variable table, both
+        for a two-variable one. The result cells read 0 until the next recalc and refuse writes until the table
+        is removed.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _alloc_struct_array(S.DATA_TABLE, 1, owned)
+            values: Dict[str, int] = {
+                "first_row": _uint(first_row, "first_row"),
+                "first_col": _uint(first_col, "first_col"),
+                "last_row": _uint(last_row, "last_row"),
+                "last_col": _uint(last_col, "last_col"),
+            }
+            for prefix, cell in (("row_input", row_input), ("col_input", col_input)):
+                if cell is not None:
+                    values["has_" + prefix] = 1
+                    values[prefix + "_row"] = _uint(cell[0], prefix + "_row")
+                    values[prefix + "_col"] = _uint(cell[1], prefix + "_col")
+            S.DATA_TABLE.pack(LIB, ptr, values)
+            _check(LIB.fm_sheet_add_data_table(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_add_data_table")
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def get_data_table(self, sheet: int, row: int, col: int) -> Optional[DataTable]:
+        """Return the data table whose result range contains ``(row, col)``, or ``None``."""
+        h = self._require()
+        present = _alloc_out_ptr()
+        ptr = S.alloc_struct(LIB, S.DATA_TABLE)
+        try:
+            _check(
+                LIB.fm_sheet_data_table_at(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), present, ptr
+                ),
+                "fm_sheet_data_table_at",
+            )
+            if not LIB.read_u32(present):
+                return None
+            d = S.DATA_TABLE.unpack(LIB, ptr)
+        finally:
+            LIB.free(present)
+            LIB.free(ptr)
+
+        def _input(prefix: str) -> Optional[DataTableInput]:
+            if not d["has_" + prefix]:
+                return None
+            return DataTableInput(d[prefix + "_row"], d[prefix + "_col"], bool(d[prefix + "_deleted"]))
+
+        return DataTable(
+            first_row=d["first_row"],
+            first_col=d["first_col"],
+            last_row=d["last_row"],
+            last_col=d["last_col"],
+            two_dimensional=bool(d["two_dimensional"]),
+            row_oriented=bool(d["row_oriented"]),
+            row_input=_input("row_input"),
+            col_input=_input("col_input"),
+        )
+
+    def remove_data_table(self, sheet: int, row: int, col: int) -> None:
+        """Remove the data table containing ``(row, col)`` and blank its result cells."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_data_table(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")),
+            "fm_sheet_remove_data_table",
+        )
+
+    def recalc_data_tables(self) -> None:
+        """Recompute every data table now, whatever the calc mode (the explicit calculation of ``AUTO_NO_TABLE``)."""
+        _check(LIB.fm_workbook_recalc_data_tables(self._require()), "fm_workbook_recalc_data_tables")
+
+    def list_sparkline_groups(self, sheet: int) -> List[SparklineGroup]:
+        """Return the sheet's sparkline groups in document order, each with its sparklines."""
+        h = self._require()
+        n = _read_count(LIB.fm_sheet_sparkline_group_count, h, _uint(sheet, "sheet_index"))
+        group_ptr = S.alloc_struct(LIB, S.SPARKLINE_GROUP)
+        item_ptr = S.alloc_struct(LIB, S.SPARKLINE)
+        out: List[SparklineGroup] = []
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.SPARKLINE_GROUP, group_ptr)
+                _check(
+                    LIB.fm_sheet_sparkline_group_at(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), group_ptr),
+                    "fm_sheet_sparkline_group_at",
+                )
+                d = S.SPARKLINE_GROUP.unpack(LIB, group_ptr)
+                group = SparklineGroup(
+                    type=d["type"],
+                    color_series=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_series"][1]),
+                    color_negative=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_negative"][1]),
+                    color_axis=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_axis"][1]),
+                    color_markers=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_markers"][1]),
+                    color_first=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_first"][1]),
+                    color_last=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_last"][1]),
+                    color_high=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_high"][1]),
+                    color_low=_decode_color(group_ptr + S.SPARKLINE_GROUP.offsets["color_low"][1]),
+                    markers=bool(d["markers"]),
+                    high=bool(d["high"]),
+                    low=bool(d["low"]),
+                    first=bool(d["first"]),
+                    last=bool(d["last"]),
+                    negative=bool(d["negative"]),
+                    display_x_axis=bool(d["display_x_axis"]),
+                    display_hidden=bool(d["display_hidden"]),
+                    min_axis_type=d["min_axis_type"],
+                    max_axis_type=d["max_axis_type"],
+                    manual_min=d["manual_min"] if d["has_manual_min"] else None,
+                    manual_max=d["manual_max"] if d["has_manual_max"] else None,
+                    date_axis=bool(d["date_axis"]),
+                    date_axis_ref=LIB.read_cstr(d["date_axis_ref"]),
+                    line_weight=d["line_weight"],
+                    empty_cells_as=d["empty_cells_as"],
+                )
+                for k in range(d["sparkline_count"]):
+                    S.zero_struct(LIB, S.SPARKLINE, item_ptr)
+                    _check(
+                        LIB.fm_sheet_sparkline_at(
+                            h, _uint(sheet, "sheet_index"), _uint(i, "idx"), _uint(k, "idx"), item_ptr
+                        ),
+                        "fm_sheet_sparkline_at",
+                    )
+                    item = S.SPARKLINE.unpack(LIB, item_ptr)
+                    group.sparklines.append(
+                        Sparkline(formula=LIB.read_cstr(item["formula"]), location=LIB.read_cstr(item["location"]))
+                    )
+                out.append(group)
+        finally:
+            LIB.free(item_ptr)
+            LIB.free(group_ptr)
+        return out
+
+    def add_sparkline_group(self, sheet: int, group: SparklineGroup) -> None:
+        """Append ``group`` with its ``sparklines`` (at least one) to the sheet's worksheet extension list."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _pack_sparkline_group(owned, group)
+            items = _pack_sparklines(owned, group.sparklines)
+            _check(
+                LIB.fm_sheet_add_sparkline_group(
+                    h, _uint(sheet, "sheet_index"), ptr, items, _uint(len(group.sparklines), "count")
+                ),
+                "fm_sheet_add_sparkline_group",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def update_sparkline_group(self, sheet: int, index: int, group: SparklineGroup) -> None:
+        """Rewrite the modelled attributes, colours and date range of group ``index`` from ``group``.
+
+        Its sparklines (``group.sparklines`` is ignored) and every attribute or
+        child outside the model are kept; read, modify and write back.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptr = _pack_sparkline_group(owned, group)
+            _check(
+                LIB.fm_sheet_update_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(index, "idx"), ptr),
+                "fm_sheet_update_sparkline_group",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def set_sparkline_group_sparklines(self, sheet: int, index: int, sparklines: Sequence[Sparkline]) -> None:
+        """Replace the sparklines of group ``index`` with ``sparklines`` (at least one)."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            items = _pack_sparklines(owned, sparklines)
+            _check(
+                LIB.fm_sheet_set_sparkline_group_sparklines(
+                    h, _uint(sheet, "sheet_index"), _uint(index, "idx"), items, _uint(len(sparklines), "count")
+                ),
+                "fm_sheet_set_sparkline_group_sparklines",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def remove_sparkline_group(self, sheet: int, index: int) -> None:
+        """Remove sparkline group ``index``."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_remove_sparkline_group(h, _uint(sheet, "sheet_index"), _uint(index, "idx")),
+            "fm_sheet_remove_sparkline_group",
+        )
+
     def get_chart(self, sheet: int, object_id: int) -> ChartInfo:
         """Return the typed view of the chart ``object_id``: plots, series, axes, legend and source.
 
@@ -6868,6 +8496,10 @@ class Workbook:
                 top_left_col=d["top_left_col"],
                 pane_top_left_row=d["pane_top_left_row"],
                 pane_top_left_col=d["pane_top_left_col"],
+                split_x=d["split_x"],
+                split_y=d["split_y"],
+                show_formulas=bool(d["show_formulas"]),
+                show_outline_symbols=bool(d["show_outline_symbols"]),
             )
         finally:
             LIB.free(ptr)
@@ -6940,6 +8572,22 @@ class Workbook:
             "fm_sheet_set_show_zeros",
         )
 
+    def set_sheet_show_formulas(self, sheet: int, show: bool) -> None:
+        """Set the sheet's ``showFormulas`` flag."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_show_formulas(h, _uint(sheet, "sheet_index"), 1 if show else 0),
+            "fm_sheet_set_show_formulas",
+        )
+
+    def set_sheet_show_outline_symbols(self, sheet: int, show: bool) -> None:
+        """Set the sheet's ``showOutlineSymbols`` flag."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_show_outline_symbols(h, _uint(sheet, "sheet_index"), 1 if show else 0),
+            "fm_sheet_set_show_outline_symbols",
+        )
+
     def set_sheet_right_to_left(self, sheet: int, right_to_left: bool) -> None:
         """Set the sheet's ``rightToLeft`` flag."""
         h = self._require()
@@ -6967,6 +8615,19 @@ class Workbook:
         _check(
             LIB.fm_sheet_set_pane_top_left(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col")),
             "fm_sheet_set_pane_top_left",
+        )
+
+    def set_sheet_split(self, sheet: int, x_twips: float, y_twips: float) -> None:
+        """Split the view at ``x_twips`` / ``y_twips`` (0 for none on that axis).
+
+        ``(0, 0)`` removes the split. A split replaces any freeze, as
+        :meth:`set_sheet_freeze` replaces a split. Negative or non-finite
+        values raise and leave the view unchanged.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_split(h, _uint(sheet, "sheet_index"), float(x_twips), float(y_twips)),
+            "fm_sheet_set_split",
         )
 
     def get_sheet_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[MergeRange]]:
@@ -7562,6 +9223,7 @@ class Workbook:
                         width=d["width"],
                         hidden=bool(d["hidden"]),
                         outline_level=d["outline_level"],
+                        collapsed=bool(d["collapsed"]),
                         has_width=bool(d["has_width"]),
                         has_style=bool(d["has_style"]),
                         style_xf=d["style_xf"],
@@ -7605,6 +9267,16 @@ class Workbook:
             "fm_sheet_set_column_outline",
         )
 
+    def set_column_collapsed(self, sheet: int, first: int, last: int, collapsed: bool) -> None:
+        """Set or clear the ``collapsed`` flag on the columns ``[first, last]``."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_column_collapsed(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if collapsed else 0
+            ),
+            "fm_sheet_set_column_collapsed",
+        )
+
     def set_column_style(self, sheet: int, first: int, last: int, xf_index: int) -> None:
         """Set the cell-style XF on ``[first, last]``, keeping the other column attributes."""
         h = self._require()
@@ -7644,6 +9316,7 @@ class Workbook:
                         height=d["height"],
                         hidden=bool(d["hidden"]),
                         outline_level=d["outline_level"],
+                        collapsed=bool(d["collapsed"]),
                         has_style=bool(d["has_style"]),
                         style_xf=d["style_xf"],
                         has_height=bool(d["has_height"]),
@@ -7676,6 +9349,14 @@ class Workbook:
         _check(
             LIB.fm_sheet_set_row_outline(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(level, "level", 8)),
             "fm_sheet_set_row_outline",
+        )
+
+    def set_row_collapsed(self, sheet: int, row: int, collapsed: bool) -> None:
+        """Set or clear the ``collapsed`` flag at ``row``."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_row_collapsed(h, _uint(sheet, "sheet_index"), _uint(row, "row"), 1 if collapsed else 0),
+            "fm_sheet_set_row_collapsed",
         )
 
     def set_row_style(self, sheet: int, first: int, last: int, xf_index: int) -> None:
@@ -8070,6 +9751,13 @@ class Workbook:
                     bool(d["icon_set_show_value"]),
                     bool(d["icon_set_percent"]),
                     self._decode_cfvo(ptr + offsets["icon_set_floor"][1]) if d["icon_set_floor_engaged"] else None,
+                    [
+                        CfIcon(
+                            LIB.read_cstr(LIB.read_u32(d["icon_set_icons"] + i * S.CF_ICON.size)),
+                            LIB.read_i32(d["icon_set_icons"] + i * S.CF_ICON.size + S.CF_ICON.offsets["icon_id"][1]),
+                        )
+                        for i in range(d["icon_set_icon_count"])
+                    ],
                 )
             return ConditionalFormat(
                 id=LIB.read_cstr(d["id"]),
@@ -8214,6 +9902,19 @@ class Workbook:
                 if icon_set.floor is not None:
                     LIB.write_bytes(ptr + ro["icon_set_floor_engaged"][1], struct.pack("<i", 1))
                     self._write_cfvo(ptr + ro["icon_set_floor"][1], icon_set.floor, owned)
+                if icon_set.icons:
+                    icons_ptr = LIB.alloc(len(icon_set.icons) * S.CF_ICON.size)
+                    owned.append(icons_ptr)
+                    for i, icon in enumerate(icon_set.icons):
+                        name_ptr, _ = LIB.alloc_utf8(icon.icon_set)
+                        owned.append(name_ptr)
+                        S.CF_ICON.pack(
+                            LIB,
+                            icons_ptr + i * S.CF_ICON.size,
+                            {"icon_set": name_ptr, "icon_id": _sint(icon.icon_id, "icon_id")},
+                        )
+                    LIB.write_bytes(ptr + ro["icon_set_icons"][1], struct.pack("<I", icons_ptr))
+                    LIB.write_bytes(ptr + ro["icon_set_icon_count"][1], struct.pack("<I", len(icon_set.icons)))
             _check(
                 LIB.fm_sheet_cf_add_rule(h, _uint(sheet, "sheet_index"), ptr, out),
                 "fm_sheet_cf_add_rule",
@@ -8503,13 +10204,16 @@ class Workbook:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.FILL_RECORD)
         out = _alloc_out_ptr()
+        owned: List[int] = []
         try:
-            _pack_fill(ptr, record)
+            _pack_fill(ptr, record, owned)
             _check(LIB.fm_styles_add_fill(h, ptr, out), "fm_styles_add_fill")
             return LIB.read_u32(out)
         finally:
             LIB.free(ptr)
             LIB.free(out)
+            for p in owned:
+                LIB.free(p)
 
     def add_border(self, sides: Dict[str, object]) -> int:
         """Add (dedup) a border record; return its index.
@@ -8624,7 +10328,7 @@ class Workbook:
                 records = alloc_array(S.FILL_RECORD.size, len(fill_list))
                 fill_indices = alloc_array(4, len(fill_list))
                 for i, record in enumerate(fill_list):
-                    _pack_fill(records + i * S.FILL_RECORD.size, record)
+                    _pack_fill(records + i * S.FILL_RECORD.size, record, owned)
                 fields.update(fills=records, fill_count=len(fill_list), fill_indices=fill_indices)
 
             border_indices = 0
@@ -8703,7 +10407,7 @@ class Workbook:
             if record.font is not None:
                 _pack_font(ptr + offsets["font"][1], record.font, owned)
             if record.fill is not None:
-                _pack_fill(ptr + offsets["fill"][1], record.fill)
+                _pack_fill(ptr + offsets["fill"][1], record.fill, owned)
             if record.border is not None:
                 _pack_border_record(ptr + offsets["border"][1], record.border)
             S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, owned)
@@ -8759,6 +10463,131 @@ class Workbook:
             _check(LIB.fm_styles_remove_cell_style(h, name_ptr), "fm_styles_remove_cell_style")
         finally:
             LIB.free(name_ptr)
+
+    def table_style_count(self) -> int:
+        """Return the number of custom table / PivotTable styles."""
+        return self._style_count(LIB.fm_styles_get_table_style_count)
+
+    def get_table_style(self, index: int) -> TableStyle:
+        """Return the custom table style at ``index``."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.TABLE_STYLE)
+        try:
+            _check(LIB.fm_styles_get_table_style(h, _uint(index, "index"), ptr), "fm_styles_get_table_style")
+            d = S.TABLE_STYLE.unpack(LIB, ptr)
+            elements = []
+            for i in range(d["element_count"]):
+                e = S.TABLE_STYLE_ELEMENT.unpack(LIB, d["elements"] + i * S.TABLE_STYLE_ELEMENT.size)
+                elements.append(
+                    TableStyleElement(
+                        type=LIB.read_cstr(e["type"]),
+                        size=e["size"],
+                        dxf_id=e["dxf_id"] if e["has_dxf_id"] else None,
+                    )
+                )
+            return TableStyle(
+                name=LIB.read_cstr(d["name"]),
+                pivot=d["pivot"] != 0,
+                table=d["table"] != 0,
+                elements=tuple(elements),
+            )
+        finally:
+            LIB.free(ptr)
+
+    def set_table_style(self, style: TableStyle) -> None:
+        """Add a custom table style, or replace the one with the same name.
+
+        The name may not be a built-in style name; each element type may
+        appear once, ``size`` must be at least 1 and ``dxf_id`` must name an
+        existing differential format (:meth:`add_dxf`).
+        """
+        h = self._require()
+        owned: List[int] = []
+        ptr = S.alloc_struct(LIB, S.TABLE_STYLE)
+        owned.append(ptr)
+        try:
+            elements_ptr = 0
+            if style.elements:
+                elements_ptr = _alloc_struct_array(S.TABLE_STYLE_ELEMENT, len(style.elements), owned)
+                for i, element in enumerate(style.elements):
+                    type_ptr, _ = LIB.alloc_utf8(element.type)
+                    owned.append(type_ptr)
+                    S.TABLE_STYLE_ELEMENT.pack(
+                        LIB,
+                        elements_ptr + i * S.TABLE_STYLE_ELEMENT.size,
+                        {
+                            "type": type_ptr,
+                            "size": _uint(element.size, "size"),
+                            "has_dxf_id": 0 if element.dxf_id is None else 1,
+                            "dxf_id": _uint(0 if element.dxf_id is None else element.dxf_id, "dxf_id"),
+                        },
+                    )
+            name_ptr, _ = LIB.alloc_utf8(style.name)
+            owned.append(name_ptr)
+            S.TABLE_STYLE.pack(
+                LIB,
+                ptr,
+                {
+                    "name": name_ptr,
+                    "pivot": 1 if style.pivot else 0,
+                    "table": 1 if style.table else 0,
+                    "elements": elements_ptr,
+                    "element_count": _uint(len(style.elements), "element_count"),
+                },
+            )
+            _check(LIB.fm_styles_set_table_style(h, ptr), "fm_styles_set_table_style")
+        finally:
+            for p in owned:
+                LIB.free(p)
+
+    def remove_table_style(self, name: str) -> None:
+        """Remove the custom table style ``name``.
+
+        A default naming it reverts to the built-in default; tables and
+        pivots naming it keep the name.
+        """
+        h = self._require()
+        name_ptr, _ = LIB.alloc_utf8(name)
+        try:
+            _check(LIB.fm_styles_remove_table_style(h, name_ptr), "fm_styles_remove_table_style")
+        finally:
+            LIB.free(name_ptr)
+
+    def table_style_defaults(self) -> Tuple[str, str]:
+        """Return the default ``(table_style, pivot_style)`` names; empty when unset."""
+        h = self._require()
+        table_ptr = _alloc_out_ptr()
+        pivot_ptr = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_styles_get_table_style_defaults(h, table_ptr, pivot_ptr),
+                "fm_styles_get_table_style_defaults",
+            )
+            return LIB.read_cstr(LIB.read_u32(table_ptr)), LIB.read_cstr(LIB.read_u32(pivot_ptr))
+        finally:
+            LIB.free(table_ptr)
+            LIB.free(pivot_ptr)
+
+    def set_table_style_defaults(self, table_style: Optional[str] = None, pivot_style: Optional[str] = None) -> None:
+        """Set the default style names; ``None`` keeps one, ``""`` removes it."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ptrs = []
+            for value in (table_style, pivot_style):
+                if value is None:
+                    ptrs.append(0)
+                else:
+                    ptr, _ = LIB.alloc_utf8(value)
+                    owned.append(ptr)
+                    ptrs.append(ptr)
+            _check(
+                LIB.fm_styles_set_table_style_defaults(h, ptrs[0], ptrs[1]),
+                "fm_styles_set_table_style_defaults",
+            )
+        finally:
+            for p in owned:
+                LIB.free(p)
 
     def get_theme(self) -> Theme:
         """Read the theme's 12 scheme colours and typefaces.
@@ -9438,6 +11267,45 @@ class Workbook:
             "fm_workbook_pivot_set_grand_totals",
         )
 
+    def pivot_set_style_info(
+        self,
+        sheet: int,
+        pivot_index: int,
+        name: Optional[str] = None,
+        *,
+        show_row_headers: bool = False,
+        show_col_headers: bool = False,
+        show_row_stripes: bool = False,
+        show_col_stripes: bool = False,
+        show_last_column: bool = False,
+    ) -> None:
+        """Set the pivot's table style and toggles, making the style element present.
+
+        ``None`` or an empty ``name`` writes the element without a style name.
+        """
+        h = self._require()
+        name_ptr = 0
+        if name:
+            name_ptr, _ = LIB.alloc_utf8(name)
+        try:
+            _check(
+                LIB.fm_workbook_pivot_set_style_info(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    name_ptr,
+                    1 if show_row_headers else 0,
+                    1 if show_col_headers else 0,
+                    1 if show_row_stripes else 0,
+                    1 if show_col_stripes else 0,
+                    1 if show_last_column else 0,
+                ),
+                "fm_workbook_pivot_set_style_info",
+            )
+        finally:
+            if name_ptr:
+                LIB.free(name_ptr)
+
     def pivot_cache_id(self, sheet: int, pivot_index: int) -> int:
         """Return the ``cache_id`` of the pivot cache the pivot draws from."""
         h = self._require()
@@ -9468,6 +11336,30 @@ class Workbook:
         finally:
             LIB.free(rows)
             LIB.free(cols)
+
+    def pivot_style_info(self, sheet: int, pivot_index: int) -> PivotStyleInfo:
+        """Return the table style :meth:`pivot_set_style_info` writes."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PIVOT_STYLE_INFO)
+        try:
+            _check(
+                LIB.fm_workbook_pivot_get_style_info(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                ),
+                "fm_workbook_pivot_get_style_info",
+            )
+            d = S.PIVOT_STYLE_INFO.unpack(LIB, ptr)
+            return PivotStyleInfo(
+                present=d["present"] != 0,
+                name=LIB.read_cstr(d["name"]),
+                show_row_headers=d["show_row_headers"] != 0,
+                show_col_headers=d["show_col_headers"] != 0,
+                show_row_stripes=d["show_row_stripes"] != 0,
+                show_col_stripes=d["show_col_stripes"] != 0,
+                show_last_column=d["show_last_column"] != 0,
+            )
+        finally:
+            LIB.free(ptr)
 
     def _pivot_get_field_order(self, fn, sheet: int, pivot_index: int) -> List[int]:
         h = self._require()
@@ -9528,6 +11420,8 @@ class Workbook:
                 date_interval_days=d["date_interval_days"],
                 date_start_serial=d["date_start_serial"],
                 date_end_serial=d["date_end_serial"],
+                default_subtotal=d["default_subtotal"] != 0,
+                subtotal_fns=tuple(agg for agg in PivotAggregation if d["subtotal_fns"] & (1 << int(agg))),
             )
         finally:
             LIB.free(ptr)
@@ -9604,10 +11498,15 @@ class Workbook:
         )
 
     def pivot_field_add(self, sheet: int, pivot_index: int, spec: PivotFieldSpec) -> int:
-        """Append a field to the pivot; return its index.
+        """Place a field on the pivot; return its index.
 
-        A field added on the row or column axis is appended to that axis's
-        field order.
+        A pivot's fields are positional over its cache's fields (field ``i``
+        is cache field ``i``). When ``source_name`` names a cache field the
+        pivot first gets one bare, axis-less field per cache field and the
+        named one is configured in place, so the index is that cache field's
+        position and adding it again updates it. A name the cache lacks
+        appends a field. A field added on the row or column axis is appended
+        to that axis's field order.
         """
         h = self._require()
         owned: List[int] = []
@@ -9657,7 +11556,10 @@ class Workbook:
         """Set the axis of pivot field ``field_idx``.
 
         Moving onto the row or column axis appends the field to that axis's
-        order; moving off removes it from the order it was in.
+        order; moving off removes it from the order it was in. ``-1`` takes
+        the field off every axis: its data fields are removed (later
+        data-field indices shift down), as are filters naming it and
+        value filters scoring a removed data field.
         """
         h = self._require()
         _check(
@@ -10026,27 +11928,21 @@ class Workbook:
         )
 
     def pivot_filter_count(self, sheet: int, pivot_index: int) -> int:
-        """Return the number of active filters on the pivot.
-
-        Counts only the entries this session added; see
-        :meth:`pivot_filter_at` for why.
-        """
+        """Return the number of filters on the pivot; see :meth:`pivot_filter_at`."""
         h = self._require()
         return _read_count(
             LIB.fm_workbook_pivot_filter_count, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
     def pivot_filter_at(self, sheet: int, pivot_index: int, filter_idx: int) -> PivotFilterSpec:
-        """Read the active filter at ``filter_idx`` without mutating it.
+        """Read the filter at ``filter_idx`` without mutating it.
 
-        The active-filter list is **session state**. An entry added through
-        :meth:`pivot_filter_add` affects evaluation only while this
-        workbook handle lives and is not written by :meth:`save`.
-        Conversely a ``<filters>`` block Excel wrote is preserved verbatim
-        on save but does not appear here, so :meth:`pivot_filter_count`
-        reports only what this session added. The filter surface that does
-        persist is pivot field item visibility
-        (:meth:`pivot_field_set_item_visible`).
+        The filter list is saved as the definition's ``<filters>`` block. A
+        loaded file's caption contains / begins-with, top-N count, value
+        greater-than / between and date-between entries appear here, naming
+        their field by source name. Its other entries are not listed, still
+        filter, survive :meth:`pivot_filter_clear` /
+        :meth:`pivot_filter_remove_at`, and are saved verbatim.
         """
         h = self._require()
         ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC)
@@ -10079,12 +11975,7 @@ class Workbook:
             LIB.free(ptr)
 
     def pivot_filter_add(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None:
-        """Append an active filter to the pivot.
-
-        The entry is session state: it affects evaluation only while this
-        workbook handle lives and is not written by :meth:`save`. See
-        :meth:`pivot_filter_at`.
-        """
+        """Append a filter to the pivot; it is saved with it. See :meth:`pivot_filter_at`."""
         h = self._require()
         owned: List[int] = []
         ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC)
@@ -10118,7 +12009,7 @@ class Workbook:
                 LIB.free(p)
 
     def pivot_filter_clear(self, sheet: int, pivot_index: int) -> None:
-        """Drop every active filter from the pivot."""
+        """Drop every listed filter from the pivot."""
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_filter_clear(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
@@ -10126,7 +12017,7 @@ class Workbook:
         )
 
     def pivot_filter_remove_at(self, sheet: int, pivot_index: int, filter_idx: int) -> None:
-        """Remove the active filter at ``filter_idx``."""
+        """Remove the filter at ``filter_idx``."""
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_filter_remove_at(

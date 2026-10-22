@@ -210,7 +210,11 @@ bool NeedsX14DataBarPayload(const cf::DataBarSpec& d) {
 /// link it by. An id is required: the link and the payload find each
 /// other by that GUID and nothing else.
 bool RuleNeedsX14Payload(const cf::CFRule& r) {
-  return !r.id.empty() && r.data_bar.has_value() && NeedsX14DataBarPayload(r.data_bar.value());
+  if (r.id.empty()) {
+    return false;
+  }
+  return (r.data_bar.has_value() && NeedsX14DataBarPayload(r.data_bar.value())) ||
+         (r.icon_set.has_value() && !r.icon_set->custom_icons.empty());
 }
 
 /// True when the rule's captured `<extLst>` already carries an x14 link,
@@ -340,18 +344,56 @@ void AppendX14DataBar(std::string& out, const cf::DataBarSpec& d, const parser::
   out.append("</x14:dataBar>");
 }
 
-/// Emits the `<x14:conditionalFormatting>` entry holding `r`'s data-bar
-/// extension payload, scoped to `sqref` (the enclosing block's range
-/// union, restated because the entry is a sibling of the legacy block
-/// rather than a child of it).
+/// Emits `i`'s `<x14:iconSet>` element: the legacy set's thresholds restated
+/// as `<x14:cfvo>` plus one `<x14:cfIcon>` per level.
+void AppendX14IconSet(std::string& out, const cf::IconSetSpec& i, const parser::ExternalBookIndexer* indexer) {
+  out.append("<x14:iconSet");
+  append_xml_attr(out, "iconSet", IconSetNameToString(i.name));
+  out.append(" custom=\"1\"");
+  if (!i.show_value) {
+    out.append(" showValue=\"0\"");
+  }
+  if (!i.percent) {
+    out.append(" percent=\"0\"");
+  }
+  if (i.reverse) {
+    out.append(" reverse=\"1\"");
+  }
+  out.push_back('>');
+  AppendX14Cfvo(out, i.floor, indexer);
+  for (const auto& th : i.thresholds) {
+    AppendX14Cfvo(out, th, indexer);
+  }
+  for (const cf::CfIcon& icon : i.custom_icons) {
+    out.append("<x14:cfIcon");
+    append_xml_attr(out, "iconSet", icon.icon_set);
+    append_xml_attr_int(out, "iconId", icon.icon_id);
+    out.append("/>");
+  }
+  out.append("</x14:iconSet>");
+}
+
+/// Emits the `<x14:conditionalFormatting>` entry holding `r`'s extension
+/// payload (data bar or custom icon set), scoped to `sqref` (the enclosing
+/// block's range union, restated because the entry is a sibling of the legacy
+/// block rather than a child of it).
 void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vector<cf::CFCellRange>& sqref,
                           const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:conditionalFormatting xmlns:xm=\"");
   out.append(kXmNs);
-  out.append("\"><x14:cfRule type=\"dataBar\" id=\"");
+  const bool icon_set = r.icon_set.has_value() && !r.icon_set->custom_icons.empty();
+  out.append(icon_set ? "\"><x14:cfRule type=\"iconSet\" priority=\"" : "\"><x14:cfRule type=\"dataBar\" id=\"");
+  if (icon_set) {
+    out.append(std::to_string(r.priority));
+    out.append("\" id=\"");
+  }
   AppendXmlAttrEscaped(out, r.id);
   out.append("\">");
-  AppendX14DataBar(out, r.data_bar.value(), indexer);
+  if (icon_set) {
+    AppendX14IconSet(out, *r.icon_set, indexer);
+  } else {
+    AppendX14DataBar(out, r.data_bar.value(), indexer);
+  }
   out.append("</x14:cfRule><xm:sqref>");
   AppendXmlEscaped(out, EncodeSqref(sqref));
   out.append("</xm:sqref></x14:conditionalFormatting>");
@@ -511,6 +553,12 @@ bool data_bar_needs_x14(const cf::DataBarSpec& bar) {
 std::string build_x14_data_bar_element(const cf::DataBarSpec& bar) {
   std::string out;
   AppendX14DataBar(out, bar, /*indexer=*/nullptr);
+  return out;
+}
+
+std::string build_x14_icon_set_element(const cf::IconSetSpec& icon_set, const parser::ExternalBookIndexer* indexer) {
+  std::string out;
+  AppendX14IconSet(out, icon_set, indexer);
   return out;
 }
 

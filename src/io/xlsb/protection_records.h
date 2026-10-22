@@ -11,16 +11,17 @@
 //   * BrtSheetProtectionIso (678, precedes 535): spin count u32, the same
 //     16 booleans, hash and salt as u32-length byte blobs, then the
 //     algorithm name as an XLWideString.
-//   * BrtBookProtection (534): protpwd u16, a u16 Excel always writes
-//     as 0, and a u16 flag word whose bit 0 is lockStructure.
-//   * BrtBookProtectionIso (677, precedes 534): book and revision spin
-//     counts, the flag word, then the book's hash / salt / algorithm and
-//     the revision's hash / salt / nullable algorithm.
+//   * BrtBookProtection (534, [MS-XLSB] 2.4.311): protpwdBook u16,
+//     protpwdRev u16, then BookProtectionFlags (2.5.7) u16 -- bit 0
+//     lockStructure, bit 1 lockWindows, bit 2 lockRevision.
+//   * BrtBookProtectionIso (677, 2.4.312, precedes 534): book and revision
+//     spin counts, the flag word, then the book's and the revision's
+//     IsoPasswordData (2.5.80: hash, salt, nullable algorithm). The 534
+//     record that follows it carries zero verifiers.
 //
 // Excel (macOS and Windows 16.0.20228) drops lockWindows, lockRevision and
-// the revisions password on save in both formats, even when set through the
-// object model, so no field for them exists and a record setting one is
-// refused.
+// the revisions password on its own save in both formats; the records still
+// define them, so they are written and read like the other fields.
 
 #ifndef FORMULON_IO_XLSB_PROTECTION_RECORDS_H_
 #define FORMULON_IO_XLSB_PROTECTION_RECORDS_H_
@@ -30,6 +31,7 @@
 #include <vector>
 
 #include "io/zip_reader.h"
+#include "protection.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -60,16 +62,17 @@ Expected<void, Error> emit_sheet_protection(std::vector<std::uint8_t>& dst, cons
 
 /// Workbook protection decoded to the `<workbookProtection>` element the
 /// model carries (`Workbook::workbook_protection_xml`), attributes in the
-/// order Excel writes them. `iso` may be empty when the book has no
-/// modern hash. Returns an empty string for an unprotected book, and
-/// false for content that is not supported.
+/// order `apply_workbook_protection` writes them. `iso` may be empty when
+/// the book has no modern hash. Returns an empty string for an unprotected
+/// book, and false for a malformed payload.
 bool decode_book_protection(ByteSpan payload, ByteSpan iso, std::string& xml);
 
 /// Emits BrtBookProtectionIso (when a modern hash is set) and
-/// BrtBookProtection for a `<workbookProtection>` element; nothing when
-/// only dropped flags remain, as in Excel's own save. Returns false when the element carries lockWindows,
-/// lockRevision or a revisions password, which have no field and
-/// are left out. Fails on a hash, salt or password the records cannot carry.
+/// BrtBookProtection for a `<workbookProtection>` element; nothing for an
+/// element with no protection. Returns false when a legacy verifier sits
+/// beside a modern hash: the 534 record after an Iso record must carry zero
+/// verifiers, so the legacy one is left out. Fails on a hash, salt or
+/// password the records cannot carry.
 Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const std::string& xml);
 
 /// Base64 (RFC 4648, padded) of `bytes`; the spelling OOXML hash and salt
@@ -79,6 +82,32 @@ std::string base64_encode(const std::uint8_t* data, std::size_t size);
 /// Inverse of `base64_encode`. Returns false on anything but canonical
 /// padded base64.
 bool base64_decode(const std::string& text, std::vector<std::uint8_t>& out);
+
+// Range protection, [MS-XLSB] spec layouts:
+//   * BrtRangeProtection (536): protPwd u16, UncheckedSqRfX (i32 count, then
+//     four-u32 ranges), RangeProtectionTitleSDRel (XLWideString title, u32
+//     dwsdRel, that many bytes of relative SECURITY_DESCRIPTOR).
+//   * BrtRangeProtectionIso (680, precedes a 536 with protPwd 0 and the same
+//     ranges and title): dwSpinCount u32, UncheckedSqRfX,
+//     RangeProtectionTitleSDRel, then IsoPasswordData (hash and salt as
+//     u32-length blobs, algorithm as an XLNullableWideString).
+inline constexpr std::uint16_t kBrtRangeProtection = 536;
+inline constexpr std::uint16_t kBrtRangeProtectionIso = 680;
+
+/// Decodes a BrtRangeProtection `payload` and the BrtRangeProtectionIso `iso`
+/// before it (empty when none). False for a malformed record, a mismatched
+/// pair, or a security descriptor, which `ProtectedRange` keeps only as the
+/// OOXML SDDL text.
+bool decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out);
+
+/// Whether `range` can be written: a parseable sqref of 1..8191 ranges, a
+/// 1..255 character name, no security descriptor.
+bool range_protection_writable(const ProtectedRange& range);
+
+/// Emits ([BrtRangeProtectionIso] BrtRangeProtection) for each writable
+/// range, the Iso record when a modern hash is set. Fails on a hash, salt or
+/// legacy password the records cannot carry.
+Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges);
 
 }  // namespace xlsb
 }  // namespace io

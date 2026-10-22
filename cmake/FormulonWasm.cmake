@@ -113,7 +113,10 @@ if(FM_WASM_VARIANT STREQUAL "embind")
     src/wasm/parts/workbook_cf.cpp
     src/wasm/parts/workbook_chart.cpp
     src/wasm/parts/workbook_core.cpp
+    src/wasm/parts/workbook_data_tables.cpp
     src/wasm/parts/workbook_drawing.cpp
+    src/wasm/parts/workbook_shapes.cpp
+    src/wasm/parts/workbook_slicers.cpp
     src/wasm/parts/workbook_misc.cpp
     src/wasm/parts/workbook_pivot.cpp
     src/wasm/parts/workbook_print.cpp
@@ -191,7 +194,21 @@ else()
   # is built -Oz while formulon_core keeps -O3: raw -73 KB, Brotli -5 KB, bulk
   # cell I/O timings unchanged (measured 2026-10-21).
   set(_FM_WASM_GLUE_OPT_FLAGS "-Oz")
+  # Load/save/edit TUs (io, c_api, chart, drawing, pivot) are built -Oz per
+  # object (no LTO); eval/parser/recalc/sheet stay -O3: raw -600 KB, Brotli
+  # -111 KB, recalc unchanged, save/load ~5-9% slower (measured 2026-10-22).
+  # The hot load readers below stay -O3: Brotli -107 KB, load back to ~1%.
+  set(_FM_WASM_COLD_SOURCE_REGEX "^src/(io|c_api|chart|drawing|pivot)/")
+  set(_FM_WASM_HOT_LOAD_REGEX
+    "^src/io/(cell_parser|sheet_reader|sst_reader|styles_reader|sax_xml_reader|xml_utils|xsd_double)\\.cpp$")
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
+endif()
+
+if(_FM_WASM_COLD_SOURCE_REGEX)
+  set(_FM_WASM_COLD_SOURCES ${FORMULON_CORE_SOURCES})
+  list(FILTER _FM_WASM_COLD_SOURCES INCLUDE REGEX "${_FM_WASM_COLD_SOURCE_REGEX}")
+  list(FILTER _FM_WASM_COLD_SOURCES EXCLUDE REGEX "${_FM_WASM_HOT_LOAD_REGEX}")
+  set_source_files_properties(${_FM_WASM_COLD_SOURCES} PROPERTIES COMPILE_OPTIONS "-Oz")
 endif()
 
 # Shadow-stack size, pinned rather than inherited.

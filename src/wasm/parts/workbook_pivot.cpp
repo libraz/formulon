@@ -334,6 +334,26 @@ JsStatus JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::pivotSetStyleInfo(uint32_t sheet, uint32_t pivotIdx, emscripten::val info) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  std::string name;
+  JsNarrowNumericReader reader("pivotSetStyleInfo");
+  const char* name_ptr = reader.optional_string(info, "name", name, "info.name");
+  const bool row_headers = reader.boolean(info, "showRowHeaders", false, "info.showRowHeaders");
+  const bool col_headers = reader.boolean(info, "showColHeaders", false, "info.showColHeaders");
+  const bool row_stripes = reader.boolean(info, "showRowStripes", false, "info.showRowStripes");
+  const bool col_stripes = reader.boolean(info, "showColStripes", false, "info.showColStripes");
+  const bool last_column = reader.boolean(info, "showLastColumn", false, "info.showLastColumn");
+  if (!reader.ok()) {
+    return binding_error_status(kInvalidArgument, reader.message().c_str());
+  }
+  return status_from_rc(fm_workbook_pivot_set_style_info(handle_, sheet, pivotIdx, name_ptr, row_headers ? 1 : 0,
+                                                         col_headers ? 1 : 0, row_stripes ? 1 : 0, col_stripes ? 1 : 0,
+                                                         last_column ? 1 : 0));
+}
+
 emscripten::val JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const {
   emscripten::val o = emscripten::val::object();
   fm_pivot_layout_t layout = FM_PIVOT_LAYOUT_COMPACT;
@@ -381,6 +401,25 @@ emscripten::val JsWorkbook::pivotGetGrandTotals(uint32_t sheet, uint32_t pivotId
   o.set("status", status_from_rc(rc));
   o.set("rows", rc == 0 && rows != 0);
   o.set("cols", rc == 0 && cols != 0);
+  return o;
+}
+
+emscripten::val JsWorkbook::pivotGetStyleInfo(uint32_t sheet, uint32_t pivotIdx) const {
+  emscripten::val o = emscripten::val::object();
+  fm_pivot_style_info_t info{};
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_pivot_get_style_info(handle_, sheet, pivotIdx, &info) : kBindingInvalidHandle;
+  if (rc != 0) {
+    info = fm_pivot_style_info_t{};
+  }
+  o.set("status", status_from_rc(rc));
+  o.set("present", info.present != 0);
+  js_set_cstr(o, "name", info.name);
+  o.set("showRowHeaders", info.show_row_headers != 0);
+  o.set("showColHeaders", info.show_col_headers != 0);
+  o.set("showRowStripes", info.show_row_stripes != 0);
+  o.set("showColStripes", info.show_col_stripes != 0);
+  o.set("showLastColumn", info.show_last_column != 0);
   return o;
 }
 
@@ -462,6 +501,14 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint
   o.set("dateIntervalDays", info.date_interval_days);
   o.set("dateStartSerial", info.date_start_serial);
   o.set("dateEndSerial", info.date_end_serial);
+  o.set("defaultSubtotal", info.default_subtotal != 0);
+  emscripten::val fns = emscripten::val::array();
+  for (std::uint32_t agg = 0; agg < 32U; ++agg) {
+    if ((info.subtotal_fns & (1U << agg)) != 0U) {
+      fns.call<void>("push", agg);
+    }
+  }
+  o.set("subtotalFns", fns);
   return o;
 }
 
@@ -499,7 +546,7 @@ JsStatus JsWorkbook::pivotFieldClear(uint32_t sheet, uint32_t pivotIdx) {
   return status_from_rc(fm_workbook_pivot_field_clear(handle_, sheet, pivotIdx));
 }
 
-JsStatus JsWorkbook::pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t axis) {
+JsStatus JsWorkbook::pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, int32_t axis) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }

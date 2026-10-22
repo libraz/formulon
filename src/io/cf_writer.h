@@ -104,6 +104,10 @@ bool data_bar_needs_x14(const cf::DataBarSpec& bar);
 /// and colours are meant to be read.
 std::string build_x14_data_bar_element(const cf::DataBarSpec& bar);
 
+/// `icon_set`'s `<x14:iconSet>` element (custom icons included), as
+/// `build_x14_cf_overlay_entries` emits it.
+std::string build_x14_icon_set_element(const cf::IconSetSpec& icon_set, const parser::ExternalBookIndexer* indexer);
+
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_CF_WRITER_H_

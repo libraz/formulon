@@ -245,8 +245,10 @@ Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const Funct
       (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name()))) {
     auto target = resolve_single_reference(arg, arena, registry, ctx);
     if (target) {
-      const Cell* cell = formula_cell_at(*target.value().sheet, target.value().row, target.value().col);
-      return Value::boolean((cell != nullptr) && !cell->formula_text.empty());
+      const Sheet& sheet = *target.value().sheet;
+      const Cell* cell = formula_cell_at(sheet, target.value().row, target.value().col);
+      return Value::boolean(((cell != nullptr) && !cell->formula_text.empty()) ||
+                            sheet.data_table_covering(target.value().row, target.value().col) != nullptr);
     }
     // A reference-shaped call may instead choose a scalar (for example
     // CHOOSE(1, 42)); that is not a formula argument. Real evaluation errors
@@ -278,6 +280,14 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   }
   const Cell* cell = formula_cell_at(*target.value().sheet, target.value().row, target.value().col);
   if (cell == nullptr || cell->formula_text.empty()) {
+    // A data table's result cell shows its `TABLE()` formula, braced like a legacy array.
+    if (const DataTable* table = target.value().sheet->data_table_covering(target.value().row, target.value().col);
+        table != nullptr) {
+      const std::string shown =
+          "{" + localize_formula_text(data_table_formula_text(*table), current_eval_profile()) + "}";
+      const std::string_view interned = arena.intern(shown);
+      return interned.empty() ? Value::error(ErrorCode::Value) : Value::text(interned);
+    }
     // No formula in the target cell (blank, value-only, or missing
     // slot). Excel 365 answers `#N/A`.
     return Value::error(ErrorCode::NA);

@@ -584,8 +584,16 @@ TEST(XlsbWriter, SheetFormatPrFlagsSurviveRoundTrip) {
   src.zero_height = true;
   src.thick_top = true;
   src.thick_bottom = true;
-  src.outline_level_row = 2U;
-  src.outline_level_col = 3U;
+  // The gutter depth is derived from the levels the rows and columns carry.
+  RowLayout row;
+  row.row = 4;
+  row.outline_level = 2;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(row);
+  ColumnLayout col;
+  col.first = 1;
+  col.last = 1;
+  col.outline_level = 3;
+  wb.sheet(0).mutable_layout().columns.push_back(col);
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
@@ -600,6 +608,95 @@ TEST(XlsbWriter, SheetFormatPrFlagsSurviveRoundTrip) {
   EXPECT_TRUE(out.thick_bottom);
   EXPECT_EQ(out.outline_level_row, 2U);
   EXPECT_EQ(out.outline_level_col, 3U);
+}
+
+TEST(XlsbWriter, CollapsedAndViewFlagsSurviveRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.sheet(wb.add_sheet("Outline"));
+  RowLayout row;
+  row.row = 4;
+  row.outline_level = 1;
+  row.collapsed = true;
+  sheet.mutable_layout().row_overrides.push_back(row);
+  ColumnLayout col;
+  col.first = 2;
+  col.last = 2;
+  col.width = 9.0;
+  col.has_width = true;
+  col.collapsed = true;
+  sheet.mutable_layout().columns.push_back(col);
+  SheetView& view = sheet.mutable_view();
+  view.show_formulas = true;
+  view.show_ruler = false;
+  view.show_outline_symbols = false;
+  view.show_white_space = false;
+  view.default_grid_color = false;
+  view.window_protection = true;
+  view.color_id = 23U;
+  view.zoom_scale_normal = 110U;
+  view.zoom_scale_sheet_layout_view = 90U;
+  view.zoom_scale_page_layout_view = 70U;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const Sheet& back = read_or.value().workbook.sheet(0);
+  ASSERT_EQ(back.layout().row_overrides.size(), 1U);
+  EXPECT_TRUE(back.layout().row_overrides[0].collapsed);
+  ASSERT_EQ(back.layout().columns.size(), 1U);
+  EXPECT_TRUE(back.layout().columns[0].collapsed);
+  EXPECT_EQ(back.format_defaults().outline_level_row, 1U);
+  const SheetView& v = back.view();
+  EXPECT_TRUE(v.show_formulas);
+  EXPECT_FALSE(v.show_ruler);
+  EXPECT_FALSE(v.show_outline_symbols);
+  EXPECT_FALSE(v.show_white_space);
+  EXPECT_FALSE(v.default_grid_color);
+  EXPECT_TRUE(v.window_protection);
+  EXPECT_EQ(v.color_id, 23U);
+  EXPECT_EQ(v.zoom_scale_normal, 110U);
+  EXPECT_EQ(v.zoom_scale_sheet_layout_view, 90U);
+  EXPECT_EQ(v.zoom_scale_page_layout_view, 70U);
+}
+
+TEST(XlsbWriter, DefaultViewKeepsExcelsFlagWord) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Plain");
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const SheetView& v = read_or.value().workbook.sheet(0).view();
+  EXPECT_TRUE(v.show_ruler);
+  EXPECT_TRUE(v.show_outline_symbols);
+  EXPECT_TRUE(v.show_white_space);
+  EXPECT_TRUE(v.default_grid_color);
+  EXPECT_FALSE(v.show_formulas);
+  EXPECT_EQ(v.color_id, SheetView::kDefaultColorId);
+}
+
+TEST(XlsbWriter, FontTogglesSurviveRoundTrip) {
+  Workbook wb = Workbook::create();
+  FontRecord font;
+  font.name = "Arial";
+  font.has_outline = font.outline = true;
+  font.has_shadow = font.shadow = true;
+  font.has_condense = font.condense = true;
+  font.has_extend = font.extend = true;
+  wb.mutable_styles().fonts.push_back(font);
+  const std::size_t index = wb.styles().fonts.size() - 1U;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const FontRecord& back = read_or.value().workbook.styles().fonts.at(index);
+  EXPECT_TRUE(back.outline && back.has_outline);
+  EXPECT_TRUE(back.shadow && back.has_shadow);
+  EXPECT_TRUE(back.condense && back.has_condense);
+  EXPECT_TRUE(back.extend && back.has_extend);
+  EXPECT_FALSE(read_or.value().workbook.styles().fonts.at(0).has_outline);
 }
 
 }  // namespace

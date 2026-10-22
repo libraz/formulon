@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "data_table.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/sst_writer.h"
 #include "utils/error.h"
@@ -87,6 +88,13 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
                                         bool* downgraded_to_literal = nullptr,
                                         const NameShapes& name_shapes = NameShapes());
+
+/// Emits the anchor cell of a What-If data table: the `BrtTable` record
+/// (result range, input cells, flags) followed by the anchor's plain value
+/// record, as [MS-XLSB] TABLECELL orders them. The result cells carry no
+/// formula in XLSB.
+void emit_data_table_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t col, const DataTable& table,
+                            SstBuilder& sst);
 
 /// Emits a phantom cell of a spilled dynamic-array formula: a `BrtFmla*`
 /// "shell" record (typed by `cached`, the spilled value at this position)

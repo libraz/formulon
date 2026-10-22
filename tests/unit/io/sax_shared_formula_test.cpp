@@ -133,11 +133,9 @@ TEST(SaxSharedFormula, ArrayFormulaTreatedAsPlainBody) {
   EXPECT_EQ(a1->formula_text, "=SUM(B1:B3)");
 }
 
-TEST(SaxSharedFormula, DataTableFormulaFallsBackToCachedValueAndIsCounted) {
-  // `<f t="dataTable">` carries no body (its geometry lives in
-  // attributes this reader does not decode), so the cell falls back to
-  // its cached `<v>` -- matching the DOM path -- and the drop is
-  // counted rather than silent.
+TEST(SaxSharedFormula, DataTableFormulaKeepsCachedValueAndModelsTheTable) {
+  // `<f t="dataTable">` carries no body: the anchor keeps its cached
+  // `<v>` and the table is modelled, matching the DOM path.
   constexpr std::string_view kXml =
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
       "<sheetData>\n"
@@ -156,7 +154,30 @@ TEST(SaxSharedFormula, DataTableFormulaFallsBackToCachedValueAndIsCounted) {
   EXPECT_EQ(a1->formula_text, "");
   ASSERT_TRUE(a1->cached_value.is_number());
   EXPECT_DOUBLE_EQ(a1->cached_value.as_number(), 42.0);
+  EXPECT_EQ(diagnostics.skipped_feature_count, 0U);
+  ASSERT_EQ(wb.sheet(0).data_tables().size(), 1U);
+  const DataTable& table = wb.sheet(0).data_tables()[0];
+  EXPECT_EQ(table.ref, (MergeRange{0U, 0U, 1U, 1U}));
+  EXPECT_TRUE(table.two_dimensional);
+  EXPECT_FALSE(table.row_oriented);
+  EXPECT_EQ(table.r1.col, 2U);
+  EXPECT_EQ(table.r2.row, 1U);
+}
+
+TEST(SaxSharedFormula, DataTableFormulaWithUnparseableRefIsCounted) {
+  constexpr std::string_view kXml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "<sheetData>\n"
+      "<row r=\"1\"><c r=\"A1\"><f t=\"dataTable\" ref=\"not-a-range\"/><v>7</v></c></row>\n"
+      "</sheetData></worksheet>\n";
+  Workbook wb = Workbook::create();
+  std::deque<std::string>& text_storage = wb.mutable_text_storage();
+  SheetReadContext ctx;
+  ReadDiagnostics diagnostics;
+  auto rs = read_sheet_data_sax(SpanOf(kXml), 0U, wb, ctx, text_storage, &diagnostics);
+  ASSERT_TRUE(static_cast<bool>(rs)) << (rs ? "" : rs.error().message);
   EXPECT_EQ(diagnostics.skipped_feature_count, 1U);
+  EXPECT_TRUE(wb.sheet(0).data_tables().empty());
 }
 
 // Mirrors `SheetReader.WideSparseStyledRowStoresOnlyWrittenCells`: the SAX

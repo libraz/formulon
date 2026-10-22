@@ -200,21 +200,62 @@ export interface DefinedNameEntry {
   formula?: string;
   /** -1 for workbook scope; otherwise a 0-based sheet index. */
   localSheetId?: number;
+  /** The note Excel shows in the Name Manager; empty when none. */
+  comment?: string;
+  /** Whether the name is hidden from the Name Manager. */
+  hidden?: boolean;
 }
 
-/** Return type of `Workbook.tableAt(idx)`. */
+/** A table column's totals-row function (`ST_TotalsRowFunction`). */
+export type TableTotalsRowFunction =
+  | 'none'
+  | 'sum'
+  | 'min'
+  | 'max'
+  | 'average'
+  | 'count'
+  | 'countNums'
+  | 'stdDev'
+  | 'var'
+  | 'custom';
+
+/** One column of `TableEntry.columns`. `totalsRowFormula` is the `custom`
+ *  function's formula (no leading `=`), empty otherwise. */
+export interface TableColumnEntry {
+  name: string;
+  totalsRowFunction: TableTotalsRowFunction;
+  totalsRowLabel: string;
+  totalsRowFormula: string;
+}
+
+/** Return type of `Workbook.tableAt(idx)`. `styleName` is empty without a
+ *  style and may name a custom style (`getTableStyle`); `hasStyleInfo` is
+ *  false when the table has no `<tableStyleInfo>` (the toggles then read
+ *  false). The row counts are 0 or 1. */
 export interface TableEntry {
   status: Status;
   name?: string;
   displayName?: string;
   ref?: string;
   sheetIndex?: number;
+  styleName?: string;
+  hasStyleInfo?: boolean;
+  showFirstColumn?: boolean;
+  showLastColumn?: boolean;
+  showRowStripes?: boolean;
+  showColumnStripes?: boolean;
+  headerRowCount?: number;
+  totalsRowCount?: number;
+  columns?: TableColumnEntry[];
 }
 
 /** Authoring input for a worksheet table. `columns` must have exactly one
- * name per column in `ref`; `styleName` follows Excel's built-in TableStyle
- * names. With `headerRow` (the default), the caller still writes the header
- * cells: Excel expects the first row of `ref` to hold the column names. */
+ * name per column in `ref`; `styleName` names a built-in TableStyle or a
+ * custom style. A styled table starts with row stripes on and the other
+ * toggles off; a supplied toggle overrides that (and, without `styleName`,
+ * writes an unnamed style element). With `headerRow` (the default), the
+ * caller still writes the header cells: Excel expects the first row of `ref`
+ * to hold the column names. */
 export interface TableInput {
   sheetIndex: number;
   ref: string;
@@ -222,19 +263,110 @@ export interface TableInput {
   displayName?: string;
   columns: string[];
   styleName?: string;
+  showFirstColumn?: boolean;
+  showLastColumn?: boolean;
+  showRowStripes?: boolean;
+  showColumnStripes?: boolean;
   headerRow?: boolean;
   totalsRow?: boolean;
 }
 
 /** Partial table metadata update. Omitted fields preserve their existing
- * values; an empty `styleName` explicitly removes the table style. When
- * omitted, `ref` also preserves the current range. `headerRow` and
- * `totalsRow` update their flags only when supplied. */
+ * values; an empty `styleName` explicitly removes the table style, while a
+ * new name keeps the four toggles. When omitted, `ref` also preserves the
+ * current range. `headerRow` and `totalsRow` update their flags only when
+ * supplied; turning `totalsRow` on writes each column's totals cell on the
+ * last row of `ref` (see `setTableColumnTotals`). `name` renames the table
+ * (`displayName` follows it unless supplied), with `createTable`'s
+ * uniqueness rule, and rewrites structured references to the old name in
+ * cell, defined-name, conditional-format, validation and chart formulas; a
+ * bare table name used as a reference is not rewritten. The update is
+ * all-or-nothing. */
 export interface TableUpdateInput {
   ref?: string;
+  name?: string;
+  displayName?: string;
   styleName?: string;
+  showFirstColumn?: boolean;
+  showLastColumn?: boolean;
+  showRowStripes?: boolean;
+  showColumnStripes?: boolean;
   headerRow?: boolean;
   totalsRow?: boolean;
+}
+
+/** Totals-row settings of one table column (`setTableColumnTotals`).
+ *  `function` defaults to `'none'`; `formula` is required for `'custom'`. */
+export interface TableColumnTotalsInput {
+  function?: TableTotalsRowFunction;
+  label?: string;
+  formula?: string;
+}
+
+/** A region of a custom table style (`ST_TableStyleType`). The PivotTable
+ *  regions apply only to styles a PivotTable uses. */
+export type TableStyleElementType =
+  | 'wholeTable'
+  | 'headerRow'
+  | 'totalRow'
+  | 'firstColumn'
+  | 'lastColumn'
+  | 'firstRowStripe'
+  | 'secondRowStripe'
+  | 'firstColumnStripe'
+  | 'secondColumnStripe'
+  | 'firstHeaderCell'
+  | 'lastHeaderCell'
+  | 'firstTotalCell'
+  | 'lastTotalCell'
+  | 'firstSubtotalColumn'
+  | 'secondSubtotalColumn'
+  | 'thirdSubtotalColumn'
+  | 'firstSubtotalRow'
+  | 'secondSubtotalRow'
+  | 'thirdSubtotalRow'
+  | 'blankRow'
+  | 'firstColumnSubheading'
+  | 'secondColumnSubheading'
+  | 'thirdColumnSubheading'
+  | 'firstRowSubheading'
+  | 'secondRowSubheading'
+  | 'thirdRowSubheading'
+  | 'pageFieldLabels'
+  | 'pageFieldValues';
+
+/** One element of a custom table style. `size` is the stripe band size
+ *  (default 1); `dxfId` indexes the differential formats (`addDxf`) and is
+ *  absent for a region the style lists without formatting. */
+export interface TableStyleElement {
+  type: TableStyleElementType;
+  size?: number;
+  dxfId?: number;
+}
+
+/** A custom table / PivotTable style (`setTableStyle`). `pivot` / `table`
+ *  (default true) say which objects may use it. */
+export interface TableStyle {
+  name: string;
+  pivot?: boolean;
+  table?: boolean;
+  elements?: TableStyleElement[];
+}
+
+/** Return type of `Workbook.getTableStyle(index)`; empty on failure. */
+export interface TableStyleResult {
+  status: Status;
+  name: string;
+  pivot: boolean;
+  table: boolean;
+  elements: TableStyleElement[];
+}
+
+/** Return type of `Workbook.getTableStyleDefaults()`; empty when unset. */
+export interface TableStyleDefaultsResult {
+  status: Status;
+  tableStyle: string;
+  pivotStyle: string;
 }
 
 /** Return type of `Workbook.passthroughAt(idx)`. */
@@ -452,6 +584,31 @@ export interface PivotDataFieldSpec {
   showAsBaseItem?: number;
 }
 
+/** Table style and toggles of a PivotTable (`pivotSetStyleInfo`). An omitted
+    `name` writes the style element without a style name; flags default to
+    false. */
+export interface PivotStyleInfo {
+  name?: string;
+  showRowHeaders?: boolean;
+  showColHeaders?: boolean;
+  showRowStripes?: boolean;
+  showColStripes?: boolean;
+  showLastColumn?: boolean;
+}
+
+/** Return type of `Workbook.pivotGetStyleInfo(...)`. `present` is false when
+    the definition has no style element (the other fields are then empty). */
+export interface PivotStyleInfoResult {
+  status: Status;
+  present: boolean;
+  name: string;
+  showRowHeaders: boolean;
+  showColHeaders: boolean;
+  showRowStripes: boolean;
+  showColStripes: boolean;
+  showLastColumn: boolean;
+}
+
 /** Return type of `Workbook.pivotGetGrandTotals(...)`. */
 export interface PivotGrandTotalsResult {
   status: Status;
@@ -493,6 +650,12 @@ export interface PivotFieldResult {
   /** `-1` when unset. */
   dateStartSerial: number;
   dateEndSerial: number;
+  /** Whether the automatic subtotal shows; `false` whenever `subtotalFns`
+   *  is non-empty, since custom functions replace it. */
+  defaultSubtotal: boolean;
+  /** Custom subtotal functions (`pivotFieldAddSubtotalFn`), in ascending
+   *  `PivotAggregation` order. */
+  subtotalFns: PivotAggregation[];
 }
 
 /** Return type of `Workbook.pivotFieldItemAt(...)`. */
@@ -542,12 +705,11 @@ export interface PivotFilterSpec {
 /** Return type of `Workbook.pivotFilterAt(...)`: the stored filter plus a
  *  status envelope. Field names and semantics match `PivotFilterSpec`.
  *
- *  The active-filter list is **session state**. An entry added through
- *  `pivotFilterAdd` affects evaluation only while the workbook handle
- *  lives and is not written by `save`. Conversely a `<filters>` block
- *  Excel wrote is preserved verbatim on save but does not appear here, so
- *  `pivotFilterCount` reports only what this session added. The filter
- *  surface that does persist is pivot field item visibility. */
+ *  The filter list is saved as the definition's `<filters>` block. A loaded
+ *  file's caption contains / begins-with, top-N count, value greater-than /
+ *  between and date-between entries appear here, naming their field by
+ *  source name. Its other entries are not listed, still filter, survive
+ *  `pivotFilterClear` / `pivotFilterRemoveAt`, and are saved verbatim. */
 export interface PivotFilterResult {
   status: Status;
   axis: number;
@@ -598,15 +760,22 @@ export enum ErrorCode {
  *
  * - `Auto` — recalc on every input change (Excel default).
  * - `Manual` — only recalc when explicitly requested.
- * - `AutoNoTable` — recalc on every change EXCEPT data-table cells.
+ * - `AutoNoTable` — recalc on every change EXCEPT data-table cells, which
+ *   `recalcDataTables()` computes on demand.
  *
- * Round-trip metadata only — the engine recalcs all dirty cells
- * regardless of which mode is set.
+ * Round-trip metadata apart from `AutoNoTable` — the engine recalcs all
+ * dirty cells regardless of which other mode is set.
  */
 export enum CalcMode {
   Auto = 0,
   Manual = 1,
   AutoNoTable = 2,
+}
+
+/** Reference notation formulas are shown in (`<calcPr refMode>`). */
+export enum RefMode {
+  A1 = 0,
+  R1C1 = 1,
 }
 
 /**
@@ -863,6 +1032,13 @@ export interface SheetFormatDefaults {
   baseColWidth: number;
   hasDefaultColWidth: boolean;
   hasDefaultRowHeight: boolean;
+  /** `<sheetFormatPr customHeight>`: `defaultRowHeight` is an explicit override that stays as
+   *  written, rather than a cached figure Excel recomputes from the Normal font. An omitted key
+   *  on set keeps the stored flag. */
+  customHeight: boolean;
+  /** `<sheetFormatPr zeroHeight>`: rows are hidden unless they say otherwise. An omitted key
+   *  on set keeps the stored flag. */
+  zeroHeight: boolean;
 }
 
 /** Return type of `Workbook.getSheetFormatDefaults(sheet)`. The effective
@@ -963,6 +1139,14 @@ export interface SheetView {
    *  (A1 for a split) until a host scrolls it. `0, 0` without panes. */
   paneTopLeftRow: number;
   paneTopLeftCol: number;
+  /** An unfrozen split's position in twips (`<pane xSplit ySplit>`); `0` for no
+   *  split on that axis, and always `0` while the view is frozen. */
+  splitX: number;
+  splitY: number;
+  /** `showFormulas`: cells show their formula text; default 0. */
+  showFormulas: number;
+  /** `showOutlineSymbols`: the outline gutter's group symbols are shown; default 1. */
+  showOutlineSymbols: number;
 }
 
 /** The active pane's selection: the active cell and the selected ranges.
@@ -1043,6 +1227,8 @@ export interface ColumnLayout {
   /** Boolean stored as 0/1. */
   hidden: number;
   outlineLevel: number;
+  /** Boolean stored as 0/1: the outline group this span summarises is collapsed. */
+  collapsed: number;
   /** Whether the width is logically explicit (raw presence or non-zero legacy width). */
   hasWidth: number;
   /** Whether the source / model carries an explicit style attribute. */
@@ -1063,6 +1249,8 @@ export interface RowLayout {
   /** Boolean stored as 0/1. */
   hidden: number;
   outlineLevel: number;
+  /** Boolean stored as 0/1: the outline group this row summarises is collapsed. */
+  collapsed: number;
   /** Whether OOXML customFormat=1 makes the row style effective. */
   hasStyle: number;
   styleXf: number;
@@ -1113,6 +1301,45 @@ export interface CommentEntry {
 export interface CommentResult {
   status: Status;
   comment: CommentEntry | null;
+}
+
+/** Workbook-level protection (`<workbookProtection>`). Booleans are stored as 0/1.
+ *  Hash fields are stored exactly as given; the host computes them. A zero
+ *  spin count and an empty string are absent. */
+export interface WorkbookProtection {
+  lockStructure: number;
+  lockWindows: number;
+  lockRevision: number;
+  /** Legacy 16-bit password hash, as the hex text Excel writes. */
+  workbookPassword: string;
+  workbookAlgorithmName: string;
+  workbookHashValue: string;
+  workbookSaltValue: string;
+  workbookSpinCount: number;
+  revisionsPassword: string;
+  revisionsAlgorithmName: string;
+  revisionsHashValue: string;
+  revisionsSaltValue: string;
+  revisionsSpinCount: number;
+}
+
+/** Return type of `Workbook.getWorkbookProtection()`. */
+export interface WorkbookProtectionResult {
+  status: Status;
+  protection: WorkbookProtection | null;
+}
+
+/** One `<protectedRange>`: a named range users may edit on a protected sheet.
+ *  `sqref` is the A1 range list (`"B2:C3 E5"`). */
+export interface ProtectedRange {
+  name: string;
+  sqref: string;
+  password: string;
+  algorithmName: string;
+  hashValue: string;
+  saltValue: string;
+  spinCount: number;
+  securityDescriptor: string;
 }
 
 /** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
@@ -1446,7 +1673,19 @@ export interface ConditionalFormatEntry {
     /** Lower bound of the lowest icon's bucket; a cell below it gets no
      *  icon. Always present on a rule read back from a workbook. */
     readonly floor?: CfValueObjectInput;
+    /** Custom icon set: the icon drawn for each level, present only when the
+     *  set does not draw its own icons. */
+    readonly icons?: ReadonlyArray<CfIconInput>;
   };
+}
+
+/** One level of a custom icon set. `iconSet` is the `ST_IconSetType` spelling
+ *  of the set the icon comes from (`"3Arrows"`, `"3Triangles"`, `"5Boxes"`,
+ *  `"NoIcons"` for a level that draws nothing, ...); `iconId` is the
+ *  zero-based icon within it. */
+export interface CfIconInput {
+  iconSet: string;
+  iconId: number;
 }
 
 /** Argument shape accepted by `addConditionalFormat(sheet, rule)`.
@@ -1514,6 +1753,9 @@ export interface ConditionalFormatInput {
     /** Lower bound of the lowest icon's bucket; a cell below it gets no
      *  icon. Omit for Excel's default, `percent 0`. */
     floor?: CfValueObjectInput;
+    /** Custom icon set: one icon per level (the set's icon count), or omit
+     *  for the set's own icons. Evaluation still buckets against `name`. */
+    icons?: ReadonlyArray<CfIconInput>;
   };
 }
 
@@ -1612,6 +1854,16 @@ export interface FontRecord {
   hasItalic: boolean;
   /** Whether the source carried a `<strike>` element at all. */
   hasStrike: boolean;
+  /** `<outline>`, `<shadow>`, `<condense>` and `<extend>` toggles, with the
+   *  same `has*` rule as `bold`. */
+  outline: boolean;
+  shadow: boolean;
+  condense: boolean;
+  extend: boolean;
+  hasOutline: boolean;
+  hasShadow: boolean;
+  hasCondense: boolean;
+  hasExtend: boolean;
   /** 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting. */
   underline: number;
   /** 0=baseline, 1=superscript, 2=subscript. */
@@ -1649,6 +1901,31 @@ export interface FillRecord {
   fg: ColorSpec;
   /** Original `<bgColor>` specification, preserved for round-tripping. */
   bg: ColorSpec;
+  /** A `<gradientFill>`; when present the pattern fields are ignored. */
+  gradient?: GradientFill;
+}
+
+/** A gradient fill. `degree` is a linear gradient's angle; `left` / `right` /
+ *  `top` / `bottom` (0..1) locate a path gradient's focus. */
+export interface GradientFill {
+  /** 0=linear, 1=path. */
+  type: number;
+  degree: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  stops: ReadonlyArray<GradientStop>;
+}
+
+/** One stop of a `GradientFill`. */
+export interface GradientStop {
+  /** 0..1 along the gradient. */
+  position: number;
+  /** AARRGGBB literal RGB or compatibility fallback. */
+  colorArgb: number;
+  /** Original `<color>` specification, preserved for round-tripping. */
+  color: ColorSpec;
 }
 
 /** One side of a `BorderRecord`. */
@@ -2014,6 +2291,48 @@ export enum AnchorEditAs {
   TwoCell = 0,
   OneCell = 1,
   Absolute = 2,
+}
+
+/** How a shape's fill or outline is specified. Mirrors `fm_shape_paint_t`. */
+export enum ShapePaint {
+  Unset = 0,
+  Solid = 1,
+  None = 2,
+  Other = 3,
+}
+
+/** Table slicer item order. Mirrors `fm_slicer_sort_t`. */
+export enum SlicerSortOrder {
+  Ascending = 0,
+  Descending = 1,
+}
+
+/** How a table slicer shows items other filters exclude. Mirrors `fm_slicer_cross_filter_t`. */
+export enum SlicerCrossFilter {
+  ShowItemsWithDataAtTop = 0,
+  ShowItemsWithNoData = 1,
+  None = 2,
+}
+
+/** Sparkline group type. Mirrors `fm_sparkline_type_t`. */
+export enum SparklineType {
+  Line = 0,
+  Column = 1,
+  Stacked = 2,
+}
+
+/** Sparkline axis scaling. Mirrors `fm_sparkline_axis_type_t`. */
+export enum SparklineAxisType {
+  Individual = 0,
+  Group = 1,
+  Custom = 2,
+}
+
+/** How a sparkline plots empty cells. Mirrors `fm_sparkline_empty_cells_t`. */
+export enum SparklineEmptyCells {
+  Gap = 0,
+  Zero = 1,
+  Span = 2,
 }
 
 /** Plot group type. Mirrors `fm_chart_plot_type_t`. */
@@ -2555,6 +2874,205 @@ export interface ImagePlacement {
   widthEmu?: number;
   heightEmu?: number;
 }
+
+/** A shape, connector or group of a sheet's drawing. The anchor fields read as in
+ *  {@link DrawingObject}. `fillKind` / `lineKind` are {@link ShapePaint}; `fillRgb` /
+ *  `lineRgb` are 0xRRGGBB when the kind is `Solid`. `rotation` is in 60000ths of a degree,
+ *  `lineWidthEmu` is 0 without a width. `prst` is the preset geometry, empty for custom
+ *  geometry or a group; `text` joins paragraphs with `\n`. */
+export interface Shape {
+  objectId: number;
+  kind: DrawingObjectKind;
+  anchorKind: AnchorKind;
+  editAs: AnchorEditAs;
+  fromRow: number;
+  fromCol: number;
+  fromRowOff: number;
+  fromColOff: number;
+  toRow: number;
+  toCol: number;
+  toRowOff: number;
+  toColOff: number;
+  cx: number;
+  cy: number;
+  name: string;
+  prst: string;
+  text: string;
+  textBox: boolean;
+  fillKind: ShapePaint;
+  fillRgb: number;
+  lineKind: ShapePaint;
+  lineRgb: number;
+  lineWidthEmu: number;
+  rotation: number;
+  hidden: boolean;
+}
+
+/** Fields `insertShape` / `updateShape` apply; a key left out (or `null`) is not applied.
+ *  Giving `anchorKind` applies the whole anchor (`editAs`, `from*`, `to*`, `cx`, `cy`; a
+ *  two-cell anchor's size is its box). `fillKind` / `lineKind` must be `Solid` (with
+ *  `fillRgb` / `lineRgb`) or `None`. An insert needs `anchorKind`, defaults `prst` to
+ *  `rect` and `name` to `Shape <id>`; a `prst` naming a line or connector geometry makes a
+ *  connector, which holds no text. An update cannot change the anchor kind. */
+export interface ShapeInput {
+  name?: string;
+  prst?: string;
+  text?: string;
+  textBox?: boolean;
+  anchorKind?: AnchorKind;
+  editAs?: AnchorEditAs;
+  fromRow?: number;
+  fromCol?: number;
+  fromRowOff?: number;
+  fromColOff?: number;
+  toRow?: number;
+  toCol?: number;
+  toRowOff?: number;
+  toColOff?: number;
+  cx?: number;
+  cy?: number;
+  fillKind?: ShapePaint;
+  fillRgb?: number;
+  lineKind?: ShapePaint;
+  lineRgb?: number;
+  lineWidthEmu?: number;
+  rotation?: number;
+  hidden?: boolean;
+}
+
+/** A table slicer of a worksheet. `objectId` is the slicer's frame in the sheet's drawing (0
+ *  without one); the anchor fields read as in {@link DrawingObject}, with `to*` zero unless the
+ *  anchor is two-cell. `rowHeight` is in EMU. `cacheName`, `tableName` and `columnName`
+ *  identify the slicer cache and the table column it filters; the selection itself lives in the
+ *  table's AutoFilter. `style` is empty without a style. */
+export interface Slicer {
+  objectId: number;
+  name: string;
+  caption: string;
+  cacheName: string;
+  tableName: string;
+  columnName: string;
+  style: string;
+  columnCount: number;
+  rowHeight: number;
+  sortOrder: SlicerSortOrder;
+  crossFilter: SlicerCrossFilter;
+  anchorKind: AnchorKind;
+  fromRow: number;
+  fromCol: number;
+  fromRowOff: number;
+  fromColOff: number;
+  toRow: number;
+  toCol: number;
+  toRowOff: number;
+  toColOff: number;
+}
+
+/** Fields `addSlicer` / `updateSlicer` apply; a key left out (or `null`) is not applied.
+ *  Giving `fromRow` applies the whole two-cell anchor (`from*`, `to*`). `addSlicer` needs the
+ *  anchor and defaults `name` and `caption` to the column name (the name is made unique),
+ *  `rowHeight` to 241300 EMU and `columnCount` to 1; `name` cannot be updated. An empty
+ *  `style` removes the style. */
+export interface SlicerInput {
+  name?: string;
+  caption?: string;
+  style?: string;
+  columnCount?: number;
+  rowHeight?: number;
+  fromRow?: number;
+  fromCol?: number;
+  fromRowOff?: number;
+  fromColOff?: number;
+  toRow?: number;
+  toCol?: number;
+  toRowOff?: number;
+  toColOff?: number;
+  sortOrder?: SlicerSortOrder;
+  crossFilter?: SlicerCrossFilter;
+}
+
+/** An input cell of a {@link DataTable}. `deleted` is set once a row or column delete removed the cell. */
+export interface DataTableInput {
+  row: number;
+  col: number;
+  deleted: boolean;
+}
+
+/** A What-If data table (`TABLE()`); every coordinate is 0-based and the range inclusive. The row input
+ *  cell receives the values of the row above the range and the column input cell those of the column left
+ *  of it. A one-variable table has one input (`rowOriented` says which) and the other is `null`; a
+ *  two-variable table has both. A deleted input makes the table evaluate to `#REF!`. */
+export interface DataTable {
+  firstRow: number;
+  lastRow: number;
+  firstCol: number;
+  lastCol: number;
+  twoDimensional: boolean;
+  rowOriented: boolean;
+  rowInput: DataTableInput | null;
+  colInput: DataTableInput | null;
+}
+
+/** Argument of `addDataTable`: the result range plus the input cells (`{ row, col }`). Give `rowInput`
+ *  or `colInput` for a one-variable table, both for a two-variable one. */
+export interface DataTableSpec {
+  firstRow: number;
+  lastRow: number;
+  firstCol: number;
+  lastCol: number;
+  rowInput?: { row: number; col: number } | null;
+  colInput?: { row: number; col: number } | null;
+}
+
+/** Return type of `Workbook.getDataTable`. `dataTable` is `null` when no table covers the cell. */
+export interface DataTableResult {
+  status: Status;
+  dataTable: DataTable | null;
+}
+
+/** One sparkline: the data `formula` (a sheet-qualified range without `=`) and the
+ *  single A1 `location` cell that shows it. */
+export interface Sparkline {
+  formula: string;
+  location: string;
+}
+
+/** A sparkline group of the sheet's worksheet extension list. A colour with `kind` 0 is
+ *  absent. `manualMin` / `manualMax` are `null` when the axis bound is not set.
+ *  `dateAxisRef` is the group's date range, empty when absent. */
+export interface SparklineGroup {
+  type: SparklineType;
+  colorSeries: ColorSpec;
+  colorNegative: ColorSpec;
+  colorAxis: ColorSpec;
+  colorMarkers: ColorSpec;
+  colorFirst: ColorSpec;
+  colorLast: ColorSpec;
+  colorHigh: ColorSpec;
+  colorLow: ColorSpec;
+  markers: boolean;
+  high: boolean;
+  low: boolean;
+  first: boolean;
+  last: boolean;
+  negative: boolean;
+  displayXAxis: boolean;
+  displayHidden: boolean;
+  minAxisType: SparklineAxisType;
+  maxAxisType: SparklineAxisType;
+  manualMin: number | null;
+  manualMax: number | null;
+  dateAxis: boolean;
+  dateAxisRef: string;
+  lineWeight: number;
+  emptyCellsAs: SparklineEmptyCells;
+  sparklines: Sparkline[];
+}
+
+/** Input of `addSparklineGroup` / `updateSparklineGroup`: every modelled field, each
+ *  defaulting as a new line group does when left out. `sparklines` is required by an add and
+ *  ignored by an update. */
+export type SparklineGroupInput = Partial<SparklineGroup>;
 
 /** One series input: nothing, a range reference, or literal points. */
 export interface ChartDataSource {
@@ -3255,14 +3773,29 @@ export interface Workbook {
   /**
    * Workbook-level calc mode (Excel `<calcPr calcMode>` policy).
    *
-   * `value` is one of the `CalcMode` codes. The engine itself does NOT gate
-   * evaluation on this value — every `recalc()` call honours all dirty
-   * cells. The mode is preserved as round-trip metadata and surfaced
-   * here so the UI can mirror Excel's user-visible state.
+   * `value` is one of the `CalcMode` codes. Apart from `AutoNoTable`, which
+   * makes `recalc()` skip the data tables (see `recalcDataTables`), the
+   * engine does NOT gate evaluation on this value — every `recalc()` call
+   * honours all dirty cells. The mode is round-trip metadata surfaced here
+   * so the UI can mirror Excel's user-visible state.
    */
   calcMode(): NumberResult<CalcMode>;
-  /** Sets the calc mode metadata; it does not change evaluation. Returns `kInvalidArgument` for a value outside `CalcMode`. */
+  /** Sets the calc mode; only `AutoNoTable` changes evaluation (`recalc()` skips the data tables). Returns `kInvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): Status;
+  /** `<calcPr fullPrecision>` as 0/1; 0 is "set precision as displayed". Metadata only. */
+  fullPrecision(): NumberResult;
+  setFullPrecision(fullPrecision: boolean): Status;
+  /** `<calcPr calcOnSave>` as 0/1 (default 1). */
+  calcOnSave(): NumberResult;
+  setCalcOnSave(calcOnSave: boolean): Status;
+  /** `<calcPr refMode>` as a `RefMode` code. */
+  refMode(): NumberResult<RefMode>;
+  /** Returns `kInvalidArgument` for a value outside `RefMode`. */
+  setRefMode(mode: RefMode): Status;
+  /** The 1904 date system flag (`<workbookPr date1904>`) as 0/1. */
+  date1904(): NumberResult;
+  /** Switches the date system without converting stored serials, so every date shifts by 1462 days. */
+  setDate1904(date1904: boolean): Status;
 
   /**
    * The workbook's pinned wall-clock reading as `now`, or `now: null` when
@@ -3349,6 +3882,9 @@ export interface Workbook {
    *  or a sheet-local scope (0-based sheet index). A non-empty `formula`
    *  that does not parse is rejected with `kParserUnexpectedToken`. */
   setDefinedNameScoped(name: string, formula: string, localSheetId: number): Status;
+  /** Sets the `comment` and / or `hidden` of an existing defined name in the given scope;
+   *  an omitted key leaves that attribute unchanged. `kInvalidArgument` when no such name exists. */
+  setDefinedNameAttrs(name: string, localSheetId: number, attrs: { comment?: string; hidden?: boolean }): Status;
 
   /** Number of worksheet tables in the workbook. */
   tableCount(): NumberResult;
@@ -3363,6 +3899,12 @@ export interface Workbook {
   updateTable(idx: number, input: TableUpdateInput): Status;
   /** Removes the table at `idx`. */
   removeTable(idx: number): Status;
+  /** Sets column `column`'s totals-row function and label. While the totals
+   *  row is shown its cell follows, as the desktop application writes it:
+   *  `SUBTOTAL(109,Table[Column])` and the other 1xx codes for a built-in
+   *  function, the formula for `'custom'`, else the label as text, else
+   *  nothing. */
+  setTableColumnTotals(idx: number, column: number, totals: TableColumnTotalsInput): Status;
 
   /** Reads the complete worksheet-level `<autoFilter>` XML fragment. */
   getSheetAutoFilterXml(sheet: number): SheetAutoFilterXmlResult;
@@ -3442,6 +3984,48 @@ export interface Workbook {
   snapshotDrawing(sheet: number, objectId: number): ImageSnapshotResult;
   /** Puts a `snapshotDrawing` capture back and returns the object's id: in place of an object with the same id at its recorded position, or as a copy on top with `newId`. */
   restoreDrawing(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): InsertImageResult;
+
+  // Drawing shapes. A shape is addressed as `(sheet, objectId)`, the id `listShapes` reports.
+  /** Lists the shapes, connectors and groups of the sheet's drawing in z-order (back first); children of a group are not listed. */
+  listShapes(sheet: number): ListResult<Shape>;
+  /** Appends a shape on top and returns its id; a sheet without a drawing gets one and existing drawing content is kept. */
+  insertShape(sheet: number, spec: ShapeInput): InsertImageResult;
+  /** Applies the fields `spec` names to the shape `objectId`; every other part of its XML is kept. */
+  updateShape(sheet: number, objectId: number, spec: ShapeInput): Status;
+  /** Removes the shape, connector or group `objectId` with its children. */
+  removeShape(sheet: number, objectId: number): Status;
+
+  // Table slicers. A slicer is addressed by its position in `listSlicers`; adding or removing one shifts later indices.
+  /** Lists the table slicers the sheet hosts; slicers over a pivot cache are not listed. */
+  listSlicers(sheet: number): ListResult<Slicer>;
+  /** Adds a slicer over column `column` (0-based) of table `table` and returns its frame's id. It creates the slicer and cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. */
+  addSlicer(sheet: number, table: number, column: number, spec: SlicerInput): InsertImageResult;
+  /** Applies the fields `spec` names to slicer `index`; every other part of its XML is kept. */
+  updateSlicer(sheet: number, index: number, spec: SlicerInput): Status;
+  /** Removes slicer `index` with its drawing frame, and its cache when no other slicer uses it. Removing a table or sheet removes the slicers bound to it. */
+  removeSlicer(sheet: number, index: number): Status;
+
+  // What-If data tables. The formulas sit in the row above the result range and the substitution values in the column left of it (or the other way round); each result cell is found by substituting into the input cell(s), recalculating the cells that read them and restoring the inputs.
+  /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. `kDataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
+  addDataTable(sheet: number, spec: DataTableSpec): Status;
+  /** Reads the data table whose result range contains `(row, col)`. */
+  getDataTable(sheet: number, row: number, col: number): DataTableResult;
+  /** Removes the data table containing `(row, col)` and blanks its result cells. `kDataTableInvalid` (8005) when none covers the cell. */
+  removeDataTable(sheet: number, row: number, col: number): Status;
+  /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `partialRecalc()` never computes tables. */
+  recalcDataTables(): Status;
+
+  // Sparkline groups. A group is addressed by its position in `listSparklineGroups`; adding or removing one shifts later indices.
+  /** Lists the sheet's sparkline groups in document order with their sparklines. */
+  listSparklineGroups(sheet: number): ListResult<SparklineGroup>;
+  /** Appends a group; `spec.sparklines` must hold at least one sparkline. */
+  addSparklineGroup(sheet: number, spec: SparklineGroupInput): Status;
+  /** Rewrites the modelled attributes, colours and date range of group `index`; its sparklines and unmodelled XML are kept. */
+  updateSparklineGroup(sheet: number, index: number, spec: SparklineGroupInput): Status;
+  /** Replaces the sparklines of group `index`. */
+  setSparklineGroupSparklines(sheet: number, index: number, sparklines: Sparkline[]): Status;
+  /** Removes group `index`. */
+  removeSparklineGroup(sheet: number, index: number): Status;
 
   // Charts. A chart is addressed as `(sheet, objectId)`, the id `listDrawingObjects` reports for a `DrawingObjectKind.Chart`.
   /** Reads the typed view of the chart `objectId`. */
@@ -3588,6 +4172,10 @@ export interface Workbook {
   ): Status;
   /** Toggles the row / column grand total bands on the pivot. */
   pivotSetGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
+  /** Sets the pivot's table style and toggles, making the style element
+   *  present. New pivots start as `PivotStyleLight16` with row / column
+   *  headers and last column on. */
+  pivotSetStyleInfo(sheet: number, pivotIdx: number, info: PivotStyleInfo): Status;
   /** Reads the pivot's compact / tabular / outline report layout. */
   pivotGetLayout(sheet: number, pivotIdx: number): PivotReportLayoutResult;
   /** Sets the pivot's compact / tabular / outline report layout. */
@@ -3600,6 +4188,8 @@ export interface Workbook {
   pivotName(sheet: number, pivotIdx: number): StringResult;
   /** Reads the row / column grand total flags `pivotSetGrandTotals` writes. */
   pivotGetGrandTotals(sheet: number, pivotIdx: number): PivotGrandTotalsResult;
+  /** Reads the table style `pivotSetStyleInfo` writes. */
+  pivotGetStyleInfo(sheet: number, pivotIdx: number): PivotStyleInfoResult;
   /** Reads the row-axis field order (the list `pivotSetRowFieldOrder` takes). */
   pivotRowFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
   /** Reads the column-axis field order. */
@@ -3607,8 +4197,14 @@ export interface Workbook {
 
   /** Number of fields configured on the pivot. */
   pivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
-  /** Appends a new field. Returns `{ status, index: fieldIdx }`. A field
-   *  added on the row or column axis is appended to that axis's order. */
+  /** Places a field on the pivot. Returns `{ status, index: fieldIdx }`.
+   *  A pivot's fields are positional over its cache's fields (field `i` is
+   *  cache field `i`): when `sourceName` names a cache field the pivot first
+   *  gets one bare, axis-less field per cache field and the named one is
+   *  configured in place, so `index` is that cache field's position and
+   *  adding it again updates it. A name the cache lacks appends a field.
+   *  A field added on the row or column axis is appended to that axis's
+   *  order. */
   pivotFieldAdd(sheet: number, pivotIdx: number, spec: PivotFieldSpec): AddStyleResult;
   /** Reads the definition of field `fieldIdx`. */
   pivotFieldAt(sheet: number, pivotIdx: number, fieldIdx: number): PivotFieldResult;
@@ -3621,8 +4217,12 @@ export interface Workbook {
   /** Drops every field from the pivot, emptying the row and column orders. */
   pivotFieldClear(sheet: number, pivotIdx: number): Status;
   /** Sets the axis of pivot field `fieldIdx`. Moving onto the row or column
-   *  axis appends the field to that axis's order; moving off removes it. */
-  pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: PivotAxis): Status;
+   *  axis appends the field to that axis's order; moving off removes it.
+   *  `-1` takes the field off every axis, as unchecking it in a field list
+   *  does: its data fields are removed (later data-field indices shift
+   *  down), as are filters naming it and value filters scoring a
+   *  removed data field; its item visibility is kept. */
+  pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: PivotAxis | -1): Status;
   /** Sets the sibling order of pivot field `fieldIdx`. `PivotSortOrder.Manual`
    *  keeps items in `pivotFieldAddItem` order and takes no `byField`; for the
    *  other orders an empty `byField` sorts by label. */
@@ -3708,18 +4308,15 @@ export interface Workbook {
    *  or empty `spec.name` is derived as in `pivotDataFieldAdd`. */
   pivotDataFieldSet(sheet: number, pivotIdx: number, dataFieldIdx: number, spec: PivotDataFieldSpec): Status;
 
-  /** Number of active (slicer-applied) filters on the pivot. Counts only
-   *  the entries this session added -- see {@link PivotFilterResult}. */
+  /** Number of filters on the pivot -- see {@link PivotFilterResult}. */
   pivotFilterCount(sheet: number, pivotIdx: number): NumberResult;
-  /** Appends an active filter. The entry is session state and is not
-   *  written by `save`; see {@link PivotFilterResult}. */
+  /** Appends a filter, saved with the pivot; see {@link PivotFilterResult}. */
   pivotFilterAdd(sheet: number, pivotIdx: number, spec: PivotFilterSpec): Status;
-  /** Reads the active filter at `filterIdx`. The list is session state:
-   *  see {@link PivotFilterResult}. */
+  /** Reads the filter at `filterIdx`; see {@link PivotFilterResult}. */
   pivotFilterAt(sheet: number, pivotIdx: number, filterIdx: number): PivotFilterResult;
-  /** Drops every active filter from the pivot. */
+  /** Drops every listed filter from the pivot. */
   pivotFilterClear(sheet: number, pivotIdx: number): Status;
-  /** Removes the active filter at `filterIdx`. */
+  /** Removes the filter at `filterIdx`. */
   pivotFilterRemoveAt(sheet: number, pivotIdx: number, filterIdx: number): Status;
 
   /** Evaluates every CF block on `sheet` against the inclusive range
@@ -3832,6 +4429,10 @@ export interface Workbook {
   setSheetShowRowColHeaders(sheet: number, show: boolean): Status;
   /** Sets the sheet's `showZeros` flag. */
   setSheetShowZeros(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `showFormulas` flag. */
+  setSheetShowFormulas(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `showOutlineSymbols` flag. */
+  setSheetShowOutlineSymbols(sheet: number, show: boolean): Status;
   /** Sets the sheet's `rightToLeft` flag. */
   setSheetRightToLeft(sheet: number, rightToLeft: boolean): Status;
   /** Sets the sheet's `tabSelected` flag. */
@@ -3842,6 +4443,11 @@ export interface Workbook {
    *  pane. It must lie past any frozen rows and columns; rejected without
    *  panes. Changing the freeze resets it to the first unfrozen cell. */
   setSheetPaneTopLeft(sheet: number, row: number, col: number): Status;
+  /** Splits the view at `xTwips` / `yTwips` (`0` for none on that axis;
+   *  `0, 0` removes the split). Replaces any freeze, as `setSheetFreeze`
+   *  replaces a split. Negative or non-finite values fail with
+   *  `kInvalidArgument` and leave the view unchanged. */
+  setSheetSplit(sheet: number, xTwips: number, yTwips: number): Status;
   /** Reads the active pane's selection (active cell and ranges). */
   getSheetSelection(sheet: number): SheetSelectionResult;
   /** Replaces the active pane's selection. In a frozen or split view the
@@ -3873,6 +4479,8 @@ export interface Workbook {
   setColumnHidden(sheet: number, first: number, last: number, hidden: boolean): Status;
   /** Sets / replaces the column outline level on `[first, last]` (clamped to 0..255). */
   setColumnOutline(sheet: number, first: number, last: number, level: number): Status;
+  /** Sets / clears the column `collapsed` flag on `[first, last]`. */
+  setColumnCollapsed(sheet: number, first: number, last: number, collapsed: boolean): Status;
   /** Sets / replaces the cell-style XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled cell of the span takes this XF, unless its row has a style. */
   setColumnStyle(sheet: number, first: number, last: number, xfIndex: number): Status;
   /** Removes the cell-style XF on `[first, last]`, retaining other column attributes. */
@@ -3886,6 +4494,8 @@ export interface Workbook {
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
   /** Sets / replaces the row outline level at `row` (clamped to 0..255). */
   setRowOutline(sheet: number, row: number, level: number): Status;
+  /** Sets / clears the row `collapsed` flag at `row`. */
+  setRowCollapsed(sheet: number, row: number, collapsed: boolean): Status;
   /** Sets / replaces the cell-style XF of the inclusive row span `first..last`; index 0 is the default XF. A value later entered into an unstyled cell of a covered row takes this XF. Nothing changes on failure. */
   setRowStyle(sheet: number, first: number, last: number, xfIndex: number): Status;
   /** Removes the cell-style XF of the inclusive row span `first..last`, retaining other row attributes. */
@@ -4066,6 +4676,25 @@ export interface Workbook {
    *  repointed at the Normal style. */
   removeCellStyle(name: string): Status;
 
+  /** Number of custom table / PivotTable styles (`<tableStyles>`). */
+  tableStyleCount(): NumberResult;
+  /** Reads the custom table style at `index`. */
+  getTableStyle(index: number): TableStyleResult;
+  /** Adds a custom table style, or replaces the one with the same name
+   *  (case-insensitive). The name may not be a built-in style name; each
+   *  element type may appear once, `size` must be at least 1 and `dxfId`
+   *  must name an existing differential format. A first style also sets the
+   *  defaults to `TableStyleMedium2` / `PivotStyleLight16`. */
+  setTableStyle(style: TableStyle): Status;
+  /** Removes the custom table style `name`. A default naming it reverts to
+   *  the built-in default; tables and pivots naming it keep the name. */
+  removeTableStyle(name: string): Status;
+  /** Reads the default table and PivotTable style names. */
+  getTableStyleDefaults(): TableStyleDefaultsResult;
+  /** Sets the default style names; an omitted field keeps its default and an
+   *  empty string removes it. */
+  setTableStyleDefaults(defaults: { tableStyle?: string; pivotStyle?: string }): Status;
+
   /** The 12 theme colours (`clrScheme` order) and the theme typefaces. The
    *  default theme is reported when the part is absent or unparseable;
    *  `source` tells the cases apart. */
@@ -4121,6 +4750,23 @@ export interface Workbook {
   getComments(sheet: number): ListResult<SheetCommentEntry>;
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
+  /** Whether the note at `(sheet, row, col)` is shown without hovering (`value` 0 or 1). */
+  getCommentVisible(sheet: number, row: number, col: number): NumberResult;
+  /** Shows or hides the note at `(sheet, row, col)`; its box geometry is kept. */
+  setCommentVisible(sheet: number, row: number, col: number, visible: boolean): Status;
+
+  /** Reads the workbook's `<workbookProtection>`; every field is zero or empty when absent. */
+  getWorkbookProtection(): WorkbookProtectionResult;
+  /** Replaces the modelled `<workbookProtection>` attributes. An all-empty record removes the element. */
+  setWorkbookProtection(protection: WorkbookProtection): Status;
+  /** Returns the protected ranges of `sheet` in file order. */
+  getProtectedRanges(sheet: number): ListResult<ProtectedRange>;
+  /** Appends a protected range. `name` must be non-empty and unique on the sheet; `sqref` must parse as A1 ranges. */
+  addProtectedRange(sheet: number, range: ProtectedRange): Status;
+  /** Replaces protected range `index`. */
+  updateProtectedRange(sheet: number, index: number, range: ProtectedRange): Status;
+  /** Removes protected range `index`. */
+  removeProtectedRange(sheet: number, index: number): Status;
 
   /** Appends a hyperlink to `sheet`. For an in-workbook link, pass an empty
    *  `target` and its A1 destination as `location`. */

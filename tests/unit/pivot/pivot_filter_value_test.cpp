@@ -661,6 +661,40 @@ TEST(PivotEvaluator, AuthoredTopCountOnInnerFieldRanksPerParent) {
   EXPECT_EQ(r.rows[1].children[0].label, "A");
 }
 
+// Value filters prune in sequence, so an authored entry runs at the place
+// `active_before` gives it among the public ones. Bottom-1 product per region
+// first leaves North/A (40) against South/A (5); top-1 region first keeps
+// South (205) and then its bottom product.
+TEST(PivotEvaluator, AuthoredAndPublicValueFiltersRunInDocumentOrder) {
+  PivotCache cache = build_region_product_cache(
+      {{"North", "A", 40.0}, {"North", "B", 50.0}, {"South", "A", 5.0}, {"South", "B", 200.0}});
+  for (const std::size_t active_before : {std::size_t{0}, std::size_t{1}}) {
+    SCOPED_TRACE(active_before);
+    PivotTable table = build_region_product_table(Aggregation::Sum);
+    PivotFilter top_region;
+    top_region.axis = PivotAxis::Row;
+    top_region.field_name = "Region";
+    top_region.type = FilterType::ValueTop10;
+    top_region.value = 1;
+    table.mutable_active_filters().push_back(std::move(top_region));
+    AuthoredValueFilter bottom_product;
+    bottom_product.field_index = 1;
+    bottom_product.type = FilterType::ValueTop10;
+    bottom_product.value = 1.0;
+    bottom_product.top = false;
+    bottom_product.active_before = active_before;
+    table.mutable_authored_value_filters().push_back(bottom_product);
+
+    auto r_or = evaluate(table, cache);
+    ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+    const PivotResult& r = r_or.value();
+    ASSERT_EQ(r.rows.size(), 1U);
+    EXPECT_EQ(r.rows[0].label, active_before == 0U ? "North" : "South");
+    ASSERT_EQ(r.rows[0].children.size(), 1U);
+    EXPECT_EQ(r.rows[0].children[0].label, "A");
+  }
+}
+
 TEST(PivotEvaluator, ValueTop10OnOuterFieldScoresNonAdditiveAggregate) {
   PivotCache cache = build_region_product_cache(
       {{"North", "A", 40.0}, {"North", "B", 40.0}, {"North", "C", 40.0}, {"South", "A", 50.0}});

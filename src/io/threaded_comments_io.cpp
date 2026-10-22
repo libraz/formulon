@@ -179,6 +179,10 @@ std::string write_persons(const std::vector<Person>& persons) {
   return out;
 }
 
+bool is_thread_stub_author(std::string_view author) {
+  return author.substr(0, kStubAuthorPrefix.size()) == kStubAuthorPrefix;
+}
+
 void drop_thread_stubs(std::vector<CellComment>& notes, const std::vector<ThreadedComment>& threads) {
   if (threads.empty()) {
     return;

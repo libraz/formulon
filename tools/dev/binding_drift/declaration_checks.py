@@ -52,11 +52,8 @@ WASM_AUTO_METHODS = {"delete"}
 # exception in one binding.
 WASM_ONLY_METHODS = {
     "addCellStyleXf",
-    "createTable",
     "getSheetAutoFilterXml",
-    "removeTable",
     "setSheetAutoFilterXml",
-    "updateTable",
 }
 NODE_ONLY_METHODS = {"dispose", "memoryUsage"}
 
@@ -318,6 +315,7 @@ _DTS_ENUM_SOURCES = {
     "CollationStrength": (CAPI_HEADER, "fm_collation_strength_t", _extract_c_typedef_enum),
     "CfMatchKind": (CF_MATCH_H, "CFMatchKind", _extract_cpp_enum_class),
     "CalcMode": (CALC_MODE_H, "CalcMode", _extract_cpp_enum_class),
+    "RefMode": (CALC_MODE_H, "RefMode", _extract_cpp_enum_class),
     "ErrorCode": (VALUE_H, "ErrorCode", _extract_cpp_enum_class),
     "ExternalLinkKind": (EXTERNAL_LINKS_H, "Kind", _extract_cpp_enum_class),
 }

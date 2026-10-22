@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "sheet.h"
@@ -39,6 +40,9 @@ std::string write_persons(const std::vector<Person>& persons);
 /// whose author is `tc=` + the id of a thread anchored at the same cell.
 /// A `tc=` note without its thread stays a note.
 void drop_thread_stubs(std::vector<CellComment>& notes, const std::vector<ThreadedComment>& threads);
+
+/// True for the `tc=<thread id>` author a thread's legacy stub note carries.
+bool is_thread_stub_author(std::string_view author);
 
 /// The comments-part list for `sheet`: its notes in order, then one stub per
 /// thread (author `tc={id}`, `xr:uid` = thread id). A note sharing a cell with

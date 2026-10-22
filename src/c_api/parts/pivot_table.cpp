@@ -127,6 +127,39 @@ void sync_field_order(formulon::pivot::PivotTable& table, std::uint32_t field) {
   }
 }
 
+constexpr std::int32_t kPivotAxisNone = -1;
+
+// A field taken off the report leaves no data fields behind, and the value
+// filters scoring a dropped data field go with them; the others follow their
+// data field's new position. Filters naming the field itself are removed too.
+void drop_field_aggregates(formulon::pivot::PivotTable& table, std::size_t field_idx) {
+  std::vector<formulon::pivot::PivotDataField>& data_fields = table.mutable_data_fields();
+  std::vector<std::size_t> new_index(data_fields.size());
+  std::size_t kept = 0;
+  for (std::size_t i = 0; i < data_fields.size(); ++i) {
+    new_index[i] = data_fields[i].field_index == field_idx ? data_fields.size() : kept++;
+  }
+  const formulon::pivot::PivotField& field = table.fields()[field_idx];
+  table.erase_active_filters_if([&](formulon::pivot::PivotFilter& filter) {
+    if (formulon::pivot::pivot_field_has_name(field, filter.field_name)) {
+      return true;
+    }
+    const bool is_value = filter.type == formulon::pivot::FilterType::ValueTop10 ||
+                          filter.type == formulon::pivot::FilterType::ValueGreaterThan ||
+                          filter.type == formulon::pivot::FilterType::ValueBetween;
+    if (!is_value || filter.data_field_index >= new_index.size()) {
+      return false;
+    }
+    const std::size_t moved = new_index[filter.data_field_index];
+    filter.data_field_index = static_cast<decltype(filter.data_field_index)>(moved);
+    return moved == data_fields.size();
+  });
+  data_fields.erase(
+      std::remove_if(data_fields.begin(), data_fields.end(),
+                     [field_idx](const formulon::pivot::PivotDataField& df) { return df.field_index == field_idx; }),
+      data_fields.end());
+}
+
 std::optional<fm_pivot_filter_type_t> pivot_filter_type_to_fm(formulon::pivot::FilterType type) {
   switch (type) {
     case formulon::pivot::FilterType::ValueTop10:
@@ -197,6 +230,13 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
   // Excel stores the Values caption in the creating UI's wording and keeps it
   // when the file is opened under another locale.
   table->set_data_caption(formulon::pivot::pivot_layout_options_for(wb->workbook().excel_profile()).values_label);
+  // The default style the desktop spreadsheet gives a new PivotTable.
+  formulon::pivot::PivotStyleInfo style;
+  style.name = "PivotStyleLight16";
+  style.show_row_headers = true;
+  style.show_col_headers = true;
+  style.show_last_column = true;
+  table->set_style_info(std::move(style));
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   sheet.add_pivot_table(std::move(table));
   *out_pivot_index = sheet.pivot_tables().size() - 1U;
@@ -279,6 +319,30 @@ extern "C" fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, std
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_pivot_set_style_info(fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index, const char* utf8_style_name,
+                                                        std::int32_t show_row_headers, std::int32_t show_col_headers,
+                                                        std::int32_t show_row_stripes, std::int32_t show_col_stripes,
+                                                        std::int32_t show_last_column) {
+  clear_last_error();
+  formulon::pivot::PivotTable* table = nullptr;
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_style_info", &table);
+      rc != 0) {
+    return rc;
+  }
+  formulon::pivot::PivotStyleInfo info;
+  if (utf8_style_name != nullptr) {
+    info.name = utf8_style_name;
+  }
+  info.show_row_headers = show_row_headers != 0;
+  info.show_col_headers = show_col_headers != 0;
+  info.show_row_stripes = show_row_stripes != 0;
+  info.show_col_stripes = show_col_stripes != 0;
+  info.show_last_column = show_last_column != 0;
+  table->set_style_info(std::move(info));
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, std::size_t sheet_index,
                                                     std::size_t pivot_index, fm_pivot_layout_t* out_layout) {
   clear_last_error();
@@ -344,15 +408,40 @@ extern "C" fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, std::size_
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  formulon::pivot::PivotField field;
+  // The pivot-field list is positional over the bound cache's fields, so a
+  // field named in the cache is configured in place at the cache field's
+  // position, after materialising a bare field for every cache column. A
+  // name the cache does not carry is appended.
+  std::vector<formulon::pivot::PivotField>& fields = table->mutable_fields();
+  std::size_t index = fields.size();
+  if (const auto* cache = find_cache(wb->workbook(), table->pivot_cache_id()); cache != nullptr) {
+    const auto& cache_fields = cache->fields();
+    for (std::size_t i = 0; i < cache_fields.size(); ++i) {
+      if (cache_fields[i].name == spec->source_name) {
+        index = i;
+        break;
+      }
+    }
+    if (index != fields.size()) {
+      for (std::size_t i = fields.size(); i < cache_fields.size(); ++i) {
+        formulon::pivot::PivotField bare;
+        bare.source_name = cache_fields[i].name;
+        bare.axis = formulon::pivot::PivotAxis::None;
+        fields.push_back(std::move(bare));
+      }
+    }
+  }
+  if (index == fields.size()) {
+    fields.emplace_back();
+  }
+  formulon::pivot::PivotField& field = fields[index];
   field.source_name = spec->source_name;
   field.custom_name = spec->custom_name != nullptr ? spec->custom_name : "";
   field.axis = pivot_axis_from_fm(spec->axis);
   field.subtotal_top = spec->subtotal_top != 0;
   field.number_format = spec->number_format != nullptr ? spec->number_format : "";
-  table->mutable_fields().push_back(std::move(field));
-  *out_field_idx = table->fields().size() - 1U;
-  sync_field_order(*table, static_cast<std::uint32_t>(*out_field_idx));
+  *out_field_idx = index;
+  sync_field_order(*table, static_cast<std::uint32_t>(index));
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
 }
@@ -436,7 +525,9 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, std::
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_set_axis: wb is NULL");
   }
-  fm_status_t enum_status = check_enum_domain(axis, 3, "fm_workbook_pivot_field_set_axis", "axis");
+  // -1 takes the field off every axis.
+  fm_status_t enum_status =
+      axis == kPivotAxisNone ? 0 : check_enum_domain(axis, 3, "fm_workbook_pivot_field_set_axis", "axis");
   if (enum_status != 0) {
     return enum_status;
   }
@@ -447,7 +538,12 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, std::
       rc != 0) {
     return rc;
   }
-  field->axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis));
+  if (axis == kPivotAxisNone) {
+    field->axis = formulon::pivot::PivotAxis::None;
+    drop_field_aggregates(*table, field_idx);
+  } else {
+    field->axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis));
+  }
   sync_field_order(*table, static_cast<std::uint32_t>(field_idx));
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
@@ -473,6 +569,7 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, std::
   return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_set_sort",
                             [order, manual, by_field](formulon::pivot::PivotField& field) {
                               field.sort.manual = manual;
+                              field.sort.stated = true;
                               // Manual keeps the ascending form the OOXML reader yields for it.
                               field.sort.ascending = order != FM_PIVOT_SORT_DESCENDING;
                               field.sort.by_field = by_field != nullptr ? by_field : "";
@@ -548,7 +645,10 @@ extern "C" fm_status_t fm_workbook_pivot_field_clear_items(fm_workbook_t* wb, st
                                                            std::size_t pivot_index, std::size_t field_idx) {
   clear_last_error();
   return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_clear_items",
-                            [](formulon::pivot::PivotField& field) { field.items.clear(); });
+                            [](formulon::pivot::PivotField& field) {
+                              field.items.clear();
+                              field.marker_items.clear();
+                            });
 }
 
 extern "C" fm_status_t fm_workbook_pivot_field_set_item_visible(fm_workbook_t* wb, std::size_t sheet_index,
@@ -983,6 +1083,32 @@ extern "C" fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* w
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_pivot_get_style_info(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index, fm_pivot_style_info_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_get_style_info: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_get_style_info");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  fm_pivot_style_info_t result{};
+  result.name = "";
+  if (const auto& info = table->style_info(); info.has_value()) {
+    result.name = info->name.c_str();
+    result.present = 1;
+    result.show_row_headers = info->show_row_headers ? 1 : 0;
+    result.show_col_headers = info->show_col_headers ? 1 : 0;
+    result.show_row_stripes = info->show_row_stripes ? 1 : 0;
+    result.show_col_stripes = info->show_col_stripes ? 1 : 0;
+    result.show_last_column = info->show_last_column ? 1 : 0;
+  }
+  *out = result;
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, std::size_t sheet_index,
                                                   std::size_t pivot_index, std::size_t field_idx,
                                                   fm_pivot_field_info_t* out) {
@@ -1025,6 +1151,12 @@ extern "C" fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, std::
     result.date_interval_days = group.interval_days;
     result.date_start_serial = group.start_serial.value_or(-1.0);
     result.date_end_serial = group.end_serial.value_or(-1.0);
+  }
+  // Custom functions replace the automatic subtotal, as the writer and the
+  // layout treat them, so the flag reads the effective state.
+  result.default_subtotal = field->default_subtotal && field->subtotal_fns.empty() ? 1 : 0;
+  for (const formulon::pivot::SubtotalFn fn : field->subtotal_fns) {
+    result.subtotal_fns |= 1U << static_cast<unsigned>(fn);
   }
   *out = result;
   return 0;
@@ -1289,7 +1421,7 @@ extern "C" fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, std::si
       rc != 0) {
     return rc;
   }
-  table->mutable_active_filters().clear();
+  table->erase_active_filters_if([](const formulon::pivot::PivotFilter&) { return true; });
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
 }
@@ -1305,13 +1437,13 @@ extern "C" fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, std
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  auto& filters = table->mutable_active_filters();
-  if (filter_idx >= filters.size()) {
+  if (filter_idx >= table->active_filters().size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_pivot_filter_remove_at: filter_idx out of range",
                              "filter_idx=" + std::to_string(filter_idx));
   }
-  filters.erase(filters.begin() + static_cast<std::ptrdiff_t>(filter_idx));
+  std::size_t position = 0;
+  table->erase_active_filters_if([&](const formulon::pivot::PivotFilter&) { return position++ == filter_idx; });
   invalidate_pivot_result(wb->workbook(), *table);
   return 0;
 }

@@ -172,6 +172,7 @@ TEST(OoxmlWriterPivot, SinglePivotCacheRoundTrips) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
   wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  wb.sheet(0).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/0U, /*anchor_row=*/0U, /*anchor_col=*/3U));
 
   auto bytes_or = io::write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
@@ -202,7 +203,28 @@ TEST(OoxmlWriterPivot, SinglePivotCacheRoundTrips) {
   EXPECT_EQ(pivot::cell_value(*cache, cache->records()[2], 0).as_text(), "North");
   EXPECT_DOUBLE_EQ(cache->records()[2].cells[1].as_number(), 300.0);
 
-  EXPECT_TRUE(reloaded.sheet(0).pivot_tables().empty());
+  EXPECT_EQ(reloaded.sheet(0).pivot_tables().size(), 1U);
+}
+
+// A cache no pivot table draws from is not written, as the desktop
+// spreadsheet drops it on save.
+TEST(OoxmlWriterPivot, UnreferencedCacheIsNotWritten) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/4U)));
+  wb.sheet(0).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/4U, /*anchor_row=*/0U, /*anchor_col=*/3U));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+
+  const Workbook& reloaded = read_or.value().workbook;
+  ASSERT_EQ(reloaded.pivot_caches().size(), 1U);
+  EXPECT_EQ(reloaded.pivot_caches()[0]->cache_id(), 4U);
+  ASSERT_EQ(reloaded.sheet(0).pivot_tables().size(), 1U);
+  EXPECT_EQ(reloaded.sheet(0).pivot_tables()[0]->pivot_cache_id(), 4U);
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +415,8 @@ TEST(OoxmlWriterPivot, MultiCacheRoundTrips) {
   rec.cells.push_back(Value::number(42.0));
   cache_b.mutable_records().push_back(std::move(rec));
   wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache_b)));
+  wb.sheet(0).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/0U, /*anchor_row=*/0U, /*anchor_col=*/6U));
+  wb.sheet(0).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/7U, /*anchor_row=*/0U, /*anchor_col=*/10U));
 
   auto bytes_or = io::write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;

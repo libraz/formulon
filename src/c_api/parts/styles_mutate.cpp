@@ -2,6 +2,8 @@
 // C ABI - styles mutation surface (fonts, fills, borders, num formats, cell
 // xfs, cell styles, dxfs and the batch commit, all with dedup-on-insert).
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -303,6 +305,14 @@ formulon::FontRecord font_from_c(const fm_font_record& record) {
   out.has_family = record.has_family != 0;
   out.has_charset = record.has_charset != 0;
   out.has_size = record.has_size != 0;
+  out.outline = record.outline != 0;
+  out.shadow = record.shadow != 0;
+  out.condense = record.condense != 0;
+  out.extend = record.extend != 0;
+  out.has_outline = record.has_outline != 0;
+  out.has_shadow = record.has_shadow != 0;
+  out.has_condense = record.has_condense != 0;
+  out.has_extend = record.has_extend != 0;
   out.underline = record.underline;
   out.vert_align = record.vert_align;
   out.family = record.family;
@@ -321,13 +331,47 @@ formulon::FontRecord cell_font_from_c(const fm_font_record& record) {
   return out;
 }
 
-formulon::FillRecord fill_from_c(const fm_fill_record& record) noexcept {
+double finite_or_zero(double value) noexcept {
+  return std::isfinite(value) ? value : 0.0;
+}
+
+constexpr std::size_t kMaxGradientStops = 1024;
+
+formulon::FillRecord fill_from_c(const fm_fill_record& record) {
   formulon::FillRecord out;
   out.pattern = record.pattern;
   out.fg_argb = record.fg_argb;
   out.bg_argb = record.bg_argb;
   out.fg = color_from_c(record.fg);
   out.bg = color_from_c(record.bg);
+  if (record.has_gradient != 0) {
+    out.has_gradient = true;
+    // The pattern fields do not exist on a gradient fill; clearing them keeps
+    // records that differ only there from comparing unequal.
+    out.pattern = 0;
+    out.fg_argb = 0;
+    out.bg_argb = 0;
+    out.fg = formulon::ColorSpec{};
+    out.bg = formulon::ColorSpec{};
+    formulon::GradientFill& gradient = out.gradient;
+    gradient.path = record.gradient_type == FM_GRADIENT_PATH;
+    gradient.degree = finite_or_zero(record.gradient_degree);
+    gradient.left = finite_or_zero(record.gradient_left);
+    gradient.right = finite_or_zero(record.gradient_right);
+    gradient.top = finite_or_zero(record.gradient_top);
+    gradient.bottom = finite_or_zero(record.gradient_bottom);
+    const std::size_t count =
+        record.gradient_stops == nullptr ? 0U : std::min<std::size_t>(record.gradient_stop_count, kMaxGradientStops);
+    gradient.stops.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+      const fm_gradient_stop& in = record.gradient_stops[i];
+      formulon::GradientStop stop;
+      stop.position = finite_or_zero(in.position);
+      stop.argb = in.color_argb;
+      stop.color = color_from_c(in.color);
+      gradient.stops.push_back(stop);
+    }
+  }
   return out;
 }
 

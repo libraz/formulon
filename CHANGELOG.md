@@ -7,6 +7,211 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **C ABI:** `fm_sheet_view_t` grows by `split_x` / `split_y`,
+  `show_formulas` and `show_outline_symbols` (64 to 88 bytes on 64-bit
+  targets), `fm_font_record`
+  by the `outline` / `shadow` / `condense` / `extend` toggles and their `has_*`
+  flags (88 to 120 bytes), and `fm_fill_record` by the gradient members (64 to
+  128 bytes); `fm_dxf_record` grows with them. `fm_cf_rule_t` gains
+  `icon_set_icons` / `icon_set_icon_count` at its end, and
+  `fm_pivot_field_info_t` gains `default_subtotal` / `subtotal_fns` at its end.
+  `fm_sheet_format_defaults` takes `custom_height` / `zero_height` ahead of the
+  `effective_*` members, which move (48 to 56 bytes). `fm_column_layout_t` and
+  `fm_row_layout_t` keep their size and take `collapsed` from padding. A caller
+  compiled against an earlier header must be recompiled.
+
+### Added
+
+- Outline: `collapsed` on `<row>` and `<col>` is read, kept, written and
+  reported by the row and column override getters, with
+  `fm_sheet_set_row_collapsed` / `fm_sheet_set_column_collapsed` (and
+  `setRowCollapsed` / `setColumnCollapsed` / `set_row_collapsed` /
+  `set_column_collapsed`). `<sheetFormatPr outlineLevelRow outlineLevelCol>`
+  is derived from the deepest row and column levels on every save, XLSX and
+  XLSB, so the outline gutter shows its symbols.
+- Sheet view: `showFormulas`, `showOutlineSymbols`, `windowProtection`,
+  `showRuler`, `showWhiteSpace`, `defaultGridColor`, `colorId`,
+  `zoomScaleNormal`, `zoomScaleSheetLayoutView`, `zoomScalePageLayoutView`,
+  `<selection activeCellId>`, `<pivotSelection>` and the view's `<extLst>` are
+  kept across a resave. `showFormulas` and `showOutlineSymbols` are reported by
+  the view getter and have setters (`fm_sheet_set_show_formulas`,
+  `fm_sheet_set_show_outline_symbols`). `<sheetView>` elements after the first
+  (additional workbook windows) are kept verbatim and written after the
+  modelled view.
+- Split panes: `fm_sheet_set_split` (`setSheetSplit` / `set_sheet_split`)
+  splits the view at a twips offset on either axis without freezing it. A split
+  replaces a freeze and the other way round; a change resets the pane origin
+  and active pane and keeps the active selection.
+- Gradient fills (`<gradientFill>`, linear and path, with stops) are read,
+  written and exposed by the fill and dxf getters and `add_fill` / `add_dxf`.
+- Font `<outline>`, `<shadow>`, `<condense>` and `<extend>` are read, written
+  and exposed by the font getters and setters.
+- Custom icon sets: the per-level `<x14:cfIcon>` icons of an icon-set rule are
+  read from and written to the linked x14 rule and exposed by the conditional
+  format getter and `add_rule` (`icon_set_icons`; `icons` in the JS and Python
+  bindings). A rule Excel stores only in the x14 extension, and the legacy
+  copy Excel adds beside the x14 rule in `.xlsb`, each load as one rule.
+- `<calcPr>`: `calcId`, `fullPrecision`, `calcOnSave`, `refMode`,
+  `concurrentCalc`, `concurrentManualCount`, `forceFullCalc`, `fullCalcOnLoad`
+  and `calcCompleted` are kept across a resave. `fullPrecision`, `calcOnSave`,
+  `refMode` and the date system (`<workbookPr date1904>`) have typed getters
+  and setters in the C ABI and every binding (`fm_workbook_full_precision` /
+  `fm_workbook_set_full_precision`, `fm_workbook_calc_on_save` /
+  `fm_workbook_set_calc_on_save`, `fm_workbook_ref_mode` /
+  `fm_workbook_set_ref_mode`, `fm_workbook_date1904` /
+  `fm_workbook_set_date1904`).
+- Defined names: `comment` and `hidden` are read with
+  `fm_workbook_defined_name_attrs_at` and set with
+  `fm_workbook_set_defined_name_attrs` / `setDefinedNameAttrs` /
+  `set_defined_name_attrs`; replacing a name's formula keeps both.
+- Tables: `<tableStyleInfo>` (style name and the first-column, last-column,
+  row-stripe and column-stripe toggles), the header and totals row counts and
+  each column's totals-row function, label and formula are read with
+  `fm_workbook_table_get_info` / `fm_workbook_table_get_column` (`tableAt` in
+  JavaScript) and written with `fm_workbook_table_set_style_info` /
+  `fm_workbook_table_set_column_totals` (`setTableColumnTotals` /
+  `table_set_style_info` / `table_set_column_totals`). `fm_workbook_table_rename`
+  (`table_rename`) renames a table and its display name and rewrites structured
+  references to it in cells, defined names, conditional formats, data
+  validations, calculated-column and totals-row formulas and chart series; a
+  pivot cache sourced from the table follows. Turning the totals row on writes
+  each column's totals cell.
+- Custom table and PivotTable styles (`<tableStyles>`): listed, added or
+  replaced, and removed with `fm_styles_get_table_style_count` /
+  `fm_styles_get_table_style` / `fm_styles_set_table_style` /
+  `fm_styles_remove_table_style` (`tableStyleCount` / `getTableStyle` /
+  `setTableStyle` / `removeTableStyle`; `table_style_count` /
+  `get_table_style` / `set_table_style` / `remove_table_style`), and the
+  default table and PivotTable style names with
+  `fm_styles_get_table_style_defaults` / `fm_styles_set_table_style_defaults`
+  (`getTableStyleDefaults` / `setTableStyleDefaults`; `table_style_defaults` /
+  `set_table_style_defaults`).
+- Pivot table style: `<pivotTableStyleInfo>` is read and written with
+  `fm_workbook_pivot_get_style_info` / `fm_workbook_pivot_set_style_info`
+  (`pivotGetStyleInfo` / `pivotSetStyleInfo`; `pivot_style_info` /
+  `pivot_set_style_info`).
+- Workbook protection: `<workbookProtection>` (`lockStructure`, `lockWindows`,
+  `lockRevision`, the legacy password hashes and the `workbook*` / `revisions*`
+  algorithm, hash, salt and spin-count attributes) has a typed getter and setter
+  in the C ABI and every binding (`fm_workbook_get_protection` /
+  `fm_workbook_set_protection`, `fm_workbook_protection_t`;
+  `getWorkbookProtection` / `setWorkbookProtection`;
+  `get_workbook_protection` / `set_workbook_protection`). Hashes are stored as
+  the host computes them; attributes the record does not model are kept.
+- Protected ranges: a sheet's `<protectedRange>` entries (name, sqref, password
+  hash, algorithm, hash, salt, spin count, security descriptor) can be listed,
+  added, updated and removed (`fm_sheet_protected_range_count`,
+  `fm_sheet_get_protected_range`, `fm_sheet_add_protected_range`,
+  `fm_sheet_update_protected_range`, `fm_sheet_remove_protected_range`,
+  `fm_protected_range_t`; `getProtectedRanges` / `addProtectedRange` /
+  `updateProtectedRange` / `removeProtectedRange`; the `*_protected_range`
+  methods in Python). The ranges move with row and column edits.
+- Legacy notes: a note's shown/hidden state is read and written with
+  `fm_sheet_get_comment_visible` / `fm_sheet_set_comment_visible`
+  (`getCommentVisible` / `setCommentVisible`, `get_comment_visible` /
+  `set_comment_visible`). A note's box (`x:Anchor`), its visibility and the
+  authors table of its comments part, including authors no remaining note
+  names, are kept across a resave; adding, removing or showing a note
+  regenerates the drawing without resetting the other notes' boxes or
+  visibility, and a box follows its note through row and column edits.
+- Drawing shapes: the `xdr:sp` shapes and text boxes, `xdr:cxnSp` lines and
+  connectors and `xdr:grpSp` groups of a sheet's drawing can be listed (id,
+  name, kind, preset geometry, anchor, text, solid fill, outline colour and
+  width, rotation, hidden), inserted, updated and removed
+  (`fm_sheet_shape_count`, `fm_sheet_shape_at`, `fm_sheet_insert_shape`,
+  `fm_sheet_update_shape`, `fm_sheet_remove_shape`, `fm_shape`;
+  `listShapes` / `insertShape` / `updateShape` / `removeShape`; the `*_shape`
+  methods in Python). An update rewrites only the fields it names and keeps
+  the rest of the shape's XML; shapes the record cannot express are listed
+  with `ShapePaint.Other` or empty fields and pass through a save unchanged.
+  Shapes follow row and column edits like pictures do.
+- Sparkline groups: the `x14:sparklineGroups` of a sheet's worksheet extension
+  list can be listed with every attribute and colour the group carries, added,
+  updated, given new sparklines and removed
+  (`fm_sheet_sparkline_group_count`, `fm_sheet_sparkline_group_at`,
+  `fm_sheet_sparkline_at`, `fm_sheet_add_sparkline_group`,
+  `fm_sheet_update_sparkline_group`, `fm_sheet_set_sparkline_group_sparklines`,
+  `fm_sheet_remove_sparkline_group`, `fm_sparkline_group`, `fm_sparkline`;
+  `listSparklineGroups` / `addSparklineGroup` / `updateSparklineGroup` /
+  `setSparklineGroupSparklines` / `removeSparklineGroup`; the
+  `*_sparkline_group*` methods in Python). Attributes and children outside the
+  record (`rightToLeft`, `uid`, unknown extensions) are kept by an update.
+  Sparklines of a workbook loaded from `.xlsb` are listed and editable the same
+  way, and groups from any source are written to `.xlsb`.
+- Table slicers: a loaded table slicer (slicer part, slicer cache, the workbook
+  and worksheet extension entries, the `Slicer_*` defined name and the drawing
+  frame with its fallback) is kept across a resave and its frame moves with row
+  and column edits. A new C ABI (`fm_sheet_slicer_count`, `fm_sheet_slicer_at`,
+  `fm_sheet_add_slicer`, `fm_sheet_update_slicer`, `fm_sheet_remove_slicer`,
+  `fm_slicer`; `listSlicers` / `addSlicer` / `updateSlicer` / `removeSlicer`;
+  `list_slicers` / `add_slicer` / `update_slicer` / `remove_slicer` in Python)
+  lists the slicers of a sheet with their caption, cache, table and column,
+  style, item columns, row height, sort order, cross filter and anchor, adds a
+  slicer over a table column with all its parts, relationships and content
+  types, updates caption, style, item columns, row height, sort order, cross
+  filter and anchor, and removes a slicer together with its cache once no slicer
+  uses it, and drops the sheet's drawing when the slicer was its last object.
+  Removing a table or a sheet, or deleting the rows or columns under a
+  slicer's frame, removes the slicers bound to it the same way. Slicers
+  over a pivot cache pass through untouched and are not listed; the selection of
+  a table slicer lives in the table's AutoFilter.
+- What-If data tables (`<f t="dataTable">`) are modelled instead of frozen into
+  values: the sheet keeps each table's result range, orientation and input
+  cells with the `dt2D`, `dtr`, `r1`, `r2`, `del1`, `del2`, `ca` and `aca`
+  attributes, and a save writes the formula back on the anchor cell. A recalc
+  fills the result cells of one-variable (column or row input) and
+  two-variable tables by substituting each value into the input cell(s),
+  recalculating the cells that read them and restoring the inputs; under
+  `calcMode="autoNoTable"` it leaves them alone until
+  `fm_workbook_recalc_data_tables` (`recalcDataTables` /
+  `recalc_data_tables`), and `partial_recalc` never computes them. The result
+  range refuses cell writes ("cannot change part of a data table"). Row and
+  column inserts and deletes shift the range and the input cells; deleting an
+  input cell sets `del1` / `del2` and the table evaluates to `#REF!`, deleting
+  the range removes the table. `fm_sheet_add_data_table` /
+  `fm_sheet_data_table_at` / `fm_sheet_remove_data_table` (`addDataTable` /
+  `getDataTable` / `removeDataTable` in JavaScript, `add_data_table` /
+  `get_data_table` / `remove_data_table` in Python, `fm_data_table`) create a
+  table, read the one covering a cell, and remove it with its result cells.
+  XLSB reads and writes the table as `BrtTable` (428) ahead of the anchor's
+  plain value record, with the always-calculate flag. Inserting or deleting
+  rows or columns that cut into a data table (its result range, or the header
+  row and column holding the formula and input values) is refused with
+  `kPreconditionFailed`; deleting the whole block removes the table. Result
+  cells report `=TABLE(row_input,col_input)` through the formula getters,
+  `FORMULATEXT` returns `{=TABLE(...)}` like an array formula, and `ISFORMULA`
+  is TRUE.
+- XLSB parity with the features above: gradient fills (`BrtFill`, `BrtDXF`
+  gradient props); dxf font outline, shadow, condense and extend, and explicit
+  "off" toggles in dxf fonts; calculation settings (`BrtCalcProp`); workbook
+  properties (`BrtWbProp`); workbook protection including lockWindows,
+  lockRevision and the revisions password (`BrtBookProtection`,
+  `BrtBookProtectionIso`); every workbook window (`BrtBookView`) and the sheet
+  views of extra windows; sheet view mode and `activeCellId`; protected ranges
+  (`BrtRangeProtection`, `BrtRangeProtectionIso`); custom icon sets as x14 rules
+  (`BrtBeginCFRule14`, `BrtBeginIconSet14`, `BrtCFVO14`, `BrtCFIcon`); sparkline
+  groups; tables (`BrtBeginList` and friends, with style, flags, totals,
+  calculated columns, AutoFilter and sort state); structured references
+  (`PtgList`); pivot filters and style info on read; and the workbook's slicer
+  cache lists, so table slicers survive an `.xlsb` resave. Table slicers from an
+  `.xlsx` source, security descriptors of protected ranges,
+  `workbookPr dateCompatibility` / `allowRefreshQuery`, custom table and
+  PivotTable styles, sparkline groups whose references cannot be encoded, and
+  pivot tables from an `.xlsx` source are not written to `.xlsb` and are
+  counted in `deferred_feature_count`.
+
+### Fixed
+
+- Workbook-level extension entries that name a relationship by `r:id` (slicer
+  caches, timeline caches) follow the relationship ids the writer assigns
+  instead of pointing at a stale id after a resave.
+- Legacy notes: when notes are added or removed, each note that remains
+  re-emits its own original `<v:shape>` (fill, stroke, shadow, text box style,
+  font, size) with only its anchor, visibility and cell patched; only a new
+  note gets the default shape.
+
 ## [0.17.0] - 2026-10-21
 
 ### BREAKING

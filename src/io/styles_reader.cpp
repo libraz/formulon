@@ -11,11 +11,13 @@
 #include <charconv>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <limits>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "io/color_spec_xml.h"
 #include "io/styles_vocab.h"
@@ -119,6 +121,22 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
     rec.has_strike = true;
     rec.strike = read_xsd_bool(strike, "val", true);
   }
+  if (const pugi::xml_node outline = f.child("outline")) {
+    rec.has_outline = true;
+    rec.outline = read_xsd_bool(outline, "val", true);
+  }
+  if (const pugi::xml_node shadow = f.child("shadow")) {
+    rec.has_shadow = true;
+    rec.shadow = read_xsd_bool(shadow, "val", true);
+  }
+  if (const pugi::xml_node condense = f.child("condense")) {
+    rec.has_condense = true;
+    rec.condense = read_xsd_bool(condense, "val", true);
+  }
+  if (const pugi::xml_node extend = f.child("extend")) {
+    rec.has_extend = true;
+    rec.extend = read_xsd_bool(extend, "val", true);
+  }
   pugi::xml_node u = f.child("u");
   if (u) {
     // `<u/>` defaults to "single" per OOXML.
@@ -144,8 +162,34 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   return rec;
 }
 
+/// Upper bound on the stops kept from one `<gradientFill>`; Excel's own
+/// editor offers ten.
+constexpr std::size_t kMaxGradientStops = 1024;
+
+void ParseGradientFill(const pugi::xml_node& node, GradientFill* out) {
+  out->path = attr_str(node, "type") == "path";
+  out->degree = attr_f64(node, "degree", 0.0);
+  out->left = attr_f64(node, "left", 0.0);
+  out->right = attr_f64(node, "right", 0.0);
+  out->top = attr_f64(node, "top", 0.0);
+  out->bottom = attr_f64(node, "bottom", 0.0);
+  for (pugi::xml_node stop = node.child("stop"); stop && out->stops.size() < kMaxGradientStops;
+       stop = stop.next_sibling("stop")) {
+    GradientStop entry;
+    entry.position = attr_f64(stop, "position", 0.0);
+    entry.argb = ParseColorArgb(stop.child("color"), 0U);
+    entry.color = read_color_spec(stop.child("color"));
+    out->stops.push_back(entry);
+  }
+}
+
 FillRecord ParseFillNode(const pugi::xml_node& fill) {
   FillRecord rec;
+  if (pugi::xml_node gradient = fill.child("gradientFill")) {
+    rec.has_gradient = true;
+    ParseGradientFill(gradient, &rec.gradient);
+    return rec;
+  }
   pugi::xml_node pattern = fill.child("patternFill");
   if (pattern) {
     rec.pattern = ParseFillPattern(pattern.attribute("patternType").value());
@@ -498,6 +542,44 @@ void ReadColors(const pugi::xml_node& colors, StylesTable& table) {
   }
 }
 
+std::string CaptureExtraAttrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known) {
+  std::vector<std::pair<std::string, std::string>> extra;
+  capture_unknown_attrs(node, known, extra);
+  std::string out;
+  append_raw_attrs(out, extra);
+  return out;
+}
+
+/// Reads `<tableStyles>`: the custom table / PivotTable styles and the
+/// default style names.
+void ReadTableStyles(const pugi::xml_node& node, StylesTable& table) {
+  TableStylesSection& section = table.table_styles;
+  section.present = true;
+  section.default_table_style = attr_str(node, "defaultTableStyle");
+  section.default_pivot_style = attr_str(node, "defaultPivotStyle");
+  section.extra_attrs = CaptureExtraAttrs(node, {"count", "defaultTableStyle", "defaultPivotStyle"});
+  for (pugi::xml_node style_node = node.child("tableStyle"); style_node;
+       style_node = style_node.next_sibling("tableStyle")) {
+    CustomTableStyle style;
+    style.name = attr_str(style_node, "name");
+    style.pivot = attr_bool(style_node, "pivot", true);
+    style.table = attr_bool(style_node, "table", true);
+    style.extra_attrs = CaptureExtraAttrs(style_node, {"name", "pivot", "table", "count"});
+    for (pugi::xml_node element_node = style_node.child("tableStyleElement"); element_node;
+         element_node = element_node.next_sibling("tableStyleElement")) {
+      TableStyleElement element;
+      element.type = attr_str(element_node, "type");
+      element.size = attr_u32(element_node, "size", 1U);
+      if (pugi::xml_attribute dxf = element_node.attribute("dxfId"); dxf) {
+        element.dxf_id = parse_xml_u32_attr(dxf, 0U);
+      }
+      element.extra_attrs = CaptureExtraAttrs(element_node, {"type", "size", "dxfId"});
+      style.elements.push_back(std::move(element));
+    }
+    section.styles.push_back(std::move(style));
+  }
+}
+
 std::string CaptureRootExtraAttrs(const pugi::xml_node& root) {
   std::string out;
   for (pugi::xml_attribute attr : root.attributes()) {
@@ -611,7 +693,7 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
     ReadColors(colors, table);
   }
   if (pugi::xml_node table_styles = root.child("tableStyles")) {
-    table.table_styles_xml = raw_xml(table_styles);
+    ReadTableStyles(table_styles, table);
   }
   if (pugi::xml_node ext_lst = root.child("extLst")) {
     table.ext_lst_xml = raw_xml(ext_lst);

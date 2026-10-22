@@ -43,11 +43,9 @@ _DTS_SURFACE_ONLY_TYPES = {
     # native addon, which is `require`d rather than instantiated.
     ("wasm", "FormulonModule"),
     ("wasm", "FormulonModuleOptions"),
-    # Reachable only from `getSheetAutoFilterXml` / `createTable` /
-    # `updateTable`, all of which are in WASM_ONLY_METHODS.
+    # Reachable only from `getSheetAutoFilterXml`, which is in
+    # WASM_ONLY_METHODS.
     ("wasm", "SheetAutoFilterXmlResult"),
-    ("wasm", "TableInput"),
-    ("wasm", "TableUpdateInput"),
 }
 
 # Shared methods whose two declarations are allowed to differ, with the
@@ -150,6 +148,26 @@ _STYLE_RECORD_PRESENCE_FLAGS = {
     },
 }
 
+# C fields the host languages carry as one nested value instead of flat
+# members: a gradient fill's parameters and its stop array travel as a single
+# `gradient` object. Each entry names the binding field and the C fields it
+# replaces, all of which must still exist in the struct.
+_STYLE_RECORD_COMPOSITES = {
+    "fm_fill_record": {
+        "gradient": (
+            "has_gradient",
+            "gradient_type",
+            "gradient_degree",
+            "gradient_left",
+            "gradient_right",
+            "gradient_top",
+            "gradient_bottom",
+            "gradient_stops",
+            "gradient_stop_count",
+        ),
+    },
+}
+
 _TS_FIELD_RE = re.compile(r"^\s*([A-Za-z_$][A-Za-z0-9_$]*)\??\s*:", re.MULTILINE)
 _PY_FIELD_RE = re.compile(r"^    ([a-z_][A-Za-z0-9_]*)\s*:", re.MULTILINE)
 
@@ -192,7 +210,17 @@ def check_style_record_fields() -> List[str]:
         if stale_flags:
             problems.append(f"style-record-fields: stale presence-flag exemptions for {struct_name}: {stale_flags}")
         c_fields = [name for name in c_fields if name not in presence]
-        camel_fields = {_snake_to_camel(name) for name in c_fields}
+        composite_fields: Set[str] = set()
+        for binding_field, members in sorted(_STYLE_RECORD_COMPOSITES.get(struct_name, {}).items()):
+            missing = [member for member in members if member not in c_fields]
+            if missing:
+                problems.append(
+                    f"style-record-fields: {struct_name} composite {binding_field!r} names fields "
+                    f"missing from {CAPI_HEADER.relative_to(REPO_ROOT)}: {missing}"
+                )
+            c_fields = [name for name in c_fields if name not in members]
+            composite_fields.add(binding_field)
+        camel_fields = {_snake_to_camel(name) for name in c_fields} | composite_fields
         for surface, source, dts_text in (
             ("wasm", WASM_DTS, wasm_dts),
             ("node", NODE_DTS, node_dts),
@@ -219,9 +247,9 @@ def check_style_record_fields() -> List[str]:
             continue
         diff = _format_diff(
             f"{struct_name} in {CAPI_HEADER.relative_to(REPO_ROOT)}",
-            set(c_fields) - py_fields,
+            (set(c_fields) | composite_fields) - py_fields,
             f"{type_name} in {PYTHON_WORKBOOK.relative_to(REPO_ROOT)}",
-            py_fields - set(c_fields),
+            py_fields - (set(c_fields) | composite_fields),
         )
         if diff:
             problems.append(f"style-record-fields: python {type_name} mismatch:\n" + "\n".join(diff))

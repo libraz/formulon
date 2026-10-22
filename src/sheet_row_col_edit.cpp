@@ -163,6 +163,67 @@ void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::u
   ranges = std::move(retained);
 }
 
+// Moves a data table's input cell along one axis. An input cell that is
+// deleted keeps its (clamped) position and is flagged `deleted`, the way the
+// `del1` / `del2` attributes record it.
+void ShiftDataTableInput(DataTableInput& input, std::uint32_t index, std::uint32_t count, bool is_delete,
+                         bool row_axis) {
+  if (!input.present || input.deleted) {
+    return;
+  }
+  std::uint32_t& pos = row_axis ? input.row : input.col;
+  const std::uint32_t bound = row_axis ? Sheet::kMaxRows : Sheet::kMaxCols;
+  if (pos < index) {
+    return;
+  }
+  if (is_delete) {
+    if (pos < index + count) {
+      pos = index < bound ? index : bound - 1U;
+      input.deleted = true;
+    } else {
+      pos -= count;
+    }
+    return;
+  }
+  const std::uint64_t shifted = static_cast<std::uint64_t>(pos) + count;
+  if (shifted >= bound) {
+    pos = bound - 1U;
+    input.deleted = true;
+  } else {
+    pos = static_cast<std::uint32_t>(shifted);
+  }
+}
+
+// A table the edit misses shifts whole, its input cells with it; one the edit
+// cuts into goes (the workbook refuses a cut that would leave part of it).
+void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::uint32_t count, bool is_delete,
+                     bool row_axis) {
+  std::vector<DataTable> retained;
+  retained.reserve(tables.size());
+  for (DataTable& table : tables) {
+    if (data_table_edit_cut(table, row_axis, is_delete, index, count) != DataTableEditCut::kMisses) {
+      continue;
+    }
+    bool drop = false;
+    ShiftAxisRange(table.ref, index, count, is_delete, row_axis, &drop);
+    if (drop) {
+      continue;
+    }
+    const bool was_deleted1 = table.r1.deleted;
+    const bool was_deleted2 = table.r2.deleted;
+    ShiftDataTableInput(table.r1, index, count, is_delete, row_axis);
+    ShiftDataTableInput(table.r2, index, count, is_delete, row_axis);
+    if (table.r1.deleted && !was_deleted1) {
+      table.explicit_attrs |= kDataTableExplicitDel1;
+    }
+    if (table.r2.deleted && !was_deleted2) {
+      table.explicit_attrs |= kDataTableExplicitDel2;
+    }
+    retained.push_back(std::move(table));
+  }
+  tables = std::move(retained);
+}
+
 // Hyperlinks use the same inclusive rectangle semantics as merge ranges.
 // Keeping this conversion next to ShiftRangeList is intentional: row/column
 // insertions and deletions must apply the exact same shift, shrink, clamp and
@@ -417,6 +478,7 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
     ShiftColAnchored(threaded_comments_, index, count, is_delete);
   }
   ShiftRangeList(merges_, index, count, is_delete, row_axis);
+  ShiftDataTables(data_tables_, index, count, is_delete, row_axis);
   for (DataValidation& dv : validations_) {
     ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
   }

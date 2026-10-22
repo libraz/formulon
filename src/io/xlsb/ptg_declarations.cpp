@@ -14,6 +14,7 @@
 
 #include "io/future_functions.h"
 #include "io/xlsb/func_id_table.h"
+#include "io/xlsb/ptg_list.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_writer.h"
 #include "parser/ast.h"
@@ -341,6 +342,13 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       const int itab_begin = resolve_ixti(sheet_names, node.as_ref3d_sheet_begin());
       const int itab_end = resolve_ixti(sheet_names, node.as_ref3d_sheet_end());
       AddSheetRange(0U, itab_begin, itab_end, ranges, seen);
+      return;
+    }
+    case parser::NodeKind::StructuredRef: {
+      // PtgList names its table's sheet through an XTI.
+      if (const std::optional<std::int32_t> itab = structured_ref_sheet(node, ranges.tables)) {
+        AddSheetRange(0U, *itab, *itab, ranges, seen);
+      }
       return;
     }
     case parser::NodeKind::NameRef:

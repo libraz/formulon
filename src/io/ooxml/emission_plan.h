@@ -118,8 +118,8 @@ struct EmissionPlan {
     std::uint32_t numeric_id = 0;  // matches the path's `tableN.xml` suffix
   };
   std::vector<std::vector<PerSheetTable>> tables_by_sheet;
-  // Workbook-level pivot caches. One entry per `wb.pivot_caches()` in
-  // document order. `numeric_id` drives the package paths; `cache_id`
+  // Workbook-level pivot caches. One entry per cache a pivot table draws
+  // from, in `wb.pivot_caches()` order. `numeric_id` drives the package paths; `cache_id`
   // is the workbook-level identifier consumers see (PivotTable refers
   // to it via `pivot_cache_id()`); `workbook_rid` is the rId integer
   // the workbook-rels file assigns to this cache definition.

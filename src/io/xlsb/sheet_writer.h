@@ -10,9 +10,10 @@
 // `BrtRowHdr`. Column/row layout, frozen panes and merged-cell
 // rectangles are emitted from the model.
 //
-// Sheet protection, conditional-format rules, data validation and
-// hyperlinks are model-owned and emitted from the model. Auto-filter,
-// print setup and page breaks are not modelled per-record; those and the
+// Sheet and range protection, conditional-format rules, data validation
+// and hyperlinks are model-owned and emitted from the model. A sheet's
+// own auto-filter, print setup and page breaks are not modelled per-record
+// (table auto-filters are written with their table parts); those and the
 // other unsupported records from a
 // sheet that came from an `.xlsb` survive as `Sheet::xlsb_tail()`, whose
 // framed bytes are appended around the merged-cell and hyperlink blocks; a
@@ -26,6 +27,7 @@
 #ifndef FORMULON_IO_XLSB_SHEET_WRITER_H_
 #define FORMULON_IO_XLSB_SHEET_WRITER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -46,6 +48,10 @@ namespace xlsb {
 /// relationships; fresh ids avoid every retained id.
 std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 
+/// Protected ranges of `sheet` the range-protection records cannot carry
+/// (`range_protection_writable`).
+std::size_t unwritten_protected_range_count(const Sheet& sheet);
+
 /// Serialises `sheet` as the body of an `xl/worksheets/sheet<N>.bin`
 /// part. `sst` is updated as text cells are interned (the same builder
 /// is shared across every sheet of the workbook so all text cells
@@ -63,12 +69,16 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 /// every anchor is then written as a plain `BrtArrFmla` with no `BrtCellMeta`
 /// record, because a dangling index makes Excel repair the file.
 /// `name_shapes` feeds a legacy formula's `legacy_intersections`.
-Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
-                                                      const std::vector<std::string>& sheet_names,
-                                                      const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                                      std::uint32_t* downgraded_formula_count = nullptr,
-                                                      std::uint32_t dynamic_array_ifmd = 0,
-                                                      const NameShapes& name_shapes = NameShapes());
+/// `table_part_rel_ids` names the generated table parts, one BrtListPart each.
+/// `workbook_views` is the BrtBookView count of the workbook part; a sheet
+/// view naming a later window is not written. Sparkline groups that cannot be
+/// encoded are left out and added to `*deferred_sparkline_groups`.
+Expected<std::vector<std::uint8_t>, Error> emit_sheet(
+    const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
+    const SheetRangeTable& sheet_ranges, const NameTable& name_table, std::uint32_t* downgraded_formula_count = nullptr,
+    std::uint32_t dynamic_array_ifmd = 0, const NameShapes& name_shapes = NameShapes(),
+    const std::vector<std::string>& table_part_rel_ids = {}, std::uint32_t workbook_views = 1U,
+    std::uint32_t* deferred_sparkline_groups = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

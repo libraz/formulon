@@ -244,6 +244,16 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
       if (rule.icon_set_floor_engaged != 0) {
         icon_set.set("floor", cfvo_to_js(rule.icon_set_floor));
       }
+      if (rule.icon_set_icon_count != 0U) {
+        emscripten::val icons = emscripten::val::array();
+        for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
+          emscripten::val icon = emscripten::val::object();
+          js_set_cstr(icon, "iconSet", rule.icon_set_icons[j].icon_set);
+          icon.set("iconId", rule.icon_set_icons[j].icon_id);
+          icons.set(j, icon);
+        }
+        icon_set.set("icons", icons);
+      }
       item.set("iconSet", icon_set);
     }
     arr.set(static_cast<uint32_t>(i), item);
@@ -267,6 +277,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
   std::vector<fm_cfvo_t> color_scale_thresholds;
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
+  std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
   JsNarrowNumericReader reader("addConditionalFormat");
   const std::vector<fm_merge_range> merge_ranges = js_pull_ranges(v, "sqref", &reader);
@@ -410,6 +421,19 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     if (js_value_present(floor)) {
       rule.icon_set_floor_engaged = 1;
       rule.icon_set_floor = js_pull_cfvo(floor, &cfvo_strings, reader);
+    }
+    const emscripten::val icons = reader.value(icon_set, "icons", "iconSet.icons");
+    if (js_value_present(icons) && reader.is_array(icons, "iconSet.icons")) {
+      const uint32_t n = reader.length(icons, "iconSet.icons");
+      icon_set_icons.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        const emscripten::val icon = reader.array_element(icons, i, "iconSet.icons[]");
+        icon_set_icons.push_back(
+            fm_cf_icon_t{cfvo_strings.emplace(reader.string(icon, "iconSet", "iconSet.icons[].iconSet")),
+                         reader.i32(icon, "iconId", 0, "iconSet.icons[].iconId")});
+      }
+      rule.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
+      rule.icon_set_icon_count = static_cast<uint32_t>(icon_set_icons.size());
     }
   }
   if (!reader.ok()) {

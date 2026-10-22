@@ -155,6 +155,9 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   if (t.totals_row) {
     out.append(" totalsRowCount=\"1\"");
   }
+  if (t.totals_row_shown.has_value()) {
+    out.append(*t.totals_row_shown ? " totalsRowShown=\"1\"" : " totalsRowShown=\"0\"");
+  }
   out.append(">\n");
   // CT_Table orders the optional filter/sort payload before the required
   // tableColumns collection. The AutoFilter is serialized from its model;
@@ -189,28 +192,47 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
       out.push_back('"');
     }
     out.append(col.extra_attrs);
-    // <calculatedColumnFormula> is the only child of <tableColumn> we
-    // emit. When the field is empty we omit the element entirely (Excel
-    // never emits empty calc-column elements) and keep the self-closing
-    // <tableColumn/> form.
-    if (col.calculated_column_formula.empty()) {
+    // CT_TableColumn children: calculatedColumnFormula, totalsRowFormula,
+    // then the retained xmlColumnPr / extLst. An empty formula omits its
+    // element (Excel never emits an empty one).
+    if (col.calculated_column_formula.empty() && col.totals_row_formula.empty() && col.trailing_children_xml.empty()) {
       out.append("/>\n");
     } else {
       out.append(">\n");
-      out.append("      <calculatedColumnFormula>");
-      AppendXmlEscaped(out, col.calculated_column_formula);
-      out.append("</calculatedColumnFormula>\n");
+      if (!col.calculated_column_formula.empty()) {
+        out.append("      <calculatedColumnFormula>");
+        AppendXmlEscaped(out, col.calculated_column_formula);
+        out.append("</calculatedColumnFormula>\n");
+      }
+      if (!col.totals_row_formula.empty()) {
+        out.append(col.totals_row_formula_array ? "      <totalsRowFormula array=\"1\">" : "      <totalsRowFormula>");
+        AppendXmlEscaped(out, col.totals_row_formula);
+        out.append("</totalsRowFormula>\n");
+      }
+      if (!col.trailing_children_xml.empty()) {
+        out.append("      ");
+        out.append(col.trailing_children_xml);
+        out.push_back('\n');
+      }
       out.append("    </tableColumn>\n");
     }
   }
   out.append("  </tableColumns>\n");
   // `<tableStyleInfo>` follows `<tableColumns>` in the CT_Table schema.
-  // Re-emit the captured element verbatim so banded-row / style-name
-  // metadata survives the round trip.
-  if (!t.table_style_info_xml.empty()) {
-    out.append("  ");
-    out.append(t.table_style_info_xml);
-    out.push_back('\n');
+  if (t.style_info.present) {
+    const TableStyleInfo& info = t.style_info;
+    out.append("  <tableStyleInfo");
+    if (!info.name.empty()) {
+      out.append(" name=\"");
+      AppendXmlAttrEscaped(out, info.name);
+      out.push_back('"');
+    }
+    out.append(info.show_first_column ? " showFirstColumn=\"1\"" : " showFirstColumn=\"0\"");
+    out.append(info.show_last_column ? " showLastColumn=\"1\"" : " showLastColumn=\"0\"");
+    out.append(info.show_row_stripes ? " showRowStripes=\"1\"" : " showRowStripes=\"0\"");
+    out.append(info.show_column_stripes ? " showColumnStripes=\"1\"" : " showColumnStripes=\"0\"");
+    out.append(info.extra_attrs);
+    out.append("/>\n");
   }
   if (!t.ext_lst_xml.empty()) {
     out.append("  ");
@@ -541,8 +563,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       continue;
     }
     const Sheet& sheet = wb.sheet(i);
-    auto cresult =
-        AddPart(writer.get(), cplan.comments_path, write_comments(legacy_comments_with_stubs(sheet)), &written_paths);
+    auto cresult = AddPart(writer.get(), cplan.comments_path,
+                           write_comments(legacy_comments_with_stubs(sheet), sheet.comment_authors()), &written_paths);
     if (!cresult) {
       return std::move(cresult.error());
     }
@@ -552,8 +574,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
         return std::move(vresult.error());
       }
     } else {
-      auto vresult = AddPart(writer.get(), cplan.vml_path,
-                             write_vml_drawing(sheet.comment_anchor_set(), cplan.numeric_id), &written_paths);
+      auto vresult = AddPart(writer.get(), cplan.vml_path, write_vml_drawing(sheet.comment_shapes(), cplan.numeric_id),
+                             &written_paths);
       if (!vresult) {
         return std::move(vresult.error());
       }

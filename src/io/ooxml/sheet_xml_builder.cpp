@@ -25,6 +25,7 @@
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
+#include "io/sheet_view_xml.h"
 #include "io/sqref_text.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -381,104 +382,13 @@ std::string BuildPageBreaksXml(std::string_view element, const std::vector<Manua
 /// its default (zoom 100, no panes, tab not hidden) — Excel
 /// itself omits the element in that case.
 std::string BuildSheetViewXml(const SheetView& view) {
-  const bool zoom_default = view.zoom_scale == SheetView::kDefaultZoomScale;
-  const bool has_panes = view.divides_rows() || view.divides_cols();
-  const bool tab_default = !view.tab_hidden;
-  // Display attributes at their schema defaults contribute nothing.
-  const bool display_default = view.show_grid_lines && view.show_row_col_headers && view.show_zeros &&
-                               !view.right_to_left && !view.tab_selected && view.view_mode.empty();
-  if (zoom_default && !has_panes && tab_default && display_default && view.top_left_cell.empty() &&
-      view.selections.empty()) {
+  if (sheet_view_element_is_default(view) && !view.tab_hidden && view.extra_views_xml.empty()) {
     return std::string();
   }
-  std::string children;
-  if (has_panes) {
-    children.append("<pane");
-    if (view.is_frozen()) {
-      if (view.freeze_cols != 0U) {
-        append_xml_attr_uint(children, "xSplit", view.freeze_cols);
-      }
-      if (view.freeze_rows != 0U) {
-        append_xml_attr_uint(children, "ySplit", view.freeze_rows);
-      }
-    } else {
-      if (view.split_x > 0.0) {
-        append_xml_attr_number(children, "xSplit", view.split_x);
-      }
-      if (view.split_y > 0.0) {
-        append_xml_attr_number(children, "ySplit", view.split_y);
-      }
-    }
-    std::uint32_t pane_row = 0;
-    std::uint32_t pane_col = 0;
-    pane_origin(view, &pane_row, &pane_col);
-    append_xml_attr(children, "topLeftCell", a1::encode_a1(pane_row, pane_col));
-    // `topLeft` is the schema default, which Excel leaves unspelled.
-    if (view.effective_active_pane() != "topLeft") {
-      append_xml_attr(children, "activePane", view.effective_active_pane());
-    }
-    if (view.is_frozen()) {
-      append_xml_attr(children, "state", view.frozen_split ? "frozenSplit" : "frozen");
-    }
-    children.append("/>");
-  }
-  // Excel omits an A1 active cell, an A1 sqref, and a top-left selection that is both.
-  for (const ResolvedSelection& selection : resolve_view_selections(view)) {
-    const bool a1_active = selection.active_row == 0U && selection.active_col == 0U;
-    const bool a1_ranges = selection.ranges.size() == 1U && selection.ranges.front() == MergeRange{};
-    if (selection.pane == "topLeft" && a1_active && a1_ranges) {
-      continue;
-    }
-    children.append("<selection");
-    if (selection.pane != "topLeft") {
-      append_xml_attr(children, "pane", selection.pane);
-    }
-    if (!a1_active) {
-      append_xml_attr(children, "activeCell", a1::encode_a1(selection.active_row, selection.active_col));
-    }
-    if (!a1_ranges) {
-      append_xml_attr(children, "sqref", format_sqref_text(selection.ranges));
-    }
-    children.append("/>");
-  }
-  std::string out;
-  out.reserve(224);
-  out.append("<sheetViews><sheetView");
-  // Display attributes precede workbookViewId in Excel's own emission
-  // order. Emit each only when it differs from its schema default so a
-  // near-default sheet stays compact.
-  if (!view.show_grid_lines) {
-    emit_xsd_bool_attr(out, "showGridLines", false);
-  }
-  if (!view.show_row_col_headers) {
-    emit_xsd_bool_attr(out, "showRowColHeaders", false);
-  }
-  if (!view.show_zeros) {
-    emit_xsd_bool_attr(out, "showZeros", false);
-  }
-  if (view.right_to_left) {
-    emit_xsd_bool_attr(out, "rightToLeft", true);
-  }
-  if (view.tab_selected) {
-    emit_xsd_bool_attr(out, "tabSelected", true);
-  }
-  if (!view.view_mode.empty()) {
-    append_xml_attr(out, "view", view.view_mode);
-  }
-  if (!view.top_left_cell.empty()) {
-    append_xml_attr(out, "topLeftCell", view.top_left_cell);
-  }
-  out.append(" workbookViewId=\"0\"");
-  if (!zoom_default) {
-    append_xml_attr_uint(out, "zoomScale", view.zoom_scale);
-  }
-  if (children.empty()) {
-    out.append("/></sheetViews>");
-    return out;
-  }
-  out.push_back('>');
-  out.append(children);
-  out.append("</sheetView></sheetViews>");
+  std::string out("<sheetViews>");
+  out.append(build_sheet_view_element_xml(view, 0U));
+  out.append(view.extra_views_xml);
+  out.append("</sheetViews>");
   return out;
 }
 
@@ -499,9 +409,10 @@ std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
   if (defaults.has_default_col_width) {
     append_xml_attr_number(out, "defaultColWidth", defaults.default_col_width);
   }
-  if (defaults.has_default_row_height) {
-    append_xml_attr_number(out, "defaultRowHeight", defaults.default_row_height);
-  }
+  // The schema requires defaultRowHeight whenever the element is written.
+  append_xml_attr_number(
+      out, "defaultRowHeight",
+      defaults.has_default_row_height ? defaults.default_row_height : ooxml_defaults::kStandardRowHeightPt);
   if (defaults.custom_height) {
     emit_xsd_bool_attr(out, "customHeight", true);
   }
@@ -622,6 +533,9 @@ std::string BuildColsXml(const SheetLayout& layout) {
     if (col.outline_level != 0U) {
       append_xml_attr_uint(out, "outlineLevel", col.outline_level);
     }
+    if (col.collapsed) {
+      emit_xsd_bool_attr(out, "collapsed", true);
+    }
     if (col.show_phonetic) {
       emit_xsd_bool_attr(out, "phonetic", true);
     }
@@ -700,7 +614,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
                               const parser::ExternalBookIndexer* indexer) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
-  const std::string sheet_format_xml = BuildSheetFormatPrXml(sheet.format_defaults());
+  const std::string sheet_format_xml =
+      BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
   const std::string cols_xml = BuildColsXml(sheet.layout());
   const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
   // Conditional-format blocks live between <sheetData> and <tableParts>

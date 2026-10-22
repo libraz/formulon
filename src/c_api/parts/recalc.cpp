@@ -190,6 +190,84 @@ extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t
   return 0;
 }
 
+namespace {
+
+/// Reads a boolean workbook flag into an `int32_t` out-parameter.
+template <typename Read>
+fm_status_t read_workbook_flag(const fm_workbook_t* wb, std::int32_t* out, const char* fn, Read read) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "NULL argument");
+  }
+  *out = read(wb->workbook()) ? 1 : 0;
+  return 0;
+}
+
+template <typename Write>
+fm_status_t write_workbook_flag(fm_workbook_t* wb, const char* fn, Write write) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn, "wb is NULL");
+  }
+  write(wb->workbook());
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_full_precision(const fm_workbook_t* wb, std::int32_t* out) {
+  return read_workbook_flag(wb, out, "fm_workbook_full_precision",
+                            [](const formulon::Workbook& w) { return w.calc_options().full_precision; });
+}
+
+extern "C" fm_status_t fm_workbook_set_full_precision(fm_workbook_t* wb, std::int32_t full_precision) {
+  return write_workbook_flag(wb, "fm_workbook_set_full_precision", [full_precision](formulon::Workbook& w) {
+    w.mutable_calc_options().full_precision = full_precision != 0;
+  });
+}
+
+extern "C" fm_status_t fm_workbook_calc_on_save(const fm_workbook_t* wb, std::int32_t* out) {
+  return read_workbook_flag(wb, out, "fm_workbook_calc_on_save",
+                            [](const formulon::Workbook& w) { return w.calc_options().calc_on_save; });
+}
+
+extern "C" fm_status_t fm_workbook_set_calc_on_save(fm_workbook_t* wb, std::int32_t calc_on_save) {
+  return write_workbook_flag(wb, "fm_workbook_set_calc_on_save", [calc_on_save](formulon::Workbook& w) {
+    w.mutable_calc_options().calc_on_save = calc_on_save != 0;
+  });
+}
+
+extern "C" fm_status_t fm_workbook_ref_mode(const fm_workbook_t* wb, fm_ref_mode_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_ref_mode: NULL argument");
+  }
+  *out = wb->workbook().calc_options().ref_mode == formulon::RefMode::kR1C1 ? FM_REF_MODE_R1C1 : FM_REF_MODE_A1;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_ref_mode(fm_workbook_t* wb, std::int32_t mode) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_ref_mode: wb is NULL");
+  }
+  if (mode != FM_REF_MODE_A1 && mode != FM_REF_MODE_R1C1) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_set_ref_mode: unknown mode");
+  }
+  wb->workbook().mutable_calc_options().ref_mode =
+      mode == FM_REF_MODE_R1C1 ? formulon::RefMode::kR1C1 : formulon::RefMode::kA1;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_date1904(const fm_workbook_t* wb, std::int32_t* out) {
+  return read_workbook_flag(wb, out, "fm_workbook_date1904", [](const formulon::Workbook& w) { return w.date1904(); });
+}
+
+extern "C" fm_status_t fm_workbook_set_date1904(fm_workbook_t* wb, std::int32_t date1904) {
+  return write_workbook_flag(wb, "fm_workbook_set_date1904",
+                             [date1904](formulon::Workbook& w) { w.set_date1904(date1904 != 0); });
+}
+
 extern "C" fm_status_t fm_workbook_pinned_now(const fm_workbook_t* wb, fm_civil_time_t* out_now,
                                               std::int32_t* out_pinned) {
   clear_last_error();

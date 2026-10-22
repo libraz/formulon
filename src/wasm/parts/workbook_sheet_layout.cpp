@@ -60,6 +60,7 @@ bool column_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index
   out->set("width", entry.width);
   out->set("hidden", entry.hidden);
   out->set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+  out->set("collapsed", entry.collapsed ? 1 : 0);
   // Normalize legacy non-zero widths at the binding boundary as well as in
   // the C getter, so a mixed-version host still sees logical presence.
   out->set("hasWidth", (entry.has_width || entry.width != 0.0) ? 1 : 0);
@@ -78,6 +79,7 @@ bool row_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index, e
   out->set("height", entry.height);
   out->set("hidden", entry.hidden);
   out->set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+  out->set("collapsed", entry.collapsed ? 1 : 0);
   out->set("hasStyle", entry.has_style ? 1 : 0);
   out->set("styleXf", entry.style_xf);
   out->set("hasHeight", entry.has_height ? 1 : 0);
@@ -273,6 +275,10 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
   r.view.topLeftCol = v.top_left_col;
   r.view.paneTopLeftRow = v.pane_top_left_row;
   r.view.paneTopLeftCol = v.pane_top_left_col;
+  r.view.splitX = v.split_x;
+  r.view.splitY = v.split_y;
+  r.view.showFormulas = v.show_formulas;
+  r.view.showOutlineSymbols = v.show_outline_symbols;
   r.status = ok_status();
   return r;
 }
@@ -422,6 +428,20 @@ JsStatus JsWorkbook::setSheetShowZeros(uint32_t sheet, bool show) {
   return status_from_rc(fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0));
 }
 
+JsStatus JsWorkbook::setSheetShowFormulas(uint32_t sheet, bool show) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_show_formulas(handle_, sheet, show ? 1 : 0));
+}
+
+JsStatus JsWorkbook::setSheetShowOutlineSymbols(uint32_t sheet, bool show) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_show_outline_symbols(handle_, sheet, show ? 1 : 0));
+}
+
 JsStatus JsWorkbook::setSheetRightToLeft(uint32_t sheet, bool rightToLeft) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
@@ -441,6 +461,13 @@ JsStatus JsWorkbook::setSheetPaneTopLeft(uint32_t sheet, uint32_t row, uint32_t 
     return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_pane_top_left(handle_, sheet, row, col));
+}
+
+JsStatus JsWorkbook::setSheetSplit(uint32_t sheet, double xTwips, double yTwips) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_split(handle_, sheet, xTwips, yTwips));
 }
 
 emscripten::val JsWorkbook::getSheetSelection(uint32_t sheet) const {
@@ -520,6 +547,13 @@ JsStatus JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t l
   return status_from_rc(fm_sheet_set_column_outline(handle_, sheet, first, last, clamp_outline_level(level)));
 }
 
+JsStatus JsWorkbook::setColumnCollapsed(uint32_t sheet, uint32_t first, uint32_t last, bool collapsed) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_column_collapsed(handle_, sheet, first, last, collapsed ? 1 : 0));
+}
+
 JsStatus JsWorkbook::setColumnStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
@@ -559,6 +593,13 @@ JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level)
     return invalid_handle_status();
   }
   return status_from_rc(fm_sheet_set_row_outline(handle_, sheet, row, clamp_outline_level(level)));
+}
+
+JsStatus JsWorkbook::setRowCollapsed(uint32_t sheet, uint32_t row, bool collapsed) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_row_collapsed(handle_, sheet, row, collapsed ? 1 : 0));
 }
 
 JsStatus JsWorkbook::setRowStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex) {
@@ -687,6 +728,8 @@ emscripten::val JsWorkbook::getSheetFormatDefaults(uint32_t sheet) const {
   o.set("baseColWidth", d.base_col_width);
   o.set("hasDefaultColWidth", d.has_default_col_width != 0);
   o.set("hasDefaultRowHeight", d.has_default_row_height != 0);
+  o.set("customHeight", d.custom_height != 0);
+  o.set("zeroHeight", d.zero_height != 0);
   o.set("effectiveDefaultColWidth", d.effective_default_col_width);
   o.set("effectiveDefaultRowHeight", d.effective_default_row_height);
   return o;
@@ -706,7 +749,13 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
       reader.value(defaults, "hasDefaultRowHeight", "format.hasDefaultRowHeight");
   const bool default_col_width_present = js_value_present(default_col_width);
   const bool default_row_height_present = js_value_present(default_row_height);
+  const emscripten::val custom_height = reader.value(defaults, "customHeight", "format.customHeight");
+  const emscripten::val zero_height = reader.value(defaults, "zeroHeight", "format.zeroHeight");
+  // An omitted flag keeps the stored one.
   fm_sheet_format_defaults d{};
+  if (handle_ != nullptr && fm_sheet_get_format_defaults(handle_, sheet, &d) != 0) {
+    d = fm_sheet_format_defaults{};
+  }
   d.default_col_width = reader.number_value(default_col_width, 0.0, "format.defaultColWidth");
   d.default_row_height = reader.number_value(default_row_height, 0.0, "format.defaultRowHeight");
   d.base_col_width = reader.number_value(base_col_width, 8.0, "format.baseColWidth");
@@ -714,6 +763,8 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
       reader.boolean_value(has_default_col_width, default_col_width_present, "format.hasDefaultColWidth") ? 1 : 0;
   d.has_default_row_height =
       reader.boolean_value(has_default_row_height, default_row_height_present, "format.hasDefaultRowHeight") ? 1 : 0;
+  d.custom_height = reader.boolean_value(custom_height, d.custom_height != 0, "format.customHeight") ? 1 : 0;
+  d.zero_height = reader.boolean_value(zero_height, d.zero_height != 0, "format.zeroHeight") ? 1 : 0;
   if (!reader.ok()) {
     return binding_error_status(kInvalidArgument, reader.message().c_str());
   }

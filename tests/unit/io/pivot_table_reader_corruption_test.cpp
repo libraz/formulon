@@ -77,11 +77,15 @@ TEST(PivotTableReader, UnmodelledChildrenCapturedAsPassthrough) {
   auto table_or = read_pivot_table_definition(Bytes(xml));
   ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
   const std::string& passthrough = table_or.value().raw_passthrough_xml();
-  // Both unrecognised elements survive verbatim (order-preserving).
+  // The unrecognised element survives verbatim.
   EXPECT_NE(passthrough.find("<calculatedItems"), std::string::npos);
   EXPECT_NE(passthrough.find("formula=\"=A1/B1\""), std::string::npos);
-  EXPECT_NE(passthrough.find("<pivotTableStyleInfo"), std::string::npos);
-  EXPECT_NE(passthrough.find("PivotStyleLight16"), std::string::npos);
+  // The style info is modelled, so it is not part of the raw tail.
+  EXPECT_EQ(passthrough.find("<pivotTableStyleInfo"), std::string::npos);
+  ASSERT_TRUE(table_or.value().style_info().has_value());
+  EXPECT_EQ(table_or.value().style_info()->name, "PivotStyleLight16");
+  EXPECT_TRUE(table_or.value().style_info()->show_row_headers);
+  EXPECT_FALSE(table_or.value().style_info()->show_col_headers);
   // Recognised elements (location) are NOT in the passthrough.
   EXPECT_EQ(passthrough.find("<location"), std::string::npos);
 }

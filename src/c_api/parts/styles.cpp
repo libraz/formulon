@@ -11,6 +11,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -192,6 +193,14 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record* out) noexcept {
   out->has_family = f.has_family ? 1 : 0;
   out->has_charset = f.has_charset ? 1 : 0;
   out->has_size = f.has_size ? 1 : 0;
+  out->outline = f.outline ? 1 : 0;
+  out->shadow = f.shadow ? 1 : 0;
+  out->condense = f.condense ? 1 : 0;
+  out->extend = f.extend ? 1 : 0;
+  out->has_outline = f.has_outline ? 1 : 0;
+  out->has_shadow = f.has_shadow ? 1 : 0;
+  out->has_condense = f.has_condense ? 1 : 0;
+  out->has_extend = f.has_extend ? 1 : 0;
   out->underline = f.underline;
   out->vert_align = f.vert_align;
   out->family = f.family;
@@ -200,12 +209,35 @@ void font_to_c(const formulon::FontRecord& f, fm_font_record* out) noexcept {
   color_to_c(f.color, &out->color);
 }
 
-void fill_to_c(const formulon::FillRecord& f, fm_fill_record* out) noexcept {
+void fill_to_c(const formulon::FillRecord& f, fm_fill_record* out, fm_workbook_t* wb) {
   out->pattern = f.pattern;
   out->fg_argb = f.fg_argb;
   out->bg_argb = f.bg_argb;
   color_to_c(f.fg, &out->fg);
   color_to_c(f.bg, &out->bg);
+  out->has_gradient = f.has_gradient ? 1 : 0;
+  out->gradient_type = f.gradient.path ? FM_GRADIENT_PATH : FM_GRADIENT_LINEAR;
+  out->gradient_degree = f.gradient.degree;
+  out->gradient_left = f.gradient.left;
+  out->gradient_right = f.gradient.right;
+  out->gradient_top = f.gradient.top;
+  out->gradient_bottom = f.gradient.bottom;
+  out->gradient_stops = nullptr;
+  out->gradient_stop_count = 0;
+  if (!f.has_gradient) {
+    return;
+  }
+  std::vector<fm_gradient_stop> stops;
+  stops.reserve(f.gradient.stops.size());
+  for (const formulon::GradientStop& stop : f.gradient.stops) {
+    fm_gradient_stop c{};
+    c.position = stop.position;
+    c.color_argb = stop.argb;
+    color_to_c(stop.color, &c.color);
+    stops.push_back(c);
+  }
+  out->gradient_stop_count = stops.size();
+  out->gradient_stops = wb->gradient_stop_scratch.adopt(std::move(stops));
 }
 
 void border_side_to_c(const formulon::BorderSide& src, fm_border_side* out) noexcept {
@@ -272,7 +304,8 @@ extern "C" fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index
         formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_fill: fill_index out of range",
         "fill_index=" + std::to_string(fill_index) + " fills_count=" + std::to_string(styles.fills.size()));
   }
-  fill_to_c(styles.fills[fill_index], out);
+  wb->gradient_stop_scratch.clear();
+  fill_to_c(styles.fills[fill_index], out, wb);
   return 0;
 }
 
@@ -313,6 +346,7 @@ extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, 
         "dxf_index=" + std::to_string(dxf_index) + " dxfs_count=" + std::to_string(styles.dxfs.size()));
   }
   *out = fm_dxf_record{};
+  wb->gradient_stop_scratch.clear();
   const formulon::DifferentialFormat& dxf = styles.dxfs[dxf_index];
   out->font_engaged = dxf.has_font ? 1 : 0;
   if (dxf.has_font) {
@@ -320,7 +354,7 @@ extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, 
   }
   out->fill_engaged = dxf.has_fill ? 1 : 0;
   if (dxf.has_fill) {
-    fill_to_c(dxf.fill, &out->fill);
+    fill_to_c(dxf.fill, &out->fill, wb);
   }
   out->border_engaged = dxf.has_border ? 1 : 0;
   if (dxf.has_border) {

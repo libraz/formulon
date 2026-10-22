@@ -140,6 +140,13 @@ void AppendFontToggle(std::string& out, std::string_view name, bool was_explicit
   out.append("/>");
 }
 
+void AppendFontCondenseExtendOutlineShadow(std::string& out, const FontRecord& f) {
+  AppendFontToggle(out, "condense", f.has_condense, f.condense);
+  AppendFontToggle(out, "extend", f.has_extend, f.extend);
+  AppendFontToggle(out, "outline", f.has_outline, f.outline);
+  AppendFontToggle(out, "shadow", f.has_shadow, f.shadow);
+}
+
 void AppendFontSize(std::string& out, double size) {
   const double emitted_size = std::isfinite(size) && size >= 0.0 ? size : FontRecord{}.size;
   out.append("<sz");
@@ -208,6 +215,7 @@ void AppendFonts(std::string& out, const StylesTable& table) {
       AppendFontToggle(out, "b", f.has_bold, f.bold);
       AppendFontToggle(out, "i", f.has_italic, f.italic);
       AppendFontToggle(out, "strike", f.has_strike, f.strike);
+      AppendFontCondenseExtendOutlineShadow(out, f);
       if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
         out.append("<u");
         append_xml_attr(out, "val", uname);
@@ -437,6 +445,59 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
   out.append("  </cellStyles>\n");
 }
 
+/// Emits `<tableStyles>` when the source carried it or a custom style exists.
+void AppendTableStyles(std::string& out, const StylesTable& table) {
+  const TableStylesSection& section = table.table_styles;
+  if (!section.present && section.styles.empty()) {
+    return;
+  }
+  out.append("  <tableStyles");
+  append_xml_attr_uint(out, "count", section.styles.size());
+  if (!section.default_table_style.empty()) {
+    append_xml_attr(out, "defaultTableStyle", section.default_table_style);
+  }
+  if (!section.default_pivot_style.empty()) {
+    append_xml_attr(out, "defaultPivotStyle", section.default_pivot_style);
+  }
+  out.append(section.extra_attrs);
+  if (section.styles.empty()) {
+    out.append("/>\n");
+    return;
+  }
+  out.append(">\n");
+  for (const CustomTableStyle& style : section.styles) {
+    out.append("    <tableStyle");
+    append_xml_attr(out, "name", style.name);
+    if (!style.pivot) {
+      emit_xsd_bool_attr(out, "pivot", false);
+    }
+    if (!style.table) {
+      emit_xsd_bool_attr(out, "table", false);
+    }
+    append_xml_attr_uint(out, "count", style.elements.size());
+    out.append(style.extra_attrs);
+    if (style.elements.empty()) {
+      out.append("/>\n");
+      continue;
+    }
+    out.append(">");
+    for (const TableStyleElement& element : style.elements) {
+      out.append("<tableStyleElement");
+      append_xml_attr(out, "type", element.type);
+      if (element.size != 1U) {
+        append_xml_attr_uint(out, "size", element.size);
+      }
+      if (element.dxf_id.has_value()) {
+        append_xml_attr_uint(out, "dxfId", *element.dxf_id);
+      }
+      out.append(element.extra_attrs);
+      out.append("/>");
+    }
+    out.append("</tableStyle>\n");
+  }
+  out.append("  </tableStyles>\n");
+}
+
 /// Emits `<colors>`: the `<indexedColors>` palette followed by the other
 /// retained children (`colors_xml` is a `<colors>` element holding them).
 void AppendColors(std::string& out, const StylesTable& table) {
@@ -466,6 +527,7 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
   AppendFontToggle(out, "b", f.has_bold, f.bold);
   AppendFontToggle(out, "i", f.has_italic, f.italic);
   AppendFontToggle(out, "strike", f.has_strike, f.strike);
+  AppendFontCondenseExtendOutlineShadow(out, f);
   if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
     out.append("<u");
     append_xml_attr(out, "val", uname);
@@ -489,7 +551,48 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
   out.append("</font>");
 }
 
+void AppendGradientFill(std::string& out, const GradientFill& gradient) {
+  out.append("<gradientFill");
+  if (gradient.path) {
+    append_xml_attr(out, "type", "path");
+  }
+  if (gradient.degree != 0.0) {
+    append_xml_attr_number(out, "degree", gradient.degree);
+  }
+  if (gradient.left != 0.0) {
+    append_xml_attr_number(out, "left", gradient.left);
+  }
+  if (gradient.right != 0.0) {
+    append_xml_attr_number(out, "right", gradient.right);
+  }
+  if (gradient.top != 0.0) {
+    append_xml_attr_number(out, "top", gradient.top);
+  }
+  if (gradient.bottom != 0.0) {
+    append_xml_attr_number(out, "bottom", gradient.bottom);
+  }
+  if (gradient.stops.empty()) {
+    out.append("/>");
+    return;
+  }
+  out.append(">");
+  for (const GradientStop& stop : gradient.stops) {
+    out.append("<stop");
+    append_xml_attr_number(out, "position", stop.position);
+    out.append(">");
+    AppendColor(out, "color", stop.color, stop.argb);
+    out.append("</stop>");
+  }
+  out.append("</gradientFill>");
+}
+
 void AppendFillFragment(std::string& out, const FillRecord& fill) {
+  if (fill.has_gradient) {
+    out.append("<fill>");
+    AppendGradientFill(out, fill.gradient);
+    out.append("</fill>");
+    return;
+  }
   out.append("<fill><patternFill");
   append_xml_attr(out, "patternType", FillPatternName(fill.pattern));
   const bool has_fg = has_color(fill.fg, fill.fg_argb);
@@ -597,11 +700,7 @@ std::string write_styles(const StylesTable& table) {
   AppendCellXfs(out, table);
   AppendCellStyles(out, table);
   AppendDxfs(out, table);
-  if (!table.table_styles_xml.empty()) {
-    out.append("  ");
-    out.append(table.table_styles_xml);
-    out.push_back('\n');
-  }
+  AppendTableStyles(out, table);
   AppendColors(out, table);
   for (const std::string& raw : table.unknown_top_level_xml) {
     out.append("  ");

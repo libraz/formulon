@@ -21,6 +21,7 @@
 
 #include "io/xlsb/func_id_table.h"
 #include "io/xlsb/ptg.h"
+#include "io/xlsb/ptg_list.h"
 #include "io/xlsb/ptg_space.h"
 #include "io/xlsb/record.h"
 #include "parser/reference.h"
@@ -299,7 +300,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                                               const std::vector<XlsbName>& name_table,
                                               const std::vector<XlsbSheetRange>& sheet_ranges,
                                               const XlsbExternalBooks& external_books, std::int32_t host_itab,
-                                              std::optional<PtgBaseCell> base, parser::FormulaWhitespace* whitespace) {
+                                              std::optional<PtgBaseCell> base, parser::FormulaWhitespace* whitespace,
+                                              const std::vector<TableMetadata>* tables) {
   std::vector<parser::AstNode*> stack;
   // `PtgArray` stores only an 8-byte placeholder inline (see its case
   // below); the real dimensions + elements are consumed from this
@@ -716,6 +718,18 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     // Set by the tokens a pending `PtgAttrSpace` passes over.
     bool keeps_pending_space = false;
     const std::uint8_t first_byte = cursor.data[0];
+    if (first_byte == kPtgList && cursor.size >= 2U && cursor.data[1] == kEptgList) {
+      auto list_or = decode_ptg_list(cursor, arena, tables);
+      if (!list_or) {
+        return std::move(list_or.error());
+      }
+      stack.push_back(list_or.value());
+      if (pending_spaces != 0) {
+        record_space(PtgKind::Area, stack.back());
+        pending_spaces = 0;
+      }
+      continue;
+    }
     const PtgInfo* info = lookup_ptg_from_wire(first_byte);
     if (info == nullptr) {
       return unsupported_ptg(first_byte, nullptr);

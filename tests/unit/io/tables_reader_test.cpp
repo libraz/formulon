@@ -314,6 +314,68 @@ TEST(TablesReader, CalculatedColumnFormulaWithOoxmlControlCharacterEscapeDecoded
                                                                                5));
 }
 
+TEST(TablesReader, TotalsRowFormulaArrayFlagRoundTrips) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"1\" name=\"T\" "
+      "displayName=\"T\" ref=\"A1:A3\" totalsRowCount=\"1\">"
+      "<tableColumns count=\"1\"><tableColumn id=\"1\" name=\"N\" totalsRowFunction=\"custom\">"
+      "<totalsRowFormula array=\"1\">SUM(T[N])</totalsRowFormula>"
+      "</tableColumn></tableColumns></table>");
+  auto table_or = read_table(Bytes(xml), 0);
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_TRUE(table_or.value().columns[0].totals_row_formula_array);
+  const std::string written = SerializeTablePart(table_or.value());
+  EXPECT_NE(written.find("<totalsRowFormula array=\"1\">SUM(T[N])</totalsRowFormula>"), std::string::npos) << written;
+  auto reread_or = read_table(Bytes(written), 0);
+  ASSERT_TRUE(static_cast<bool>(reread_or));
+  EXPECT_TRUE(reread_or.value().columns[0].totals_row_formula_array);
+}
+
+TEST(TablesReader, TotalsRowFormulaAndTrailingColumnChildrenRoundTrip) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"1\" name=\"T\" "
+      "displayName=\"T\" ref=\"A1:A3\" totalsRowCount=\"1\">"
+      "<tableColumns count=\"1\"><tableColumn id=\"1\" name=\"N\" totalsRowFunction=\"custom\">"
+      "<calculatedColumnFormula>[@N]*2</calculatedColumnFormula>"
+      "<totalsRowFormula>SUM(T[N])&amp;\"x\"</totalsRowFormula>"
+      "<xmlColumnPr mapId=\"1\" xpath=\"/r/n\" xmlDataType=\"string\"/>"
+      "</tableColumn></tableColumns>"
+      "<tableStyleInfo name=\"Custom\" showFirstColumn=\"1\" showRowStripes=\"1\" futureFlag=\"7\"/>"
+      "</table>");
+  auto table_or = read_table(Bytes(xml), 0);
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const TableMetadata& table = table_or.value();
+  ASSERT_EQ(table.columns.size(), 1U);
+  EXPECT_EQ(table.columns[0].totals_row_formula, "SUM(T[N])&\"x\"");
+  EXPECT_EQ(table.columns[0].calculated_column_formula, "[@N]*2");
+  EXPECT_NE(table.columns[0].trailing_children_xml.find("<xmlColumnPr"), std::string::npos);
+  EXPECT_TRUE(table.style_info.present);
+  EXPECT_EQ(table.style_info.name, "Custom");
+  EXPECT_TRUE(table.style_info.show_first_column);
+  EXPECT_FALSE(table.style_info.show_last_column);
+  EXPECT_TRUE(table.style_info.show_row_stripes);
+  EXPECT_FALSE(table.style_info.show_column_stripes);
+
+  const std::string written = SerializeTablePart(table);
+  const std::size_t calc = written.find("<calculatedColumnFormula>[@N]*2</calculatedColumnFormula>");
+  const std::size_t totals = written.find("<totalsRowFormula>SUM(T[N])&amp;");
+  const std::size_t xml_pr = written.find("<xmlColumnPr");
+  ASSERT_NE(calc, std::string::npos);
+  ASSERT_NE(totals, std::string::npos);
+  ASSERT_NE(xml_pr, std::string::npos);
+  EXPECT_LT(calc, totals);
+  EXPECT_LT(totals, xml_pr);
+  EXPECT_NE(written.find("<tableStyleInfo name=\"Custom\" showFirstColumn=\"1\" showLastColumn=\"0\" "
+                         "showRowStripes=\"1\" showColumnStripes=\"0\" futureFlag=\"7\"/>"),
+            std::string::npos);
+  auto reread_or = read_table(Bytes(written), 0);
+  ASSERT_TRUE(static_cast<bool>(reread_or)) << reread_or.error().message;
+  EXPECT_EQ(reread_or.value().columns[0].totals_row_formula, table.columns[0].totals_row_formula);
+  EXPECT_EQ(reread_or.value().columns[0].trailing_children_xml, table.columns[0].trailing_children_xml);
+}
+
 TEST(TablesReader, MissingCalculatedColumnFormulaIsEmptyString) {
   std::string xml(kXmlDecl);
   xml.append(

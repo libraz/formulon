@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include "io/xlsb/brt_color.h"
@@ -61,6 +62,14 @@ void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {
     flags |= 0x0002U;
   if (font.strike)
     flags |= 0x0008U;
+  if (font.outline)
+    flags |= 0x0010U;
+  if (font.shadow)
+    flags |= 0x0020U;
+  if (font.condense)
+    flags |= 0x0040U;
+  if (font.extend)
+    flags |= 0x0080U;
   emit_u16(payload, flags);
   emit_u16(payload, font.bold ? 700U : 400U);
   emit_u16(payload, font.vert_align == 1U ? 1U : (font.vert_align == 2U ? 2U : 0U));
@@ -74,8 +83,39 @@ void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtFont), payload);
 }
 
+/// Gradient type, then degree, left, right, top, bottom: the order BrtFill
+/// and XFPropGradient share.
+void EmitGradientGeometry(std::vector<std::uint8_t>& payload, const GradientFill& gradient) {
+  emit_u32(payload, gradient.path ? 1U : 0U);
+  emit_double(payload, gradient.path ? 0.0 : gradient.degree);
+  for (double edge : {gradient.left, gradient.right, gradient.top, gradient.bottom}) {
+    emit_double(payload, gradient.path ? edge : 0.0);
+  }
+}
+
+std::size_t GradientStopCount(const GradientFill& gradient) {
+  return std::min(gradient.stops.size(), kMaxBrtGradientStops);
+}
+
 void EmitFill(std::vector<std::uint8_t>& out, const FillRecord& fill) {
   std::vector<std::uint8_t> payload;
+  if (fill.has_gradient) {
+    // fls 0x28: the pattern colours are ignored, the gradient tail is live.
+    emit_u32(payload, kBrtFillGradient);
+    EmitColor(payload, fill.fg_argb, fill.fg);
+    EmitColor(payload, fill.bg_argb, fill.bg);
+    EmitGradientGeometry(payload, fill.gradient);
+    const std::size_t stops = GradientStopCount(fill.gradient);
+    emit_u32(payload, static_cast<std::uint32_t>(stops));
+    for (std::size_t i = 0; i < stops; ++i) {
+      // GradientStop (2.5.68): BrtColor, then Xnum position.
+      const GradientStop& stop = fill.gradient.stops[i];
+      EmitColor(payload, stop.argb, stop.color);
+      emit_double(payload, stop.position);
+    }
+    emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtFill), payload);
+    return;
+  }
   emit_u32(payload, fill.pattern <= 18U ? fill.pattern : 0U);
   EmitColor(payload, fill.fg_argb, fill.fg);
   EmitColor(payload, fill.bg_argb, fill.bg);
@@ -193,7 +233,21 @@ std::vector<std::uint8_t> ColorProp(std::uint32_t argb, const ColorSpec& spec) {
 void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
   std::vector<std::uint8_t> props;
   std::uint16_t count = 0;
-  if (dxf.has_fill) {
+  if (dxf.has_fill && dxf.fill.has_gradient) {
+    // XFProps forbids a pattern (type 0) beside a gradient (types 3 / 4).
+    const GradientFill& gradient = dxf.fill.gradient;
+    std::vector<std::uint8_t> geometry;
+    EmitGradientGeometry(geometry, gradient);
+    AppendProp(props, count, kDxfPropFillGradient, geometry);
+    for (std::size_t i = 0; i < GradientStopCount(gradient); ++i) {
+      const GradientStop& stop = gradient.stops[i];
+      std::vector<std::uint8_t> data;
+      emit_u16(data, 0U);
+      emit_double(data, stop.position);
+      EmitColor(data, stop.argb, stop.color);
+      AppendProp(props, count, kDxfPropGradientStop, data);
+    }
+  } else if (dxf.has_fill) {
     const FillRecord& fill = dxf.fill;
     AppendProp(props, count, kDxfPropFillPattern, {static_cast<std::uint8_t>(fill.pattern <= 18U ? fill.pattern : 0U)});
     if (fill.fg.kind != ColorSpec::Kind::kNone) {
@@ -212,8 +266,11 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
     if (!font.name.empty()) {
       AppendProp(props, count, kDxfPropFontName, ShortWideString(font.name));
     }
-    if (font.has_bold && font.bold) {
-      AppendProp(props, count, kDxfPropFontWeight, {0xBC, 0x02});  // 700
+    // A stated toggle is written even when off: a dxf `val="0"` clears it.
+    if (font.has_bold) {
+      std::vector<std::uint8_t> weight;
+      emit_u16(weight, font.bold ? 700U : 400U);
+      AppendProp(props, count, kDxfPropFontWeight, weight);
     }
     if (font.underline != 0U) {
       AppendProp(props, count, kDxfPropUnderline,
@@ -222,11 +279,14 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
     if (font.vert_align == 1U || font.vert_align == 2U) {
       AppendProp(props, count, kDxfPropVertAlign, {font.vert_align, 0x00});
     }
-    if (font.has_italic && font.italic) {
-      AppendProp(props, count, kDxfPropItalic, {0x01});
-    }
-    if (font.has_strike && font.strike) {
-      AppendProp(props, count, kDxfPropStrike, {0x01});
+    const std::tuple<std::uint16_t, bool, bool> toggles[] = {
+        {kDxfPropItalic, font.has_italic, font.italic},       {kDxfPropStrike, font.has_strike, font.strike},
+        {kDxfPropOutline, font.has_outline, font.outline},    {kDxfPropShadow, font.has_shadow, font.shadow},
+        {kDxfPropCondense, font.has_condense, font.condense}, {kDxfPropExtend, font.has_extend, font.extend}};
+    for (const auto& [type, stated, on] : toggles) {
+      if (stated) {
+        AppendProp(props, count, type, {static_cast<std::uint8_t>(on ? 1U : 0U)});
+      }
     }
     if (font.has_size) {
       std::vector<std::uint8_t> twips;

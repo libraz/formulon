@@ -187,6 +187,158 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::GetCommentVisible(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeNumberResult(env, kBindingInvalidHandle, 0);
+  }
+  int32_t visible = 0;
+  const fm_status_t rc =
+      fm_sheet_get_comment_visible(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &visible);
+  return MakeNumberResult(env, rc, visible);
+}
+
+Napi::Value Workbook::SetCommentVisible(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    return fm_sheet_set_comment_visible(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgFlag(info, 3));
+  });
+}
+
+// ---- Protection records ---------------------------------------------
+
+Napi::Value Workbook::GetWorkbookProtection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeFieldResult(env, NullHandleError(env), "protection", env.Null());
+  }
+  fm_workbook_protection_t p{};
+  const fm_status_t rc = fm_workbook_get_protection(handle_, &p);
+  if (rc != 0) {
+    return MakeFieldResult(env, MakeErrorStatus(env, rc), "protection", env.Null());
+  }
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("lockStructure", Napi::Number::New(env, p.lock_structure));
+  o.Set("lockWindows", Napi::Number::New(env, p.lock_windows));
+  o.Set("lockRevision", Napi::Number::New(env, p.lock_revision));
+  o.Set("workbookSpinCount", Napi::Number::New(env, p.workbook_spin_count));
+  o.Set("revisionsSpinCount", Napi::Number::New(env, p.revisions_spin_count));
+  o.Set("workbookPassword", JsString(env, p.workbook_password));
+  o.Set("workbookAlgorithmName", JsString(env, p.workbook_algorithm_name));
+  o.Set("workbookHashValue", JsString(env, p.workbook_hash_value));
+  o.Set("workbookSaltValue", JsString(env, p.workbook_salt_value));
+  o.Set("revisionsPassword", JsString(env, p.revisions_password));
+  o.Set("revisionsAlgorithmName", JsString(env, p.revisions_algorithm_name));
+  o.Set("revisionsHashValue", JsString(env, p.revisions_hash_value));
+  o.Set("revisionsSaltValue", JsString(env, p.revisions_salt_value));
+  return MakeFieldResult(env, MakeOkStatus(env), "protection", o);
+}
+
+Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  Napi::Object in = ArgObjectOrEmpty(info, 0);
+  CheckedSpecReader reader(env);
+  std::string text[8];
+  (void)reader.String(in, "workbookPassword", &text[0]);
+  (void)reader.String(in, "workbookAlgorithmName", &text[1]);
+  (void)reader.String(in, "workbookHashValue", &text[2]);
+  (void)reader.String(in, "workbookSaltValue", &text[3]);
+  (void)reader.String(in, "revisionsPassword", &text[4]);
+  (void)reader.String(in, "revisionsAlgorithmName", &text[5]);
+  (void)reader.String(in, "revisionsHashValue", &text[6]);
+  (void)reader.String(in, "revisionsSaltValue", &text[7]);
+  fm_workbook_protection_t p{};
+  p.lock_structure = reader.I32(in, "lockStructure", 0);
+  p.lock_windows = reader.I32(in, "lockWindows", 0);
+  p.lock_revision = reader.I32(in, "lockRevision", 0);
+  p.workbook_spin_count = reader.U32(in, "workbookSpinCount", 0U);
+  p.revisions_spin_count = reader.U32(in, "revisionsSpinCount", 0U);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  p.workbook_password = text[0].c_str();
+  p.workbook_algorithm_name = text[1].c_str();
+  p.workbook_hash_value = text[2].c_str();
+  p.workbook_salt_value = text[3].c_str();
+  p.revisions_password = text[4].c_str();
+  p.revisions_algorithm_name = text[5].c_str();
+  p.revisions_hash_value = text[6].c_str();
+  p.revisions_salt_value = text[7].c_str();
+  return MakeStatus(env, fm_workbook_set_protection(handle_, &p));
+}
+
+namespace {
+
+Napi::Object ProtectedRangeToJs(Napi::Env env, const fm_protected_range_t& r) {
+  Napi::Object item = Napi::Object::New(env);
+  item.Set("spinCount", Napi::Number::New(env, r.spin_count));
+  item.Set("name", JsString(env, r.name));
+  item.Set("sqref", JsString(env, r.sqref));
+  item.Set("password", JsString(env, r.password));
+  item.Set("algorithmName", JsString(env, r.algorithm_name));
+  item.Set("hashValue", JsString(env, r.hash_value));
+  item.Set("saltValue", JsString(env, r.salt_value));
+  item.Set("securityDescriptor", JsString(env, r.security_descriptor));
+  return item;
+}
+
+// Reads the range spec at `info[idx]` and hands it to `edit`.
+template <typename Edit>
+Napi::Value EditProtectedRange(fm_workbook_t* handle, const Napi::CallbackInfo& info, size_t idx, Edit edit) {
+  Napi::Env env = info.Env();
+  if (handle == nullptr) {
+    return MakeErrorStatus(env, kBindingInvalidHandle);
+  }
+  Napi::Object in = Workbook::ArgObjectOrEmpty(info, idx);
+  CheckedSpecReader reader(env);
+  std::string text[7];
+  (void)reader.String(in, "name", &text[0]);
+  (void)reader.String(in, "sqref", &text[1]);
+  (void)reader.String(in, "password", &text[2]);
+  (void)reader.String(in, "algorithmName", &text[3]);
+  (void)reader.String(in, "hashValue", &text[4]);
+  (void)reader.String(in, "saltValue", &text[5]);
+  (void)reader.String(in, "securityDescriptor", &text[6]);
+  fm_protected_range_t r{};
+  r.spin_count = reader.U32(in, "spinCount", 0U);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  r.name = text[0].c_str();
+  r.sqref = text[1].c_str();
+  r.password = text[2].c_str();
+  r.algorithm_name = text[3].c_str();
+  r.hash_value = text[4].c_str();
+  r.salt_value = text[5].c_str();
+  r.security_descriptor = text[6].c_str();
+  return MakeStatus(env, edit(handle, r));
+}
+
+}  // namespace
+
+Napi::Value Workbook::GetProtectedRanges(const Napi::CallbackInfo& info) {
+  return SheetListResult(info, handle_, &fm_sheet_protected_range_count, &fm_sheet_get_protected_range,
+                         &ProtectedRangeToJs);
+}
+
+Napi::Value Workbook::AddProtectedRange(const Napi::CallbackInfo& info) {
+  return EditProtectedRange(handle_, info, 1, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
+    return fm_sheet_add_protected_range(handle, ArgU32(info, 0), &r);
+  });
+}
+
+Napi::Value Workbook::UpdateProtectedRange(const Napi::CallbackInfo& info) {
+  return EditProtectedRange(handle_, info, 2, [&](fm_workbook_t* handle, const fm_protected_range_t& r) {
+    return fm_sheet_update_protected_range(handle, ArgU32(info, 0), ArgU32(info, 1), &r);
+  });
+}
+
+Napi::Value Workbook::RemoveProtectedRange(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_sheet_remove_protected_range);
+}
+
 // ---- Hyperlinks -----------------------------------------------------
 
 namespace {

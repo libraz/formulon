@@ -165,7 +165,7 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
 /// tokens live once in the anchor's `BrtArrFmla`.
 EncodedFormula MakePtgExpShell(std::uint32_t anchor_row, std::uint32_t anchor_col) {
   EncodedFormula shell;
-  shell.rgce.push_back(0x01);  // PtgExp
+  shell.rgce.push_back(0x01U);  // PtgExp
   shell.rgce.push_back(static_cast<std::uint8_t>(anchor_row & 0xFFU));
   shell.rgce.push_back(static_cast<std::uint8_t>((anchor_row >> 8) & 0xFFU));
   shell.rgce.push_back(static_cast<std::uint8_t>((anchor_row >> 16) & 0xFFU));
@@ -329,6 +329,33 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
   EmitFormulaCellRecord(dst, col, StyleWord(cell), anchor_value, shell, always_calculates);
   EmitArrayFormulaRecord(dst, anchor_row, last_row, col, last_col, formula_or.value(), always_calculates);
   return Expected<void, Error>::Ok();
+}
+
+void emit_data_table_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t col, const DataTable& table,
+                            SstBuilder& sst) {
+  // TABLECELL = BrtTable CELLMETA (BrtCellRk / BrtCellError / BrtCellBool / BrtCellReal / BrtCellSt).
+  std::vector<std::uint8_t> p;
+  emit_rfx(p, table.ref);
+  for (const DataTableInput* input : {&table.r1, &table.r2}) {
+    const bool usable = input->present && !input->deleted;
+    emit_u32(p, usable ? input->row : 0U);
+    emit_u32(p, usable ? input->col : 0U);
+  }
+  emit_u8(p, static_cast<std::uint8_t>((table.row_oriented ? 0x01U : 0U) | (table.two_dimensional ? 0x02U : 0U) |
+                                       (table.r1.deleted ? 0x04U : 0U) | (table.r2.deleted ? 0x08U : 0U) |
+                                       (table.always_calc ? 0x10U : 0U)));
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtTable), p);
+  const Value& v = cell.cached_value;
+  if (v.is_text()) {
+    std::vector<std::uint8_t> st;
+    EmitCellHeader(st, col, StyleWord(cell));
+    emit_xlwidestring(st, v.as_text());
+    emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellSt), st);
+    return;
+  }
+  // A blank result reads as 0 in a data table, and the grammar has no blank anchor.
+  const Value scalar = v.is_number() || v.is_boolean() || v.is_error() ? v : Value::number(0.0);
+  EmitLiteralCellRecord(dst, col, StyleWord(cell), scalar, cell.phonetic_runs, cell.phonetic_props, sst);
 }
 
 void emit_array_phantom(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index, const Value& cached,

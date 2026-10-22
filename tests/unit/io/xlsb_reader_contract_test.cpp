@@ -759,8 +759,11 @@ TEST(XlsbSheetView, PaneAndSelectionOutsideTheMainViewAreNotFoldedIntoIt) {
   EXPECT_EQ(view.top_left_cell, "");
   ASSERT_EQ(view.selections.size(), 1U);
   EXPECT_EQ(view.selections[0].active_cell, "B2");
-  // The second view's three records are counted; the tail's two are retained.
-  EXPECT_EQ(result.value().dropped_record_count, 3U);
+  // The second view becomes an extra `<sheetView>`; the tail's two records are retained.
+  EXPECT_EQ(result.value().dropped_record_count, 0U);
+  EXPECT_NE(view.extra_views_xml.find("topLeftCell=\"C4\" workbookViewId=\"0\""), std::string::npos)
+      << view.extra_views_xml;
+  EXPECT_NE(view.extra_views_xml.find("<pane "), std::string::npos) << view.extra_views_xml;
   EXPECT_FALSE(result.value().workbook.sheet(0).xlsb_tail().empty());
 }
 

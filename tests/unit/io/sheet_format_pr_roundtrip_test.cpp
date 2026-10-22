@@ -25,8 +25,16 @@ TEST(SheetFormatPrRoundTrip, AllAttributesSurviveSaveAndLoad) {
   defaults.zero_height = true;
   defaults.thick_top = true;
   defaults.thick_bottom = true;
-  defaults.outline_level_row = 2U;
-  defaults.outline_level_col = 3U;
+  // The gutter depth is derived from the levels the rows and columns carry.
+  RowLayout row;
+  row.row = 4;
+  row.outline_level = 2;
+  src.sheet(0).mutable_layout().row_overrides.push_back(row);
+  ColumnLayout col;
+  col.first = 1;
+  col.last = 1;
+  col.outline_level = 3;
+  src.sheet(0).mutable_layout().columns.push_back(col);
 
   auto save_or = src.save();
   ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
@@ -71,6 +79,28 @@ TEST(SheetFormatPrRoundTrip, CustomHeightAloneIsKept) {
   EXPECT_FALSE(out.zero_height);
   EXPECT_FALSE(out.thick_top);
   EXPECT_EQ(out.outline_level_row, 0U);
+}
+
+TEST(SheetFormatPrRoundTrip, OutlineOnlySheetWritesDefaultRowHeight) {
+  Workbook src = Workbook::create();
+  RowLayout row;
+  row.row = 4;
+  row.outline_level = 1;
+  src.sheet(0).mutable_layout().row_overrides.push_back(row);
+  ASSERT_FALSE(src.sheet(0).format_defaults().has_default_row_height);
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(io::ByteSpan{save_or.value().data(), save_or.value().size()})));
+  auto entry_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(entry_or));
+  const std::string xml(reinterpret_cast<const char*>(entry_or.value().data()), entry_or.value().size());
+  const std::size_t at = xml.find("<sheetFormatPr");
+  ASSERT_NE(at, std::string::npos) << xml;
+  const std::string element = xml.substr(at, xml.find("/>", at) - at);
+  EXPECT_NE(element.find("outlineLevelRow=\"1\""), std::string::npos) << element;
+  EXPECT_NE(element.find("defaultRowHeight=\""), std::string::npos) << element;
 }
 
 }  // namespace

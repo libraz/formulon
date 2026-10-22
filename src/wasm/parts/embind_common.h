@@ -203,6 +203,10 @@ struct JsSheetView {
   uint32_t topLeftCol = 0U;
   uint32_t paneTopLeftRow = 0U;
   uint32_t paneTopLeftCol = 0U;
+  double splitX = 0.0;
+  double splitY = 0.0;
+  int32_t showFormulas = 0;
+  int32_t showOutlineSymbols = 1;
 };
 
 /// Return envelope for `Workbook.getSheetView(...)`.

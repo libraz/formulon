@@ -118,6 +118,24 @@ constexpr std::size_t icon_count(IconSetName name) noexcept {
   return name <= IconSetName::Three_Symbols2 ? 3U : name <= IconSetName::Four_TrafficLights ? 4U : 5U;
 }
 
+/// Number of icons in the `x14:cfIcon` icon set spelled `name`: the 17
+/// built-in sets, the x14-only `3Triangles` / `3Stars` / `5Boxes`, and
+/// `NoIcons` (one slot, id 0). 0 for any other spelling.
+constexpr std::size_t cf_icon_set_icon_count(std::string_view name) noexcept {
+  for (std::size_t i = 0; i < kIconSetNames.size(); ++i) {
+    if (kIconSetNames[i] == name) {
+      return icon_count(static_cast<IconSetName>(i));
+    }
+  }
+  if (name == "3Triangles" || name == "3Stars") {
+    return 3U;
+  }
+  if (name == "5Boxes") {
+    return 5U;
+  }
+  return name == "NoIcons" ? 1U : 0U;
+}
+
 /// `<cfRule type="timePeriod">` value bucket.
 enum class TimePeriod : std::uint8_t {
   Today = 0,
@@ -253,6 +271,16 @@ struct DataBarSpec {
   std::uint8_t max_length_pct = 90;
 };
 
+/// One `<x14:cfIcon>`: the icon drawn for one level of a custom icon set.
+struct CfIcon {
+  /// `ST_IconSetType` spelling of the set the icon is taken from, including
+  /// the x14-only sets (`3Triangles`, `3Stars`, `5Boxes`) and `NoIcons`,
+  /// which draws nothing for the level.
+  std::string icon_set;
+  /// Zero-based position of the icon within `icon_set`; 0 for `NoIcons`.
+  std::int32_t icon_id = 0;
+};
+
 /// `<iconSet>` sub-element of a `cfRule`.
 struct IconSetSpec {
   IconSetName name = IconSetName::Three_Arrows;
@@ -275,6 +303,10 @@ struct IconSetSpec {
   /// the interpretation, change the cfvo types. Same contract as
   /// `PivotField::passthrough_attrs`.
   bool percent = true;
+  /// Per-level icon overrides of a custom icon set (x14 `cfIcon`), one per
+  /// icon of the set; empty when the set draws its own icons. Round-trip and
+  /// authoring only: evaluation still resolves the bucket against `name`.
+  std::vector<CfIcon> custom_icons;
 };
 
 /// One `<cfRule>` definition. Matches the union of all rule types: the

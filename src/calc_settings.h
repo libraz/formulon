@@ -15,10 +15,10 @@ namespace formulon {
 /// Excel calc-mode enum. Mirrors the `calcMode` attribute on `<calcPr>`
 /// (`auto` / `manual` / `autoNoTable`).
 ///
-/// Plain metadata: the engine itself does not gate evaluation on this
-/// setting (every `recalc()` call honours all dirty cells). The value
-/// is preserved as round-trip metadata and surfaced through the
-/// bindings so a host UI can mirror Excel's user-visible state.
+/// Round-trip metadata surfaced through the bindings so a host UI can
+/// mirror Excel's user-visible state. The one effect on evaluation:
+/// `kAutoNoTable` makes `Workbook::recalc()` skip What-If data tables,
+/// which `Workbook::recalc_data_tables()` then computes on demand.
 enum class CalcMode : std::uint8_t {
   kAuto = 0,
   kManual = 1,
@@ -38,6 +38,38 @@ constexpr std::uint32_t kDefaultMaxIterations = 100U;
 constexpr std::uint32_t kMaxIterationsCap = 32767U;
 /// Excel's default absolute convergence threshold.
 constexpr double kDefaultMaxChange = 0.001;
+
+/// Cell-reference style of the `<calcPr refMode>` attribute: the notation
+/// the host UI shows formulas in.
+enum class RefMode : std::uint8_t {
+  kA1 = 0,
+  kR1C1 = 1,
+};
+
+/// The `<calcPr>` attributes other than `calcMode` and the iterative trio.
+/// Round-trip metadata the host UI mirrors; the engine itself evaluates the
+/// same way whatever they hold. The defaults are the schema's, so a
+/// workbook that never set them writes none of them.
+struct CalcOptions {
+  /// `fullPrecision`: false is "set precision as displayed".
+  bool full_precision = true;
+  bool calc_on_save = true;  ///< `calcOnSave`.
+  RefMode ref_mode = RefMode::kA1;
+  bool has_calc_id = false;     ///< `calcId` was present.
+  std::uint32_t calc_id = 0;    ///< `calcId`: the calc engine version that last computed the file.
+  bool concurrent_calc = true;  ///< `concurrentCalc`.
+  bool has_concurrent_manual_count = false;
+  std::uint32_t concurrent_manual_count = 0;  ///< `concurrentManualCount`.
+  bool force_full_calc = false;               ///< `forceFullCalc`.
+  bool full_calc_on_load = false;             ///< `fullCalcOnLoad`.
+  bool calc_completed = true;                 ///< `calcCompleted`.
+
+  /// Whether every attribute holds its schema default, i.e. nothing to write.
+  bool is_default() const noexcept {
+    return full_precision && calc_on_save && ref_mode == RefMode::kA1 && !has_calc_id && concurrent_calc &&
+           !has_concurrent_manual_count && !force_full_calc && !full_calc_on_load && calc_completed;
+  }
+};
 
 /// User-facing knobs governing iterative-calc behaviour. Mirrors Excel's
 /// "Enable iterative calculation" workbook option. The defaults match

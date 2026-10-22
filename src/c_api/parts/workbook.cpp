@@ -397,6 +397,26 @@ extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, co
   return finish_status(wb->workbook().set_defined_name_scoped(std::string(name), std::move(stored), local_sheet_id));
 }
 
+extern "C" fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const char* name, int32_t local_sheet_id,
+                                                          const char* comment, int32_t hidden) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_defined_name_attrs: NULL argument");
+  }
+  // Both setters fail only on a missing name, so the first one reports it
+  // before anything is changed.
+  if (comment != nullptr) {
+    if (auto result = wb->workbook().set_defined_name_comment(name, local_sheet_id, comment); !result) {
+      return finish_status(std::move(result));
+    }
+  }
+  if (hidden >= 0) {
+    return finish_status(wb->workbook().set_defined_name_hidden(name, local_sheet_id, hidden != 0));
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
@@ -457,6 +477,22 @@ extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size
   if (out_local_sheet_id != nullptr) {
     *out_local_sheet_id = names[idx].local_sheet_id;
   }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_defined_name_attrs_at(const fm_workbook_t* wb, size_t idx, const char** out_comment,
+                                                         int32_t* out_hidden) {
+  clear_last_error();
+  if (wb == nullptr || out_comment == nullptr || out_hidden == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_defined_name_attrs_at: NULL argument");
+  }
+  const auto& names = wb->workbook().defined_names();
+  if (auto rc = check_index(idx, names.size(), "fm_workbook_defined_name_attrs_at", "idx"); rc != 0) {
+    return rc;
+  }
+  *out_comment = names[idx].comment.c_str();
+  *out_hidden = names[idx].hidden ? 1 : 0;
   return 0;
 }
 

@@ -47,6 +47,10 @@ std::optional<std::string_view> RefTransform::apply_name_sheet(std::string_view 
   return sheet;
 }
 
+std::string_view RefTransform::apply_structured_ref_table(std::string_view table) const {
+  return table;
+}
+
 namespace {
 
 // Builds a `#REF!` error literal node. Returns nullptr on arena failure.
@@ -186,6 +190,18 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
     return make_ref3d_range(arena, final_begin, final_end, *rewritten_first, *rewritten_last);
   }
   return make_ref3d(arena, final_begin, final_end, *rewritten_first);
+}
+
+const AstNode* TransformStructuredRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const std::string_view table = node.as_structured_ref_table();
+  if (table.empty()) {
+    return &node;
+  }
+  const std::string_view mapped = transform.apply_structured_ref_table(table);
+  if (mapped == table) {
+    return &node;
+  }
+  return make_structured_ref(arena, mapped, node.as_structured_ref_column(), node.as_structured_ref_modifier());
 }
 
 const AstNode* TransformNameRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
@@ -460,12 +476,13 @@ const AstNode* TransformNodeBare(const AstNode& node, Arena& arena, const RefTra
     case NodeKind::Literal:
     case NodeKind::ErrorLiteral:
     case NodeKind::ErrorPlaceholder:
-    case NodeKind::StructuredRef:
     // A cross-workbook reference addresses another file's grid. Inserting
     // or deleting rows here cannot move a cell there, and Excel leaves
     // such a reference untouched for exactly that reason.
     case NodeKind::ExternalRef:
       return &node;
+    case NodeKind::StructuredRef:
+      return TransformStructuredRef(node, arena, transform);
     case NodeKind::Ref:
       return TransformRef(node, arena, transform);
     case NodeKind::SpillRef:

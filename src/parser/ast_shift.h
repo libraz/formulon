@@ -87,6 +87,10 @@ class RefTransform {
   /// Only called for a non-empty qualifier. The default is an identity
   /// mapping; returning `std::nullopt` collapses the name to `#REF!`.
   virtual std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const;
+
+  /// Rewrites the table name of a structured reference (`Table1[Col]`). Only
+  /// called for a non-empty table name; the default is an identity mapping.
+  virtual std::string_view apply_structured_ref_table(std::string_view table) const;
 };
 
 /// Walks `root` and produces a new tree with every reference rewritten via

@@ -1,5 +1,7 @@
 // Stable C ABI active-sheet, show-phonetic and phonetic-properties presence tests.
 
+#include <limits>
+
 #include "formulon_c_pivot_test_helpers.h"
 
 namespace {
@@ -613,4 +615,96 @@ TEST(FormulonCApiWorkbookView, SettersWriteTheFrozenPaneTheDesktopWayAndRoundTri
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 0, 0), 0);
   EXPECT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 0, 0), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_top_left(wb.handle, 9, 0, 0), kInvalidArgument);
+}
+
+TEST(FormulonCApiWorkbookView, SetSplitReadsBackRoundTripsAndExchangesWithFreeze) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_sheet_view_t view{};
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.split_x, 0.0);
+  EXPECT_EQ(view.split_y, 0.0);
+
+  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 2000.0, 1500.0), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.split_x, 2000.0);
+  EXPECT_EQ(view.split_y, 1500.0);
+  EXPECT_EQ(view.freeze_rows, 0U);
+  EXPECT_EQ(view.freeze_cols, 0U);
+
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    const std::vector<std::uint8_t> bytes = Save(wb.handle, format);
+    if (format == FM_WORKBOOK_FORMAT_XLSX) {
+      const std::string xml = ExtractZipEntry(bytes, "xl/worksheets/sheet1.xml");
+      EXPECT_NE(xml.find("xSplit=\"2000\" ySplit=\"1500\""), std::string::npos) << xml;
+      EXPECT_EQ(xml.find("state=\"frozen\""), std::string::npos) << xml;
+    }
+    WorkbookGuard reloaded;
+    Load(bytes, reloaded);
+    fm_sheet_view_t got{};
+    ASSERT_EQ(fm_sheet_get_view(reloaded.handle, 0, &got), 0);
+    EXPECT_EQ(got.split_x, 2000.0) << "format " << format;
+    EXPECT_EQ(got.split_y, 1500.0) << "format " << format;
+    EXPECT_EQ(got.freeze_rows, 0U) << "format " << format;
+    EXPECT_EQ(got.freeze_cols, 0U) << "format " << format;
+  }
+
+  // A freeze replaces the split.
+  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.split_x, 0.0);
+  EXPECT_EQ(view.split_y, 0.0);
+  EXPECT_EQ(view.freeze_rows, 2U);
+
+  // A split replaces the freeze.
+  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 0.0, 900.0), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.split_x, 0.0);
+  EXPECT_EQ(view.split_y, 900.0);
+  EXPECT_EQ(view.freeze_rows, 0U);
+  EXPECT_EQ(view.freeze_cols, 0U);
+
+  // (0, 0) removes the split.
+  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 0.0, 0.0), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.split_y, 0.0);
+}
+
+TEST(FormulonCApiWorkbookView, SetSplitRehomesTheActiveSelectionAndKeepsTheViewOnInvalidInput) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 2, 1), 0);
+  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 40, 6), 0);
+  const fm_merge_range ranges[] = {{41, 7, 43, 8}};
+  ASSERT_EQ(fm_sheet_set_selection(wb.handle, 0, 41, 7, ranges, 1), 0);
+
+  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 1800.0, 1200.0), 0);
+  fm_sheet_view_t view{};
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.pane_top_left_row, 0U);  // origin re-derived
+  EXPECT_EQ(view.pane_top_left_col, 0U);
+  uint32_t row = 0;
+  uint32_t col = 0;
+  size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_selection(wb.handle, 0, &row, &col, nullptr, 0, &count), 0);
+  EXPECT_EQ(row, 41U);
+  EXPECT_EQ(col, 7U);
+  EXPECT_EQ(count, 1U);
+
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+  EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, -1.0, 0.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, 0.0, nan), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_split(wb.handle, 0, inf, 0.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_split(wb.handle, 9, 1.0, 1.0), kInvalidArgument);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.split_x, 1800.0);
+  EXPECT_EQ(view.split_y, 1200.0);
+
+  // Re-stating the current split keeps the pane origin a host scrolled to.
+  ASSERT_EQ(fm_sheet_set_pane_top_left(wb.handle, 0, 9, 3), 0);
+  ASSERT_EQ(fm_sheet_set_split(wb.handle, 0, 1800.0, 1200.0), 0);
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &view), 0);
+  EXPECT_EQ(view.pane_top_left_row, 9U);
+  EXPECT_EQ(view.pane_top_left_col, 3U);
 }

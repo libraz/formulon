@@ -11,9 +11,10 @@
 // decoder is the authoritative consumer, so the encoder need only stay
 // consistent with it.
 //
-// Tokens the AST can carry but the encoder cannot lower (structured refs,
-// implicit-intersection, optional LAMBDA parameters)
-// return `kIoXlsbUnsupportedPtg` rather
+// A structured reference lowers to PtgList through `SheetRangeTable::tables`
+// (`io/xlsb/ptg_list.h`). Tokens the AST can carry but the encoder cannot
+// lower (a structured reference to an unknown table, implicit-intersection,
+// optional LAMBDA parameters) return `kIoXlsbUnsupportedPtg` rather
 // than silently dropping data; the cell writer surfaces that as a hard
 // failure through `write_xlsb`'s `Expected` return.
 
@@ -37,6 +38,9 @@
 #include "utils/expected.h"
 
 namespace formulon {
+
+struct TableMetadata;
+
 namespace io {
 namespace xlsb {
 
@@ -97,6 +101,11 @@ struct SheetRangeTable {
   /// Maps a cross-workbook reference's directory and book to the
   /// `ExternalLinkRecord::index` it names; unset when there are no links.
   parser::ExternalBookIndexer indexer{nullptr, nullptr};
+  /// The workbook's tables, which a structured reference (PtgList) names by
+  /// id and whose sheets it needs an XTI for; null when there are none.
+  const std::vector<TableMetadata>* tables = nullptr;
+  /// `idList` values of table parts kept verbatim, which no model table may take.
+  std::unordered_set<std::uint32_t> reserved_table_ids;
 };
 
 /// The `iSupBook` the file stores for an XTI naming `book`: this workbook's

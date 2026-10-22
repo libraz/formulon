@@ -184,6 +184,39 @@ COMMENT = Struct(
     [("row", U32), ("col", U32), ("author", PTR), ("text", PTR)],
 )
 
+WORKBOOK_PROTECTION = Struct(
+    "fm_workbook_protection_t",
+    [
+        ("lock_structure", I32),
+        ("lock_windows", I32),
+        ("lock_revision", I32),
+        ("workbook_spin_count", U32),
+        ("revisions_spin_count", U32),
+        ("workbook_password", PTR),
+        ("workbook_algorithm_name", PTR),
+        ("workbook_hash_value", PTR),
+        ("workbook_salt_value", PTR),
+        ("revisions_password", PTR),
+        ("revisions_algorithm_name", PTR),
+        ("revisions_hash_value", PTR),
+        ("revisions_salt_value", PTR),
+    ],
+)
+
+PROTECTED_RANGE = Struct(
+    "fm_protected_range_t",
+    [
+        ("spin_count", U32),
+        ("name", PTR),
+        ("sqref", PTR),
+        ("password", PTR),
+        ("algorithm_name", PTR),
+        ("hash_value", PTR),
+        ("salt_value", PTR),
+        ("security_descriptor", PTR),
+    ],
+)
+
 DATA_VALIDATION = Struct(
     "fm_data_validation",
     [
@@ -345,8 +378,12 @@ CF_RULE = Struct(
         ("icon_set_floor_engaged", I32),
         ("icon_set_floor", CFVO_BLOB),
         ("data_bar_direction", U8),
+        ("icon_set_icons", PTR),
+        ("icon_set_icon_count", U32),
     ],
 )
+
+CF_ICON = Struct("fm_cf_icon_t", [("icon_set", PTR), ("icon_id", I32)])
 
 CELL_NODE = Struct(
     "fm_cell_node_t",
@@ -421,12 +458,62 @@ PIVOT_FIELD_INFO = Struct(
         ("date_interval_days", U32),
         ("date_start_serial", F64),
         ("date_end_serial", F64),
+        ("default_subtotal", I32),
+        ("subtotal_fns", U32),
     ],
 )
 
 PIVOT_ITEM_INFO = Struct(
     "fm_pivot_item_info_t",
     [("name", PTR), ("cache_index", I32), ("visible", I32)],
+)
+
+TABLE_INFO = Struct(
+    "fm_table_info_t",
+    [
+        ("style_name", PTR),
+        ("style_present", I32),
+        ("show_first_column", I32),
+        ("show_last_column", I32),
+        ("show_row_stripes", I32),
+        ("show_column_stripes", I32),
+        ("header_row_count", U32),
+        ("totals_row_count", U32),
+        ("column_count", U32),
+    ],
+)
+
+TABLE_COLUMN_INFO = Struct(
+    "fm_table_column_info_t",
+    [
+        ("name", PTR),
+        ("totals_row_function", PTR),
+        ("totals_row_label", PTR),
+        ("totals_row_formula", PTR),
+    ],
+)
+
+TABLE_STYLE_ELEMENT = Struct(
+    "fm_table_style_element_t",
+    [("type", PTR), ("size", U32), ("has_dxf_id", I32), ("dxf_id", U32)],
+)
+
+TABLE_STYLE = Struct(
+    "fm_table_style_t",
+    [("name", PTR), ("pivot", I32), ("table", I32), ("elements", PTR), ("element_count", U32)],
+)
+
+PIVOT_STYLE_INFO = Struct(
+    "fm_pivot_style_info_t",
+    [
+        ("name", PTR),
+        ("present", I32),
+        ("show_row_headers", I32),
+        ("show_col_headers", I32),
+        ("show_row_stripes", I32),
+        ("show_col_stripes", I32),
+        ("show_last_column", I32),
+    ],
 )
 
 PIVOT_FILTER_SPEC = Struct(
@@ -541,6 +628,10 @@ SHEET_VIEW = Struct(
         ("top_left_col", U32),
         ("pane_top_left_row", U32),
         ("pane_top_left_col", U32),
+        ("split_x", F64),
+        ("split_y", F64),
+        ("show_formulas", I32),
+        ("show_outline_symbols", I32),
     ],
 )
 
@@ -552,6 +643,7 @@ COLUMN_LAYOUT = Struct(
         ("width", F64),
         ("hidden", I32),
         ("outline_level", U8),
+        ("collapsed", U8),
         ("has_width", I32),
         ("has_style", I32),
         ("style_xf", U32),
@@ -565,6 +657,7 @@ ROW_LAYOUT = Struct(
         ("height", F64),
         ("hidden", I32),
         ("outline_level", U8),
+        ("collapsed", U8),
         ("has_style", I32),
         ("style_xf", U32),
         ("has_height", I32),
@@ -580,6 +673,8 @@ SHEET_FORMAT_DEFAULTS = Struct(
         ("base_col_width", F64),
         ("has_default_col_width", I32),
         ("has_default_row_height", I32),
+        ("custom_height", I32),
+        ("zero_height", I32),
         ("effective_default_col_width", F64),
         ("effective_default_row_height", F64),
     ],
@@ -713,6 +808,14 @@ FONT_RECORD = Struct(
         ("has_family", I32),
         ("has_charset", I32),
         ("has_size", I32),
+        ("outline", I32),
+        ("shadow", I32),
+        ("condense", I32),
+        ("extend", I32),
+        ("has_outline", I32),
+        ("has_shadow", I32),
+        ("has_condense", I32),
+        ("has_extend", I32),
         ("underline", U8),
         ("vert_align", U8),
         ("family", U8),
@@ -720,6 +823,11 @@ FONT_RECORD = Struct(
         ("scheme", U8),
         ("color", COLOR_SPEC_BLOB),
     ],
+)
+
+GRADIENT_STOP = Struct(
+    "fm_gradient_stop",
+    [("position", F64), ("color_argb", U32), ("color", COLOR_SPEC_BLOB)],
 )
 
 FILL_RECORD = Struct(
@@ -730,6 +838,16 @@ FILL_RECORD = Struct(
         ("bg_argb", U32),
         ("fg", COLOR_SPEC_BLOB),
         ("bg", COLOR_SPEC_BLOB),
+        ("has_gradient", I32),
+        ("gradient_type", I32),
+        ("gradient_degree", F64),
+        ("gradient_left", F64),
+        ("gradient_right", F64),
+        ("gradient_top", F64),
+        ("gradient_bottom", F64),
+        ("gradient_stops", PTR),
+        # ``size_t`` is 4 bytes on wasm32, so the count shares PTR's layout.
+        ("gradient_stop_count", PTR),
     ],
 )
 
@@ -1162,6 +1280,122 @@ DRAWING_ANCHOR = Struct(
         ("col_off_emu", I64),
         ("width_emu", I64),
         ("height_emu", I64),
+    ],
+)
+
+
+SHAPE = Struct(
+    "fm_shape",
+    [
+        ("fields", U32),
+        ("object_id", U32),
+        ("kind", I32),
+        ("anchor_kind", I32),
+        ("edit_as", I32),
+        ("from_row", U32),
+        ("from_col", U32),
+        ("to_row", U32),
+        ("to_col", U32),
+        ("fill_kind", I32),
+        ("fill_rgb", U32),
+        ("line_kind", I32),
+        ("line_rgb", U32),
+        ("rotation", I32),
+        ("hidden", I32),
+        ("text_box", I32),
+        ("from_row_off", I64),
+        ("from_col_off", I64),
+        ("to_row_off", I64),
+        ("to_col_off", I64),
+        ("cx", I64),
+        ("cy", I64),
+        ("line_width_emu", I64),
+        ("name", PTR),
+        ("prst", PTR),
+        ("text", PTR),
+    ],
+)
+
+DATA_TABLE = Struct(
+    "fm_data_table",
+    [
+        ("first_row", U32),
+        ("first_col", U32),
+        ("last_row", U32),
+        ("last_col", U32),
+        ("row_input_row", U32),
+        ("row_input_col", U32),
+        ("col_input_row", U32),
+        ("col_input_col", U32),
+        ("has_row_input", I32),
+        ("has_col_input", I32),
+        ("two_dimensional", I32),
+        ("row_oriented", I32),
+        ("row_input_deleted", I32),
+        ("col_input_deleted", I32),
+    ],
+)
+
+SLICER = Struct(
+    "fm_slicer",
+    [
+        ("fields", U32),
+        ("object_id", U32),
+        ("column_count", U32),
+        ("sort_order", I32),
+        ("cross_filter", I32),
+        ("anchor_kind", I32),
+        ("from_row", U32),
+        ("from_col", U32),
+        ("to_row", U32),
+        ("to_col", U32),
+        ("from_row_off", I64),
+        ("from_col_off", I64),
+        ("to_row_off", I64),
+        ("to_col_off", I64),
+        ("row_height", I64),
+        ("name", PTR),
+        ("caption", PTR),
+        ("cache_name", PTR),
+        ("table_name", PTR),
+        ("column_name", PTR),
+        ("style", PTR),
+    ],
+)
+
+SPARKLINE = Struct("fm_sparkline", [("formula", PTR), ("location", PTR)])
+
+SPARKLINE_GROUP = Struct(
+    "fm_sparkline_group",
+    [
+        ("color_series", COLOR_SPEC_BLOB),
+        ("color_negative", COLOR_SPEC_BLOB),
+        ("color_axis", COLOR_SPEC_BLOB),
+        ("color_markers", COLOR_SPEC_BLOB),
+        ("color_first", COLOR_SPEC_BLOB),
+        ("color_last", COLOR_SPEC_BLOB),
+        ("color_high", COLOR_SPEC_BLOB),
+        ("color_low", COLOR_SPEC_BLOB),
+        ("manual_min", F64),
+        ("manual_max", F64),
+        ("line_weight", F64),
+        ("type", I32),
+        ("markers", I32),
+        ("high", I32),
+        ("low", I32),
+        ("first", I32),
+        ("last", I32),
+        ("negative", I32),
+        ("display_x_axis", I32),
+        ("display_hidden", I32),
+        ("min_axis_type", I32),
+        ("max_axis_type", I32),
+        ("has_manual_min", I32),
+        ("has_manual_max", I32),
+        ("date_axis", I32),
+        ("empty_cells_as", I32),
+        ("date_axis_ref", PTR),
+        ("sparkline_count", U32),
     ],
 )
 

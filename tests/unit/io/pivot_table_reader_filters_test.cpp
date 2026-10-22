@@ -17,7 +17,7 @@
 namespace formulon::io {
 namespace {
 using namespace pivot_table_reader_test_support;
-TEST(PivotTableReader, AuthoredFiltersDecodeForEvaluationAndStillRoundTripAsPassthrough) {
+TEST(PivotTableReader, AuthoredFiltersDecodeForEvaluationAndRoundTripVerbatim) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
   xml.append("<location ref=\"A1:B2\"/>");
@@ -38,8 +38,12 @@ TEST(PivotTableReader, AuthoredFiltersDecodeForEvaluationAndStillRoundTripAsPass
   EXPECT_EQ(table.authored_caption_filters()[0].field_index, 0U);
   EXPECT_EQ(table.authored_caption_filters()[0].predicate, pivot::CaptionPredicate::Equal);
   EXPECT_EQ(table.authored_caption_filters()[0].value, "North");
-  EXPECT_NE(table.raw_passthrough_xml().find("<filters"), std::string::npos);
-  EXPECT_NE(table.raw_passthrough_xml().find("val=\"North\""), std::string::npos);
+  // `captionEqual` is outside the public vocabulary, so the entry is retained
+  // verbatim rather than left in the tail bin.
+  EXPECT_EQ(table.raw_passthrough_xml().find("<filters"), std::string::npos);
+  ASSERT_EQ(table.retained_filters().size(), 1U);
+  EXPECT_NE(table.retained_filters()[0].xml.find("val=\"North\""), std::string::npos);
+  EXPECT_EQ(table.retained_filters()[0].id, 1U);
 
   const std::string round = write_pivot_table_definition(table);
   EXPECT_EQ(CountOccurrences(round, "<filters"), 1U) << round;
@@ -51,8 +55,8 @@ TEST(PivotTableReader, AuthoredFiltersDecodeForEvaluationAndStillRoundTripAsPass
   auto reparsed_or = read_pivot_table_definition(Bytes(round));
   ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
   EXPECT_TRUE(reparsed_or.value().active_filters().empty());
-  // The decode is stable across the round trip, and the writer still emits
-  // the block from the passthrough tail rather than from the decoded view.
+  // The decode is stable across the round trip, and the writer emits the
+  // retained bytes rather than re-serialising the decoded view.
   EXPECT_EQ(reparsed_or.value().authored_caption_filters().size(), 1U);
   EXPECT_EQ(write_pivot_table_definition(reparsed_or.value()), round);
 }
@@ -78,7 +82,7 @@ TEST(PivotTableReader, AuthoredCaptionFilterVariantsDecodeAndNonCaptionTypesAreS
       "<customFilters and=\"1\"><customFilter operator=\"greaterThanOrEqual\" val=\"B\"/>"
       "<customFilter operator=\"lessThanOrEqual\" val=\"M\"/></customFilters>"
       "</filterColumn></autoFilter></filter>");
-  // Value family: outside the caption set, so passthrough-only.
+  // Value family: outside the caption set, so not a caption decode.
   xml.append(
       "<filter fld=\"5\" type=\"valueGreaterThan\" iMeasureFld=\"0\"><autoFilter ref=\"A3:A9\">"
       "<filterColumn colId=\"0\"><customFilters><customFilter operator=\"greaterThan\" val=\"100\"/>"
@@ -100,7 +104,7 @@ TEST(PivotTableReader, AuthoredCaptionFilterVariantsDecodeAndNonCaptionTypesAreS
   EXPECT_EQ(decoded[3].predicate, pivot::CaptionPredicate::Between);
   EXPECT_EQ(decoded[3].value, "B");
   EXPECT_EQ(decoded[3].value_high, "M");
-  // Every entry, decoded or not, is still re-emitted from the passthrough.
+  // Every entry, decoded or not, is still re-emitted.
   const std::string round = write_pivot_table_definition(table_or.value());
   EXPECT_NE(round.find("valueGreaterThan"), std::string::npos) << round;
   EXPECT_EQ(CountOccurrences(round, "<filter "), 5U) << round;

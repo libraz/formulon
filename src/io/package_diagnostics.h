@@ -61,9 +61,8 @@ struct ReadDiagnostics {
   /// hyperlinks and data validations, and one per dropped
   /// `<conditionalFormatting>` block (a block carries several rules, so a
   /// single increment can cost more than one rule). Also counts one per
-  /// `<f t="dataTable">` cell: the element carries no formula body, so
-  /// the cell keeps its cached value but the data-table formula itself
-  /// is not preserved for re-emission.
+  /// `<f t="dataTable">` whose `ref` does not parse: the cell keeps its
+  /// cached value but no data table is modelled.
   /// Fed by: `io.sheet.overlay.skip`, `io.cf.skip`, `io.sheet.formula.data_table_skip`.
   std::uint32_t skipped_feature_count = 0;
   /// Workbook parts whose declared content type was unrecognised, so the

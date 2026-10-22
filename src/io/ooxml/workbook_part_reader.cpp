@@ -54,6 +54,24 @@ void apply_workbook_part_settings(const pugi::xml_node& wb_root, Workbook& wb) {
       opts.max_change = delta_value;
     }
     wb.set_iterative_options(opts);
+
+    CalcOptions& calc = wb.mutable_calc_options();
+    calc = CalcOptions{};
+    calc.full_precision = read_xsd_bool(calc_pr, "fullPrecision", true);
+    calc.calc_on_save = read_xsd_bool(calc_pr, "calcOnSave", true);
+    calc.ref_mode = attr_str(calc_pr, "refMode") == "R1C1" ? RefMode::kR1C1 : RefMode::kA1;
+    calc.concurrent_calc = read_xsd_bool(calc_pr, "concurrentCalc", true);
+    calc.force_full_calc = read_xsd_bool(calc_pr, "forceFullCalc", false);
+    calc.full_calc_on_load = read_xsd_bool(calc_pr, "fullCalcOnLoad", false);
+    calc.calc_completed = read_xsd_bool(calc_pr, "calcCompleted", true);
+    if (calc_pr.attribute("calcId")) {
+      calc.has_calc_id = true;
+      calc.calc_id = attr_u32(calc_pr, "calcId", 0U);
+    }
+    if (calc_pr.attribute("concurrentManualCount")) {
+      calc.has_concurrent_manual_count = true;
+      calc.concurrent_manual_count = attr_u32(calc_pr, "concurrentManualCount", 0U);
+    }
   }
 
   // Workbook-level elements captured raw for verbatim re-emission:

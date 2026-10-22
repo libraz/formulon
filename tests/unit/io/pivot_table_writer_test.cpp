@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -469,12 +470,9 @@ TEST(PivotTableWriter, PassthroughRoundTrips) {
   EXPECT_EQ(write_pivot_table_definition(second_or.value()), written);
 }
 
-// `active_filters()` is session state: it drives evaluation for as long as the
-// workbook object lives and is never written to the package. Pinning that here
-// keeps the omission a decision rather than an oversight — a writer that
-// started emitting `<filters>` would both contradict the documented contract
-// and duplicate any authored block the reader is holding in passthrough.
-TEST(PivotTableWriter, ActiveFiltersAreSessionStateAndAreNotSerialized) {
+// `active_filters()` is persisted: an entry added in memory is written as a
+// `<filters>` entry and decodes back into the same list on reload.
+TEST(PivotTableWriter, ActiveFiltersSerializeIntoFiltersBlock) {
   pivot::PivotTable table;
   table.set_name("P");
   table.set_pivot_cache_id(1U);
@@ -491,18 +489,30 @@ TEST(PivotTableWriter, ActiveFiltersAreSessionStateAndAreNotSerialized) {
   filter.type = pivot::FilterType::LabelBeginsWith;
   filter.value = std::string("Nor");
   table.mutable_active_filters().push_back(std::move(filter));
-  ASSERT_EQ(table.active_filters().size(), 1U);
 
   const std::string written = write_pivot_table_definition(table);
-  EXPECT_EQ(written.find("<filters"), std::string::npos) << written;
-  EXPECT_EQ(written.find("Nor"), std::string::npos) << written;
+  EXPECT_NE(written.find("<filters count=\"1\"><filter fld=\"0\" type=\"captionBeginsWith\" evalOrder=\"-1\" "
+                         "id=\"1\" stringValue1=\"Nor\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+                         "<customFilters><customFilter val=\"Nor*\"/></customFilters></filterColumn></autoFilter>"
+                         "</filter></filters>"),
+            std::string::npos)
+      << written;
 
   auto reparsed_or = read_pivot_table_definition(Bytes(written));
   ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
-  EXPECT_TRUE(reparsed_or.value().active_filters().empty());
-  // The rest of the definition is unaffected by the dropped filter.
-  ASSERT_EQ(reparsed_or.value().fields().size(), 1U);
-  EXPECT_EQ(reparsed_or.value().row_field_order().size(), 1U);
+  ASSERT_EQ(reparsed_or.value().active_filters().size(), 1U);
+  const pivot::PivotFilter& back = reparsed_or.value().active_filters()[0];
+  EXPECT_EQ(back.type, pivot::FilterType::LabelBeginsWith);
+  EXPECT_EQ(std::get<std::string>(back.value), "Nor");
+  ASSERT_TRUE(back.source.has_value());
+  EXPECT_EQ(back.source->field_index, 0U);
+  EXPECT_TRUE(reparsed_or.value().retained_filters().empty());
+  EXPECT_TRUE(reparsed_or.value().authored_caption_filters().empty());
+  const std::string rewritten = write_pivot_table_definition(reparsed_or.value());
+  const auto block = [](const std::string& xml) {
+    return xml.substr(xml.find("<filters"), xml.rfind("</filters>") - xml.find("<filters"));
+  };
+  EXPECT_EQ(block(rewritten), block(written));
 }
 
 // ---------------------------------------------------------------------------

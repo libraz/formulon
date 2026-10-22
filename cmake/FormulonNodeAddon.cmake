@@ -73,6 +73,9 @@ add_library(formulon_node MODULE
   src/node_addon/parts/chart.cc
   src/node_addon/parts/conditional_format.cc
   src/node_addon/parts/drawing.cc
+  src/node_addon/parts/shapes.cc
+  src/node_addon/parts/data_tables.cc
+  src/node_addon/parts/slicers.cc
   src/node_addon/parts/free_funcs.cc
   src/node_addon/parts/lifecycle.cc
   src/node_addon/parts/pivot_cache.cc

@@ -99,6 +99,7 @@ export const ErrorCode = Object.freeze({
   Unknown: 16,
 });
 export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
+export const RefMode = Object.freeze({ A1: 0, R1C1: 1 });
 export const CollationStrength = Object.freeze({ Compare: 0, Dynamic: 1, ClassicExact: 2 });
 export const SheetVisibility = Object.freeze({ Visible: 0, Hidden: 1, VeryHidden: 2 });
 export const GeometryMode = Object.freeze({ Display: 0, Print: 1 });
@@ -172,6 +173,12 @@ export const DrawingObjectKind = Object.freeze({
 });
 export const AnchorKind = Object.freeze({ OneCell: 0, TwoCell: 1, Absolute: 2 });
 export const AnchorEditAs = Object.freeze({ TwoCell: 0, OneCell: 1, Absolute: 2 });
+export const ShapePaint = Object.freeze({ Unset: 0, Solid: 1, None: 2, Other: 3 });
+export const SlicerSortOrder = Object.freeze({ Ascending: 0, Descending: 1 });
+export const SlicerCrossFilter = Object.freeze({ ShowItemsWithDataAtTop: 0, ShowItemsWithNoData: 1, None: 2 });
+export const SparklineType = Object.freeze({ Line: 0, Column: 1, Stacked: 2 });
+export const SparklineAxisType = Object.freeze({ Individual: 0, Group: 1, Custom: 2 });
+export const SparklineEmptyCells = Object.freeze({ Gap: 0, Zero: 1, Span: 2 });
 export const ChartPlotType = Object.freeze({
   Bar: 0,
   Bar3D: 1,

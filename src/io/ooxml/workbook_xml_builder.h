@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "io/ooxml/emission_plan.h"
@@ -62,8 +63,12 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan);
 ///
 /// Drops entries whose target part is absent under the same rule, the
 /// same counter and the same NULL policy as `BuildPackageRels`.
+///
+/// `id_map`, when non-null, receives `(source rId, written rId)` for every
+/// round-tripped relationship, so raw XML naming a source rId can follow it.
 std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan, const Workbook& wb,
-                              WriteDiagnostics* diagnostics);
+                              WriteDiagnostics* diagnostics,
+                              std::vector<std::pair<std::string, std::string>>* id_map = nullptr);
 
 }  // namespace io
 }  // namespace formulon

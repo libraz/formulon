@@ -572,6 +572,8 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   // their value is resolved below via `resolve_cell_value`. Only a stored
   // cell can contribute a formula pointer.
   const formulon::Cell* cell = sheet.cell_at(row, col);
+  const formulon::DataTable* table =
+      cell != nullptr && !cell->formula_text.empty() ? nullptr : sheet.data_table_covering(row, col);
   if (out_formula != nullptr) {
     *out_formula = (cell != nullptr && !cell->formula_text.empty()) ? cell->formula_text.c_str() : nullptr;
   }
@@ -585,6 +587,9 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   // cell's own `formula_text`, not scratch, so clearing here is safe.
   TextStore& store = const_cast<TextStore&>(wb->read_scratch);
   store.clear();
+  if (out_formula != nullptr && table != nullptr) {
+    *out_formula = store.emplace_back(formulon::data_table_formula_text(*table)).c_str();
+  }
   value_to_fm(v, store, out_value);
   return 0;
 }
@@ -650,8 +655,12 @@ fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std
     return rc;
   }
   formulon::Sheet::CellRead read;
-  wb->workbook().sheet(sheet_index).read_formula_cell(row, col, read);
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  sheet.read_formula_cell(row, col, read);
   out_text->assign(read.formula_text());
+  if (const formulon::DataTable* table = sheet.data_table_covering(row, col); out_text->empty() && table != nullptr) {
+    *out_text = formulon::data_table_formula_text(*table);
+  }
   return 0;
 }
 
@@ -726,6 +735,14 @@ extern "C" fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t s
                                   static_cast<fm_cell_range_t*>(ctx)->append(cell);
                                 },
                                 handle.get());
+  // A data table's result cells show its `TABLE()` formula, as `fm_workbook_get_formula` does.
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  for (fm_cell_range_t::Entry& entry : handle->entries) {
+    if (const formulon::DataTable* table = sheet.data_table_covering(entry.row, entry.col);
+        entry.formula == nullptr && table != nullptr) {
+      entry.formula = handle->text.emplace_back(formulon::data_table_formula_text(*table)).c_str();
+    }
+  }
   *out = handle.release();
   return 0;
 }

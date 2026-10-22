@@ -112,7 +112,8 @@ fm_cfvo_t from_cfvo(const formulon::cf::CfValueObject& src, BorrowedStringArena&
 void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalFormat& block,
                const formulon::cf::CFRule& rule, std::size_t dxf_count, BorrowedStringArena& text_arena,
                BorrowedArrayArena<fm_cf_cell_range_t>& range_arena, BorrowedArrayArena<fm_cfvo_t>& cfvo_arena,
-               BorrowedArrayArena<fm_cf_color_t>& color_arena, fm_cf_rule_t* out) {
+               BorrowedArrayArena<fm_cf_color_t>& color_arena, BorrowedArrayArena<fm_cf_icon_t>& icon_arena,
+               fm_cf_rule_t* out) {
   *out = fm_cf_rule_t{};
   out->id = text_arena.emplace(rule.id);
   out->type = static_cast<std::uint8_t>(rule.type);
@@ -220,6 +221,13 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->icon_set_percent = spec.percent ? 1 : 0;
     out->icon_set_floor_engaged = 1;
     out->icon_set_floor = from_cfvo(spec.floor, text_arena);
+    std::vector<fm_cf_icon_t> icons;
+    icons.reserve(spec.custom_icons.size());
+    for (const auto& icon : spec.custom_icons) {
+      icons.push_back(fm_cf_icon_t{text_arena.emplace(icon.icon_set), icon.icon_id});
+    }
+    out->icon_set_icon_count = static_cast<std::uint32_t>(icons.size());
+    out->icon_set_icons = icon_arena.adopt(std::move(icons));
   }
 }
 
@@ -312,6 +320,14 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   if (rule.icon_set_floor_engaged != 0) {
     spec.floor = to_cfvo(rule.icon_set_floor);
   }
+  // Shape and domain of the icons are checked by `validate(rule, ...)`.
+  if (rule.icon_set_icons != nullptr) {
+    spec.custom_icons.reserve(rule.icon_set_icon_count);
+    for (std::uint32_t i = 0; i < rule.icon_set_icon_count; ++i) {
+      spec.custom_icons.push_back(
+          formulon::cf::CfIcon{rule.icon_set_icons[i].icon_set, rule.icon_set_icons[i].icon_id});
+    }
+  }
   out_rule->icon_set = std::move(spec);
   return true;
 }
@@ -390,9 +406,10 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
   mutable_wb->cf_range_scratch.clear();
   mutable_wb->cfvo_scratch.clear();
   mutable_wb->cf_color_scratch.clear();
+  mutable_wb->cf_icon_scratch.clear();
   fill_rule(wb->workbook(), blocks[b], blocks[b].rules[r], wb->workbook().styles().dxfs.size(),
             mutable_wb->cf_text_scratch, mutable_wb->cf_range_scratch, mutable_wb->cfvo_scratch,
-            mutable_wb->cf_color_scratch, out);
+            mutable_wb->cf_color_scratch, mutable_wb->cf_icon_scratch, out);
   return 0;
 }
 

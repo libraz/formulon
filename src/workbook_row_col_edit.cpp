@@ -16,6 +16,7 @@
 #include "chart/chart_ref.h"
 #include "defined_name.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/slicer_edit.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
 #include "io/auto_filter_xml.h"
@@ -322,6 +323,15 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count exceeds sheet bounds",
                       "origin=" + std::to_string(origin) + " count=" + std::to_string(count));
   }
+  // A data table moves or goes whole; an edit cutting into it is refused, as a write into it is.
+  for (const DataTable& table : wb.sheet(sheet_index).data_tables()) {
+    if (data_table_edit_cut(table, axis == parser::RowColAxis::kRow, edit == parser::RowColEdit::kDelete, origin,
+                            count) == DataTableEditCut::kSplits) {
+      return make_error(FormulonErrorCode::kPreconditionFailed,
+                        std::string(op_name) + ": cannot change part of a data table",
+                        "origin=" + std::to_string(origin) + " count=" + std::to_string(count));
+    }
+  }
   return Expected<void, Error>::Ok();
 }
 
@@ -414,8 +424,13 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   }
   shift_retained_extension_ranges(target, origin, count, edit == parser::RowColEdit::kDelete,
                                   axis == parser::RowColAxis::kRow);
+  const std::vector<std::string> framed_slicers_before = framed_slicers(wb, sheet_index);
   shift_drawing_anchors(wb, sheet_index, origin, count, edit == parser::RowColEdit::kDelete,
                         axis == parser::RowColAxis::kRow);
+  // A slicer whose frame the edit deleted goes with its cache; their `Slicer_*` names leave here, under the lock.
+  if (erase_slicer_cache_names(defined_names, remove_unframed_slicers(wb, sheet_index, framed_slicers_before))) {
+    names_changed = true;
+  }
   std::vector<std::string> filters_after;
   filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
   for (TableMetadata& table : wb.mutable_tables()) {

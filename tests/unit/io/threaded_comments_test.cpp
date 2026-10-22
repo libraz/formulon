@@ -341,9 +341,10 @@ TEST(ThreadedComments, VmlRegeneratedWithPassthroughNotes) {
       wb.add_threaded_comment(0, Comment("{33333333-1111-4222-8333-444444444444}", 2, 2, kBob, "New thread"))));
   const std::vector<std::uint8_t> saved = Save(wb);
   const std::string vml = Part(saved, "xl/drawings/vmlDrawing1.vml");
-  EXPECT_EQ(vml.find("source-vml"), std::string::npos);
+  // The plain note keeps its own shape; the thread stubs get the default one.
+  EXPECT_EQ(Count(vml, "source-vml"), 1U);
   EXPECT_EQ(Count(vml, "ObjectType=\"Note\""), 3U);
-  EXPECT_NE(vml.find("<x:Row>0</x:Row>\n   <x:Column>0</x:Column>"), std::string::npos);
+  EXPECT_NE(vml.find("<x:Row>0</x:Row><x:Column>0</x:Column>"), std::string::npos);
   EXPECT_NE(vml.find("<x:Row>1</x:Row>\n   <x:Column>1</x:Column>"), std::string::npos);
   EXPECT_NE(vml.find("<x:Row>2</x:Row>\n   <x:Column>2</x:Column>"), std::string::npos);
 

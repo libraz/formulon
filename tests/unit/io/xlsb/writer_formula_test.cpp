@@ -755,8 +755,8 @@ TEST(XlsbWriter, HarvestedFuncIdCallsRoundTripWithIdenticalFormulaText) {
 }
 
 TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {
-  // A structured reference (`T[C]`) has no Ptg lowering in the
-  // common-token codec. A single unsupported formula must not make the
+  // A structured reference to a table the workbook lacks (`T[C]`) has no
+  // Ptg lowering. A single unsupported formula must not make the
   // whole workbook unsaveable: it degrades to its cached literal and the
   // explicit result count records the loss.
   Workbook wb = Workbook::create_empty();

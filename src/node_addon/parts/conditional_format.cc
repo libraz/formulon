@@ -229,6 +229,16 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
       if (rule.icon_set_floor_engaged != 0) {
         icon_set.Set("floor", CfvoToJs(env, rule.icon_set_floor));
       }
+      if (rule.icon_set_icon_count != 0U) {
+        Napi::Array icons = Napi::Array::New(env, rule.icon_set_icon_count);
+        for (uint32_t j = 0; j < rule.icon_set_icon_count; ++j) {
+          Napi::Object icon = Napi::Object::New(env);
+          icon.Set("iconSet", JsString(env, rule.icon_set_icons[j].icon_set));
+          icon.Set("iconId", Napi::Number::New(env, rule.icon_set_icons[j].icon_id));
+          icons.Set(j, icon);
+        }
+        icon_set.Set("icons", icons);
+      }
       item.Set("iconSet", icon_set);
     }
     arr.Set(static_cast<uint32_t>(emitted), item);
@@ -259,6 +269,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   std::vector<fm_cfvo_t> color_scale_thresholds;
   std::vector<fm_cf_color_t> color_scale_colors;
   std::vector<fm_cfvo_t> icon_set_thresholds;
+  std::vector<fm_cf_icon_t> icon_set_icons;
   formulon::c_api::BorrowedStringArena cfvo_strings;
   CheckedSpecReader reader(env);
   Napi::Array sqref_arr;
@@ -470,6 +481,28 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     if (reader.Object(is, "floor", &floor)) {
       rule.icon_set_floor_engaged = 1;
       rule.icon_set_floor = PullCfvo(reader, floor, &cfvo_strings);
+    }
+    Napi::Array icons;
+    if (reader.Array(is, "icons", &icons)) {
+      icon_set_icons.reserve(icons.Length());
+      for (uint32_t i = 0; i < icons.Length(); ++i) {
+        Napi::Value element;
+        if (!reader.ArrayElement(icons, i, &element)) {
+          if (!reader.ok()) {
+            break;
+          }
+          continue;
+        }
+        Napi::Object icon;
+        if (!reader.Object(element, "icons[]", &icon)) {
+          break;
+        }
+        std::string icon_set_name;
+        reader.String(icon, "iconSet", &icon_set_name);
+        icon_set_icons.push_back(fm_cf_icon_t{cfvo_strings.emplace(icon_set_name), reader.I32(icon, "iconId", 0)});
+      }
+      rule.icon_set_icons = icon_set_icons.empty() ? nullptr : icon_set_icons.data();
+      rule.icon_set_icon_count = static_cast<uint32_t>(icon_set_icons.size());
     }
   }
   if (!reader.ok()) {

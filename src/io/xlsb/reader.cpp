@@ -42,8 +42,10 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/sheet_reader.h"
+#include "io/xlsb/slicer_records.h"
 #include "io/xlsb/sst_reader.h"
 #include "io/xlsb/styles_reader.h"
+#include "io/xlsb/table_records.h"
 #include "io/xlsb/workbook_bin_reader.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
@@ -766,8 +768,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // has none: back-filling the factory's seeded defaults would invent style
   // records the file never carried and add an unwanted styles part on write.
   wb.set_styles(StylesTable{});
-  wb.set_date1904(workbook_info.date1904);
-  wb.set_workbook_protection_xml(workbook_info.protection_xml);
+  ApplyWorkbookBinInfo(workbook_info, wb);
   std::vector<std::string> sheet_part_paths;
   sheet_part_paths.reserve(bundle.size());
   for (const SheetBundleEntry& b : bundle) {
@@ -822,6 +823,22 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   LoadExternalLinkParts(zip, wb, sup_books);
   const XlsbExternalBooks external_books = CollectExternalBookTables(wb);
 
+  // Table parts decode before any formula so a structured reference
+  // (PtgList) resolves; the sheet loop loads these relationships again.
+  XlsbTableParts table_parts;
+  for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
+    const std::string rels_path = ooxml::rels_path_for_part(sheet_part_paths[i]);
+    if (!zip.has_entry(rels_path)) {
+      continue;
+    }
+    auto rels_or = LoadSheetRelationships(zip, rels_path, ooxml::dir_of(sheet_part_paths[i]));
+    if (!rels_or) {
+      return std::move(rels_or.error());
+    }
+    read_xlsb_table_parts(zip, i, rels_or.value(), table_parts);
+  }
+  wb.set_tables(xlsb_table_directory(table_parts));
+
   // 5b. Register every non-hidden `BrtName` entry as a defined name.
   // Needs `sheet_names` (for qualified references inside a name's own
   // formula) and the complete `name_table` / `sheet_ranges` (for
@@ -834,6 +851,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       !r) {
     return std::move(r.error());
   }
+  // Slicer cache lists stay future records keyed by workbook relationship ids.
+  wb.set_xlsb_book_frt(read_book_slicer_cache_ids(ByteSpan{wb_bytes.data(), wb_bytes.size()}));
 
   // 6. xl/sharedStrings.bin — load before the per-sheet decode loop so
   // BrtCellIsst can resolve indices in-pipeline. The text deque is
@@ -952,6 +971,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // Conditional-format and data-validation formulas name other books
   // through the same `[N]` cell formulas do.
   ingest_feature_formulas(wb, Workbook::FormulaSource::kRendered);
+
+  // Table parts the sheets relate to, through the relationships stored above.
+  load_xlsb_tables(wb, std::move(table_parts), sheet_names, name_table, sheet_ranges, external_books, consumed_parts);
 
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table
