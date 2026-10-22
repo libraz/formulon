@@ -633,7 +633,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   - id: scale_25_extreme_shrink
     cause: harness-cannot-capture
     mode: skip-oracle
@@ -641,7 +641,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 25 with v=[] h=[] pages=1, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   - id: zoom_50_dense_fit_off
     cause: harness-cannot-capture
     mode: skip-oracle
@@ -649,7 +649,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[29] pages=8 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   - id: zoom_25_dense_fit_off
     cause: harness-cannot-capture
     mode: skip-oracle
@@ -657,7 +657,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 25 with v=[] h=[] pages=1, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   - id: scale_50_short_row
     cause: harness-cannot-capture
     mode: skip-oracle
@@ -665,7 +665,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   - id: scale_50_flat_rows
     cause: harness-cannot-capture
     mode: skip-oracle
@@ -673,7 +673,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
 
   # -- GROUPBY / PIVOTBY nested subtotals (|total_depth| == 2) -------------
   # Both functions build the outer/inner hierarchy over the first key
@@ -689,7 +689,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 75, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 75 with v=[3,6] h=[] pages=3, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-08-16
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   - id: scale_75_short_row
     cause: harness-cannot-capture
     mode: skip-oracle
@@ -697,7 +697,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 75, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 75 with v=[3,6] h=[] pages=3, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-08-16
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   - id: scale_75_flat_rows
     cause: harness-cannot-capture
     mode: skip-oracle
@@ -705,7 +705,7 @@ entries:
     reason: "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 75, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 75 with v=[3,6] h=[] pages=3, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup."
     prefer: formulon
     first_noted: 2026-08-16
-    last_verified_excel_version: "16.0.20228"
+    last_verified_excel_version: "needs live Windows recapture"
   # -- Column print-layout width is inferred for every font but Calibri ----
   # Excel resolves a column's width in points from its stored character-unit
   # width times the Normal font's maximum digit width (MDW), so the
