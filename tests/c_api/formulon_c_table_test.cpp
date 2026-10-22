@@ -12,8 +12,13 @@
 #include "c_api/formulon_c.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "gtest/gtest.h"
+#include "io/xlsb/record.h"
+#include "io/xlsb/record_writer.h"
+#include "io/xlsb/writer.h"
 #include "miniz.h"
+#include "table.h"
 #include "utils/error.h"
+#include "workbook.h"
 
 namespace {
 
@@ -545,6 +550,79 @@ TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
   ASSERT_EQ(fm_styles_set_table_style_defaults(wb.handle, nullptr, ""), 0);
   const std::string styles_xml = ExtractZipEntry(Save(wb.handle), "xl/styles.xml");
   EXPECT_NE(styles_xml.find("<tableStyles count=\"0\" defaultTableStyle=\"TableStyleMedium2\"/>"), std::string::npos);
+}
+
+/// An `.xlsb` package whose only table `Sales` (id `id`) stays a verbatim
+/// part: a record the model has no field for sits before BrtEndList.
+std::vector<std::uint8_t> RetainedSalesPackage(std::uint32_t id) {
+  constexpr std::uint16_t kBrtEndList = 344;
+  formulon::Workbook book = formulon::Workbook::create_empty();
+  book.add_sheet("Sheet1");
+  formulon::TableMetadata table;
+  table.id = id;
+  table.name = "Sales";
+  table.display_name = "Sales";
+  table.ref = "A1:B3";
+  table.header_row = true;
+  table.columns = {formulon::TableColumn(1, "Product", "", "", ""), formulon::TableColumn(2, "Amount", "", "", "")};
+  table.style_info.present = true;
+  table.style_info.name = "TableStyleLight1";
+  book.mutable_tables().push_back(table);
+  auto saved = formulon::io::xlsb::write_xlsb_with_result(book);
+  EXPECT_TRUE(static_cast<bool>(saved));
+  if (!saved) {
+    return {};
+  }
+  return RewriteEntry(saved.value().bytes, "xl/tables/table" + std::to_string(id) + ".bin", [](std::string body) {
+    const std::vector<std::uint8_t> part(body.begin(), body.end());
+    std::vector<std::uint8_t> patched;
+    for (const formulon::io::xlsb::FramedRecord& rec : formulon::io::xlsb::split_records(part)) {
+      if (rec.type == kBrtEndList) {
+        formulon::io::xlsb::emit_record(patched, 35, std::vector<std::uint8_t>{0x02, 0x0E, 0x00, 0x00});
+        formulon::io::xlsb::emit_record(patched, 5000, std::vector<std::uint8_t>{0x01, 0x01, 0x00});
+        formulon::io::xlsb::emit_record(patched, 36, formulon::io::ByteSpan{});
+      }
+      formulon::io::xlsb::append_record(patched, part, rec);
+    }
+    return std::string(patched.begin(), patched.end());
+  });
+}
+
+TEST(FormulonCApiTable, CreateRejectsTheNameOfAVerbatimXlsbTable) {
+  WorkbookGuard wb;
+  Load(RetainedSalesPackage(3), wb);
+  ASSERT_EQ(fm_workbook_table_count(wb.handle), 0U);
+  const char* columns[] = {"A", "B"};
+  std::size_t index = 0;
+  EXPECT_EQ(fm_workbook_table_create(wb.handle, 0, "E1:F3", "sales", "sales", columns, 2, nullptr, 1, 0, &index),
+            kInvalidArgument);
+  EXPECT_EQ(fm_workbook_table_create(wb.handle, 0, "E1:F3", "Fresh", "SALES", columns, 2, nullptr, 1, 0, &index),
+            kInvalidArgument);
+  EXPECT_EQ(fm_workbook_table_count(wb.handle), 0U);
+  EXPECT_EQ(fm_workbook_table_create(wb.handle, 0, "E1:F3", "Fresh", "Fresh", columns, 2, nullptr, 1, 0, &index), 0);
+}
+
+TEST(FormulonCApiTable, RenameRejectsTheNameOfAVerbatimXlsbTable) {
+  WorkbookGuard wb;
+  Load(RetainedSalesPackage(3), wb);
+  const char* columns[] = {"A", "B"};
+  std::size_t index = 0;
+  ASSERT_EQ(fm_workbook_table_create(wb.handle, 0, "E1:F3", "Fresh", "Fresh", columns, 2, nullptr, 1, 0, &index), 0);
+  EXPECT_EQ(fm_workbook_table_rename(wb.handle, index, "Sales", "Sales"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_table_rename(wb.handle, index, "Fresh2", "sALES"), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_table_rename(wb.handle, index, "Fresh2", "Fresh2"), 0);
+}
+
+TEST(FormulonCApiTable, CreateAvoidsTheIdOfAVerbatimXlsbTable) {
+  WorkbookGuard wb;
+  Load(RetainedSalesPackage(1), wb);
+  const char* columns[] = {"A", "B"};
+  std::size_t index = 0;
+  ASSERT_EQ(fm_workbook_table_create(wb.handle, 0, "E1:F3", "Fresh", "Fresh", columns, 2, nullptr, 1, 0, &index), 0);
+  // The xlsx part is named after the table id.
+  const std::string table_xml = ExtractZipEntry(Save(wb.handle), "xl/tables/table2.xml");
+  EXPECT_NE(table_xml.find(" id=\"2\""), std::string::npos) << table_xml;
+  EXPECT_NE(table_xml.find("name=\"Fresh\""), std::string::npos) << table_xml;
 }
 
 }  // namespace

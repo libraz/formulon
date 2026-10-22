@@ -87,6 +87,18 @@ struct XlsbLinkTables {
   std::vector<std::string> names;
 };
 
+/// A table part kept verbatim, as much of it as a structured reference needs.
+/// Filled by `xlsb_retained_tables` (table_records.h).
+struct XlsbRetainedTable {
+  std::uint32_t id = 0;
+  std::string name;
+  std::string display_name;
+  /// 0-based sheet whose relationships name the part; unset when none does.
+  std::optional<std::size_t> sheet_index;
+  /// Column captions in table order.
+  std::vector<std::string> columns;
+};
+
 /// Mirrors `xl/workbook.bin`'s `BrtExternSheet` table: `xti[i]` is the
 /// entry a `PtgRef3d` / `PtgArea3d` / `PtgNameX` token resolves via
 /// `ixti == i`. Built once per workbook by `collect_ptg_sheet_ranges`
@@ -104,7 +116,10 @@ struct SheetRangeTable {
   /// The workbook's tables, which a structured reference (PtgList) names by
   /// id and whose sheets it needs an XTI for; null when there are none.
   const std::vector<TableMetadata>* tables = nullptr;
-  /// `idList` values of table parts kept verbatim, which no model table may take.
+  /// Table parts kept verbatim: structured references that no model table
+  /// resolves fall back to them.
+  std::vector<XlsbRetainedTable> retained_tables;
+  /// `idList` values of `retained_tables`, which no model table may take.
   std::unordered_set<std::uint32_t> reserved_table_ids;
 };
 

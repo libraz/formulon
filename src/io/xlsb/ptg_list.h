@@ -48,8 +48,8 @@ Expected<parser::AstNode*, Error> decode_ptg_list(ByteSpan& cursor, Arena& arena
 std::uint32_t xlsb_table_id(const std::vector<TableMetadata>& tables, std::size_t index,
                             const std::unordered_set<std::uint32_t>& reserved);
 
-/// The 0-based sheet of the table a StructuredRef names, or nullopt.
-std::optional<std::int32_t> structured_ref_sheet(const parser::AstNode& node, const std::vector<TableMetadata>* tables);
+/// The 0-based sheet of the model or verbatim table a StructuredRef names, or nullopt.
+std::optional<std::int32_t> structured_ref_sheet(const parser::AstNode& node, const SheetRangeTable& ranges);
 
 /// Appends `node` (a StructuredRef) as a PtgList of Ptg class `cls`
 /// (0x20 / 0x40 / 0x60). `kIoXlsbUnsupportedPtg` for an unknown table or

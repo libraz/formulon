@@ -516,6 +516,60 @@ TEST(XlsbTableFidelity, StructuredReferencesSurviveAsPtgList) {
   }
 }
 
+/// `part` with the PtgList of its calculated-column formula naming table 99,
+/// which no part holds, so the reader cannot model the table.
+std::vector<std::uint8_t> WithDanglingCalculatedColumn(const std::vector<std::uint8_t>& part) {
+  constexpr std::size_t kListIndexAtPtg = 6;
+  std::vector<std::uint8_t> patched = part;
+  for (const FramedRecord& rec : split_records(part)) {
+    if (rec.type != 351U) {
+      continue;
+    }
+    // fArray (1) and cce (4) precede the rgce.
+    const std::size_t ptg = static_cast<std::size_t>(rec.payload.data - part.data()) + 5U;
+    EXPECT_EQ(part[ptg], 0x18);
+    patched[ptg + kListIndexAtPtg] = 99;
+    patched[ptg + kListIndexAtPtg + 1U] = 0;
+  }
+  return patched;
+}
+
+TEST(XlsbTableFidelity, RetainedTableStructuredRefsSurviveResave) {
+  const std::vector<std::uint8_t> package = SaveXlsb(StructuredRefBook());
+  const std::vector<std::uint8_t> patched = WithDanglingCalculatedColumn(Entry(package, "xl/tables/table4.bin"));
+  const Workbook wb = LoadXlsb(RepackWithEntries(package, {{"xl/tables/table4.bin", patched}}));
+  ASSERT_TRUE(wb.tables().empty());
+  ASSERT_NE(wb.sheet(1).cell_at(0, 0), nullptr);
+  ASSERT_EQ(wb.sheet(1).cell_at(0, 0)->formula_text, "=SUM(Sales[Amount])");
+  // Cells and a defined name name the part the model does not hold.
+  WriteDiagnostics diagnostics;
+  const std::vector<std::uint8_t> resaved = SaveXlsb(wb, &diagnostics);
+  ASSERT_FALSE(resaved.empty());
+  EXPECT_EQ(diagnostics.downgraded_formula_count, 0U);
+  EXPECT_EQ(Entry(resaved, "xl/tables/table4.bin"), patched);
+  const Workbook back = LoadXlsb(resaved);
+  EXPECT_TRUE(back.tables().empty());
+  const std::pair<std::uint32_t, const char*> cells[] = {{0, "=SUM(Sales[Amount])"},
+                                                         {1, "=ROWS(Sales[#All])"},
+                                                         {2, "=SUM(Sales[[#Data],[#Totals],[Amount]])"},
+                                                         {3, "=COUNTA(Sales[[#Headers],[Region]:[Tax]])"},
+                                                         {4, "=SUM(Sales[[Amount]:[Tax]])"}};
+  for (const auto& [row, formula] : cells) {
+    SCOPED_TRACE(row);
+    const Cell* cell = back.sheet(1).cell_at(row, 0);
+    ASSERT_NE(cell, nullptr);
+    EXPECT_EQ(cell->formula_text, formula);
+  }
+  bool has_name = false;
+  for (const auto& entry : back.defined_names()) {
+    if (entry.name == "SalesTotal") {
+      has_name = true;
+      EXPECT_EQ(entry.formula, "SUM(Sales[Amount])");
+    }
+  }
+  EXPECT_TRUE(has_name);
+}
+
 TEST(XlsbTableFidelity, CalculatedColumnPtgListMatchesTheSpecExample) {
   // [MS-XLSB] 3.3.11: "=Table1[[#This Row],[Price]]*.08" over Table1 (id 1)
   // whose second column is Price, on the first sheet.

@@ -314,7 +314,9 @@ void EmitAcuid(std::vector<std::uint8_t>& out, const std::string* guid) {
   emit_record(out, kBrtACEnd, ByteSpan{});
 }
 
-Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table) {
+/// With `identity_only`, stops after the id and names: the checks that make a
+/// part model-readable are skipped.
+Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table, bool identity_only = false) {
   ASSIGN_OR_RETURN(const MergeRange rfx, read_rfx(payload));
   if (rfx.first_row > rfx.last_row || rfx.first_col > rfx.last_col || rfx.last_row >= Sheet::kMaxRows ||
       rfx.last_col >= Sheet::kMaxCols) {
@@ -338,6 +340,12 @@ Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table) {
   for (std::string& style : styles) {
     ASSIGN_OR_RETURN(auto value, read_xlnullablewidestring(payload));
     style = std::move(value);
+  }
+  if (identity_only) {
+    table->id = id;
+    table->name = name.empty() ? display_name : std::move(name);
+    table->display_name = std::move(display_name);
+    return Expected<void, Error>::Ok();
   }
   if ((flags & kSingleCell) != 0U || (lt != kLtRange && lt != kLtXml && lt != kLtExtData)) {
     // Single-cell XML-map tables live in their own part type.
@@ -1038,29 +1046,46 @@ void load_xlsb_tables(Workbook& wb, XlsbTableParts parts, const std::vector<std:
   wb.set_tables(std::move(tables));
 }
 
-std::unordered_set<std::uint32_t> xlsb_retained_table_ids(const Workbook& wb) {
-  std::unordered_set<std::uint32_t> ids;
+std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb) {
+  std::vector<XlsbRetainedTable> out;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path.compare(0, 10, "xl/tables/") != 0 || part.path.size() < 4U ||
         part.path.compare(part.path.size() - 4U, 4U, ".bin") != 0) {
       continue;
     }
+    std::optional<TableMetadata> head;
+    std::vector<std::string> columns;
     for (const FramedRecord& rec : split_records(part.bytes)) {
-      if (rec.type != kBrtBeginList) {
-        continue;
+      if (rec.type == kBrtBeginList && !head) {
+        TableMetadata table;
+        if (!ReadBeginList(rec.payload, &table, /*identity_only=*/true)) {
+          break;
+        }
+        head = std::move(table);
+      } else if (rec.type == kBrtBeginListCol && head) {
+        auto col = ReadBeginListCol(rec.payload);
+        columns.push_back(col ? std::move(col.value().name) : std::string());
       }
-      ByteSpan payload = rec.payload;
-      // rfx (four u32) and the list type precede idList.
-      if (payload.size >= 24U) {
-        payload = ByteSpan{payload.data + 20, payload.size - 20U};
-        if (auto id = read_u32(payload)) {
-          ids.insert(id.value());
+    }
+    if (!head) {
+      continue;
+    }
+    XlsbRetainedTable table;
+    table.id = head->id;
+    table.name = std::move(head->name);
+    table.display_name = std::move(head->display_name);
+    table.columns = std::move(columns);
+    for (std::size_t i = 0; i < wb.sheet_count() && !table.sheet_index; ++i) {
+      for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
+        if (rel.target == part.path) {
+          table.sheet_index = i;
+          break;
         }
       }
-      break;
     }
+    out.push_back(std::move(table));
   }
-  return ids;
+  return out;
 }
 
 XlsbTableAllocator::XlsbTableAllocator(std::unordered_set<std::string> taken_paths)

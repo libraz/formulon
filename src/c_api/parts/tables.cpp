@@ -10,12 +10,14 @@
 #include <string_view>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "auto_filter.h"
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "drawing/slicer_edit.h"
 #include "io/auto_filter_xml.h"
+#include "io/xlsb/table_records.h"
 #include "io/xml_escape.h"
 #include "table.h"
 #include "utils/error.h"
@@ -130,8 +132,8 @@ fm_status_t write_totals_cell(formulon::Workbook& book, const formulon::TableMet
 }
 
 /// Rejects an empty name or one another table (other than `self`) already
-/// uses as its name or display name. Table names share one case-insensitive
-/// namespace.
+/// uses as its name or display name, a table part kept verbatim included.
+/// Table names share one case-insensitive namespace.
 fm_status_t check_table_names(const formulon::Workbook& book, std::string_view name, std::string_view display_name,
                               std::size_t self, const char* api) {
   if (name.empty() || display_name.empty()) {
@@ -146,6 +148,15 @@ fm_status_t check_table_names(const formulon::Workbook& book, std::string_view n
     }
     const std::string existing_name_key = ascii_lower(tables[i].name);
     const std::string existing_display_name_key = ascii_lower(tables[i].display_name);
+    if (existing_name_key == name_key || existing_display_name_key == name_key ||
+        existing_name_key == display_name_key || existing_display_name_key == display_name_key) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api,
+                               "reason=table name already exists name=" + std::string(name));
+    }
+  }
+  for (const formulon::io::xlsb::XlsbRetainedTable& retained : formulon::io::xlsb::xlsb_retained_tables(book)) {
+    const std::string existing_name_key = ascii_lower(retained.name);
+    const std::string existing_display_name_key = ascii_lower(retained.display_name);
     if (existing_name_key == name_key || existing_display_name_key == name_key ||
         existing_name_key == display_name_key || existing_display_name_key == display_name_key) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, api,
@@ -328,6 +339,17 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
   uint32_t next_id = 1;
   for (const formulon::TableMetadata& existing : book.tables()) {
     next_id = std::max(next_id, existing.id + 1U);
+  }
+  // A table part kept verbatim still owns its id.
+  const auto retained_tables = formulon::io::xlsb::xlsb_retained_tables(book);
+  for (bool taken = true; taken;) {
+    taken = false;
+    for (const formulon::io::xlsb::XlsbRetainedTable& retained : retained_tables) {
+      if (retained.id == next_id) {
+        ++next_id;
+        taken = true;
+      }
+    }
   }
   table.id = next_id;
   table.columns.reserve(column_count);

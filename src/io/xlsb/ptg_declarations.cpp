@@ -346,7 +346,7 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
     }
     case parser::NodeKind::StructuredRef: {
       // PtgList names its table's sheet through an XTI.
-      if (const std::optional<std::int32_t> itab = structured_ref_sheet(node, ranges.tables)) {
+      if (const std::optional<std::int32_t> itab = structured_ref_sheet(node, ranges)) {
         AddSheetRange(0U, *itab, *itab, ranges, seen);
       }
       return;

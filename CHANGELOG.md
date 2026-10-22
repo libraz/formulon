@@ -211,6 +211,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-emits its own original `<v:shape>` (fill, stroke, shadow, text box style,
   font, size) with only its anchor, visibility and cell patched; only a new
   note gets the default shape.
+- `.xlsb` tables kept verbatim (a part the model cannot hold) keep their
+  name and id: creating or renaming a table onto either is refused, and
+  structured references to them are written back instead of failing the save
+  (a defined name) or losing the formula (a cell).
 
 ## [0.17.0] - 2026-10-21
 

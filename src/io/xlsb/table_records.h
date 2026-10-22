@@ -104,8 +104,10 @@ void load_xlsb_tables(Workbook& wb, XlsbTableParts parts, const std::vector<std:
                       const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
                       const XlsbExternalBooks& external_books, std::unordered_set<std::string>& consumed_parts);
 
-/// The `idList` of every table part kept verbatim in `wb`'s passthrough parts.
-std::unordered_set<std::uint32_t> xlsb_retained_table_ids(const Workbook& wb);
+/// Identity, sheet and column captions of every table part kept verbatim in
+/// `wb`'s passthrough parts, read from its BrtBeginList and BrtBeginListCol
+/// records. A part whose list record cannot be read is left out.
+std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb);
 
 /// One generated table part and the sheet relationship that names it.
 struct XlsbTablePart {

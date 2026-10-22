@@ -451,6 +451,7 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
   if (!wb.tables().empty()) {
     collected.tables = &wb.tables();
   }
+  collected.retained_tables = xlsb_retained_tables(wb);
   std::unordered_set<std::uint64_t> seen;
   for (const DefinedName& dn : wb.defined_names()) {
     CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen);
@@ -480,7 +481,10 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
   ranges.value().links = std::move(collected.links);
   ranges.value().indexer = collected.indexer;
   ranges.value().tables = collected.tables;
-  ranges.value().reserved_table_ids = xlsb_retained_table_ids(wb);
+  ranges.value().retained_tables = std::move(collected.retained_tables);
+  for (const XlsbRetainedTable& table : ranges.value().retained_tables) {
+    ranges.value().reserved_table_ids.insert(table.id);
+  }
   return ranges;
 }
 

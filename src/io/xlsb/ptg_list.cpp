@@ -97,6 +97,15 @@ const TableMetadata* FindTable(const std::vector<TableMetadata>* tables, std::st
   return nullptr;
 }
 
+const XlsbRetainedTable* FindRetainedTable(const SheetRangeTable& ranges, std::string_view name) {
+  for (const XlsbRetainedTable& t : ranges.retained_tables) {
+    if (EqualsIgnoreCase(t.display_name, name) || EqualsIgnoreCase(t.name, name)) {
+      return &t;
+    }
+  }
+  return nullptr;
+}
+
 /// The parsed bracket payload: selector bits and the column slice.
 struct Payload {
   std::uint8_t selectors = 0;
@@ -382,20 +391,37 @@ std::uint32_t xlsb_table_id(const std::vector<TableMetadata>& tables, std::size_
   return 0U;
 }
 
-std::optional<std::int32_t> structured_ref_sheet(const parser::AstNode& node,
-                                                 const std::vector<TableMetadata>* tables) {
+std::optional<std::int32_t> structured_ref_sheet(const parser::AstNode& node, const SheetRangeTable& ranges) {
   std::size_t index = 0;
-  const TableMetadata* table = FindTable(tables, node.as_structured_ref_table(), &index);
-  if (table == nullptr) {
-    return std::nullopt;
+  if (const TableMetadata* table = FindTable(ranges.tables, node.as_structured_ref_table(), &index)) {
+    return static_cast<std::int32_t>(table->sheet_index);
   }
-  return static_cast<std::int32_t>(table->sheet_index);
+  if (const XlsbRetainedTable* retained = FindRetainedTable(ranges, node.as_structured_ref_table());
+      retained != nullptr && retained->sheet_index) {
+    return static_cast<std::int32_t>(*retained->sheet_index);
+  }
+  return std::nullopt;
 }
 
 Expected<void, Error> encode_ptg_list(std::vector<std::uint8_t>& out, const parser::AstNode& node, std::uint8_t cls,
                                       const SheetRangeTable& ranges) {
   std::size_t index = 0;
   const TableMetadata* table = FindTable(ranges.tables, node.as_structured_ref_table(), &index);
+  // A table kept verbatim resolves through its retained identity and columns.
+  TableMetadata retained_view;
+  std::uint32_t table_id = 0;
+  if (table != nullptr) {
+    table_id = xlsb_table_id(*ranges.tables, index, ranges.reserved_table_ids);
+  } else if (const XlsbRetainedTable* retained = FindRetainedTable(ranges, node.as_structured_ref_table());
+             retained != nullptr && retained->sheet_index) {
+    retained_view.sheet_index = *retained->sheet_index;
+    for (const std::string& caption : retained->columns) {
+      retained_view.columns.emplace_back();
+      retained_view.columns.back().name = caption;
+    }
+    table = &retained_view;
+    table_id = retained->id;
+  }
   if (table == nullptr) {
     return Unsupported("structured reference names no table of this workbook");
   }
@@ -435,7 +461,7 @@ Expected<void, Error> encode_ptg_list(std::vector<std::uint8_t>& out, const pars
   emit_u8(out, kEptgList);
   emit_u16(out, static_cast<std::uint16_t>(xti - ranges.xti.begin()));
   emit_u16(out, flags);
-  emit_u32(out, xlsb_table_id(*ranges.tables, index, ranges.reserved_table_ids));
+  emit_u32(out, table_id);
   emit_u16(out, col_first);
   emit_u16(out, col_last);
   return Expected<void, Error>::Ok();
