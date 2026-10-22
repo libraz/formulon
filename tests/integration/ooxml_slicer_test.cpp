@@ -14,12 +14,15 @@
 
 #include "drawing/drawing_edit.h"
 #include "drawing/slicer_edit.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -789,6 +792,20 @@ TEST(SlicerFidelity, DeletingTheFramesRowsRemovesTheSlicerAndItsCache) {
   const std::string slicers = ReadPart(saved, "xl/slicers/slicer1.xml");
   EXPECT_FALSE(Has(slicers, "name=\"Region\"")) << slicers;
   EXPECT_TRUE(Has(slicers, "Slicer_Pivot")) << slicers;
+}
+
+TEST(SlicerFidelity, DeletingTheFramesRowsRecalculatesFormulasNamingItsCache) {
+  Workbook wb = LoadOrDie(SlicerPackage({true, false, "rId3", "twoCell"}));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 25, "=Slicer_Region")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(wb.sheet(0).cell_at(0, 25)->cached_value.as_error(), ErrorCode::NA);
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 1, 11)));
+  ASSERT_TRUE(list_slicers(wb, 0).value().empty());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* cell = wb.sheet(0).cell_at(0, 25);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_TRUE(cell->cached_value.is_error());
+  EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Name);
 }
 
 TEST(SlicerFidelity, DeletingTheLastFramesCellsLeavesNoSlicerState) {
