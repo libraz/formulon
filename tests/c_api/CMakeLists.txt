@@ -65,6 +65,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_trace_test.cpp
   formulon_c_zip_budget_test.cpp
   partial_recalc_test.cpp
+  pivot_field_order_test.cpp
   workbook_sheet_ops_test.cpp
 )
 

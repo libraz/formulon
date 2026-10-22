@@ -810,32 +810,76 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   const std::size_t field_count = table->fields().size();
+  constexpr std::uint8_t kNotRequested = 0U;
+  constexpr std::uint8_t kRequested = 1U;
+  constexpr std::uint8_t kAlreadyRemoved = 2U;
+  std::vector<std::uint8_t> requested_field(field_count, kNotRequested);
   for (std::size_t i = 0; i < count; ++i) {
     if (indices[i] >= field_count) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                (std::string(fn) + ": indices[i] out of range").c_str(),
                                "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
     }
-    if (std::find(indices, indices + i, indices[i]) != indices + i) {
+    if (requested_field[indices[i]] != kNotRequested) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                (std::string(fn) + ": indices lists a field twice").c_str(),
                                "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
     }
+    requested_field[indices[i]] = kRequested;
+  }
+  // The getter exposes the axis vector's storage, so preserve the request
+  // before updating either order in case `indices` aliases one of them.
+  std::vector<std::uint32_t> requested_order;
+  if (count > 0U) {
+    requested_order.assign(indices, indices + count);
   }
   // The list is the axis's whole membership: a field left out comes off the
   // axis, and a listed field moves onto it from wherever it was.
   const formulon::pivot::PivotAxis axis = row ? formulon::pivot::PivotAxis::Row : formulon::pivot::PivotAxis::Col;
   std::vector<std::uint32_t>& target = row ? table->mutable_row_field_order() : table->mutable_col_field_order();
   for (const std::uint32_t field : target) {
-    if (field < field_count && std::find(indices, indices + count, field) == indices + count) {
+    if (field < field_count && requested_field[field] == kNotRequested) {
       table->mutable_fields()[field].axis = formulon::pivot::PivotAxis::None;
     }
   }
-  for (std::size_t i = 0; i < count; ++i) {
-    table->mutable_fields()[indices[i]].axis = axis;
-    remove_from_field_order(*table, !row, indices[i]);
+  for (const std::uint32_t field : requested_order) {
+    table->mutable_fields()[field].axis = axis;
   }
-  target.assign(indices, indices + count);
+
+  // Remove each requested field's first occurrence from the opposite order,
+  // preserving its stable order even if a loaded document contains duplicates.
+  std::vector<std::uint32_t>& opposite = row ? table->mutable_col_field_order() : table->mutable_row_field_order();
+  const std::optional<std::size_t> opposite_values_position =
+      row ? table->col_values_position() : table->row_values_position();
+  std::size_t removed_before_values = 0U;
+  std::size_t kept = 0U;
+  for (std::size_t read = 0U; read < opposite.size(); ++read) {
+    const std::uint32_t field = opposite[read];
+    if (field < field_count && requested_field[field] == kRequested) {
+      requested_field[field] = kAlreadyRemoved;
+      if (opposite_values_position.has_value() && read < *opposite_values_position) {
+        ++removed_before_values;
+      }
+      continue;
+    }
+    if (kept != read) {
+      opposite[kept] = field;
+    }
+    ++kept;
+  }
+  opposite.resize(kept);
+  if (opposite_values_position.has_value() && removed_before_values > 0U) {
+    if (row) {
+      table->set_col_values_position(*opposite_values_position - removed_before_values);
+    } else {
+      table->set_row_values_position(*opposite_values_position - removed_before_values);
+    }
+  }
+  if (count == 0U) {
+    target.clear();
+  } else {
+    target.assign(requested_order.begin(), requested_order.end());
+  }
   // Keep a Values marker within the new order's slots.
   const std::optional<std::size_t> values_position = row ? table->row_values_position() : table->col_values_position();
   if (values_position.has_value() && *values_position > count) {
