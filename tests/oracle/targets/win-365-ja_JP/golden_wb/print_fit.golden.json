@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:14:30Z",
-    "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-23T04:14:30Z"
+    "generated_at": "2026-10-23T13:04:23Z",
+    "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-23T13:04:23Z"
   },
   "cases": [
     {
@@ -115,8 +115,7 @@
           }
         }
       },
-      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
-      "observed": {
+      "expect": {
         "print": {
           "print_area": "A1:H1",
           "h_breaks": [],
@@ -539,8 +538,7 @@
           }
         }
       },
-      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 25 with v=[] h=[] pages=1, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
-      "observed": {
+      "expect": {
         "print": {
           "print_area": "A1:H30",
           "h_breaks": [],
