@@ -260,8 +260,8 @@ class SkipProjectionTests(unittest.TestCase):
         # A win-only entry must not skip the case on another target.
         win = self._emit("win-365-ja_JP")["skips"]
         mac = self._emit("mac-365-ja_JP")["skips"]
-        self.assertIn("scale_50_flat_rows", win)
-        self.assertNotIn("scale_50_flat_rows", mac)
+        self.assertIn("external_stub_webservice", win)
+        self.assertNotIn("external_stub_webservice", mac)
 
     def test_rewrite_is_skipped_when_the_content_is_unchanged(self) -> None:
         # The file is a CMake configure input; rewriting it unconditionally
