@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-13T04:30:53Z"
+    "generated_at": "2026-10-23T04:17:11Z"
   },
   "tolerance": {
     "abs": 1e-09,
@@ -110,6 +110,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0537818867274622
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -258,6 +262,10 @@
       "expect": {
         "kind": "number",
         "value": 7.272540897341714
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -267,6 +275,10 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -373,6 +385,10 @@
       "expect": {
         "kind": "number",
         "value": 0.1260941303659051
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -382,6 +398,10 @@
       "expect": {
         "kind": "number",
         "value": 0.1180339887498949
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -400,6 +420,10 @@
       "expect": {
         "kind": "number",
         "value": -1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -430,6 +454,10 @@
       "expect": {
         "kind": "number",
         "value": 0.13523953080286844
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -607,6 +635,84 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "rri_exp_log_form_a",
+      "formula": "=RRI(3,25232.91,976406.04)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.382369422704911
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rri_exp_log_form_b",
+      "formula": "=RRI(38.9,54123.17,821882.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07243471583009375
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rri_exp_log_form_c",
+      "formula": "=RRI(38,85802.61,589618.18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05203010438694311
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "xnpv_exp_log_form_a",
+      "formula": "=XNPV(0.2036,{-6330.59;3480.01;1130.15;3587.31},{44205;45070;46123;46186})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2348.615433109875
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "xnpv_exp_log_form_b",
+      "formula": "=XNPV(0.263,{-2570.64;102.19;2936.41;1394.33;-117.67},{38615;38960;39138;39696;40565})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 277.26245335237104
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "xnpv_exp_log_form_c",
+      "formula": "=XNPV(0.0785,{-4662.44;4053.52;4284.38;3790.09;2926.3;-294.17;602.24},{37622;38044;38509;38797;38834;39003;39459})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8056.725418895475
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

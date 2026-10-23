@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-13T03:12:28Z",
-    "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
+    "generated_at": "2026-10-23T04:14:30Z",
+    "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-23T04:14:30Z"
   },
   "cases": [
     {
@@ -90,7 +90,7 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "2ca3d416e4230fa1cbb2862a194c20d813d785d81b787cdf8d5fed19b9e31783",
+          "xlsx_sha256": "6cd5738ea98010c71f4d9eac2602ec1a687de11cb1a84c79de52f9e5279b2022",
           "xlsx_bytes": 2634
         }
       }
@@ -174,7 +174,7 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "bc7d806921b4406116a38e3a3ba7f5f2264f280f60eec3b048a1d8f229968d02",
+          "xlsx_sha256": "4d3378077795e654df8f41bc2fafced62683cf626034194a91d52e39b162d22b",
           "xlsx_bytes": 2602
         }
       }
@@ -266,7 +266,7 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "eaa0ed00c69aa0e9e07c0a1d0eb1db6095c6a258b46e680f669991c35799296d",
+          "xlsx_sha256": "ccbb482a0541e7315afbb6351faac4858d129dc74336098532ad9041bbe1646a",
           "xlsx_bytes": 2654
         }
       }
@@ -354,7 +354,7 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "bd8b900ce65afbbd2ba93535fc5701c6432ed43d2a6434b216d46e43f8a187bc",
+          "xlsx_sha256": "93afbd352201e3065342b744bec7624ea36b1fb43d72358076f71af8a1c8ed1c",
           "xlsx_bytes": 2762
         }
       }
@@ -437,7 +437,7 @@
           "print_title_cols": "A:A",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "466c8a7e98550885a1a0a7b6fa49d7a9f3f6bbf024ade9a801f7967a0dd9a6a2",
+          "xlsx_sha256": "0981daf09ea83ef320204a35062c7c809717a473662e58d485164046e00ee718",
           "xlsx_bytes": 2640
         }
       }
@@ -528,7 +528,7 @@
           "manual_col_breaks": [
             3
           ],
-          "xlsx_sha256": "a3535a4553239881e804bcd50b650be1bf6953a62a23182503b8b8ad6a295d04",
+          "xlsx_sha256": "69267d863151f425212ec638fd66d7db06c2f86212b17e61e009e7fa20077235",
           "xlsx_bytes": 2704
         }
       }

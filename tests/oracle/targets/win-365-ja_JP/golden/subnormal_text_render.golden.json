@@ -1,0 +1,1223 @@
+{
+  "suite": "subnormal_text_render",
+  "description": "How a subnormal number renders as text: concatenation, TEXT with General, fixed, scientific, fraction and sectioned formats, FIXED and DOLLAR",
+  "environment": {
+    "excel_version": "16.0.20430",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-23T04:17:11Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "concat_pa",
+      "formula": "=(2^-1022*1.25-2^-1022)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concat_na",
+      "formula": "=(2^-1022-2^-1022*1.25)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0"
+      }
+    },
+    {
+      "id": "concat_pb",
+      "formula": "=EXP(-720)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concat_nb",
+      "formula": "=(0-EXP(-720))&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0"
+      }
+    },
+    {
+      "id": "concat_pu",
+      "formula": "=(2^-1022*(1+2^-52)-2^-1022)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concat_nu",
+      "formula": "=(2^-1022-2^-1022*(1+2^-52))&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0"
+      }
+    },
+    {
+      "id": "general_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "general_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "general_pb",
+      "formula": "=TEXT(EXP(-720),\"G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "general_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "general_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "general_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"G/標準\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "int_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "int_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "int_pb",
+      "formula": "=TEXT(EXP(-720),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "int_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "int_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "int_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "dec3_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"0.000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000"
+      }
+    },
+    {
+      "id": "dec3_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"0.000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000"
+      }
+    },
+    {
+      "id": "dec3_pb",
+      "formula": "=TEXT(EXP(-720),\"0.000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000"
+      }
+    },
+    {
+      "id": "dec3_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"0.000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000"
+      }
+    },
+    {
+      "id": "dec3_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"0.000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000"
+      }
+    },
+    {
+      "id": "dec3_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"0.000\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000"
+      }
+    },
+    {
+      "id": "sci2_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E-01"
+      }
+    },
+    {
+      "id": "sci2_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.00E-01"
+      }
+    },
+    {
+      "id": "sci2_pb",
+      "formula": "=TEXT(EXP(-720),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E+00"
+      }
+    },
+    {
+      "id": "sci2_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.00E-01"
+      }
+    },
+    {
+      "id": "sci2_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E+00"
+      }
+    },
+    {
+      "id": "sci2_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.00E-01"
+      }
+    },
+    {
+      "id": "sci0_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0E-1"
+      }
+    },
+    {
+      "id": "sci0_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0E-1"
+      }
+    },
+    {
+      "id": "sci0_pb",
+      "formula": "=TEXT(EXP(-720),\"0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0E+0"
+      }
+    },
+    {
+      "id": "sci0_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0E-1"
+      }
+    },
+    {
+      "id": "sci0_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0E+0"
+      }
+    },
+    {
+      "id": "sci0_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"0E+0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0E-1"
+      }
+    },
+    {
+      "id": "pct_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0%"
+      }
+    },
+    {
+      "id": "pct_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0%"
+      }
+    },
+    {
+      "id": "pct_pb",
+      "formula": "=TEXT(EXP(-720),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0%"
+      }
+    },
+    {
+      "id": "pct_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0%"
+      }
+    },
+    {
+      "id": "pct_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0%"
+      }
+    },
+    {
+      "id": "pct_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"0%\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0%"
+      }
+    },
+    {
+      "id": "grp_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "grp_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "grp_pb",
+      "formula": "=TEXT(EXP(-720),\"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "grp_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "grp_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "grp_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"#,##0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "frac_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0    "
+      }
+    },
+    {
+      "id": "frac_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0    "
+      }
+    },
+    {
+      "id": "frac_pb",
+      "formula": "=TEXT(EXP(-720),\"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0    "
+      }
+    },
+    {
+      "id": "frac_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0    "
+      }
+    },
+    {
+      "id": "frac_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0    "
+      }
+    },
+    {
+      "id": "frac_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"# ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0    "
+      }
+    },
+    {
+      "id": "sections_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "sections_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "sections_pb",
+      "formula": "=TEXT(EXP(-720),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "sections_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "sections_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "sections_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "(0)"
+      }
+    },
+    {
+      "id": "cond_pa",
+      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"[<0]\"\"n\"\";[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "p"
+      }
+    },
+    {
+      "id": "cond_na",
+      "formula": "=TEXT((2^-1022-2^-1022*1.25),\"[<0]\"\"n\"\";[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "n"
+      }
+    },
+    {
+      "id": "cond_pb",
+      "formula": "=TEXT(EXP(-720),\"[<0]\"\"n\"\";[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "cond_nb",
+      "formula": "=TEXT((0-EXP(-720)),\"[<0]\"\"n\"\";[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "n"
+      }
+    },
+    {
+      "id": "cond_pu",
+      "formula": "=TEXT((2^-1022*(1+2^-52)-2^-1022),\"[<0]\"\"n\"\";[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "cond_nu",
+      "formula": "=TEXT((2^-1022-2^-1022*(1+2^-52)),\"[<0]\"\"n\"\";[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "n"
+      }
+    },
+    {
+      "id": "fixed_pa",
+      "formula": "=FIXED((2^-1022*1.25-2^-1022))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "fixed_na",
+      "formula": "=FIXED((2^-1022-2^-1022*1.25))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "fixed_pb",
+      "formula": "=FIXED(EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "fixed_nb",
+      "formula": "=FIXED((0-EXP(-720)))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "fixed_pu",
+      "formula": "=FIXED((2^-1022*(1+2^-52)-2^-1022))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "fixed_nu",
+      "formula": "=FIXED((2^-1022-2^-1022*(1+2^-52)))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00"
+      }
+    },
+    {
+      "id": "fixed0_pa",
+      "formula": "=FIXED((2^-1022*1.25-2^-1022),0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "fixed0_na",
+      "formula": "=FIXED((2^-1022-2^-1022*1.25),0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "fixed0_pb",
+      "formula": "=FIXED(EXP(-720),0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "fixed0_nb",
+      "formula": "=FIXED((0-EXP(-720)),0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "fixed0_pu",
+      "formula": "=FIXED((2^-1022*(1+2^-52)-2^-1022),0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "fixed0_nu",
+      "formula": "=FIXED((2^-1022-2^-1022*(1+2^-52)),0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "dollar_pa",
+      "formula": "=DOLLAR((2^-1022*1.25-2^-1022))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥0"
+      }
+    },
+    {
+      "id": "dollar_na",
+      "formula": "=DOLLAR((2^-1022-2^-1022*1.25))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥-0"
+      }
+    },
+    {
+      "id": "dollar_pb",
+      "formula": "=DOLLAR(EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥0"
+      }
+    },
+    {
+      "id": "dollar_nb",
+      "formula": "=DOLLAR((0-EXP(-720)))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥-0"
+      }
+    },
+    {
+      "id": "dollar_pu",
+      "formula": "=DOLLAR((2^-1022*(1+2^-52)-2^-1022))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥0"
+      }
+    },
+    {
+      "id": "dollar_nu",
+      "formula": "=DOLLAR((2^-1022-2^-1022*(1+2^-52)))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "¥-0"
+      }
+    },
+    {
+      "id": "value_roundtrip_pa",
+      "formula": "=VALUE((2^-1022*1.25-2^-1022)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "value_roundtrip_na",
+      "formula": "=VALUE((2^-1022-2^-1022*1.25)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "value_roundtrip_pb",
+      "formula": "=VALUE(EXP(-720)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "value_roundtrip_nb",
+      "formula": "=VALUE((0-EXP(-720))&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "value_roundtrip_pu",
+      "formula": "=VALUE((2^-1022*(1+2^-52)-2^-1022)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "value_roundtrip_nu",
+      "formula": "=VALUE((2^-1022-2^-1022*(1+2^-52))&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "len_pa",
+      "formula": "=LEN((2^-1022*1.25-2^-1022)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "len_na",
+      "formula": "=LEN((2^-1022-2^-1022*1.25)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "len_pb",
+      "formula": "=LEN(EXP(-720)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "len_nb",
+      "formula": "=LEN((0-EXP(-720))&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "len_pu",
+      "formula": "=LEN((2^-1022*(1+2^-52)-2^-1022)&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "len_nu",
+      "formula": "=LEN((2^-1022-2^-1022*(1+2^-52))&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "concatenate_pa",
+      "formula": "=CONCATENATE((2^-1022*1.25-2^-1022))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concatenate_na",
+      "formula": "=CONCATENATE((2^-1022-2^-1022*1.25))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0"
+      }
+    },
+    {
+      "id": "concatenate_pb",
+      "formula": "=CONCATENATE(EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concatenate_nb",
+      "formula": "=CONCATENATE((0-EXP(-720)))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0"
+      }
+    },
+    {
+      "id": "concatenate_pu",
+      "formula": "=CONCATENATE((2^-1022*(1+2^-52)-2^-1022))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concatenate_nu",
+      "formula": "=CONCATENATE((2^-1022-2^-1022*(1+2^-52)))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0"
+      }
+    },
+    {
+      "id": "textjoin_pa",
+      "formula": "=TEXTJOIN(\",\",TRUE,(2^-1022*1.25-2^-1022),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0,1"
+      }
+    },
+    {
+      "id": "textjoin_na",
+      "formula": "=TEXTJOIN(\",\",TRUE,(2^-1022-2^-1022*1.25),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0,1"
+      }
+    },
+    {
+      "id": "textjoin_pb",
+      "formula": "=TEXTJOIN(\",\",TRUE,EXP(-720),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0,1"
+      }
+    },
+    {
+      "id": "textjoin_nb",
+      "formula": "=TEXTJOIN(\",\",TRUE,(0-EXP(-720)),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0,1"
+      }
+    },
+    {
+      "id": "textjoin_pu",
+      "formula": "=TEXTJOIN(\",\",TRUE,(2^-1022*(1+2^-52)-2^-1022),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0,1"
+      }
+    },
+    {
+      "id": "textjoin_nu",
+      "formula": "=TEXTJOIN(\",\",TRUE,(2^-1022-2^-1022*(1+2^-52)),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0,1"
+      }
+    },
+    {
+      "id": "sections_p1025",
+      "formula": "=TEXT((2^-1022*1.125-2^-1022),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "sections_p1026",
+      "formula": "=TEXT((2^-1022*1.0625-2^-1022),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "sections_p1026up",
+      "formula": "=TEXT((2^-1022*(1.0625+2^-52)-2^-1022),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "sections_p1026dn",
+      "formula": "=TEXT((2^-1022*(1.0625-2^-52)-2^-1022),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "sections_p1027",
+      "formula": "=TEXT((2^-1022*1.03125-2^-1022),\"0;(0);\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "sci2_p1025",
+      "formula": "=TEXT((2^-1022*1.125-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E-01"
+      }
+    },
+    {
+      "id": "sci2_p1026",
+      "formula": "=TEXT((2^-1022*1.0625-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E-01"
+      }
+    },
+    {
+      "id": "sci2_p1026up",
+      "formula": "=TEXT((2^-1022*(1.0625+2^-52)-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E-01"
+      }
+    },
+    {
+      "id": "sci2_p1026dn",
+      "formula": "=TEXT((2^-1022*(1.0625-2^-52)-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E+00"
+      }
+    },
+    {
+      "id": "sci2_p1027",
+      "formula": "=TEXT((2^-1022*1.03125-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E+00"
+      }
+    },
+    {
+      "id": "cond_p1025",
+      "formula": "=TEXT((2^-1022*1.125-2^-1022),\"[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "p"
+      }
+    },
+    {
+      "id": "cond_p1026",
+      "formula": "=TEXT((2^-1022*1.0625-2^-1022),\"[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "p"
+      }
+    },
+    {
+      "id": "cond_p1026up",
+      "formula": "=TEXT((2^-1022*(1.0625+2^-52)-2^-1022),\"[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "p"
+      }
+    },
+    {
+      "id": "cond_p1026dn",
+      "formula": "=TEXT((2^-1022*(1.0625-2^-52)-2^-1022),\"[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "cond_p1027",
+      "formula": "=TEXT((2^-1022*1.03125-2^-1022),\"[>0]\"\"p\"\";\"\"z\"\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "concat_p1025",
+      "formula": "=(2^-1022*1.125-2^-1022)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concat_p1026",
+      "formula": "=(2^-1022*1.0625-2^-1022)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concat_p1026up",
+      "formula": "=(2^-1022*(1.0625+2^-52)-2^-1022)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concat_p1026dn",
+      "formula": "=(2^-1022*(1.0625-2^-52)-2^-1022)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "concat_p1027",
+      "formula": "=(2^-1022*1.03125-2^-1022)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "frac_len_pb",
+      "formula": "=LEN(TEXT(EXP(-720),\"# ?/?\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "frac_len_zero",
+      "formula": "=LEN(TEXT(0,\"# ?/?\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "complex_real_pb",
+      "formula": "=COMPLEX(EXP(-720),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0+i"
+      }
+    },
+    {
+      "id": "complex_real_nb",
+      "formula": "=COMPLEX(0-EXP(-720),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0+i"
+      }
+    },
+    {
+      "id": "complex_imag_nb",
+      "formula": "=COMPLEX(1,0-EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1-0i"
+      }
+    },
+    {
+      "id": "complex_imag_pa",
+      "formula": "=COMPLEX(1,2^-1022*1.25-2^-1022)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1+0i"
+      }
+    }
+  ]
+}

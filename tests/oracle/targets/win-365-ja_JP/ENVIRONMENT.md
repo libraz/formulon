@@ -5,8 +5,8 @@ in `tests/oracle/targets/win-365-ja_JP/golden/` was generated against. Reviewers
 should watch this file on oracle-gen PRs to catch
 version-driven divergences early.
 
-- **Excel version**: `16.0.20228`
+- **Excel version**: `16.0.20430`
 - **Excel locale**: `ja-JP`
 - **date1904**: `False`
 - **iterative**: `False`
-- **generated_at**: `2026-10-13T04:30:53Z`
+- **generated_at**: `2026-10-23T04:17:11Z`

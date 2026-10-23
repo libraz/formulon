@@ -6,8 +6,8 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-13T03:12:28Z",
-    "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-13T03:12:28Z"
+    "generated_at": "2026-10-23T04:14:30Z",
+    "capture_id": "win-365-ja_JP:16.0.20430:ja-JP:2026-10-23T04:14:30Z"
   },
   "cases": [
     {
@@ -176,7 +176,79 @@
           }
         }
       },
-      "skipped": "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at zoom 75, identical to zoom 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 75, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 75 with v=[3,6] h=[] pages=3, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
+      "observed": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            3,
+            6
+          ],
+          "pages": 3,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 75,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
     },
     {
       "id": "zoom_50_dense_fit_off",
@@ -224,7 +296,78 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[29] pages=8 at zoom 50, where zoom 100 gives h=[]; breaks do not shrink as the scale does, and at 25 they grow."
+      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[29] pages=8 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
+      "observed": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            5
+          ],
+          "pages": 2,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 50,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
     },
     {
       "id": "zoom_25_dense_fit_off",
@@ -272,7 +415,76 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[1,2,3,4,5,6,7] h=[18] pages=16 at zoom 25; breaks do not shrink as the scale does, and at 25 they grow."
+      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[1,2,3,4,5,6,7] h=[18] pages=16 at scale 25, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 25 with v=[] h=[] pages=1, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
+      "observed": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [],
+          "pages": 1,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 25,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              79.5,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              79.5
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
     },
     {
       "id": "fit_off_zoom_100_dense",
@@ -1680,7 +1892,49 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
+      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
+      "observed": {
+        "print": {
+          "print_area": "A1:H1",
+          "h_breaks": [],
+          "v_breaks": [
+            5
+          ],
+          "pages": 2,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 50,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
     },
     {
       "id": "scale_50_flat_rows",
@@ -1724,7 +1978,78 @@
           }
         }
       },
-      "skipped": "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk). Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 50, identical to scale 100; breaks do not shrink as the scale does, and at 25 they grow."
+      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 50, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 50 with v=[5] h=[] pages=2, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
+      "observed": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            5
+          ],
+          "pages": 2,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 50,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
     },
     {
       "id": "scale_75_short_row",
@@ -1756,7 +2081,50 @@
           }
         }
       },
-      "skipped": "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 75, identical to scale 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 75, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 75 with v=[3,6] h=[] pages=3, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
+      "observed": {
+        "print": {
+          "print_area": "A1:H1",
+          "h_breaks": [],
+          "v_breaks": [
+            3,
+            6
+          ],
+          "pages": 3,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 75,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
     },
     {
       "id": "scale_75_flat_rows",
@@ -1800,7 +2168,79 @@
           }
         }
       },
-      "skipped": "Excel's automatic column breaks do not respond to the print scale: Microsoft 365 16.0.20228 observed v=[2,4,6] h=[] pages=4 at scale 75, identical to scale 100, with the column measured at the same 171.0 pt throughout. Formulon paginates the scaled geometry."
+      "skipped": "The Windows capture (Microsoft 365 16.0.20228, PageBreakPreview read) reports v=[2,4,6] h=[] pages=4 at scale 75, where scale 100 gives v=[2,4,6] h=[]; the driver set the zoom after writing the content. Mac Excel 16.113 builds the same case at scale 75 with v=[3,6] h=[] pages=3, breaking at printable width / (column width x scale), and reports the previous pagination when only the zoom changes. Formulon gives the Mac breaks. Recapture on Windows with the layout settled after the page setup.",
+      "observed": {
+        "print": {
+          "print_area": "A1:H30",
+          "h_breaks": [],
+          "v_breaks": [
+            3,
+            6
+          ],
+          "pages": 3,
+          "applied_page_setup": {
+            "orientation": "portrait",
+            "paper": 9,
+            "zoom": 75,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          },
+          "applied_geometry": {
+            "column_widths_pt": [
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25,
+              161.25
+            ],
+            "row_heights_pt": [
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0,
+              15.0
+            ],
+            "printer": "Microsoft Print to PDF on Ne00:",
+            "normal_font": "Calibri 11"
+          }
+        }
+      }
     }
   ]
 }

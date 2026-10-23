@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-13T04:30:53Z"
+    "generated_at": "2026-10-23T04:17:11Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -119,6 +119,10 @@
       "expect": {
         "kind": "number",
         "value": 0.02579396768034742
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -128,6 +132,10 @@
       "expect": {
         "kind": "number",
         "value": 0.02579396768034742
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -137,6 +145,10 @@
       "expect": {
         "kind": "number",
         "value": 0.5882886668596937
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
