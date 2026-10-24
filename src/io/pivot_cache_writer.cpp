@@ -123,6 +123,7 @@ void AppendSharedItemsHints(std::string& out, const pivot::SharedItemsHints& h) 
   if (h.has_max_date && !h.max_date.empty()) {
     append_xml_attr(out, "maxDate", h.max_date);
   }
+  append_raw_attrs(out, h.extra_attrs);
 }
 
 }  // namespace
@@ -161,8 +162,14 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   // range / defined name. Falls back to the minimal self-closing form
   // for caches built from scratch (no source captured).
   const pivot::WorksheetSource& wsrc = cache.worksheet_source();
+  out.append("<cacheSource");
+  if (cache.cache_source_attrs().empty()) {
+    append_xml_attr(out, "type", "worksheet");
+  } else {
+    append_raw_attrs(out, cache.cache_source_attrs());
+  }
   if (wsrc.present) {
-    out.append("<cacheSource type=\"worksheet\"><worksheetSource");
+    out.append("><worksheetSource");
     if (!wsrc.ref.empty()) {
       append_xml_attr(out, "ref", wsrc.ref);
     }
@@ -172,9 +179,15 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
     if (!wsrc.name.empty()) {
       append_xml_attr(out, "name", wsrc.name);
     }
-    out.append("/></cacheSource>");
+    out.append("/>");
+    out.append(cache.cache_source_children_xml());
+    out.append("</cacheSource>");
+  } else if (!cache.cache_source_children_xml().empty()) {
+    out.append(">");
+    out.append(cache.cache_source_children_xml());
+    out.append("</cacheSource>");
   } else {
-    out.append("<cacheSource type=\"worksheet\"/>");
+    out.append("/>");
   }
 
   out.append("<cacheFields");
@@ -189,6 +202,7 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
     if (!field.is_database_field) {
       emit_xsd_bool_attr(out, "databaseField", false);
     }
+    append_raw_attrs(out, field.extra_attrs);
     out.append(">");
 
     if (field.shared_items.empty()) {
@@ -218,10 +232,12 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
     }
     // Re-emit the captured `<fieldGroup>` verbatim (grouping definition).
     out.append(field.field_group_xml);
+    out.append(field.trailing_children_xml);
     out.append("</cacheField>");
   }
 
   out.append("</cacheFields>");
+  out.append(cache.trailing_children_xml());
   out.append("</pivotCacheDefinition>");
   return out;
 }

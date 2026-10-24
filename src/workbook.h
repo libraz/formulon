@@ -186,9 +186,9 @@ class Workbook {
   /// the entry point that can build a workbook Excel would refuse, which
   /// is what the reader-rejection tests need to author their fixtures.
   /// Anything appending from outside the process must not use it. Callers
-  /// that append from external input use `add_sheet_checked`; public API
-  /// callers that also want name validation use `add_sheet_validated`,
-  /// which is the path every binding and both file readers take.
+  /// that append from external input use `add_sheet_checked`; the file
+  /// readers validate the name through `add_sheet_validated`, and every
+  /// binding through `add_sheet_entered`.
   std::size_t add_sheet(std::string name);
 
   /// Appends a new sheet with display name `name` and returns its index,
@@ -205,10 +205,11 @@ class Workbook {
   ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
   Expected<std::size_t, Error> add_sheet_checked(std::string name);
 
-  /// Appends a new sheet after validating `name` the same way
-  /// `rename_sheet` does: strict UTF-8, non-empty, at most 31 UTF-16 code units, no
-  /// forbidden character (`: \ / ? * [ ]`), and no Unicode-simple-fold
-  /// collision with an existing sheet. Returns a pointer to the new sheet
+  /// Appends a new sheet after validating `name` structurally: strict
+  /// UTF-8, non-empty, at most 31 UTF-16 code units, no forbidden character
+  /// (`: \ / ? * [ ]`), no leading or trailing apostrophe, and no
+  /// Unicode-simple-fold collision with an existing sheet. The name only
+  /// Windows Excel's naming UI refuses is left to `add_sheet_entered`. Returns a pointer to the new sheet
   /// on success (owned by the Workbook, invalidated by later structural
   /// mutations) or `kInvalidSheetName` on any violation.
   ///
@@ -223,11 +224,21 @@ class Workbook {
   ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
   Expected<Sheet*, Error> add_sheet_validated(std::string name);
 
+  /// Appends a new sheet whose name a user entered, validating it exactly as
+  /// `rename_sheet` does: `add_sheet_validated`'s rules, plus, under a
+  /// Windows profile, not `History` in any case, which Windows Excel's naming
+  /// UI reserves (Mac Excel accepts it). The add path of every binding goes through here; the file
+  /// readers stay on `add_sheet_validated`.
+  ///
+  /// Errors: as `add_sheet_validated`.
+  Expected<Sheet*, Error> add_sheet_entered(std::string name);
+
   /// Renames the sheet at `index` to `new_name`.
   ///
   /// Updates the sheet's stored name and rewrites every affected local
   /// reference in cell formulas, defined names, conditional-format and
-  /// validation formulas, hyperlinks, table formulas, and pivot sources.
+  /// validation formulas, table formulas, and pivot sources. Internal
+  /// hyperlink locations keep their text, as Excel's do.
   /// Unrelated literals, unresolved references, and external-workbook
   /// references remain byte-identical.
   ///
@@ -235,6 +246,8 @@ class Workbook {
   ///   * `kSheetIndexOutOfRange` when `index >= sheet_count()`.
   ///   * `kInvalidSheetName` when `new_name` is malformed UTF-8, empty, exceeds 31
   ///     UTF-16 units, contains a forbidden character (`: \ / ? * [ ]`),
+  ///     begins or ends with an apostrophe, is `History` in any case under
+  ///     a Windows profile,
   ///     or collides under Unicode simple case folding with another sheet's
   ///     name. A no-op rename to the sheet's existing name under the same
   ///     fold is accepted: the sheet's stored name is updated to the
@@ -1008,6 +1021,11 @@ class Workbook {
   void set_file_sharing_xml(std::string xml) { file_sharing_xml_ = std::move(xml); }
   const std::string& workbook_ext_lst_xml() const noexcept { return workbook_ext_lst_xml_; }
   void set_workbook_ext_lst_xml(std::string xml) { workbook_ext_lst_xml_ = std::move(xml); }
+  /// Every `<workbook>` child the model does not fold in (`oleSize`,
+  /// `customWorkbookViews`, `fileRecoveryPr`, ...), captured verbatim with
+  /// the schema slot it is written back at, ordered by slot.
+  const WorksheetRawExtensions& raw_children() const noexcept { return raw_children_; }
+  WorksheetRawExtensions& mutable_raw_children() noexcept { return raw_children_; }
   /// Framed `xl/workbook.bin` future-record blocks an `.xlsb` source carried
   /// that the model does not own (the slicer cache lists), naming the source
   /// workbook relationship ids; see `io/xlsb/slicer_records.h`.
@@ -1172,15 +1190,27 @@ class Workbook {
 
   /// Inserts `count` rows at `row` on `sheet_index`. Existing rows at
   /// `row` and beyond shift down by `count`; rows that would land past
-  /// `Sheet::kMaxRows` are dropped (their cells are lost). Returns
-  /// `kInvalidArgument` for an out-of-range sheet index, a row beyond
-  /// the sheet bound, or `count == 0`.
+  /// `Sheet::kMaxRows` are dropped (their cells are lost). A table grows
+  /// when the insert falls inside it.
+  ///
+  /// Errors, each leaving the workbook unchanged:
+  ///   * `kInvalidArgument` for an out-of-range sheet index, a row beyond
+  ///     the sheet bound, or `count == 0`.
+  ///   * `kPreconditionFailed` when the insert falls inside a data table's
+  ///     block, a legacy array block or a PivotTable, or would push one of
+  ///     them or a table past the sheet bound.
   Expected<void, Error> insert_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count);
 
   /// Deletes `count` rows starting at `row` on `sheet_index`. The deleted
   /// rows are dropped wholesale; rows past `row + count` shift up by
-  /// `count`. Returns `kInvalidArgument` on the same error paths as
-  /// `insert_rows`.
+  /// `count`. A data table, legacy array block, PivotTable or table whose
+  /// whole extent is deleted goes with it.
+  ///
+  /// Errors, each leaving the workbook unchanged:
+  ///   * `kInvalidArgument` on the same argument errors as `insert_rows`,
+  ///     or a `count` running past the sheet bound.
+  ///   * `kPreconditionFailed` when the delete covers part, but not all, of
+  ///     a data table's block, a legacy array block or a PivotTable.
   Expected<void, Error> delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count);
 
   /// Inserts `count` columns at `col` on `sheet_index`. Mirrors
@@ -1267,6 +1297,7 @@ class Workbook {
   std::string file_version_xml_;
   std::string file_sharing_xml_;
   std::string workbook_ext_lst_xml_;
+  WorksheetRawExtensions raw_children_;
   std::vector<std::uint8_t> xlsb_book_frt_;
   // Extra `<workbook>` root namespace declarations (xmlns:mc / xmlns:xr* /
   // x15 + mc:Ignorable) captured for verbatim re-emission so namespaced

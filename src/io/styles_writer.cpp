@@ -123,10 +123,11 @@ void AppendBorderSide(std::string& out, const char* tag, const BorderSide& side)
   }
 }
 
-// Inline style fragments (used by both `<dxf>` records and, for fills,
-// the section writers). Declared ahead of the section writers that reuse
-// them; defined below alongside the other fragment emitters.
+// Inline style fragments (used by both `<dxf>` records and, for fills and
+// borders, the section writers). Declared ahead of the section writers that
+// reuse them; defined below alongside the other fragment emitters.
 void AppendFillFragment(std::string& out, const FillRecord& fill);
+void AppendBorderFragment(std::string& out, const BorderRecord& b);
 
 void AppendFontToggle(std::string& out, std::string_view name, bool was_explicit, bool value) {
   if (!was_explicit && !value) {
@@ -264,20 +265,9 @@ void AppendBorders(std::string& out, const StylesTable& table) {
     out.append("    <border/>\n");
   } else {
     for (const BorderRecord& b : table.borders) {
-      out.append("    <border");
-      if (b.diagonal_up) {
-        emit_xsd_bool_attr(out, "diagonalUp", true);
-      }
-      if (b.diagonal_down) {
-        emit_xsd_bool_attr(out, "diagonalDown", true);
-      }
-      out.append(">");
-      AppendBorderSide(out, "left", b.left);
-      AppendBorderSide(out, "right", b.right);
-      AppendBorderSide(out, "top", b.top);
-      AppendBorderSide(out, "bottom", b.bottom);
-      AppendBorderSide(out, "diagonal", b.diagonal);
-      out.append("</border>\n");
+      out.append("    ");
+      AppendBorderFragment(out, b);
+      out.push_back('\n');
     }
   }
   out.append("  </borders>\n");
@@ -311,10 +301,11 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
   append_apply("applyAlignment", xf.apply_alignment);
   append_apply("applyProtection", xf.apply_protection);
   append_apply("quotePrefix", xf.quote_prefix);
+  out.append(xf.extra_attrs);
   const char* halign = HorizontalAlignName(xf.horizontal_align);
   const char* valign = VerticalAlignName(xf.vertical_align);
   const bool has_alignment = HasAlignment(xf);
-  if (!has_alignment && !xf.has_protection) {
+  if (!has_alignment && !xf.has_protection && xf.trailing_children_xml.empty()) {
     out.append("/>\n");
     return;
   }
@@ -359,6 +350,7 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
     emit_xsd_bool_attr(out, "hidden", xf.hidden);
     out.append("/>");
   }
+  out.append(xf.trailing_children_xml);
   out.append("</xf>\n");
 }
 
@@ -620,12 +612,15 @@ void AppendBorderFragment(std::string& out, const BorderRecord& b) {
   if (b.diagonal_down) {
     emit_xsd_bool_attr(out, "diagonalDown", true);
   }
+  out.append(b.extra_attrs);
   out.append(">");
+  out.append(b.leading_children_xml);
   AppendBorderSide(out, "left", b.left);
   AppendBorderSide(out, "right", b.right);
   AppendBorderSide(out, "top", b.top);
   AppendBorderSide(out, "bottom", b.bottom);
   AppendBorderSide(out, "diagonal", b.diagonal);
+  out.append(b.trailing_children_xml);
   out.append("</border>");
 }
 

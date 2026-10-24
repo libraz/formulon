@@ -71,17 +71,32 @@ std::vector<double> column_widths_chars(const Sheet& sheet, std::uint32_t first,
                                         const ColumnWidthModel& model) {
   const double default_width = default_column_width_chars(sheet, model);
   std::vector<double> widths(static_cast<std::size_t>(last - first) + 1U, default_width);
-  std::vector<bool> assigned(widths.size(), false);
+  // The first span covering a column wins. `next[i]` leads to the first
+  // unassigned index at or after `i`, so overlapping spans skip assigned
+  // runs instead of walking them: O(columns + spans) for any span set.
+  std::vector<std::size_t> next(widths.size() + 1U);
+  for (std::size_t i = 0; i < next.size(); ++i) {
+    next[i] = i;
+  }
+  const auto unassigned_from = [&next](std::size_t i) {
+    while (next[i] != i) {
+      next[i] = next[next[i]];
+      i = next[i];
+    }
+    return i;
+  };
   for (const ColumnLayout& span : sheet.layout().columns) {
-    const std::uint32_t span_first = std::max(span.first, first);
-    const std::uint32_t span_last = std::min(span.last, last);
-    for (std::uint32_t col = span_first; col <= span_last; ++col) {
-      const auto index = static_cast<std::size_t>(col - first);
-      if (assigned[index]) {
-        continue;
-      }
-      assigned[index] = true;
+    if (span.last < first || span.first > last || span.first > span.last) {
+      continue;
+    }
+    const auto span_end = static_cast<std::size_t>(std::min(span.last, last) - first);
+    for (std::size_t index = unassigned_from(static_cast<std::size_t>(std::max(span.first, first) - first));
+         index <= span_end; index = unassigned_from(index + 1U)) {
       widths[index] = SpanColumnWidth(span, default_width);
+      next[index] = index + 1U;
+    }
+    if (unassigned_from(0U) == widths.size()) {
+      break;
     }
   }
   return widths;

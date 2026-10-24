@@ -8,8 +8,10 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -140,12 +142,25 @@ bool ParseInt(std::string_view text, std::int64_t& out) {
 void apply_vml_note_shapes(std::string_view vml, std::vector<CellComment>& comments) {
   constexpr std::string_view kShapeOpen = "<v:shape ";
   constexpr std::string_view kShapeClose = "</v:shape>";
-  for (std::size_t at = vml.find(kShapeOpen); at != std::string_view::npos; at = vml.find(kShapeOpen, at + 1U)) {
+  // The first comment at a cell takes its shape.
+  std::unordered_map<std::uint64_t, std::size_t> by_cell;
+  by_cell.reserve(comments.size());
+  for (std::size_t i = 0; i < comments.size(); ++i) {
+    by_cell.emplace((static_cast<std::uint64_t>(comments[i].row) << 32U) | comments[i].col, i);
+  }
+  // Each byte is scanned once: a shape is the last open before its close,
+  // and the search resumes after that close.
+  for (std::size_t at = vml.find(kShapeOpen); at != std::string_view::npos;) {
     const std::size_t end = vml.find(kShapeClose, at);
     if (end == std::string_view::npos) {
       break;
     }
-    const std::string_view shape = vml.substr(at, end - at);
+    for (std::size_t inner = vml.find(kShapeOpen, at + 1U); inner < end; inner = vml.find(kShapeOpen, at + 1U)) {
+      at = inner;
+    }
+    const std::size_t shape_at = at;
+    at = vml.find(kShapeOpen, end + kShapeClose.size());
+    const std::string_view shape = vml.substr(shape_at, end - shape_at);
     const std::size_t tag_end = shape.find('>');
     const std::string_view client = ElementText(shape, "<x:ClientData", "</x:ClientData>");
     if (tag_end == std::string_view::npos || shape.find("ObjectType=\"Note\"") == std::string_view::npos) {
@@ -157,11 +172,13 @@ void apply_vml_note_shapes(std::string_view vml, std::vector<CellComment>& comme
         !ParseInt(ElementText(client, "<x:Column", "</x:Column>"), col) || row < 0 || col < 0) {
       continue;
     }
-    for (CellComment& comment : comments) {
-      if (comment.row != row || comment.col != col) {
-        continue;
-      }
-      comment.vml_shape = std::string(vml.substr(at, end + kShapeClose.size() - at));
+    if (row > std::numeric_limits<std::uint32_t>::max() || col > std::numeric_limits<std::uint32_t>::max()) {
+      continue;
+    }
+    const auto found = by_cell.find((static_cast<std::uint64_t>(row) << 32U) | static_cast<std::uint64_t>(col));
+    if (found != by_cell.end()) {
+      CellComment& comment = comments[found->second];
+      comment.vml_shape = std::string(vml.substr(shape_at, end + kShapeClose.size() - shape_at));
       comment.visible = shape.substr(0, tag_end).find("visibility:visible") != std::string_view::npos ||
                         client.find("<x:Visible") != std::string_view::npos;
       // Eight comma-separated integers; anything else leaves the default box.
@@ -183,9 +200,46 @@ void apply_vml_note_shapes(std::string_view vml, std::vector<CellComment>& comme
         comment.has_box = true;
         comment.box = box;
       }
-      break;
     }
   }
+}
+
+std::string vml_non_note_shapes(std::string_view vml) {
+  constexpr std::string_view kTypeOpen = "<v:shapetype";
+  constexpr std::string_view kTypeClose = "</v:shapetype>";
+  constexpr std::string_view kShapeOpen = "<v:shape ";
+  constexpr std::string_view kShapeClose = "</v:shape>";
+  std::string out;
+  for (std::size_t at = vml.find("<v:shape"); at != std::string_view::npos; at = vml.find("<v:shape", at)) {
+    const bool is_type = vml.compare(at, kTypeOpen.size(), kTypeOpen) == 0;
+    if (!is_type && vml.compare(at, kShapeOpen.size(), kShapeOpen) != 0) {
+      at += kShapeOpen.size() - 1U;
+      continue;
+    }
+    const std::size_t tag_end = vml.find('>', at);
+    if (tag_end == std::string_view::npos) {
+      break;
+    }
+    std::size_t end = tag_end + 1U;
+    if (vml[tag_end - 1U] != '/') {
+      const std::string_view close = is_type ? kTypeClose : kShapeClose;
+      const std::size_t close_at = vml.find(close, tag_end);
+      if (close_at == std::string_view::npos) {
+        break;
+      }
+      end = close_at + close.size();
+    }
+    const std::string_view element = vml.substr(at, end - at);
+    const std::string_view open_tag = vml.substr(at, tag_end - at);
+    const bool keep = is_type ? open_tag.find("id=\"_x0000_t202\"") == std::string_view::npos
+                              : element.find("ObjectType=\"Note\"") == std::string_view::npos;
+    if (keep) {
+      out.append(element);
+      out.push_back('\n');
+    }
+    at = end;
+  }
+  return out;
 }
 
 }  // namespace formulon::io

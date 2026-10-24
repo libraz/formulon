@@ -65,6 +65,11 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
 Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet,
                                                                    ReadDiagnostics* diagnostics = nullptr);
 
+/// The `<dataValidations>` attributes other than `count` (`disablePrompts`,
+/// `xWindow`, `yWindow`) as escaped ` name="value"` pairs; empty when the
+/// sheet has none.
+std::string read_data_validations_extra_attrs(const pugi::xml_node& worksheet);
+
 /// Reads `<sheetProtection>` from the sheet and returns the parsed
 /// `SheetProtection`. When the element is absent the result has
 /// `enabled = false` and every other field at its default. The reader

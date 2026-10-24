@@ -21,6 +21,7 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
 
@@ -149,7 +150,12 @@ void ReadSharedItemsHints(const pugi::xml_node& items, pivot::SharedItemsHints* 
   read_str("maxValue", &out->has_max_value, &out->max_value);
   read_str("minDate", &out->has_min_date, &out->min_date);
   read_str("maxDate", &out->has_max_date, &out->max_date);
-  out->present = any;
+  capture_unknown_attrs(
+      items,
+      {"containsNumber", "containsInteger", "containsDate", "containsString", "containsBlank", "containsSemiMixedTypes",
+       "containsNonDate", "containsMixedTypes", "minValue", "maxValue", "minDate", "maxDate", "count"},
+      out->extra_attrs);
+  out->present = any || !out->extra_attrs.empty();
 }
 
 }  // namespace
@@ -182,7 +188,10 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
                         "context=pivot_cache_reader cacheSource.type=external");
     }
     // type defaults to "worksheet"; any other value (e.g. "consolidation",
-    // "scenario") is accepted but treated as worksheet-equivalent here.
+    // "scenario") is evaluated as worksheet-equivalent here but written
+    // back as read, with the children that describe it.
+    capture_unknown_attrs(src, {}, cache.mutable_cache_source_attrs());
+    capture_unknown_children(src, {"worksheetSource"}, cache.mutable_cache_source_children_xml());
     // Capture the `<worksheetSource>` child so Excel's Refresh can locate
     // the source range / defined name after a round trip; dropping it
     // makes Refresh fail or repoint to the wrong range.
@@ -211,6 +220,8 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       // `databaseField` defaults to true; `databaseField="0"` marks a
       // grouping-derived field that carries no per-record cell.
       field.is_database_field = attr_bool(f, "databaseField", true);
+      capture_unknown_attrs(f, {"name", "databaseField"}, field.extra_attrs);
+      capture_unknown_children(f, {"sharedItems", "fieldGroup"}, field.trailing_children_xml);
       // Capture any `<fieldGroup>` verbatim so a grouped field round-trips
       // even though the grouping structure is not modelled.
       if (pugi::xml_node group = f.child("fieldGroup"); group) {
@@ -240,11 +251,13 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       cache.mutable_fields().push_back(std::move(field));
     }
   }
+  capture_unknown_children(root, {"cacheSource", "cacheFields"}, cache.mutable_trailing_children_xml());
 
   return cache;
 }
 
-Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache) {
+Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache,
+                                               std::uint64_t max_record_cells) {
   // `doc` is a body local and `records_bytes` a parameter, so the buffer
   // the DOM aliases is destroyed after the DOM that points into it.
   pugi::xml_document doc;
@@ -268,8 +281,12 @@ Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records
     }
   }
   std::vector<pivot::PivotCacheRecord>& records = cache.mutable_records();
+  // Each `<r>` costs one slot per field however few children it carries, so
+  // the slots are charged before the record is allocated.
+  ResourceBudget slots(max_record_cells, FormulonErrorCode::kIoFileTooLarge);
 
   for (pugi::xml_node r = root.child("r"); r; r = r.next_sibling("r")) {
+    RETURN_IF_ERROR(slots.consume(1U + field_count));
     pivot::PivotCacheRecord record;
     // Pre-fill every field slot with an inline blank; database-field slots
     // are overwritten as the record's children are consumed.

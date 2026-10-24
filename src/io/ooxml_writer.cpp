@@ -200,7 +200,8 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     } else {
       out.append(">\n");
       if (!col.calculated_column_formula.empty()) {
-        out.append("      <calculatedColumnFormula>");
+        out.append(col.calculated_column_formula_array ? "      <calculatedColumnFormula array=\"1\">"
+                                                       : "      <calculatedColumnFormula>");
         AppendXmlEscaped(out, col.calculated_column_formula);
         out.append("</calculatedColumnFormula>\n");
       }
@@ -552,7 +553,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   // 9.5. Comments + VML drawings — one pair per sheet that has at
-  // least one note or thread, plus the sheet's threaded comments. The
+  // least one note or thread (a VML alone for a drawing of form controls
+  // only), plus the sheet's threaded comments. The
   // comments part carries the notes and one legacy stub per thread. The
   // VML companion re-emits the source bytes while the plan found them
   // current, and is regenerated with one shape per commented cell
@@ -563,10 +565,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       continue;
     }
     const Sheet& sheet = wb.sheet(i);
-    auto cresult = AddPart(writer.get(), cplan.comments_path,
-                           write_comments(legacy_comments_with_stubs(sheet), sheet.comment_authors()), &written_paths);
-    if (!cresult) {
-      return std::move(cresult.error());
+    if (!cplan.comments_path.empty()) {
+      auto cresult =
+          AddPart(writer.get(), cplan.comments_path,
+                  write_comments(legacy_comments_with_stubs(sheet), sheet.comment_authors()), &written_paths);
+      if (!cresult) {
+        return std::move(cresult.error());
+      }
     }
     if (cplan.vml_source != nullptr) {
       auto vresult = AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes, &written_paths);
@@ -574,7 +579,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
         return std::move(vresult.error());
       }
     } else {
-      auto vresult = AddPart(writer.get(), cplan.vml_path, write_vml_drawing(sheet.comment_shapes(), cplan.numeric_id),
+      auto vresult = AddPart(writer.get(), cplan.vml_path,
+                             write_vml_drawing(sheet.comment_shapes(), cplan.numeric_id, sheet.comment_vml_extra_xml()),
                              &written_paths);
       if (!vresult) {
         return std::move(vresult.error());

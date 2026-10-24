@@ -426,6 +426,281 @@ std::vector<std::string> CollectRelationshipIds(const pugi::xml_node& relationsh
   return ids;
 }
 
+TEST(OoxmlPassthroughRels, ExtensionOnlyPivotCacheKeepsItsRelationshipAndStaleIdsAreDropped) {
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+      "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+      "<Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+      "<Override PartName=\"/xl/pivotCache/pivotCacheDefinition1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml\"/>"
+      "</Types>";
+  const std::string_view package_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/></Relationships>";
+  // rId3 is named only from the timeline extension; rId9 names nothing.
+  const std::string_view workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+      "<extLst><ext uri=\"{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}\" "
+      "xmlns:x15=\"http://schemas.microsoft.com/office/spreadsheetml/2010/11/main\">"
+      "<x15:timelineCachePivotCaches><x15:timelineCachePivotCache r:id=\"rId3\"/>"
+      "<x15:timelineCachePivotCache r:id=\"rId9\"/></x15:timelineCachePivotCaches></ext></extLst>"
+      "</workbook>";
+  const std::string_view workbook_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>"
+      "<Relationship Id=\"rId3\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition\" "
+      "Target=\"pivotCache/pivotCacheDefinition1.xml\"/></Relationships>";
+  const std::string_view sheet_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData/></worksheet>";
+  const std::string_view cache_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<pivotCacheDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<cacheSource type=\"worksheet\"/><cacheFields count=\"0\"/></pivotCacheDefinition>";
+  const std::vector<std::uint8_t> source = BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet_xml},
+      {"xl/pivotCache/pivotCacheDefinition1.xml", cache_xml},
+  });
+  auto load_or = io::read_ooxml(SpanOf(source));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  auto save_or = load_or.value().workbook.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/pivotCache/pivotCacheDefinition1.xml"));
+  auto rels_or = zip.read_entry("xl/_rels/workbook.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  pugi::xml_document rels_doc;
+  ASSERT_TRUE(rels_doc.load_buffer(rels_or.value().data(), rels_or.value().size()));
+  std::string cache_rid;
+  for (pugi::xml_node rel = rels_doc.child("Relationships").child("Relationship"); rel;
+       rel = rel.next_sibling("Relationship")) {
+    if (std::string_view(rel.attribute("Target").value()) == "pivotCache/pivotCacheDefinition1.xml") {
+      cache_rid = rel.attribute("Id").value();
+    }
+  }
+  ASSERT_FALSE(cache_rid.empty()) << "the extension's pivot cache lost its relationship";
+
+  auto wb_or = zip.read_entry("xl/workbook.xml");
+  ASSERT_TRUE(static_cast<bool>(wb_or));
+  pugi::xml_document wb_doc;
+  ASSERT_TRUE(wb_doc.load_buffer(wb_or.value().data(), wb_or.value().size()));
+  const pugi::xml_node caches =
+      wb_doc.child("workbook").child("extLst").child("ext").child("x15:timelineCachePivotCaches");
+  ASSERT_TRUE(caches);
+  std::vector<std::string> ids;
+  for (pugi::xml_node c = caches.child("x15:timelineCachePivotCache"); c;
+       c = c.next_sibling("x15:timelineCachePivotCache")) {
+    ids.emplace_back(c.attribute("r:id").value());
+  }
+  EXPECT_EQ(ids, std::vector<std::string>{cache_rid});
+}
+
+TEST(OoxmlPassthroughRels, SourceSheetIdsSurviveAndNewSheetsTakeFreshOnes) {
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+      "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+      "<Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet2.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+      "</Types>";
+  const std::string_view package_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/></Relationships>";
+  const std::string_view workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"First\" sheetId=\"3\" r:id=\"rId1\"/>"
+      "<sheet name=\"Second\" sheetId=\"1\" r:id=\"rId2\"/></sheets></workbook>";
+  const std::string_view workbook_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>"
+      "<Relationship Id=\"rId2\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet2.xml\"/></Relationships>";
+  const std::string_view sheet_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData/></worksheet>";
+  const std::vector<std::uint8_t> source = BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet_xml},
+      {"xl/worksheets/sheet2.xml", sheet_xml},
+  });
+  auto load_or = io::read_ooxml(SpanOf(source));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  Workbook& wb = load_or.value().workbook;
+  wb.add_sheet("Third");
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  auto wb_or = zip.read_entry("xl/workbook.xml");
+  ASSERT_TRUE(static_cast<bool>(wb_or));
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_buffer(wb_or.value().data(), wb_or.value().size()));
+  std::vector<std::string> ids;
+  for (pugi::xml_node sheet = doc.child("workbook").child("sheets").child("sheet"); sheet;
+       sheet = sheet.next_sibling("sheet")) {
+    ids.emplace_back(sheet.attribute("sheetId").value());
+  }
+  EXPECT_EQ(ids, (std::vector<std::string>{"3", "1", "4"}));
+}
+
+/// One sheet whose legacy drawing holds a checkbox and no notes.
+std::vector<std::uint8_t> BuildPackageWithCheckboxOnlyVml() {
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+      "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+      "<Default Extension=\"vml\" ContentType=\"application/vnd.openxmlformats-officedocument.vmlDrawing\"/>"
+      "<Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+      "</Types>";
+  const std::string_view package_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/></Relationships>";
+  const std::string_view workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>";
+  const std::string_view workbook_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/></Relationships>";
+  const std::string_view sheet_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheetData/><legacyDrawing r:id=\"rId1\"/></worksheet>";
+  const std::string_view sheet_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing\" "
+      "Target=\"../drawings/vmlDrawing1.vml\"/></Relationships>";
+  const std::string_view vml =
+      "<xml xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" "
+      "xmlns:x=\"urn:schemas-microsoft-com:office:excel\"><o:shapelayout v:ext=\"edit\">"
+      "<o:idmap v:ext=\"edit\" data=\"1\"/></o:shapelayout>"
+      "<v:shapetype id=\"_x0000_t201\" coordsize=\"21600,21600\" o:spt=\"201\"/>"
+      "<v:shape id=\"_x0000_s1025\" type=\"#_x0000_t201\"><x:ClientData ObjectType=\"Checkbox\">"
+      "<x:Row>2</x:Row><x:Column>1</x:Column></x:ClientData></v:shape></xml>";
+  return BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet_xml},
+      {"xl/worksheets/_rels/sheet1.xml.rels", sheet_rels},
+      {"xl/drawings/vmlDrawing1.vml", vml},
+  });
+}
+
+/// The VML part the saved sheet's `<legacyDrawing>` names, or empty.
+std::string LegacyDrawingVml(const std::vector<std::uint8_t>& saved) {
+  io::ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(saved))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  auto rels_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  if (!sheet_or || !rels_or) {
+    ADD_FAILURE() << "sheet part or its rels missing";
+    return {};
+  }
+  pugi::xml_document sheet;
+  pugi::xml_document rels;
+  EXPECT_TRUE(sheet.load_buffer(sheet_or.value().data(), sheet_or.value().size()));
+  EXPECT_TRUE(rels.load_buffer(rels_or.value().data(), rels_or.value().size()));
+  const std::string rid = sheet.child("worksheet").child("legacyDrawing").attribute("r:id").value();
+  if (rid.empty()) {
+    ADD_FAILURE() << "no <legacyDrawing>";
+    return {};
+  }
+  for (pugi::xml_node rel = rels.child("Relationships").child("Relationship"); rel;
+       rel = rel.next_sibling("Relationship")) {
+    if (rid == rel.attribute("Id").value()) {
+      std::string target = rel.attribute("Target").value();
+      if (target.rfind("../", 0) == 0) {
+        target = "xl/" + target.substr(3);
+      }
+      auto vml_or = zip.read_entry(target);
+      EXPECT_TRUE(static_cast<bool>(vml_or)) << target;
+      return vml_or ? std::string(vml_or.value().begin(), vml_or.value().end()) : std::string();
+    }
+  }
+  ADD_FAILURE() << "<legacyDrawing> names no relationship";
+  return {};
+}
+
+TEST(OoxmlSheetRelsIntegrity, CheckboxOnlyLegacyDrawingSurvivesAResave) {
+  auto load_or = io::read_ooxml(SpanOf(BuildPackageWithCheckboxOnlyVml()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  auto save_or = load_or.value().workbook.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+  const std::string vml = LegacyDrawingVml(save_or.value());
+  EXPECT_NE(vml.find("ObjectType=\"Checkbox\""), std::string::npos) << vml;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  EXPECT_FALSE(zip.has_entry("xl/comments1.xml"));
+}
+
+TEST(OoxmlSheetRelsIntegrity, NoteAddedBesideACheckboxKeepsBoth) {
+  auto load_or = io::read_ooxml(SpanOf(BuildPackageWithCheckboxOnlyVml()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  Workbook& wb = load_or.value().workbook;
+  wb.sheet(0).mutable_comments().push_back(CellComment{0, 0, "A", "note"});
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+  const std::string vml = LegacyDrawingVml(save_or.value());
+  EXPECT_NE(vml.find("ObjectType=\"Checkbox\""), std::string::npos) << vml;
+  EXPECT_NE(vml.find("_x0000_s1025"), std::string::npos) << vml;
+  EXPECT_NE(vml.find("ObjectType=\"Note\""), std::string::npos) << vml;
+}
+
 TEST(OoxmlSheetRelsIntegrity, TablePartRidMatchesItsOwnTableRelationship) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);

@@ -43,6 +43,12 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
 /// scanned as text, since Excel's VML is not always well-formed XML.
 void apply_vml_note_shapes(std::string_view vml, std::vector<CellComment>& comments);
 
+/// The shapes of a comment VML drawing that are not notes (form controls such
+/// as checkboxes and buttons), each preceded by the shape types other than the
+/// note type `_x0000_t202`, as verbatim text. Excel keeps both kinds in one
+/// drawing, so a drawing regenerated from the notes must carry these too.
+std::string vml_non_note_shapes(std::string_view vml);
+
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_COMMENTS_READER_H_

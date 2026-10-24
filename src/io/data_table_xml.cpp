@@ -1,9 +1,11 @@
 #include "io/data_table_xml.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "io/sqref_text.h"
 #include "io/xsd_bool.h"
+#include "utils/resource_budget.h"
 
 namespace formulon::io {
 
@@ -42,6 +44,11 @@ bool parse_data_table(const DataTableAttrs& attrs, DataTable* out) {
   }
   DataTable table;
   table.ref = normalized(ref[0]);
+  const std::uint64_t cells = static_cast<std::uint64_t>(table.ref.last_row - table.ref.first_row + 1U) *
+                              (table.ref.last_col - table.ref.first_col + 1U);
+  if (ResourceBudget(kMaxDataTableCells).would_exceed(cells)) {
+    return false;
+  }
   const auto flag = [](std::string_view text, std::uint8_t bit, std::uint8_t* explicit_attrs) {
     if (!text.empty()) {
       *explicit_attrs = static_cast<std::uint8_t>(*explicit_attrs | bit);

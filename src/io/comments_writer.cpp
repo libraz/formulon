@@ -191,7 +191,26 @@ std::uint64_t ShapeNumber(const std::string& xml) {
 
 }  // namespace
 
-std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint32_t drawing_id) {
+std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint32_t drawing_id,
+                              std::string_view other_shapes) {
+  // Ids the retained shapes hold, which no note shape may take.
+  std::unordered_set<std::uint64_t> used;
+  std::vector<std::uint64_t> blocks{drawing_id};
+  for (std::size_t at = other_shapes.find("<v:shape "); at != std::string_view::npos;
+       at = other_shapes.find("<v:shape ", at + 1U)) {
+    const std::uint64_t number = ShapeNumber(std::string(other_shapes.substr(at, other_shapes.find('>', at) - at)));
+    if (number == 0U || !used.insert(number).second) {
+      continue;
+    }
+    if (const std::uint64_t block = (number - 1U) / 1024U;
+        std::find(blocks.begin(), blocks.end(), block) == blocks.end()) {
+      blocks.push_back(block);
+    }
+  }
+  std::string idmap;
+  for (const std::uint64_t block : blocks) {
+    idmap.append(idmap.empty() ? "" : ",").append(std::to_string(block));
+  }
   std::string out;
   out.reserve(512 + shapes.size() * 640);
   out.append("<xml xmlns:v=\"urn:schemas-microsoft-com:vml\"\n");
@@ -199,7 +218,7 @@ std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint
   out.append(" xmlns:x=\"urn:schemas-microsoft-com:office:excel\">\n");
   out.append(" <o:shapelayout v:ext=\"edit\">\n");
   out.append("  <o:idmap v:ext=\"edit\" data=\"");
-  out.append(std::to_string(drawing_id));
+  out.append(idmap);
   out.append("\"/>\n");
   out.append(" </o:shapelayout>\n");
   out.append(" <v:shapetype id=\"_x0000_t202\" coordsize=\"21600,21600\" o:spt=\"202\"\n");
@@ -207,9 +226,9 @@ std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint
   out.append("  <v:stroke joinstyle=\"miter\"/>\n");
   out.append("  <v:path gradientshapeok=\"t\" o:connecttype=\"rect\"/>\n");
   out.append(" </v:shapetype>\n");
-  // A kept shape keeps its id only inside this drawing's block and only once.
+  out.append(other_shapes);
+  // A kept note shape keeps its id only inside this drawing's block and only once.
   const std::uint64_t block_first = static_cast<std::uint64_t>(drawing_id) * 1024U + 1U;
-  std::unordered_set<std::uint64_t> used;
   std::vector<bool> renumber(shapes.size(), false);
   for (std::size_t i = 0; i < shapes.size(); ++i) {
     const std::uint64_t number = ShapeNumber(shapes[i].xml);

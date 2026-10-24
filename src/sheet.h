@@ -78,6 +78,27 @@ struct StructuralEdit {
   bool row_axis = false;
 };
 
+/// How a row/column edit meets a structure that moves whole or goes whole (a
+/// data table's block, a legacy array block, a PivotTable), given its extent
+/// `[first, last]` along the edit's axis.
+enum class StructureEditCut : std::uint8_t {
+  kMisses,     ///< The edit lies outside the extent; the structure shifts whole or stays.
+  kRemoves,    ///< A delete spans the whole extent; the structure goes.
+  kSplits,     ///< The edit cuts into the extent.
+  kPushesOff,  ///< An insert would push the far edge of the extent off the grid.
+};
+
+/// Classifies `edit` against the extent `[first, last]`; see `StructureEditCut`.
+StructureEditCut structure_edit_cut(std::uint32_t first, std::uint32_t last, const StructuralEdit& edit) noexcept;
+
+/// `structure_edit_cut` for a data table's block: its result range plus the
+/// header row above it and the header column left of it.
+StructureEditCut data_table_structure_cut(const DataTable& table, const StructuralEdit& edit) noexcept;
+
+/// `structure_edit_cut` for a PivotTable's location range; a zero span counts
+/// as the anchor line alone.
+StructureEditCut pivot_structure_cut(const pivot::PivotTable& pivot, const StructuralEdit& edit) noexcept;
+
 /// Moves the ranges of one sqref (a conditional format's, or a retained x14
 /// copy of one) for a row/column edit: `count` rows or columns inserted or
 /// deleted at 0-based `index`. Ranges the edit deletes are removed, and a
@@ -217,6 +238,9 @@ struct DataValidation {
   std::string error_message;
   std::string prompt_title;
   std::string prompt_message;
+  /// Attributes not represented by the model (`imeMode`, ...) retained as
+  /// escaped ` name="value"` pairs.
+  std::string extra_attrs;
 };
 
 /// A registered spill region produced by a dynamic-array formula.
@@ -1627,6 +1651,11 @@ class Sheet {
   /// entries without an extra accessor pair per field.
   std::vector<DataValidation>& mutable_validations() noexcept { return validations_; }
 
+  /// `<dataValidations>` attributes other than `count` (`disablePrompts`,
+  /// `xWindow`, `yWindow`) as escaped ` name="value"` pairs.
+  const std::string& validations_extra_attrs() const noexcept { return validations_extra_attrs_; }
+  void set_validations_extra_attrs(std::string attrs) { validations_extra_attrs_ = std::move(attrs); }
+
   // ---------------------------------------------------------------------------
   // Sheet protection (passive round-trip)
   // ---------------------------------------------------------------------------
@@ -1692,6 +1721,11 @@ class Sheet {
   const WorksheetRawExtensions& raw_extensions() const noexcept { return raw_extensions_; }
   WorksheetRawExtensions& mutable_raw_extensions() noexcept { return raw_extensions_; }
 
+  /// The `sheetId` the source workbook gave this sheet, which retained
+  /// parts (slicer and timeline caches) cite as `tabId`; 0 when none.
+  std::uint32_t source_sheet_id() const noexcept { return source_sheet_id_; }
+  void set_source_sheet_id(std::uint32_t id) noexcept { source_sheet_id_ = id; }
+
   /// Package-relative path of the DrawingML part (`xl/drawings/drawingN.xml`)
   /// this sheet references via `<drawing r:id="...">`, or empty when the
   /// sheet anchors no drawing. Populated by the OOXML reader; the part
@@ -1716,6 +1750,12 @@ class Sheet {
   /// still match, and regenerates it from the model otherwise.
   const std::vector<CommentShape>& comment_vml_shapes() const noexcept { return comment_vml_shapes_; }
   void set_comment_vml_shapes(std::vector<CommentShape> shapes) { comment_vml_shapes_ = std::move(shapes); }
+
+  /// The non-note shapes and shape types of the source comment VML (form
+  /// controls such as checkboxes and buttons), kept verbatim so a
+  /// regenerated drawing still carries them.
+  const std::string& comment_vml_extra_xml() const noexcept { return comment_vml_extra_xml_; }
+  void set_comment_vml_extra_xml(std::string xml) { comment_vml_extra_xml_ = std::move(xml); }
 
   /// Relationships from this worksheet's `.rels` part that Formulon does
   /// not otherwise model (OLE objects, controls, slicers, and so on).
@@ -1949,6 +1989,7 @@ class Sheet {
   std::vector<ThreadedComment> threaded_comments_;
   // `<dataValidations>` blocks. Empty by default.
   std::vector<DataValidation> validations_;
+  std::string validations_extra_attrs_;
   // `<sheetProtection>` flags. `protection_.enabled = false` by
   // default; the writer emits no element when the field stays at its
   // default-constructed state.
@@ -1966,6 +2007,7 @@ class Sheet {
   SheetPrintSettings print_settings_;
   // Raw worksheet children not represented by the editing/evaluation model.
   WorksheetRawExtensions raw_extensions_;
+  std::uint32_t source_sheet_id_ = 0;
   // Package-relative path of the DrawingML part referenced by
   // `<drawing r:id>`, or empty. The part itself round-trips via the
   // workbook's passthrough parts.
@@ -1976,6 +2018,7 @@ class Sheet {
   std::string comment_vml_path_;
   // Comment shapes the source VML at `comment_vml_path_` was read with.
   std::vector<CommentShape> comment_vml_shapes_;
+  std::string comment_vml_extra_xml_;
   std::vector<std::string> comment_authors_;
   // Unmodelled entries from `xl/worksheets/_rels/sheetN.xml.rels`.
   std::vector<UnknownRelationship> unknown_relationships_;

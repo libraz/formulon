@@ -20,6 +20,48 @@ std::vector<std::uint8_t> AsBytes(const std::string& s) {
   return std::vector<std::uint8_t>(s.begin(), s.end());
 }
 
+std::string NoteShape(std::uint32_t row, std::uint32_t col, const char* style) {
+  return std::string("<v:shape id=\"s\" style=\"") + style +
+         "\"><x:ClientData ObjectType=\"Note\"><x:Anchor>1, 15, 0, 2, 3, 15, 4, 4</x:Anchor><x:Row>" +
+         std::to_string(row) + "</x:Row><x:Column>" + std::to_string(col) + "</x:Column></x:ClientData></v:shape>";
+}
+
+TEST(CommentsRoundTrip, VmlNoteShapesMatchTheirCommentsOnce) {
+  std::vector<CellComment> comments(3);
+  comments[0].row = 0;
+  comments[0].col = 0;
+  comments[1].row = 4;
+  comments[1].col = 2;
+  comments[2].row = 4;
+  comments[2].col = 2;  // a second comment at a cell keeps no shape
+  const std::string vml = "<xml>" + NoteShape(4, 2, "visibility:visible") + NoteShape(0, 0, "visibility:hidden") +
+                          "<v:shape id=\"c\"><x:ClientData ObjectType=\"Checkbox\"><x:Row>9</x:Row>"
+                          "<x:Column>9</x:Column></x:ClientData></v:shape></xml>";
+  apply_vml_note_shapes(vml, comments);
+  EXPECT_FALSE(comments[0].visible);
+  EXPECT_TRUE(comments[0].has_box);
+  EXPECT_EQ(comments[0].vml_shape, NoteShape(0, 0, "visibility:hidden"));
+  EXPECT_TRUE(comments[1].visible);
+  EXPECT_EQ(comments[1].vml_shape, NoteShape(4, 2, "visibility:visible"));
+  EXPECT_TRUE(comments[2].vml_shape.empty());
+}
+
+TEST(CommentsRoundTrip, VmlRunOfUnclosedShapeOpensIsScannedOnce) {
+  // ~10 MB of opens ahead of one closed note; a rescan per open is quadratic.
+  std::string vml;
+  vml.reserve(10U * 1024U * 1024U + 256U);
+  while (vml.size() < 10U * 1024U * 1024U) {
+    vml.append("<v:shape ");
+  }
+  vml.append(NoteShape(1, 1, "visibility:visible"));
+  std::vector<CellComment> comments(1);
+  comments[0].row = 1;
+  comments[0].col = 1;
+  apply_vml_note_shapes(vml, comments);
+  EXPECT_TRUE(comments[0].visible);
+  EXPECT_EQ(comments[0].vml_shape, NoteShape(1, 1, "visibility:visible"));
+}
+
 TEST(CommentsRoundTrip, EmptyListProducesEmptyString) {
   std::vector<CellComment> input;
   EXPECT_TRUE(write_comments(input).empty());
@@ -185,6 +227,38 @@ TEST(CommentsRoundTrip, KeptShapeOutsideDrawingIdBlockIsRenumbered) {
   };
   EXPECT_EQ(count("id=\"_x0000_s2050\""), 1U) << vml;
   EXPECT_EQ(count("<v:shape id=\"_x0000_s20"), 3U) << vml;
+}
+
+TEST(CommentsRoundTrip, FormControlsSurviveARegeneratedDrawing) {
+  const std::string checkbox =
+      "<v:shape id=\"_x0000_s1026\" type=\"#_x0000_t201\"><x:ClientData ObjectType=\"Checkbox\">"
+      "<x:Row>4</x:Row><x:Column>1</x:Column></x:ClientData></v:shape>";
+  const std::string button_type = "<v:shapetype id=\"_x0000_t201\" coordsize=\"21600,21600\"/>";
+  const std::string source =
+      "<xml><o:shapelayout v:ext=\"edit\"><o:idmap v:ext=\"edit\" data=\"1\"/></o:shapelayout>"
+      "<v:shapetype id=\"_x0000_t202\"><v:path/></v:shapetype>" +
+      button_type + NoteShape(0, 0, "visibility:hidden") + checkbox + "</xml>";
+  const std::string others = vml_non_note_shapes(source);
+  EXPECT_NE(others.find(button_type), std::string::npos) << others;
+  EXPECT_NE(others.find(checkbox), std::string::npos) << others;
+  EXPECT_EQ(others.find("ObjectType=\"Note\""), std::string::npos) << others;
+  EXPECT_EQ(others.find("_x0000_t202"), std::string::npos) << others;
+
+  // Regenerated as drawing 2, the checkbox keeps id 1026, which the
+  // worksheet's controls cite, and drawing 1's block stays mapped.
+  CommentShape note;
+  note.row = 0;
+  note.col = 0;
+  const std::string vml = write_vml_drawing({note}, 2U, others);
+  EXPECT_NE(vml.find(checkbox), std::string::npos) << vml;
+  EXPECT_NE(vml.find("<o:idmap v:ext=\"edit\" data=\"2,1\"/>"), std::string::npos) << vml;
+  EXPECT_NE(vml.find("<v:shape id=\"_x0000_s2049\""), std::string::npos) << vml;
+
+  // In its own block the checkbox's id is skipped by new note shapes.
+  const std::string same_block = write_vml_drawing({note}, 1U, others);
+  EXPECT_NE(same_block.find("<o:idmap v:ext=\"edit\" data=\"1\"/>"), std::string::npos) << same_block;
+  EXPECT_NE(same_block.find("<v:shape id=\"_x0000_s1025\""), std::string::npos) << same_block;
+  EXPECT_EQ(same_block.find("_x0000_s1026"), same_block.rfind("_x0000_s1026")) << same_block;
 }
 
 }  // namespace

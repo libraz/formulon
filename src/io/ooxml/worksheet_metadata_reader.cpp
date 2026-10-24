@@ -160,6 +160,7 @@ Expected<void, Error> apply_worksheet_metadata(const pugi::xml_document& doc, st
   wb.sheet(i).mutable_hyperlinks() = std::move(hls);
   ASSIGN_OR_RETURN(auto dvs, read_data_validations(worksheet, diagnostics));
   wb.sheet(i).mutable_validations() = std::move(dvs);
+  wb.sheet(i).set_validations_extra_attrs(read_data_validations_extra_attrs(worksheet));
   wb.sheet(i).mutable_protection() = read_sheet_protection(worksheet);
   CaptureUnconsumedWorksheetChildren(worksheet, wb.sheet(i).mutable_raw_extensions());
 

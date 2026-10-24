@@ -5,6 +5,7 @@
 #include <limits>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "drawing/image_header.h"
 #include "io/ooxml/package_validator.h"
@@ -43,20 +44,30 @@ Error unparseable(const char* message, std::string_view detail) {
   return make_error(FormulonErrorCode::kIoDrawingUnparseable, message, std::string(detail));
 }
 
-// Cell extents in EMU under the Windows display geometry.
+// Cell extents in EMU under the Windows display geometry. Column widths are
+// resolved once for the whole grid, so walking columns costs O(columns +
+// spans) however many `<col>` spans the sheet carries.
 class Geometry {
  public:
   Geometry(const Workbook& wb, const Sheet& sheet)
-      : sheet_(sheet), model_(resolve_column_width_model(wb.styles(), GeometryMode::kDisplay)) {}
+      : sheet_(sheet),
+        model_(resolve_column_width_model(wb.styles(), GeometryMode::kDisplay)),
+        column_chars_(print::column_widths_chars(sheet, 0U, Sheet::kMaxCols - 1U, model_)) {}
 
   std::int64_t size(bool row_axis, std::uint32_t index) const {
-    const double pt = row_axis ? print::effective_row_height_pt(sheet_, index)
-                               : print::effective_column_width_pt(sheet_, index, model_);
+    const double pt = row_axis ? print::effective_row_height_pt(sheet_, index) : column_pt(index);
     return std::llround(pt * kEmuPerPoint);
   }
 
   std::int64_t offset(bool row_axis, std::uint32_t index) const {
-    const double pt = row_axis ? print::row_offset_pt(sheet_, index) : print::column_offset_pt(sheet_, index, model_);
+    if (row_axis) {
+      return std::llround(print::row_offset_pt(sheet_, index) * kEmuPerPoint);
+    }
+    // Summed in the order `print::column_offset_pt` sums them.
+    double pt = 0.0;
+    for (std::uint32_t col = 0; col < index && col < column_chars_.size(); ++col) {
+      pt += column_pt(col);
+    }
     return std::llround(pt * kEmuPerPoint);
   }
 
@@ -90,8 +101,15 @@ class Geometry {
   }
 
  private:
+  double column_pt(std::uint32_t col) const {
+    // An anchor read from a file may name a column past the grid; it has the default width.
+    return column_chars_to_points(
+        col < column_chars_.size() ? column_chars_[col] : default_column_width_chars(sheet_, model_), model_);
+  }
+
   const Sheet& sheet_;
   ColumnWidthModel model_;
+  std::vector<double> column_chars_;
 };
 
 template <typename Fn>

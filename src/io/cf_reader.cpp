@@ -4,6 +4,7 @@
 
 #include "io/cf_reader.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -41,6 +42,12 @@ cf::IconSetName ParseIconSetName(std::string_view text) {
   }
   // The schema default, which Excel omits the attribute for.
   return cf::IconSetName::Three_TrafficLights1;
+}
+
+/// True when `text` is absent or names one of the modelled icon sets, so
+/// `ParseIconSetName` reports what the file says rather than the default.
+bool IsModelledIconSetName(std::string_view text) {
+  return text.empty() || std::find(cf::kIconSetNames.begin(), cf::kIconSetNames.end(), text) != cf::kIconSetNames.end();
 }
 
 /// Strips `$` absolute markers from an A1 token. CF `sqref` legitimately
@@ -621,7 +628,10 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     out.push_back(std::move(cfmt));
   }
   // An icon-set rule Excel stores only in the x14 extension (custom icons)
-  // has no legacy counterpart to carry it.
+  // has no legacy counterpart to carry it. Only one the model can write back
+  // as it read it is adopted: custom icons over a modelled base set. Any
+  // other (3Stars, 3Triangles, 5Boxes, a plain set) stays in the extension
+  // as captured, since the legacy writer would add a second, different rule.
   std::unordered_set<std::string> linked;
   for (const cf::ConditionalFormat& cfmt : out) {
     for (const cf::CFRule& rule : cfmt.rules) {
@@ -634,7 +644,8 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
       for (pugi::xml_node rule : block.children("x14:cfRule")) {
         const std::string id(attr_str(rule, "id"));
         const pugi::xml_node iset = rule.child("x14:iconSet");
-        if (!ranges_or || id.empty() || !iset || attr_str(rule, "type") != "iconSet" || !linked.insert(id).second) {
+        if (!ranges_or || id.empty() || !iset || attr_str(rule, "type") != "iconSet" ||
+            !x14_cf_rule_model_can_hold(rule) || !iset.child("x14:cfIcon") || !linked.insert(id).second) {
           continue;
         }
         cf::CFRule parsed;
@@ -714,6 +725,14 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
 
 void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out) {
   ApplyX14DataBarOverlay(x14_bar, out);
+}
+
+bool x14_cf_rule_model_can_hold(const pugi::xml_node& rule) {
+  const std::string_view type = attr_str(rule, "type");
+  if (type == "dataBar") {
+    return true;
+  }
+  return type == "iconSet" && IsModelledIconSetName(attr_str(rule.child("x14:iconSet"), "iconSet"));
 }
 
 std::vector<cf::CfIcon> read_x14_icon_set_icons(const pugi::xml_node& x14_icon_set) {

@@ -112,6 +112,12 @@ void apply_x14_data_bar_overlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* 
 /// document order; empty for a null node or one without them.
 std::vector<cf::CfIcon> read_x14_icon_set_icons(const pugi::xml_node& x14_icon_set);
 
+/// True when the model can hold the `<x14:cfRule>` `rule`: a data bar, or an
+/// icon set over one of the modelled base sets. Any other extension rule (a
+/// 3Stars / 3Triangles / 5Boxes icon set, a formula rule Excel writes only in
+/// the extension) never enters the model and stays in the extension as read.
+bool x14_cf_rule_model_can_hold(const pugi::xml_node& rule);
+
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_CF_READER_H_

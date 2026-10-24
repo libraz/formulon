@@ -389,6 +389,38 @@ TEST(ChartCache, WholeColumnUsesTheFullPointCount) {
   EXPECT_FALSE(Contains(text, "<c:pt idx=\"1048575\">"));
 }
 
+// A ref whose populated cells exceed the range-expansion budget keeps its cache.
+TEST(ChartCache, OverBudgetReferenceKeepsItsExistingCache) {
+  Workbook wb = LoadFixture("chart_column.xlsx");
+  const std::string path = ChartPathWith(wb, "Sheet1!$B$2:$B$5");
+  std::string text = PartText(wb, path);
+  Replace(text, "<c:f>Sheet1!$B$2:$B$5</c:f>", "<c:f>Sheet1!$B$2:$XFD$1048575</c:f>");
+  Replace(text, "<c:v>7</c:v>", "<c:v>111</c:v>");
+  Replace(text, "<c:v>S1</c:v>", "<c:v>OLD</c:v>");  // forces the part to be rewritten
+  SetPart(wb, path, text);
+  wb.sheet(0).set_cell_value(Sheet::kMaxRows - 2U, Sheet::kMaxCols - 1U, Value::number(1));
+  const std::string refreshed = RefreshedText(wb, path);
+  ASSERT_FALSE(refreshed.empty());
+  EXPECT_TRUE(Contains(refreshed, "<c:v>S1</c:v>"));
+  EXPECT_TRUE(Contains(refreshed, "<c:v>111</c:v>"));
+}
+
+TEST(ChartCache, OverBudgetMultiLevelReferenceKeepsItsExistingCache) {
+  Workbook wb = LoadFixture("chart_data.xlsx");
+  const std::string path = ChartPathWith(wb, "<c:f>Sheet1!$F$2:$G$9</c:f>");
+  std::string text = PartText(wb, path);
+  Replace(text, "<c:f>Sheet1!$F$2:$G$9</c:f>", "<c:f>Sheet1!$F$2:$XFD$1048575</c:f>");
+  SetPart(wb, path, text);
+  const std::size_t open = text.find("<c:multiLvlStrCache>");
+  const std::size_t close = text.find("</c:multiLvlStrCache>");
+  ASSERT_NE(open, std::string::npos);
+  ASSERT_NE(close, std::string::npos);
+  const std::string cache = text.substr(open, close - open);
+  wb.sheet(0).set_cell_value(Sheet::kMaxRows - 2U, Sheet::kMaxCols - 1U, Value::number(1));
+  const std::string refreshed = RefreshedText(wb, path);
+  EXPECT_TRUE(refreshed.empty() || Contains(refreshed, cache));
+}
+
 TEST(ChartCache, MultiLevelCategoryRefreshesBothLevels) {
   Workbook wb = LoadFixture("chart_data.xlsx");
   const std::string path = ChartPathWith(wb, "<c:f>Sheet1!$F$2:$G$9</c:f>");

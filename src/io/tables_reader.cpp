@@ -169,6 +169,7 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
       // ooxml_writer.cpp).
       if (pugi::xml_node fn_node = col.child("calculatedColumnFormula"); fn_node) {
         AppendOoxmlTextUnescaped(entry.calculated_column_formula, fn_node.text().as_string());
+        entry.calculated_column_formula_array = attr_bool(fn_node, "array", false);
       }
       if (pugi::xml_node totals_node = col.child("totalsRowFormula"); totals_node) {
         AppendOoxmlTextUnescaped(entry.totals_row_formula, totals_node.text().as_string());

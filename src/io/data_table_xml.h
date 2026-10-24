@@ -27,8 +27,9 @@ struct DataTableAttrs {
   std::string_view aca;
 };
 
-/// Builds the table from `attrs`. False when `ref` is missing or not a
-/// single range, in which case nothing is modelled.
+/// Builds the table from `attrs`. False when `ref` is missing, not a single
+/// range, or covers more than `kMaxDataTableCells`, in which case nothing is
+/// modelled.
 bool parse_data_table(const DataTableAttrs& attrs, DataTable* out);
 
 /// Appends `<f t="dataTable" .../>` for `table`.

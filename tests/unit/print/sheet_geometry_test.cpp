@@ -291,6 +291,32 @@ TEST(SheetGeometry, OverridesAndHiddenTracksShapeEffectiveSizes) {
   EXPECT_DOUBLE_EQ(heights[2], kStandardRowPt);
 }
 
+TEST(SheetGeometry, OverlappingColumnSpansResolveFirstWinsInLinearTime) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  AddColumn(&sheet, 2, 5, 10.0, false);
+  AddColumn(&sheet, 1, Sheet::kMaxCols - 1U, 20.0, false);
+  // Column A stays unassigned, so every span below is visited; walking each
+  // one column by column would cost 200k x 16k steps.
+  for (int i = 0; i < 200000; ++i) {
+    AddColumn(&sheet, 1, Sheet::kMaxCols - 1U, 30.0, false);
+  }
+  AddColumn(&sheet, 0, 0, 40.0, false);
+  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const std::vector<double> widths = column_widths_chars(sheet, 0, Sheet::kMaxCols - 1U, model);
+  ASSERT_EQ(widths.size(), static_cast<std::size_t>(Sheet::kMaxCols));
+  EXPECT_DOUBLE_EQ(widths[0], 40.0);
+  EXPECT_DOUBLE_EQ(widths[1], 20.0);
+  EXPECT_DOUBLE_EQ(widths[2], 10.0);
+  EXPECT_DOUBLE_EQ(widths[5], 10.0);
+  EXPECT_DOUBLE_EQ(widths[6], 20.0);
+  EXPECT_DOUBLE_EQ(widths[Sheet::kMaxCols - 1U], 20.0);
+  const std::vector<double> window = column_widths_chars(sheet, 4, 7, model);
+  ASSERT_EQ(window.size(), 4U);
+  EXPECT_DOUBLE_EQ(window[0], 10.0);
+  EXPECT_DOUBLE_EQ(window[2], 20.0);
+}
+
 TEST(SheetGeometry, RowOffsetUsesFirstUnsortedDuplicateOverrideOnce) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);

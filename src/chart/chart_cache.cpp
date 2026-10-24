@@ -25,6 +25,7 @@
 #include "sheet.h"
 #include "style_resolve.h"
 #include "styles.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
 
@@ -109,22 +110,33 @@ struct Pos {
   std::uint32_t col;
 };
 
+std::uint64_t rect_cells(const SheetRect& r) {
+  if (r.top > r.bottom || r.left > r.right) {
+    return 0;
+  }
+  return (static_cast<std::uint64_t>(r.bottom) - r.top + 1U) * (static_cast<std::uint64_t>(r.right) - r.left + 1U);
+}
+
 class Gatherer {
  public:
   Gatherer(const Workbook& wb, bool vis_only) : wb_(wb), vis_only_(vis_only) {}
 
-  /// Builds the cache `ref` would carry on save. `kind` may change from
-  /// numeric to string when a category holds text.
-  Cache build(const std::vector<SheetRect>& areas, RefKind& kind, std::string_view role, bool apply_hidden) const {
+  /// Builds into `cache` the cache `ref` would carry on save. `kind` may
+  /// change from numeric to string when a category holds text. False, with
+  /// `kind` untouched, when the populated cells exceed
+  /// `kMaxRangeExpansionCells`; the existing cache then stays as it is.
+  bool build(const std::vector<SheetRect>& areas, RefKind& kind, std::string_view role, bool apply_hidden,
+             Cache& cache) const {
     const bool hide = vis_only_ && apply_hidden;
     if (kind == RefKind::kMultiLvl && areas.size() == 1 && areas[0].top != areas[0].bottom &&
         areas[0].left != areas[0].right) {
-      return build_levels(areas[0], hide);
+      return build_levels(areas[0], hide, cache);
     }
     std::vector<Item> items;
-    Cache cache;
     bool had_cells = false;
-    cache.point_count = flatten(areas, hide, items, had_cells);
+    if (!flatten(areas, hide, items, had_cells, cache.point_count)) {
+      return false;
+    }
     if (kind == RefKind::kNum && (role == "cat" || role == "xVal") && has_text(items)) {
       kind = RefKind::kStr;
     }
@@ -133,7 +145,7 @@ class Gatherer {
       cache.format_code = format_code_at(second_position(areas));
       if (items.empty() && had_cells && hide) {
         cache.present = false;  // every cell hidden: the ref keeps `c:f` alone
-        return cache;
+        return true;
       }
       for (const Item& it : items) {
         numeric_point(it, cache);
@@ -158,7 +170,7 @@ class Gatherer {
         }
       }
     }
-    return cache;
+    return true;
   }
 
  private:
@@ -214,14 +226,24 @@ class Gatherer {
     cache.lvls[0].push_back(std::move(pt));
   }
 
-  /// A 2-D category: the last column (or row) is the lowest level.
-  Cache build_levels(const SheetRect& r, bool hide) const {
-    Cache cache;
+  /// A 2-D category: the last column (or row) is the lowest level. Cells
+  /// past the populated extent are blank and add no point text, so only the
+  /// populated part is read and charged against the cell budget.
+  bool build_levels(const SheetRect& r, bool hide, Cache& cache) const {
+    const SheetRect t = trim_to_populated(wb_, r);
+    ResourceBudget cells(kMaxRangeExpansionCells);
+    if (!cells.consume(rect_cells(t))) {
+      return false;
+    }
     const bool down = (r.bottom - r.top) >= (r.right - r.left);
     const std::uint32_t first = down ? r.top : r.left;
     const std::uint32_t last = down ? r.bottom : r.right;
     const std::uint32_t lvl_first = down ? r.left : r.top;
     const std::uint32_t lvl_last = down ? r.right : r.bottom;
+    const bool populated = t.top <= t.bottom && t.left <= t.right;
+    const std::uint32_t read_last = down ? t.bottom : t.right;
+    const std::uint32_t read_lvl_first = down ? t.left : t.top;
+    const std::uint32_t read_lvl_last = down ? t.right : t.bottom;
     const Sheet& sheet = wb_.sheet(r.sheet);
     cache.lvls.assign(lvl_last - lvl_first + 1U, {});
     std::uint64_t next = 0;
@@ -229,7 +251,11 @@ class Gatherer {
       if (hide && (down ? row_hidden(sheet, i) : col_hidden(sheet, i))) {
         continue;
       }
-      for (std::uint32_t lv = lvl_last + 1U; lv-- > lvl_first;) {
+      if (!populated || i > read_last) {
+        ++next;
+        continue;
+      }
+      for (std::uint32_t lv = read_lvl_last + 1U; lv-- > read_lvl_first;) {
         const Pos p = down ? Pos{r.sheet, i, lv} : Pos{r.sheet, lv, i};
         const std::string text = display(p, value_at(p));
         if (!text.empty()) {
@@ -240,17 +266,28 @@ class Gatherer {
     }
     cache.point_count = next;
     cache.present = next > 0 || !hide;  // every point hidden
-    return cache;
+    return true;
   }
 
   /// Cells in point order (column by column) with hidden ones dropped
-  /// and the rest renumbered; returns the point count.
-  std::uint64_t flatten(const std::vector<SheetRect>& areas, bool hide, std::vector<Item>& items,
-                        bool& had_cells) const {
-    std::uint64_t next = 0;
+  /// and the rest renumbered, and the point count in `point_count`. False
+  /// when the populated cells exceed the cell budget.
+  bool flatten(const std::vector<SheetRect>& areas, bool hide, std::vector<Item>& items, bool& had_cells,
+               std::uint64_t& point_count) const {
+    std::vector<SheetRect> trimmed;
+    trimmed.reserve(areas.size());
+    ResourceBudget cells(kMaxRangeExpansionCells);
     for (const SheetRect& area : areas) {
+      trimmed.push_back(trim_to_populated(wb_, area));
+      if (!cells.consume(rect_cells(trimmed.back()))) {
+        return false;
+      }
+    }
+    std::uint64_t next = 0;
+    for (std::size_t a = 0; a < areas.size(); ++a) {
+      const SheetRect& area = areas[a];
       const Sheet& sheet = wb_.sheet(area.sheet);
-      const SheetRect r = trim_to_populated(wb_, area);
+      const SheetRect& r = trimmed[a];
       std::uint64_t kept = 0;
       for (std::uint32_t col = r.left; col <= r.right && r.top <= r.bottom; ++col) {
         if (hide && col_hidden(sheet, col)) {
@@ -269,7 +306,8 @@ class Gatherer {
       had_cells = had_cells || seen > 0;
       next += kept + (full - seen);
     }
-    return next;
+    point_count = next;
+    return true;
   }
 
   /// The cache's format is that of the range's second cell, or the only one.
@@ -487,7 +525,10 @@ bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_
     }
     const RefKind original = kind;
     // A series name is not plotted, so hidden cells do not drop out of it.
-    const Cache fresh = gatherer.build(source.value().areas, kind, role, role != "tx");
+    Cache fresh;
+    if (!gatherer.build(source.value().areas, kind, role, role != "tx", fresh)) {
+      continue;
+    }
     const pugi::xml_node cache_node = find_cache(ref);
     const Cache old = read_cache(cache_node);
     if (kind == original && same_cache(fresh, old, kind)) {

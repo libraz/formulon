@@ -66,8 +66,10 @@
 #include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
@@ -323,6 +325,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (workbook_visibility != SheetVisibility::kVisible) {
       wb.sheet(wb.sheet_count() - 1U).mutable_view().set_visibility(workbook_visibility);
     }
+    wb.sheet(wb.sheet_count() - 1U).set_source_sheet_id(attr_u32(sn, "sheetId", 0U));
     const ooxml::WorkbookRels::SheetTarget& target = it->second;
     if (target.relationship_type != kRelWorksheet) {
       // Keep non-worksheet sheet types in their original position, but do
@@ -648,14 +651,22 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // intentionally NOT consumed here so the bytes flow through the
       // unknown-parts passthrough mechanism unchanged; the anchors it was
       // read with let the writer tell whether those bytes are still current.
+      // The drawing's other shapes (form controls) are kept even on a sheet
+      // without notes, so a note added later regenerates the drawing with them.
+      std::vector<std::uint8_t> vml_bytes;
+      if (!aux.vml_path.empty() && zip.has_entry(aux.vml_path)) {
+        ASSIGN_OR_RETURN(vml_bytes, zip.read_entry(aux.vml_path));
+        wb.sheet(i).set_comment_vml_extra_xml(
+            vml_non_note_shapes(std::string_view(reinterpret_cast<const char*>(vml_bytes.data()), vml_bytes.size())));
+      }
       if (!aux.comments_path.empty() && zip.has_entry(aux.comments_path)) {
         ASSIGN_OR_RETURN(auto cb, zip.read_entry(aux.comments_path));
         std::vector<std::string> authors;
         ASSIGN_OR_RETURN(auto comments, read_comments(cb, &authors));
         drop_thread_stubs(comments, wb.sheet(i).threaded_comments());
-        if (!aux.vml_path.empty() && zip.has_entry(aux.vml_path)) {
-          ASSIGN_OR_RETURN(auto vb, zip.read_entry(aux.vml_path));
-          apply_vml_note_shapes(std::string_view(reinterpret_cast<const char*>(vb.data()), vb.size()), comments);
+        if (!vml_bytes.empty()) {
+          apply_vml_note_shapes(std::string_view(reinterpret_cast<const char*>(vml_bytes.data()), vml_bytes.size()),
+                                comments);
         }
         wb.sheet(i).mutable_comments() = std::move(comments);
         authors.erase(std::remove_if(authors.begin(), authors.end(),
@@ -665,6 +676,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         wb.sheet(i).set_comment_vml_path(aux.vml_path);
         wb.sheet(i).set_comment_vml_shapes(wb.sheet(i).comment_shapes());
         consumed_parts.insert(aux.comments_path);
+      } else if (!wb.sheet(i).comment_vml_extra_xml().empty()) {
+        // Form controls without notes: the drawing is still the sheet's
+        // legacy drawing, and its bytes stay current until a note is added.
+        wb.sheet(i).set_comment_vml_path(aux.vml_path);
       }
 
       // Drawing (DrawingML) reference. The reader does not model the
@@ -792,6 +807,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // loading above attaches `PivotTable`s that reference these caches by
   // id.
   pugi::xml_node pivot_caches_node = wb_root.child("pivotCaches");
+  std::unordered_set<std::string> listed_cache_rids;
   for (pugi::xml_node pc = pivot_caches_node.child("pivotCache"); pc; pc = pc.next_sibling("pivotCache")) {
     const std::uint32_t cache_id = pc.attribute("cacheId").as_uint(0U);
     // Accept both "r:id" (Office-namespaced) and bare "id" — same
@@ -810,6 +826,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       return make_error(FormulonErrorCode::kIoRelationshipBroken,
                         "workbook.xml: <pivotCache> r:id has no matching workbook relationship", std::move(ctx));
     }
+    listed_cache_rids.insert(rid);
     const std::string& definition_path = def_it->second;
     if (!zip.has_entry(definition_path)) {
       std::string ctx("context=ooxml_reader cache_id=");
@@ -856,6 +873,27 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     }
 
     wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
+  }
+  // A cache named only from an extension (a timeline's cache, say) is not
+  // modelled: its parts pass through, and its relationship stays a plain
+  // one so the extension's `r:id` is remapped to it on save.
+  {
+    std::vector<UnknownRelationship> unlisted;
+    for (const auto& [rid, definition_path] : wb_rels.pivot_cache_definition_paths_by_rid) {
+      if (listed_cache_rids.count(rid) != 0U) {
+        continue;
+      }
+      UnknownRelationship entry;
+      entry.id = rid;
+      entry.type.assign(kRelPivotCacheDefinition);
+      entry.target = definition_path;
+      unlisted.push_back(std::move(entry));
+    }
+    // The map is unordered; the relationship order on save must not be.
+    sort_by_index(unlisted, [](const UnknownRelationship& a, const UnknownRelationship& b) { return a.id < b.id; });
+    for (UnknownRelationship& entry : unlisted) {
+      wb_rels.unknown_rels.push_back(std::move(entry));
+    }
   }
 
   // Both pivot tables (per sheet) and their caches (workbook-level) are

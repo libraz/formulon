@@ -64,6 +64,9 @@ struct SharedItemsHints {
   /// attributes. When false the writer falls back to its legacy minimal
   /// placeholder for an empty (range-typed) field.
   bool present = false;
+  /// Unmodelled `<sharedItems>` attributes (`longText`, ...), re-emitted
+  /// verbatim after the modelled ones.
+  std::vector<std::pair<std::string, std::string>> extra_attrs;
 };
 
 /// One column of the pivot cache.
@@ -99,6 +102,14 @@ struct PivotCacheField {
   /// does not model grouping structurally. Empty when the field carries no
   /// `<fieldGroup>`.
   std::string field_group_xml;
+
+  /// Unmodelled `<cacheField>` attributes (`caption`, `formula`,
+  /// `numFmtId`, `sqlType`, ...), re-emitted verbatim.
+  std::vector<std::pair<std::string, std::string>> extra_attrs;
+
+  /// `<cacheField>` children after `<fieldGroup>` (`mpMap`, `extLst`),
+  /// retained verbatim in their schema position.
+  std::string trailing_children_xml;
 };
 
 /// The `<cacheSource>/<worksheetSource>` reference that tells Excel where
@@ -225,6 +236,22 @@ class PivotCache {
   const WorksheetSource& worksheet_source() const { return worksheet_source_; }
   WorksheetSource& mutable_worksheet_source() { return worksheet_source_; }
 
+  /// Every `<cacheSource>` attribute (`type`, `connectionId`) as read; empty
+  /// for a cache built in memory, which is written as a worksheet source.
+  const std::vector<std::pair<std::string, std::string>>& cache_source_attrs() const { return cache_source_attrs_; }
+  std::vector<std::pair<std::string, std::string>>& mutable_cache_source_attrs() { return cache_source_attrs_; }
+
+  /// `<cacheSource>` children other than `<worksheetSource>`
+  /// (`consolidation`, `extLst`), retained verbatim.
+  const std::string& cache_source_children_xml() const { return cache_source_children_xml_; }
+  std::string& mutable_cache_source_children_xml() { return cache_source_children_xml_; }
+
+  /// `<pivotCacheDefinition>` children after `<cacheFields>`
+  /// (`cacheHierarchies`, `calculatedItems`, `extLst`, ...), retained
+  /// verbatim in their schema position.
+  const std::string& trailing_children_xml() const { return trailing_children_xml_; }
+  std::string& mutable_trailing_children_xml() { return trailing_children_xml_; }
+
  private:
   std::uint32_t cache_id_ = 0;
   std::vector<PivotCacheField> fields_;
@@ -232,6 +259,9 @@ class PivotCache {
   std::deque<std::string> text_storage_;
   WorksheetSource worksheet_source_;
   std::vector<std::pair<std::string, std::string>> passthrough_attrs_;
+  std::vector<std::pair<std::string, std::string>> cache_source_attrs_;
+  std::string cache_source_children_xml_;
+  std::string trailing_children_xml_;
 };
 
 }  // namespace formulon::pivot

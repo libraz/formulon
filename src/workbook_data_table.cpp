@@ -20,6 +20,7 @@
 #include "eval/recalc_engine.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
 
@@ -137,9 +138,14 @@ OwnedValue read_result(const Sheet& sheet, std::uint32_t row, std::uint32_t col)
   return OwnedValue::result_of(sheet.cell_at(row, col));
 }
 
+std::uint64_t cell_count(const MergeRange& ref) {
+  return static_cast<std::uint64_t>(ref.last_row - ref.first_row + 1U) * (ref.last_col - ref.first_col + 1U);
+}
+
 // The result grid of `table`, row-major over its `ref`. A table without a
-// header row and column, or one whose input cell is unusable, yields errors
-// (the latter) or is skipped (the former, `computed == false`).
+// header row and column, or one whose recalc passes would exceed `passes`,
+// is skipped (`computed == false`) and keeps its cached results; one whose
+// input cell is unusable yields errors.
 struct TableResult {
   bool computed = false;
   std::uint32_t cols = 0;
@@ -147,24 +153,29 @@ struct TableResult {
 };
 
 Expected<TableResult, Error> compute_table(Workbook& wb, std::size_t sheet_index, const DataTable& table,
-                                           const eval::FunctionRegistry& registry) {
+                                           const eval::FunctionRegistry& registry, ResourceBudget& passes) {
   TableResult result;
   const MergeRange& ref = table.ref;
-  if (ref.first_row == 0U || ref.first_col == 0U) {
+  if (ref.first_row == 0U || ref.first_col == 0U || ResourceBudget(kMaxDataTableCells).would_exceed(cell_count(ref))) {
     return result;
   }
   const std::uint32_t rows = ref.last_row - ref.first_row + 1U;
   const std::uint32_t cols = ref.last_col - ref.first_col + 1U;
   const std::uint32_t top = ref.first_row - 1U;
   const std::uint32_t left = ref.first_col - 1U;
-  result.computed = true;
-  result.cols = cols;
-  result.cells.assign(static_cast<std::size_t>(rows) * cols, OwnedValue::error(ErrorCode::Ref));
-
   const DataTableInput row_in = table.row_input();
   const DataTableInput col_in = table.col_input();
   const bool needs_row_in = table.two_dimensional || table.row_oriented;
   const bool needs_col_in = table.two_dimensional || !table.row_oriented;
+  // One settle before the headers, then one per substitution.
+  const std::uint64_t substitutions = needs_row_in && needs_col_in ? cell_count(ref) : needs_col_in ? rows : cols;
+  if (!passes.consume(1U + substitutions)) {
+    return result;
+  }
+  result.computed = true;
+  result.cols = cols;
+  result.cells.assign(static_cast<std::size_t>(rows) * cols, OwnedValue::error(ErrorCode::Ref));
+
   const Sheet& sheet = wb.sheet(sheet_index);
   if ((needs_row_in && (!input_usable(sheet, row_in) || range_contains(ref, row_in.row, row_in.col))) ||
       (needs_col_in && (!input_usable(sheet, col_in) || range_contains(ref, col_in.row, col_in.col)))) {
@@ -284,6 +295,9 @@ Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRan
     return make_error(FormulonErrorCode::kDataTableInvalid,
                       "add_data_table: ref needs a row above and a column left of it");
   }
+  if (auto charged = ResourceBudget(kMaxDataTableCells).consume(cell_count(ref)); !charged) {
+    return std::move(charged.error());
+  }
   for (const DataTableInput* input : {&row_input, &col_input}) {
     if (input->present && range_contains(ref, input->row, input->col)) {
       return make_error(FormulonErrorCode::kDataTableInvalid, "add_data_table: input cell inside ref");
@@ -356,11 +370,12 @@ Expected<void, Error> Workbook::remove_data_table(std::size_t sheet_index, std::
 Expected<void, Error> Workbook::compute_data_tables(const eval::FunctionRegistry& registry) {
   data_tables_pending_ = false;
   bool wrote = false;
+  ResourceBudget passes(kMaxDataTableRecalcPasses);
   for (std::size_t sheet_index = 0; sheet_index < sheets_.size(); ++sheet_index) {
     // Copied: computing a table rewrites cells, never the table list.
     const std::vector<DataTable> tables = sheets_[sheet_index].data_tables();
     for (const DataTable& table : tables) {
-      ASSIGN_OR_RETURN(TableResult result, compute_table(*this, sheet_index, table, registry));
+      ASSIGN_OR_RETURN(TableResult result, compute_table(*this, sheet_index, table, registry, passes));
       if (!result.computed) {
         continue;
       }

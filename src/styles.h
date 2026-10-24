@@ -167,6 +167,15 @@ struct BorderRecord {
   BorderSide diagonal;
   bool diagonal_up = false;
   bool diagonal_down = false;
+  /// Attributes not represented by the model (`outline`, ...) retained as
+  /// escaped ` name="value"` pairs.
+  std::string extra_attrs;
+  /// `<vertical>` / `<horizontal>` and any later children, retained verbatim
+  /// after `<diagonal>`.
+  std::string trailing_children_xml;
+  /// `<start>` / `<end>`, which lead the sequence, retained verbatim before
+  /// `<left>`.
+  std::string leading_children_xml;
 };
 
 /// One `<numFmt>` entry inside `<numFmts>`. The format string itself is
@@ -238,6 +247,11 @@ struct CellXf {
   bool has_protection = false;
   bool locked = true;
   bool hidden = false;
+  /// Attributes not represented by the model (`pivotButton`, ...) retained
+  /// as escaped ` name="value"` pairs.
+  std::string extra_attrs;
+  /// Children after `<protection>` (`extLst`), retained verbatim.
+  std::string trailing_children_xml;
 };
 
 /// Returns the canonical alignment-child presence for an xf.

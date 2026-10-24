@@ -25,7 +25,9 @@
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/workbook_part_reader.h"
 #include "io/ooxml_defs.h"
+#include "io/sheet_ids.h"
 #include "io/workbook_kind_ooxml.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
@@ -138,6 +140,7 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     if (!n.comment.empty()) {
       append_xml_attr(out, "comment", n.comment);
     }
+    out.append(n.extra_attrs);
     out.push_back('>');
     // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
     // on the enumerated future functions, `_xlpm.` on LET / LAMBDA
@@ -288,7 +291,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // Comments parts: one Override per part. VML drawings are covered
   // by the `Default Extension="vml"` entry above and need no Override.
   for (const EmissionPlan::CommentsPlan& cplan : plan.comments_by_sheet) {
-    if (cplan.numeric_id == 0) {
+    if (cplan.comments_path.empty()) {
       continue;
     }
     AppendOverride(out, cplan.comments_path, kCtComments);
@@ -377,31 +380,57 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
 
 namespace {
 
-// Rewrites each `r:id` in raw workbook XML from its source relationship id to the id the writer assigns.
+// Rewrites each `r:id` under `node` to the id the writer assigns. An element
+// whose relationship is not written is removed, and so is every ancestor
+// the removal leaves without element children. True when anything was removed.
+bool RemapRelationshipIdsUnder(pugi::xml_node node, const std::vector<std::pair<std::string, std::string>>& id_map) {
+  bool removed = false;
+  for (pugi::xml_node child = node.first_child(); child;) {
+    const pugi::xml_node next = child.next_sibling();
+    if (child.type() == pugi::node_element) {
+      if (pugi::xml_attribute rid = child.attribute("r:id"); rid) {
+        const std::string_view id = rid.value();
+        const auto hit =
+            std::find_if(id_map.begin(), id_map.end(), [&id](const auto& entry) { return entry.first == id; });
+        if (hit == id_map.end()) {
+          node.remove_child(child);
+          removed = true;
+          child = next;
+          continue;
+        }
+        rid.set_value(hit->second.c_str());
+      }
+      if (RemapRelationshipIdsUnder(child, id_map)) {
+        removed = true;
+        if (!has_element_child(child)) {
+          node.remove_child(child);
+        }
+      }
+    }
+    child = next;
+  }
+  return removed;
+}
+
+// Rewrites each `r:id` in a raw workbook fragment from its source
+// relationship id to the id the writer assigns; an element naming a
+// relationship that is not written is dropped rather than left pointing at
+// whatever the stale id now numbers. Empty when nothing is left.
 std::string RemapRelationshipIds(const Workbook& wb, const EmissionPlan& plan, const std::string& xml) {
-  constexpr std::string_view kAttr = " r:id=\"";
-  if (xml.find(kAttr) == std::string::npos) {
+  if (xml.find(" r:id=\"") == std::string::npos) {
     return xml;
+  }
+  pugi::xml_document doc;
+  if (!doc.load_string(xml.c_str()) || !doc.document_element()) {
+    return {};
   }
   std::vector<std::pair<std::string, std::string>> id_map;
   BuildWorkbookRels(wb.sheet_count(), plan, wb, nullptr, &id_map);
-  std::string out;
-  out.reserve(xml.size());
-  std::size_t pos = 0;
-  for (std::size_t at = xml.find(kAttr); at != std::string::npos; at = xml.find(kAttr, pos)) {
-    const std::size_t begin = at + kAttr.size();
-    const std::size_t end = xml.find('"', begin);
-    if (end == std::string::npos) {
-      break;
-    }
-    const std::string_view id(xml.data() + begin, end - begin);
-    out.append(xml, pos, begin - pos);
-    const auto hit = std::find_if(id_map.begin(), id_map.end(), [&id](const auto& entry) { return entry.first == id; });
-    out.append(hit != id_map.end() ? std::string_view(hit->second) : id);
-    pos = end;
+  const pugi::xml_node root = doc.document_element();
+  if (RemapRelationshipIdsUnder(root, id_map) && !has_element_child(root)) {
+    return {};
   }
-  out.append(xml, pos, std::string::npos);
-  return out;
+  return raw_xml(root);
 }
 
 }  // namespace
@@ -419,6 +448,18 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // the fragment is malformed XML and Excel refuses the file.
   out.append(wb.workbook_root_extra_attrs());
   out.append(">\n");
+  // Retained children go back ahead of the first emitted element whose slot
+  // follows theirs; the list is sorted by slot, so one cursor suffices.
+  const WorksheetRawExtensions& raw_children = wb.raw_children();
+  std::size_t raw_cursor = 0;
+  const auto flush_raw_before = [&](std::string_view element) {
+    const std::size_t slot = ooxml::workbook_child::slot_of(element);
+    while (raw_cursor < raw_children.size() && raw_children[raw_cursor].slot < slot) {
+      out.append("  ");
+      out.append(raw_children[raw_cursor++].xml);
+      out.push_back('\n');
+    }
+  };
   // Workbook-level elements that precede <sheets> in ECMA-376 order
   // (fileVersion, fileSharing, workbookPr, workbookProtection, bookViews,
   // sheets, ...). Each is re-emitted verbatim from its raw capture so the
@@ -431,32 +472,38 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     out.append(wb.file_version_xml());
     out.push_back('\n');
   }
+  flush_raw_before("fileSharing");
   if (!wb.file_sharing_xml().empty()) {
     out.append("  ");
     out.append(wb.file_sharing_xml());
     out.push_back('\n');
   }
+  flush_raw_before("workbookPr");
   const std::string workbook_pr_xml = SynchronizedWorkbookPr(wb);
   if (!workbook_pr_xml.empty()) {
     out.append("  ");
     out.append(workbook_pr_xml);
     out.push_back('\n');
   }
+  flush_raw_before("workbookProtection");
   if (!wb.workbook_protection_xml().empty()) {
     out.append("  ");
     out.append(wb.workbook_protection_xml());
     out.push_back('\n');
   }
+  flush_raw_before("bookViews");
   if (!wb.book_views_xml().empty()) {
     out.append("  ");
     out.append(wb.book_views_xml());
     out.push_back('\n');
   }
+  flush_raw_before("sheets");
   out.append("  <sheets>\n");
+  const std::vector<std::uint32_t> sheet_ids = assign_sheet_ids(wb);
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     out.append("    <sheet");
     append_xml_attr(out, "name", wb.sheet(i).name());
-    append_xml_attr_uint(out, "sheetId", i + 1U);
+    append_xml_attr_uint(out, "sheetId", sheet_ids[i]);
     const std::string rid = "rId" + std::to_string(i + 1U);
     append_xml_attr(out, "r:id", rid);
     // Excel records tab visibility on the workbook part via the
@@ -479,6 +526,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     out.append("/>\n");
   }
   out.append("  </sheets>\n");
+  flush_raw_before("externalReferences");
   // <externalReferences> precedes <definedNames> per ECMA-376 element
   // order (sheets, functionGroups, externalReferences, definedNames,
   // ...). Emit only when the workbook actually carries cross-workbook
@@ -500,10 +548,12 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
       out.append("  </externalReferences>\n");
     }
   }
+  flush_raw_before("definedNames");
   // <definedNames> sits between <sheets> and <calcPr>/end-of-workbook
   // per OOXML schema (cf. ECMA-376 sheet ordering).
   const parser::ExternalBookIndexer indexer = plan.external_link_ordinals.indexer();
   AppendDefinedNamesBlock(out, wb.defined_names(), indexer);
+  flush_raw_before("calcPr");
   // <calcPr> persists Excel's workbook-level calculation policy
   // (`calcMode` + iterative trio). Emit only when at least one
   // attribute differs from the spec defaults so a fresh workbook keeps
@@ -565,6 +615,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
       out.append("/>\n");
     }
   }
+  flush_raw_before("pivotCaches");
   // <pivotCaches> follows <calcPr> in the ECMA-376 schema element order.
   if (!plan.pivot_caches.empty()) {
     out.append("  <pivotCaches>\n");
@@ -577,11 +628,13 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     }
     out.append("  </pivotCaches>\n");
   }
-  if (!wb.workbook_ext_lst_xml().empty()) {
+  flush_raw_before("extLst");
+  if (const std::string ext_lst = RemapRelationshipIds(wb, plan, wb.workbook_ext_lst_xml()); !ext_lst.empty()) {
     out.append("  ");
-    out.append(RemapRelationshipIds(wb, plan, wb.workbook_ext_lst_xml()));
+    out.append(ext_lst);
     out.push_back('\n');
   }
+  flush_raw_before({});
   out.append("</workbook>\n");
   return out;
 }

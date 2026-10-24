@@ -54,6 +54,8 @@ struct TableColumn {
   std::string totals_row_formula;
   /// Whether `<totalsRowFormula>` carried `array="1"`.
   bool totals_row_formula_array = false;
+  /// Whether `<calculatedColumnFormula>` carried `array="1"`.
+  bool calculated_column_formula_array = false;
   /// `<xmlColumnPr>` and `<extLst>` children, retained verbatim in their
   /// schema positions after the two formula children.
   std::string trailing_children_xml;

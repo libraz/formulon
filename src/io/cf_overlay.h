@@ -45,7 +45,9 @@ namespace formulon::io {
 /// nothing survives.
 ///
 /// `<x14:cfRule>` elements without an `id` attribute carry no legacy
-/// cross-reference, can never dangle, and are kept verbatim. Extension
+/// cross-reference, can never dangle, and are kept verbatim. Neither is a
+/// rule the model cannot hold (`x14_cf_rule_model_can_hold`): it was never
+/// in `formats`, so its absence there says nothing about a removal. Extension
 /// blocks other than `x14:conditionalFormattings` are never touched.
 ///
 /// Conservative fallback: when `ext_lst_xml` does not parse or is not a

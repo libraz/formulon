@@ -94,6 +94,28 @@ TEST(CfOverlay, RemovedRuleIsStrippedSurvivorKept) {
   EXPECT_TRUE(Contains(out, "x14:negativeFillColor"));
 }
 
+TEST(CfOverlay, RulesTheModelCannotHoldSurviveAMutationOfOthers) {
+  // A 3Stars icon set and a formula rule live only in the extension and
+  // never enter the model, so their absence from it is no removal.
+  constexpr const char* kStars = "{33333333-3333-3333-3333-333333333333}";
+  constexpr const char* kFormula = "{44444444-4444-4444-4444-444444444444}";
+  std::string overlay = OverlayWithRules({kIdA, kIdB});
+  const std::string extra = std::string("<x14:cfRule type=\"iconSet\" priority=\"3\" id=\"") + kStars +
+                            "\"><x14:iconSet iconSet=\"3Stars\"><x14:cfvo type=\"percent\"><xm:f>0</xm:f></x14:cfvo>"
+                            "</x14:iconSet></x14:cfRule><x14:cfRule type=\"expression\" priority=\"4\" id=\"" +
+                            kFormula + "\"><xm:f>Sheet2!$A$1&gt;0</xm:f></x14:cfRule>";
+  overlay.insert(overlay.find("<xm:sqref>"), extra);
+  const std::string out = reconcile_x14_cf_overlay(overlay, ModelWithIds({kIdB}));
+  EXPECT_FALSE(Contains(out, kIdA)) << out;
+  EXPECT_TRUE(Contains(out, kIdB)) << out;
+  EXPECT_TRUE(Contains(out, kStars)) << out;
+  EXPECT_TRUE(Contains(out, kFormula)) << out;
+  // With every modelled rule cleared they still remain.
+  const std::string cleared = reconcile_x14_cf_overlay(overlay, {});
+  EXPECT_TRUE(Contains(cleared, kStars)) << cleared;
+  EXPECT_TRUE(Contains(cleared, kFormula)) << cleared;
+}
+
 TEST(CfOverlay, UntouchedOverlayRoundTripsByteForByte) {
   const std::string overlay = OverlayWithRules({kIdA, kIdB});
   EXPECT_EQ(reconcile_x14_cf_overlay(overlay, ModelWithIds({kIdA, kIdB})), overlay);

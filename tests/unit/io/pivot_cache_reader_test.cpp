@@ -337,6 +337,34 @@ TEST(PivotCacheReader, RecordsMissingTrailingValuesPadWithBlank) {
   EXPECT_TRUE(cache.records()[0].cells[1].is_blank());
 }
 
+TEST(PivotCacheReader, RecordsPastTheSlotCeilingFailWithoutAllocating) {
+  // Empty `<r/>` elements still cost one slot per field, so a records part
+  // of them is charged by field count, not by its byte size.
+  pivot::PivotCache cache;
+  for (int i = 0; i < 64; ++i) {
+    cache.mutable_fields().push_back(pivot::PivotCacheField{"F", {}});
+  }
+  std::string rec_xml(kXmlDecl);
+  rec_xml.append("<pivotCacheRecords").append(kPivotNs).append(">");
+  for (int i = 0; i < 100; ++i) {
+    rec_xml.append("<r/>");
+  }
+  rec_xml.append("</pivotCacheRecords>");
+
+  // 65 slots per record: 15 records fit under 1000, the 16th does not.
+  auto status = read_pivot_cache_records(Bytes(rec_xml), cache, 1000U);
+  ASSERT_FALSE(static_cast<bool>(status));
+  EXPECT_EQ(status.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(cache.records().size(), 15U);
+
+  pivot::PivotCache fits;
+  for (int i = 0; i < 64; ++i) {
+    fits.mutable_fields().push_back(pivot::PivotCacheField{"F", {}});
+  }
+  ASSERT_TRUE(static_cast<bool>(read_pivot_cache_records(Bytes(rec_xml), fits)));
+  EXPECT_EQ(fits.records().size(), 100U);
+}
+
 TEST(PivotCacheReader, RecordsMalformedRootIsContentTypeInvalid) {
   pivot::PivotCache cache;  // empty cache is fine; root check fires first
   std::string xml(kXmlDecl);
@@ -411,6 +439,35 @@ TEST(PivotCacheReader, RecordsDateItemConsumesFieldSlotKeepingAlignment) {
 // ---------------------------------------------------------------------------
 // cacheSource <worksheetSource> + <sharedItems> range hints round trip.
 // ---------------------------------------------------------------------------
+
+TEST(PivotCacheReader, UnmodelledCacheContentSurvivesRoundTrip) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotCacheDefinition").append(kPivotNs).append(" pivotCacheId=\"7\">");
+  xml.append("<cacheSource type=\"consolidation\"><consolidation autoPage=\"0\"/></cacheSource>");
+  xml.append("<cacheFields count=\"2\">");
+  xml.append("<cacheField name=\"Amt\" numFmtId=\"14\"><sharedItems longText=\"1\"/></cacheField>");
+  xml.append("<cacheField name=\"Dbl\" numFmtId=\"0\" formula=\"Amt*2\" databaseField=\"0\">");
+  xml.append("<sharedItems containsNumber=\"1\"/><mpMap v=\"1\"/></cacheField>");
+  xml.append("</cacheFields>");
+  xml.append("<calculatedItems count=\"1\"><calculatedItem formula=\"1\"/></calculatedItems>");
+  xml.append("<extLst><ext uri=\"{725AE2AE-9491-48be-B2B4-4EB974FC3084}\"/></extLst>");
+  xml.append("</pivotCacheDefinition>");
+
+  auto cache_or = read_pivot_cache_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const std::string out = write_pivot_cache_definition(cache_or.value());
+  for (const char* kept :
+       {"pivotCacheId=\"7\"", "<cacheSource type=\"consolidation\"><consolidation autoPage=\"0\"/></cacheSource>",
+        "<cacheField name=\"Amt\" numFmtId=\"14\">", "longText=\"1\"", "formula=\"Amt*2\"",
+        "<mpMap v=\"1\"/></cacheField>",
+        "</cacheFields><calculatedItems count=\"1\"><calculatedItem formula=\"1\"/></calculatedItems><extLst>"}) {
+    EXPECT_NE(out.find(kept), std::string::npos) << kept << "\n" << out;
+  }
+  // Re-reading the written part keeps the same content.
+  auto again = read_pivot_cache_definition(Bytes(out));
+  ASSERT_TRUE(static_cast<bool>(again));
+  EXPECT_EQ(write_pivot_cache_definition(again.value()), out);
+}
 
 TEST(PivotCacheReader, WorksheetSourceAndSharedItemsHintsSurviveRoundTrip) {
   std::string xml(kXmlDecl);

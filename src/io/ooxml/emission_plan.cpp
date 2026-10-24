@@ -191,7 +191,9 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
     if (c.numeric_id == 0) {
       continue;
     }
-    paths.insert(c.comments_path);
+    if (!c.comments_path.empty()) {
+      paths.insert(c.comments_path);
+    }
     paths.insert(c.vml_path);
     if (!c.threaded_path.empty()) {
       paths.insert(c.threaded_path);
@@ -468,7 +470,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   std::uint32_t next_comments_id = 1;
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     const Sheet& sheet = wb.sheet(s);
-    if (sheet.comments().empty() && sheet.threaded_comments().empty()) {
+    const bool has_notes = !sheet.comments().empty() || !sheet.threaded_comments().empty();
+    // A drawing of form controls alone still needs its VML part and link.
+    if (!has_notes && sheet.comment_vml_extra_xml().empty()) {
       continue;
     }
     while (retained_paths.count(NumberedPartPath("xl/drawings/vmlDrawing", next_comments_id, ".vml")) != 0U) {
@@ -476,7 +480,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     }
     EmissionPlan::CommentsPlan entry;
     entry.numeric_id = next_comments_id++;
-    entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, ".xml");
+    if (has_notes) {
+      entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, ".xml");
+    }
     entry.vml_path = NumberedPartPath("xl/drawings/vmlDrawing", entry.numeric_id, ".vml");
     if (!sheet.threaded_comments().empty()) {
       entry.threaded_path = NumberedPartPath("xl/threadedComments/threadedComment", entry.numeric_id, ".xml");

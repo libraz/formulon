@@ -210,15 +210,31 @@ void ReadBorderSide(const pugi::xml_node& side, BorderSide* out) {
   out->color = read_color_spec(side.child("color"));
 }
 
+std::string CaptureExtraAttrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known) {
+  std::vector<std::pair<std::string, std::string>> extra;
+  capture_unknown_attrs(node, known, extra);
+  std::string out;
+  append_raw_attrs(out, extra);
+  return out;
+}
+
 BorderRecord ParseBorderNode(const pugi::xml_node& b) {
   BorderRecord rec;
   rec.diagonal_up = b.attribute("diagonalUp").as_bool(false);
   rec.diagonal_down = b.attribute("diagonalDown").as_bool(false);
+  rec.extra_attrs = CaptureExtraAttrs(b, {"diagonalUp", "diagonalDown"});
   ReadBorderSide(b.child("left"), &rec.left);
   ReadBorderSide(b.child("right"), &rec.right);
   ReadBorderSide(b.child("top"), &rec.top);
   ReadBorderSide(b.child("bottom"), &rec.bottom);
   ReadBorderSide(b.child("diagonal"), &rec.diagonal);
+  for (const char* leading : {"start", "end"}) {
+    if (const pugi::xml_node node = b.child(leading); node) {
+      append_raw_xml(rec.leading_children_xml, node);
+    }
+  }
+  capture_unknown_children(b, {"start", "end", "left", "right", "top", "bottom", "diagonal"},
+                           rec.trailing_children_xml);
   return rec;
 }
 
@@ -406,6 +422,9 @@ Expected<void, Error> ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec, std
   ASSIGN_OR_RETURN(rec->apply_alignment, ParseBoolAttribute(xf.attribute("applyAlignment"), false, section, index));
   ASSIGN_OR_RETURN(rec->apply_protection, ParseBoolAttribute(xf.attribute("applyProtection"), false, section, index));
   ASSIGN_OR_RETURN(rec->quote_prefix, ParseBoolAttribute(xf.attribute("quotePrefix"), false, section, index));
+  rec->extra_attrs =
+      CaptureExtraAttrs(xf, {"fontId", "fillId", "borderId", "numFmtId", "xfId", "applyNumberFormat", "applyFont",
+                             "applyFill", "applyBorder", "applyAlignment", "applyProtection", "quotePrefix"});
 
   const pugi::xml_node align = xf.child("alignment");
   rec->has_alignment = static_cast<bool>(align);
@@ -464,6 +483,7 @@ Expected<void, Error> ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec, std
     ASSIGN_OR_RETURN(rec->locked, ParseBoolAttribute(protection.attribute("locked"), true, section, index));
     ASSIGN_OR_RETURN(rec->hidden, ParseBoolAttribute(protection.attribute("hidden"), false, section, index));
   }
+  capture_unknown_children(xf, {"alignment", "protection"}, rec->trailing_children_xml);
   return Expected<void, Error>::Ok();
 }
 
@@ -540,14 +560,6 @@ void ReadColors(const pugi::xml_node& colors, StylesTable& table) {
   if (!others.empty()) {
     table.colors_xml = "<colors>" + others + "</colors>";
   }
-}
-
-std::string CaptureExtraAttrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known) {
-  std::vector<std::pair<std::string, std::string>> extra;
-  capture_unknown_attrs(node, known, extra);
-  std::string out;
-  append_raw_attrs(out, extra);
-  return out;
 }
 
 /// Reads `<tableStyles>`: the custom table / PivotTable styles and the

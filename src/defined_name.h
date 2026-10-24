@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 namespace formulon {
 
@@ -22,11 +23,26 @@ namespace formulon {
 /// is the optional human-readable note Excel exposes in the Name
 /// Manager dialog.
 struct DefinedName {
+  DefinedName() = default;
+  // Keeps the five-field construction shape for call sites that initialise
+  // the modelled fields directly.
+  DefinedName(std::string name_in, std::string formula_in, std::int32_t local_sheet_id_in, bool hidden_in,
+              std::string comment_in)
+      : name(std::move(name_in)),
+        formula(std::move(formula_in)),
+        local_sheet_id(local_sheet_id_in),
+        hidden(hidden_in),
+        comment(std::move(comment_in)) {}
+
   std::string name;
   std::string formula;
   std::int32_t local_sheet_id = -1;
   bool hidden = false;
   std::string comment;
+  /// Attributes not represented by the model (`function`, `vbProcedure`,
+  /// `shortcutKey`, `description`, ...) retained as escaped ` name="value"`
+  /// pairs.
+  std::string extra_attrs;
 };
 
 }  // namespace formulon

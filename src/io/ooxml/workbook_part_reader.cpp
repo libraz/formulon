@@ -1,12 +1,15 @@
 #include "io/ooxml/workbook_part_reader.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <string_view>
 
 #include "calc_settings.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
+#include "utils/index_sort.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -104,6 +107,33 @@ void apply_workbook_part_settings(const pugi::xml_node& wb_root, Workbook& wb) {
   if (pugi::xml_node ext_lst = wb_root.child("extLst"); ext_lst) {
     wb.set_workbook_ext_lst_xml(raw_xml(ext_lst));
   }
+
+  // Everything else is retained by exclusion, so an element no release has
+  // modelled survives too. A name outside the sequence (`mc:AlternateContent`)
+  // takes the slot of the child before it.
+  static constexpr std::string_view kModelled[] = {
+      "fileVersion",        "fileSharing",  "workbookPr", "workbookProtection", "bookViews", "sheets",
+      "externalReferences", "definedNames", "calcPr",     "pivotCaches",        "extLst",
+  };
+  WorksheetRawExtensions& raw = wb.mutable_raw_children();
+  raw.clear();
+  std::size_t previous_slot = 0;
+  for (pugi::xml_node child = wb_root.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    const std::string_view name = child.name();
+    const std::size_t slot = workbook_child::slot_of(name);
+    if (slot != workbook_child::kCount) {
+      previous_slot = slot;
+    }
+    if (std::find(std::begin(kModelled), std::end(kModelled), name) != std::end(kModelled)) {
+      continue;
+    }
+    raw.push_back(WorksheetRawChild{static_cast<std::uint32_t>(slot == workbook_child::kCount ? previous_slot : slot),
+                                    raw_xml(child)});
+  }
+  sort_by_index(raw, [](const WorksheetRawChild& lhs, const WorksheetRawChild& rhs) { return lhs.slot < rhs.slot; });
 }
 
 }  // namespace ooxml

@@ -106,6 +106,7 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
   out.reserve(96 + sheet.validations().size() * 96);
   out.append("<dataValidations");
   append_xml_attr_uint(out, "count", sheet.validations().size());
+  out.append(sheet.validations_extra_attrs());
   out.append(">");
   for (const DataValidation& v : sheet.validations()) {
     out.append("<dataValidation");
@@ -145,6 +146,7 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
     if (!v.prompt_message.empty()) {
       append_xml_attr(out, "prompt", v.prompt_message);
     }
+    out.append(v.extra_attrs);
     out.append(" sqref=\"");
     for (std::size_t i = 0; i < v.ranges.size(); ++i) {
       if (i > 0) {
@@ -934,9 +936,10 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   // comments rel comes first; the VML rel follows so the two ids are
   // adjacent and readers that scan top-down see them as a pair.
   if (comments_plan.numeric_id != 0) {
-    const std::string comments_target = "../comments" + std::to_string(comments_plan.numeric_id) + ".xml";
     const std::string vml_target = "../drawings/vmlDrawing" + std::to_string(comments_plan.numeric_id) + ".vml";
-    add_rel(next_unique_rid(), kRelComments, comments_target);
+    if (!comments_plan.comments_path.empty()) {
+      add_rel(next_unique_rid(), kRelComments, TargetRelativeToWorksheet(comments_plan.comments_path));
+    }
     res.legacy_drawing_rid = next_unique_rid();
     add_rel(res.legacy_drawing_rid, kRelVmlDrawing, vml_target);
     if (!comments_plan.threaded_path.empty()) {

@@ -85,6 +85,11 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     if (pugi::xml_attribute comment_attr = dn.attribute("comment"); comment_attr) {
       entry.comment = comment_attr.value();
     }
+    {
+      std::vector<std::pair<std::string, std::string>> extra;
+      capture_unknown_attrs(dn, {"name", "localSheetId", "hidden", "comment"}, extra);
+      append_raw_attrs(entry.extra_attrs, extra);
+    }
 
     // Element text payload — pugixml exposes child text nodes via
     // `.child_value()` for the first text child, which is what writers

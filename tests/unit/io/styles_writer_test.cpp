@@ -760,6 +760,34 @@ TEST(StylesWriter, RoundTripsDxfAlignmentAndProtection) {
   EXPECT_EQ(rt.dxfs[0].font.color.theme, 4U);
 }
 
+TEST(StylesWriter, UnmodelledBorderAndXfContentSurvivesReadAndWrite) {
+  const std::string source =
+      "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<fonts count=\"1\"><font/></fonts><fills count=\"1\"><fill/></fills>"
+      "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"
+      "<cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" pivotButton=\"1\">"
+      "<protection locked=\"0\"/><extLst><ext uri=\"{TEST}\"/></extLst></xf></cellXfs>"
+      "<dxfs count=\"1\"><dxf><border outline=\"0\"><start style=\"thin\"/><end/><left/><right/><top/><bottom/>"
+      "<vertical style=\"thin\"><color rgb=\"FF000000\"/></vertical>"
+      "<horizontal style=\"thin\"><color rgb=\"FF000000\"/></horizontal></border></dxf></dxfs>"
+      "</styleSheet>";
+  auto read_or = read_styles(std::vector<std::uint8_t>(source.begin(), source.end()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const std::string xml = write_styles(read_or.value());
+  EXPECT_NE(xml.find("pivotButton=\"1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<border outline=\"0\"><start style=\"thin\"/><end/><left/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<protection locked=\"0\" hidden=\"0\"/><extLst><ext uri=\"{TEST}\"/></extLst></xf>"),
+            std::string::npos)
+      << xml;
+  const std::size_t diagonal = xml.find("<diagonal/><vertical style=\"thin\">");
+  const std::size_t horizontal = xml.find("<horizontal style=\"thin\">");
+  ASSERT_NE(diagonal, std::string::npos) << xml;
+  ASSERT_NE(horizontal, std::string::npos) << xml;
+  EXPECT_LT(diagonal, horizontal) << xml;
+  // Absent stays absent on a record that never carried them.
+  EXPECT_EQ(xml.find("pivotButton"), xml.rfind("pivotButton")) << xml;
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon

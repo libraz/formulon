@@ -115,6 +115,26 @@ inline constexpr std::size_t kMaxHeaderFooterFragmentBytes = 65536U;
 /// a single call can request.
 inline constexpr std::uint64_t kMaxStyledRangeCells = 1048576U;  // 2^20
 
+/// Ceiling on the result cells of one What-If data table.
+///
+/// Each result cell is a stored value, so the ref sizes both the result grid
+/// and the cell writes that create or clear it. One full column of results
+/// fits; a near-full-grid ref from a file is kept as cached values only.
+inline constexpr std::uint64_t kMaxDataTableCells = 1048576U;  // 2^20
+
+/// Ceiling on the recalc passes one data-table computation may run.
+///
+/// A one-variable table settles once per input value and a two-variable
+/// table once per result cell, so the pass count is the cost that matters.
+/// 2^16 covers a 256 x 256 two-variable table; a table that would push the
+/// total past it keeps its cached results.
+inline constexpr std::uint64_t kMaxDataTableRecalcPasses = 65536U;  // 2^16
+
+/// Ceiling on the record cell slots one pivot cache may hold, counted as
+/// `records * cache fields`. Every slot is a `Value` plus an index flag, so
+/// 2^25 slots bound a records part at about 1 GiB of heap.
+inline constexpr std::uint64_t kMaxPivotCacheRecordCells = 33554432U;  // 2^25
+
 /// Ceiling on manual page breaks per axis.
 ///
 /// 1026 is Excel's published limit on horizontal page breaks in a sheet.

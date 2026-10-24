@@ -8,6 +8,7 @@
 
 #include "external_book.h"
 #include "io/xlsb/record.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -91,6 +92,11 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
   const auto put_cell = [&book, &current_sheet, &current_row, &row_seen](std::uint32_t col, ExternalCell cell) -> bool {
     if (current_sheet == ExternalBook::kNoSheet || !row_seen) {
       return false;
+    }
+    // An off-grid coordinate would carry into the neighbouring key bits;
+    // it is skipped, as the OOXML reader skips an unparseable reference.
+    if (current_row >= a1::kMaxRows || col >= a1::kMaxCols) {
+      return true;
     }
     book.cells.emplace(ExternalBook::cell_key(current_sheet, current_row, col), std::move(cell));
     return true;

@@ -483,6 +483,35 @@ TEST(CustomIconFidelity, AnAuthoredRuleGetsAnX14Counterpart) {
   EXPECT_EQ(IconSpec(again).custom_icons[1].icon_set, "3Flags");
 }
 
+// Excel stores 3Stars / 3Triangles / 5Boxes only in the x14 extension. The
+// model has no such set, so the rule stays there alone instead of gaining a
+// legacy traffic-light twin, and the model reports no set the file lacks.
+TEST(CustomIconFidelity, AnX14OnlySetTheModelLacksStaysInTheExtensionAlone) {
+  const std::string sheet = Worksheet(
+      "<sheetData/><extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\"><x14:conditionalFormattings>"
+      "<x14:conditionalFormatting><x14:cfRule type=\"iconSet\" priority=\"1\" "
+      "id=\"{AAAAAAAA-0000-0000-0000-000000000002}\"><x14:iconSet iconSet=\"3Stars\">"
+      "<x14:cfvo type=\"percent\"><xm:f>0</xm:f></x14:cfvo><x14:cfvo type=\"percent\"><xm:f>33</xm:f></x14:cfvo>"
+      "<x14:cfvo type=\"percent\"><xm:f>67</xm:f></x14:cfvo></x14:iconSet></x14:cfRule>"
+      "<xm:sqref>A1:A3</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>",
+      kX14Ns);
+  Workbook loaded = LoadOrDie(BuildPackage(sheet));
+  for (const cf::ConditionalFormat& format : loaded.sheet(0).conditional_formats()) {
+    for (const cf::CFRule& rule : format.rules) {
+      EXPECT_FALSE(rule.icon_set.has_value()) << "the model reports an icon set the file does not name";
+    }
+  }
+  const std::string xml = ReadPart(SaveOrDie(loaded), "xl/worksheets/sheet1.xml");
+  std::size_t rules = 0;
+  for (std::size_t at = xml.find("type=\"iconSet\""); at != std::string::npos;
+       at = xml.find("type=\"iconSet\"", at + 1U)) {
+    ++rules;
+  }
+  EXPECT_EQ(rules, 1U) << xml;
+  EXPECT_FALSE(Has(xml, "<conditionalFormatting")) << xml;
+  EXPECT_TRUE(Has(xml, "<x14:iconSet iconSet=\"3Stars\">")) << xml;
+}
+
 // ---------------------------------------------------------------------------
 // calcPr
 // ---------------------------------------------------------------------------
@@ -532,6 +561,50 @@ TEST(CalcPrFidelity, TypedSettersReachTheFile) {
 // ---------------------------------------------------------------------------
 // Defined names
 // ---------------------------------------------------------------------------
+
+TEST(WorkbookChildFidelity, UnmodelledChildrenSurviveInSchemaOrder) {
+  const std::string extra =
+      "<calcPr calcId=\"191029\" iterate=\"1\"/><oleSize ref=\"A1:D10\"/>"
+      "<customWorkbookViews><customWorkbookView name=\"Mine\" guid=\"{11111111-2222-3333-4444-555555555555}\" "
+      "windowWidth=\"800\" windowHeight=\"600\" activeSheetId=\"1\"/></customWorkbookViews>"
+      "<fileRecoveryPr repairLoad=\"1\"/>";
+  const std::string xml = ReadPart(Resave(BuildPackage(Worksheet("<sheetData/>"), extra)), "xl/workbook.xml");
+  const std::size_t calc = xml.find("<calcPr");
+  const std::size_t ole = xml.find("<oleSize ref=\"A1:D10\"/>");
+  const std::size_t views = xml.find("<customWorkbookViews>");
+  const std::size_t recovery = xml.find("<fileRecoveryPr repairLoad=\"1\"/>");
+  ASSERT_NE(calc, std::string::npos) << xml;
+  ASSERT_NE(ole, std::string::npos) << xml;
+  ASSERT_NE(views, std::string::npos) << xml;
+  ASSERT_NE(recovery, std::string::npos) << xml;
+  EXPECT_LT(calc, ole) << xml;
+  EXPECT_LT(ole, views) << xml;
+  EXPECT_LT(views, recovery) << xml;
+  EXPECT_LT(recovery, xml.find("</workbook>")) << xml;
+}
+
+TEST(DataValidationFidelity, UnmodelledAttributesSurviveAResave) {
+  const std::string sheet = Worksheet(
+      "<sheetData/><dataValidations count=\"1\" disablePrompts=\"1\" xWindow=\"10\" yWindow=\"20\">"
+      "<dataValidation type=\"whole\" imeMode=\"hiragana\" allowBlank=\"1\" sqref=\"A1\">"
+      "<formula1>1</formula1></dataValidation></dataValidations>");
+  const std::string xml = ReadPart(Resave(BuildPackage(sheet)), "xl/worksheets/sheet1.xml");
+  EXPECT_TRUE(Has(xml, "disablePrompts=\"1\"")) << xml;
+  EXPECT_TRUE(Has(xml, "xWindow=\"10\"")) << xml;
+  EXPECT_TRUE(Has(xml, "yWindow=\"20\"")) << xml;
+  EXPECT_TRUE(Has(xml, "imeMode=\"hiragana\"")) << xml;
+}
+
+TEST(DefinedNameFidelity, UnmodelledAttributesSurviveAResave) {
+  const std::string extra =
+      "<definedNames><definedName name=\"Macro1\" function=\"1\" vbProcedure=\"1\" shortcutKey=\"q\" "
+      "description=\"Runs &amp; checks\">Sheet1!$A$1</definedName></definedNames>";
+  const std::string xml = ReadPart(Resave(BuildPackage(Worksheet("<sheetData/>"), extra)), "xl/workbook.xml");
+  EXPECT_TRUE(Has(xml, "function=\"1\"")) << xml;
+  EXPECT_TRUE(Has(xml, "vbProcedure=\"1\"")) << xml;
+  EXPECT_TRUE(Has(xml, "shortcutKey=\"q\"")) << xml;
+  EXPECT_TRUE(Has(xml, "description=\"Runs &amp; checks\"")) << xml;
+}
 
 TEST(DefinedNameFidelity, CommentAndHiddenSurviveAndStayThroughAReplacement) {
   const std::string extra =

@@ -38,7 +38,13 @@ std::string write_comments(const std::vector<CellComment>& comments,
 /// (1-based, unique per package) sets the shape-id block: `<o:idmap data>` is
 /// `drawing_id` and new shapes are numbered from `1024 * drawing_id + 1`,
 /// skipping the ids source shapes carry.
-std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint32_t drawing_id);
+///
+/// `other_shapes` (see `vml_non_note_shapes`) is written verbatim after the
+/// note shape type. Its shapes keep their ids, which worksheet `<controls>`
+/// cite: note shapes are numbered around them, and `<o:idmap>` also lists
+/// every block they occupy.
+std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint32_t drawing_id,
+                              std::string_view other_shapes = {});
 
 /// A VML drawing with no shapes (`write_vml_drawing({}, 1)`).
 std::string write_vml_drawing_stub();

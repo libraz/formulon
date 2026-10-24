@@ -304,7 +304,7 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
            block = block.next_sibling("x14:conditionalFormatting")) {
         changed |= RemoveMatchingChildren(block, "x14:cfRule", [&surviving_ids](const pugi::xml_node& rule) {
           const char* id = rule.attribute("id").value();
-          return id[0] != '\0' && surviving_ids.count(id) == 0U;
+          return id[0] != '\0' && surviving_ids.count(id) == 0U && x14_cf_rule_model_can_hold(rule);
         });
       }
     }

@@ -221,6 +221,14 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     v.error_message.assign(attr_str(dv, "error"));
     v.prompt_title.assign(attr_str(dv, "promptTitle"));
     v.prompt_message.assign(attr_str(dv, "prompt"));
+    {
+      std::vector<std::pair<std::string, std::string>> extra;
+      capture_unknown_attrs(dv,
+                            {"sqref", "type", "operator", "errorStyle", "allowBlank", "showInputMessage",
+                             "showErrorMessage", "showDropDown", "errorTitle", "error", "promptTitle", "prompt"},
+                            extra);
+      append_raw_attrs(v.extra_attrs, extra);
+    }
 
     // `AppendOoxmlTextUnescaped` decodes the OOXML `_xHHHH_` control-
     // character escapes the writer emits for this slot (`AppendXmlEscaped`
@@ -245,6 +253,14 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
 
     out.push_back(std::move(v));
   }
+  return out;
+}
+
+std::string read_data_validations_extra_attrs(const pugi::xml_node& worksheet) {
+  std::vector<std::pair<std::string, std::string>> extra;
+  capture_unknown_attrs(worksheet.child("dataValidations"), {"count"}, extra);
+  std::string out;
+  append_raw_attrs(out, extra);
   return out;
 }
 

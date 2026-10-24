@@ -40,6 +40,13 @@ TEST(DataTableXml, RejectsAMissingOrMalformedRef) {
   EXPECT_FALSE(parse_data_table(DataTableAttrs{"A1:B2 D4", "A1", {}, {}, {}, {}, {}, {}, {}}, &table));
 }
 
+TEST(DataTableXml, RejectsARefLargerThanTheCellCeiling) {
+  DataTable table;
+  EXPECT_FALSE(parse_data_table(DataTableAttrs{"B2:XFD1048576", "A1", {}, {}, {}, {}, {}, {}, {}}, &table));
+  // One full column of results is still a table.
+  EXPECT_TRUE(parse_data_table(DataTableAttrs{"B1:B1048576", "A1", {}, {}, {}, {}, {}, {}, {}}, &table));
+}
+
 TEST(DataTableXml, AnUnparseableInputIsAbsentAndNotWritten) {
   DataTable table;
   ASSERT_TRUE(parse_data_table(DataTableAttrs{"B2:B3", "#REF!", {}, {}, {}, {}, {}, {}, {}}, &table));

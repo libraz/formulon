@@ -53,6 +53,35 @@ TEST(WorkbookDataTable, SecondTableHeadersReadTheFirstTablesInputAfterItIsRestor
   }
 }
 
+TEST(WorkbookDataTable, RefusesARefLargerThanTheCellCeiling) {
+  Workbook wb = OneSheet();
+  auto added = wb.add_data_table(0, MergeRange{1, 1, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U}, DataTableInput{},
+                                 InputAt(0, 0));
+  ASSERT_FALSE(static_cast<bool>(added));
+  EXPECT_EQ(added.error().code, FormulonErrorCode::kSecResourceLimit);
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 1), nullptr);
+  EXPECT_TRUE(wb.sheet(0).data_tables().empty());
+}
+
+TEST(WorkbookDataTable, ATableOverTheRecalcPassCeilingKeepsItsCachedResults) {
+  Workbook wb = OneSheet();
+  // A 300 x 300 two-variable table needs 90,001 passes, over the ceiling.
+  ASSERT_TRUE(wb.set_cell_formula(0, 1, 1, "=A1+A2+1"));
+  ASSERT_TRUE(wb.add_data_table(0, MergeRange{2, 2, 301, 301}, InputAt(0, 0), InputAt(1, 0)));
+  // A small table after it still computes from the remaining budget.
+  ASSERT_TRUE(wb.set_cell_formula(0, 1, 400, "=A1+A2+1"));
+  ASSERT_TRUE(wb.add_data_table(0, MergeRange{2, 401, 3, 402}, InputAt(0, 0), InputAt(1, 0)));
+  ASSERT_TRUE(wb.recalc(eval::default_registry()));
+  const Cell* skipped = wb.sheet(0).cell_at(2, 2);
+  ASSERT_NE(skipped, nullptr);
+  ASSERT_TRUE(skipped->cached_value.is_number());
+  EXPECT_EQ(skipped->cached_value.as_number(), 0.0);
+  const Cell* computed = wb.sheet(0).cell_at(2, 401);
+  ASSERT_NE(computed, nullptr);
+  ASSERT_TRUE(computed->cached_value.is_number());
+  EXPECT_EQ(computed->cached_value.as_number(), 1.0);
+}
+
 TEST(WorkbookDataTable, RefusesARefOverALegacyArrayBlock) {
   Workbook wb = OneSheet();
   ASSERT_TRUE(wb.set_cell_formula(0, 5, 3, "=1"));

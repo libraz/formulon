@@ -159,13 +159,14 @@ struct EmissionPlan {
   // read with, and the drawing is regenerated from the model otherwise.
   struct CommentsPlan {
     std::uint32_t numeric_id = 0;
-    std::string comments_path;                    // "xl/comments<N>.xml"
+    std::string comments_path;                    // "xl/comments<N>.xml", or empty for a VML of controls alone
     std::string vml_path;                         // "xl/drawings/vmlDrawing<N>.vml"
     std::string threaded_path;                    // "xl/threadedComments/threadedComment<N>.xml", or empty
     const PassthroughPart* vml_source = nullptr;  // non-null => use bytes verbatim
   };
   // One entry per sheet; engaged only for sheets with at least one
-  // note or thread. Disengaged entries have `numeric_id == 0`.
+  // note or thread, or a comment VML holding form controls. Disengaged
+  // entries have `numeric_id == 0`.
   std::vector<CommentsPlan> comments_by_sheet;
   // External link relationships. One entry per `wb.external_links()` in
   // `ExternalLinkRecord::index` order. `workbook_rid` is the writer-assigned

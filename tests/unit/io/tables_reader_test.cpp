@@ -314,6 +314,24 @@ TEST(TablesReader, CalculatedColumnFormulaWithOoxmlControlCharacterEscapeDecoded
                                                                                5));
 }
 
+TEST(TablesReader, CalculatedColumnFormulaArrayFlagRoundTrips) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"1\" name=\"T\" "
+      "displayName=\"T\" ref=\"A1:B3\"><tableColumns count=\"2\"><tableColumn id=\"1\" name=\"N\">"
+      "<calculatedColumnFormula array=\"1\">SUM(T[N])</calculatedColumnFormula></tableColumn>"
+      "<tableColumn id=\"2\" name=\"M\"><calculatedColumnFormula>T[N]*2</calculatedColumnFormula>"
+      "</tableColumn></tableColumns></table>");
+  auto table_or = read_table(Bytes(xml), 0);
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_TRUE(table_or.value().columns[0].calculated_column_formula_array);
+  EXPECT_FALSE(table_or.value().columns[1].calculated_column_formula_array);
+  const std::string written = SerializeTablePart(table_or.value());
+  EXPECT_NE(written.find("<calculatedColumnFormula array=\"1\">SUM(T[N])</calculatedColumnFormula>"), std::string::npos)
+      << written;
+  EXPECT_NE(written.find("<calculatedColumnFormula>T[N]*2</calculatedColumnFormula>"), std::string::npos) << written;
+}
+
 TEST(TablesReader, TotalsRowFormulaArrayFlagRoundTrips) {
   std::string xml(kXmlDecl);
   xml.append(

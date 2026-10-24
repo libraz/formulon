@@ -26,6 +26,7 @@
 #include "pivot/pivot_cache.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 
 namespace formulon::io {
 
@@ -97,9 +98,15 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 /// copied into pugixml. Pass an rvalue (the buffer `ZipReader` just
 /// handed back) and treat it as consumed on return.
 ///
+/// Every `<r>` is charged one slot per cache field plus one before it is
+/// allocated; past `max_record_cells` (default `kMaxPivotCacheRecordCells`,
+/// tests inject a smaller value) the read fails with `kIoFileTooLarge`.
+///
 /// Errors:
-///   * `kIoXmlParse`, `kIoContentTypeInvalid`, `kIoSheetCorrupt`.
-Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache);
+///   * `kIoXmlParse`, `kIoContentTypeInvalid`, `kIoSheetCorrupt`,
+///     `kIoFileTooLarge`.
+Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache,
+                                               std::uint64_t max_record_cells = kMaxPivotCacheRecordCells);
 
 }  // namespace formulon::io
 
