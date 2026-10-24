@@ -46,10 +46,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Element count past which a generator (SEQUENCE, RANDARRAY, MAKEARRAY)
-// sized under ROWS / COLUMNS abandons the formula: floor(2^30 / 10).
-constexpr std::uint64_t kMaxShapeOnlyGeneratorElements = 107'374'182U;
-
 enum class OperationShape : std::uint8_t {
   kUnknown,  ///< Needs evaluation to be sized.
   kSized,    ///< Sized without reading any cell value.
@@ -59,7 +55,7 @@ enum class OperationShape : std::uint8_t {
 // Sizes a SEQUENCE, RANDARRAY or MAKEARRAY call from its validated
 // arguments without building the grid or invoking MAKEARRAY's lambda. An
 // argument error is the call's error; a grid past
-// `kMaxShapeOnlyGeneratorElements` abandons the formula. Any other call, or
+// `kMaxEvaluatedArrayElements` abandons the formula. Any other call, or
 // an omitted or array-valued argument, is `kUnknown`.
 OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
@@ -99,8 +95,7 @@ OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const 
     *out_rows = params.rows;
     *out_cols = params.cols;
   }
-  if (static_cast<std::uint64_t>(*out_rows) * *out_cols > kMaxShapeOnlyGeneratorElements) {
-    abandon_formula();
+  if (abandons_formula(*out_rows, *out_cols)) {
     *out_err = Value::error(ErrorCode::Num);
     return OperationShape::kError;
   }
@@ -110,9 +105,9 @@ OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const 
 // Sizes an elementwise operation over references, array constants and
 // generator calls (`generator_shape`) from its operands' shapes alone, so no
 // cell value is read: a reference contributes its declared rectangle, an
-// operator the broadcast of its operands. A broadcast past `kMaxEvaluatedArrayElements`
-// abandons the formula, as evaluating it would. Anything else is
-// `kUnknown`.
+// operator the broadcast of its operands. A result past
+// `kMaxEvaluatedArrayElements` abandons the formula, as evaluating it would.
+// Anything else is `kUnknown`.
 OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
                                Value* out_err) {
@@ -142,8 +137,15 @@ OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const F
       *out_cols = rect.value().cols();
       return OperationShape::kSized;
     }
-    case parser::NodeKind::UnaryOp:
-      return operation_shape(node.as_unary_operand(), arena, registry, ctx, out_rows, out_cols, out_err);
+    case parser::NodeKind::UnaryOp: {
+      const OperationShape operand =
+          operation_shape(node.as_unary_operand(), arena, registry, ctx, out_rows, out_cols, out_err);
+      if (operand == OperationShape::kSized && abandons_formula(*out_rows, *out_cols)) {
+        *out_err = Value::error(ErrorCode::Num);
+        return OperationShape::kError;
+      }
+      return operand;
+    }
     case parser::NodeKind::BinaryOp: {
       const OperationShape first =
           operation_shape(node.as_binary_operand(0), arena, registry, ctx, out_rows, out_cols, out_err);
@@ -848,14 +850,15 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
 
 Value eval_binop_array_ctx(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx) {
-  // Folded left to right; a scalar error ends the chain before the next operand.
+  // Folded left to right; the left-most error wins between scalars, and a
+  // scalar error against an array is broadcast error per position.
   Value lhs = eval_node_as_array(node.as_binary_operand(0), arena, registry, ctx);
   for (std::uint32_t i = 1; i < node.as_binary_arity(); ++i) {
-    if (lhs.is_error()) {
+    const Value rhs = eval_node_as_array(node.as_binary_operand(i), arena, registry, ctx);
+    if (lhs.is_error() && !rhs.is_array()) {
       return lhs;
     }
-    const Value rhs = eval_node_as_array(node.as_binary_operand(i), arena, registry, ctx);
-    if (rhs.is_error()) {
+    if (rhs.is_error() && !lhs.is_array()) {
       return rhs;
     }
     // Both operands are guaranteed Array post the array-context contract.

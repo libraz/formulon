@@ -18,6 +18,7 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/spill_committer.h"
 #include "eval/tree_walker.h"
 #include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
@@ -82,8 +83,10 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
     // Hard parse failure, or a valid prefix followed by unparseable trailing
     // tokens. Either way we refuse to evaluate a recovered prefix as if it
     // were the whole formula. #NAME? matches the existing recursive resolver
-    // behaviour in `EvalContext::resolve_ref`.
-    return Value::error(ErrorCode::Name);
+    // behaviour in `EvalContext::resolve_ref`. It is committed like any other
+    // result, so a legacy array block keeps its rectangle.
+    return SpillCommitter(&sheet, row, col, opts.spill_release_callback, opts.spill_release_user_data)
+        .commit(Value::error(ErrorCode::Name));
   }
 
   // Build an EvalContext that authorises spill writes on `sheet` and

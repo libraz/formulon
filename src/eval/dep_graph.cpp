@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "utils/index_sort.h"
+
 namespace formulon::eval {
 namespace {
 
@@ -384,6 +386,26 @@ std::vector<CellNodeId> cells_of_component(const std::vector<CellNodeId>& compon
   return cells;
 }
 
+bool DepGraph::rect_cell_depends_on(CellNodeId node, std::uint32_t row_first, std::uint32_t col_first,
+                                    std::uint32_t row_last, std::uint32_t col_last) const {
+  std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
+  std::vector<CellNodeId> queue{node};
+  seen.emplace(node, 1);
+  for (std::size_t head = 0; head < queue.size(); ++head) {
+    for (const CellNodeId dependent : dependents_of_ref(queue[head])) {
+      if (!seen.emplace(dependent, 1).second) {
+        continue;
+      }
+      if (dependent.sheet_id == node.sheet_id && dependent.row >= row_first && dependent.row <= row_last &&
+          dependent.col >= col_first && dependent.col <= col_last) {
+        return true;
+      }
+      queue.push_back(dependent);
+    }
+  }
+  return false;
+}
+
 std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
   return tarjan_scc_impl(nullptr);
 }
@@ -553,10 +575,72 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
     }
   }
 
-  // Tarjan emits SCCs in reverse-topological order by construction:
-  // deeper-first DFS post-order means leaves close before roots. Keep that
-  // ordering as the documented contract.
-  return sccs;
+  // Tarjan emits SCCs in reverse-topological order, but which of several
+  // valid orders depends on hash enumeration and adjacency insertion history.
+  // The order decides which of two overlapping spill producers with no edge
+  // between them commits first, so it is re-derived from the edge set and
+  // the addresses alone.
+  return canonical_component_order(std::move(sccs), nodes);
+}
+
+std::vector<std::vector<CellNodeId>> DepGraph::canonical_component_order(
+    std::vector<std::vector<CellNodeId>> sccs, const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const {
+  const std::size_t count = sccs.size();
+  // Reuses the value type of Tarjan's maps, so no new map is instantiated.
+  std::unordered_map<CellNodeId, std::int64_t, CellNodeIdHash> component_of;
+  for (std::size_t i = 0; i < count; ++i) {
+    for (const CellNodeId member : sccs[i]) {
+      component_of.emplace(member, static_cast<std::int64_t>(i));
+    }
+  }
+  std::vector<std::vector<std::size_t>> successors(count);
+  std::vector<std::size_t> in_degree(count, 0U);
+  for (std::size_t i = 0; i < count; ++i) {
+    for (const CellNodeId member : sccs[i]) {
+      for (const CellNodeId dependency : dependencies_of_ref(member)) {
+        if (nodes != nullptr && nodes->count(dependency) == 0U) {
+          continue;
+        }
+        const auto it = component_of.find(dependency);
+        if (it != component_of.end() && static_cast<std::size_t>(it->second) != i) {
+          successors[static_cast<std::size_t>(it->second)].push_back(i);
+          ++in_degree[i];
+        }
+      }
+    }
+  }
+
+  // Kahn layers, as the parallel scheduler builds them, each taken in
+  // address order: the serial walk then commits in the order the pooled
+  // driver settles a layer in. Members are sorted, so a component's front is
+  // its lowest address; a range node sorts after every cell.
+  // Fronts of different components are different nodes, so the order is total.
+  const auto earlier = [&sccs](std::uint32_t lhs, std::uint32_t rhs) {
+    return CellNodeIdOrder{}(sccs[lhs].front(), sccs[rhs].front());
+  };
+  std::vector<std::uint32_t> frontier;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (in_degree[i] == 0U) {
+      frontier.push_back(static_cast<std::uint32_t>(i));
+    }
+  }
+  std::vector<std::vector<CellNodeId>> ordered;
+  ordered.reserve(count);
+  std::vector<std::uint32_t> next_frontier;
+  while (!frontier.empty()) {
+    sort_index_order(frontier, make_index_less(earlier));
+    next_frontier.clear();
+    for (const std::uint32_t current : frontier) {
+      for (const std::size_t successor : successors[current]) {
+        if (--in_degree[successor] == 0U) {
+          next_frontier.push_back(static_cast<std::uint32_t>(successor));
+        }
+      }
+      ordered.push_back(std::move(sccs[current]));
+    }
+    frontier.swap(next_frontier);
+  }
+  return ordered;
 }
 
 std::vector<CellNodeId> DepGraph::topological_order() const {

@@ -270,6 +270,8 @@ TEST(BroadcastTail, ScalarPlusScalarStaysScalar) {
 }
 
 TEST(BroadcastTail, ScalarErrorPropagatesLeftFirst) {
+  // Between two scalars the left error wins; against an array a scalar error
+  // fills every position, as Excel's `ROWS(1/0+{1;2;3})` = 3 shows.
   Arena arena;
   const Shaped l = broadcast_binop(parser::BinOp::Add, scalar(Value::error(ErrorCode::Div0)),
                                    scalar(Value::error(ErrorCode::Ref)), arena);
@@ -278,8 +280,13 @@ TEST(BroadcastTail, ScalarErrorPropagatesLeftFirst) {
   const double d[] = {1, 2};
   const Shaped r =
       broadcast_binop(parser::BinOp::Add, dense(arena, 2, 1, d), scalar(Value::error(ErrorCode::Ref)), arena);
-  ASSERT_FALSE(r.value.is_array());
-  EXPECT_EQ(r.value.as_error(), ErrorCode::Ref);
+  ASSERT_EQ(r.tail_array, nullptr);
+  ASSERT_TRUE(r.value.is_array());
+  ASSERT_EQ(r.value.as_array()->rows, 2U);
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    ASSERT_TRUE(r.value.as_array()->cells[i].is_error()) << i;
+    EXPECT_EQ(r.value.as_array()->cells[i].as_error(), ErrorCode::Ref) << i;
+  }
 }
 
 TEST(BroadcastTail, DensePlusScalarUnchanged) {

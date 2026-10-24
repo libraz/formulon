@@ -297,6 +297,9 @@ class RecalcEngine {
   // ------------------------------------------------------------------------
 
   /// Returns the current dependency graph. Lifetime is tied to the engine.
+  /// The evaluator also reads it, without the engine mutex, to tell whether
+  /// a self-referencing rectangle closes a cycle through other cells; the
+  /// graph is not mutated while cells are being evaluated.
   const DepGraph& dep_graph() const noexcept { return graph_; }
 
   /// Returns the cells `cell` reads through a compact rectangle dependency.

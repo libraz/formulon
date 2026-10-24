@@ -236,6 +236,21 @@ TEST(WholeAxisSpill, AnotherFormulaInsideTheAxisKeepsTheCyclePolicy) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+TEST(WholeAxisSpill, UnrelatedFormulaInsideTheAxisLeavesTheCellItsOwnCycle) {
+  // A5 `=1+1` sits inside A:A but does not read A1, so `=A:A` at A1 is still
+  // the only member of its cycle: 0 in both drivers, as with A5 absent.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 4U, 0U, "=1+1")));
+  const Sheet& sheet = RecalcWith(wb, 0U, 0U, "=A:A");
+  const Value v = sheet.resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
+
+  const Value adhoc = AdhocValue(wb, sheet, 0U, 0U, "=A:A");
+  ASSERT_TRUE(adhoc.is_number()) << adhoc.debug_to_string();
+  EXPECT_EQ(adhoc.as_number(), 0.0);
+}
+
 TEST(WholeAxisSpill, DerivedSelfReferenceIsZero) {
   // `=A:A+0` at A1, `=SUM(C:C*1)` at C1 and `=E1+1` at E1 read their own
   // cell through an operation rather than as a bare range; the cell is still

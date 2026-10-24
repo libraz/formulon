@@ -494,6 +494,47 @@ TEST(DepGraph, TarjanSubsetUsesOnlySelectedDirtyClosure) {
   EXPECT_LT(SccIndexOf(sccs, c), SccIndexOf(sccs, b));
 }
 
+TEST(DepGraph, TarjanEmitsUnrelatedNodesInAddressOrder) {
+  // Nodes with no edge between them are emitted in address order rather than
+  // hash order, so two overlapping spill producers commit in the same order
+  // on every run and standard library.
+  std::vector<CellNodeId> expected;
+  for (std::uint16_t sheet = 0; sheet < 2; ++sheet) {
+    for (std::uint32_t row = 0; row < 8; ++row) {
+      for (std::uint32_t col = 0; col < 8; ++col) {
+        expected.push_back(Make(sheet, row, col));
+      }
+    }
+  }
+  std::unordered_set<CellNodeId, CellNodeIdHash> selected;
+  for (auto it = expected.rbegin(); it != expected.rend(); ++it) {
+    selected.insert(*it);
+  }
+
+  DepGraph g;
+  std::vector<CellNodeId> emitted;
+  for (const auto& component : g.tarjan_scc_subset(selected)) {
+    ASSERT_EQ(component.size(), 1U);
+    emitted.push_back(component[0]);
+  }
+  EXPECT_EQ(emitted, expected);
+}
+
+TEST(DepGraph, TarjanOrderIgnoresEdgeInsertionOrder) {
+  // A1 reads C1 and A2, which share no edge. Whichever order the reads were
+  // registered in, C1 (row 1) comes before A2 (row 2), and A1 comes last.
+  const CellNodeId a1 = Make(0, 0, 0);
+  const CellNodeId c1 = Make(0, 0, 2);
+  const CellNodeId a2 = Make(0, 1, 0);
+  for (const bool c1_first : {true, false}) {
+    DepGraph g;
+    g.add_dependency(a1, c1_first ? c1 : a2);
+    g.add_dependency(a1, c1_first ? a2 : c1);
+    const auto order = g.topological_order();
+    EXPECT_EQ(order, (std::vector<CellNodeId>{c1, a2, a1})) << c1_first;
+  }
+}
+
 TEST(DepGraph, TarjanSelfLoopIsSingleton) {
   DepGraph g;
   CellNodeId a = Make(0, 0, 0);

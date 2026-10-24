@@ -35,6 +35,14 @@ Value SpillCommitter::commit(Value v) const {
   // to mask real cells in the former footprint.
   if (!v.is_array()) {
     if (sheet_ != nullptr) {
+      // A legacy array block keeps its fixed rectangle whatever the anchor
+      // commits: a scalar (a cycle value, an error) fills every cell, as
+      // fitting it through the block's fill rule would.
+      const auto block = sheet_->array_block_covering(row_, col_);
+      if (block.has_value() && block->anchor_row == row_ && block->anchor_col == col_) {
+        std::vector<Value> cells(static_cast<std::size_t>(block->rows) * block->cols, v);
+        return commit_cells(block->rows, block->cols, std::move(cells));
+      }
       // One scalar is not a producer giving up its array shape: a `#SPILL!`
       // means a producer measured its own footprint, refused it, and
       // recorded the rectangle so the anchor can be retried once whatever
@@ -103,7 +111,10 @@ Value SpillCommitter::commit(Value v) const {
   for (std::size_t i = 0; i < total; ++i) {
     cells_vec.push_back(src[i]);
   }
+  return commit_cells(rows, cols, std::move(cells_vec));
+}
 
+Value SpillCommitter::commit_cells(std::uint32_t rows, std::uint32_t cols, std::vector<Value> cells_vec) const {
   // Re-evaluating a producer without changing its occupied rectangle does
   // not release any blockers. In particular, volatile array formulas are
   // evaluated on every recalc wave; notifying the same blocked producers for

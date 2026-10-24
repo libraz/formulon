@@ -215,14 +215,8 @@ Shaped build_tail_result(std::uint32_t rows, std::uint32_t cols, std::uint32_t h
 }  // namespace
 
 Shaped broadcast_binop(parser::BinOp op, const Shaped& lhs, const Shaped& rhs, Arena& arena) {
-  // A scalar error operand short-circuits (left-most first) before any
-  // broadcasting, as the walker does for plain values.
-  if (lhs.tail_array == nullptr && lhs.value.is_error()) {
-    return lhs;
-  }
-  if (rhs.tail_array == nullptr && rhs.value.is_error()) {
-    return rhs;
-  }
+  // Between two scalars the left-most error wins; against an array operand
+  // a scalar error is broadcast like any other scalar, error per position.
   if (lhs.tail_array == nullptr && rhs.tail_array == nullptr) {
     if (lhs.value.is_array() || rhs.value.is_array()) {
       return Shaped{broadcast_binop(op, lhs.value, rhs.value, arena), nullptr};

@@ -26,6 +26,7 @@
 #include "eval/tree_walker/dispatch.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -408,6 +409,99 @@ bool union_endpoint_refs(const parser::AstNode& range, Arena& arena, const Funct
 
 namespace {
 
+// A derived whole column / row argument of a reducer with `FoldOps`, streamed
+// instead of built; `position` counts the collected values before it.
+struct StreamedTail {
+  std::size_t position;
+  const TailArray* tail;
+};
+
+// The first error a row-major walk of `ta` reaches, or Blank.
+Value first_tail_error(const TailArray& ta) {
+  const auto first_error = [](const Value* cells, std::size_t count) {
+    for (std::size_t i = 0; i < count; ++i) {
+      if (cells[i].is_error()) {
+        return cells[i];
+      }
+    }
+    return Value::blank();
+  };
+  if (ta.axis == TailAxis::kRows) {
+    const Value head = first_error(ta.cells, static_cast<std::size_t>(ta.head) * ta.cols);
+    return head.is_error() || ta.head >= ta.rows ? head : first_error(ta.tail, ta.cols);
+  }
+  for (std::uint32_t r = 0; r < ta.rows; ++r) {
+    const Value head = first_error(ta.cells + static_cast<std::size_t>(r) * ta.head, ta.head);
+    if (head.is_error()) {
+      return head;
+    }
+    if (ta.head < ta.cols && ta.tail[r].is_error()) {
+      return ta.tail[r];
+    }
+  }
+  return Value::blank();
+}
+
+// Feeds `line`'s filtered cells through `def`'s fold `repeat` times in order.
+bool fold_line(const FunctionDef& def, const Value* line, std::size_t count, std::uint64_t repeat,
+               std::vector<Value>* scratch, FoldState* state, Value* err) {
+  scratch->clear();
+  if (!append_array_sourced_values(def, line, count, scratch, err)) {
+    return false;
+  }
+  for (std::uint64_t k = 0; k < repeat; ++k) {
+    for (const Value& v : *scratch) {
+      if (!def.fold->step(*state, v, err)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Streams `ta` through `def`'s fold in row-major order, the repeated tail
+// taken once per position it stands for, so the result matches the dense
+// walk without building the array.
+bool fold_tail(const FunctionDef& def, const TailArray& ta, FoldState* state, Value* err) {
+  std::vector<Value> scratch;
+  if (ta.axis == TailAxis::kRows) {
+    return fold_line(def, ta.cells, static_cast<std::size_t>(ta.head) * ta.cols, 1U, &scratch, state, err) &&
+           (ta.head >= ta.rows || fold_line(def, ta.tail, ta.cols, ta.rows - ta.head, &scratch, state, err));
+  }
+  for (std::uint32_t r = 0; r < ta.rows; ++r) {
+    if (!fold_line(def, ta.cells + static_cast<std::size_t>(r) * ta.head, ta.head, 1U, &scratch, state, err) ||
+        (ta.head < ta.cols && !fold_line(def, ta.tail + r, 1U, ta.cols - ta.head, &scratch, state, err))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Folds the collected `values` with the streamed tails at their positions.
+Value fold_with_tails(const FunctionDef& def, const std::vector<Value>& values,
+                      const std::vector<StreamedTail>& streamed) {
+  FoldState state;
+  Value err = Value::blank();
+  std::size_t next = 0;
+  const auto feed_values = [&](std::size_t end) {
+    for (; next < end; ++next) {
+      if (!def.fold->step(state, values[next], &err)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  for (const StreamedTail& segment : streamed) {
+    if (!feed_values(segment.position) || !fold_tail(def, *segment.tail, &state, &err)) {
+      return err;
+    }
+  }
+  if (!feed_values(values.size())) {
+    return err;
+  }
+  return def.fold->finish(state);
+}
+
 // The body of `dispatch_call`. A scalar function applied over a whole column /
 // row returns through `*tail_out` (the returned value is then unused).
 Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -494,6 +588,8 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // Parallel to `values`: the whole column / row a scalar function's argument
   // evaluated to, whose `values` slot is then a placeholder.
   std::vector<const TailArray*> tails;
+  // Derived whole column / row arguments of a reducer with `FoldOps`.
+  std::vector<StreamedTail> streamed;
   // Tracks whether any argument slot was range-shaped (RangeOp / OFFSET-call
   // / ArrayLiteral). The deferred `RejectAllScalarsBlank` policy surfaces
   // #VALUE! for `=GCD(A1,B1,C1)` (all blank
@@ -1016,6 +1112,19 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       }
       continue;
     }
+    // A reducer that takes values one at a time streams a derived one
+    // (`-A:BB`), which can hold more cells than an array may.
+    if (shaped_arg.tail_array != nullptr && def->accepts_ranges && def->fold != nullptr) {
+      had_range_shaped_arg = true;
+      if (def->propagate_errors) {
+        const Value err = first_tail_error(*shaped_arg.tail_array);
+        if (err.is_error()) {
+          return err;
+        }
+      }
+      streamed.push_back(StreamedTail{values.size(), shaped_arg.tail_array});
+      continue;
+    }
     Value v = densify(shaped_arg, arena);
     if (def->propagate_errors && v.is_error()) {
       // A text literal that cannot be a number already failed ahead of this
@@ -1127,6 +1236,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     if (any_array) {
       return broadcast_scalar_call(*def, values, out_rows, out_cols, arena);
     }
+  }
+  if (!streamed.empty()) {
+    return fold_with_tails(*def, values, streamed);
   }
   if (lifted_last_arg != nullptr) {
     return lift_last_arg_call(*def, values, *lifted_last_arg, arena);

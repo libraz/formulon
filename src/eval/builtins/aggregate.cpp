@@ -12,7 +12,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <functional>
 #include <string>
 #include <vector>
 
@@ -40,19 +39,52 @@ namespace {
 
 using builtins_detail::to_finite_value;
 
+// Folds `args` through `ops` in order: the dense form of a reducer whose
+// values the dispatcher can also stream (`FoldOps`).
+Value fold_values(const FoldOps& ops, const Value* args, std::uint32_t arity) {
+  FoldState state;
+  Value err = Value::blank();
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (!ops.step(state, args[i], &err)) {
+      return err;
+    }
+  }
+  return ops.finish(state);
+}
+
+// Coerces one argument to a number, or sets `*err` to the coercion error.
+bool step_number(const Value& value, double* out, Value* err) {
+  auto coerced = coerce_to_number(value);
+  if (!coerced) {
+    *err = Value::error(coerced.error());
+    return false;
+  }
+  *out = coerced.value();
+  return true;
+}
+
 // SUM(value, ...) --------------------------------------------------------
 // Excel's SUM coerces each argument to a number; non-coercible text yields
-// #VALUE! and any error among the inputs propagates left-to-right.
-Value Sum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  FinalStepSnapSum sum;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    sum.add(coerced.value());
+// #VALUE! and any error among the inputs propagates left-to-right. AVERAGE
+// takes the same steps.
+bool sum_step(FoldState& state, const Value& value, Value* err) {
+  double x = 0.0;
+  if (!step_number(value, &x, err)) {
+    return false;
   }
-  return to_finite_value(sum.result());
+  state.sum.add(x);
+  state.count += 1.0;
+  return true;
+}
+
+Value sum_finish(const FoldState& state) {
+  return to_finite_value(state.sum.result());
+}
+
+constexpr FoldOps kSumFold{&sum_step, &sum_finish};
+
+Value Sum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return fold_values(kSumFold, args, arity);
 }
 
 // CONCAT(value, ...) / CONCATENATE(value, ...) ---------------------------
@@ -103,67 +135,69 @@ Value Len(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // --- Aggregates ---------------------------------------------------------
 
-// Shared kernel for MIN / MAX. A literal non-numeric argument coerces via
+// MIN / MAX steps. A literal non-numeric argument coerces via
 // `coerce_to_number` and surfaces `#VALUE!` on failure. The caller's
 // pre-evaluation has already short-circuited any argument that was itself
 // an error. When every argument is filtered out by the range-vs-direct
 // provenance rule (e.g. `=MIN(A1:A3)` over an empty / all-text range),
 // Excel returns 0 rather than an error.
-//
-// `Cmp` is invoked as `Cmp{}(candidate, current_best)` and must return
-// true when `candidate` should replace `current_best`. Passing
-// `std::less<>` therefore selects the minimum; `std::greater<>` selects
-// the maximum.
-template <typename Cmp>
-Value extreme(const Value* args, std::uint32_t arity) {
-  if (arity == 0) {
-    return Value::number(0.0);
+bool min_step(FoldState& state, const Value& value, Value* err) {
+  double x = 0.0;
+  if (!step_number(value, &x, err)) {
+    return false;
   }
-  auto first = coerce_to_number(args[0]);
-  if (!first) {
-    return Value::error(first.error());
+  if (!state.any || x < state.total) {
+    state.total = x;
   }
-  double best = first.value();
-  for (std::uint32_t i = 1; i < arity; ++i) {
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    if (Cmp{}(coerced.value(), best)) {
-      best = coerced.value();
-    }
-  }
-  return to_finite_value(best);
+  state.any = true;
+  return true;
 }
+
+bool max_step(FoldState& state, const Value& value, Value* err) {
+  double x = 0.0;
+  if (!step_number(value, &x, err)) {
+    return false;
+  }
+  if (!state.any || x > state.total) {
+    state.total = x;
+  }
+  state.any = true;
+  return true;
+}
+
+// MIN / MAX / PRODUCT result: 0 when nothing was taken.
+Value total_finish(const FoldState& state) {
+  return state.any ? to_finite_value(state.total) : Value::number(0.0);
+}
+
+constexpr FoldOps kMinFold{&min_step, &total_finish};
+constexpr FoldOps kMaxFold{&max_step, &total_finish};
 
 // MIN(value, ...) - smallest of the coerced numbers.
 Value Min(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return extreme<std::less<double>>(args, arity);
+  return fold_values(kMinFold, args, arity);
 }
 
 // MAX(value, ...) - symmetric to MIN. Empty post-filter arity also returns 0.
 Value Max(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return extreme<std::greater<double>>(args, arity);
+  return fold_values(kMaxFold, args, arity);
 }
 
 // AVERAGE(value, ...) - arithmetic mean. The registry enforces min_arity=1
 // on the pre-expansion argument count, but the provenance filter may drop
 // every range-sourced value before this impl runs; in that case Excel
 // reports #DIV/0!.
-Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  if (arity == 0) {
+Value average_finish(const FoldState& state) {
+  if (state.count == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  FinalStepSnapSum sum;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    sum.add(coerced.value());
-  }
-  const double r = flush_subnormal(sum.result() / static_cast<double>(arity));
-  return to_finite_value(r);
+  return to_finite_value(flush_subnormal(state.sum.result() / state.count));
+}
+
+constexpr FoldOps kAverageFold{&sum_step, &average_finish};
+
+Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return fold_values(kAverageFold, args, arity);
 }
 
 // PRODUCT(value, ...) - product of all args. Overflow to Inf -> `#NUM!`.
@@ -171,25 +205,24 @@ Value Average(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // rule (e.g. `=PRODUCT(A1:A3)` over an empty / all-text range), Excel
 // returns 0 rather than the mathematical identity 1. An omitted slot
 // (`PRODUCT(3,,6)`) is skipped, not counted as 0.
+bool product_step(FoldState& state, const Value& value, Value* err) {
+  if (value.kind() == ValueKind::Blank) {
+    return true;
+  }
+  double x = 0.0;
+  if (!step_number(value, &x, err)) {
+    return false;
+  }
+  // Excel starts from the first value, so a lone subnormal is not flushed.
+  state.total = state.any ? flush_subnormal(state.total * x) : x;
+  state.any = true;
+  return true;
+}
+
+constexpr FoldOps kProductFold{&product_step, &total_finish};
+
 Value Product(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  double total = 1.0;
-  bool any = false;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    if (args[i].kind() == ValueKind::Blank) {
-      continue;
-    }
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    // Excel starts from the first value, so a lone subnormal is not flushed.
-    total = any ? flush_subnormal(total * coerced.value()) : coerced.value();
-    any = true;
-  }
-  if (!any) {
-    return Value::number(0.0);
-  }
-  return to_finite_value(total);
+  return fold_values(kProductFold, args, arity);
 }
 
 // SUMSQ(value, ...) - sum of squares. Follows the same provenance rule as
@@ -234,14 +267,21 @@ Value SumSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // errors are all counted. Plain blanks and raw-reference blanks remain
 // skipped; a blank explicitly owned by a derived value array counts as an
 // occupied array cell.
-Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  double total = 0.0;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    if (!args[i].is_blank() || args[i].blank_counts_for_counta()) {
-      total += 1.0;
-    }
+bool counta_step(FoldState& state, const Value& value, Value* /*err*/) {
+  if (!value.is_blank() || value.blank_counts_for_counta()) {
+    state.count += 1.0;
   }
-  return Value::number(total);
+  return true;
+}
+
+Value count_finish(const FoldState& state) {
+  return Value::number(state.count);
+}
+
+constexpr FoldOps kCountAFold{&counta_step, &count_finish};
+
+Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return fold_values(kCountAFold, args, arity);
 }
 
 // SUM-style per-argument total used by PERCENTOF. Mirrors the eager SUM
@@ -423,19 +463,19 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
   // dropped silently, while direct scalar arguments continue through normal
   // coercion.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"SUM", 1u, kVariadic, &Sum, true, true, true},
+      builtins_detail::with_fold({"SUM", 1u, kVariadic, &Sum, true, true, true}, &kSumFold),
       // CONCAT accepts ranges: cells are coerced to text in row-major order.
       {"CONCAT", 1u, kVariadic, &Concat, true, true},
       // CONCATENATE keeps legacy implicit-intersection semantics, so it is
       // intentionally not range-aware.
       {"CONCATENATE", 1u, kVariadic, &Concatenate},
       {"LEN", 1u, 1u, &Len},
-      {"MIN", 1u, kVariadic, &Min, true, true, true},
-      {"MAX", 1u, kVariadic, &Max, true, true, true},
-      {"AVERAGE", 1u, kVariadic, &Average, true, true, true},
-      {"PRODUCT", 1u, kVariadic, &Product, true, true, true},
+      builtins_detail::with_fold({"MIN", 1u, kVariadic, &Min, true, true, true}, &kMinFold),
+      builtins_detail::with_fold({"MAX", 1u, kVariadic, &Max, true, true, true}, &kMaxFold),
+      builtins_detail::with_fold({"AVERAGE", 1u, kVariadic, &Average, true, true, true}, &kAverageFold),
+      builtins_detail::with_fold({"PRODUCT", 1u, kVariadic, &Product, true, true, true}, &kProductFold),
       {"SUMSQ", 1u, kVariadic, &SumSq, true, true, true},
-      {"COUNTA", 1u, kVariadic, &CountA, false, true},
+      builtins_detail::with_fold({"COUNTA", 1u, kVariadic, &CountA, false, true}, &kCountAFold),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 

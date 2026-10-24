@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -27,6 +28,7 @@
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
+#include "eval/dep_graph.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/eval_clock_scope.h"
 #include "eval/eval_context.h"
@@ -41,6 +43,7 @@
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
+#include "eval/recalc_engine.h"
 #include "eval/spill_anchor.h"
 #include "eval/structured_ref.h"
 #include "eval/structured_ref_project.h"
@@ -264,10 +267,10 @@ Shaped build_declared_rect(const parser::Reference& top_left, const parser::Refe
 // no graph to fall back on, which is where the two spellings visibly
 // disagreed.
 //
-// The answer is the engine's cycle policy. With no other formula inside the
-// rectangle the formula cell is the only member of its cycle, and Excel
-// leaves it at 0; another formula inside may close a cycle through several
-// cells, which Formulon reports as `#REF!`.
+// The answer is the engine's cycle policy. When no cell inside the
+// rectangle reads the formula cell back, the formula cell is the only member
+// of its cycle, and Excel leaves it at 0; otherwise the cycle runs through
+// several cells, which Formulon reports as `#REF!`.
 //
 // Without a formula cell to anchor against there is no footprint to
 // measure and nothing that could spill, so the rectangle is built
@@ -306,11 +309,13 @@ Shaped evaluate_bare_range_spill(const parser::Reference& top_left, const parser
     if (workbook != nullptr && workbook->iterative_options().enabled) {
       return Shaped{sheet->resolve_cell_value(anchor_row, anchor_col), nullptr};
     }
-    const std::vector<CellAddress> formulas =
-        sheet->formula_cells_in(top_left.row, top_left.col, bottom_right.row, bottom_right.col);
-    const bool sole_member = std::all_of(formulas.begin(), formulas.end(), [&](const CellAddress& a) {
-      return a.row == anchor_row && a.col == anchor_col;
-    });
+    // Another cell joins the cycle only if it reads the anchor back; a
+    // formula that merely sits in the rectangle does not.
+    const std::size_t sheet_index = workbook == nullptr ? 0U : workbook->sheet_index_by_name(sheet->name());
+    const bool sole_member = workbook == nullptr || sheet_index >= workbook->sheet_count() ||
+                             !workbook->recalc_engine().dep_graph().rect_cell_depends_on(
+                                 CellNodeId{static_cast<std::uint16_t>(sheet_index), anchor_row, anchor_col},
+                                 top_left.row, top_left.col, bottom_right.row, bottom_right.col);
     if (sole_member) {
       abandon_formula();
     }
@@ -641,16 +646,18 @@ Value snap_array_result(const Value& out, const Value& lhs, const Value& rhs, Ar
 // cell by cell when it is an array.
 Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, bool snap_cancellation_result) {
-  // Evaluate left first so error propagation honours the documented
-  // left-most-wins rule: a scalar error ends the chain before the next operand.
+  // Left-most wins between scalars; a scalar error against an array operand
+  // fills every position of the broadcast instead (`ROWS(1/0+{1;2;3})` is 3).
   Shaped lhs = eval_node_shaped(node.as_binary_operand(0), arena, registry, ctx);
   const std::uint32_t arity = node.as_binary_arity();
   for (std::uint32_t i = 1; i < arity; ++i) {
-    if (lhs.tail_array == nullptr && lhs.value.is_error()) {
+    const Shaped rhs = eval_node_shaped(node.as_binary_operand(i), arena, registry, ctx);
+    const bool lhs_array = lhs.tail_array != nullptr || lhs.value.is_array();
+    const bool rhs_array = rhs.tail_array != nullptr || rhs.value.is_array();
+    if (!rhs_array && lhs.tail_array == nullptr && lhs.value.is_error()) {
       return lhs;
     }
-    const Shaped rhs = eval_node_shaped(node.as_binary_operand(i), arena, registry, ctx);
-    if (rhs.tail_array == nullptr && rhs.value.is_error()) {
+    if (!lhs_array && rhs.tail_array == nullptr && rhs.value.is_error()) {
       return rhs;
     }
     // Cellwise broadcast when either operand is an array (SpillRef #,

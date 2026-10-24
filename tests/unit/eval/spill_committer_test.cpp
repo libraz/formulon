@@ -15,6 +15,7 @@
 //   * Collision against a pre-existing literal yields `#SPILL!` and
 //     does not leave a registered region.
 //   * Degenerate `0 x N` / `N x 0` arrays surface `#VALUE!`.
+//   * A scalar at a legacy array block's anchor fills the whole block.
 
 #include "eval/spill_committer.h"
 
@@ -103,6 +104,28 @@ TEST(SpillCommitter, CollisionWithExistingLiteralYieldsSpillError) {
   const Value out = committer.commit(array_v);
   ASSERT_TRUE(out.is_error());
   EXPECT_EQ(out.as_error(), ErrorCode::Spill);
+}
+
+TEST(SpillCommitter, ScalarAtArrayBlockAnchorFillsTheBlock) {
+  // A legacy array block E1:E2 committing a scalar (a cycle value, a parse
+  // failure) keeps its rectangle: every cell shows the scalar and the
+  // interior still belongs to the block.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=1")));
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_array_block(0U, 4U, 2U, 1U);
+
+  const SpillCommitter committer(&sheet, 0U, 4U);
+  EXPECT_EQ(committer.commit(Value::error(ErrorCode::Ref)), Value::error(ErrorCode::Ref));
+  EXPECT_EQ(sheet.resolve_cell_value(1U, 4U), Value::error(ErrorCode::Ref));
+  const auto block = sheet.array_block_covering(1U, 4U);
+  ASSERT_TRUE(block.has_value());
+  EXPECT_EQ(block->anchor_row, 0U);
+  EXPECT_EQ(block->anchor_col, 4U);
+
+  EXPECT_EQ(committer.commit(Value::number(0.0)), Value::number(0.0));
+  EXPECT_EQ(sheet.resolve_cell_value(1U, 4U), Value::number(0.0));
+  EXPECT_TRUE(sheet.array_block_covering(1U, 4U).has_value());
 }
 
 TEST(SpillCommitter, DegenerateArrayShapesSurfaceValueError) {

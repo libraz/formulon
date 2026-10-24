@@ -18,6 +18,7 @@
 #include <string_view>
 
 #include "utils/arena.h"
+#include "utils/cancellation_snap.h"
 #include "value.h"
 
 namespace formulon {
@@ -25,6 +26,26 @@ namespace eval {
 
 /// Sentinel for `FunctionDef::max_arity` denoting an unbounded variadic.
 inline constexpr std::uint32_t kVariadic = std::numeric_limits<std::uint32_t>::max();
+
+/// Running state of a reducer taken one value at a time (`FoldOps`).
+struct FoldState {
+  FinalStepSnapSum sum;  ///< Running sum, snapped on its last addition.
+  double total = 0.0;    ///< Running product or extreme.
+  double count = 0.0;    ///< Values taken.
+  bool any = false;      ///< Whether `total` holds a value yet.
+};
+
+/// A range-aware reducer expressed one value at a time, so the dispatcher can
+/// stream a whole-axis argument's repeated tail through it without building
+/// the array. The function's `impl` folds its argument list through the same
+/// steps, so both paths compute identically.
+struct FoldOps {
+  /// Takes one (already filtered) argument value. Returns false with `*err`
+  /// set to end the reduction with that error.
+  bool (*step)(FoldState& state, const Value& value, Value* err);
+  /// The reduction's result once every value has been taken.
+  Value (*finish)(const FoldState& state);
+};
 
 /// Built-in function entry. Every Formulon function (and every host-registered
 /// extension) is described by a `FunctionDef` and looked up by its canonical
@@ -149,6 +170,8 @@ struct FunctionDef {
   /// is unknown: the call is `#NAME?` before arity or arguments are checked,
   /// whatever the arguments evaluate to.
   bool absent_on_mac = false;
+  /// One-value-at-a-time form of a range-aware reducer, or null. See `FoldOps`.
+  const FoldOps* fold = nullptr;
 };
 
 /// Case-insensitive function lookup table. Registry keys are stored in an

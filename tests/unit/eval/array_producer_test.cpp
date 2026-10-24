@@ -7,7 +7,7 @@
 // The cases pin the dispatch surface end-to-end:
 //   * Range / Ref / ArrayLiteral expansion via `resolve_range_arg`.
 //   * Cellwise broadcasting (1x1 against shape, equal shapes, mismatch).
-//   * Per-cell error-cell propagation vs. scalar-error short-circuit.
+//   * Per-cell error-cell propagation and scalar-error broadcast.
 //   * Unary cellwise application.
 //   * Scalar -> 1x1 wrapping fallback for non-range expressions.
 
@@ -278,23 +278,23 @@ TEST(ArrayProducer, ErrorCellPreservedPerCellInComparison) {
   EXPECT_TRUE(v.as_array_cells()[2].as_boolean());
 }
 
-TEST(ArrayProducer, ScalarErrorOperandShortCircuitsToScalar) {
-  // A literal `#DIV/0!` parses as an `ErrorLiteral` AST node which goes
-  // through `eval_node_as_array`'s scalar fallback. That fallback
-  // forwards scalar errors verbatim (it does NOT wrap them in a 1x1
-  // array), so the outer broadcaster sees `rhs.is_error()` on the raw
-  // `Value` and short-circuits the whole expression to scalar `#DIV/0!`.
-  // (Contrast: `(1/0)` would evaluate through `eval_binop_array_ctx`
-  // first, which produces a 1x1 array containing the error - that path
-  // would broadcast cellwise, not short-circuit.)
+TEST(ArrayProducer, ScalarErrorOperandBroadcastsAgainstAnArray) {
+  // A literal `#DIV/0!` reaches the broadcaster as a scalar error. Against
+  // the 3x1 range it fills every position, as Excel does
+  // (`ROWS(1/0+{1;2;3})` is 3), rather than ending the expression.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
   wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
   EvalHarness h;
   const Value v = RunArrayCtx(&h, "=A1:A3+#DIV/0!", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(ErrorCode::Div0, v.as_error());
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(3U, v.as_array_rows());
+  EXPECT_EQ(1U, v.as_array_cols());
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    ASSERT_TRUE(v.as_array_cells()[i].is_error()) << i;
+    EXPECT_EQ(ErrorCode::Div0, v.as_array_cells()[i].as_error()) << i;
+  }
 }
 
 // ---------------------------------------------------------------------------

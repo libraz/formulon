@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "eval/array_alloc.h"
+#include "eval/formula_abandon.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -104,6 +105,26 @@ TEST(TailArray, DensifyOverCapIsNum) {
   const Value v = densify(s, arena);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(TailArray, OperationResultPastTheElementBoundAbandons) {
+  // 102 whole columns are within the element bound, 103 are past it; a
+  // reference read is never an evaluated array.
+  Arena arena;
+  const Value tail[] = {Value::number(0)};
+  {
+    const ScopedFormulaAbandon scope;
+    EXPECT_NE(make_tail_array(arena, 1048576, 102, 0, TailAxis::kRows, nullptr, tail, false), nullptr);
+    EXPECT_FALSE(scope.abandoned());
+  }
+  {
+    const ScopedFormulaAbandon scope;
+    EXPECT_EQ(make_tail_array(arena, 1048576, 103, 0, TailAxis::kRows, nullptr, tail, false), nullptr);
+    EXPECT_TRUE(scope.abandoned());
+  }
+  const ScopedFormulaAbandon scope;
+  EXPECT_NE(make_tail_array(arena, 1048576, 16384, 0, TailAxis::kRows, nullptr, tail, true), nullptr);
+  EXPECT_FALSE(scope.abandoned());
 }
 
 TEST(TailArray, ShapedDefaultsToBlankWithoutTail) {

@@ -1,8 +1,25 @@
 suite: dynamic_array
 description: Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
+  # -- Scalar error against an array operand ------------------------------
+  - id: rows_of_scalar_error_plus_array
+    description: "ROWS(1/0+{1;2;3}) = 3: the scalar error is broadcast across the array operand."
+    formula: "=ROWS(1/0+{1;2;3})"
+
+  - id: rows_of_if_scalar_error_plus_array
+    description: "ROWS(IF(TRUE,1/0+{1;2;3})) = 3: evaluating the operation keeps the 3x1 shape."
+    formula: "=ROWS(IF(TRUE,1/0+{1;2;3}))"
+
+  - id: rows_of_iferror_scalar_error_plus_array
+    description: "ROWS(IFERROR(1/0+{1;2;3},0)) = 3"
+    formula: "=ROWS(IFERROR(1/0+{1;2;3},0))"
+
+  - id: rows_of_iserror_scalar_error_plus_array
+    description: "ROWS(ISERROR(1/0+{1;2;3})) = 3"
+    formula: "=ROWS(ISERROR(1/0+{1;2;3}))"
+
   # -- SEQUENCE -----------------------------------------------------------
   - id: sequence_3
     description: "SEQUENCE(3) spills to a 3x1 column vector; oracle reads the anchor (1)."

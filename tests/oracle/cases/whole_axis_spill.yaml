@@ -509,6 +509,60 @@ cases:
     formula_cell: Z1
     setup: *axis_data
     expect: 0
+  - id: axis_rows_of_negated_wide_cols
+    description: "ROWS(-L!A:BB): 54 whole columns through a unary operator are sized, not abandoned"
+    formula: '=ROWS(-Sheet2!A:BB)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_rows_of_double_negated_wide_cols
+    description: "ROWS(--L!A:BB) = 1048576"
+    formula: '=ROWS(--Sheet2!A:BB)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_rows_of_wide_cols_plus_zero
+    description: "ROWS(L!A:BB+0) = 1048576"
+    formula: '=ROWS(Sheet2!A:BB+0)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: rows_of_cross_broadcast_3277
+    description: "ROWS(L!A1:A3277+L!A1:XFD1) = 3277: a 53.69M-element cross broadcast is within the element bound"
+    formula: '=ROWS(Sheet2!A1:A3277+Sheet2!A1:XFD1)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 3277
+  - id: rows_of_sequence_3277_plus_zero
+    description: "ROWS(SEQUENCE(3277,16384)+0) = 3277"
+    formula: '=ROWS(SEQUENCE(3277,16384)+0)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 3277
+  - id: rows_of_cx_plus_zero
+    description: "ROWS(L!A:CX+0) = 1048576: 102 whole columns (106,954,752 elements) are within the element bound"
+    formula: '=ROWS(Sheet2!A:CX+0)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 1048576
+  - id: axis_columns_of_negated_wide_cols
+    description: "COLUMNS(-L!A:BB) = 54"
+    formula: '=COLUMNS(-Sheet2!A:BB)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 54
+  - id: axis_sum_of_negated_wide_cols
+    description: "SUM(-L!A:BB): the 56.6M-element negation is evaluated, not abandoned, so the text in column A gives #VALUE!"
+    formula: '=SUM(-Sheet2!A:BB)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: { kind: error, code: "#VALUE!" }
+  - id: axis_sum_of_negated_empty_wide_cols
+    description: "SUM(-L!C:BD): the same 54 columns with nothing in them sum to 0"
+    formula: '=SUM(-Sheet2!C:BD)'
+    formula_cell: Z1
+    setup: *axis_data
+    expect: 0
 
   # ------------------------------------------------------------------
   # SUMPRODUCT argument shapes and accumulation order.

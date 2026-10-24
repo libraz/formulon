@@ -56,10 +56,13 @@ inline constexpr std::uint64_t kMaxDerivedArrayCells = kMaxRangeExpansionCells;
 static_assert(kMaxDerivedArrayCells * sizeof(Value) <= kMaxEvalArenaBytes,
               "kMaxEvalArenaBytes must admit one full-size derived array");
 
-/// Element count past which Excel abandons a formula that evaluates an array:
-/// floor(2^29 / 10). The whole formula then evaluates to the number 0, so
-/// `SUM(A:A+1:1)`, `ISERROR(...)` and `ROWS(...)` of such an array are all 0.
-inline constexpr std::uint64_t kMaxEvaluatedArrayElements = 53'687'091U;
+/// Element count past which Excel abandons a formula that evaluates an array,
+/// whatever its shape or origin: floor(2^30 / 10). Mac Excel sizes and
+/// evaluates `A:CX+0` (106,954,752) and refuses `A:CY+0` and
+/// `SEQUENCE(1048576,103)` (108,003,328). The whole formula then evaluates to
+/// the number 0, so `SUM(A:A+1:1)`, `ISERROR(...)` and `ROWS(...)` of such an
+/// array are all 0.
+inline constexpr std::uint64_t kMaxEvaluatedArrayElements = 107'374'182U;
 
 /// True when an array of `rows` x `cols` elements abandons its formula, which
 /// is then marked (`abandon_formula`). The caller must not build the array.

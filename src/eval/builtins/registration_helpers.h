@@ -36,7 +36,14 @@ struct BuiltinRegistration {
   bool atp_omitted_optional_is_na = false;
   bool last_arg_scalar = false;
   bool absent_on_mac = false;
+  const FoldOps* fold = nullptr;
 };
+
+/// Gives a range-aware reducer its one-value-at-a-time form; see `FoldOps`.
+constexpr BuiltinRegistration with_fold(BuiltinRegistration def, const FoldOps* fold) noexcept {
+  def.fold = fold;
+  return def;
+}
 
 /// Marks `def` as a former Analysis-ToolPak function; see
 /// `FunctionDef::analysis_toolpak_args`.
@@ -125,6 +132,7 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
     fn.atp_omitted_optional_is_na = def.atp_omitted_optional_is_na;
     fn.last_arg_scalar = def.last_arg_scalar;
     fn.absent_on_mac = def.absent_on_mac;
+    fn.fold = def.fold;
     registry.register_function(fn);
   }
 }

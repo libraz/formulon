@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -36,6 +37,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/structured_log.h"
 #include "utils/thread_launch.h"
@@ -119,6 +121,61 @@ CondensedGraph build_condensed_graph(const SccIndex& idx, const DepGraph& graph)
   return out;
 }
 
+bool footprints_overlap(const SpillFootprint& a, const SpillFootprint& b) noexcept {
+  return static_cast<std::uint64_t>(a.anchor_row) < static_cast<std::uint64_t>(b.anchor_row) + b.rows &&
+         static_cast<std::uint64_t>(b.anchor_row) < static_cast<std::uint64_t>(a.anchor_row) + a.rows &&
+         static_cast<std::uint64_t>(a.anchor_col) < static_cast<std::uint64_t>(b.anchor_col) + b.cols &&
+         static_cast<std::uint64_t>(b.anchor_col) < static_cast<std::uint64_t>(a.anchor_col) + a.cols;
+}
+
+// One potential spill producer of a pooled layer: its component id and anchor.
+struct LayerProducer {
+  std::size_t scc_id;
+  CellNodeId anchor;
+};
+
+// The producers of `layer` on one sheet that have to run again, in ascending
+// component id, because the pool committed them in an order the serial walk
+// would not have: a producer ended blocked by the region of a later one. The
+// serial walk takes a layer in ascending id, so the earlier anchor wins.
+// Empty when every blocked producer lost to an earlier one or to a cell.
+std::vector<LayerProducer> misordered_spill_producers(const Workbook& wb, const std::vector<LayerProducer>& on_sheet) {
+  if (on_sheet.size() < 2U) {
+    return {};
+  }
+  const Sheet& sheet = wb.sheet(on_sheet.front().anchor.sheet_id);
+  const std::vector<BlockedSpillFootprint> blocked = sheet.blocked_spill_footprints();
+  if (blocked.empty()) {
+    return {};
+  }
+  const std::vector<SpillFootprint> committed = sheet.committed_spill_footprints();
+  const auto footprint_at = [](const std::vector<SpillFootprint>& footprints,
+                               CellNodeId anchor) -> const SpillFootprint* {
+    for (const SpillFootprint& footprint : footprints) {
+      if (footprint.anchor_row == anchor.row && footprint.anchor_col == anchor.col) {
+        return &footprint;
+      }
+    }
+    return nullptr;
+  };
+  for (const LayerProducer& loser : on_sheet) {
+    const SpillFootprint* refused = footprint_at(blocked, loser.anchor);
+    if (refused == nullptr) {
+      continue;
+    }
+    for (const LayerProducer& winner : on_sheet) {
+      if (winner.scc_id <= loser.scc_id) {
+        continue;
+      }
+      const SpillFootprint* region = footprint_at(committed, winner.anchor);
+      if (region != nullptr && footprints_overlap(*refused, *region)) {
+        return on_sheet;
+      }
+    }
+  }
+  return {};
+}
+
 // Computes layers via Kahn's algorithm. `layers[k]` holds the SCC indices
 // whose dependencies all live in layers `< k`. Because the input graph is
 // the dirty-SCC condensation (which is a DAG by construction), this
@@ -136,6 +193,8 @@ std::vector<std::vector<std::size_t>> kahn_layers(const CondensedGraph& cg) {
 
   std::vector<std::size_t> next_frontier;
   while (!frontier.empty()) {
+    // Ascending ids are the order the serial engine walks one layer in.
+    sort_by_index(frontier, std::less<std::size_t>{});
     layers.push_back(frontier);
     next_frontier.clear();
     for (std::size_t i : frontier) {
@@ -834,6 +893,42 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       if (!isolated.empty()) {
         ++serial_fallback_steps;
         if (!run_on_caller(isolated)) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+        }
+      }
+
+      // Overlapping producers with no edge between them race for the cells
+      // they share. Where the race went against the serial walk's ascending
+      // order, release the sheet's producers of this layer and run them again
+      // in that order on the caller, so the winner never depends on timing.
+      std::vector<std::vector<LayerProducer>> producers_by_sheet(wb.sheet_count());
+      for (const std::size_t scc_id : layer) {
+        for (const CellNodeId member : idx.components[scc_id]) {
+          if (member.sheet_id < wb.sheet_count() && engine.potential_spill_producers_.find(member) != nullptr) {
+            producers_by_sheet[member.sheet_id].push_back(LayerProducer{scc_id, member});
+          }
+        }
+      }
+      for (std::size_t sheet_id = 0U; sheet_id < producers_by_sheet.size(); ++sheet_id) {
+        const std::vector<LayerProducer> rerun = misordered_spill_producers(wb, producers_by_sheet[sheet_id]);
+        if (rerun.empty()) {
+          continue;
+        }
+        Sheet& sheet = wb.sheet(sheet_id);
+        std::vector<std::size_t> rerun_sccs;
+        for (const LayerProducer& producer : rerun) {
+          if (const auto region = sheet.committed_spill_footprint_covering(producer.anchor.row, producer.anchor.col);
+              region.has_value() && region->anchor_row == producer.anchor.row &&
+              region->anchor_col == producer.anchor.col) {
+            release_callback(&release_queue, sheet, region->anchor_row, region->anchor_col, region->rows, region->cols);
+            sheet.clear_spill(producer.anchor.row, producer.anchor.col);
+          }
+          if (rerun_sccs.empty() || rerun_sccs.back() != producer.scc_id) {
+            rerun_sccs.push_back(producer.scc_id);
+          }
+        }
+        ++serial_fallback_steps;
+        if (!run_on_caller(rerun_sccs)) {
           return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
         }
       }

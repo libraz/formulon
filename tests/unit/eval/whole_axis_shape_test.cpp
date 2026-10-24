@@ -10,11 +10,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
+#include <vector>
 
 #include "eval/adhoc_eval.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/range_args.h"
 #include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
@@ -236,13 +239,14 @@ TEST_F(WholeAxisShape, ScalarFunctionOverAColumnStaysCompactUntilExpanded) {
 }
 
 TEST_F(WholeAxisShape, ArrayPastExcelsElementBoundMakesTheFormulaZero) {
-  // A whole column plus a whole row is the full grid, and an operation over
-  // 52 whole columns is 54,525,952 elements: both are past the bound, so the
-  // formula holds 0 whatever encloses the array. A reader of the cell sees
-  // that 0.
-  const char* const formulas[] = {"=SUM(L!A:A+L!1:1)",    "=ISERROR(L!A:A+L!1:1)",
-                                  "=ROWS(L!A:A+L!1:1)",   "=SUM(IFERROR(L!A:A+L!1:1,1))",
-                                  "=\"x\"&SUM(L!A:AZ+0)", "=SUM(SEQUENCE(6553,8193)*0+1)"};
+  // A whole column plus a whole row is the full grid, and 103 whole columns
+  // or a 1048576 x 103 generator are 108,003,328 elements: all are past the
+  // bound, so the formula holds 0 whatever encloses the array (Mac Excel:
+  // SUM(A:CZ+0) and ROWS(A:A+1:1) are 0). A reader of the cell sees that 0.
+  const char* const formulas[] = {"=SUM(L!A:A+L!1:1)",       "=ISERROR(L!A:A+L!1:1)",
+                                  "=ROWS(L!A:A+L!1:1)",      "=SUM(IFERROR(L!A:A+L!1:1,1))",
+                                  "=\"x\"&SUM(L!A:A+L!1:1)", "=SUM(SEQUENCE(1048576,103)*0+1)",
+                                  "=SUM(L!A:CY+0)",          "=SUM(-L!A:CY)"};
   for (const char* formula : formulas) {
     Put(kH, 0U, kHCol, formula);
     const Value v = At(kH, 0U, kHCol);
@@ -255,9 +259,10 @@ TEST_F(WholeAxisShape, ArrayPastExcelsElementBoundMakesTheFormulaZero) {
 }
 
 TEST_F(WholeAxisShape, RowsAndColumnsSizeAnOperationWithoutBuildingIt) {
-  // A SEQUENCE under ROWS / COLUMNS is sized, not built, so a grid past the
-  // element bound still answers; an operation's broadcast past the bound
-  // abandons the formula even under ROWS. Both drivers agree.
+  // A SEQUENCE under ROWS / COLUMNS is sized, not built, and so is an
+  // operation, up to the one element bound (Mac Excel: ROWS(-A:BB),
+  // ROWS(A1:A3277+A1:XFD1), ROWS(A:CX+0) answer; ROWS(A:CY+0) is 0). Both
+  // drivers agree.
   const struct {
     const char* formula;
     double expected;
@@ -265,9 +270,19 @@ TEST_F(WholeAxisShape, RowsAndColumnsSizeAnOperationWithoutBuildingIt) {
                {"=COLUMNS(SEQUENCE(4096,16384))", 16384.0},
                {"=ROWS(L!A:A+L!1:1)", 0.0},
                {"=COLUMNS(L!A:A+L!1:1)", 0.0},
-               {"=ROWS(L!A1:A3277+L!1:1)", 0.0},
-               {"=ROWS(SEQUENCE(3277,16384)+0)", 0.0},
+               {"=ROWS(L!A1:A3277+L!1:1)", 3277.0},
+               {"=ROWS(SEQUENCE(3277,16384)+0)", 3277.0},
+               {"=ROWS(L!A:CX+0)", static_cast<double>(Sheet::kMaxRows)},
+               {"=COLUMNS(L!A:CX+0)", 102.0},
+               {"=ROWS(L!A:CY+0)", 0.0},
+               {"=ROWS(-L!A:CY)", 0.0},
+               {"=COLUMNS(L!A:CZ+0)", 0.0},
                {"=ROWS(L!A:AY+0)", static_cast<double>(Sheet::kMaxRows)},
+               {"=ROWS(-L!A:BB)", static_cast<double>(Sheet::kMaxRows)},
+               {"=ROWS(--L!A:BB)", static_cast<double>(Sheet::kMaxRows)},
+               {"=ROWS(L!A:BB+0)", static_cast<double>(Sheet::kMaxRows)},
+               {"=COLUMNS(-L!A:BB)", 54.0},
+               {"=ROWS(-L!A:A)", static_cast<double>(Sheet::kMaxRows)},
                {"=COLUMNS(L!A1:A3+{1,2})", 2.0}};
   for (const auto& c : cases) {
     Put(kH, 0U, kHCol, c.formula);
@@ -280,10 +295,40 @@ TEST_F(WholeAxisShape, RowsAndColumnsSizeAnOperationWithoutBuildingIt) {
   }
 }
 
+TEST_F(WholeAxisShape, ScalarErrorAgainstAnArrayFillsTheBroadcast) {
+  // A scalar error meeting an array operand is broadcast error per position
+  // rather than ending the operation (Mac Excel: ROWS of each is 3), while
+  // a scalar error alone stays the error. Both drivers agree.
+  const char* const sized[] = {"=ROWS(1/0+{1;2;3})", "=ROWS(IF(TRUE,1/0+{1;2;3}))", "=ROWS(IFERROR(1/0+{1;2;3},0))",
+                               "=ROWS(ISERROR(1/0+{1;2;3}))", "=ROWS({1;2;3}+1/0)"};
+  for (const char* formula : sized) {
+    Put(kH, 0U, kHCol, formula);
+    const Value v = At(kH, 0U, kHCol);
+    ASSERT_TRUE(v.is_number()) << formula << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 3.0) << formula;
+    const Value adhoc = Adhoc(formula);
+    ASSERT_TRUE(adhoc.is_number()) << formula << " " << adhoc.debug_to_string();
+    EXPECT_EQ(adhoc.as_number(), 3.0) << formula;
+  }
+  Put(kH, 0U, kHCol, "=ROWS(1/0)");
+  ASSERT_TRUE(At(kH, 0U, kHCol).is_error());
+  EXPECT_EQ(At(kH, 0U, kHCol).as_error(), ErrorCode::Div0);
+
+  Put(kH, 0U, kHCol, "=1/0+{1;2;3}");
+  const SpillRegion* region = Region(kH, 0U, kHCol);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->rows, 3U);
+  for (std::uint32_t row = 0; row < 3U; ++row) {
+    const Value cell = At(kH, row, kHCol);
+    ASSERT_TRUE(cell.is_error()) << row;
+    EXPECT_EQ(cell.as_error(), ErrorCode::Div0) << row;
+  }
+}
+
 TEST_F(WholeAxisShape, GeneratorsUnderRowsAbandonPastTheirElementBound) {
-  // A generator sized under ROWS / COLUMNS answers up to 107,374,182
-  // elements and abandons the formula past it, whatever its shape; an
-  // operation keeps the 53,687,091-element bound. Both drivers agree.
+  // A generator, or an operation, sized under ROWS / COLUMNS answers up to
+  // 107,374,182 elements and abandons the formula past it, whatever its
+  // shape (Mac Excel: ROWS(SEQUENCE(1048576,103)) is 0). Both drivers agree.
   const struct {
     const char* formula;
     double expected;
@@ -297,10 +342,14 @@ TEST_F(WholeAxisShape, GeneratorsUnderRowsAbandonPastTheirElementBound) {
                {"=ROWS(MAKEARRAY(8193,16384,LAMBDA(i,j,1)))", 0.0},
                {"=ROWS(RANDARRAY(4096,16384))", 4096.0},
                {"=COLUMNS(RANDARRAY(8193,16384))", 0.0},
-               {"=ROWS(L!A1:A3276+L!A1:XFD1)", 3276.0},
-               {"=ROWS(L!A1:A3277+L!A1:XFD1)", 0.0},
-               {"=ROWS(SEQUENCE(3276,16384)+0)", 3276.0},
-               {"=ROWS(SEQUENCE(3277,16384)+0)", 0.0}};
+               {"=ROWS(SEQUENCE(1048576,102))", static_cast<double>(Sheet::kMaxRows)},
+               {"=ROWS(SEQUENCE(1048576,103))", 0.0},
+               {"=ROWS(L!A1:A3277+L!A1:XFD1)", 3277.0},
+               {"=ROWS(L!A1:A6553+L!A1:XFD1)", 6553.0},
+               {"=ROWS(L!A1:A6554+L!A1:XFD1)", 0.0},
+               {"=ROWS(SEQUENCE(3277,16384)+0)", 3277.0},
+               {"=ROWS(SEQUENCE(6553,16384)+0)", 6553.0},
+               {"=ROWS(SEQUENCE(6554,16384)+0)", 0.0}};
   for (const auto& c : cases) {
     Put(kH, 0U, kHCol, c.formula);
     const Value v = At(kH, 0U, kHCol);
@@ -309,6 +358,110 @@ TEST_F(WholeAxisShape, GeneratorsUnderRowsAbandonPastTheirElementBound) {
     const Value adhoc = Adhoc(c.formula);
     ASSERT_TRUE(adhoc.is_number()) << c.formula << " " << adhoc.debug_to_string();
     EXPECT_EQ(adhoc.as_number(), c.expected) << c.formula;
+  }
+}
+
+// The reducers that stream a derived whole column / row through the
+// dispatcher (COUNT is lazy and not among them).
+const char* const kStreamedReducers[] = {"SUM", "AVERAGE", "MIN", "MAX", "PRODUCT", "COUNTA"};
+
+TEST_F(WholeAxisShape, ReducersStreamADerivedWholeAxisPastTheArrayCeiling) {
+  // `-L!A:BB` is 56.6M elements, within the element bound, so it is evaluated
+  // rather than abandoned (Mac Excel: SUM(-A:BB) is #VALUE! over the text in
+  // column A, 0 over empty columns). Each reducer streams the repeated tail
+  // instead of building it. Both drivers agree.
+  constexpr double kCells = 54.0 * static_cast<double>(Sheet::kMaxRows);
+  const struct {
+    const char* formula;
+    bool is_error;
+    ErrorCode error;
+    double number;
+  } cases[] = {
+      // Text in column A negates to #VALUE!, the first error in row-major order.
+      {"=SUM(-L!A:BB)", true, ErrorCode::Value, 0.0},
+      {"=AVERAGE(-L!A:BB)", true, ErrorCode::Value, 0.0},
+      {"=MIN(-L!A:BB)", true, ErrorCode::Value, 0.0},
+      {"=MAX(-L!A:BB)", true, ErrorCode::Value, 0.0},
+      {"=PRODUCT(-L!A:BB)", true, ErrorCode::Value, 0.0},
+      {"=COUNTA(-L!A:BB)", false, ErrorCode::Value, kCells},
+      // Empty columns: every element is 0.
+      {"=SUM(-L!C:BD)", false, ErrorCode::Value, 0.0},
+      {"=SUM(L!C:BD+0)", false, ErrorCode::Value, 0.0},
+      {"=AVERAGE(-L!C:BD)", false, ErrorCode::Value, 0.0},
+      {"=MIN(-L!C:BD)", false, ErrorCode::Value, 0.0},
+      {"=MAX(L!C:BD+1)", false, ErrorCode::Value, 1.0},
+      {"=PRODUCT(L!C:BD+1)", false, ErrorCode::Value, 1.0},
+      {"=COUNTA(-L!C:BD)", false, ErrorCode::Value, kCells},
+      {"=SUM(L!C:BD+1)", false, ErrorCode::Value, kCells},
+      // An error tail: the first element already is the error.
+      {"=SUM(1/L!C:BD)", true, ErrorCode::Div0, 0.0},
+      {"=MAX(1/L!C:BD)", true, ErrorCode::Div0, 0.0},
+      {"=COUNTA(1/L!C:BD)", false, ErrorCode::Value, kCells},
+  };
+  for (const auto& c : cases) {
+    Put(kH, 0U, kHCol, c.formula);
+    for (const Value& v : {At(kH, 0U, kHCol), Adhoc(c.formula)}) {
+      if (c.is_error) {
+        ASSERT_TRUE(v.is_error()) << c.formula << " " << v.debug_to_string();
+        EXPECT_EQ(v.as_error(), c.error) << c.formula;
+      } else {
+        ASSERT_TRUE(v.is_number()) << c.formula << " " << v.debug_to_string();
+        EXPECT_EQ(v.as_number(), c.number) << c.formula;
+      }
+    }
+  }
+}
+
+// `name` applied to the dense walk of a derived whole-axis array: the `head`
+// computed cells, then `tail` repeated up to `extent`, through the same
+// array-element filter the dispatcher applies before the impl.
+Value DenseReduce(const char* name, const Value* head, std::size_t head_count, const Value& tail, std::size_t extent,
+                  Arena& arena) {
+  const FunctionDef* def = default_registry().lookup(name);
+  std::vector<Value> values;
+  Value err = Value::blank();
+  for (std::size_t i = 0; i < extent; ++i) {
+    if (!append_array_sourced_value(*def, i < head_count ? head[i] : tail, &values, &err)) {
+      return err;
+    }
+  }
+  return def->impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
+}
+
+TEST_F(WholeAxisShape, StreamedReductionMatchesTheDenseWalkBitForBit) {
+  // Fractional data with a cancelling pair, so the order of the additions and
+  // SUM's last-step snap both show in the result. A column (tail down the
+  // rows) and a row (tail across the columns) are each reduced streamed by
+  // the dispatcher and densely through the impl; the doubles must be equal.
+  const double data[] = {0.1, 0.2, 1e16, 0.3, -1e16, 0.7, 3.3};
+  for (std::uint32_t i = 0; i < 7U; ++i) {
+    ASSERT_TRUE(static_cast<bool>(wb_.set_cell_value(kL, i, 3U, Value::number(data[i]))));
+    ASSERT_TRUE(static_cast<bool>(wb_.set_cell_value(kL, 7U, 4U + i, Value::number(data[i]))));
+  }
+  const struct {
+    const char* whole;  // streamed
+    const char* head;   // the populated head plus one tail cell, dense; the
+                        // parentheses keep the root-level snap off
+    std::size_t extent;
+  } shapes[] = {{"L!D:D*1.1+0.3", "=(L!D1:D8*1.1+0.3)", Sheet::kMaxRows},
+                {"L!8:8*1.1+0.3", "=(L!A8:L8*1.1+0.3)", Sheet::kMaxCols}};
+  for (const auto& shape : shapes) {
+    const Value head = Adhoc(shape.head);
+    ASSERT_TRUE(head.is_array()) << shape.head << " " << head.debug_to_string();
+    const std::size_t head_count = head.as_array_rows() * head.as_array_cols() - 1U;
+    const Value* cells = head.as_array_cells();
+    for (const char* reducer : kStreamedReducers) {
+      const std::string formula = std::string("=") + reducer + "(" + shape.whole + ")";
+      const Value streamed = Adhoc(formula);
+      const Value dense = DenseReduce(reducer, cells, head_count, cells[head_count], shape.extent, arena_);
+      ASSERT_EQ(streamed.kind(), dense.kind()) << formula;
+      if (streamed.is_number()) {
+        const double a = streamed.as_number();
+        const double b = dense.as_number();
+        EXPECT_EQ(std::memcmp(&a, &b, sizeof(double)), 0)
+            << formula << " streamed=" << streamed.debug_to_string() << " dense=" << dense.debug_to_string();
+      }
+    }
   }
 }
 

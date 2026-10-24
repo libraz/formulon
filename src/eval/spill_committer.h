@@ -23,6 +23,7 @@
 #define FORMULON_EVAL_SPILL_COMMITTER_H_
 
 #include <cstdint>
+#include <vector>
 
 #include "value.h"
 
@@ -85,6 +86,9 @@ class SpillCommitter {
 
  private:
   void notify_release() const noexcept;
+  /// Commits row-major `cells` as a `rows` x `cols` region at the anchor and
+  /// returns the anchor's resolved value.
+  Value commit_cells(std::uint32_t rows, std::uint32_t cols, std::vector<Value> cells) const;
 
   Sheet* sheet_ = nullptr;
   std::uint32_t row_ = 0;

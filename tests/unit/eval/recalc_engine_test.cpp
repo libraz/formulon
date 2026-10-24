@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "cell.h"
 #include "eval/builtin_names.h"
@@ -17,6 +18,7 @@
 #include "eval/scheduler.h"
 #include "eval/volatile_tracker.h"
 #include "gtest/gtest.h"
+#include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -790,6 +792,43 @@ TEST(SchedulerContract, SccPhaseWalksOnlyTheDirtySubgraph) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 43.0);
 }
 
+// The deepest trees the parser accepts evaluate on pool workers, not only on
+// the calling thread whose stack is the process's main one.
+TEST(SchedulerContract, DeepestAcceptedFormulasEvaluateOnWorkers) {
+  std::string signs = "=";
+  signs.append(parser::kMaxOperatorNesting, '-');
+  signs.append("A1");
+  std::string ifs = "=";
+  for (std::uint32_t i = 0; i < parser::kMaxFunctionNesting; ++i) {
+    ifs.append("IF(A1=0,0,");
+  }
+  ifs.append(parser::kMaxGroupingParenDepth, '(');
+  ifs.append("A1");
+  ifs.append(parser::kMaxGroupingParenDepth, ')');
+  ifs.append(parser::kMaxFunctionNesting, ')');
+
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(7.0))));
+  constexpr std::uint32_t kRows = 8U;
+  for (std::uint32_t row = 0; row < kRows; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, signs)));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 2U, ifs)));
+  }
+  SchedulerConfig cfg;
+  cfg.num_threads = 4U;
+  SchedulerStats stats;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
+  EXPECT_GE(stats.parallel_steps, 1U) << "the formulas never reached the worker pool";
+  for (std::uint32_t row = 0; row < kRows; ++row) {
+    // An even sign run and every IF's else branch leave A1's 7 unchanged.
+    for (const std::uint32_t col : {1U, 2U}) {
+      const Value v = CellValue(wb, 0U, row, col);
+      ASSERT_TRUE(v.is_number()) << "row " << row << " col " << col << ": " << v.debug_to_string();
+      EXPECT_DOUBLE_EQ(v.as_number(), 7.0) << "row " << row << " col " << col;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // A formula reading one spilled cell depends on the spill's anchor.
 // ---------------------------------------------------------------------------
@@ -872,6 +911,74 @@ TEST_P(SpilledCellRead, ReadingTheAnchorsOwnSpillIsCircular) {
 
 INSTANTIATE_TEST_SUITE_P(Drivers, SpilledCellRead,
                          ::testing::Values(SpillReadDriver::kSerial, SpillReadDriver::kParallel));
+
+// A legacy array block E1:E2 whose formula reads its own anchor is a cycle.
+// The cycle value fills the whole block, which keeps its formula and its
+// write protection, whichever driver commits it.
+class ArrayBlockCycle : public ::testing::TestWithParam<SpillReadDriver> {};
+
+TEST_P(ArrayBlockCycle, CycleValueFillsTheWholeBlock) {
+  Workbook wb = Workbook::create();
+  SetFormula(wb, 0U, 4U, "=E1+1");
+  wb.sheet(0).set_cell_array_block(0U, 4U, 2U, 1U);
+  SetFormula(wb, 0U, 6U, "=FORMULATEXT(E2)");
+  SetFormula(wb, 1U, 6U, "=ISFORMULA(E2)");
+  SetFormula(wb, 2U, 6U, "=E2");
+  RecalcSpillBook(wb, GetParam());
+
+  const Sheet& sheet = wb.sheet(0);
+  for (std::uint32_t row = 0; row < 2U; ++row) {
+    const Value v = sheet.resolve_cell_value(row, 4U);
+    ASSERT_TRUE(v.is_number()) << row << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), 0.0) << row;
+  }
+  ASSERT_TRUE(sheet.array_block_covering(1U, 4U).has_value());
+  const Value text = CellValue(wb, 0U, 0U, 6U);
+  ASSERT_TRUE(text.is_text()) << text.debug_to_string();
+  EXPECT_EQ(text.as_text(), "{=E1+1}");
+  const Value is_formula = CellValue(wb, 0U, 1U, 6U);
+  ASSERT_TRUE(is_formula.is_boolean()) << is_formula.debug_to_string();
+  EXPECT_TRUE(is_formula.as_boolean());
+  const Value reader = CellValue(wb, 0U, 2U, 6U);
+  ASSERT_TRUE(reader.is_number()) << reader.debug_to_string();
+  EXPECT_EQ(reader.as_number(), 0.0);
+
+  EXPECT_FALSE(static_cast<bool>(wb.set_cell_value(0U, 1U, 4U, Value::number(5.0))));
+  EXPECT_FALSE(static_cast<bool>(wb.set_cell_text(0U, 1U, 4U, "x")));
+}
+
+INSTANTIATE_TEST_SUITE_P(Drivers, ArrayBlockCycle,
+                         ::testing::Values(SpillReadDriver::kSerial, SpillReadDriver::kParallel));
+
+// A2 `=SEQUENCE(1,3)` and C1 `=SEQUENCE(3)` overlap on C2 with neither
+// anchor inside the other's footprint, so no edge orders them. The winner
+// must not depend on entry order, on the driver, or on worker timing.
+TEST(OverlappingSpillProducers, WinnerIsIndependentOfEntryOrderAndDriver) {
+  std::vector<bool> a2_blocked;
+  for (int c1_first = 0; c1_first < 2; ++c1_first) {
+    for (int run = 0; run < 6; ++run) {
+      const SpillReadDriver driver = run == 0 ? SpillReadDriver::kSerial : SpillReadDriver::kParallel;
+      Workbook wb = Workbook::create();
+      if (c1_first != 0) {
+        SetFormula(wb, 0U, 2U, "=SEQUENCE(3)");
+        SetFormula(wb, 1U, 0U, "=SEQUENCE(1,3)");
+      } else {
+        SetFormula(wb, 1U, 0U, "=SEQUENCE(1,3)");
+        SetFormula(wb, 0U, 2U, "=SEQUENCE(3)");
+      }
+      RecalcSpillBook(wb, driver);
+      const Value a2 = CellValue(wb, 0U, 1U, 0U);
+      const Value c1 = CellValue(wb, 0U, 0U, 2U);
+      const bool a2_spill = a2.is_error() && a2.as_error() == ErrorCode::Spill;
+      const bool c1_spill = c1.is_error() && c1.as_error() == ErrorCode::Spill;
+      EXPECT_NE(a2_spill, c1_spill) << "a2=" << a2.debug_to_string() << " c1=" << c1.debug_to_string();
+      a2_blocked.push_back(a2_spill);
+    }
+  }
+  for (const bool blocked : a2_blocked) {
+    EXPECT_EQ(blocked, a2_blocked.front());
+  }
+}
 
 // Inserting a row above the spill re-registers the shifted formulas; the
 // index follows, so the moved reader still tracks the moved anchor.

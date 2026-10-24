@@ -226,6 +226,13 @@ class DepGraph {
   /// BFS). The returned reference stays valid until this graph is mutated.
   const std::vector<CellNodeId>& dependents_of_ref(CellNodeId node) const noexcept;
 
+  /// Whether a cell other than `node`, on `node`'s sheet and inside rows
+  /// `row_first..row_last` x columns `col_first..col_last`, reads `node`
+  /// directly or transitively. For a formula at `node` that reads exactly
+  /// that rectangle, this is whether its cycle has a member besides itself.
+  bool rect_cell_depends_on(CellNodeId node, std::uint32_t row_first, std::uint32_t col_first, std::uint32_t row_last,
+                            std::uint32_t col_last) const;
+
   /// Computes the strongly connected components of the graph using an
   /// iterative Tarjan algorithm. Each inner vector is one SCC; SCCs are
   /// emitted in **reverse-topological order**: a component appears before
@@ -273,6 +280,12 @@ class DepGraph {
 
   std::vector<std::vector<CellNodeId>> tarjan_scc_impl(
       const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const;
+
+  /// Reorders `sccs`, given in any topological order of the condensation,
+  /// into its Kahn layers, each sorted by lowest member address. Edges
+  /// leaving `nodes` (when non-null) are ignored.
+  std::vector<std::vector<CellNodeId>> canonical_component_order(
+      std::vector<std::vector<CellNodeId>> sccs, const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const;
 
   void add_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
   bool remove_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
