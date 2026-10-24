@@ -60,7 +60,11 @@ getSheetAutoFilterXml, setSheetAutoFilterXml
 ```
 
 Calling any of them on a native `Workbook` is a TypeScript error and a
-runtime `is not a function`.
+runtime `is not a function`. The two XML methods exchange the raw
+`<autoFilter>` fragment; the typed `getAutoFilter` / `setAutoFilter` pair
+covers the same state on both packages. `addCellStyleXf` has no native
+binding yet, so a named style's base format can only be created through the
+WASM package or the Python one.
 
 Two methods exist only here, both because a native workbook lives outside
 the JS heap in a way the WASM build's does not: `dispose()` releases the
@@ -70,12 +74,16 @@ available on both the native and WASM packages and returns the parallel SCC
 telemetry described in the API declarations. See
 [Memory accounting](#memory-accounting).
 
-Two C ABI capabilities are bound in the Python package but not exposed by
-either JS binding: `fm_workbook_set_iterative_enabled` (toggling iterative
-calculation without re-supplying the existing iteration cap and residual
-threshold -- `setIterative(enabled, maxIterations, maxChange)` here always
-takes all three) and `fm_styles_add_batch` (bulk style registration). This
-is a genuine gap, not an intentional exclusion.
+Two C ABI functions bound in the Python package have no JS method of their
+own; what they do is reachable from both JS packages:
+
+- `fm_workbook_set_iterative_enabled` toggles iterative calculation and keeps
+  the stored cap and threshold. In JS, read them back and pass them on:
+  `const it = wb.getIterative(); wb.setIterative(on, it.maxIterations, it.maxChange)`.
+- `fm_styles_add_batch` registers fonts, fills, borders and cell xfs in one
+  all-or-nothing call. JS registers the same records one call each
+  (`addFont`, `addFill`, `addBorder`, `addXf`), so a failure part-way leaves
+  the records added before it in place.
 
 The TypeScript declarations in `dist/index.d.ts` are the authoritative
 method list; the categories below summarise what is registered on the

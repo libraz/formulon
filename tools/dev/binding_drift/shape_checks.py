@@ -53,6 +53,56 @@ _DTS_SURFACE_ONLY_TYPES = {
 # difference that should not exist.
 _DTS_RETURN_TYPE_EXEMPT_METHODS: dict[str, str] = {}
 
+_TS_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
+_TS_MEMBER_KEY_RE = re.compile(r"(?:readonly\s+)?([A-Za-z_$][A-Za-z0-9_$]*)")
+
+
+def _ts_member_declarations(body: str) -> dict[str, List[str]]:
+    """Maps each top-level member of an interface body to its declarations.
+
+    A declaration is the member's whole text -- parameter names, optional
+    markers and types, or a field's type -- with comments dropped and
+    whitespace collapsed, so the comparison sees the signature a caller
+    compiles against rather than its formatting. Overloads keep one entry
+    each, sorted.
+    """
+    text = _TS_COMMENT_RE.sub("", body)
+    out: dict[str, List[str]] = {}
+    depth = 0
+    current: List[str] = []
+    for char in text:
+        if char in "({[<":
+            depth += 1
+        elif char in ")}]>" and not (char == ">" and current and current[-1] == "="):
+            depth -= 1
+        if char == ";" and depth == 0:
+            declaration = " ".join("".join(current).split())
+            declaration = re.sub(r",\s*\)", ")", declaration).replace("( ", "(")
+            match = _TS_MEMBER_KEY_RE.match(declaration)
+            if match:
+                out.setdefault(match.group(1), []).append(declaration)
+            current = []
+        else:
+            current.append(char)
+    return {name: sorted(declarations) for name, declarations in out.items()}
+
+
+def _declaration_mismatches(kind: str, owner: str, wasm_body: str, node_body: str) -> List[str]:
+    wasm_members = _ts_member_declarations(wasm_body)
+    node_members = _ts_member_declarations(node_body)
+    wasm_label = str(WASM_DTS.relative_to(REPO_ROOT))
+    node_label = str(NODE_DTS.relative_to(REPO_ROOT))
+    problems: List[str] = []
+    for name in sorted(set(wasm_members) & set(node_members)):
+        if wasm_members[name] == node_members[name]:
+            continue
+        problems.append(
+            f"dts-shared-shapes: {owner}.{name} {kind} differently on each surface:\n"
+            f"  {wasm_label}: {' | '.join(wasm_members[name])}\n"
+            f"  {node_label}: {' | '.join(node_members[name])}"
+        )
+    return problems
+
 
 def check_dts_shared_shapes() -> List[str]:
     problems: List[str] = []
@@ -62,8 +112,13 @@ def check_dts_shared_shapes() -> List[str]:
     node_label = str(NODE_DTS.relative_to(REPO_ROOT))
 
     for interface in ("Workbook", "WorkbookCtor"):
-        wasm_returns = _ts_return_types(_find_interface_body(wasm_dts, interface, WASM_DTS))
-        node_returns = _ts_return_types(_find_interface_body(node_dts, interface, NODE_DTS))
+        wasm_body = _find_interface_body(wasm_dts, interface, WASM_DTS)
+        node_body = _find_interface_body(node_dts, interface, NODE_DTS)
+        # Parameter lists, optional markers and enum-typed parameters, which
+        # the return-type comparison below does not see.
+        problems.extend(_declaration_mismatches("is declared", interface, wasm_body, node_body))
+        wasm_returns = _ts_return_types(wasm_body)
+        node_returns = _ts_return_types(node_body)
         for name in sorted(set(wasm_returns) & set(node_returns)):
             if wasm_returns[name] == node_returns[name]:
                 if name in _DTS_RETURN_TYPE_EXEMPT_METHODS:
@@ -113,6 +168,8 @@ def check_dts_shared_shapes() -> List[str]:
         )
         if diff:
             problems.append(f"dts-shared-shapes: {name} field set mismatch:\n" + "\n".join(diff))
+            continue
+        problems.extend(_declaration_mismatches("is typed", name, wasm_body, node_body))
 
     return problems
 

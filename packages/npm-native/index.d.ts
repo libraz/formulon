@@ -2,13 +2,15 @@
 // Hand-written TypeScript declarations for @libraz/formulon-native.
 //
 // This file is the public surface of the native N-API binding. It
-// MUST be kept in sync with `src/node_addon/addon.cc` -- the addon's
-// `Init()` registers the JS members declared here. Drift will surface
-// at runtime as `undefined` access.
+// MUST be kept in sync with the `DefineClass` table in
+// `src/node_addon/parts/workbook_class.cc`, which registers the JS
+// members declared here. Drift will surface at runtime as `undefined`
+// access.
 //
-// The shape mirrors `packages/npm/dist/formulon.d.ts` (the WASM
-// binding) so that JS callers can treat the two packages
-// interchangeably for the methods both expose. The two notable shape
+// The shape mirrors `src/wasm/formulon.d.ts` (the WASM binding, staged as
+// `packages/npm/dist/formulon.d.ts`) so that JS callers can treat the two
+// packages interchangeably for the methods both expose: shared methods and
+// types are declared identically in both files. The two notable shape
 // differences are deliberate:
 //
 //   * The native binding exposes `dispose()` for deterministic release;
@@ -16,7 +18,7 @@
 //   * The native binding exposes `memoryUsage()` so a host can size a
 //     workbook by what its handle owns rather than by the handle.
 //
-// Nine methods go the other way and are WASM-only; see "Surface parity"
+// Three methods go the other way and are WASM-only; see "Surface parity"
 // in this package's README for the list.
 
 /** `fm_value_kind_t` ordinals (mirror of `fm_value_kind_t`). */
@@ -33,8 +35,13 @@ export const ValueKind: Readonly<{
 /** Union of the {@link ValueKind} ordinals. */
 export type ValueKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-/** Status carried by binding result envelopes. Argument validation may
- *  throw `TypeError` or `RangeError` before returning a result. */
+/** Status carried by binding result envelopes. Positional arguments are
+ *  validated before any engine call, identically on both packages: a
+ *  missing required argument, a value of the wrong type, or a primitive or
+ *  `null` where an object is declared throws `TypeError`, and an
+ *  out-of-range integer throws `RangeError`. A malformed argument a method
+ *  reports as a status instead -- an array of the wrong length, a value that
+ *  is not callable -- carries `kInvalidArgument` (2). */
 export interface Status {
   /** True when the underlying C ABI returned `kOk`. */
   ok: boolean;
@@ -154,6 +161,8 @@ export const WorkbookFormat: Readonly<{
   Xlsx: 1;
   Xlsb: 2;
 }>;
+/** Union of the {@link WorkbookFormat} ordinals. */
+export type WorkbookFormat = 0 | 1 | 2;
 
 /** `{ status, value }` returned by the text accessors (`sheetName`,
  *  `localizeFunctionName`, `excelProfileId`, ...). `value` is `""` on
@@ -415,6 +424,8 @@ export const PivotAxis: Readonly<{
   Value: 2;
   Page: 3;
 }>;
+/** Union of the {@link PivotAxis} ordinals. */
+export type PivotAxis = 0 | 1 | 2 | 3;
 
 /** Aggregation function for a value-axis field. Mirrors
  *  `fm_pivot_aggregation_t`. */
@@ -431,6 +442,8 @@ export const PivotAggregation: Readonly<{
   Var: 9;
   VarP: 10;
 }>;
+/** Union of the {@link PivotAggregation} ordinals. */
+export type PivotAggregation = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 /** Show-values-as derivation applied to a data-field aggregate.
  *  Mirrors `fm_pivot_show_as_t`. */
@@ -452,6 +465,8 @@ export const PivotShowValuesAs: Readonly<{
   RankAscending: 14;
   RankDescending: 15;
 }>;
+/** Union of the {@link PivotShowValuesAs} ordinals. */
+export type PivotShowValuesAs = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 
 /** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning
  *  "(previous)". */
@@ -470,6 +485,8 @@ export const PivotFilterType: Readonly<{
   LabelBeginsWith: 4;
   LabelDate: 5;
 }>;
+/** Union of the {@link PivotFilterType} ordinals. */
+export type PivotFilterType = 0 | 1 | 2 | 3 | 4 | 5;
 
 /** Date-grouping granularity. Mirrors `fm_pivot_date_grouping_t`.
  *  `Days` is Excel's "By: Days" grouping (an explicit interval, e.g. a
@@ -485,6 +502,8 @@ export const PivotDateGrouping: Readonly<{
   Minute: 6;
   Second: 7;
 }>;
+/** Union of the {@link PivotDateGrouping} ordinals. */
+export type PivotDateGrouping = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** Calendar system used by date grouping. Mirrors
  *  `fm_pivot_calendar_t`. */
@@ -492,6 +511,8 @@ export const PivotCalendar: Readonly<{
   Gregorian: 0;
   Japanese: 1;
 }>;
+/** Union of the {@link PivotCalendar} ordinals. */
+export type PivotCalendar = 0 | 1;
 
 /** Discriminator for the variant payload carried by a pivot filter
  *  spec. `None` (= -1) means the slot is unset. Mirrors
@@ -502,6 +523,8 @@ export const PivotFilterValueKind: Readonly<{
   Double: 1;
   Text: 2;
 }>;
+/** Union of the {@link PivotFilterValueKind} ordinals. */
+export type PivotFilterValueKind = -1 | 0 | 1 | 2;
 
 /** Sibling item order of a pivot field. Mirrors `fm_pivot_sort_order_t`. */
 export const PivotSortOrder: Readonly<{
@@ -509,6 +532,8 @@ export const PivotSortOrder: Readonly<{
   Ascending: 1;
   Manual: 2;
 }>;
+/** Union of the {@link PivotSortOrder} ordinals. */
+export type PivotSortOrder = 0 | 1 | 2;
 
 /** Pivot report layout form. Mirrors `fm_pivot_layout_t`. */
 export const PivotReportLayout: Readonly<{
@@ -516,6 +541,8 @@ export const PivotReportLayout: Readonly<{
   Tabular: 1;
   Outline: 2;
 }>;
+/** Union of the {@link PivotReportLayout} ordinals. */
+export type PivotReportLayout = 0 | 1 | 2;
 
 /** Plain-data spec for `Workbook.pivotFieldAdd`. Mirrors
  *  `fm_pivot_field_spec_t`. */
@@ -523,7 +550,7 @@ export interface PivotFieldSpec {
   sourceName: string;
   customName?: string;
   /** One of `PivotAxis.*`. */
-  axis: number;
+  axis: PivotAxis;
   /** Subtotal on the group's own heading row (default `true`, as in Excel);
    *  `false` heads the group with a label-only row and closes it with an
    *  `"<item> Total"` row. */
@@ -543,11 +570,11 @@ export interface PivotDataFieldSpec {
   name?: string;
   fieldIndex: number;
   /** One of `PivotAggregation.*`. */
-  aggregation: number;
+  aggregation: PivotAggregation;
   /** `numFmtId` as a decimal string (built-in or from `addNumFmt`). */
   numberFormat?: string;
   /** One of `PivotShowValuesAs.*`. */
-  showAs?: number;
+  showAs?: PivotShowValuesAs;
   showAsBaseField?: number;
   showAsBaseItem?: number;
 }
@@ -556,19 +583,19 @@ export interface PivotDataFieldSpec {
  *  `fm_pivot_filter_spec_t`. */
 export interface PivotFilterSpec {
   /** One of `PivotAxis.*`. */
-  axis: number;
+  axis: PivotAxis;
   fieldName: string;
   /** One of `PivotFilterType.*`. */
-  type: number;
+  type: PivotFilterType;
   /** Data-field aggregate scored by value filters. Defaults to 0. */
   dataFieldIndex?: number;
   /** One of `PivotFilterValueKind.*`. */
-  valueKind?: number;
+  valueKind?: PivotFilterValueKind;
   valueInt?: number;
   valueDouble?: number;
   valueText?: string;
   /** One of `PivotFilterValueKind.*`. */
-  valueHighKind?: number;
+  valueHighKind?: PivotFilterValueKind;
   valueHighInt?: number;
   valueHighDouble?: number;
 }
@@ -594,7 +621,7 @@ export interface PivotWorksheetSourceResult extends PivotWorksheetSource {
 export interface PivotReportLayoutResult {
   status: Status;
   /** One of `PivotReportLayout.*`. */
-  layout: number;
+  layout: PivotReportLayout;
 }
 
 /** Table style and toggles of a PivotTable (`pivotSetStyleInfo`). An omitted
@@ -644,19 +671,19 @@ export interface PivotFieldResult {
   sourceName: string;
   customName: string;
   /** One of `PivotAxis.*`, or `-1` when the field sits on no axis. */
-  axis: number;
+  axis: PivotAxis | -1;
   subtotalTop: boolean;
   numberFormat: string;
   /** Index of the bound pivot-cache field, `-1` when the cache does not
    *  cover this field. Pivot field `i` binds to cache field `i`. */
   cacheFieldIndex: number;
   /** One of `PivotSortOrder.*`, as written by `pivotFieldSetSort`. */
-  sortOrder: number;
+  sortOrder: PivotSortOrder;
   sortByField: string;
   /** When `false` the `date*` members are zero and the unset sentinels. */
   hasDateGroup: boolean;
-  dateGranularity: number;
-  dateCalendar: number;
+  dateGranularity: PivotDateGrouping;
+  dateCalendar: PivotCalendar;
   /** `-1` when unset. */
   dateStartYear: number;
   dateEndYear: number;
@@ -669,7 +696,7 @@ export interface PivotFieldResult {
   defaultSubtotal: boolean;
   /** Custom subtotal functions (`pivotFieldAddSubtotalFn`), as
    *  `PivotAggregation.*` ordinals in ascending order. */
-  subtotalFns: number[];
+  subtotalFns: PivotAggregation[];
 }
 
 /** Return type of `Workbook.pivotFieldItemAt(...)`. */
@@ -691,10 +718,10 @@ export interface PivotDataFieldResult {
   name: string;
   fieldIndex: number;
   /** One of `PivotAggregation.*`. */
-  aggregation: number;
+  aggregation: PivotAggregation;
   numberFormat: string;
   /** One of `PivotShowValuesAs.*`. */
-  showAs: number;
+  showAs: PivotShowValuesAs;
   showAsBaseField: number;
   showAsBaseItem: number;
 }
@@ -752,6 +779,8 @@ export const ErrorCode: Readonly<{
   Python: 15;
   Unknown: 16;
 }>;
+/** Union of the {@link ErrorCode} ordinals. */
+export type ErrorCode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
 
 /** Workbook-level calc mode (Excel `<calcPr calcMode>` policy). Mirrors
  *  `fm_calc_mode_t`: 0 = automatic, 1 = manual, 2 = automatic except
@@ -798,6 +827,8 @@ export const LogLevel: Readonly<{
   Error: 3;
   Off: 4;
 }>;
+/** Union of the {@link LogLevel} ordinals. */
+export type LogLevel = 0 | 1 | 2 | 3 | 4;
 
 /** External-link kinds (mirror of `formulon::io::ExternalLinkRecord::Kind`),
  *  as carried by `ExternalLinkRecord.kind`. */
@@ -1955,10 +1986,10 @@ export interface AutoFilterEvalResult {
   match: boolean[];
 }
 
-/** Return type of `Workbook.validateValue`. `hasRule` is false when no rule
- *  covers the cell, and `valid` is then true. `ruleIndex` is the
- *  `getValidations` index of the applied rule and `errorStyle` its style
- *  (a `ValidationErrorStyle`). */
+/** Result of `Workbook.validateValue`. `hasRule` is false when no rule covers
+ *  the cell, and `valid` is then true. Otherwise `ruleIndex` indexes
+ *  `getValidations` and `errorStyle` is a `ValidationErrorStyle`. A failed
+ *  call reports `hasRule` and `valid` false and the numbers 0. */
 export interface ValidationOutcomeResult {
   status: Status;
   hasRule: boolean;
@@ -2646,7 +2677,7 @@ export interface RangeCell {
  *  cell. */
 export interface CellsInRangeResult {
   status: Status;
-  cells: ReadonlyArray<RangeCell>;
+  cells: RangeCell[];
   nextCursor: number | null;
 }
 
@@ -3269,10 +3300,10 @@ export interface ExternalLinkRecord {
 
 /** One inclusive cell-range entry inside a CF rule's `sqref` union. */
 export interface ConditionalFormatRange {
-  firstRow: number;
-  firstCol: number;
-  lastRow: number;
-  lastCol: number;
+  readonly firstRow: number;
+  readonly firstCol: number;
+  readonly lastRow: number;
+  readonly lastCol: number;
 }
 
 /** One CF rule as returned by `getConditionalFormats(sheet)`.
@@ -3656,7 +3687,12 @@ export type ListResult<T> = ReadonlyArray<T> & { readonly status: Status };
  *  caller: the recalc that ran the callback returns `{ok: false}` with
  *  status 7003 (`kBindingCallbackException`) instead. Cells committed by
  *  the sweeps that already ran keep their values, and the workbook stays
- *  usable. */
+ *  usable.
+ *
+ *  The callback runs inside the solver, which holds the workbook mid-sweep:
+ *  it must not call any method on the workbook. Such calls, reads included,
+ *  throw `TypeError` naming `kGraphRecalcReentrant` (4005) and change
+ *  nothing; `dispose()` throws `TypeError` as during any other active call. */
 export type IterativeProgressCallback = (
   iteration: number,
   maxResidual: number,
@@ -3803,15 +3839,17 @@ export interface Workbook {
    *  has switched iteration on. */
   getIterative(): IterativeSettingsResult;
   /** Installs (or, when passed `null`, clears) this workbook's JS callback
-   *  invoked after each Gauss-Seidel sweep. */
+   *  invoked after each Gauss-Seidel sweep. A value that is neither a
+   *  function nor `null` is rejected with `kInvalidArgument` (2) and leaves
+   *  the installed callback in place. */
   setIterativeProgress(callback: IterativeProgressCallback | null): Status;
   /** Serialises the workbook to an in-memory `.xlsx` byte stream. `bytes` is `null` and
    *  `status` a `kIo*` code on archive / writer failure. */
   save(): SaveResult;
   /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
-  saveAs(format: number): SaveResult;
+  saveAs(format: WorkbookFormat | number): SaveResult;
   /** Serialises using an explicit format and reports loss/defer counters. */
-  saveWithDiagnostics(format: number): SaveDiagnosticsResult;
+  saveWithDiagnostics(format: WorkbookFormat | number): SaveDiagnosticsResult;
   /** Returns the loss counters captured when this handle was loaded. */
   readDiagnostics(): ReadDiagnosticsResult;
 
@@ -3878,18 +3916,19 @@ export interface Workbook {
   /** Removes the sheet at `index`. References to it are rewritten to `#REF!` at the affected subexpression
    *  (cell formulas, defined names, conditional-format, validation and table formulas); sheet-scoped names and
    *  tables owned by the sheet are dropped, as are pivot caches sourced from it and their pivot tables.
-   *  Fails with `kSheetIndexOutOfRange`, or `kCannotRemoveLastSheet` when only one sheet remains. */
+   *  Fails with `kSheetIndexOutOfRange`, or `kCannotRemoveLastSheet` when only one sheet remains.
+   *  Removing the only visible sheet fails with `kInvalidArgument` and leaves the workbook unchanged. */
   removeSheet(index: number): Status;
   /** Renames the sheet at `index` and rewrites the references that name it (formulas, defined names,
    *  conditional-format and validation formulas, hyperlinks, table formulas, pivot sources). Fails with
    *  `kSheetIndexOutOfRange`, or `kInvalidSheetName` under the same rules as `addSheet`. */
-  renameSheet(index: number, name: string): Status;
+  renameSheet(index: number, newName: string): Status;
   /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
   moveSheet(fromIdx: number, toIdx: number): Status;
   /** Number of sheets. */
   sheetCount(): NumberResult;
-  /** Display name of the sheet at `index`; `kInvalidArgument` when `index` is out of range. */
-  sheetName(index: number): StringResult;
+  /** Display name of the sheet at `idx`; `kInvalidArgument` when `idx` is out of range. */
+  sheetName(idx: number): StringResult;
   /** Returns `{ status, index }`: the sheet the first `<workbookView>` marks
    *  active (`activeTab`); without workbook views (an XLSB load) the first
    *  tab-selected sheet; `0` when neither is recorded. Removing or hiding the
@@ -3921,14 +3960,26 @@ export interface Workbook {
    */
 
   /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
-   *  references to follow the shift. */
+   *  references to follow the shift.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   insertRows(sheet: number, row: number, count: number): Status;
   /** Deletes `count` rows starting at `row` on `sheet`. References that
-   *  fall inside the deleted interval collapse to `#REF!`. */
+   *  fall inside the deleted interval collapse to `#REF!`.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   deleteRows(sheet: number, row: number, count: number): Status;
-  /** Inserts `count` columns at `col` on `sheet`. */
+  /** Inserts `count` columns at `col` on `sheet`.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   insertCols(sheet: number, col: number, count: number): Status;
-  /** Deletes `count` columns starting at `col` on `sheet`. */
+  /** Deletes `count` columns starting at `col` on `sheet`.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   deleteCols(sheet: number, col: number, count: number): Status;
 
   // Iteration / metadata.
@@ -4069,7 +4120,7 @@ export interface Workbook {
   pivotGetLayout(sheet: number, pivotIdx: number): PivotReportLayoutResult;
   /** Sets the pivot's compact / tabular / outline report layout. One of
    *  `PivotReportLayout.*`. */
-  pivotSetLayout(sheet: number, pivotIdx: number, layout: number): Status;
+  pivotSetLayout(sheet: number, pivotIdx: number, layout: PivotReportLayout): Status;
   /** Returns `{ status, index: cacheId }`: the cache the pivot draws from.
    *  The definition read-backs here work for pivots created in-session and
    *  loaded from a package alike. */
@@ -4112,12 +4163,12 @@ export interface Workbook {
    *  does: its data fields are removed (later data-field indices shift
    *  down), as are filters naming it and value filters scoring a
    *  removed data field; its item visibility is kept. */
-  pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: number): Status;
+  pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: PivotAxis | -1): Status;
   /** Sets the sibling order of pivot field `fieldIdx`; `order` is one of
    *  `PivotSortOrder.*`. `PivotSortOrder.Manual` keeps items in
    *  `pivotFieldAddItem` order and takes no `byField`; for the other orders
    *  an empty `byField` sorts by label. */
-  pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, order: number, byField: string): Status;
+  pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, order: PivotSortOrder, byField: string): Status;
   /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
   pivotFieldSetSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
   /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
@@ -4146,7 +4197,7 @@ export interface Workbook {
     visible: boolean,
   ): Status;
   /** Appends a subtotal-fn entry to pivot field `fieldIdx`. */
-  pivotFieldAddSubtotalFn(sheet: number, pivotIdx: number, fieldIdx: number, agg: number): Status;
+  pivotFieldAddSubtotalFn(sheet: number, pivotIdx: number, fieldIdx: number, agg: PivotAggregation): Status;
   /** Drops every subtotal-fn entry from pivot field `fieldIdx`. */
   pivotFieldClearSubtotalFns(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Configures date-grouping on pivot field `fieldIdx`. Pass `-1` for
@@ -4164,8 +4215,8 @@ export interface Workbook {
     sheet: number,
     pivotIdx: number,
     fieldIdx: number,
-    granularity: number,
-    calendar: number,
+    granularity: PivotDateGrouping,
+    calendar: PivotCalendar,
     startYear: number,
     endYear: number,
     intervalDays?: number,
@@ -4323,13 +4374,15 @@ export interface Workbook {
    *  `setSheetVisibility`. `true` on an already very-hidden sheet leaves
    *  it very-hidden rather than demoting it, since "hidden" says nothing
    *  that sheet does not already satisfy; `false` shows it from either
-   *  hidden state. */
+   *  hidden state. Hiding the only visible sheet fails with
+   *  `kInvalidArgument` and leaves it visible. */
   setSheetTabHidden(sheet: number, hidden: boolean): Status;
   /** Sets the sheet tab's visibility to one of the three states. The only
    *  way to newly state `SheetVisibility.VeryHidden`, and the only way to
    *  demote a very-hidden sheet to plain hidden; `setSheetTabHidden` can
    *  express neither. A value outside `SheetVisibility` fails with
-   *  `kInvalidArgument` and leaves the sheet unchanged. */
+   *  `kInvalidArgument` and leaves the sheet unchanged. So does hiding the only
+   *  visible sheet. */
   setSheetVisibility(sheet: number, visibility: SheetVisibility): Status;
   /** Sets the sheet's `showGridLines` flag. */
   setSheetShowGridLines(sheet: number, show: boolean): Status;
@@ -4380,7 +4433,8 @@ export interface Workbook {
   setColumnWidth(sheet: number, first: number, last: number, width: number): Status;
   /** Sets / replaces the column hidden flag on `[first, last]`. */
   setColumnHidden(sheet: number, first: number, last: number, hidden: boolean): Status;
-  /** Sets / replaces the column outline level on `[first, last]` (clamped to 0..255). */
+  /** Sets / replaces the column outline level on `[first, last]`. A level
+   *  above 7, the deepest Excel stores, fails with `kInvalidArgument`. */
   setColumnOutline(sheet: number, first: number, last: number, level: number): Status;
   /** Sets / clears the column `collapsed` flag on `[first, last]`. */
   setColumnCollapsed(sheet: number, first: number, last: number, collapsed: boolean): Status;
@@ -4415,7 +4469,8 @@ export interface Workbook {
   columnPtToChars(sheet: number, mode: GeometryMode, pt: number): NumberResult;
   /** Sets / replaces the row hidden flag at `row`. */
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
-  /** Sets / replaces the row outline level at `row` (clamped to 0..255). */
+  /** Sets / replaces the row outline level at `row`. A level above 7, the
+   *  deepest Excel stores, fails with `kInvalidArgument`. */
   setRowOutline(sheet: number, row: number, level: number): Status;
   /** Sets / clears the row `collapsed` flag at `row`. */
   setRowCollapsed(sheet: number, row: number, collapsed: boolean): Status;
@@ -4473,7 +4528,8 @@ export interface Workbook {
   // Styles.
   /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */
   getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
-  /** Persists `xfIndex` on the cell at `(sheet, row, col)`. */
+  /** Persists `xfIndex` on the cell at `(sheet, row, col)`. An index not
+   *  below `xfCount()` fails with `kInvalidArgument`. */
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
   /**
    * Removes the direct style assignment from the cell at `(sheet, row, col)`
@@ -4485,7 +4541,8 @@ export interface Workbook {
    */
   clearCellXfIndex(sheet: number, row: number, col: number): Status;
   /** Applies `xfIndex` across an inclusive rectangle, materialising blank
-   *  cells so an empty ruled box renders. Saves one call per cell. */
+   *  cells so an empty ruled box renders. Saves one call per cell. An
+   *  index not below `xfCount()` fails with `kInvalidArgument`. */
   setRangeXfIndex(
     sheet: number,
     firstRow: number,
@@ -4494,7 +4551,8 @@ export interface Workbook {
     lastCol: number,
     xfIndex: number,
   ): Status;
-  /** Returns the resolved XF record at `xfIndex`. */
+  /** Returns the resolved XF record at `xfIndex`. A failed read reports
+   *  the all-default record (`locked` true, every other flag false). */
   getCellXf(xfIndex: number): CellXfResult;
   /** Returns the font record at `fontIndex`, including its ColorSpec selector. */
   getFont(fontIndex: number): FontResult;
@@ -4698,7 +4756,7 @@ export interface Workbook {
   /** Reads the sheet AutoFilter; `autoFilter` is `null` when the sheet has none. */
   getAutoFilter(sheet: number): AutoFilterResult;
   /** Replaces the sheet AutoFilter. Row visibility is unchanged until `applyAutoFilter`. */
-  setAutoFilter(sheet: number, autoFilter: AutoFilter): Status;
+  setAutoFilter(sheet: number, filter: AutoFilter): Status;
   /** Removes the sheet AutoFilter; a no-op when there is none. */
   removeAutoFilter(sheet: number): Status;
   /** Hides the body rows the criteria exclude and shows the ones they match. */
@@ -4710,7 +4768,7 @@ export interface Workbook {
   /** Table counterpart of `getAutoFilter`; `tableIdx` is the `tableAt` index. */
   getTableAutoFilter(table: number): AutoFilterResult;
   /** Replaces the table's AutoFilter. Row visibility is unchanged. */
-  setTableAutoFilter(table: number, autoFilter: AutoFilter): Status;
+  setTableAutoFilter(table: number, filter: AutoFilter): Status;
   /** Removes the table's AutoFilter. Row visibility is unchanged. */
   removeTableAutoFilter(table: number): Status;
   /** Hides every body row the table's criteria exclude and shows the rest. */
@@ -5042,7 +5100,9 @@ export function setLogMinLevel(level: number): Status;
  *  may produce a record on any thread it owns, so the native binding
  *  routes it through a thread-safe function and calls `sink`
  *  asynchronously -- a record produced while JS is blocked inside a
- *  native call arrives after that call returns. */
+ *  native call arrives after that call returns. A value that is neither a
+ *  function nor `null` is rejected with `kInvalidArgument` (2) and leaves
+ *  the installed sink in place. */
 export function setLogSink(sink: ((record: Uint8Array) => void) | null): Status;
 
 /** Merge a host-supplied metadata entry over the engine's structural

@@ -7,7 +7,7 @@
 // EXPORT_NAME=createFormulon / EXPORT_ES6=1 and share this surface. It
 // returns a Promise resolving to the Module surface declared below.
 //
-// Mirror of `EMSCRIPTEN_BINDINGS(formulon)` in `src/wasm/embind.cpp`.
+// Mirror of the embind registration in `src/wasm/parts/bindings_register.cpp`.
 // Keep this file in sync when adding or removing bindings.
 
 /** `fm_value_kind_t` ordinals (mirror of `fm_value_kind_t`). */
@@ -22,8 +22,13 @@ export enum ValueKind {
   Lambda = 7,
 }
 
-/** Status carried by binding result envelopes. Argument validation may
- *  throw `TypeError` or `RangeError` before returning a result. */
+/** Status carried by binding result envelopes. Positional arguments are
+ *  validated before any engine call, identically on both packages: a
+ *  missing required argument, a value of the wrong type, or a primitive or
+ *  `null` where an object is declared throws `TypeError`, and an
+ *  out-of-range integer throws `RangeError`. A malformed argument a method
+ *  reports as a status instead -- an array of the wrong length, a value that
+ *  is not callable -- carries `kInvalidArgument` (2). */
 export interface Status {
   /** True when the underlying C ABI returned `kOk`. */
   ok: boolean;
@@ -2741,7 +2746,8 @@ export interface AutoFilterEvalResult {
 
 /** Result of `Workbook.validateValue`. `hasRule` is false when no rule covers
  *  the cell, and `valid` is then true. Otherwise `ruleIndex` indexes
- *  `getValidations` and `errorStyle` is a `ValidationErrorStyle`. */
+ *  `getValidations` and `errorStyle` is a `ValidationErrorStyle`. A failed
+ *  call reports `hasRule` and `valid` false and the numbers 0. */
 export interface ValidationOutcomeResult {
   status: Status;
   hasRule: boolean;
@@ -3569,7 +3575,12 @@ export interface HeaderFooterInput {
  *  status 7003 (`kBindingCallbackException`) instead. Cells committed by
  *  the sweeps that already ran keep their values, and the workbook stays
  *  usable — the next recalc behaves as if the aborted one had been
- *  cancelled deliberately. */
+ *  cancelled deliberately.
+ *
+ *  The callback runs inside the solver, which holds the workbook mid-sweep:
+ *  it must not call any method on the workbook. Such calls, reads included,
+ *  throw `TypeError` naming `kGraphRecalcReentrant` (4005) and change
+ *  nothing; `delete()` throws `TypeError` as during any other active call. */
 export type IterativeProgressCallback = (
   iteration: number,
   maxResidual: number,
@@ -3599,7 +3610,11 @@ export interface Workbook {
    *  contains one of `: \ / ? * [ ]`, or collides case-insensitively (Unicode simple case folding) with an
    *  existing sheet, and with `kSheetCountLimitExceeded` at the maximum sheet count. */
   addSheet(name: string): Status;
-  /** Removes the sheet at `index`. */
+  /** Removes the sheet at `index`. References to it are rewritten to `#REF!` at the affected subexpression
+   *  (cell formulas, defined names, conditional-format, validation and table formulas); sheet-scoped names and
+   *  tables owned by the sheet are dropped, as are pivot caches sourced from it and their pivot tables.
+   *  Fails with `kSheetIndexOutOfRange`, or `kCannotRemoveLastSheet` when only one sheet remains.
+   *  Removing the only visible sheet fails with `kInvalidArgument` and leaves the workbook unchanged. */
   removeSheet(index: number): Status;
   /** Renames the sheet at `index`. */
   renameSheet(index: number, newName: string): Status;
@@ -3766,8 +3781,8 @@ export interface Workbook {
    *  `Workbook`: installing one on another instance leaves this one's
    *  registration alone.
    *
-   *  A value that is not callable is accepted here and reported when the
-   *  solver tries to use it, the same way a throwing callback is. */
+   *  A value that is neither a function nor `null` is rejected here with
+   *  `kInvalidArgument` (2) and leaves the installed callback in place. */
   setIterativeProgress(callback: IterativeProgressCallback | null): Status;
 
   /**
@@ -3853,14 +3868,26 @@ export interface Workbook {
    */
 
   /** Inserts `count` rows at `row` on `sheet` and rewrites cross-workbook
-   *  references to follow the shift. */
+   *  references to follow the shift.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   insertRows(sheet: number, row: number, count: number): Status;
   /** Deletes `count` rows starting at `row` on `sheet`. References that
-   *  fall inside the deleted interval collapse to `#REF!`. */
+   *  fall inside the deleted interval collapse to `#REF!`.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   deleteRows(sheet: number, row: number, count: number): Status;
-  /** Inserts `count` columns at `col` on `sheet`. */
+  /** Inserts `count` columns at `col` on `sheet`.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   insertCols(sheet: number, col: number, count: number): Status;
-  /** Deletes `count` columns starting at `col` on `sheet`. */
+  /** Deletes `count` columns starting at `col` on `sheet`.
+   *  Returns `kPreconditionFailed` when the edit cuts into a data table, legacy
+   *  array block or PivotTable, or would push one of them or a table past
+   *  the sheet bound; the workbook is unchanged. */
   deleteCols(sheet: number, col: number, count: number): Status;
 
   /** Number of written coordinates on `sheet`: cells set by any value, formula or format setter,
@@ -4261,13 +4288,14 @@ export interface Workbook {
   /** Configures date-grouping on pivot field `fieldIdx`. Pass `-1` for
    *  `startYear` / `endYear` to leave the Year-truncation bound unset
    *  (meaningful only for `PivotDateGrouping.Year`). `intervalDays` is
-   *  the `PivotDateGrouping.Days`-only bucket width in whole days; pass
-   *  `1` for every other granularity. `startSerial` / `endSerial` are
-   *  the `Days`-only Start/End window as Excel date serials -- pass
-   *  `-1` for either to leave it auto (Start = the field's data
-   *  minimum, End = the data maximum plus one day); ignored otherwise.
-   *  With `Days`, a zero `intervalDays` or a start after the end is
-   *  rejected with `kInvalidArgument`. */
+   *  the `PivotDateGrouping.Days`-only bucket width in whole days;
+   *  defaults to `1`, which is also what every other granularity
+   *  should pass. `startSerial` / `endSerial` are the `Days`-only
+   *  Start/End window as Excel date serials; default `-1` leaves
+   *  either auto (Start = the field's data minimum, End = the data
+   *  maximum plus one day), and both are ignored for every other
+   *  granularity. With `Days`, a zero `intervalDays` or a start after
+   *  the end is rejected with `kInvalidArgument`. */
   pivotFieldSetDateGroup(
     sheet: number,
     pivotIdx: number,
@@ -4276,9 +4304,9 @@ export interface Workbook {
     calendar: PivotCalendar,
     startYear: number,
     endYear: number,
-    intervalDays: number,
-    startSerial: number,
-    endSerial: number,
+    intervalDays?: number,
+    startSerial?: number,
+    endSerial?: number,
   ): Status;
   /** Removes the date-grouping config from pivot field `fieldIdx`. */
   pivotFieldClearDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;
@@ -4415,13 +4443,15 @@ export interface Workbook {
    *  `setSheetVisibility`. `true` on an already very-hidden sheet leaves
    *  it very-hidden rather than demoting it, since "hidden" says nothing
    *  that sheet does not already satisfy; `false` shows it from either
-   *  hidden state. */
+   *  hidden state. Hiding the only visible sheet fails with
+   *  `kInvalidArgument` and leaves it visible. */
   setSheetTabHidden(sheet: number, hidden: boolean): Status;
   /** Sets the sheet tab's visibility to one of the three states. The only
    *  way to newly state `SheetVisibility.VeryHidden`, and the only way to
    *  demote a very-hidden sheet to plain hidden; `setSheetTabHidden` can
    *  express neither. A value outside `SheetVisibility` fails with
-   *  `kInvalidArgument` and leaves the sheet unchanged. */
+   *  `kInvalidArgument` and leaves the sheet unchanged. So does hiding the only
+   *  visible sheet. */
   setSheetVisibility(sheet: number, visibility: SheetVisibility): Status;
   /** Sets the sheet's `showGridLines` flag. */
   setSheetShowGridLines(sheet: number, show: boolean): Status;
@@ -4477,7 +4507,8 @@ export interface Workbook {
   setColumnWidth(sheet: number, first: number, last: number, width: number): Status;
   /** Sets / replaces the column hidden flag on `[first, last]`. */
   setColumnHidden(sheet: number, first: number, last: number, hidden: boolean): Status;
-  /** Sets / replaces the column outline level on `[first, last]` (clamped to 0..255). */
+  /** Sets / replaces the column outline level on `[first, last]`. A level
+   *  above 7, the deepest Excel stores, fails with `kInvalidArgument`. */
   setColumnOutline(sheet: number, first: number, last: number, level: number): Status;
   /** Sets / clears the column `collapsed` flag on `[first, last]`. */
   setColumnCollapsed(sheet: number, first: number, last: number, collapsed: boolean): Status;
@@ -4492,7 +4523,8 @@ export interface Workbook {
   setRowHeight(sheet: number, row: number, height: number): Status;
   /** Sets / replaces the row hidden flag at `row`. */
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
-  /** Sets / replaces the row outline level at `row` (clamped to 0..255). */
+  /** Sets / replaces the row outline level at `row`. A level above 7, the
+   *  deepest Excel stores, fails with `kInvalidArgument`. */
   setRowOutline(sheet: number, row: number, level: number): Status;
   /** Sets / clears the row `collapsed` flag at `row`. */
   setRowCollapsed(sheet: number, row: number, collapsed: boolean): Status;
@@ -4572,7 +4604,8 @@ export interface Workbook {
 
   /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */
   getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
-  /** Persists `xfIndex` on the cell at `(sheet, row, col)`. */
+  /** Persists `xfIndex` on the cell at `(sheet, row, col)`. An index not
+   *  below `xfCount()` fails with `kInvalidArgument`. */
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
   /**
    * Removes the direct style assignment from the cell at `(sheet, row, col)`
@@ -4584,7 +4617,8 @@ export interface Workbook {
    */
   clearCellXfIndex(sheet: number, row: number, col: number): Status;
   /** Applies `xfIndex` across an inclusive rectangle, materialising blank
-   *  cells so an empty ruled box renders. Saves one call per cell. */
+   *  cells so an empty ruled box renders. Saves one call per cell. An
+   *  index not below `xfCount()` fails with `kInvalidArgument`. */
   setRangeXfIndex(
     sheet: number,
     firstRow: number,
@@ -4593,7 +4627,8 @@ export interface Workbook {
     lastCol: number,
     xfIndex: number,
   ): Status;
-  /** Returns the resolved XF record at `xfIndex`. */
+  /** Returns the resolved XF record at `xfIndex`. A failed read reports
+   *  the all-default record (`locked` true, every other flag false). */
   getCellXf(xfIndex: number): CellXfResult;
   /** Returns the font record at `fontIndex`, including its ColorSpec selector. */
   getFont(fontIndex: number): FontResult;
@@ -4991,7 +5026,9 @@ export interface FormulonModule {
    *
    *  A sink that throws has its exception dropped and the record lost;
    *  the call that emitted it is unaffected. Records come from arbitrary
-   *  depth inside the engine, so there is nowhere to report it. */
+   *  depth inside the engine, so there is nowhere to report it. A value
+   *  that is neither a function nor `null` is rejected with
+   *  `kInvalidArgument` (2) and leaves the installed sink in place. */
   setLogSink(sink: ((record: Uint8Array) => void) | null): Status;
 }
 
