@@ -5,12 +5,15 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/ast_dump.h"
+#include "parser/ast_format.h"
 #include "parser/parse_error.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
@@ -389,12 +392,115 @@ TEST(ParserErrors, DefaultDepthCapAcceptsLongLeftAssociativeChain) {
     formula.append("+A").append(std::to_string(i));
   }
   Arena arena;
-  Parser parser(formula, arena);  // default ParserOptions: max_parse_depth == kMaxFormulaAstDepth (128).
+  Parser parser(formula, arena);  // default ParserOptions: max_parse_depth == kMaxFormulaAstDepth.
   AstNode* root = parser.parse();
   ASSERT_NE(root, nullptr);
   EXPECT_TRUE(parser.errors().empty());
   ASSERT_EQ(root->kind(), NodeKind::BinaryOp);
   EXPECT_EQ(root->as_binary_arity(), 150U);
+}
+
+// Excel's entry limits, measured on Mac Excel 365: 65 calls deep whatever
+// sits between them, 256 grouping parentheses (a call's own do not count),
+// and 1024 prefix signs over one operand.
+std::string NestedIfs(std::uint32_t calls, std::string_view between, std::string_view close_between,
+                      std::string_view leaf) {
+  std::string text = "=";
+  for (std::uint32_t i = 1; i <= calls; ++i) {
+    text.append("IF(A1=").append(std::to_string(i)).append(",").append(std::to_string(i)).append(",");
+    if (i < calls) {
+      text.append(between);
+    }
+  }
+  text.append(leaf);
+  for (std::uint32_t i = 1; i <= calls; ++i) {
+    text.push_back(')');
+    if (i < calls) {
+      text.append(close_between);
+    }
+  }
+  return text;
+}
+
+std::string Repeated(std::string_view open, std::uint32_t n, std::string_view leaf, std::string_view close) {
+  std::string text = "=";
+  for (std::uint32_t i = 0; i < n; ++i) {
+    text.append(open);
+  }
+  text.append(leaf);
+  for (std::uint32_t i = 0; i < n; ++i) {
+    text.append(close);
+  }
+  return text;
+}
+
+// True when `formula` parses without diagnostics; false when it is refused as
+// too deep, with the whole formula left as one placeholder.
+bool AcceptedNotTooDeep(const std::string& formula) {
+  Arena arena;
+  Parser parser(formula, arena);
+  const AstNode* root = parser.parse();
+  if (parser.errors().empty()) {
+    return root != nullptr && root->kind() != NodeKind::ErrorPlaceholder;
+  }
+  EXPECT_TRUE(HasErrorCode(parser.errors(), ParseErrorCode::NestedFormulaTooDeep)) << formula;
+  EXPECT_EQ(parser.errors().size(), 1U) << formula;
+  return false;
+}
+
+TEST(ParserErrors, FunctionNestingStopsAtSixtyFiveCalls) {
+  EXPECT_TRUE(AcceptedNotTooDeep(NestedIfs(kMaxFunctionNesting, "", "", "0")));
+  EXPECT_FALSE(AcceptedNotTooDeep(NestedIfs(kMaxFunctionNesting + 1U, "", "", "0")));
+  // Operators and parentheses between the calls do not change the count.
+  EXPECT_TRUE(AcceptedNotTooDeep(NestedIfs(kMaxFunctionNesting, "-(1+", ")", "0")));
+  EXPECT_FALSE(AcceptedNotTooDeep(NestedIfs(kMaxFunctionNesting + 1U, "-(1+", ")", "0")));
+  EXPECT_TRUE(AcceptedNotTooDeep(Repeated("SUM(", kMaxFunctionNesting, "1", ")")));
+  EXPECT_FALSE(AcceptedNotTooDeep(Repeated("SUM(", kMaxFunctionNesting + 1U, "1", ")")));
+  EXPECT_FALSE(AcceptedNotTooDeep(Repeated("LET(x,", kMaxFunctionNesting + 1U, "1", ",x)")));
+}
+
+TEST(ParserErrors, GroupingParenthesesStopAtTwoHundredFiftySix) {
+  EXPECT_TRUE(AcceptedNotTooDeep(Repeated("(", kMaxGroupingParenDepth, "1", ")")));
+  EXPECT_FALSE(AcceptedNotTooDeep(Repeated("(", kMaxGroupingParenDepth + 1U, "1", ")")));
+  EXPECT_TRUE(AcceptedNotTooDeep(Repeated("-(", kMaxGroupingParenDepth, "1", ")")));
+  EXPECT_FALSE(AcceptedNotTooDeep(Repeated("-(", kMaxGroupingParenDepth + 1U, "1", ")")));
+  EXPECT_TRUE(AcceptedNotTooDeep(Repeated("1+(", kMaxGroupingParenDepth, "1", ")")));
+  EXPECT_FALSE(AcceptedNotTooDeep(Repeated("1+(", kMaxGroupingParenDepth + 1U, "1", ")")));
+  // A call's own parentheses are not grouping parentheses.
+  const std::string inner = Repeated("(", kMaxGroupingParenDepth, "0", ")").substr(1);
+  const std::string inner_past = Repeated("(", kMaxGroupingParenDepth + 1U, "0", ")").substr(1);
+  for (const std::uint32_t calls : {1U, 30U, kMaxFunctionNesting}) {
+    EXPECT_TRUE(AcceptedNotTooDeep(NestedIfs(calls, "", "", inner))) << calls;
+    EXPECT_FALSE(AcceptedNotTooDeep(NestedIfs(calls, "", "", inner_past))) << calls;
+  }
+}
+
+TEST(ParserErrors, AllTwoHundredFiftySixPairsAroundOneNodeAreKept) {
+  const std::string text = Repeated("(", kMaxGroupingParenDepth, "1", ")");
+  Arena arena;
+  Parser parser(text, arena);
+  const AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(parser.errors().empty());
+  EXPECT_EQ(root->paren_depth(), kMaxGroupingParenDepth);
+}
+
+TEST(ParserErrors, PrefixSignRunStopsAtOneThousandTwentyFour) {
+  EXPECT_TRUE(AcceptedNotTooDeep(Repeated("-", kMaxOperatorNesting, "1", "")));
+  EXPECT_FALSE(AcceptedNotTooDeep(Repeated("-", kMaxOperatorNesting + 1U, "1", "")));
+  // The deepest accepted tree is still one every walker takes.
+  const std::string deepest = Repeated("-", kMaxOperatorNesting, "A1", "");
+  Arena deep_arena;
+  Parser deep(deepest, deep_arena);
+  const AstNode* deep_root = deep.parse();
+  ASSERT_NE(deep_root, nullptr);
+  ASSERT_TRUE(deep.errors().empty());
+  EXPECT_EQ("=" + format_formula(*deep_root), deepest);
+  Arena arena;
+  Parser parser("=-+-1", arena);
+  const AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(dump_sexpr(*root), "(unary - (unary + (unary - (num 1))))");
 }
 
 TEST(ParserErrors, TooManyErrorsAppendsSentinel) {

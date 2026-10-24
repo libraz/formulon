@@ -54,7 +54,7 @@ const char* default_message(ParseErrorCode code) noexcept {
     case ParseErrorCode::InvalidRange:
       return "invalid range expression";
     case ParseErrorCode::NestedFormulaTooDeep:
-      return "formula nesting depth exceeds the configured limit";
+      return "formula nesting depth exceeds the limit";
     case ParseErrorCode::TooManyErrors:
       return "too many parse errors; stopping";
     case ParseErrorCode::LetInvalidName:

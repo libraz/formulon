@@ -198,10 +198,11 @@ void ShiftDataTableInput(DataTableInput& input, std::uint32_t index, std::uint32
 // cuts into goes (the workbook refuses a cut that would leave part of it).
 void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::uint32_t count, bool is_delete,
                      bool row_axis) {
+  const StructuralEdit edit{index, count, is_delete, row_axis};
   std::vector<DataTable> retained;
   retained.reserve(tables.size());
   for (DataTable& table : tables) {
-    if (data_table_edit_cut(table, row_axis, is_delete, index, count) != DataTableEditCut::kMisses) {
+    if (data_table_structure_cut(table, edit) != StructureEditCut::kMisses) {
       continue;
     }
     bool drop = false;
@@ -294,35 +295,25 @@ void ShiftColumnLayouts(std::vector<ColumnLayout>& columns, std::uint32_t index,
   columns = std::move(retained);
 }
 
+// A pivot the edit misses shifts whole; one the edit deletes, or cuts into
+// (which the workbook refuses), goes.
 void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, std::uint32_t index,
                        std::uint32_t count, bool is_delete, bool row_axis) {
+  const StructuralEdit edit{index, count, is_delete, row_axis};
   for (std::unique_ptr<pivot::PivotTable>& pivot : pivots) {
     if (pivot == nullptr) {
       continue;
     }
+    if (pivot_structure_cut(*pivot, edit) != StructureEditCut::kMisses) {
+      pivot.reset();
+      continue;
+    }
     std::uint32_t anchor = row_axis ? pivot->anchor_row() : pivot->anchor_col();
     if (anchor >= index) {
-      if (is_delete) {
-        anchor = anchor < index + count ? index : anchor - count;
-      } else {
-        const std::uint64_t shifted = static_cast<std::uint64_t>(anchor) + count;
-        if (shifted >= (row_axis ? Sheet::kMaxRows : Sheet::kMaxCols)) {
-          pivot.reset();
-          continue;
-        }
-        anchor = static_cast<std::uint32_t>(shifted);
-      }
+      anchor = is_delete ? anchor - count : anchor + count;
     }
-    std::uint32_t span_rows = pivot->span_rows();
-    std::uint32_t span_cols = pivot->span_cols();
-    // Clip the span on the edited axis to the grid; a zero span stays zero.
-    if (row_axis && span_rows != 0U) {
-      span_rows = std::min(span_rows, Sheet::kMaxRows - anchor);
-    } else if (!row_axis && span_cols != 0U) {
-      span_cols = std::min(span_cols, Sheet::kMaxCols - anchor);
-    }
-    pivot->set_anchor(row_axis ? anchor : pivot->anchor_row(), row_axis ? pivot->anchor_col() : anchor, span_rows,
-                      span_cols);
+    pivot->set_anchor(row_axis ? anchor : pivot->anchor_row(), row_axis ? pivot->anchor_col() : anchor,
+                      pivot->span_rows(), pivot->span_cols());
   }
   pivots.erase(std::remove(pivots.begin(), pivots.end(), nullptr), pivots.end());
 }
@@ -339,6 +330,36 @@ std::vector<std::uint32_t> SortedRowKeys(const std::unordered_map<std::uint32_t,
 }
 
 }  // namespace
+
+StructureEditCut structure_edit_cut(std::uint32_t first, std::uint32_t last, const StructuralEdit& edit) noexcept {
+  if (!edit.is_delete) {
+    if (edit.index > last) {
+      return StructureEditCut::kMisses;
+    }
+    const std::uint32_t bound = edit.row_axis ? Sheet::kMaxRows : Sheet::kMaxCols;
+    if (static_cast<std::uint64_t>(last) + edit.count >= bound) {
+      return StructureEditCut::kPushesOff;
+    }
+    return edit.index > first ? StructureEditCut::kSplits : StructureEditCut::kMisses;
+  }
+  const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  if (end <= first || edit.index > last) {
+    return StructureEditCut::kMisses;
+  }
+  return edit.index <= first && end > last ? StructureEditCut::kRemoves : StructureEditCut::kSplits;
+}
+
+StructureEditCut data_table_structure_cut(const DataTable& table, const StructuralEdit& edit) noexcept {
+  const std::uint32_t first = edit.row_axis ? table.ref.first_row : table.ref.first_col;
+  const std::uint32_t last = edit.row_axis ? table.ref.last_row : table.ref.last_col;
+  return structure_edit_cut(first == 0U ? 0U : first - 1U, last, edit);
+}
+
+StructureEditCut pivot_structure_cut(const pivot::PivotTable& pivot, const StructuralEdit& edit) noexcept {
+  const std::uint32_t first = edit.row_axis ? pivot.anchor_row() : pivot.anchor_col();
+  const std::uint32_t span = edit.row_axis ? pivot.span_rows() : pivot.span_cols();
+  return structure_edit_cut(first, span == 0U ? first : first + span - 1U, edit);
+}
 
 // Beyond the per-range rules, a delete joins the two ranges it brings edge to
 // edge across the removed band when they share the other axis's span, as

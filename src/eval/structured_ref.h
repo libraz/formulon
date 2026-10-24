@@ -111,6 +111,16 @@ struct StructuredRefRange {
 /// unparseable structured references).
 Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::string_view payload);
 
+/// Unescapes ECMA-376 §18.5.1.10's structured-reference escape grammar: an
+/// apostrophe immediately before one of `# ' [ ]` makes that one character
+/// literal (`Bob''s` -> `Bob's`, `'#Items` -> `#Items`); every other byte,
+/// including an apostrophe not followed by one of those four, passes
+/// through unchanged. A table column name is never stored pre-escaped
+/// (`TableMetadata::columns[i].name` is the literal name), so a
+/// bracket payload read verbatim from formula text must be unescaped
+/// before comparison.
+std::string unescape_structured_ref_name(std::string_view raw);
+
 /// Looks up `selector.table_name` in `wb.tables()` (case-insensitive),
 /// computes the row span from `selector.specifiers`, computes the column
 /// span from `selector.column_first/column_last`, and returns the resolved

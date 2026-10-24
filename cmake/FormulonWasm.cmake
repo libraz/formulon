@@ -213,23 +213,21 @@ endif()
 
 # Shadow-stack size, pinned rather than inherited.
 #
-# The engine's recursive formula walkers are bounded by one shared constant,
-# `parser::kMaxFormulaAstDepth` (128): the Pratt parser counts its own
-# recursion against it, and `ast_format`, `ast_shift` and the XLSB
-# `ptg_reader` re-check the finished tree against the same number before
-# walking it. That constant is only a stack-safety guarantee if the stack it
-# is sized against is known, and under Emscripten it is not known by default
-# -- the default is 64 KiB, small enough that the parser blows through it
-# well inside the depth the cap permits.
+# The engine's recursive formula walkers are bounded by the parser's nesting
+# limits: Excel's own (`parser::kMaxFunctionNesting`,
+# `kMaxGroupingParenDepth`, `kMaxOperatorNesting`) and the shared tree bound
+# `parser::kMaxFormulaAstDepth`, which the Pratt parser counts its recursion
+# against and `ast_format`, `ast_shift` and the XLSB `ptg_reader` re-check
+# before walking a tree. Those limits are only a stack-safety guarantee if
+# the stack they are sized against is known, and under Emscripten it is not
+# known by default -- the default is 64 KiB, far inside what they permit.
 #
-# The deepest tree the cap admits costs about 155 KiB to parse,
-# which is the worst of the walkers -- parsing a nested call is several times
-# more expensive per level than formatting or shifting one, and evaluation
-# does not exceed it. tests/wasm/stack_probe.cpp measures all of them on
-# every WASM build and prints the current figures, so the numbers live there
-# rather than in this comment where they would rot.
+# tests/wasm/stack_probe.cpp measures the deepest accepted shape of each kind
+# through parse, evaluate, shift and format, and the runaway nesting the
+# parser recurses into before refusing it, on every WASM build. The numbers
+# live there rather than in this comment where they would rot.
 #
-# 320 KiB is about 2x that worst case. The margin matters more than
+# The pinned size is about 2.4x the probe's worst case. The margin matters more than
 # usual here: the engine is built -fno-exceptions, and a shadow-stack
 # overflow is not a C++-level failure in any case. Under the release link (`ASSERTIONS=0`, so
 # `STACK_OVERFLOW_CHECK` is 0) the stack pointer simply walks past the limit
@@ -239,7 +237,7 @@ endif()
 #
 # Growing this does not grow the code section; it shifts the linear-memory
 # layout, which moves the Brotli figure by a few hundred bytes.
-set(_FM_WASM_STACK_SIZE 327680)
+set(_FM_WASM_STACK_SIZE 1572864)
 
 if(FM_WASM_VARIANT STREQUAL "embind")
   set(_FM_WASM_COMMON_LINK_FLAGS
@@ -300,7 +298,7 @@ if(FM_WASM_VARIANT STREQUAL "embind")
       "-sPTHREAD_POOL_SIZE=8"
       # Worker stacks would follow STACK_SIZE implicitly; state it so the
       # coupling survives a toolchain whose default changes. This reserves
-      # PTHREAD_POOL_SIZE x 320 KiB (2.5 MiB) of the runtime heap up front,
+      # PTHREAD_POOL_SIZE x 1.5 MiB (12 MiB) of the runtime heap up front,
       # which is heap, not artifact size.
       "-sDEFAULT_PTHREAD_STACK_SIZE=${_FM_WASM_STACK_SIZE}"
     )
@@ -375,8 +373,8 @@ endif()
 
 # Shadow-stack guard.
 #
-# tests/wasm/stack_probe.cpp measures what `parser::kMaxFormulaAstDepth`
-# costs the recursive walkers and fails if that has drifted past what the
+# tests/wasm/stack_probe.cpp measures what the parser's nesting limits
+# cost the recursive walkers and fails if that has drifted past what the
 # link reserves. It needs its own executable because peak stack usage is not
 # observable through the binding surface, and it links with the shipped
 # optimisation level and stack size so the numbers describe shipped codegen.

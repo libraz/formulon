@@ -203,6 +203,44 @@ bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
   return true;
 }
 
+const AstNode* first_node_past_excel_nesting(const AstNode& root) {
+  struct Frame {
+    const AstNode* node;
+    std::uint64_t next_child;
+    std::uint64_t child_count;
+    std::uint32_t calls;   // functions along the path, this node included
+    std::uint32_t parens;  // grouping parentheses along the path, this node's included
+  };
+  const auto enter = [](const AstNode& node, std::uint32_t calls, std::uint32_t parens) {
+    const NodeKind kind = node.kind();
+    const bool function = (kind == NodeKind::Call && trim_ref_call_mode(node) == TrimRefMode::None) ||
+                          kind == NodeKind::Lambda || kind == NodeKind::LetBinding;
+    return Frame{&node, 0, ChildCount(node), calls + (function ? 1U : 0U), parens + node.paren_depth()};
+  };
+  const auto past = [](const Frame& frame) {
+    return frame.calls > kMaxFunctionNesting || frame.parens > kMaxGroupingParenDepth;
+  };
+  std::vector<Frame> stack;
+  stack.push_back(enter(root, 0, 0));
+  if (past(stack.back())) {
+    return &root;
+  }
+  while (!stack.empty()) {
+    Frame& frame = stack.back();
+    if (frame.next_child == frame.child_count) {
+      stack.pop_back();
+      continue;
+    }
+    const AstNode& child = ChildAt(*frame.node, frame.next_child++);
+    const Frame next = enter(child, frame.calls, frame.parens);
+    if (past(next)) {
+      return &child;
+    }
+    stack.push_back(next);
+  }
+  return nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // Factories
 // ---------------------------------------------------------------------------
@@ -819,6 +857,18 @@ TrimRefMode trim_ref_call_mode(const AstNode& node) noexcept {
     }
   }
   return TrimRefMode::None;
+}
+
+bool is_spill_anchor(const AstNode& node) noexcept {
+  switch (node.kind()) {
+    case NodeKind::Ref:
+      return !node.as_ref().is_full_col && !node.as_ref().is_full_row;
+    case NodeKind::Call:
+    case NodeKind::NameRef:
+      return true;
+    default:
+      return false;
+  }
 }
 
 bool is_volatile_function_name(std::string_view name) noexcept {

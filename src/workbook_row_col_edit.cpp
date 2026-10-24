@@ -6,7 +6,10 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -19,17 +22,23 @@
 #include "drawing/slicer_edit.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
+#include "eval/structured_ref.h"
 #include "io/auto_filter_xml.h"
+#include "io/worksheet_child_refs.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
 #include "parser/ref_transforms.h"
+#include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "sheet_name.h"
+#include "sheet_passthrough.h"
+#include "table.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
 #include "workbook_ref_rewrite.h"
@@ -78,6 +87,103 @@ CellShift shift_cell_coords_for_row_col_edit(parser::RowColAxis axis, parser::Ro
   return r;
 }
 
+// @size-budget: 11 KB
+// What a row/column delete takes from the tables on the edited sheet: a
+// table whose whole extent it deletes, or the columns a column delete removes.
+struct TableLoss {
+  std::string name;
+  std::string display_name;
+  bool whole = false;
+  std::vector<std::string> columns;
+};
+
+std::vector<TableLoss> table_losses(const std::vector<TableMetadata>& tables, std::size_t sheet_index,
+                                    const StructuralEdit& edit) {
+  std::vector<TableLoss> losses;
+  if (!edit.is_delete) {
+    return losses;
+  }
+  const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  for (const TableMetadata& table : tables) {
+    const std::optional<MergeRange> ref =
+        table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
+    if (!ref.has_value()) {
+      continue;
+    }
+    const std::uint32_t first = edit.row_axis ? ref->first_row : ref->first_col;
+    const std::uint32_t last = edit.row_axis ? ref->last_row : ref->last_col;
+    if (end <= first || edit.index > last) {
+      continue;
+    }
+    TableLoss loss{table.name, table.display_name, edit.index <= first && end > last, {}};
+    if (!loss.whole && !edit.row_axis) {
+      const std::uint64_t stop = std::min<std::uint64_t>(end, last + 1ULL);
+      for (std::uint64_t col = std::max(edit.index, first); col < stop; ++col) {
+        const auto offset = static_cast<std::size_t>(col - first);
+        if (offset < table.columns.size()) {
+          loss.columns.push_back(table.columns[offset].name);
+        }
+      }
+    }
+    if (loss.whole || !loss.columns.empty()) {
+      losses.push_back(std::move(loss));
+    }
+  }
+  return losses;
+}
+
+// A row/column edit's reference transform that also sends a structured
+// reference to a table the edit deletes, or to a column it deletes, to
+// `#REF!`, as Excel rewrites them.
+class TableLossTransform final : public parser::RefTransform {
+ public:
+  TableLossTransform(const parser::RefTransform& inner, const std::vector<TableLoss>& losses)
+      : inner_(inner), losses_(losses) {}
+
+  std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return inner_.apply(ref); }
+  std::optional<std::pair<parser::Reference, parser::Reference>> apply_range(
+      const parser::Reference& lhs, const parser::Reference& rhs) const override {
+    return inner_.apply_range(lhs, rhs);
+  }
+  bool preserves_ref3d_coordinates() const noexcept override { return inner_.preserves_ref3d_coordinates(); }
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override {
+    return inner_.apply_ref3d_span(begin, end);
+  }
+  std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override {
+    return inner_.apply_name_sheet(sheet);
+  }
+
+  std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override {
+    for (const TableLoss& loss : losses_) {
+      if (!strings::case_insensitive_eq(table, loss.name) && !strings::case_insensitive_eq(table, loss.display_name)) {
+        continue;
+      }
+      if (loss.whole) {
+        return std::nullopt;
+      }
+      const auto selector = eval::parse_structured_ref_payload(column);
+      if (!selector) {
+        break;
+      }
+      const auto deleted = [&loss](std::string_view written) {
+        const std::string name = eval::unescape_structured_ref_name(written);
+        return std::any_of(loss.columns.begin(), loss.columns.end(),
+                           [&name](const std::string& gone) { return strings::case_insensitive_eq(gone, name); });
+      };
+      if ((selector.value().column_first_set && deleted(selector.value().column_first)) ||
+          (selector.value().column_last_set && deleted(selector.value().column_last))) {
+        return std::nullopt;
+      }
+      break;
+    }
+    return inner_.apply_structured_ref(table, column);
+  }
+
+ private:
+  const parser::RefTransform& inner_;
+  const std::vector<TableLoss>& losses_;
+};
+
 // Walks every formula cell in `sheets`, applying a row/col shift
 // transform. The transform is rebuilt per sheet so its
 // `local_means_target` flag tracks whether the current sheet's
@@ -107,7 +213,8 @@ CellShift shift_cell_coords_for_row_col_edit(parser::RowColAxis axis, parser::Ro
 // concurrent `recalc_parallel`.
 void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
                                        const Workbook& workbook, std::string_view target_sheet, parser::RowColAxis axis,
-                                       parser::RowColEdit edit, std::uint32_t index, std::uint32_t count) {
+                                       parser::RowColEdit edit, std::uint32_t index, std::uint32_t count,
+                                       const std::vector<TableLoss>& table_losses) {
   struct FormulaUpdate {
     Sheet* sheet = nullptr;
     eval::CellNodeId old_node;
@@ -128,7 +235,8 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     const bool local_means_target = sheet_names::equal(sheet.name(), target_sheet);
-    const parser::RowColShiftTransform transform(target_sheet, axis, edit, index, count, local_means_target);
+    const parser::RowColShiftTransform shift(target_sheet, axis, edit, index, count, local_means_target);
+    const TableLossTransform transform(shift, table_losses);
 
     std::vector<std::uint32_t> row_keys;
     row_keys.reserve(sheet.rows().size());
@@ -303,6 +411,165 @@ std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vec
   return mapped;
 }
 
+// Gives a table the column entries its rewritten `ref` spans: a column delete
+// removes the deleted columns' entries, and an insert inside the table adds
+// `ColumnN` entries with fresh ids, writing their header cells. `before` is
+// the table's extent before the edit.
+void update_table_columns(TableMetadata& table, const MergeRange& before, const MergeRange& after, Sheet& sheet,
+                          std::size_t sheet_index, const eval::RecalcEngine::LockedMutator& mutator,
+                          const StructuralEdit& edit) {
+  const std::uint64_t edit_end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  if (edit.is_delete) {
+    // The deleted columns inside the table, as offsets from its first column.
+    const std::uint64_t lo = std::max<std::uint64_t>(edit.index, before.first_col);
+    const std::uint64_t hi = std::min<std::uint64_t>(edit_end, before.last_col + 1ULL);
+    const std::size_t size = table.columns.size();
+    if (lo < hi && lo - before.first_col < size) {
+      table.columns.erase(
+          table.columns.begin() + static_cast<std::ptrdiff_t>(lo - before.first_col),
+          table.columns.begin() + static_cast<std::ptrdiff_t>(std::min<std::uint64_t>(hi - before.first_col, size)));
+    }
+    return;
+  }
+  if (edit.index <= before.first_col || edit.index > before.last_col) {
+    return;
+  }
+  std::uint32_t next_id = 1;
+  for (const TableColumn& column : table.columns) {
+    next_id = std::max(next_id, column.id + 1U);
+  }
+  const std::size_t offset = std::min<std::size_t>(edit.index - before.first_col, table.columns.size());
+  std::vector<TableColumn> added;
+  added.reserve(edit.count);
+  std::uint32_t suffix = 1;
+  const auto name_taken = [&](const std::string& name) {
+    const auto same = [&name](const TableColumn& column) { return strings::case_insensitive_eq(column.name, name); };
+    return std::any_of(table.columns.begin(), table.columns.end(), same) ||
+           std::any_of(added.begin(), added.end(), same);
+  };
+  for (std::uint32_t i = 0; i < edit.count; ++i) {
+    TableColumn column;
+    column.id = next_id++;
+    do {
+      column.name = "Column" + std::to_string(suffix++);
+    } while (name_taken(column.name));
+    if (table.header_row) {
+      const std::uint32_t col = edit.index + i;
+      sheet.set_cell_text(after.first_row, col, column.name);
+      const eval::CellNodeId node = make_node(sheet_index, after.first_row, col);
+      for (const eval::CellNodeId dependent : mutator.dep_graph().dependents_of_ref(node)) {
+        mutator.mark_dirty(dependent);
+      }
+      mutator.mark_range_dependents_dirty(node);
+    }
+    added.push_back(std::move(column));
+  }
+  table.columns.insert(table.columns.begin() + static_cast<std::ptrdiff_t>(offset),
+                       std::make_move_iterator(added.begin()), std::make_move_iterator(added.end()));
+}
+
+// Brings the tables on the edited sheet in line with the `ref` their rewrite
+// gave them: column entries follow a column edit inside the table, the sort
+// state moves the way a worksheet one does, and a table whose whole extent was
+// deleted goes. `refs_before` holds each table's `ref` before the edit, by
+// index. Returns the names of every table whose extent changed, for the
+// re-index of the structured references that resolve through it.
+std::vector<std::string> update_tables_for_row_col_edit(std::vector<TableMetadata>& tables, Sheet& sheet,
+                                                        std::size_t sheet_index,
+                                                        const std::vector<std::string>& refs_before,
+                                                        const eval::RecalcEngine::LockedMutator& mutator,
+                                                        const StructuralEdit& edit) {
+  std::vector<std::string> changed;
+  std::vector<TableMetadata> retained;
+  retained.reserve(tables.size());
+  for (std::size_t i = 0; i < tables.size(); ++i) {
+    TableMetadata& table = tables[i];
+    if (table.sheet_index != sheet_index || table.ref == refs_before[i]) {
+      retained.push_back(std::move(table));
+      continue;
+    }
+    changed.push_back(table.name);
+    changed.push_back(table.display_name);
+    const std::optional<MergeRange> after = parse_a1_rectangle(table.ref);
+    if (!after.has_value()) {
+      continue;
+    }
+    const std::optional<MergeRange> before = parse_a1_rectangle(refs_before[i]);
+    if (before.has_value() && !edit.row_axis) {
+      update_table_columns(table, *before, *after, sheet, sheet_index, mutator, edit);
+    }
+    if (!table.sort_state_xml.empty()) {
+      WorksheetRawExtensions sort_state{WorksheetRawChild{
+          static_cast<std::uint32_t>(worksheet_child::slot_of("sortState")), std::move(table.sort_state_xml)}};
+      io::remap_worksheet_children(sort_state, edit);
+      table.sort_state_xml = sort_state.empty() ? std::string() : std::move(sort_state.front().xml);
+    }
+    retained.push_back(std::move(table));
+  }
+  tables = std::move(retained);
+  return changed;
+}
+
+// The structure-intersection preflight every row/column edit passes before
+// anything moves. A data table, a legacy array block and a PivotTable each move
+// or go whole, so an edit cutting into one is refused, as a write into it is.
+// A table grows and shrinks with an edit inside it instead. An insert that
+// would push any of them past the grid edge is refused, as Excel refuses to
+// shift non-empty cells off the sheet.
+Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit,
+                                           const char* op_name) {
+  const auto refuse = [&](StructureEditCut cut, const char* what) {
+    std::string message(op_name);
+    message.append(cut == StructureEditCut::kPushesOff ? ": cannot shift " : ": cannot change part of ").append(what);
+    if (cut == StructureEditCut::kPushesOff) {
+      message.append(" off the sheet");
+    }
+    return make_error(FormulonErrorCode::kPreconditionFailed, std::move(message),
+                      "origin=" + std::to_string(edit.index) + " count=" + std::to_string(edit.count));
+  };
+  const auto refused = [](StructureEditCut cut) {
+    return cut == StructureEditCut::kSplits || cut == StructureEditCut::kPushesOff;
+  };
+  const Sheet& sheet = wb.sheet(sheet_index);
+  for (const DataTable& table : sheet.data_tables()) {
+    if (const StructureEditCut cut = data_table_structure_cut(table, edit); refused(cut)) {
+      return refuse(cut, "a data table");
+    }
+  }
+  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
+    const Cell* cell = sheet.cell_at(address.row, address.col);
+    if (cell == nullptr || cell->array_block_rows == 0U) {
+      continue;
+    }
+    const std::uint32_t first = edit.row_axis ? address.row : address.col;
+    const std::uint32_t extent = edit.row_axis ? cell->array_block_rows : cell->array_block_cols;
+    if (const StructureEditCut cut = structure_edit_cut(first, first + extent - 1U, edit); refused(cut)) {
+      return refuse(cut, "an array");
+    }
+  }
+  for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
+    if (pivot == nullptr) {
+      continue;
+    }
+    if (const StructureEditCut cut = pivot_structure_cut(*pivot, edit); refused(cut)) {
+      return refuse(cut, "a PivotTable");
+    }
+  }
+  for (const TableMetadata& table : wb.tables()) {
+    const std::optional<MergeRange> ref =
+        table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
+    if (!ref.has_value()) {
+      continue;
+    }
+    const StructureEditCut cut = edit.row_axis ? structure_edit_cut(ref->first_row, ref->last_row, edit)
+                                               : structure_edit_cut(ref->first_col, ref->last_col, edit);
+    if (cut == StructureEditCut::kPushesOff) {
+      return refuse(cut, "a table");
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
 Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, parser::RowColAxis axis,
                                          parser::RowColEdit edit, std::uint32_t origin, std::uint32_t count,
                                          const char* op_name) {
@@ -323,16 +590,9 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count exceeds sheet bounds",
                       "origin=" + std::to_string(origin) + " count=" + std::to_string(count));
   }
-  // A data table moves or goes whole; an edit cutting into it is refused, as a write into it is.
-  for (const DataTable& table : wb.sheet(sheet_index).data_tables()) {
-    if (data_table_edit_cut(table, axis == parser::RowColAxis::kRow, edit == parser::RowColEdit::kDelete, origin,
-                            count) == DataTableEditCut::kSplits) {
-      return make_error(FormulonErrorCode::kPreconditionFailed,
-                        std::string(op_name) + ": cannot change part of a data table",
-                        "origin=" + std::to_string(origin) + " count=" + std::to_string(count));
-    }
-  }
-  return Expected<void, Error>::Ok();
+  return check_structure_edit(
+      wb, sheet_index,
+      StructuralEdit{origin, count, edit == parser::RowColEdit::kDelete, axis == parser::RowColAxis::kRow}, op_name);
 }
 
 // Precondition: caller holds the engine mutex for the lifetime of the
@@ -370,9 +630,14 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
   const parser::RowColShiftTransform local_transform(target_sheet_name, axis, edit, origin, count,
                                                      /*local_means_target=*/true);
-  std::vector<const parser::RefTransform*> per_sheet_transforms(sheets.size(), &name_transform);
-  per_sheet_transforms[sheet_index] = &local_transform;
-  bool names_changed = rewrite_defined_names(defined_names, per_sheet_transforms, name_transform);
+  const std::vector<TableLoss> losses = table_losses(
+      wb.tables(), sheet_index,
+      StructuralEdit{origin, count, edit == parser::RowColEdit::kDelete, axis == parser::RowColAxis::kRow});
+  const TableLossTransform name_rewrite(name_transform, losses);
+  const TableLossTransform local_rewrite(local_transform, losses);
+  std::vector<const parser::RefTransform*> per_sheet_transforms(sheets.size(), &name_rewrite);
+  per_sheet_transforms[sheet_index] = &local_rewrite;
+  bool names_changed = rewrite_defined_names(defined_names, per_sheet_transforms, name_rewrite);
   // Snapshot the pending-footprint records before formula text rewrites.
   // `Sheet::set_cell_formula` quite correctly clears a user-overwritten
   // blocked anchor; a structural rewrite of that same formula is not a user
@@ -399,7 +664,13 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
       filters_before.push_back(io::auto_filter_xml(table.auto_filter_xml.get()));
     }
   }
-  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
+  // Every table's `ref` before the rewrite, by index, to tell which ones the edit moved or resized.
+  std::vector<std::string> table_refs_before;
+  table_refs_before.reserve(wb.tables().size());
+  for (const TableMetadata& table : wb.tables()) {
+    table_refs_before.push_back(table.ref);
+  }
+  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count, losses);
   // Metadata formulas follow the same per-sheet policy as cell formulas: a
   // qualified reference to the edited sheet shifts no matter which sheet owns
   // the rule, while an unqualified one is in scope only on the edited sheet.
@@ -408,9 +679,9 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   // friends move afterwards.
   std::vector<std::uint32_t> ignored_cache_ids;
   rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
-                                  {}, ignored_cache_ids, name_transform);
+                                  {}, ignored_cache_ids, name_rewrite);
   // Chart refs are always sheet-qualified, so the unowned policy is the right one.
-  RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_transform));
+  RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_rewrite));
   if (axis == parser::RowColAxis::kRow) {
     if (edit == parser::RowColEdit::kInsert) {
       target.insert_rows(origin, count);
@@ -431,6 +702,18 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   if (erase_slicer_cache_names(defined_names, remove_unframed_slicers(wb, sheet_index, framed_slicers_before))) {
     names_changed = true;
   }
+  // A table the edit deleted whole takes its slicers and their caches with it.
+  for (std::size_t i = 0; i < wb.tables().size(); ++i) {
+    const TableMetadata& table = wb.tables()[i];
+    if (table.sheet_index == sheet_index && table.ref != table_refs_before[i] &&
+        !parse_a1_rectangle(table.ref).has_value() &&
+        erase_slicer_cache_names(defined_names, remove_table_slicers_locked(wb, table.id))) {
+      names_changed = true;
+    }
+  }
+  const std::vector<std::string> changed_tables = update_tables_for_row_col_edit(
+      wb.mutable_tables(), target, sheet_index, table_refs_before, mutator,
+      StructuralEdit{origin, count, edit == parser::RowColEdit::kDelete, axis == parser::RowColAxis::kRow});
   std::vector<std::string> filters_after;
   filters_after.push_back(io::auto_filter_xml(target.auto_filter()));
   for (TableMetadata& table : wb.mutable_tables()) {
@@ -464,6 +747,10 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
       }
       sheets[preserved_sheet].restore_blocked_spill_footprints(std::move(blocked_before_all[preserved_sheet]));
     }
+  } else if (!changed_tables.empty()) {
+    // A structured reference resolves through its table's `ref`, so a formula
+    // naming a moved, resized or removed table keeps its text but not its edges.
+    reindex_formulas_referencing_table(sheets, mutator, wb, changed_tables);
   }
   reregister_three_d_span_owners_after_row_col_edit(three_d_owners, sheets, mutator, wb, sheet_index, axis, edit,
                                                     origin, count);

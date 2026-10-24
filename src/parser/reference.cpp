@@ -162,5 +162,12 @@ std::string format_a1(const Reference& r) {
   return out;
 }
 
+bool whole_axis_pair_is_single(const Reference& lhs, const Reference& rhs) noexcept {
+  if (lhs.is_full_col && rhs.is_full_col) {
+    return lhs.col == rhs.col && lhs.col_abs == rhs.col_abs;
+  }
+  return lhs.is_full_row && rhs.is_full_row && lhs.row == rhs.row && lhs.row_abs == rhs.row_abs;
+}
+
 }  // namespace parser
 }  // namespace formulon

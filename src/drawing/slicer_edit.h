@@ -106,6 +106,11 @@ Expected<void, Error> remove_slicer(Workbook& wb, std::size_t sheet, std::size_t
 /// before the table leaves the workbook.
 void remove_table_slicers(Workbook& wb, std::uint32_t table_id);
 
+/// `remove_table_slicers` for a caller that already holds the workbook lock:
+/// returns the names of the caches that went and leaves their `Slicer_*`
+/// defined names to the caller.
+std::vector<std::string> remove_table_slicers_locked(Workbook& wb, std::uint32_t table_id);
+
 /// Removes the slicers hosted on `sheet` and those bound to its tables, and
 /// returns the names of the caches that went with them. It leaves their
 /// `Slicer_*` defined names to the caller, which already holds the workbook

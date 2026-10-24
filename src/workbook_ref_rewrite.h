@@ -35,9 +35,9 @@ struct FormulaRewriteResult {
 FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::RefTransform& transform);
 
 // Applies a per-sheet AST transform to every non-cell formula holder:
-// conditional-format rules and their formula thresholds, hyperlink locations,
-// data validations, table refs and calculated columns, and pivot-cache
-// worksheet sources.
+// conditional-format rules and their formula thresholds, data validations,
+// table refs and calculated columns, and pivot-cache worksheet sources.
+// Internal hyperlink locations are not among them: Excel keeps their text.
 //
 // `per_sheet[i]` governs the metadata owned by `sheets[i]`. A row/column edit
 // needs `local_means_target` enabled only on the edited sheet — an unqualified

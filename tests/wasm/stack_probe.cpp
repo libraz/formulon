@@ -1,36 +1,23 @@
 // Guards the WASM shadow-stack budget against the recursive formula walkers.
 //
-// `parser::kMaxFormulaAstDepth` is the engine's single nesting bound: the
-// Pratt parser counts its own recursion against it, and `ast_shift`,
-// `ast_format` and the XLSB `ptg_reader` re-check the finished tree against
-// the same number before walking it. That bound is only a stack-safety
-// guarantee if the stack it is sized against is known, and under Emscripten
-// the stack is a link-time constant. This program measures what the bound
-// actually costs and fails if the two have drifted apart. A flat operator
-// chain is one node however long it is, so the probe also fails if any
-// walker's use grows with the chain's length.
+// The parser refuses a formula past Excel's nesting limits
+// (`kMaxFunctionNesting`, `kMaxGroupingParenDepth`, `kMaxOperatorNesting`)
+// and bounds its own recursion, and every walker's tree, by
+// `kMaxFormulaAstDepth`. Those bounds are only a stack-safety guarantee if
+// the stack they are sized against is known, and under Emscripten the stack
+// is a link-time constant. This program measures the deepest shape of each
+// kind the parser accepts, through parse, evaluate, shift and format, plus
+// the runaway nesting the parser recurses into before refusing it, and fails
+// when the worst exceeds half the linked stack. Each deep shape is built at
+// its limit and checked to parse cleanly while one level more is refused, so
+// a limit that moves cannot leave the probe measuring a rejected stub.
 //
-// It exists as a separate executable rather than a case inside the Node
-// smoke suite because peak stack usage is not observable through the binding
-// surface. The measurement paints the unused shadow stack with a known byte,
-// runs one walker, then scans upward from the stack limit for the first byte
-// the walker overwrote; usage is `base - lowest_touched`.
-//
-// Three ways this can fail, in the order they are worth catching:
-//
-//   * the link stopped applying `-sSTACK_SIZE`, or a toolchain renamed it,
-//     so the binary silently fell back to Emscripten's 64 KiB default;
-//   * a walker's per-frame cost grew, eating the margin between the measured
-//     worst case and the linked size;
-//   * `kMaxFormulaAstDepth` was raised without re-pinning the link flag.
-//
-// Nothing here hard-codes a byte count. The depth comes from the engine's own
-// constant and the budget from the linked stack, so both sides of the
-// comparison move with the code they describe.
-//
-// Built and run by `make wasm` / `make test-wasm`; see
-// cmake/FormulonWasm.cmake for the link, which mirrors the shipped one so the
-// numbers reflect shipped codegen.
+// It is a separate executable because peak stack use is not observable
+// through the binding surface: it paints the unused shadow stack, runs one
+// walker and scans for the lowest byte overwritten. A flat operator chain is
+// one node however long, so it also fails if any walker grows with the
+// chain's length. Built and run by `make wasm` / `make test-wasm`; see
+// cmake/FormulonWasm.cmake for the link.
 
 #include <emscripten/stack.h>
 
@@ -40,6 +27,7 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "eval/tree_walker/depth_guard.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
@@ -55,25 +43,14 @@ namespace {
 using formulon::Arena;
 using formulon::parser::AstNode;
 using formulon::parser::kMaxFormulaAstDepth;
+using formulon::parser::kMaxFunctionNesting;
+using formulon::parser::kMaxGroupingParenDepth;
+using formulon::parser::kMaxOperatorNesting;
 using formulon::parser::Parser;
 
-// Deepest nesting the parser accepts. One `SUM(` per level plus the `A1`
-// leaf puts the tree at exactly `kMaxFormulaAstDepth` nodes deep.
-constexpr int kDeepestAccepted = static_cast<int>(kMaxFormulaAstDepth) - 1;
-
-// One level past it. The parser recurses to the cap before emitting its
-// diagnostic and unwinding, so this -- not `kDeepestAccepted` -- is the
-// parser's true worst case.
-constexpr int kRejected = static_cast<int>(kMaxFormulaAstDepth);
-
-// A shallow depth measured alongside the deep one, so a failure can report
-// bytes per nesting level instead of a bare total.
-constexpr int kShallow = kDeepestAccepted / 4;
-
 // The measured worst case may claim at most this fraction of the linked
-// stack. The link is sized at a little over 3x the worst case; requiring 2x
-// leaves the guard failing well before a real overflow, while still tolerating
-// the frame-layout noise a compiler bump produces.
+// stack: the guard then fails well before a real overflow, while still
+// tolerating the frame-layout noise a compiler bump produces.
 constexpr std::size_t kStackBudgetDivisor = 2;
 
 constexpr unsigned char kPaint = 0xA5;
@@ -125,14 +102,32 @@ constexpr int kLongChain = 2700;
 // A walker that recursed per operand would grow by well over 100 KiB.
 constexpr std::size_t kChainGrowthAllowance = 4096;
 
-std::string nested_calls(int n) {
+std::string repeated(const char* open, int n, const char* leaf, const char* close) {
   std::string s;
   for (int i = 0; i < n; ++i) {
-    s += "SUM(";
+    s += open;
   }
-  s += "A1";
-  s.append(static_cast<std::size_t>(n), ')');
+  s += leaf;
+  for (int i = 0; i < n; ++i) {
+    s += close;
+  }
   return s;
+}
+
+// `1+(1+(...A1))`: one grouping pair and one binary level per step.
+std::string sum_parens(int n) {
+  return repeated("1+(", n, "A1", ")");
+}
+
+// `calls` nested IFs around `parens` grouping pairs around `A1`; A1 holds 7,
+// so every IF takes its else branch and the value is 7.
+std::string ifs_around_parens(int calls, int parens) {
+  return repeated("IF(A1=0,0,", calls, repeated("(", parens, "A1", ")").c_str(), ")");
+}
+
+// `--...-A1`: a prefix run, one UnaryOp per sign.
+std::string prefix_signs(int n) {
+  return repeated("-", n, "A1", "");
 }
 
 // Peak usage of one walker at a shallow and a deep nesting level.
@@ -151,18 +146,22 @@ void fail(const char* what) {
   ++g_failures;
 }
 
-__attribute__((noinline)) std::size_t measure_parse(const std::string& src, bool expect_clean) {
+enum class Expect { kClean, kRefused };
+
+__attribute__((noinline)) std::size_t measure_parse(const std::string& src, Expect expect) {
   Arena arena;
   paint_free_stack();
   Parser p(src, arena);
   AstNode* root = p.parse();
   const std::size_t peak = peak_since_paint();
-  if (expect_clean && (root == nullptr || !p.errors().empty())) {
+  const bool clean = root != nullptr && p.errors().empty();
+  if (expect == Expect::kClean && !clean) {
     // The downstream walkers are measured over the tree this parse builds. A
     // rejected parse yields a stub, which would under-report them silently.
-    fail(
-        "the deepest accepted nesting no longer parses cleanly; the walker "
-        "measurements below would be taken over a truncated tree");
+    fail("a shape at its nesting limit no longer parses cleanly; the walkers would measure a stub");
+  }
+  if (expect == Expect::kRefused && clean) {
+    fail("a shape one level past its nesting limit parsed; the probe is not measuring the limit");
   }
   return peak;
 }
@@ -211,7 +210,7 @@ __attribute__((noinline)) std::size_t measure_evaluate(const std::string& formul
   const fm_status_t rc = fm_workbook_evaluate_formula(wb, 0, 1, 0, src.c_str(), &v);
   const std::size_t peak = peak_since_paint();
   if (expected >= 0.0 && (rc != 0 || v.kind != FM_VAL_NUMBER || v.u.number != expected)) {
-    fail("a formula at the walker bound did not evaluate to its value");
+    fail("a formula at a nesting limit did not evaluate to its value");
   }
   return peak;
 }
@@ -220,8 +219,10 @@ void print_walker(const Walker& w) {
   const int span = w.deep_depth - w.shallow_depth;
   const std::size_t per_level =
       (span > 0 && w.deep_peak > w.shallow_peak) ? (w.deep_peak - w.shallow_peak) / static_cast<std::size_t>(span) : 0;
-  std::printf("  %-22s depth %3d: %7zu B   depth %3d: %7zu B   %5zu B/level\n", w.label, w.shallow_depth,
+  std::printf("  %-28s depth %4d: %8zu B   depth %4d: %8zu B   %5zu B/level\n", w.label, w.shallow_depth,
               w.shallow_peak, w.deep_depth, w.deep_peak, per_level);
+  // A probe that overruns the stack dies mid-run; what was measured so far still reaches the log.
+  std::fflush(stdout);
 }
 
 }  // namespace
@@ -231,7 +232,9 @@ int main() {
   const std::size_t expected_stack_size = static_cast<std::size_t>(FORMULON_WASM_EXPECTED_STACK_SIZE);
 
   std::printf("shadow stack: %zu bytes linked, %zu requested\n", stack_size, expected_stack_size);
-  std::printf("nesting cap:  %u (kMaxFormulaAstDepth)\n", static_cast<unsigned>(kMaxFormulaAstDepth));
+  std::printf("nesting caps: %u calls, %u parentheses, %u signs, %u nodes\n",
+              static_cast<unsigned>(kMaxFunctionNesting), static_cast<unsigned>(kMaxGroupingParenDepth),
+              static_cast<unsigned>(kMaxOperatorNesting), static_cast<unsigned>(kMaxFormulaAstDepth));
 
   if (stack_size != expected_stack_size) {
     // Either the flag did not reach the link or the toolchain no longer
@@ -246,23 +249,62 @@ int main() {
   }
   fm_workbook_set_number(wb, 0, 0, 0, 7.0);
 
-  Walker walkers[] = {
-      {"parse", kShallow, kRejected, 0, 0},
-      {"parse + evaluate", kShallow, kDeepestAccepted, 0, 0},
-      {"shift_relative_refs", kShallow, kDeepestAccepted, 0, 0},
-      {"format_formula", kShallow, kDeepestAccepted, 0, 0},
-  };
+  const int kOps = static_cast<int>(kMaxOperatorNesting);
+  const int kParens = static_cast<int>(kMaxGroupingParenDepth);
+  const int kCalls = static_cast<int>(kMaxFunctionNesting);
+  const int kRunaway = static_cast<int>(kMaxFormulaAstDepth) + 1;
 
-  walkers[0].shallow_peak = measure_parse(nested_calls(kShallow), true);
-  walkers[0].deep_peak = measure_parse(nested_calls(kRejected), false);
-  measure_parse(nested_calls(kDeepestAccepted), true);
-  // Nested SUM over a single cell is the identity.
-  walkers[1].shallow_peak = measure_evaluate(nested_calls(kShallow), wb, -1.0);
-  walkers[1].deep_peak = measure_evaluate(nested_calls(kDeepestAccepted), wb, 7.0);
-  walkers[2].shallow_peak = measure_shift(nested_calls(kShallow));
-  walkers[2].deep_peak = measure_shift(nested_calls(kDeepestAccepted));
-  walkers[3].shallow_peak = measure_format(nested_calls(kShallow));
-  walkers[3].deep_peak = measure_format(nested_calls(kDeepestAccepted));
+  // Every deep shape sits exactly at its limit: it parses, one more level does not.
+  measure_parse(sum_parens(kParens + 1), Expect::kRefused);
+  measure_parse(ifs_around_parens(kCalls + 1, kParens), Expect::kRefused);
+  measure_parse(ifs_around_parens(kCalls, kParens + 1), Expect::kRefused);
+  measure_parse(prefix_signs(kOps + 1), Expect::kRefused);
+
+  Walker walkers[] = {
+      {"parse: runaway (", 64, kRunaway, 0, 0},  {"parse: 1+( run", 64, kParens, 0, 0},
+      {"parse: IFs around (", 16, kCalls, 0, 0}, {"parse: sign run", 256, kOps, 0, 0},
+      {"evaluate: 1+( run", 64, kParens, 0, 0},  {"evaluate: IFs around (", 16, kCalls, 0, 0},
+      {"evaluate: sign run", 256, kOps, 0, 0},   {"shift: 1+( run", 64, kParens, 0, 0},
+      {"shift: IFs around (", 16, kCalls, 0, 0}, {"shift: sign run", 256, kOps, 0, 0},
+      {"format: 1+( run", 64, kParens, 0, 0},    {"format: IFs around (", 16, kCalls, 0, 0},
+      {"format: sign run", 256, kOps, 0, 0},
+  };
+  // The IF shape's shallow and deep cases scale its calls and parentheses together.
+  const std::string sums[] = {sum_parens(64), sum_parens(kParens)};
+  const std::string ifs[] = {ifs_around_parens(16, 64), ifs_around_parens(kCalls, kParens)};
+  const std::string signs[] = {prefix_signs(256), prefix_signs(kOps)};
+  const double sum_values[] = {64.0 + 7.0, kParens + 7.0};
+  const std::string* shapes[] = {sums, ifs, signs};
+
+  std::printf("peak shadow stack by walker:\n");
+  walkers[0].shallow_peak = measure_parse(repeated("(", 64, "A1", ")"), Expect::kClean);
+  walkers[0].deep_peak = measure_parse(repeated("(", kRunaway, "A1", ")"), Expect::kRefused);
+  print_walker(walkers[0]);
+  for (int k = 0; k < 3; ++k) {
+    Walker& w = walkers[1 + k];
+    w.shallow_peak = measure_parse(shapes[k][0], Expect::kClean);
+    w.deep_peak = measure_parse(shapes[k][1], Expect::kClean);
+    print_walker(w);
+  }
+  for (int k = 0; k < 3; ++k) {
+    Walker& w = walkers[4 + k];
+    // An even sign run and every IF branch leave A1's 7 unchanged.
+    w.shallow_peak = measure_evaluate(shapes[k][0], wb, k == 0 ? sum_values[0] : 7.0);
+    w.deep_peak = measure_evaluate(shapes[k][1], wb, k == 0 ? sum_values[1] : 7.0);
+    print_walker(w);
+  }
+  for (int k = 0; k < 3; ++k) {
+    Walker& w = walkers[7 + k];
+    w.shallow_peak = measure_shift(shapes[k][0]);
+    w.deep_peak = measure_shift(shapes[k][1]);
+    print_walker(w);
+  }
+  for (int k = 0; k < 3; ++k) {
+    Walker& w = walkers[10 + k];
+    w.shallow_peak = measure_format(shapes[k][0]);
+    w.deep_peak = measure_format(shapes[k][1]);
+    print_walker(w);
+  }
 
   // The same walkers over a flat chain, where depth is the operand count.
   Walker chain_walkers[] = {
@@ -271,8 +313,8 @@ int main() {
       {"chain shift", kShortChain, kLongChain, 0, 0},
       {"chain format", kShortChain, kLongChain, 0, 0},
   };
-  chain_walkers[0].shallow_peak = measure_parse(flat_chain(kShortChain), true);
-  chain_walkers[0].deep_peak = measure_parse(flat_chain(kLongChain), true);
+  chain_walkers[0].shallow_peak = measure_parse(flat_chain(kShortChain), Expect::kClean);
+  chain_walkers[0].deep_peak = measure_parse(flat_chain(kLongChain), Expect::kClean);
   chain_walkers[1].shallow_peak = measure_evaluate(flat_chain(kShortChain), wb, 7.0 * kShortChain);
   chain_walkers[1].deep_peak = measure_evaluate(flat_chain(kLongChain), wb, 7.0 * kLongChain);
   chain_walkers[2].shallow_peak = measure_shift(flat_chain(kShortChain));
@@ -282,11 +324,9 @@ int main() {
 
   fm_workbook_destroy(wb);
 
-  std::printf("peak shadow stack by walker:\n");
   std::size_t worst = 0;
   const char* worst_label = "";
   for (const Walker& w : walkers) {
-    print_walker(w);
     if (w.deep_peak > worst) {
       worst = w.deep_peak;
       worst_label = w.label;
@@ -304,15 +344,30 @@ int main() {
     }
   }
 
+  // Evaluation may recurse to `kMaxEvalDepth` levels, through a re-entrant
+  // cell chain, past the deepest single formula; extrapolate the sign run's
+  // per-level cost to it.
+  const Walker& sign_eval = walkers[6];
+  const std::size_t eval_per_level =
+      sign_eval.deep_peak > sign_eval.shallow_peak
+          ? (sign_eval.deep_peak - sign_eval.shallow_peak) / static_cast<std::size_t>(kOps - sign_eval.shallow_depth)
+          : 0;
+  const std::size_t eval_projected =
+      sign_eval.deep_peak + eval_per_level * (formulon::eval::kMaxEvalDepth - static_cast<std::size_t>(kOps));
+  std::printf("  %-28s projected to depth %u: %8zu B\n", "evaluate", formulon::eval::kMaxEvalDepth, eval_projected);
+  if (eval_projected > worst) {
+    worst = eval_projected;
+    worst_label = "evaluate projected to kMaxEvalDepth";
+  }
+
   const std::size_t budget = stack_size / kStackBudgetDivisor;
   std::printf("worst case:   %zu B (%s), budget %zu B (1/%zu of the linked stack)\n", worst, worst_label, budget,
               kStackBudgetDivisor);
 
   if (worst > budget) {
     fail(
-        "the nesting cap now costs more stack than the link reserves for it; "
-        "re-measure and raise _FM_WASM_STACK_SIZE in cmake/FormulonWasm.cmake, "
-        "or lower parser::kMaxFormulaAstDepth");
+        "the nesting limits now cost more stack than the link reserves for them; "
+        "re-measure and raise _FM_WASM_STACK_SIZE in cmake/FormulonWasm.cmake");
   }
 
   if (g_failures != 0) {

@@ -753,11 +753,15 @@ Expected<void, Error> remove_slicer(Workbook& wb, std::size_t sheet, std::size_t
 }
 
 void remove_table_slicers(Workbook& wb, std::uint32_t table_id) {
-  std::vector<std::string> dropped;
-  remove_table_slicers_at(wb, table_id, dropped);
-  for (const std::string& name : dropped) {
+  for (const std::string& name : remove_table_slicers_locked(wb, table_id)) {
     static_cast<void>(wb.set_defined_name(name, ""));
   }
+}
+
+std::vector<std::string> remove_table_slicers_locked(Workbook& wb, std::uint32_t table_id) {
+  std::vector<std::string> dropped;
+  remove_table_slicers_at(wb, table_id, dropped);
+  return dropped;
 }
 
 std::vector<std::string> remove_sheet_slicers(Workbook& wb, std::size_t sheet) {

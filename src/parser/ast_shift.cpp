@@ -47,7 +47,8 @@ std::optional<std::string_view> RefTransform::apply_name_sheet(std::string_view 
   return sheet;
 }
 
-std::string_view RefTransform::apply_structured_ref_table(std::string_view table) const {
+std::optional<std::string_view> RefTransform::apply_structured_ref(std::string_view table,
+                                                                   std::string_view /*column*/) const {
   return table;
 }
 
@@ -194,14 +195,14 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
 
 const AstNode* TransformStructuredRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const std::string_view table = node.as_structured_ref_table();
-  if (table.empty()) {
+  const std::optional<std::string_view> mapped = transform.apply_structured_ref(table, node.as_structured_ref_column());
+  if (!mapped.has_value()) {
+    return MakeRefError(arena);
+  }
+  if (*mapped == table) {
     return &node;
   }
-  const std::string_view mapped = transform.apply_structured_ref_table(table);
-  if (mapped == table) {
-    return &node;
-  }
-  return make_structured_ref(arena, mapped, node.as_structured_ref_column(), node.as_structured_ref_modifier());
+  return make_structured_ref(arena, *mapped, node.as_structured_ref_column(), node.as_structured_ref_modifier());
 }
 
 const AstNode* TransformNameRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
@@ -249,78 +250,140 @@ bool IsRefError(const AstNode& node) {
   return node.kind() == NodeKind::ErrorLiteral && node.as_error_literal() == ErrorCode::Ref;
 }
 
+// The qualifier a bare reference operand of `range` evaluates under: the
+// first sheet a written-out reference operand names. `Sheet2!A1:C3:E5` reads
+// E5 on Sheet2 too, so a transform keyed on `ref.sheet` must see it there.
+const Reference* ChainSheetOwner(const AstNode& range) noexcept {
+  for (std::uint32_t i = 0; i < range.as_range_arity(); ++i) {
+    const AstNode& operand = range.as_range_operand(i);
+    if (operand.kind() == NodeKind::Ref && !operand.as_ref().sheet.empty()) {
+      return &operand.as_ref();
+    }
+  }
+  return nullptr;
+}
+
+// `ref` as handed to a transform: a bare operand borrows `owner`'s qualifier.
+Reference OnSheetOf(const Reference& ref, const Reference* owner) noexcept {
+  Reference out = ref;
+  if (owner != nullptr && ref.sheet.empty()) {
+    out.sheet = owner->sheet;
+    out.sheet_quoted = owner->sheet_quoted;
+  }
+  return out;
+}
+
+// Drops a qualifier `OnSheetOf` lent to `orig` again. Transforms map a sheet
+// by its name alone, so the lent qualifier came back as the owner's image
+// and the operand keeps Excel's bare spelling (`Sheet1!A1:A10`).
+Reference BareAgain(const Reference& orig, Reference rewritten) noexcept {
+  if (orig.sheet.empty()) {
+    rewritten.sheet = {};
+    rewritten.sheet_quoted = false;
+  }
+  return rewritten;
+}
+
+// Rewrites a `:` chain token by token, as Excel tokenises it. An area token
+// (`A1:A3`, `A:C`) moves as one interval through `apply_range`, so deleting
+// row 1 shrinks `A1:A3` to `A1:A2` instead of poisoning it; a reference
+// operand moves through `apply`; any other operand is walked as a subtree.
+// Every reference operand is transformed on the sheet it evaluates on, and
+// an area token whose halves land on one whole column or row becomes the
+// single Ref the parser builds for that text (`A:A`, never `A:A:A:A`).
 const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const std::uint32_t n = node.as_range_arity();
+  const Reference* const chain_owner = ChainSheetOwner(node);
   std::vector<const AstNode*> operands;
+  // Per output operand, the splice flag joining it to the previous one.
+  std::vector<std::uint8_t> links;
   operands.reserve(n);
+  links.reserve(n);
   bool changed = false;
-  // The chain is walked token by token, as Excel tokenises it: an area
-  // token (`A1:A3`, `A:C`) moves as one interval, any other operand alone.
-  for (std::uint32_t i = 0; i < n; i += range_token_width(node, i)) {
+  for (std::uint32_t i = 0; i < n;) {
+    const std::uint32_t width = range_token_width(node, i);
     const AstNode& lhs_node = node.as_range_operand(i);
-    if (range_token_width(node, i) == 2U) {
-      const AstNode& rhs_node = node.as_range_operand(i + 1U);
-      // Give the transform the pair as one interval: Excel shrinks `A1:A3`
-      // to `A1:A2` when row 1 is deleted instead of poisoning the whole
-      // range because its first endpoint disappeared.
-      //
-      // Excel parses `Sheet1!A1:A10` with the sheet qualifier on the lhs
-      // only -- the rhs ends up as a sheet-less Ref but evaluates as if it
-      // shared the lhs sheet. Transforms that key on `ref.sheet` would miss
-      // the rhs without help, so the implicit sheet is synthesised onto the
-      // copy handed to the transform and stripped again afterwards, which
-      // keeps both the input AST immutable and the formatted output in
-      // Excel's canonical `Sheet1!A1:A10` form.
-      const Reference& lhs_orig = lhs_node.as_ref();
-      const Reference& rhs_orig = rhs_node.as_ref();
-      const bool inherit_rhs_sheet = !lhs_orig.sheet.empty() && rhs_orig.sheet.empty();
-      Reference rhs_for_transform = rhs_orig;
-      if (inherit_rhs_sheet) {
-        rhs_for_transform.sheet = lhs_orig.sheet;
-        rhs_for_transform.sheet_quoted = lhs_orig.sheet_quoted;
+    i += width;
+    if (lhs_node.kind() != NodeKind::Ref) {
+      const AstNode* updated = TransformNode(lhs_node, arena, transform);
+      if (updated == nullptr) {
+        return nullptr;
       }
-      const std::optional<std::pair<Reference, Reference>> rewritten =
-          transform.apply_range(lhs_orig, rhs_for_transform);
+      // An endpoint that collapsed to `#REF!` poisons the whole range
+      // expression -- this matches Excel's behaviour for `#REF!:#REF!` shapes.
+      if (IsRefError(*updated)) {
+        return MakeRefError(arena);
+      }
+      operands.push_back(updated);
+      links.push_back(0U);
+      changed = changed || updated != &lhs_node;
+      continue;
+    }
+    const Reference& lhs_orig = lhs_node.as_ref();
+    if (width == 1U) {
+      const std::optional<Reference> rewritten = transform.apply(OnSheetOf(lhs_orig, chain_owner));
       if (!rewritten.has_value()) {
         return MakeRefError(arena);
       }
-      Reference rewritten_lhs = rewritten->first;
-      Reference rewritten_rhs = rewritten->second;
-      if (inherit_rhs_sheet && rewritten_rhs.sheet == rewritten_lhs.sheet) {
-        rewritten_rhs.sheet = {};
-        rewritten_rhs.sheet_quoted = false;
-      }
-      if (SameReference(lhs_orig, rewritten_lhs) && SameReference(rhs_orig, rewritten_rhs)) {
+      const Reference out = BareAgain(lhs_orig, *rewritten);
+      links.push_back(0U);
+      if (SameReference(lhs_orig, out)) {
         operands.push_back(&lhs_node);
-        operands.push_back(&rhs_node);
         continue;
       }
-      AstNode* lhs = make_ref(arena, rewritten_lhs);
-      AstNode* rhs = make_ref(arena, rewritten_rhs);
-      if (lhs == nullptr || rhs == nullptr) {
+      AstNode* ref = make_ref(arena, out);
+      if (ref == nullptr) {
         return nullptr;
       }
-      operands.push_back(lhs);
-      operands.push_back(rhs);
+      ref->set_paren_depth(lhs_node.paren_depth());
+      operands.push_back(ref);
       changed = true;
       continue;
     }
-    const AstNode* updated = TransformNode(lhs_node, arena, transform);
-    if (updated == nullptr) {
-      return nullptr;
-    }
-    // An endpoint that collapsed to `#REF!` poisons the whole range
-    // expression -- this matches Excel's behaviour for `#REF!:#REF!` shapes.
-    if (IsRefError(*updated)) {
+    // The second corner of an area token is always written bare and shares
+    // the first corner's qualifier, or the chain's when the first is bare.
+    const AstNode& rhs_node = node.as_range_operand(i - 1U);
+    const Reference& rhs_orig = rhs_node.as_ref();
+    const Reference* const token_owner = lhs_orig.sheet.empty() ? chain_owner : &lhs_orig;
+    const std::optional<std::pair<Reference, Reference>> rewritten =
+        transform.apply_range(OnSheetOf(lhs_orig, chain_owner), OnSheetOf(rhs_orig, token_owner));
+    if (!rewritten.has_value()) {
       return MakeRefError(arena);
     }
-    operands.push_back(updated);
-    changed = changed || updated != &lhs_node;
+    const Reference lhs_out = BareAgain(lhs_orig, rewritten->first);
+    const Reference rhs_out = BareAgain(rhs_orig, rewritten->second);
+    const bool spliced = node.as_range_spliced(i - 2U);
+    if (SameReference(lhs_orig, lhs_out) && SameReference(rhs_orig, rhs_out)) {
+      operands.push_back(&lhs_node);
+      operands.push_back(&rhs_node);
+      links.push_back(0U);
+      links.push_back(spliced ? 1U : 0U);
+      continue;
+    }
+    changed = true;
+    AstNode* lhs = make_ref(arena, lhs_out);
+    if (lhs == nullptr) {
+      return nullptr;
+    }
+    operands.push_back(lhs);
+    links.push_back(0U);
+    if (spliced && whole_axis_pair_is_single(lhs_out, rhs_out)) {
+      continue;
+    }
+    AstNode* rhs = make_ref(arena, rhs_out);
+    if (rhs == nullptr) {
+      return nullptr;
+    }
+    operands.push_back(rhs);
+    links.push_back(spliced ? 1U : 0U);
   }
   if (!changed) {
     return &node;
   }
-  return make_chain_with_operands(arena, node, operands.data());
+  if (operands.size() == 1U) {
+    return operands.front();
+  }
+  return make_range_chain(arena, operands.data(), links.data() + 1, static_cast<std::uint32_t>(operands.size()));
 }
 
 const AstNode* TransformIntersect(const AstNode& node, Arena& arena, const RefTransform& transform) {

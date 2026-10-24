@@ -63,6 +63,12 @@ struct Reference {
 /// doubled per Excel's escaping convention.
 std::string format_a1(const Reference& r);
 
+/// True iff `lhs` and `rhs`, the two halves of a whole-column or whole-row
+/// token (`A:C`, `1:3`), name one axis index with the same anchoring, so the
+/// token is the single whole-axis `Reference` (`A:A`, `$1:$1`). `$A:A`
+/// keeps both halves: each endpoint moves on its own under a relative copy.
+bool whole_axis_pair_is_single(const Reference& lhs, const Reference& rhs) noexcept;
+
 /// Returns true iff the local sheet `name` must be wrapped in single quotes
 /// when written into an A1 reference: names leaving the bare qualifier run
 /// (ASCII letters, digits, `.`, `_` and non-ASCII characters other than

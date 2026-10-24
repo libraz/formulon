@@ -154,7 +154,7 @@ bool Parser::decode_full_row_endpoint(const Token& tok, Reference* out) noexcept
 
 AstNode* Parser::make_whole_axis_ref(const Reference& lhs, const Reference& rhs, TextRange lhs_range,
                                      TextRange rhs_range) {
-  if (lhs.col == rhs.col && lhs.row == rhs.row) {
+  if (whole_axis_pair_is_single(lhs, rhs)) {
     AstNode* n = make_ref(arena_, lhs);
     if (n == nullptr) {
       return nullptr;
@@ -492,7 +492,7 @@ bool Parser::parse_3d_ref_tail(Reference* first, Reference* last, bool* is_range
   advance();
   advance();
   advance();
-  *is_range = first->col != last->col || first->row != last->row;
+  *is_range = !whole_axis_pair_is_single(*first, *last);
   return true;
 }
 

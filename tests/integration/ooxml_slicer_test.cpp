@@ -555,6 +555,21 @@ TEST(SlicerFidelity, RemovingTheTableRemovesItsSlicersAndCaches) {
   EXPECT_FALSE(Has(ReadPart(saved, "xl/drawings/drawing1.xml"), "sle:slicer"));
 }
 
+TEST(SlicerFidelity, DeletingTheTablesWholeExtentRemovesItsSlicersAndCaches) {
+  Workbook wb = LoadOrDie(SlicerPackage({true, true}));
+  // Columns A:B hold the whole table; the slicer frame (E:G) only moves.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, 0, 2)));
+  EXPECT_TRUE(wb.tables().empty());
+  EXPECT_TRUE(list_slicers(wb, 0).value().empty());
+  const auto saved = SaveOrDie(wb);
+  ExpectSelfConsistent(saved);
+  EXPECT_FALSE(HasPart(saved, "xl/slicerCaches/slicerCache1.xml"));
+  const std::string book = ReadPart(saved, "xl/workbook.xml");
+  EXPECT_FALSE(Has(book, "Slicer_Region")) << book;
+  EXPECT_TRUE(HasPart(saved, "xl/slicerCaches/slicerCache2.xml"));
+  EXPECT_TRUE(Has(book, "Slicer_Pivot")) << book;
+}
+
 TEST(SlicerFidelity, RemovingTheHostSheetRemovesItsSlicers) {
   Workbook wb = LoadOrDie(SlicerPackage());
   wb.add_sheet("Other");

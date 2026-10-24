@@ -369,18 +369,24 @@ AstNode* Parser::parse_at_prefix_atom(SyncContext ctx) {
   return n;
 }
 
-AstNode* Parser::parse_unary_prefix_atom(UnaryOp op, SyncContext ctx) {
-  const Token& sign_tok = advance();
+AstNode* Parser::parse_unary_prefix_atom(SyncContext ctx) {
+  // A run of signs (`---1`) is read in this one frame and wrapped innermost
+  // first, so its length costs no recursion; Excel takes 1024 of them.
+  const std::size_t first_sign = pos_;
+  while (peek_kind() == TokenKind::Plus || peek_kind() == TokenKind::Minus) {
+    advance();
+  }
+  const std::size_t end_sign = pos_;
   AstNode* operand = parse_expression(kBpUnaryPrefix, ctx);
-  if (operand == nullptr) {
-    return nullptr;
+  for (std::size_t i = end_sign; operand != nullptr && i > first_sign; --i) {
+    const Token& sign_tok = tokens_[i - 1U];
+    AstNode* n = make_unary_op(arena_, sign_tok.kind == TokenKind::Minus ? UnaryOp::Minus : UnaryOp::Plus, operand);
+    if (n != nullptr) {
+      n->set_range(SpanRange(sign_tok.range, operand->range()));
+    }
+    operand = n;
   }
-  AstNode* n = make_unary_op(arena_, op, operand);
-  if (n == nullptr) {
-    return nullptr;
-  }
-  n->set_range(SpanRange(sign_tok.range, operand->range()));
-  return n;
+  return operand;
 }
 
 AstNode* Parser::parse_cellref_atom() {

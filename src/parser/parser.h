@@ -58,7 +58,10 @@ namespace parser {
 /// short-circuits with a final `TooManyErrors` sentinel and stops doing
 /// useful work. `max_parse_depth` bounds how deeply nested an expression
 /// may recurse before we emit `NestedFormulaTooDeep` and bail to the
-/// nearest sync point; this is the parser's stack-overflow guard.
+/// nearest sync point; this is the parser's stack-overflow guard. Excel's
+/// own entry limits (`kMaxFunctionNesting`, `kMaxGroupingParenDepth`) are
+/// fixed and checked on the finished tree, which a formula past them leaves
+/// as one `ErrorPlaceholder` with a `NestedFormulaTooDeep` diagnostic.
 struct ParserOptions {
   /// Total cap on the size of the diagnostic list, including the
   /// `TooManyErrors` sentinel that the parser appends when the cap is
@@ -68,8 +71,10 @@ struct ParserOptions {
   /// the cap check in `parser.cpp`. After the sentinel is appended,
   /// further parsing is skipped (the parser short-circuits).
   std::uint32_t max_error_count = 50;
-  /// Maximum nesting depth: parentheses, calls, unary and postfix operator
-  /// runs, and a binary operator inside another's operand. A flat run of binary operators
+  /// Maximum nesting depth, in AST nodes along any path: parentheses, calls,
+  /// unary and postfix operator runs, and a binary operator inside another's
+  /// operand. A run of prefix signs is parsed without recursion but still
+  /// counts here, one node per sign. A flat run of binary operators
   /// sharing one binding power (`=A1+A2+...+An`) is a single node, so its
   /// length is bounded by the formula-length limit (`TokenizerOptions::
   /// max_formula_length_utf16`) rather than by this cap. Every recursive
@@ -77,14 +82,15 @@ struct ParserOptions {
   /// decode-time check, the evaluator) walks it under the same bound.
   ///
   /// Two different stacks have to hold. On native builds it is the thread
-  /// stack, which is megabytes wide and never the binding constraint. On
-  /// WASM it is the shadow stack, whose size is a link-time constant: the
-  /// deepest tree this cap admits costs about 155 KiB to parse, so
-  /// `cmake/FormulonWasm.cmake` pins `STACK_SIZE` from that figure
-  /// rather than inheriting Emscripten's 64 KiB default. Raising the cap
-  /// means recomputing and re-pinning that flag, not just editing this
-  /// number -- an overflow there is untrappable, and the engine is built
-  /// with exceptions off, so there is nothing to catch it with either way.
+  /// stack: megabytes on the main thread, but a worker started with default
+  /// attributes gets 512 KiB on macOS. On WASM it is the shadow stack, whose
+  /// size is a link-time constant: `cmake/FormulonWasm.cmake` pins
+  /// `STACK_SIZE` from what the deepest tree this cap admits costs, as
+  /// `tests/wasm/stack_probe.cpp` measures it, rather than inheriting
+  /// Emscripten's 64 KiB default. Raising the cap means recomputing and
+  /// re-pinning that flag, not just editing this number -- an overflow there
+  /// is untrappable, and the engine is built with exceptions off, so there is
+  /// nothing to catch it with either way.
   std::uint32_t max_parse_depth = kMaxFormulaAstDepth;
 };
 
@@ -186,7 +192,7 @@ class Parser {
   AstNode* parse_paren_atom();
   AstNode* parse_array_literal_atom();
   AstNode* parse_at_prefix_atom(SyncContext ctx);
-  AstNode* parse_unary_prefix_atom(UnaryOp op, SyncContext ctx);
+  AstNode* parse_unary_prefix_atom(SyncContext ctx);
   AstNode* parse_ident_or_call_or_full_col();
   // Parses the arguments of a call whose `(` is already consumed, stopping at
   // the `)` without consuming it; an empty slot becomes a Blank literal. An

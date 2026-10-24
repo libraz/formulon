@@ -547,7 +547,7 @@ TEST(WorkbookSheetOps, RemoveTransformsAllFormulaMetadataAndDropsDanglingPivotSt
   EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].icon_set->thresholds[0].value, "#REF!");
   EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].data_bar->min.value, "#REF!");
   EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].data_bar->max.value, "#REF!");
-  EXPECT_EQ(wb.sheet(0).hyperlinks()[0].location, "#REF!");
+  EXPECT_EQ(wb.sheet(0).hyperlinks()[0].location, "#Drop!A1") << "Excel keeps a hyperlink location's text";
   EXPECT_EQ(wb.sheet(0).validations()[0].formula1, "#REF!");
   EXPECT_EQ(wb.sheet(0).validations()[0].formula2, "#REF!");
   ASSERT_EQ(wb.tables().size(), 1U);

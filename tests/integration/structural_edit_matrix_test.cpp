@@ -866,7 +866,8 @@ TEST(StructuralEditMatrix, CrossSheetConditionalFormatFormulaShiftsOnEveryEdit) 
 
 TEST(StructuralEditMatrix, CrossSheetConditionalFormatFormulaBecomesRefWhenTargetDeleted) {
   Workbook wb = MakeCrossSheetWorkbook();
-  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, kAnchorRow, kEditCount)));
+  // Both anchor rows: the pivot there moves or goes whole.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, kAnchorRow, 2U)));
   EXPECT_EQ(CrossSheetCfFormula(wb), "#REF!>0");
 }
 
@@ -894,12 +895,17 @@ TEST(StructuralEditMatrix, CrossSheetConditionalFormatSqrefIsNotShifted) {
   EXPECT_EQ(range.first.col, kAnchorCol);
 }
 
-TEST(StructuralEditMatrix, CrossSheetHyperlinkLocationShiftsOnRowInsert) {
+// Excel never rewrites an internal hyperlink's location: not on an insert,
+// not when the target row is deleted, not when the target sheet is renamed.
+TEST(StructuralEditMatrix, CrossSheetHyperlinkLocationKeepsItsTextOnEveryEdit) {
   Workbook wb = MakeCrossSheetWorkbook();
   ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, kEditOrigin, kEditCount)));
+  // The target D6 is now D7; delete both anchor rows (the pivot there goes whole).
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, kAnchorRow + 1U, 2U)));
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "X")));
   ASSERT_EQ(wb.sheet(1).hyperlinks().size(), 2U);
-  EXPECT_EQ(wb.sheet(1).hyperlinks()[0].location, "Sheet1!D7");
-  EXPECT_EQ(wb.sheet(1).hyperlinks()[1].location, "#Sheet1!D7");
+  EXPECT_EQ(wb.sheet(1).hyperlinks()[0].location, "Sheet1!D6");
+  EXPECT_EQ(wb.sheet(1).hyperlinks()[1].location, "#Sheet1!D6");
   EXPECT_EQ(wb.sheet(1).hyperlinks()[0].row, 0U) << "the link anchor lives on Sheet2 and does not move";
 }
 

@@ -733,6 +733,23 @@ TEST(LegacyAt, SpillAndLambdaResultsProjectOntoTheFormulaCell) {
   }
 }
 
+// Node ranges count UTF-16 units; the `@` still lands at the right byte after
+// multi-byte text, including a supplementary-plane character.
+TEST(LegacyAt, ImpliedAtLandsAfterNonAsciiText) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  const char* const stored[] = {"=LEN(\"日本\")+ABS(A1:A2)", "=LEN(\"😀\")+ABS(A1:A2)", "=\"日本\"&LEN((A1:A2))"};
+  const char* const shown[] = {"=LEN(\"日本\")+ABS(@A1:A2)", "=LEN(\"😀\")+ABS(@A1:A2)", "=\"日本\"&LEN((@A1:A2))"};
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, i, 4U, stored[i])));
+    s.set_cell_dynamic_array(i, 4U, false);
+  }
+  wb.apply_legacy_implicit_intersections();
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    EXPECT_EQ(s.cell_at(i, 4U)->formula_text, shown[i]) << stored[i];
+  }
+}
+
 TEST(LegacyAt, DynamicArrayAndCseFormulasKeepTheirText) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);

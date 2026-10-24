@@ -219,8 +219,7 @@ bool formula_is_dynamic_array(const parser::AstNode& root, const NameShapes& nam
 namespace {
 
 /// `node` is the value `name_sets_calc_exp` looks for, or reaches one through operators.
-bool ValueSetsCalcExp(const parser::AstNode& node,
-                      const std::unordered_map<const parser::AstNode*, std::uint8_t>& parens) {
+bool ValueSetsCalcExp(const parser::AstNode& node, const parser::ParenCounts& parens) {
   using parser::NodeKind;
   if (parens.count(&node) != 0U) {
     return false;
@@ -399,7 +398,7 @@ std::vector<const parser::AstNode*> function_value_refs(const parser::AstNode& r
 }
 
 bool name_sets_calc_exp(const parser::AstNode& root, const NameShapes& names) {
-  std::unordered_map<const parser::AstNode*, std::uint8_t> parens;
+  parser::ParenCounts parens;
   parser::collect_parenthesized_nodes(root, parens);
   return ValueSetsCalcExp(root, parens) || RefersToCalcExpName(root, names);
 }

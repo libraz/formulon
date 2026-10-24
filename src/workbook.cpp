@@ -63,6 +63,7 @@
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 #include "workbook_formula_index.h"
@@ -71,10 +72,11 @@
 
 namespace formulon {
 namespace {
-// Forward declaration; defined further below alongside the other
-// sheet-name helpers. Declared here so the early `add_sheet_validated`
-// definition can call it.
+// Forward declarations; defined further below alongside the other
+// sheet-name helpers. Declared here so the early `add_sheet_validated` and
+// `add_sheet_entered` definitions can call them.
 Expected<void, Error> validate_sheet_name(std::string_view name);
+Expected<void, Error> validate_entered_sheet_name(std::string_view name, ExcelHost host);
 
 void mark_all_formulas_dirty_locked(const std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator);
 
@@ -402,6 +404,11 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   return &sheets_.back();
 }
 
+Expected<Sheet*, Error> Workbook::add_sheet_entered(std::string name) {
+  RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
+  return add_sheet_validated(std::move(name));
+}
+
 namespace {
 
 // Hidden sheet-scoped name Excel keeps over a sheet AutoFilter's range.
@@ -490,8 +497,8 @@ constexpr std::uint32_t kMaxSheetNameUnits = 31U;
 
 // Shared structural validator for a sheet name across every mutation
 // surface (add / rename / any future import-side check). Verifies strict
-// UTF-8, a non-empty name within the code-unit length limit, and no forbidden
-// characters. Duplicate/case-folding collision is caller-scoped (it needs
+// UTF-8, a non-empty name within the code-unit length limit, no forbidden
+// characters and no edge apostrophe. Duplicate/case-folding collision is caller-scoped (it needs
 // the target index) and handled at each call site.
 Expected<void, Error> validate_sheet_name(std::string_view name) {
   if (name.empty()) {
@@ -507,6 +514,21 @@ Expected<void, Error> validate_sheet_name(std::string_view name) {
   if (!is_valid_sheet_name_chars(name)) {
     return make_error(FormulonErrorCode::kInvalidSheetName,
                       "sheet name contains a forbidden character (: \\ / ? * [ ])",
+                      "name=\"" + std::string(name) + "\"");
+  }
+  // Excel refuses an edge apostrophe on entry and a file carrying one fails to open, like a forbidden character.
+  if (name.front() == '\'' || name.back() == '\'') {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name must not begin or end with an apostrophe",
+                      "name=\"" + std::string(name) + "\"");
+  }
+  return Expected<void, Error>::Ok();
+}
+
+// The name Windows Excel's naming UI reserves beyond the structural rules:
+// `History`, in any case. Mac Excel accepts it on entry and on load.
+Expected<void, Error> validate_entered_sheet_name(std::string_view name, ExcelHost host) {
+  if (host == ExcelHost::kWin365 && strings::case_insensitive_eq(name, "History")) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name \"History\" is reserved",
                       "name=\"" + std::string(name) + "\"");
   }
   return Expected<void, Error>::Ok();
@@ -548,8 +570,10 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
                       "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
   // Validate the new name (non-empty, ≤ 31 code units, no forbidden
-  // characters) via the shared validator so add / rename agree.
+  // characters, none of the names Excel's naming UI refuses) via the shared
+  // validators, so a rename and `add_sheet_entered` agree.
   RETURN_IF_ERROR(validate_sheet_name(new_name));
+  RETURN_IF_ERROR(validate_entered_sheet_name(new_name, excel_profile_.host));
   // Collision check (Unicode simple-fold). A no-op rename — same case-fold
   // as the current name — bypasses the collision check so callers can
   // change only the casing.
@@ -1033,7 +1057,8 @@ class TableRenameTransform final : public parser::RefTransform {
 
   std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return ref; }
 
-  std::string_view apply_structured_ref_table(std::string_view table) const override {
+  std::optional<std::string_view> apply_structured_ref(std::string_view table,
+                                                       std::string_view /*column*/) const override {
     if (strings::case_insensitive_eq(table, old_name_) || strings::case_insensitive_eq(table, old_display_name_)) {
       return new_name_;
     }
@@ -1359,12 +1384,14 @@ void Workbook::apply_legacy_implicit_intersections() {
       if (root == nullptr) {
         continue;
       }
+      // Byte offsets into the body; a node's range counts UTF-16 units.
+      const std::string_view body = std::string_view(text).substr(body_at);
       std::vector<std::uint32_t> at;
       for (const parser::AstNode* node : io::xlsb::legacy_intersections(*root, name_shapes)) {
         if (node->kind() != parser::NodeKind::ImplicitIntersection) {
           // A parenthesised operand takes the `@` inside its parentheses: `(@A1:A3)`.
-          std::uint32_t start = node->range().start;
-          for (std::uint8_t pairs = node->paren_depth(); pairs > 0U && body_at + start < text.size(); ++start) {
+          auto start = static_cast<std::uint32_t>(utf16_to_byte_offset(body, node->range().start));
+          for (std::uint16_t pairs = node->paren_depth(); pairs > 0U && body_at + start < text.size(); ++start) {
             if (text[body_at + start] == '(') {
               --pairs;
             }

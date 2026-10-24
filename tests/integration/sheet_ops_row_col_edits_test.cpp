@@ -1,7 +1,10 @@
 // Structural workbook mutation tests grouped by public surface.
 #include <limits>
 
+#include "io/ooxml_reader.h"
+#include "io/xlsb/reader.h"
 #include "sheet_ops_test_support.h"
+#include "workbook_format.h"
 
 namespace formulon {
 namespace {
@@ -774,6 +777,244 @@ TEST(WorkbookSheetOps, RowInsertKeepsWrittenParentheses) {
   const Cell* cell = wb.sheet(0).cell_at(5U, 1U);
   ASSERT_NE(cell, nullptr);
   EXPECT_EQ(cell->formula_text, "=(A2)+1");
+}
+
+void ExpectPreconditionFailed(const Expected<void, Error>& result) {
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kPreconditionFailed);
+}
+
+// A1 = {=B1:B3*2} as a 3x1 legacy array block, with 999 just below it.
+Workbook ArrayBlockWorkbook() {
+  Workbook wb = Workbook::create();
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=B1:B3*2")));
+  wb.sheet(0).set_cell_array_block(0, 0, 3, 1);
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0, 3, 0, Value::number(999.0))));
+  return wb;
+}
+
+TEST(WorkbookRowColEdits, EditCuttingIntoAnArrayBlockIsRefusedAndChangesNothing) {
+  Workbook wb = ArrayBlockWorkbook();
+  ExpectPreconditionFailed(wb.delete_rows(0, 1, 1));                     // One row of the block.
+  ExpectPreconditionFailed(wb.delete_rows(0, 2, 5));                     // Its last row and past it.
+  ExpectPreconditionFailed(wb.insert_rows(0, 1, 1));                     // Between two block rows.
+  ExpectPreconditionFailed(wb.insert_rows(0, 0, Sheet::kMaxRows - 2U));  // Pushes its last row off the sheet.
+  const Sheet& s = wb.sheet(0);
+  const Cell* anchor = s.cell_at(0, 0);
+  ASSERT_NE(anchor, nullptr);
+  EXPECT_EQ(anchor->formula_text, "=B1:B3*2");
+  EXPECT_EQ(anchor->array_block_rows, 3U);
+  EXPECT_EQ(anchor->array_block_cols, 1U);
+  ASSERT_NE(s.cell_at(3, 0), nullptr);
+  EXPECT_EQ(s.cell_at(3, 0)->cached_value.as_number(), 999.0);
+}
+
+TEST(WorkbookRowColEdits, ArrayBlockMovesWholeAndGoesWithAWholeDelete) {
+  Workbook wb = ArrayBlockWorkbook();
+  // An insert at the anchor row moves the block whole.
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 1)));
+  const Cell* anchor = wb.sheet(0).cell_at(1, 0);
+  ASSERT_NE(anchor, nullptr);
+  EXPECT_EQ(anchor->formula_text, "=B2:B4*2");
+  EXPECT_EQ(anchor->array_block_rows, 3U);
+  // Deleting every block row drops the block; the 999 moves up into its place.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 1, 3)));
+  const Cell* moved = wb.sheet(0).cell_at(1, 0);
+  ASSERT_NE(moved, nullptr);
+  EXPECT_TRUE(moved->formula_text.empty());
+  EXPECT_EQ(moved->cached_value.as_number(), 999.0);
+}
+
+// A PivotTable whose location is rows 5..15, columns A..C.
+Workbook PivotWorkbook() {
+  Workbook wb = Workbook::create();
+  auto pivot = std::make_unique<pivot::PivotTable>();
+  pivot->set_anchor(/*row=*/4U, /*col=*/0U, /*rows=*/11U, /*cols=*/3U);
+  wb.sheet(0).add_pivot_table(std::move(pivot));
+  return wb;
+}
+
+TEST(WorkbookRowColEdits, EditCuttingIntoAPivotTableIsRefusedAndChangesNothing) {
+  Workbook wb = PivotWorkbook();
+  ExpectPreconditionFailed(wb.insert_rows(0, 6, 1));
+  ExpectPreconditionFailed(wb.delete_rows(0, 4, 5));    // Its first rows only.
+  ExpectPreconditionFailed(wb.delete_rows(0, 10, 10));  // Its last rows and past it.
+  ExpectPreconditionFailed(wb.insert_cols(0, 1, 1));
+  ExpectPreconditionFailed(wb.delete_cols(0, 2, 1));
+  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
+  const pivot::PivotTable& p = *wb.sheet(0).pivot_tables()[0];
+  EXPECT_EQ(p.anchor_row(), 4U);
+  EXPECT_EQ(p.anchor_col(), 0U);
+  EXPECT_EQ(p.span_rows(), 11U);
+  EXPECT_EQ(p.span_cols(), 3U);
+}
+
+TEST(WorkbookRowColEdits, PivotTableMovesWholeAndGoesWithAWholeDelete) {
+  Workbook wb = PivotWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 4, 2)));   // At its first row: it moves whole.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 20, 5)));  // Below it: untouched.
+  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).pivot_tables()[0]->anchor_row(), 6U);
+  EXPECT_EQ(wb.sheet(0).pivot_tables()[0]->span_rows(), 11U);
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 0, 20)));  // Its whole extent.
+  EXPECT_TRUE(wb.sheet(0).pivot_tables().empty());
+}
+
+TEST(WorkbookRowColEdits, InsertPushingADataTableOffTheSheetIsRefused) {
+  Workbook wb = Workbook::create();
+  const MergeRange ref{Sheet::kMaxRows - 3U, 2U, Sheet::kMaxRows - 1U, 3U};
+  ASSERT_TRUE(static_cast<bool>(wb.add_data_table(0, ref, DataTableInput{}, DataTableInput{true, false, 0U, 0U})));
+  ExpectPreconditionFailed(wb.insert_rows(0, 0, 1));
+  ExpectPreconditionFailed(wb.insert_rows(0, Sheet::kMaxRows - 4U, 1));  // At its header row.
+  const DataTable* t = wb.data_table_at(0, Sheet::kMaxRows - 1U, 3U);
+  ASSERT_NE(t, nullptr);
+  EXPECT_EQ(t->ref, ref);
+  EXPECT_FALSE(t->r1.deleted);
+}
+
+// Table1 over B2:D5 with columns c1..c3, a sort state on its data rows and
+// =SUM(Table1[c1]) in A1.
+Workbook TableWorkbook() {
+  Workbook wb = Workbook::create();
+  const char* const names[] = {"c1", "c2", "c3"};
+  for (std::uint32_t i = 0; i < 3; ++i) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_text(0, 1, 1 + i, names[i])));
+    for (std::uint32_t r = 0; r < 3; ++r) {
+      EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0, 2 + r, 1 + i, Value::number(r + 1.0))));
+    }
+  }
+  TableMetadata table;
+  table.id = 1;
+  table.name = "Table1";
+  table.display_name = "Table1";
+  table.ref = "B2:D5";
+  table.sheet_index = 0;
+  for (std::uint32_t i = 0; i < 3; ++i) {
+    table.columns.emplace_back(i + 1U, names[i], "", "", "");
+  }
+  table.sort_state_xml = "<sortState ref=\"B3:D5\"><sortCondition ref=\"C3:C5\"/></sortState>";
+  wb.mutable_tables().push_back(std::move(table));
+  wb.reindex_formulas_for_table_change({"Table1"});
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SUM(Table1[c1])")));
+  EXPECT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  return wb;
+}
+
+TEST(WorkbookRowColEdits, StructuredReferencesFollowARowInsertInsideTheTable) {
+  Workbook wb = TableWorkbook();
+  ASSERT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 6.0);
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 3, 1)));
+  ASSERT_EQ(wb.tables().size(), 1U);
+  EXPECT_EQ(wb.tables()[0].ref, "B2:D6");
+  // B6 held the last value before the insert; it is still inside Table1[c1].
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 5, 1, Value::number(100.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 103.0);
+}
+
+TEST(WorkbookRowColEdits, ColumnEditsInsideATableKeepItsColumnsAndSortState) {
+  Workbook wb = TableWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, 2, 1)));
+  ASSERT_EQ(wb.tables().size(), 1U);
+  const TableMetadata& widened = wb.tables()[0];
+  EXPECT_EQ(widened.ref, "B2:E5");
+  ASSERT_EQ(widened.columns.size(), 4U);
+  EXPECT_EQ(widened.columns[0].name, "c1");
+  EXPECT_EQ(widened.columns[1].name, "Column1");
+  EXPECT_EQ(widened.columns[1].id, 4U);
+  EXPECT_EQ(widened.columns[2].name, "c2");
+  ASSERT_NE(wb.sheet(0).cell_at(1, 2), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 2)->cached_value.as_text(), "Column1");
+  EXPECT_NE(widened.sort_state_xml.find("ref=\"B3:E5\""), std::string::npos) << widened.sort_state_xml;
+  EXPECT_NE(widened.sort_state_xml.find("ref=\"D3:D5\""), std::string::npos) << widened.sort_state_xml;
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, 2, 2)));  // Column1 and c2.
+  const TableMetadata& narrowed = wb.tables()[0];
+  EXPECT_EQ(narrowed.ref, "B2:C5");
+  ASSERT_EQ(narrowed.columns.size(), 2U);
+  EXPECT_EQ(narrowed.columns[0].name, "c1");
+  EXPECT_EQ(narrowed.columns[1].name, "c3");
+  // The sort condition sat on the deleted c2, so the sort state goes with it.
+  EXPECT_TRUE(narrowed.sort_state_xml.empty()) << narrowed.sort_state_xml;
+
+  for (const WorkbookFormat format : {WorkbookFormat::Ooxml, WorkbookFormat::Xlsb}) {
+    const auto saved = wb.save_as(format);
+    ASSERT_TRUE(static_cast<bool>(saved));
+    const io::ByteSpan bytes{saved.value().data(), saved.value().size()};
+    if (format == WorkbookFormat::Ooxml) {
+      const auto loaded = io::read_ooxml(bytes);
+      ASSERT_TRUE(static_cast<bool>(loaded));
+      ASSERT_EQ(loaded.value().workbook.tables().size(), 1U);
+      EXPECT_EQ(loaded.value().workbook.tables()[0].columns.size(), 2U);
+    } else {
+      const auto loaded = io::xlsb::read_xlsb(bytes);
+      ASSERT_TRUE(static_cast<bool>(loaded));
+      ASSERT_EQ(loaded.value().workbook.tables().size(), 1U);
+      EXPECT_EQ(loaded.value().workbook.tables()[0].columns.size(), 2U);
+    }
+  }
+}
+
+TEST(WorkbookRowColEdits, DeletingATableColumnSendsReferencesToItToRef) {
+  Workbook wb = TableWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 6, "=SUM(Table1[c2])")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 8, "=SUM(Table1[c3])")));
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, 2, 1)));  // c2, column C.
+  const Sheet& s = wb.sheet(0);
+  // The formulas right of the deleted column moved one column left.
+  EXPECT_EQ(s.cell_at(0, 5)->formula_text, "=SUM(#REF!)");
+  EXPECT_EQ(s.cell_at(0, 7)->formula_text, "=SUM(Table1[c3])");
+  EXPECT_EQ(s.cell_at(0, 0)->formula_text, "=SUM(Table1[c1])");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(s.cell_at(0, 5)->cached_value.as_error(), ErrorCode::Ref);
+  EXPECT_EQ(s.cell_at(0, 7)->cached_value.as_number(), 6.0);
+}
+
+// Mac Excel 16.114: a place-in-this-document link to Sheet1!D10 keeps
+// `location="Sheet1!D10"` after inserting row 5, deleting row 10 and renaming
+// Sheet1, in the object model and in the saved file.
+TEST(WorkbookRowColEdits, InternalHyperlinkLocationSurvivesEditsRenameAndRoundTrip) {
+  Workbook wb = Workbook::create();
+  Hyperlink link;
+  link.location = "Sheet1!D10";
+  link.display = "go";
+  wb.sheet(0).mutable_hyperlinks().push_back(link);
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 4, 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 10, 1)));
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "X")));
+  ASSERT_EQ(wb.sheet(0).hyperlinks().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).hyperlinks()[0].location, "Sheet1!D10");
+
+  for (const WorkbookFormat format : {WorkbookFormat::Ooxml, WorkbookFormat::Xlsb}) {
+    const auto saved = wb.save_as(format);
+    ASSERT_TRUE(static_cast<bool>(saved));
+    const io::ByteSpan bytes{saved.value().data(), saved.value().size()};
+    if (format == WorkbookFormat::Ooxml) {
+      const auto loaded = io::read_ooxml(bytes);
+      ASSERT_TRUE(static_cast<bool>(loaded));
+      ASSERT_EQ(loaded.value().workbook.sheet(0).hyperlinks().size(), 1U);
+      EXPECT_EQ(loaded.value().workbook.sheet(0).hyperlinks()[0].location, "Sheet1!D10");
+    } else {
+      const auto loaded = io::xlsb::read_xlsb(bytes);
+      ASSERT_TRUE(static_cast<bool>(loaded));
+      ASSERT_EQ(loaded.value().workbook.sheet(0).hyperlinks().size(), 1U);
+      EXPECT_EQ(loaded.value().workbook.sheet(0).hyperlinks()[0].location, "Sheet1!D10");
+    }
+  }
+}
+
+TEST(WorkbookRowColEdits, DeletingATablesWholeExtentRemovesIt) {
+  Workbook wb = TableWorkbook();
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 1, 4)));
+  EXPECT_TRUE(wb.tables().empty());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* sum = wb.sheet(0).cell_at(0, 0);
+  ASSERT_NE(sum, nullptr);
+  EXPECT_EQ(sum->formula_text, "=SUM(#REF!)");
+  ASSERT_TRUE(sum->cached_value.is_error());
+  EXPECT_EQ(sum->cached_value.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(static_cast<bool>(wb.save()));
+  ASSERT_TRUE(static_cast<bool>(wb.save_as(WorkbookFormat::Xlsb)));
 }
 
 }  // namespace

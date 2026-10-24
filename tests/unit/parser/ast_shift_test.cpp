@@ -427,6 +427,83 @@ TEST(ShiftRefsWithRowCol, CrossSheetQualifiedRangesOnlyRewriteTargetSheet) {
             "SUM(Sheet1!A1:A2)+SUM(Sheet2!A1:A3)");
 }
 
+// Every operand of a qualified `:` chain reads the qualified sheet, the
+// width-1 and later area tokens included, so only an edit there moves them.
+TEST(ShiftRefsWithRowCol, QualifiedChainMovesEveryOperandOnTheQualifiedSheet) {
+  EXPECT_EQ(
+      ParseRowColShiftFormula("=SUM(Sheet2!A1:C3:E5)", RowColAxis::kRow, RowColEdit::kInsert, 0, 1, "Sheet2", false),
+      "SUM(Sheet2!A2:C4:E6)");
+  EXPECT_EQ(
+      ParseRowColShiftFormula("=SUM(Sheet2!A1:C3:E5)", RowColAxis::kRow, RowColEdit::kInsert, 0, 1, "Sheet1", true),
+      "SUM(Sheet2!A1:C3:E5)");
+  EXPECT_EQ(
+      ParseRowColShiftFormula("=SUM(Sheet2!A1:B2:C3:D4)", RowColAxis::kRow, RowColEdit::kInsert, 0, 1, "Sheet2", false),
+      "SUM(Sheet2!A2:B3:C4:D5)");
+  EXPECT_EQ(
+      ParseRowColShiftFormula("=SUM(Sheet2!A1:B2:C3:D4)", RowColAxis::kRow, RowColEdit::kInsert, 0, 1, "Sheet1", true),
+      "SUM(Sheet2!A1:B2:C3:D4)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM('シート 2'!A1:C3:E5)", RowColAxis::kCol, RowColEdit::kInsert, 0, 1,
+                                    "シート 2", false),
+            "SUM('シート 2'!B1:D3:F5)");
+}
+
+TEST(ShiftRefsWithSheetRename, QualifiedChainKeepsLaterOperandsBare) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Sheet2!A1:C3:E5)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("Sheet2", "データ");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM(データ!A1:C3:E5)");
+}
+
+// A whole-axis token that a delete narrows to one column or row becomes the
+// single Ref its own text parses to.
+TEST(ShiftRefsWithRowCol, WholeAxisTokenNarrowedToOneAxisIsTheSingleRef) {
+  const struct {
+    const char* src;
+    RowColAxis axis;
+    std::uint32_t index;
+    std::string_view target;
+    bool local;
+    const char* want;
+  } kCases[] = {
+      {"=SUM(A:B)", RowColAxis::kCol, 1, "Sheet1", true, "SUM(A:A)"},
+      {"=SUM($A:$B)", RowColAxis::kCol, 1, "Sheet1", true, "SUM($A:$A)"},
+      {"=SUM(Sheet1!A:B)", RowColAxis::kCol, 1, "Sheet1", false, "SUM(Sheet1!A:A)"},
+      {"=SUM(1:2)", RowColAxis::kRow, 1, "Sheet1", true, "SUM(1:1)"},
+      {"=SUM(A:B:D:D)", RowColAxis::kCol, 1, "Sheet1", true, "SUM(A:A:C:C)"},
+      {"=SUM(B:C)*2", RowColAxis::kCol, 2, "Sheet1", true, "SUM(B:B)*2"},
+  };
+  for (const auto& c : kCases) {
+    Arena arena;
+    const AstNode* root = ParseOrNull(c.src, arena);
+    ASSERT_NE(root, nullptr) << c.src;
+    RowColShiftTransform transform(c.target, c.axis, RowColEdit::kDelete, c.index, 1, c.local);
+    const AstNode* shifted = shift_refs(*root, arena, transform);
+    ASSERT_NE(shifted, nullptr) << c.src;
+    const std::string text = format_formula(*shifted);
+    EXPECT_EQ(text, c.want) << c.src;
+    Arena reparsed_arena;
+    const AstNode* reparsed = ParseOrNull(text, reparsed_arena);
+    ASSERT_NE(reparsed, nullptr) << text;
+    EXPECT_EQ(dump_sexpr(*shifted), dump_sexpr(*reparsed)) << c.src;
+  }
+}
+
+// A mixed-anchor whole-axis token moves each endpoint by its own flag.
+TEST(ShiftRelativeRefs, MixedAnchorWholeAxisTokenWidens) {
+  EXPECT_EQ(ParseShiftRelativeDump("=SUM($A:A)", 1, 1), "(call SUM (range (ref $A:$A) spliced (ref B:B)))");
+  EXPECT_EQ(ParseShiftRelativeDump("=SUM(A:$A)", 1, 1), "(call SUM (range (ref B:B) spliced (ref $A:$A)))");
+  EXPECT_EQ(ParseShiftRelativeDump("=SUM($1:1)", 1, 1), "(call SUM (range (ref $1:$1) spliced (ref 2:2)))");
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM($A:A)", arena);
+  ASSERT_NE(root, nullptr);
+  const AstNode* shifted = shift_relative_refs(*root, arena, 1, 1);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM($A:B)");
+}
+
 // ---------------------------------------------------------------------------
 // shift_refs with SheetRenameTransform
 // ---------------------------------------------------------------------------
@@ -685,7 +762,53 @@ class FixedColTransform final : public RefTransform {
   }
 };
 
+// Test fixture transform: table `Gone` was dropped and column `Dropped` was
+// deleted from every table; `Old` was renamed to `New`.
+class TableEditTransform final : public RefTransform {
+ public:
+  std::optional<Reference> apply(const Reference& ref) const override { return ref; }
+
+  std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override {
+    if (table == "Gone" || column.find("Dropped") != std::string_view::npos) {
+      return std::nullopt;
+    }
+    return table == "Old" ? std::string_view("New") : table;
+  }
+};
+
+std::string ParseTableEditFormula(std::string_view src) {
+  Arena arena;
+  const AstNode* root = ParseOrNull(src, arena);
+  if (root == nullptr) {
+    return "<parse-failed>";
+  }
+  TableEditTransform transform;
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  if (shifted == nullptr) {
+    return "<arena-fail>";
+  }
+  return format_formula(*shifted);
+}
+
 }  // namespace
+
+// A structured reference whose table or column is gone collapses to `#REF!`
+// like a deleted cell.
+TEST(ShiftRefsCustom, StructuredRefToRemovedTargetBecomesRef) {
+  EXPECT_EQ(ParseTableEditFormula("=SUM(Gone[Amount])"), "SUM(#REF!)");
+  EXPECT_EQ(ParseTableEditFormula("=SUM(Keep[Dropped])+1"), "SUM(#REF!)+1");
+  EXPECT_EQ(ParseTableEditFormula("=SUM(Keep[[#Data],[Dropped]])"), "SUM(#REF!)");
+  EXPECT_EQ(ParseTableEditFormula("=SUM(Keep[Amount],Old[売上])"), "SUM(Keep[Amount],New[売上])");
+  EXPECT_EQ(ParseTableEditFormula("=Keep[@Dropped]*2"), "#REF!*2");
+}
+
+TEST(ShiftRefsCustom, UntouchedStructuredRefKeepsIdentity) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Keep[Amount])+Keep[@Amount]", arena);
+  ASSERT_NE(root, nullptr);
+  TableEditTransform transform;
+  EXPECT_EQ(shift_refs(*root, arena, transform), root);
+}
 
 TEST(ShiftRefsCustom, FixedColTransformRewritesEveryRef) {
   Arena arena;

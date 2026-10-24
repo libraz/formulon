@@ -412,7 +412,7 @@ TEST(GetPivotDataLazy, DuplicateCustomCaptionAcrossAxesReturnsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(GetPivotDataLazy, PivotPushedOffGridByRowInsertTurnsDependentIntoRef) {
+TEST(GetPivotDataLazy, RowInsertPushingThePivotOffGridIsRefused) {
   Workbook wb = BuildBasicWorkbook();
   ASSERT_TRUE(static_cast<bool>(
       wb.set_cell_formula(0U, 0U, 5U, "=GETPIVOTDATA(\"Sum of Amount\", A3, \"Region\", \"North\")")));
@@ -422,13 +422,17 @@ TEST(GetPivotDataLazy, PivotPushedOffGridByRowInsertTurnsDependentIntoRef) {
   ASSERT_TRUE(before->cached_value.is_number());
   EXPECT_EQ(before->cached_value.as_number(), 300.0);
 
-  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 1U, Sheet::kMaxRows - 2U)));
-  EXPECT_TRUE(wb.sheet(0).pivot_tables().empty());
+  const auto refused = wb.insert_rows(0U, 1U, Sheet::kMaxRows - 2U);
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
+  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).pivot_tables()[0]->anchor_row(), 2U);
+  EXPECT_EQ(wb.sheet(0).pivot_tables()[0]->anchor_col(), 0U);
   ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
   const Cell* after = wb.sheet(0).cell_at(0U, 5U);
   ASSERT_NE(after, nullptr);
-  ASSERT_TRUE(after->cached_value.is_error());
-  EXPECT_EQ(after->cached_value.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(after->cached_value.is_number());
+  EXPECT_EQ(after->cached_value.as_number(), 300.0);
 }
 
 TEST(GetPivotDataLazy, DistinctRowAndColumnFieldsUseTheirLeafOffsets) {

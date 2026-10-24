@@ -458,8 +458,7 @@ TEST(AstFormat, RangeEndpointsThatCannotFoldStayBare) {
 // The whole-axis splice turns `RangeOp(A:A, C:C)` into the compact `A:C`.
 // It must not fire when both endpoints sit on the same axis: `A:A` reads
 // back as one whole-column reference rather than as the pair, so the pair
-// the source spelled out would be lost. Anchoring does not separate them
-// either -- `$A:A` is also a single token.
+// the source spelled out would be lost.
 TEST(AstFormat, WholeAxisPairOnOneColumnKeepsBothEndpoints) {
   ExpectRoundTripsToSame("=A:A:A:A");
   ExpectRoundTripsToSame("=$A:$A:A:A");
@@ -519,6 +518,28 @@ TEST(AstFormat, WholeAxisPairKeepsPerEndpointAnchoring) {
   ASSERT_NE(reparsed, nullptr);
   ASSERT_TRUE(reparse.errors().empty());
   EXPECT_EQ(dump_sexpr(*reparsed), "(range (ref $A:$A) (ref A:A))");
+}
+// One whole-axis token whose halves differ only in anchoring stays a pair,
+// unqualified, sheet-qualified and 3-D alike: `$A:A` is not `$A:$A`.
+TEST(AstFormat, OneAxisTokenWithMixedAnchoringKeepsBothFlags) {
+  for (const char* src : {"=SUM($A:A)", "=SUM(A:$A)", "=SUM($1:1)", "=SUM(1:$1)", "=SUM(Sheet2!$A:A)",
+                          "=SUM(Sheet1:Sheet2!$A:A)", "=SUM(Sheet1:Sheet2!1:$1)"}) {
+    ExpectRoundTripsToSame(src);
+    Arena a;
+    Parser p(src, a);
+    AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    EXPECT_EQ("=" + format_formula(*root), src);
+  }
+  Arena a;
+  Parser p("=$A:A", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(dump_sexpr(*root), "(range (ref $A:$A) spliced (ref A:A))");
+  Parser single("=$A:$A", a);
+  AstNode* single_root = single.parse();
+  ASSERT_NE(single_root, nullptr);
+  EXPECT_EQ(dump_sexpr(*single_root), "(ref $A:$A)");
 }
 
 TEST(AstFormat, IntersectOp) {
@@ -804,6 +825,33 @@ TEST(AstFormat, StorageOperatorRespellingLeavesEverythingElse) {
   EXPECT_EQ(spell_storage_operators("=SINGLE(A1,2)"), "=SINGLE(A1,2)");
   EXPECT_EQ(spell_storage_operators("=SUM(A1:A2)"), "=SUM(A1:A2)");
   EXPECT_EQ(spell_storage_operators("=SINGLE("), "=SINGLE(");
+}
+
+// Token offsets count UTF-16 units; the text around the rewritten call must
+// come through byte for byte, including multi-byte and surrogate-pair text.
+TEST(AstFormat, StorageOperatorRespellingKeepsNonAsciiTextAround) {
+  EXPECT_EQ(spell_storage_operators("=\"日本\"&ANCHORARRAY(B1)"), "=\"日本\"&B1#");
+  EXPECT_EQ(spell_storage_operators("=\"計\"&SINGLE(A1:A10)&\"末尾\""), "=\"計\"&@A1:A10&\"末尾\"");
+  EXPECT_EQ(spell_storage_operators("=IF(B1=\"計\",1,0)+SINGLE(A1:A10)"), "=IF(B1=\"計\",1,0)+@A1:A10");
+  EXPECT_EQ(spell_storage_operators("=\"😀\"&ROWS(_TRO_TRAILING(A1:A10))&\"😀\""), "=\"😀\"&ROWS(A1:.A10)&\"😀\"");
+  EXPECT_EQ(spell_storage_operators("=SUM('シート 1'!A1,ANCHORARRAY('シート 1'!B1))"),
+            "=SUM('シート 1'!A1,'シート 1'!B1#)");
+}
+
+// Only an anchor the parser takes before `#` is respelled; any other keeps
+// the call spelling, so the result always parses.
+TEST(AstFormat, StorageOperatorRespellingKeepsUnanchorableCalls) {
+  for (const char* src : {"=SUM(ANCHORARRAY([Book.xlsx]Sheet1!A1))", "=ANCHORARRAY(Sheet1:Sheet2!A1)",
+                          "=ANCHORARRAY(A:A)", "=ANCHORARRAY(A1:B2)", "=ANCHORARRAY(\"日本\"&ANCHORARRAY(B1))"}) {
+    const std::string out = spell_storage_operators(src);
+    Arena a;
+    Parser p(std::string_view(out).substr(1), a);
+    ASSERT_NE(p.parse(), nullptr) << out;
+    EXPECT_TRUE(p.errors().empty()) << src << " -> " << out;
+  }
+  EXPECT_EQ(spell_storage_operators("=SUM(ANCHORARRAY([Book.xlsx]Sheet1!A1))"),
+            "=SUM(ANCHORARRAY([Book.xlsx]Sheet1!A1))");
+  EXPECT_EQ(spell_storage_operators("=ANCHORARRAY(\"日本\"&ANCHORARRAY(B1))"), "=ANCHORARRAY(\"日本\"&B1#)");
 }
 
 TEST(AstFormat, WrittenParenthesesAreKept) {

@@ -39,12 +39,24 @@
 namespace formulon {
 namespace parser {
 
-/// Shared ceiling for AST consumers that receive a tree without parser
-/// diagnostics (notably the XLSB Ptg decoder). Keep this in lockstep with
-/// ParserOptions' default so every recursive AST walk has the same bound.
-/// A flat operator chain (`1+2+...+n`) is one `BinaryOp` node, so its length
-/// is bounded by the formula-length limit rather than by this depth.
-inline constexpr std::uint32_t kMaxFormulaAstDepth = 128;
+/// Excel 365's nesting limits on entered formula text, measured on Mac
+/// Excel: 65 calls deep (the outermost plus 64 nested), whatever operators or
+/// parentheses sit between them.
+inline constexpr std::uint32_t kMaxFunctionNesting = 65;
+/// Grouping parentheses nest 256 deep; a call's own parentheses do not count.
+/// A `-(-(...` or `1+(1+(...` run is bound by this, one pair per level.
+inline constexpr std::uint32_t kMaxGroupingParenDepth = 256;
+/// Prefix operators nest 1024 deep over one operand (`---...-1`), the deepest
+/// single shape Excel accepts.
+inline constexpr std::uint32_t kMaxOperatorNesting = 1024;
+
+/// Shared ceiling, in nodes along any path, for every recursive AST walker
+/// and for consumers that receive a tree without parser diagnostics (notably
+/// the XLSB Ptg decoder): the `kMaxOperatorNesting` run plus its operand.
+/// Keep this in lockstep with ParserOptions' default. A flat operator chain
+/// (`1+2+...+n`) is one `BinaryOp` node, so its length is bounded by the
+/// formula-length limit rather than by this depth.
+inline constexpr std::uint32_t kMaxFormulaAstDepth = kMaxOperatorNesting + 1;
 
 /// Discriminator tag for every AST variant.
 ///
@@ -158,13 +170,14 @@ class AstNode final {
 
   /// Parenthesis pairs written around this node (`((x))` is 2), kept so the
   /// text and the XLSB `PtgParen`s round-trip; evaluation ignores them.
-  std::uint8_t paren_depth() const noexcept { return paren_depth_; }
+  /// Wide enough for `kMaxGroupingParenDepth` pairs around one node.
+  std::uint16_t paren_depth() const noexcept { return paren_depth_; }
   void add_paren() noexcept {
-    if (paren_depth_ < 0xFF) {
+    if (paren_depth_ < 0xFFFF) {
       ++paren_depth_;
     }
   }
-  void set_paren_depth(std::uint8_t depth) noexcept { paren_depth_ = depth; }
+  void set_paren_depth(std::uint16_t depth) noexcept { paren_depth_ = depth; }
 
   // --- Literal -------------------------------------------------------------
   const Value& as_literal() const;
@@ -482,7 +495,7 @@ class AstNode final {
   };
 
   NodeKind kind_ = NodeKind::Literal;
-  std::uint8_t paren_depth_ = 0;
+  std::uint16_t paren_depth_ = 0;
   TextRange range_{};
   Payload data_;
 };
@@ -491,6 +504,13 @@ class AstNode final {
 /// `max_depth` nodes. The walk is iterative so it is itself safe for an
 /// adversarially deep tree.
 bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth);
+
+/// The first node, in a depth-first walk, past Excel's entry limits: more
+/// than `kMaxFunctionNesting` calls (`LET` and `LAMBDA` included, a stored
+/// trim-reference operator not) or `kMaxGroupingParenDepth` grouping
+/// parentheses along its path. Null when `root` is within both. The walk is
+/// iterative.
+const AstNode* first_node_past_excel_nesting(const AstNode& root);
 
 static_assert(std::is_trivially_destructible_v<AstNode>, "AstNode must be trivially destructible to live in an Arena");
 
@@ -676,6 +696,11 @@ std::string_view trim_ref_function_name(TrimRefMode mode) noexcept;
 /// The mode of `node` when it is a one-argument call to a
 /// `trim_ref_function_name`, ASCII case-insensitively; `None` otherwise.
 TrimRefMode trim_ref_call_mode(const AstNode& node) noexcept;
+
+/// True iff `node` may stand before the postfix `#` operator: a cell
+/// reference written out (never a whole column or row), or a call or
+/// defined name that may return one.
+bool is_spill_anchor(const AstNode& node) noexcept;
 
 /// True for one of Excel's volatile functions (NOW, TODAY, RAND,
 /// RANDBETWEEN, RANDARRAY, OFFSET, INDIRECT, INFO, CELL, FORMULATEXT, SHEET,

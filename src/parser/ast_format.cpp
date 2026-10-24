@@ -35,11 +35,9 @@ using detail::kBpPostfixPercent;
 using detail::kBpRange;
 using detail::kBpUnaryPrefix;
 
-// Parenthesis pairs to print around each node, decided once by
-// `CollectParens` for the formatters and the XLSB encoder alike.
-using ParenCounts = std::unordered_map<const AstNode*, std::uint8_t>;
-
-std::uint8_t ParenCount(const ParenCounts& parens, const AstNode& node) {
+// `ParenCounts` is decided once by `CollectParens` for the formatters and the
+// XLSB encoder alike.
+std::uint16_t ParenCount(const ParenCounts& parens, const AstNode& node) {
   const auto it = parens.find(&node);
   return it == parens.end() ? 0U : it->second;
 }
@@ -428,9 +426,9 @@ bool ColonEndpointsWouldFold(const AstNode& lhs, const AstNode& rhs) noexcept {
 // True when operands `i` and `i + 1` of `range` print as one whole-axis
 // token (`A:C`, `1:3`): a spliced pair of whole-column or whole-row Refs.
 //
-// Two endpoints on the same axis index never print spliced: `A:A` reads
-// back as the single whole-column Ref rather than as a pair, so such a pair
-// prints in full (`A:A:A:A`), which reads back as itself.
+// A pair that is one whole-axis Ref (`whole_axis_pair_is_single`) never
+// prints spliced: `A:A` reads back as the single Ref rather than as a pair,
+// so such a pair prints in full (`A:A:A:A`), which reads back as itself.
 bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept {
   if (!range.as_range_spliced(i)) {
     return false;
@@ -442,10 +440,8 @@ bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept {
   }
   const Reference& lr = lhs.as_ref();
   const Reference& rr = rhs.as_ref();
-  if (lr.is_full_col && rr.is_full_col) {
-    return lr.col != rr.col;
-  }
-  return lr.is_full_row && rr.is_full_row && lr.row != rr.row;
+  const bool same_axis = (lr.is_full_col && rr.is_full_col) || (lr.is_full_row && rr.is_full_row);
+  return same_axis && !whole_axis_pair_is_single(lr, rr);
 }
 
 // Prints a `:` chain with `emit` printing each operand. The two halves of a
@@ -713,15 +709,15 @@ void FormatBare(const AstNode& node, std::string& out, const Layout& layout) {
 }
 
 void FormatNode(const AstNode& node, std::string& out, const Layout& layout) {
-  const std::uint8_t n = ParenCount(layout.parens, node);
+  const std::uint16_t n = ParenCount(layout.parens, node);
   for (unsigned i = n; i >= 1U; --i) {
-    AppendWhitespace(layout, node, WhitespaceSlot::kBeforeOpen, static_cast<std::uint8_t>(i), out);
+    AppendWhitespace(layout, node, WhitespaceSlot::kBeforeOpen, static_cast<std::uint16_t>(i), out);
     out.push_back('(');
   }
   AppendWhitespace(layout, node, WhitespaceSlot::kBeforeText, 0, out);
   FormatBare(node, out, layout);
   for (unsigned i = 1; i <= n; ++i) {
-    AppendWhitespace(layout, node, WhitespaceSlot::kBeforeClose, static_cast<std::uint8_t>(i), out);
+    AppendWhitespace(layout, node, WhitespaceSlot::kBeforeClose, static_cast<std::uint16_t>(i), out);
     out.push_back(')');
   }
 }
@@ -730,9 +726,9 @@ void FormatNode(const AstNode& node, std::string& out, const Layout& layout) {
 // with: the pairs written around it, or one where its slot's binding power
 // demands it. The formatters and the XLSB `PtgParen`s both read the result.
 void Parenthesize(const AstNode& node, bool needed, ParenCounts& out) {
-  const std::uint8_t count = std::max<std::uint8_t>(node.paren_depth(), needed ? 1U : 0U);
+  const std::uint16_t count = std::max<std::uint16_t>(node.paren_depth(), needed ? 1U : 0U);
   if (count != 0U) {
-    std::uint8_t& slot = out[&node];
+    std::uint16_t& slot = out[&node];
     slot = std::max(slot, count);
   }
 }
@@ -869,7 +865,7 @@ struct StorageEmitter {
   void append_function_name(std::string& out, std::string_view canonical) const { out.append(spell(canonical)); }
 
   void emit(const AstNode& node, std::string& out) {
-    const std::uint8_t n = ParenCount(parens, node);
+    const std::uint16_t n = ParenCount(parens, node);
     out.append(n, '(');
     emit_bare(node, out);
     out.append(n, ')');
@@ -1157,7 +1153,7 @@ void append_external_qualifier(const AstNode& node, bool r1c1, std::string& out)
   AppendExternalQualifier(node, r1c1, nullptr, out);
 }
 
-void collect_parenthesized_nodes(const AstNode& root, std::unordered_map<const AstNode*, std::uint8_t>& out) {
+void collect_parenthesized_nodes(const AstNode& root, ParenCounts& out) {
   if (ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
     CollectParens(root, 0, out);
   }

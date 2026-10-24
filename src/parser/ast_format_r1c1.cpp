@@ -20,8 +20,6 @@ namespace formulon {
 namespace parser {
 namespace {
 
-using ParenCounts = std::unordered_map<const AstNode*, std::uint8_t>;
-
 struct Host {
   std::int64_t row;
   std::int64_t col;
@@ -148,7 +146,7 @@ struct Emitter {
         break;
     }
     const auto it = parens.find(&node);
-    const std::uint8_t n = it == parens.end() ? 0U : it->second;
+    const std::uint16_t n = it == parens.end() ? 0U : it->second;
     out.append(n, '(');
     emit_bare(node, out);
     out.append(n, ')');

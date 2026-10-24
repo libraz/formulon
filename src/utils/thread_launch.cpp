@@ -12,6 +12,7 @@
 #include "utils/thread_launch.h"
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -36,6 +37,13 @@ namespace {
 /// read would only mis-time an injected failure rather than corrupt
 /// anything.
 std::atomic<std::int64_t> g_launches_until_failure{-1};
+
+/// Workers evaluate trees as deep as the parser admits; 8 MiB is a Linux main
+/// thread's stack and, reserved rather than committed, costs only address
+/// space. Emscripten workers take `DEFAULT_PTHREAD_STACK_SIZE` from the link.
+#if !defined(__EMSCRIPTEN__)
+constexpr std::size_t kWorkerStackBytes = std::size_t{8} << 20;
+#endif
 
 /// Returns true when this launch should fail without touching the OS,
 /// consuming one of the allowance's remaining successes otherwise.
@@ -126,7 +134,8 @@ Expected<Thread, Error> launch_thread(ThreadStart& start) {
 
   Thread thread;
 #if defined(_WIN32)
-  const uintptr_t handle = _beginthreadex(nullptr, 0U, &ThreadTrampoline, &start, 0U, nullptr);
+  const uintptr_t handle = _beginthreadex(nullptr, static_cast<unsigned>(kWorkerStackBytes), &ThreadTrampoline, &start,
+                                          STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
   if (handle == 0U) {
     return LaunchError(errno);
   }
@@ -134,7 +143,20 @@ Expected<Thread, Error> launch_thread(ThreadStart& start) {
 #else
   // `pthread_create` reports through its return value; `errno` is not
   // set, which is the whole reason this path can stay non-throwing.
+#if defined(__EMSCRIPTEN__)
   const int create_rc = pthread_create(&thread.handle_, nullptr, &ThreadTrampoline, &start);
+#else
+  pthread_attr_t attr;
+  int create_rc = pthread_attr_init(&attr);
+  if (create_rc != 0) {
+    return LaunchError(create_rc);
+  }
+  create_rc = pthread_attr_setstacksize(&attr, kWorkerStackBytes);
+  if (create_rc == 0) {
+    create_rc = pthread_create(&thread.handle_, &attr, &ThreadTrampoline, &start);
+  }
+  pthread_attr_destroy(&attr);
+#endif
   if (create_rc != 0) {
     return LaunchError(create_rc);
   }

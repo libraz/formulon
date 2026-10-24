@@ -71,29 +71,6 @@ struct DataTable {
   DataTableInput col_input() const noexcept { return two_dimensional ? r2 : row_oriented ? DataTableInput{} : r1; }
 };
 
-/// How a row/column insert or delete meets a table's block: `ref` plus the
-/// header row above it and the header column left of it.
-enum class DataTableEditCut : std::uint8_t {
-  kMisses,   ///< The edit lies outside the block along its axis; the table shifts.
-  kRemoves,  ///< A delete spans the whole block along its axis; the table goes.
-  kSplits,   ///< The edit cuts into the block; it is refused.
-};
-
-inline DataTableEditCut data_table_edit_cut(const DataTable& table, bool row_axis, bool is_delete, std::uint32_t index,
-                                            std::uint32_t count) noexcept {
-  const std::uint32_t first = row_axis ? table.ref.first_row : table.ref.first_col;
-  const std::uint32_t last = row_axis ? table.ref.last_row : table.ref.last_col;
-  const std::uint32_t lo = first == 0U ? 0U : first - 1U;
-  if (!is_delete) {
-    return index > lo && index <= last ? DataTableEditCut::kSplits : DataTableEditCut::kMisses;
-  }
-  const std::uint64_t end = static_cast<std::uint64_t>(index) + count;  // exclusive
-  if (end <= lo || index > last) {
-    return DataTableEditCut::kMisses;
-  }
-  return index <= lo && end > last ? DataTableEditCut::kRemoves : DataTableEditCut::kSplits;
-}
-
 /// The formula every result cell shows: `=TABLE(row_input,col_input)` in A1,
 /// an absent input left empty and a deleted one as `#REF!`.
 inline std::string data_table_formula_text(const DataTable& table) {

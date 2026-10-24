@@ -233,32 +233,7 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
       }
     }
 
-    for (Hyperlink& hyperlink : sheet.mutable_hyperlinks()) {
-      if (hyperlink.location.empty()) {
-        continue;
-      }
-      const bool has_fragment_prefix = hyperlink.location.front() == '#';
-      const std::string_view body =
-          has_fragment_prefix ? std::string_view(hyperlink.location).substr(1) : std::string_view(hyperlink.location);
-      const FormulaRewriteResult result = rewrite_formula(body, transform);
-      if (!result.changed) {
-        continue;
-      }
-      // A fragment marker is a transport prefix, not part of the formula.
-      // Avoid turning the removal result `#REF!` into the invalid `##REF!`.
-      if (has_fragment_prefix && result.text == "#REF!") {
-        hyperlink.location = "#REF!";
-      } else {
-        std::string rewritten;
-        rewritten.reserve(result.text.size() + (has_fragment_prefix ? 1U : 0U));
-        if (has_fragment_prefix) {
-          rewritten.push_back('#');
-        }
-        rewritten.append(result.text);
-        hyperlink.location = std::move(rewritten);
-      }
-    }
-
+    // Internal hyperlink locations are left alone: Excel keeps their text through every edit and rename.
     for (DataValidation& validation : sheet.mutable_validations()) {
       rewrite_field(validation.formula1, transform);
       rewrite_field(validation.formula2, transform);

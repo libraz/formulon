@@ -42,6 +42,39 @@ TEST(WorkbookSheetOps, RenameRejectsForbiddenCharacters) {
   EXPECT_EQ(wb.sheet(0).name(), "Alpha");
 }
 
+// Mac Excel 16.114 refuses an edge apostrophe on rename and fails to open a
+// file carrying one, as it does a forbidden character; it accepts History both
+// ways. Windows Excel's naming UI reserves History.
+TEST(WorkbookSheetOps, RenameRejectsEdgeApostrophesEverywhere) {
+  for (const ExcelProfile profile : {win_365_en_us_profile(), mac_365_ja_jp_profile()}) {
+    Workbook wb = ThreeSheetWorkbook();
+    wb.set_excel_profile(profile);
+    for (const char* bad : {"'abc", "abc'", "'"}) {
+      auto r = wb.rename_sheet(0, bad);
+      ASSERT_FALSE(static_cast<bool>(r)) << "expected rejection of " << bad;
+      EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+    }
+    EXPECT_EQ(wb.sheet(0).name(), "Alpha");
+    ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "a'b")));
+  }
+}
+
+TEST(WorkbookSheetOps, RenameRejectsHistoryOnlyUnderAWindowsProfile) {
+  Workbook win = ThreeSheetWorkbook();
+  win.set_excel_profile(win_365_en_us_profile());
+  for (const char* reserved : {"History", "HISTORY", "history"}) {
+    auto r = win.rename_sheet(0, reserved);
+    ASSERT_FALSE(static_cast<bool>(r)) << "expected rejection of " << reserved;
+    EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+  }
+  ASSERT_TRUE(static_cast<bool>(win.rename_sheet(1, "History1")));
+
+  Workbook mac = ThreeSheetWorkbook();
+  mac.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(mac.rename_sheet(0, "History")));
+  EXPECT_EQ(mac.sheet(0).name(), "History");
+}
+
 TEST(WorkbookSheetOps, RenameRejectsCaseInsensitiveCollision) {
   Workbook wb = ThreeSheetWorkbook();
   // `BETA` collides with the existing `Beta`.
@@ -124,6 +157,27 @@ TEST(WorkbookSheetOps, AddSheetValidatedRejectsEmptyForbiddenAndTooLong) {
   EXPECT_FALSE(static_cast<bool>(wb.add_sheet_validated("a/b")));
   EXPECT_FALSE(static_cast<bool>(wb.add_sheet_validated(std::string(32U, 'a'))));
   EXPECT_EQ(wb.sheet_count(), 3U);
+}
+
+TEST(WorkbookSheetOps, AddSheetEnteredRejectsWhatRenameRejects) {
+  Workbook wb = ThreeSheetWorkbook();
+  wb.set_excel_profile(win_365_en_us_profile());
+  for (const char* bad : {"'abc", "abc'", "History", "hIsToRy", "", "a/b", "beta"}) {
+    auto r = wb.add_sheet_entered(bad);
+    ASSERT_FALSE(static_cast<bool>(r)) << "expected rejection of " << bad;
+    EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+  }
+  EXPECT_EQ(wb.sheet_count(), 3U);
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("a'b")));
+  // A file may carry History, which Excel opens; an edge apostrophe it does not.
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("History")));
+  EXPECT_FALSE(static_cast<bool>(wb.add_sheet_validated("'a")));
+  EXPECT_FALSE(static_cast<bool>(wb.add_sheet_validated("a'")));
+  EXPECT_EQ(wb.sheet_count(), 5U);
+
+  Workbook mac = ThreeSheetWorkbook();
+  mac.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(mac.add_sheet_entered("History")));
 }
 
 TEST(WorkbookSheetOps, AddSheetValidatedAccepts31JapaneseCharacters) {
@@ -360,7 +414,7 @@ TEST(WorkbookSheetOps, RenameRewritesSheetNamedMetadata) {
   ASSERT_EQ(wb.defined_names().size(), 1U);
   EXPECT_EQ(wb.defined_names()[0].formula, "Delta!$A$1");
   ASSERT_EQ(wb.sheet(0).hyperlinks().size(), 1U);
-  EXPECT_EQ(wb.sheet(0).hyperlinks()[0].location, "#Delta!A1");
+  EXPECT_EQ(wb.sheet(0).hyperlinks()[0].location, "#Gamma!A1") << "Excel keeps a hyperlink location's text";
   ASSERT_EQ(wb.sheet(0).validations().size(), 1U);
   EXPECT_EQ(wb.sheet(0).validations()[0].formula1, "Delta!$A$1");
   EXPECT_EQ(wb.sheet(0).validations()[0].formula2, "Delta!$B$1");

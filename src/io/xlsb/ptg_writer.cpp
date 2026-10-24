@@ -320,7 +320,7 @@ class SourceWhitespace {
   // Index of the first token of `node`'s text inside its own parentheses.
   std::size_t first_bare_token(const parser::AstNode& node) const {
     std::size_t i = token_at(node.range().start);
-    for (std::uint8_t d = 0; d < node.paren_depth(); ++d) {
+    for (unsigned d = 0; d < node.paren_depth(); ++d) {
       if (!is(i, parser::TokenKind::LParen)) {
         return kNone;
       }
@@ -571,8 +571,8 @@ class Encoder {
     RETURN_IF_ERROR(emit_node(node));
     if (const auto it = parens_.find(&node); it != parens_.end()) {
       for (unsigned i = 1; i <= it->second; ++i) {
-        emit_space(node, parser::WhitespaceSlot::kBeforeOpen, static_cast<std::uint8_t>(i));
-        emit_space(node, parser::WhitespaceSlot::kBeforeClose, static_cast<std::uint8_t>(i));
+        emit_space(node, parser::WhitespaceSlot::kBeforeOpen, static_cast<std::uint16_t>(i));
+        emit_space(node, parser::WhitespaceSlot::kBeforeClose, static_cast<std::uint16_t>(i));
         emit_u8(out_, 0x15);  // PtgParen, one per pair
       }
     }
@@ -1741,7 +1741,7 @@ class Encoder {
   const NameTable& name_table_;
   /// Parenthesis pairs per node, as the formula text prints them
   /// (`parser::collect_parenthesized_nodes`).
-  std::unordered_map<const parser::AstNode*, std::uint8_t> parens_;
+  parser::ParenCounts parens_;
   /// True while emitting the operation a memory token covers.
   bool in_memory_token_ = false;
   /// Where the next node `emit_node` starts sits; set by its parent.

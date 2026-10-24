@@ -174,32 +174,6 @@ bool split_column_range(std::string_view text, StructuredRefSelector* sel) {
   return true;
 }
 
-/// Unescapes ECMA-376 §18.5.1.10's structured-reference escape grammar: an
-/// apostrophe immediately before one of `# ' [ ]` makes that one character
-/// literal (`Bob''s` -> `Bob's`, `'#Items` -> `#Items`); every other byte,
-/// including an apostrophe not followed by one of those four, passes
-/// through unchanged. A table column name is never stored pre-escaped
-/// (`TableMetadata::columns[i].name` is the literal name), so a
-/// bracket payload read verbatim from formula text must be unescaped
-/// before comparison.
-std::string unescape_structured_ref_name(std::string_view raw) {
-  std::string out;
-  out.reserve(raw.size());
-  for (std::size_t i = 0; i < raw.size();) {
-    if (raw[i] == '\'' && i + 1 < raw.size()) {
-      const char next = raw[i + 1];
-      if (next == '#' || next == '\'' || next == '[' || next == ']') {
-        out.push_back(next);
-        i += 2;
-        continue;
-      }
-    }
-    out.push_back(raw[i]);
-    ++i;
-  }
-  return out;
-}
-
 /// Looks up a column by case-insensitive name. Returns a 0-based index into
 /// `t.columns` on success, `-1u` on failure.
 std::uint32_t find_column_index(const TableMetadata& t, std::string_view name) noexcept {
@@ -238,6 +212,24 @@ bool parse_table_ref(std::string_view ref, std::uint32_t* row_top, std::uint32_t
 }
 
 }  // namespace
+
+std::string unescape_structured_ref_name(std::string_view raw) {
+  std::string out;
+  out.reserve(raw.size());
+  for (std::size_t i = 0; i < raw.size();) {
+    if (raw[i] == '\'' && i + 1 < raw.size()) {
+      const char next = raw[i + 1];
+      if (next == '#' || next == '\'' || next == '[' || next == ']') {
+        out.push_back(next);
+        i += 2;
+        continue;
+      }
+    }
+    out.push_back(raw[i]);
+    ++i;
+  }
+  return out;
+}
 
 Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::string_view payload) {
   payload = ascii_trim(payload);

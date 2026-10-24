@@ -484,14 +484,19 @@ AstNode* Parser::parse() {
     return nullptr;
   }
 
-  // A left-associative chain of `%`, a space or a call suffix is assembled
-  // by the Pratt loop without adding parse_expression frames, one node per
-  // operator. Validate the completed tree as well, so those shapes observe
-  // the same configured ceiling as nested calls and parentheses before any
-  // recursive consumer sees it. A binary or `:` chain is one node.
-  if (!ast_depth_within_limit(*root_, opts_.max_parse_depth)) {
+  // A run of prefix signs, and a left-associative chain of `%`, a space or a
+  // call suffix, is assembled without adding parse_expression frames, one
+  // node per operator. Validate the completed tree as well, so those shapes
+  // observe the same configured ceiling as nested calls and parentheses
+  // before any recursive consumer sees it. A binary or `:` chain is one
+  // node. Excel's own limits on calls and grouping parentheses are checked
+  // here too, the diagnostic pointing at the first node past one; a formula
+  // past any limit is refused whole, as Excel refuses its entry.
+  const bool within_depth = ast_depth_within_limit(*root_, opts_.max_parse_depth);
+  const AstNode* past_excel = within_depth ? first_node_past_excel_nesting(*root_) : nullptr;
+  if (!within_depth || past_excel != nullptr) {
     const TextRange range = root_->range();
-    record_error(ParseErrorCode::NestedFormulaTooDeep, range);
+    record_error(ParseErrorCode::NestedFormulaTooDeep, past_excel != nullptr ? past_excel->range() : range);
     root_ = make_recovery_placeholder(range);
     if (root_ == nullptr) {
       return nullptr;
@@ -777,22 +782,15 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // Always consume `#` so we never re-enter the loop on the same token,
       // even on rejection. The diagnostic carries the Hash token's range.
       const Token& hash_tok = advance();
-      const NodeKind anchor_kind = lhs->kind();
-      const bool computed_anchor = anchor_kind == NodeKind::Call || anchor_kind == NodeKind::NameRef;
-      if (anchor_kind != NodeKind::Ref && !computed_anchor) {
+      // `A:A#` / `1:1#` are not legal Excel spill anchors either.
+      if (!is_spill_anchor(*lhs)) {
         record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
         // Surface an `ErrorPlaceholder` so siblings keep parsing.
         AstNode* placeholder = make_recovery_placeholder(SpanRange(lhs->range(), hash_tok.range));
         lhs = placeholder != nullptr ? placeholder : lhs;
         continue;
       }
-      if (!computed_anchor && (lhs->as_ref().is_full_col || lhs->as_ref().is_full_row)) {
-        // `A:A#` / `1:1#` are not legal Excel spill anchors.
-        record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
-        AstNode* placeholder = make_recovery_placeholder(SpanRange(lhs->range(), hash_tok.range));
-        lhs = placeholder != nullptr ? placeholder : lhs;
-        continue;
-      }
+      const bool computed_anchor = lhs->kind() != NodeKind::Ref;
       AstNode* node = computed_anchor ? make_spill_ref_expr(arena_, lhs) : make_spill_ref(arena_, lhs->as_ref());
       if (node == nullptr) {
         bailed_ = true;
@@ -952,9 +950,8 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
     case TokenKind::At:
       return parse_at_prefix_atom(ctx);
     case TokenKind::Plus:
-      return parse_unary_prefix_atom(UnaryOp::Plus, ctx);
     case TokenKind::Minus:
-      return parse_unary_prefix_atom(UnaryOp::Minus, ctx);
+      return parse_unary_prefix_atom(ctx);
     case TokenKind::Ident:
       return parse_ident_or_call_or_full_col();
     case TokenKind::SheetName:

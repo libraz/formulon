@@ -15,6 +15,7 @@
 #include "utils/arena.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace parser {
@@ -52,7 +53,7 @@ class OperatorRespeller {
   std::string text(const AstNode& node, bool tight_parent) const {
     const TextRange r = node.range();
     if (!HasStorageOperatorCall(node)) {
-      return std::string(src_.substr(r.start, r.end - r.start));
+      return std::string(slice(r.start, r.end));
     }
     if (IsStorageOperatorCall(node)) {
       const AstNode& arg = node.as_call_arg(0);
@@ -66,10 +67,12 @@ class OperatorRespeller {
         const std::string at = "@" + parenthesised(arg, wrap_arg);
         return tight_parent ? "(" + at + ")" : at;
       }
-      const bool bare = arg.kind() == NodeKind::Ref || arg.kind() == NodeKind::Ref3D ||
-                        arg.kind() == NodeKind::NameRef || arg.kind() == NodeKind::Call ||
-                        arg.kind() == NodeKind::ExternalRef;
-      return parenthesised(arg, !bare) + "#";
+      // An anchor `#` cannot follow keeps the call spelling, which parses.
+      if (!is_spill_anchor(arg)) {
+        return std::string(slice(r.start, arg.range().start)) + text(arg, false) +
+               std::string(slice(arg.range().end, r.end));
+      }
+      return text(arg, false) + "#";
     }
     const std::vector<const AstNode*> children = child_nodes(node);
     const auto by_start = [&](std::uint32_t lhs, std::uint32_t rhs) {
@@ -87,12 +90,19 @@ class OperatorRespeller {
       if (!HasStorageOperatorCall(*child)) {
         continue;
       }
-      out.append(src_.substr(at, child->range().start - at));
+      out.append(slice(at, child->range().start));
       out.append(text(*child, tight));
       at = child->range().end;
     }
-    out.append(src_.substr(at, r.end - at));
+    out.append(slice(at, r.end));
     return out;
+  }
+
+  /// The source text between two token offsets, which count UTF-16 code
+  /// units while `src_` is UTF-8.
+  std::string_view slice(std::uint32_t start, std::uint32_t end) const {
+    const std::size_t from = utf16_to_byte_offset(src_, start);
+    return src_.substr(from, utf16_to_byte_offset(src_, end) - from);
   }
 
  private:
@@ -112,13 +122,13 @@ class OperatorRespeller {
       return out;
     }
     if (arg.paren_depth() == 0U && arg.kind() == NodeKind::Ref) {
-      const std::string ref(src_.substr(arg.range().start, arg.range().end - arg.range().start));
+      const std::string ref(slice(arg.range().start, arg.range().end));
       if (const std::size_t colon = ref.rfind(':'); colon != std::string::npos) {
         return ref.substr(0, colon) + trim_ref_operator(mode) + ref.substr(colon + 1);
       }
     }
     const TextRange r = call.range();
-    return std::string(src_.substr(r.start, r.end - r.start));
+    return std::string(slice(r.start, r.end));
   }
 
   std::string parenthesised(const AstNode& node, bool wrap) const {
@@ -143,9 +153,12 @@ std::string spell_storage_operators(std::string_view formula) {
   if (root == nullptr || !HasStorageOperatorCall(*root)) {
     return std::string(formula);
   }
+  const OperatorRespeller respeller(body);
   const TextRange r = root->range();
-  const std::string respelled = OperatorRespeller(body).text(*root, false);
-  return std::string(formula.substr(0, body_at + r.start)) + respelled + std::string(body.substr(r.end));
+  const std::string_view whole = respeller.slice(0, r.end);
+  const std::string_view lead = respeller.slice(0, r.start);
+  return std::string(formula.substr(0, body_at + lead.size())) + respeller.text(*root, false) +
+         std::string(body.substr(whole.size()));
 }
 
 }  // namespace parser

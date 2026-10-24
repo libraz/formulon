@@ -301,9 +301,12 @@ TEST(AutoFilterModel, LargeColumnInsertDropsFiltersShiftedOffGrid) {
     ASSERT_TRUE(static_cast<bool>(sheet_filter.insert_cols(0, 2U, count)));
     EXPECT_EQ(Describe(sheet_filter.sheet(0).auto_filter()), "B2:XFD12");
 
+    // A table would be pushed off the sheet, so the insert is refused.
     Workbook table_filter = ProbeTableWorkbook();
-    ASSERT_TRUE(static_cast<bool>(table_filter.insert_cols(0, 2U, count)));
-    EXPECT_EQ(Describe(table_filter.tables()[0].auto_filter_xml.get()), "B2:XFD12");
+    const auto refused = table_filter.insert_cols(0, 2U, count);
+    ASSERT_FALSE(static_cast<bool>(refused));
+    EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
+    EXPECT_EQ(Describe(table_filter.tables()[0].auto_filter_xml.get()), "B2:F12; colId 1: 1; colId 3: 2");
   }
 }
 
@@ -316,8 +319,10 @@ TEST(AutoFilterModel, ColumnInsertAtLastValidFilterIdKeepsThatCriterion) {
   EXPECT_EQ(Describe(sheet_filter.sheet(0).auto_filter()), "B2:XFD12; colId 16382: 1");
 
   Workbook table_filter = ProbeTableWorkbook();
-  ASSERT_TRUE(static_cast<bool>(table_filter.insert_cols(0, 2U, count)));
-  EXPECT_EQ(Describe(table_filter.tables()[0].auto_filter_xml.get()), "B2:XFD12; colId 16382: 1");
+  const auto refused = table_filter.insert_cols(0, 2U, count);
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
+  EXPECT_EQ(table_filter.tables()[0].ref, "B2:F12");
 }
 
 TEST(AutoFilterModel, ColumnDeleteRemovesCriterionAndRenumbers) {

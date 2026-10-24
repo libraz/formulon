@@ -106,11 +106,14 @@ struct ExternalBookIndexer {
   std::uint32_t (*qualifier_index)(const void* ctx, std::string_view qualifier) = nullptr;
 };
 
+/// Parenthesis pairs to print around each node.
+using ParenCounts = std::unordered_map<const AstNode*, std::uint16_t>;
+
 /// Fills `out` with the parenthesis pairs each node of `root` prints with:
 /// the pairs written around it (`AstNode::paren_depth`), or one where its
 /// slot's precedence demands it. Both formatters print exactly these, and a
 /// token encoder emits the same count of XLSB `PtgParen`s after the node.
-void collect_parenthesized_nodes(const AstNode& root, std::unordered_map<const AstNode*, std::uint8_t>& out);
+void collect_parenthesized_nodes(const AstNode& root, ParenCounts& out);
 
 /// Storage prefix a function name carries in the OOXML `<f>` element.
 enum class StoragePrefixKind {

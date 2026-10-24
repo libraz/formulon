@@ -56,7 +56,7 @@ enum class ParseErrorCode : std::uint16_t {
   ExpectedComma,         // `=SUM(1 2)`
   UnbalancedBrackets,    // `=Table[col`
   InvalidRange,          // `=A1:foo` (rhs of `:` not ref-like)
-  NestedFormulaTooDeep,  // recursion depth exceeded ParserOptions limit
+  NestedFormulaTooDeep,  // nesting past max_parse_depth or Excel's call / parenthesis limits
   TooManyErrors,         // accumulated error count hit the cap
   // Parser-level: LET-specific validation.
   LetInvalidName,  // LET binding name is empty, clashes with an A1 cell ref, or fails the identifier syntax

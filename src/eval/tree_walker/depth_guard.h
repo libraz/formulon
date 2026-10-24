@@ -15,19 +15,24 @@
 
 #include <cstdint>
 
+#include "parser/ast.h"
+
 namespace formulon {
 namespace eval {
 
-// Hard caps on recursion depth. The parser already enforces a parse-depth
-// limit of 128 (see `parser::ParserOptions::max_parse_depth`), which bounds
-// stack growth from a single formula. These two evaluator-side caps defend
+// Hard caps on recursion depth. The parser already bounds a single
+// formula's tree at `parser::kMaxFormulaAstDepth` nodes (see
+// `parser::ParserOptions::max_parse_depth`), which bounds stack growth from
+// one formula. These two evaluator-side caps defend
 // against the orthogonal vectors that bypass that bound:
 //
 //   * `kMaxEvalDepth` — bounds linear cell-chain recursion through
 //     `EvalContext::resolve_ref`. A workbook of `A1=A2, A2=A3, ..., A1000=1`
 //     is not a cycle (so `EvalState::push_cell` does not flag it), and each
-//     resolved formula spawns a fresh `eval_node` recursion. Without this
-//     cap a chain of ~1000 cells overflows the WASM 256-512 KB stack.
+//     resolved formula spawns a fresh `eval_node` recursion. The cap is
+//     twice the deepest tree the parser accepts, so any one formula
+//     evaluates in full with room for a re-entrant chain of the same depth;
+//     the WASM stack is pinned to cover it (tests/wasm/stack_probe.cpp).
 //
 //   * `kMaxLambdaDepth` — bounds runtime recursion through user-defined
 //     LAMBDA closures. The body AST stays small so `kMaxEvalDepth` does
@@ -46,7 +51,7 @@ namespace eval {
 // Excel-visible code Mac Excel surfaces for indeterminate / runaway lambda
 // recursion). The internal `kEvalStackOverflow` code is reserved for the
 // `Expected<T, Error>` plumbing (currently unused on this path).
-constexpr std::uint32_t kMaxEvalDepth = 512;
+constexpr std::uint32_t kMaxEvalDepth = 2U * parser::kMaxFormulaAstDepth;
 constexpr std::uint32_t kMaxLambdaDepth = 256;
 
 // RAII guard: bumps `*p` on construction (when `*p < cap`) and decrements

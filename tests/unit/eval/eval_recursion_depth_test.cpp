@@ -1,7 +1,7 @@
 //
 // Recursion-depth caps for the tree-walk evaluator. The parser already
-// caps formula nesting at 128 layers, but two orthogonal vectors bypass
-// that bound:
+// caps a formula's tree at `parser::kMaxFormulaAstDepth` nodes, but two
+// orthogonal vectors bypass that bound:
 //
 //   * `eval_node` is re-entered through `EvalContext::resolve_ref` when a
 //     referenced cell is itself a formula. A linear chain of references
@@ -24,6 +24,7 @@
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "eval/tree_walker/depth_guard.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -52,11 +53,11 @@ AstNode* BuildUnaryLadder(Arena& arena, std::uint32_t depth) {
   return node;
 }
 
-// 600 layers comfortably exceeds the 512 cap; below the cap the AST
-// evaluates back to the literal value untouched.
+// A ladder of `kMaxEvalDepth` layers is one node past the cap; the deepest
+// tree the parser accepts evaluates back to the literal value untouched.
 TEST(EvalRecursionDepth, EvalNodeRejectsDeeplyNestedFormula) {
   Arena arena;
-  AstNode* root = BuildUnaryLadder(arena, /*depth=*/600);
+  AstNode* root = BuildUnaryLadder(arena, kMaxEvalDepth);
   ASSERT_NE(root, nullptr);
 
   const Value v = evaluate(*root, arena, default_registry(), test::mac_context());
@@ -66,8 +67,8 @@ TEST(EvalRecursionDepth, EvalNodeRejectsDeeplyNestedFormula) {
 
 TEST(EvalRecursionDepth, EvalNodeAcceptsDepthBelowCap) {
   Arena arena;
-  // 200 layers is well under the 512 cap: the result must be the literal.
-  AstNode* root = BuildUnaryLadder(arena, /*depth=*/200);
+  // The deepest tree the parser accepts: the result must be the literal.
+  AstNode* root = BuildUnaryLadder(arena, parser::kMaxFormulaAstDepth - 1U);
   ASSERT_NE(root, nullptr);
 
   const Value v = evaluate(*root, arena, default_registry(), test::mac_context());
