@@ -20,6 +20,7 @@
 #include "external_link.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
+#include "io/sheet_ids.h"
 #include "io/sparkline_groups.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/protection_records.h"
@@ -187,6 +188,21 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
   }
 }
 
+/// Calls `visit` with the text and sheet of every calculated-column and
+/// totals-row formula of `wb`'s tables.
+template <typename Visit>
+void ForEachTableFormula(const Workbook& wb, Visit&& visit) {
+  for (const TableMetadata& table : wb.tables()) {
+    for (const TableColumn& column : table.columns) {
+      for (const std::string* text : {&column.calculated_column_formula, &column.totals_row_formula}) {
+        if (!text->empty()) {
+          visit(std::string_view(*text), table.sheet_index);
+        }
+      }
+    }
+  }
+}
+
 }  // namespace
 
 /// Builds the workbook's `BrtName` record order: every genuine defined
@@ -229,6 +245,10 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
                               invisible_seen, qualified);
     });
   }
+  ForEachTableFormula(wb, [&](std::string_view formula, std::size_t sheet_index) {
+    CollectNamesFromFormula(formula, static_cast<std::int32_t>(sheet_index), defined_scopes, names, seen, invisible,
+                            invisible_seen, qualified);
+  });
   for (std::string& text : names) {
     ordered_names.push_back(OrderedName{std::move(text), -1});
   }
@@ -462,12 +482,9 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
     });
   }
   // A table part's own formulas are encoded against the same tables.
-  for (const TableMetadata& table : wb.tables()) {
-    for (const TableColumn& column : table.columns) {
-      CollectSheetRangesFromFormula(column.calculated_column_formula, sheet_names, collected, seen);
-      CollectSheetRangesFromFormula(column.totals_row_formula, sheet_names, collected, seen);
-    }
-  }
+  ForEachTableFormula(wb, [&](std::string_view formula, std::size_t) {
+    CollectSheetRangesFromFormula(formula, sheet_names, collected, seen);
+  });
   auto ranges = SeedFromRetainedTails(wb, collected.links);
   if (!ranges) {
     return std::move(ranges.error());
@@ -647,18 +664,19 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   emit_book_views(body, wb.book_views_xml(), wb.active_sheet(), wb.sheet_count());
 
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBundleShs), ByteSpan{});
+  const std::vector<std::uint32_t> sheet_ids = assign_sheet_ids(wb);
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     // BrtBundleSh ([MS-XLSB] §2.4.304):
     //   hsState    : u32 (0 = visible, 1 = hidden, 2 = very hidden)
-    //   iTabID     : u32 (sheet id; 1-based)
+    //   iTabID     : u32 (sheet id)
     //   strRelID   : XLNullableWideString
     //   strName    : XLWideString
     std::vector<std::uint8_t> p;
     // `SheetVisibility` is numbered to match `hsState`, so the model state
     // is the field value.
     const auto hs_state = static_cast<std::uint32_t>(wb.sheet(i).view().visibility());
-    emit_u32(p, hs_state);                            // hsState
-    emit_u32(p, static_cast<std::uint32_t>(i + 1U));  // iTabID
+    emit_u32(p, hs_state);      // hsState
+    emit_u32(p, sheet_ids[i]);  // iTabID
     const std::string rid = std::string("rId") + std::to_string(i + 1U);
     emit_xlnullablewidestring(p, std::optional<std::string_view>{rid});
     emit_xlwidestring(p, wb.sheet(i).name());

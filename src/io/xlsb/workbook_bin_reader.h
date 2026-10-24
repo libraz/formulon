@@ -30,6 +30,8 @@ namespace xlsb {
 struct SheetBundleEntry {
   std::string name;
   std::string rid;
+  /// The sheet's `iTabID`, which `Sheet::source_sheet_id` carries.
+  std::uint32_t tab_id = 0;
   /// The sheet's `hsState`, which shares its numbering with
   /// `SheetVisibility` and so is carried across whole. Very-hidden stays
   /// distinct from hidden: it is the state that keeps a sheet out of

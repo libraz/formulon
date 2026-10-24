@@ -101,10 +101,7 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
     ByteSpan p = rec.payload;
     // hsState: 0 = visible, 1 = hidden, 2 = very hidden.
     ASSIGN_OR_RETURN(auto hs_state, read_u32(p));
-    auto skip2 = read_u32(p);  // iTabID
-    if (!skip2) {
-      return std::move(skip2.error());
-    }
+    ASSIGN_OR_RETURN(auto tab_id, read_u32(p));
     ASSIGN_OR_RETURN(auto rid, read_xlnullablewidestring(p));
     auto name_or = read_xlwidestring(p);
     if (!name_or) {
@@ -112,6 +109,7 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
     }
     SheetBundleEntry entry;
     entry.rid = std::move(rid);
+    entry.tab_id = tab_id;
     entry.name = std::move(name_or.value());
     // An hsState outside the three defined values is not a visibility this
     // model can name; treat anything non-zero it cannot place as plain

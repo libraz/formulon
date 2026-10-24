@@ -570,6 +570,77 @@ TEST(XlsbTableFidelity, RetainedTableStructuredRefsSurviveResave) {
   EXPECT_TRUE(has_name);
 }
 
+TEST(XlsbTableFidelity, StructuredRefsIntoAPartRejectedOnReadSurviveResave) {
+  const std::vector<std::uint8_t> package = SaveXlsb(StructuredRefBook());
+  const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(Entry(package, "xl/tables/table4.bin"));
+  const Workbook wb = LoadXlsb(RepackWithEntries(package, {{"xl/tables/table4.bin", patched}}));
+  ASSERT_TRUE(wb.tables().empty());
+  const auto expect_formulas = [](const Workbook& book) {
+    const Cell* cell = book.sheet(1).cell_at(0, 0);
+    ASSERT_NE(cell, nullptr);
+    EXPECT_EQ(cell->formula_text, "=SUM(Sales[Amount])");
+    bool has_name = false;
+    for (const auto& entry : book.defined_names()) {
+      if (entry.name == "SalesTotal") {
+        has_name = true;
+        EXPECT_EQ(entry.formula, "SUM(Sales[Amount])");
+      }
+    }
+    EXPECT_TRUE(has_name);
+  };
+  expect_formulas(wb);
+  WriteDiagnostics diagnostics;
+  const std::vector<std::uint8_t> resaved = SaveXlsb(wb, &diagnostics);
+  EXPECT_EQ(diagnostics.downgraded_formula_count, 0U);
+  EXPECT_EQ(Entry(resaved, "xl/tables/table4.bin"), patched);
+  const Workbook back = LoadXlsb(resaved);
+  EXPECT_TRUE(back.tables().empty());
+  expect_formulas(back);
+}
+
+TEST(XlsbTableFidelity, NameUsedOnlyInATableFormulaIsWritten) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  TableMetadata t;
+  t.id = 1;
+  t.name = "Table1";
+  t.display_name = "Table1";
+  t.ref = "A1:B4";
+  t.columns = {TableColumn(1, "Key", "", "", ""),
+               TableColumn(2, "Found", "", "", "XLOOKUP(Table1[[#This Row],[Key]],A1:A4,B1:B4)")};
+  t.style_info.present = true;
+  wb.mutable_tables().push_back(t);
+  WriteDiagnostics diagnostics;
+  const std::vector<std::uint8_t> saved = SaveXlsb(wb, &diagnostics);
+  EXPECT_EQ(diagnostics.deferred_feature_count, 0U);
+  bool has_formula = false;
+  for (const FramedRecord& rec : split_records(Entry(saved, "xl/tables/table1.bin"))) {
+    has_formula = has_formula || rec.type == 351U;
+  }
+  EXPECT_TRUE(has_formula);
+  const Workbook back = LoadXlsb(saved);
+  ASSERT_EQ(back.tables().size(), 1U);
+  // Formula text is read back in storage form, as the OOXML reader holds it.
+  EXPECT_EQ(back.tables()[0].columns[1].calculated_column_formula,
+            "_xlfn.XLOOKUP(Table1[[#This Row],[Key]],A1:A4,B1:B4)");
+}
+
+TEST(XlsbTableFidelity, SheetIdsSurviveSaveAndLoad) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("A");
+  wb.add_sheet("B");
+  wb.sheet(0).set_source_sheet_id(3U);
+  wb.sheet(1).set_source_sheet_id(1U);
+  Workbook back = LoadXlsb(SaveXlsb(wb));
+  ASSERT_EQ(back.sheet_count(), 2U);
+  EXPECT_EQ(back.sheet(0).source_sheet_id(), 3U);
+  EXPECT_EQ(back.sheet(1).source_sheet_id(), 1U);
+  back.add_sheet("C");
+  const Workbook again = LoadXlsb(SaveXlsb(back));
+  ASSERT_EQ(again.sheet_count(), 3U);
+  EXPECT_EQ(again.sheet(2).source_sheet_id(), 4U);
+}
+
 TEST(XlsbTableFidelity, CalculatedColumnPtgListMatchesTheSpecExample) {
   // [MS-XLSB] 3.3.11: "=Table1[[#This Row],[Price]]*.08" over Table1 (id 1)
   // whose second column is Price, on the first sheet.

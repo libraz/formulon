@@ -802,6 +802,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
                         "workbook.bin: BrtBundleSh name is invalid or collides with an earlier sheet",
                         "context=xlsb_reader sheet=\"" + b.name + "\"");
     }
+    wb.sheet(wb.sheet_count() - 1U).set_source_sheet_id(b.tab_id);
     if (b.visibility != SheetVisibility::kVisible) {
       wb.sheet(wb.sheet_count() - 1U).mutable_view().set_visibility(b.visibility);
     }
