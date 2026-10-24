@@ -895,6 +895,57 @@ TEST(BuiltinsXLookup, RegexModeReturnsTheMatchedRow) {
   EXPECT_EQ(EvalSourceIn("=XLOOKUP(\"z\",A1:A2,B1:B2,,3)", wb, wb.sheet(0)).as_error(), ErrorCode::NA);
 }
 
+// The regex scan stops at the first cell, in search order, that either matches
+// or exhausts the match limit; exhaustion is REGEXTEST's #VALUE!, which
+// if_not_found does not mask. "aa" matches `^(a+)+$`; 30 a's plus "!" exhausts.
+constexpr const char* kExhausting = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!";  // 30 a's
+
+Value RegexScan(const std::string& formula) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text(kExhausting));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("aa"));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("bb"));
+  wb.sheet(0).set_cell_value(1, 1, Value::text(kExhausting));
+  wb.sheet(0).set_cell_value(0, 2, Value::text("aa"));
+  wb.sheet(0).set_cell_value(1, 2, Value::text(kExhausting));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(20.0));
+  return EvalSourceIn(formula, wb, wb.sheet(0));
+}
+
+void ExpectValueError(const std::string& formula) {
+  const Value v = RegexScan(formula);
+  ASSERT_TRUE(v.is_error()) << formula << " -> " << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+}
+
+void ExpectNumber(const std::string& formula, double want) {
+  const Value v = RegexScan(formula);
+  ASSERT_TRUE(v.is_number()) << formula << " -> " << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), want) << formula;
+}
+
+TEST(BuiltinsXMatch, RegexExhaustionBeforeTheMatchIsValueError) {
+  ExpectValueError("=XMATCH(\"^(a+)+$\",A1,3)");
+  ExpectValueError("=XMATCH(\"^(a+)+$\",A1:A2,3)");
+  ExpectValueError("=XLOOKUP(\"^(a+)+$\",A1:A2,D1:D2,,3)");
+  ExpectValueError("=XLOOKUP(\"^(a+)+$\",A1:A2,D1:D2,\"nf\",3)");
+}
+
+TEST(BuiltinsXMatch, RegexNonMatchBeforeExhaustionIsValueError) {
+  ExpectValueError("=XMATCH(\"^(a+)+$\",B1:B2,3)");
+}
+
+TEST(BuiltinsXMatch, RegexMatchBeforeExhaustionReturnsTheMatch) {
+  ExpectNumber("=XMATCH(\"^(a+)+$\",C1:C2,3)", 1.0);
+  ExpectNumber("=XLOOKUP(\"^(a+)+$\",C1:C2,D1:D2,,3)", 10.0);
+}
+
+TEST(BuiltinsXMatch, RegexReverseSearchReachesTheMatchFirst) {
+  ExpectNumber("=XMATCH(\"^(a+)+$\",A1:A2,3,-1)", 2.0);
+  ExpectNumber("=XLOOKUP(\"^(a+)+$\",A1:A2,D1:D2,,3,-1)", 20.0);
+}
+
 // ---- text collation ----
 
 Value EvalWithProfile(const std::string& formula, ExcelProfile profile) {

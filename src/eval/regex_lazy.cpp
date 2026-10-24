@@ -14,7 +14,9 @@
 //   * Excel REGEX function family signatures and shape semantics:
 //     Mac Excel oracle observations.
 //   * Resource limits: match_limit = 1_000_000, depth_limit = 10_000;
-//     exhausting the match limit is #VALUE!.
+//     exhausting the match limit is #VALUE!. PCRE2 applies the match
+//     limit per start position, and nothing bounds a call's total work,
+//     which grows linearly with subject length -- as Excel's does.
 //   * Pattern length cap (32_767 bytes): matches Excel's worksheet
 //     formula text limit; longer patterns yield #VALUE! before
 //     pcre2_compile is invoked.
@@ -77,6 +79,12 @@ constexpr std::size_t kMaxSubstituteOutputBytes = static_cast<std::size_t>(kExce
 // overflow it returns PCRE2_ERROR_MATCHLIMIT or PCRE2_ERROR_DEPTHLIMIT.
 constexpr std::uint32_t kMatchLimit = 1000000U;
 constexpr std::uint32_t kDepthLimit = 10000U;
+
+// What a REGEX* call returns when a match attempt exhausts `kMatchLimit`, and
+// what the extract / replace pair returns for any other resource exhaustion
+// (depth / heap limit, retained-match budget).
+constexpr ErrorCode kMatchLimitError = ErrorCode::Value;
+constexpr ErrorCode kResourceError = ErrorCode::Calc;
 
 // Published through `regex_compile_count()`. Atomic because two worker
 // threads of a parallel recalc may evaluate REGEX* cells concurrently;
@@ -362,7 +370,7 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
 
   if (end == ScanEnd::kLimitHit) {
     result.ok = false;
-    result.err = Value::error(ErrorCode::Value);
+    result.err = Value::error(kMatchLimitError);
     return result;
   }
   if (budget_exhausted || end == ScanEnd::kError) {
@@ -370,7 +378,7 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
     // degrades to "no match", the extract / replace pair reports #CALC!.
     if (!on_match_limit_returns_no_match) {
       result.ok = false;
-      result.err = Value::error(ErrorCode::Calc);
+      result.err = Value::error(kResourceError);
     }
   }
   return result;
@@ -944,6 +952,8 @@ class ReplacementWriter {
   }
   // Ends an unterminated run at the end of the replacement.
   void finish() { end_run(); }
+  // Bytes written so far, including a case span not yet flushed.
+  std::size_t size() const noexcept { return out_.size() + span_.size(); }
 
  private:
   enum class CaseMode : std::uint8_t { kNone, kUpper, kLower };
@@ -1031,12 +1041,12 @@ bool expand_replacement(const std::vector<ReplToken>& tokens, const CompiledPatt
       case ReplTokenKind::kInvalid:
         return false;
     }
-    if (out.size() > kMaxSubstituteOutputBytes) {
+    if (writer.size() > kMaxSubstituteOutputBytes) {
       return false;
     }
   }
   writer.finish();
-  return true;
+  return out.size() <= kMaxSubstituteOutputBytes;
 }
 
 // Finishes a replacement result: one past the Excel text cap is `#VALUE!`.
@@ -1067,11 +1077,14 @@ Value substitute_global(const CompiledPattern& program, std::string_view subject
     copied = stop;
     return true;
   });
-  if (expansion_failed || end == ScanEnd::kLimitHit) {
+  if (expansion_failed) {
     return Value::error(ErrorCode::Value);
   }
+  if (end == ScanEnd::kLimitHit) {
+    return Value::error(kMatchLimitError);
+  }
   if (end == ScanEnd::kError) {
-    return Value::error(ErrorCode::Calc);
+    return Value::error(kResourceError);
   }
   out.append(subject.substr(copied));
   return finish_replacement(out, arena);
@@ -1169,10 +1182,13 @@ bool RegexSearch::ok() const noexcept {
   return impl_->program.ok();
 }
 
-bool RegexSearch::matches(std::string_view subject) const {
+Expected<bool, ErrorCode> RegexSearch::matches(std::string_view subject) const {
   const KernelResult result = regex_kernel(impl_->program, subject, /*find_all=*/false,
                                            /*on_match_limit_returns_no_match=*/true);
-  return result.ok && !result.matches.empty();
+  if (!result.ok) {
+    return result.err.as_error();
+  }
+  return !result.matches.empty();
 }
 
 std::uint64_t regex_compile_count() noexcept {

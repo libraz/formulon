@@ -648,6 +648,23 @@ TEST(RegexReplace, OutputWithinTextCapSucceeds) {
   EXPECT_EQ(v.as_text(), "bbbbbb");
 }
 
+// Text gathered under an open `\U` / `\L` run counts against the output cap
+// before it is flushed, so an unterminated run cannot buffer past the cap.
+TEST(RegexReplace, CaseRunPastTextCapIsValueError) {
+  for (const char* src : {"=REGEXREPLACE(REPT(\"a\",32000),\"^\",\"\\U\"&REPT(\"$_\",3000))",
+                          "=REGEXREPLACE(REPT(\"é\",16000),\"^\",\"\\L\"&REPT(\"$_\",3000)&\"\\E\")"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
+  }
+}
+
+TEST(RegexReplace, CaseRunWithinTextCapSucceeds) {
+  const Value v = EvalSource("=LEN(REGEXREPLACE(REPT(\"a\",100),\"^\",\"\\U$_\"))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 200.0);
+}
+
 // A find-all scan retains one span slot per match plus one per capture
 // group. PCRE2's `match_limit` bounds a single match attempt and says
 // nothing about that accumulation, so the kernel charges it against its own

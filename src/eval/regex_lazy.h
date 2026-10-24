@@ -28,6 +28,7 @@
 #include <string_view>
 
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -45,9 +46,9 @@ class FunctionRegistry;
 /// when `pattern` matches anywhere in `text`. `case_sensitivity` must
 /// coerce to {0, 1}; any other value yields `#VALUE!`. The convention
 /// matches Mac Excel 365 / MS docs: `0`/FALSE (default) is
-/// case-sensitive, `1`/TRUE is case-insensitive. Resource exhaustion
-/// (match_limit / depth_limit) returns FALSE rather than `#CALC!`
-/// because the test is a predicate by intent.
+/// case-sensitive, `1`/TRUE is case-insensitive. Exhausting the match
+/// limit is `#VALUE!`; any other PCRE2 resource error (depth / heap limit)
+/// returns FALSE.
 Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx);
 
@@ -58,22 +59,26 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
 ///   * 2 -> row array (1 x G) of capture groups from the FIRST match.
 /// Any other mode (3 included) is `#VALUE!`.
 /// Mode 2 yields `#VALUE!` when the pattern has no capture groups
-/// AND a match occurred (no match still yields `#N/A`). Resource
-/// exhaustion yields `#CALC!`.
+/// AND a match occurred (no match still yields `#N/A`). Exhausting the
+/// match limit is `#VALUE!`; any other resource exhaustion (depth / heap
+/// limit, retained-match budget) is `#CALC!`.
 Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
 
 /// `REGEXREPLACE(text, pattern, replacement, [occurrence=0],
-/// [case_sensitivity=0])`. `occurrence == 0` replaces every match
-/// (PCRE2_SUBSTITUTE_GLOBAL); `occurrence == N > 0` replaces only the
-/// N-th match. Mac Excel 365 is permissive on negative values: they
-/// fold to global replacement. When `occurrence` exceeds the number of
-/// matches the original `text` is returned unchanged. Resource
-/// exhaustion yields `#CALC!`.
+/// [case_sensitivity=0])`. `occurrence == 0` replaces every match;
+/// `occurrence == N > 0` replaces only the N-th match from the start and
+/// `N < 0` only the |N|-th from the end. When |N| exceeds the number of
+/// matches the original `text` is returned unchanged. Exhausting the match
+/// limit, or a result past the 32,767-character text cap, is `#VALUE!`;
+/// any other resource exhaustion is `#CALC!`.
 ///
-/// Inside `replacement` only `$n`, `${name}` and `$$` are special; every
-/// other byte, backslashes included, is emitted verbatim. A `$` that
-/// begins none of those three forms is a literal dollar.
+/// `replacement` has a `$` layer (`$n`, `${n}`, `${name}`, `$name`,
+/// `$<name>`, `$&`, `` $` ``, `$'`, `$_`, `$$`) and a backslash layer
+/// (group references, character escapes, `\u` / `\l`, `\U`..`\E` /
+/// `\L`..`\E` case runs, `\Q`..`\E`); the full grammar is listed in
+/// `regex_lazy.cpp`. A bare `$`, an unknown escape or a reference to a
+/// missing group is `#VALUE!` once a match is expanded.
 Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
 
@@ -82,8 +87,8 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
 /// the only place patterns are compiled.
 class RegexSearch {
  public:
-  /// Compiles `pattern`. An empty, oversized or invalid pattern leaves `ok()`
-  /// false.
+  /// Compiles `pattern`. An oversized or invalid pattern leaves `ok()` false;
+  /// an empty pattern compiles and matches every subject.
   explicit RegexSearch(std::string_view pattern);
   ~RegexSearch();
   RegexSearch(const RegexSearch&) = delete;
@@ -91,9 +96,10 @@ class RegexSearch {
 
   bool ok() const noexcept;
 
-  /// True when the pattern matches anywhere in `subject`. Resource
+  /// Whether the pattern matches anywhere in `subject`, with REGEXTEST's
+  /// outcome: exhausting the match limit is `#VALUE!`, any other resource
   /// exhaustion counts as no match.
-  bool matches(std::string_view subject) const;
+  Expected<bool, ErrorCode> matches(std::string_view subject) const;
 
  private:
   struct Impl;

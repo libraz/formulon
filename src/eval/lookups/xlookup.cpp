@@ -523,7 +523,8 @@ struct MatchOutcome {
 // cell whose text contains a match of `query` read as a regular expression.
 // Numbers and booleans are searched by their text; blanks and errors never
 // hit. An empty pattern hits the first scanned cell; an invalid one is
-// #VALUE!.
+// #VALUE!. The scan stops at the first cell, in search order, that either
+// matches or exhausts the match limit; the latter is REGEXTEST's error.
 MatchOutcome regex_match_query(const std::vector<Value>& cells, const Value& query, XSearchMode search_mode) {
   auto pattern = coerce_to_text(query);
   if (!pattern) {
@@ -547,7 +548,14 @@ MatchOutcome regex_match_query(const std::vector<Value>& cells, const Value& que
       continue;
     }
     auto text = coerce_to_text(cells[i]);
-    if (text && search.matches(text.value())) {
+    if (!text) {
+      continue;
+    }
+    const auto matched = search.matches(text.value());
+    if (!matched) {
+      return {MatchOutcomeKind::Error, SIZE_MAX, Value::error(matched.error())};
+    }
+    if (matched.value()) {
       return {MatchOutcomeKind::Hit, i, Value::blank()};
     }
   }
