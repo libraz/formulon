@@ -455,11 +455,16 @@ Value ImArgument(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Arithmetic
 // ---------------------------------------------------------------------------
 
-// Left fold over every argument; `mismatch` is the error for two operands with
-// different imaginary suffixes. The result's suffix is reconciled across the
-// operands. `product` selects IMPRODUCT (an infinite component is #VALUE!)
-// over IMSUM.
+// Left fold over every argument, range and array cells flattened in order;
+// operands with different imaginary suffixes are #VALUE!. The result's suffix
+// is reconciled across the operands. `product` selects IMPRODUCT (an infinite
+// component is #VALUE!) over IMSUM.
 Value fold_complex(const Value* args, std::uint32_t arity, Arena& arena, bool product) {
+  // A reference with no populated cells folds like a single blank cell.
+  if (arity == 0U) {
+    const Value blank = Value::blank();
+    return fold_complex(&blank, 1U, arena, product);
+  }
   auto first = parse_complex_value(args[0]);
   if (!first) {
     return Value::error(first.error());
@@ -973,9 +978,9 @@ void register_complex_num_builtins(FunctionRegistry& registry) {
       builtins_detail::analysis_toolpak({"IMREAL", 1u, 1u, &ImReal}),
       builtins_detail::analysis_toolpak({"IMCONJUGATE", 1u, 1u, &ImConjugate}),
       builtins_detail::analysis_toolpak({"IMARGUMENT", 1u, 1u, &ImArgument}),
-      builtins_detail::analysis_toolpak({"IMSUM", 1u, kVariadic, &ImSum}),
+      builtins_detail::analysis_toolpak({"IMSUM", 1u, kVariadic, &ImSum, true, true}),
       builtins_detail::analysis_toolpak({"IMSUB", 2u, 2u, &ImSub}),
-      builtins_detail::analysis_toolpak({"IMPRODUCT", 1u, kVariadic, &ImProduct}),
+      builtins_detail::analysis_toolpak({"IMPRODUCT", 1u, kVariadic, &ImProduct, true, true}),
       builtins_detail::analysis_toolpak({"IMDIV", 2u, 2u, &ImDiv}),
       builtins_detail::analysis_toolpak({"IMPOWER", 2u, 2u, &ImPower}),
       builtins_detail::analysis_toolpak({"IMEXP", 1u, 1u, &ImExp}),

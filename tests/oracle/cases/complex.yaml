@@ -7,7 +7,7 @@ description: >
   exponential / logarithmic / root operations where floating-point drift
   is most likely. Trigonometric and hyperbolic variants are exercised at
   stable points (z=0, pure real) to keep goldens robust.
-tolerance: { abs: 1.0e-5, rel: 1.0e-5 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- COMPLEX: formatting table ------------------------------------------
@@ -932,3 +932,30 @@ cases:
   - id: im_rules_csch_far_branch
     formula: "=IMCSCH(\"1e10+1e10i\")"
     tolerance: { abs: 0, rel: 0 }
+
+  # -- IMSUM / IMPRODUCT fold range and array arguments -------------------
+  - id: imsum_array_folds
+    formula: "=IMSUM({\"1+i\",\"2+i\"})"
+
+  - id: improduct_array_and_scalar_fold
+    formula: "=IMPRODUCT({\"1+i\";\"2\"},\"i\")"
+
+  - id: imsum_range_folds
+    setup: { A1: "1+i", A2: "2+3i", A3: 4 }
+    formula: "=IMSUM(A1:A3)"
+
+  - id: improduct_range_folds
+    setup: { A1: "1+i", A2: "2+3i", A3: 4 }
+    formula: "=IMPRODUCT(A1:A3)"
+
+  - id: imsum_range_blank_cell
+    setup: { A1: "1+i", A3: "2+i" }
+    formula: "=IMSUM(A1:A3)"
+
+  - id: improduct_range_blank_cell
+    setup: { A1: "1+i", A3: "2+i" }
+    formula: "=IMPRODUCT(A1:A3)"
+
+  - id: imsum_range_error_cell
+    setup: { A1: "1+i", A2: "=1/0" }
+    formula: "=IMSUM(A1:A2)"

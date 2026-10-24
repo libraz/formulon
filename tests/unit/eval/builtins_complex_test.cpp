@@ -18,15 +18,18 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // ---------------------------------------------------------------------------
 // Registry pin
@@ -336,6 +339,44 @@ TEST(BuiltinsComplex, ImSumPureRealsKeepFirstSuffix) {
   const Value v = EvalSource("=IMSUM(\"2+3j\",\"5\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "7+3j");
+}
+
+TEST(BuiltinsComplex, ImSumFoldsArray) {
+  const Value v = EvalSource("=IMSUM({\"1+i\",\"2+i\"})");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "3+2i");
+}
+
+TEST(BuiltinsComplex, ImProductFoldsArrayAndScalar) {
+  // (1+i) * 2 * i = -2+2i.
+  const Value v = EvalSource("=IMPRODUCT({\"1+i\";\"2\"},\"i\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "-2+2i");
+}
+
+TEST(BuiltinsComplex, ImSumAndImProductFoldRange) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("1+i"));
+  s.set_cell_value(1, 0, Value::text("2+3i"));
+  s.set_cell_value(2, 0, Value::number(4.0));
+  const Value sum = EvalSourceIn("=IMSUM(A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(sum.is_text());
+  EXPECT_EQ(sum.as_text(), "7+4i");
+  // (1+i)(2+3i) = -1+5i; times 4 = -4+20i.
+  const Value product = EvalSourceIn("=IMPRODUCT(A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(product.is_text());
+  EXPECT_EQ(product.as_text(), "-4+20i");
+}
+
+TEST(BuiltinsComplex, ImSumRangeErrorPropagates) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::text("1+i"));
+  s.set_cell_value(1, 0, Value::error(ErrorCode::Div0));
+  const Value v = EvalSourceIn("=IMSUM(A1:A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
 TEST(BuiltinsComplex, ImSub) {
