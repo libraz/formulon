@@ -726,6 +726,25 @@ void ReleaseSheetTables(Sheet& sheet, const std::vector<std::string>& rel_ids) {
   sheet.set_unknown_relationships(std::move(rels));
 }
 
+/// Id, names and column captions of a table part, read without the checks that
+/// make it model-readable. Empty when the list record cannot be read.
+std::optional<TableMetadata> ReadRetainedIdentity(const std::vector<std::uint8_t>& bytes) {
+  std::optional<TableMetadata> head;
+  for (const FramedRecord& rec : split_records(bytes)) {
+    if (rec.type == kBrtBeginList && !head) {
+      TableMetadata table;
+      if (!ReadBeginList(rec.payload, &table, /*identity_only=*/true)) {
+        return std::nullopt;
+      }
+      head = std::move(table);
+    } else if (rec.type == kBrtBeginListCol && head) {
+      auto col = ReadBeginListCol(rec.payload);
+      head->columns.push_back(col ? std::move(col.value()) : TableColumn{});
+    }
+  }
+  return head;
+}
+
 }  // namespace
 
 Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_index, TableFormulaBytes* formulas) {
@@ -992,6 +1011,14 @@ void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const 
     auto table = read_table_bin(ByteSpan{bytes.value().data(), bytes.value().size()}, sheet_index, &part.formulas);
     if (!table) {
       StructuredLog("xlsb.table.retained_raw").field("part", rel.target).field("reason", table.error().message).warn();
+      // Structured references into the kept part still resolve by identity and
+      // captions; an empty rel_id keeps the entry out of every sheet's LISTPARTS match.
+      if (auto head = ReadRetainedIdentity(bytes.value())) {
+        part.sheet_index = sheet_index;
+        part.table = std::move(*head);
+        part.table.sheet_index = sheet_index;
+        out.parts.push_back(std::move(part));
+      }
       continue;
     }
     part.sheet_index = sheet_index;
@@ -1053,20 +1080,7 @@ std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb) {
         part.path.compare(part.path.size() - 4U, 4U, ".bin") != 0) {
       continue;
     }
-    std::optional<TableMetadata> head;
-    std::vector<std::string> columns;
-    for (const FramedRecord& rec : split_records(part.bytes)) {
-      if (rec.type == kBrtBeginList && !head) {
-        TableMetadata table;
-        if (!ReadBeginList(rec.payload, &table, /*identity_only=*/true)) {
-          break;
-        }
-        head = std::move(table);
-      } else if (rec.type == kBrtBeginListCol && head) {
-        auto col = ReadBeginListCol(rec.payload);
-        columns.push_back(col ? std::move(col.value().name) : std::string());
-      }
-    }
+    std::optional<TableMetadata> head = ReadRetainedIdentity(part.bytes);
     if (!head) {
       continue;
     }
@@ -1074,7 +1088,9 @@ std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb) {
     table.id = head->id;
     table.name = std::move(head->name);
     table.display_name = std::move(head->display_name);
-    table.columns = std::move(columns);
+    for (TableColumn& column : head->columns) {
+      table.columns.push_back(std::move(column.name));
+    }
     for (std::size_t i = 0; i < wb.sheet_count() && !table.sheet_index; ++i) {
       for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
         if (rel.target == part.path) {
