@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <iterator>
 #include <map>
 #include <string>
@@ -489,13 +490,9 @@ TEST_P(WorkbookOracleTest, Matches) {
       EXPECT_EQ(format_print_area(pag.print_area), area_v->as_string()) << "resolved print area mismatch";
     }
 
-    // h_breaks / v_breaks: 1-bit parity with Excel's pagination is
-    // best-effort -- font-metric rounding shifts a break by at most one
-    // track -- so each expected break position is allowed to differ by
-    // +/-1 from the engine's. When the break *counts* match the page
-    // count is compared exactly; when they differ (a break landed on a
-    // neighbouring track and merged / split a page) the page count is
-    // allowed to differ by +/-1.
+    // h_breaks / v_breaks: font-metric rounding may shift a break by one
+    // track, so each break may differ by +/-1 from Excel's; the break counts
+    // (and therefore the page count) must match exactly.
     const std::vector<std::uint32_t> exp_h = golden_index_array(print_expect->find("h_breaks"));
     const std::vector<std::uint32_t> exp_v = golden_index_array(print_expect->find("v_breaks"));
 
@@ -533,15 +530,7 @@ TEST_P(WorkbookOracleTest, Matches) {
 
     if (const JsonValue* pages_v = print_expect->find("pages"); pages_v != nullptr && pages_v->is_number()) {
       const auto expected_pages = static_cast<std::uint32_t>(pages_v->as_number());
-      const bool counts_match = pag.h_breaks.size() == exp_h.size() && pag.v_breaks.size() == exp_v.size();
-      if (counts_match) {
-        EXPECT_EQ(pag.page_count, expected_pages) << "page count mismatch (break counts agreed)";
-      } else {
-        const std::int64_t delta =
-            static_cast<std::int64_t>(pag.page_count) - static_cast<std::int64_t>(expected_pages);
-        EXPECT_GE(delta, -1) << "page count below the +/-1 tolerance";
-        EXPECT_LE(delta, 1) << "page count above the +/-1 tolerance";
-      }
+      EXPECT_EQ(pag.page_count, expected_pages) << "page count mismatch";
     }
 
     if (!has_pivot) {
@@ -664,21 +653,45 @@ INSTANTIATE_TEST_SUITE_P(WorkbookOracle, WorkbookOracleTest, ::testing::ValuesIn
 // explicitly so an empty golden_wb tree builds and runs cleanly.
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(WorkbookOracleTest);
 
-// The allowance above is suite-wide, so once FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR
-// is provenance-activated and starts pointing at a real directory (see
-// tests/oracle/CMakeLists.txt), a misconfigured or moved path would still
-// register zero WorkbookOracleTest cases and exit 0 with nothing asserting
-// the directory actually loaded. This plain, non-parameterized TEST closes
-// that gap the same way OracleGoldenDirectory does for the formula track;
-// it is a no-op skip today because the directory is empty by design before
-// activation.
+// The allowance above is suite-wide, so a blank or moved
+// FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR would register zero WorkbookOracleTest
+// cases and exit 0 with nothing asserting the goldens loaded. These plain,
+// non-parameterized TESTs close that gap the way OracleGoldenDirectory does
+// for the formula track.
 TEST(WorkbookOracleGoldenDirectory, NonEmptyConfiguredDirYieldsCases) {
   const std::string dir = FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR;
   if (dir.empty()) {
-    GTEST_SKIP() << "no workbook golden directory configured (not yet provenance-activated, or the variant build)";
+    GTEST_SKIP() << "no workbook golden directory configured (the variant build)";
   }
   EXPECT_FALSE(load_workbook_oracle_cases(dir, "").empty())
       << "configured workbook golden directory " << dir << " loaded zero oracle cases";
+}
+
+// A blank configured directory is only legitimate while the primary target's
+// golden_wb holds no goldens; otherwise the workbook track is silently off.
+TEST(WorkbookOracleGoldenDirectory, BlankConfiguredDirMeansNoGoldensOnDisk) {
+#ifdef FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS_DEFAULT
+  GTEST_SKIP() << "variant build loads only variant directories";
+#else
+  if (!std::string(FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR).empty()) {
+    GTEST_SKIP() << "golden directory is configured";
+  }
+  const std::filesystem::path golden_wb = std::filesystem::path(__FILE__).parent_path() / "targets" /
+                                          FORMULON_WORKBOOK_ORACLE_PRIMARY_PROFILE_ID / "golden_wb";
+  std::error_code ec;
+  if (!std::filesystem::is_directory(golden_wb, ec)) {
+    GTEST_SKIP() << "no golden_wb directory at " << golden_wb.string();
+  }
+  std::size_t golden_count = 0;
+  for (const auto& entry : std::filesystem::directory_iterator(golden_wb, ec)) {
+    if (entry.path().filename().string().find(".golden.json") != std::string::npos) {
+      ++golden_count;
+    }
+  }
+  EXPECT_EQ(golden_count, 0U) << golden_wb.string() << " holds " << golden_count
+                              << " golden(s) but FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR is blank: the workbook "
+                                 "oracle is switched off (stale PROVENANCE.json?)";
+#endif
 }
 
 // ---------------------------------------------------------------------------
