@@ -5,11 +5,13 @@
 #include "eval/ets_series.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cfloat>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -922,9 +924,12 @@ struct Ymd {
   std::int64_t day = 0;
 };
 
+// `serial` is a grid node or a target already admitted by `whole_count`.
 Ymd ymd_of(double serial) {
+  const std::optional<std::int64_t> days = whole_count(std::floor(serial));
+  assert(days.has_value());
   Ymd r;
-  civil_from_days(static_cast<std::int64_t>(std::floor(serial)) + spreadsheet_epoch_days(), &r.year, &r.month, &r.day);
+  civil_from_days(*days + spreadsheet_epoch_days(), &r.year, &r.month, &r.day);
   return r;
 }
 
@@ -1225,10 +1230,13 @@ void classify_multiyear(Timeline* tl, double lo, double hi) {
   if (k < 2 || k > 100) {
     return;
   }
-  const std::int64_t nominal = static_cast<std::int64_t>(static_cast<double>(k) * 365.0 + static_cast<double>(k >> 2));
-  const std::int64_t tol = static_cast<std::int64_t>(std::log2(static_cast<double>(k)) + 2.0);
+  const std::int64_t nominal = k * 365 + (k >> 2);
+  // floor(log2(k)) + 2
+  std::int64_t tol = 2;
+  for (std::int64_t v = k; v > 1; v >>= 1) {
+    ++tol;
+  }
   if (ranges_overlap(lo, hi, static_cast<double>(nominal - tol), static_cast<double>(nominal + tol))) {
-    tl->nominal = static_cast<double>(nominal);
     tl->months = 12 * k;
   }
 }
@@ -1246,23 +1254,19 @@ void classify_constant(Timeline* tl, double step, std::int64_t m) {
     if (m > lim) {
       return;
     }
-    tl->nominal = 30.5;
     tl->months = 1;
   } else if (ranges_overlap(step, step, 363.0, 367.0)) {
-    tl->nominal = 365.0;
     tl->months = 12;
   } else if (ranges_overlap(step, step, 90.0, 92.0)) {
     const std::int64_t lim = step == 90.5 ? 2 : 2 + (step > 90.5 ? 1 : 0);
     if (m > lim) {
       return;
     }
-    tl->nominal = 91.0;
     tl->months = 3;
   } else if (ranges_overlap(step, step, 181.5, 184.5)) {
     if (m > 2) {
       return;
     }
-    tl->nominal = 183.0;
     tl->months = 6;
   } else if (bit_compare(step, 365.0) == 1) {
     classify_multiyear(tl, step, step);
@@ -1279,14 +1283,11 @@ void classify_bin(Timeline* tl, double lo, double hi, bool has_rep, double rep, 
     return;
   }
   const auto cnt = [&](double a, double b) { return count_in(low, bw, counts, nbins, a, b); };
-  const auto set = [&](double nominal, std::int64_t months) {
-    tl->nominal = nominal;
-    tl->months = months;
-  };
+  const auto set = [&](std::int64_t months) { tl->months = months; };
   if (ranges_overlap(lo, hi, 30.0, 31.0)) {
     const std::int64_t c1 = cnt(27.5, 31.5);
     if (c1 < 2) {
-      return set(30.5, 1);
+      return set(1);
     }
     const std::int64_t c2 = cnt(27.5, 29.5);
     const std::int64_t c3 = cnt(29.5, 30.5);
@@ -1299,26 +1300,26 @@ void classify_bin(Timeline* tl, double lo, double hi, bool has_rep, double rep, 
       if (c4 > 4 || c2 > 2) {
         return;
       }
-      return set(30.5, 1);
+      return set(1);
     }
     if (c2 < 3) {
-      return set(30.5, 1);
+      return set(1);
     }
     if (c5 > 9) {
-      return set(30.5, 1);
+      return set(1);
     }
     if (c5 + c2 != c1) {
-      return set(30.5, 1);
+      return set(1);
     }
     return;
   }
   if (ranges_overlap(lo, hi, 363.0, 367.0)) {
-    return set(365.0, 12);
+    return set(12);
   }
   if (ranges_overlap(lo, hi, 90.0, 92.0)) {
     const std::int64_t c1 = cnt(89.5, 92.5);
     if (c1 < 2) {
-      return set(91.0, 3);
+      return set(3);
     }
     const std::int64_t c2 = cnt(89.5, 90.5);
     const std::int64_t c3 = cnt(90.5, 91.5);
@@ -1331,23 +1332,23 @@ void classify_bin(Timeline* tl, double lo, double hi, bool has_rep, double rep, 
       if (c3 > 3 || c2 > 2) {
         return;
       }
-      return set(91.0, 3);
+      return set(3);
     }
     if (c2 < 3) {
-      return set(91.0, 3);
+      return set(3);
     }
     if (c5 > 1) {
-      return set(91.0, 3);
+      return set(3);
     }
     if (c5 + c2 == c1) {
       return;
     }
-    return set(91.0, 3);
+    return set(3);
   }
   if (ranges_overlap(lo, hi, 181.5, 184.5)) {
     const std::int64_t c1 = cnt(89.5, 92.5);
     if (c1 < 2) {
-      return set(183.0, 6);
+      return set(6);
     }
     const std::int64_t c2 = cnt(180.5, 181.5);
     const std::int64_t c3 = cnt(181.5, 182.5);
@@ -1359,19 +1360,19 @@ void classify_bin(Timeline* tl, double lo, double hi, bool has_rep, double rep, 
       if (c2 > 2 || c3 > 2) {
         return;
       }
-      return set(183.0, 6);
+      return set(6);
     }
     if (c3 < 3) {
-      return set(183.0, 6);
+      return set(6);
     }
     const std::int64_t s = c4 + c2;
     if (s + c3 != c1) {
-      return set(183.0, 6);
+      return set(6);
     }
     if (s < 6) {
       return;
     }
-    return set(183.0, 6);
+    return set(6);
   }
   if (bit_compare(lo, 365.0) == 1) {
     classify_multiyear(tl, lo, hi);
@@ -2166,10 +2167,15 @@ bool target_position(const Timeline& tl, double target, double* position, bool* 
     return false;
   }
   if (tl.months >= 1) {
-    double v = div_zero(target - tl.last, tl.nominal);
-    v = std::floor(v);
-    std::int64_t k = static_cast<std::int64_t>(v);
+    if (!whole_count(std::floor(target))) {
+      *err = ErrorCode::Num;
+      return false;
+    }
     Ymd ymd = ymd_of(tl.last);
+    const Ymd at = ymd_of(target);
+    // The calendar month difference puts the first node within a step or two
+    // of the target, so the walks below stay short.
+    std::int64_t k = floor_div((at.year - ymd.year) * 12 + (at.month - ymd.month), tl.months);
     double node = add_months(&ymd, tl.months * k);
     while (bit_compare(node, target) == 1) {
       --k;
@@ -2194,7 +2200,7 @@ bool target_position(const Timeline& tl, double target, double* position, bool* 
       node = add_months(&ymd, -tl.months);
     }
     const double span = hi - node;
-    v = target - node;
+    double v = target - node;
     v = div_zero(v, span);
     *position = v + static_cast<double>(k);
     *interpolated = true;

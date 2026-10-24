@@ -1,10 +1,7 @@
 suite: regression
 description: CORREL / COVARIANCE.P / COVARIANCE.S / SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR — pairwise linear-regression builtins
-# These functions are numerically stable and xlwings returns close-to-full
-# precision for the small-magnitude values in this suite (|v| < 100), so we
-# can assert near-double tolerance. Widen if xlwings starts rounding to the
-# displayed format.
-tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- CORREL --------------------------------------------------------------
@@ -466,3 +463,25 @@ cases:
   - id: covariance_s_scalars_is_div0
     description: "COVARIANCE.S of one-element arrays is #DIV/0!"
     formula: "=COVARIANCE.S(1,2)"
+
+  # -- FORECAST / FORECAST.LINEAR lift over an array x ----------------------
+  - id: forecast_linear_array_x_second
+    description: "Array x spills one forecast per element; second element"
+    formula: "=INDEX(FORECAST.LINEAR({3,7}, {2;4;5;4;5}, {1;2;3;4;5}), 2)"
+
+  - id: forecast_linear_array_x_columns
+    description: "Array x spill keeps the x shape"
+    formula: "=COLUMNS(FORECAST.LINEAR({3,7,9}, {2;4;5;4;5}, {1;2;3;4;5}))"
+
+  - id: forecast_legacy_array_x_second
+    description: "Legacy FORECAST over an array x; second element"
+    formula: "=INDEX(FORECAST({3,7}, {2;4;5;4;5}, {1;2;3;4;5}), 2)"
+
+  - id: forecast_linear_range_x_second
+    description: "Range x spills; second element"
+    setup: { A1: 3, A2: 7 }
+    formula: "=INDEX(FORECAST.LINEAR(A1:A2, {2;4;5;4;5}, {1;2;3;4;5}), 2)"
+
+  - id: forecast_linear_array_x_text_element
+    description: "A text element of x is #VALUE! in its own slot"
+    formula: "=INDEX(FORECAST.LINEAR({3,\"x\"}, {2;4;5;4;5}, {1;2;3;4;5}), 2)"

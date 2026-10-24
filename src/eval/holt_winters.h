@@ -35,12 +35,14 @@ struct HoltWintersFit {
   std::vector<double> state;
 
   /// Point forecast `h` steps after the last observation (`h` may be <= 0).
+  /// Callers keep `|h|` at most 2^53 (`ets::kMaxWholeCount`).
   double forecast(std::int64_t h) const;
 
   /// Returns 0 for a forecast that is negligible next to the initial trend.
   double zero_if_negligible(double r) const;
 
-  /// Forecast error variance at horizon `h >= 1`.
+  /// Forecast error variance at horizon `1 <= h <= 2^53`; the bound keeps
+  /// `2 * h - 1` inside the int64 range.
   double variance(std::int64_t h) const;
 };
 

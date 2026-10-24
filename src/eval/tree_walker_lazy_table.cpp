@@ -63,6 +63,9 @@ struct LazyEntry {
   // return paths have been checked; this prevents a catalog addition from
   // creating a silent partial-recalc false negative.
   LazyResultShape shape = LazyResultShape::kArray;
+  // Inclusive minimum argument count, as `FunctionDef::min_arity`; 0 where
+  // the table does not declare it and the impl checks its own arity.
+  std::uint32_t min_arity = 0U;
 };
 
 // The single source of truth for lazy-form routing. Sorted alphabetically
@@ -97,15 +100,15 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"BYROW", &eval_byrow_lazy, LazyResultShape::kArray},
     {"CELL", &eval_cell_lazy, LazyResultShape::kArray},
     // CHITEST is the pre-2010 legacy spelling of CHISQ.TEST; same impl.
-    {"CHISQ.TEST", &eval_chisq_test_lazy, LazyResultShape::kReduce},
-    {"CHITEST", &eval_chisq_test_lazy, LazyResultShape::kReduce},
+    {"CHISQ.TEST", &eval_chisq_test_lazy, LazyResultShape::kReduce, 2U},
+    {"CHITEST", &eval_chisq_test_lazy, LazyResultShape::kReduce, 2U},
     {"CHOOSE", &eval_choose_lazy, LazyResultShape::kBroadcast},
     {"CHOOSECOLS", &eval_choosecols_lazy, LazyResultShape::kArray},
     {"CHOOSEROWS", &eval_chooserows_lazy, LazyResultShape::kArray},
     {"CODE", &eval_code_lazy, LazyResultShape::kScalar},
     {"COLUMN", &eval_column_lazy, LazyResultShape::kBroadcast},
     {"COLUMNS", &eval_columns_lazy, LazyResultShape::kReduce},
-    {"CORREL", &eval_correl_lazy, LazyResultShape::kReduce},
+    {"CORREL", &eval_correl_lazy, LazyResultShape::kReduce, 2U},
     {"COUNT", &eval_count_lazy, LazyResultShape::kReduce},
     {"COUNTBLANK", &eval_countblank_lazy, LazyResultShape::kReduce},
     {"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce},
@@ -118,9 +121,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"COUPPCD", &eval_financial_date_lazy, LazyResultShape::kScalar},
     // COVAR is the pre-2010 legacy spelling of COVARIANCE.P; both compute
     // the population covariance with identical semantics.
-    {"COVAR", &eval_covariance_p_lazy, LazyResultShape::kReduce},
-    {"COVARIANCE.P", &eval_covariance_p_lazy, LazyResultShape::kReduce},
-    {"COVARIANCE.S", &eval_covariance_s_lazy, LazyResultShape::kReduce},
+    {"COVAR", &eval_covariance_p_lazy, LazyResultShape::kReduce, 2U},
+    {"COVARIANCE.P", &eval_covariance_p_lazy, LazyResultShape::kReduce, 2U},
+    {"COVARIANCE.S", &eval_covariance_s_lazy, LazyResultShape::kReduce, 2U},
     // Calendar family: date1904-sensitive functions share one lazy impl
     // (`eval_datetime_lazy`) so the workbook epoch reaches the calendar math.
     // WEEKNUM is served by `eval_weeknum_lazy` and is registered separately
@@ -149,19 +152,19 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"EDATE", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"EOMONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"EXPAND", &eval_expand_lazy, LazyResultShape::kArray},
-    {"F.TEST", &eval_f_test_lazy, LazyResultShape::kReduce},
+    {"F.TEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U},
     {"FILTER", &eval_filter_lazy, LazyResultShape::kArray},
     // FORECAST is the legacy spelling kept by Excel for back-compat;
     // its impl and arity are identical to FORECAST.LINEAR.
-    {"FORECAST", &eval_forecast_linear_lazy, LazyResultShape::kScalar},
+    {"FORECAST", &eval_forecast_linear_lazy, LazyResultShape::kBroadcast},
     // The FORECAST.ETS family rides the lazy seam because both the
     // values and timeline arguments may be Range refs that must reach
     // the impl with their (rows, cols) shape preserved for pairing.
-    {"FORECAST.ETS", &eval_forecast_ets_lazy, LazyResultShape::kScalar},
-    {"FORECAST.ETS.CONFINT", &eval_forecast_ets_confint_lazy, LazyResultShape::kScalar},
+    {"FORECAST.ETS", &eval_forecast_ets_lazy, LazyResultShape::kBroadcast},
+    {"FORECAST.ETS.CONFINT", &eval_forecast_ets_confint_lazy, LazyResultShape::kBroadcast},
     {"FORECAST.ETS.SEASONALITY", &eval_forecast_ets_seasonality_lazy, LazyResultShape::kScalar},
     {"FORECAST.ETS.STAT", &eval_forecast_ets_stat_lazy, LazyResultShape::kScalar},
-    {"FORECAST.LINEAR", &eval_forecast_linear_lazy, LazyResultShape::kScalar},
+    {"FORECAST.LINEAR", &eval_forecast_linear_lazy, LazyResultShape::kBroadcast},
     // FORMULATEXT returns the source text of the referenced cell's formula,
     // so it must inspect the un-evaluated Ref AST and the bound Sheet's
     // `formula_text` directly — the eager path would flatten the argument
@@ -169,7 +172,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kScalar},
     {"FREQUENCY", &eval_frequency_lazy, LazyResultShape::kArray},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
-    {"FTEST", &eval_f_test_lazy, LazyResultShape::kReduce},
+    {"FTEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U},
     // GETPIVOTDATA recovers the (sheet, row, col) anchor of its second
     // argument from the un-evaluated Reference AST and reads the
     // freshest `PivotResult` off the bound Workbook on EvalContext;
@@ -187,7 +190,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"IFS", &eval_ifs_lazy, LazyResultShape::kBroadcast},
     {"INDEX", &eval_index_lazy, LazyResultShape::kArray},
     {"INDIRECT", &eval_indirect_lazy, LazyResultShape::kArray},
-    {"INTERCEPT", &eval_intercept_lazy, LazyResultShape::kScalar},
+    {"INTERCEPT", &eval_intercept_lazy, LazyResultShape::kScalar, 2U},
     {"INTRATE", &eval_financial_date_lazy, LazyResultShape::kScalar},
     // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
     // they cannot ride the eager path because it flattens references to
@@ -226,8 +229,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"OR", &eval_or_lazy, LazyResultShape::kReduce},
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
     // correlation coefficient); Excel keeps both names for back-compat.
-    {"PEARSON", &eval_correl_lazy, LazyResultShape::kReduce},
-    {"PERCENTOF", &eval_percentof_lazy, LazyResultShape::kScalar},
+    {"PEARSON", &eval_correl_lazy, LazyResultShape::kReduce, 2U},
+    {"PERCENTOF", &eval_percentof_lazy, LazyResultShape::kScalar, 2U},
     {"PERCENTRANK", &eval_percentrank_inc_lazy, LazyResultShape::kScalar},
     {"PERCENTRANK.EXC", &eval_percentrank_exc_lazy, LazyResultShape::kScalar},
     {"PERCENTRANK.INC", &eval_percentrank_inc_lazy, LazyResultShape::kScalar},
@@ -250,7 +253,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"REGEXTEST", &eval_regextest_lazy, LazyResultShape::kBroadcast},
     {"ROW", &eval_row_lazy, LazyResultShape::kBroadcast},
     {"ROWS", &eval_rows_lazy, LazyResultShape::kReduce},
-    {"RSQ", &eval_rsq_lazy, LazyResultShape::kScalar},
+    {"RSQ", &eval_rsq_lazy, LazyResultShape::kScalar, 2U},
     {"SCAN", &eval_scan_lazy, LazyResultShape::kArray},
     {"SECOND", &eval_datetime_lazy, LazyResultShape::kBroadcast},
     {"SERIESSUM", &eval_series_sum_lazy, LazyResultShape::kScalar},
@@ -266,19 +269,19 @@ constexpr LazyEntry kLazyDispatch[] = {
     // formula cell's row / column via `EvalContext::formula_row` /
     // `formula_col` — the same logic the `@` operator uses.
     {"SINGLE", &eval_single_lazy, LazyResultShape::kScalar},
-    {"SLOPE", &eval_slope_lazy, LazyResultShape::kScalar},
+    {"SLOPE", &eval_slope_lazy, LazyResultShape::kScalar, 2U},
     {"SORT", &eval_sort_lazy, LazyResultShape::kArray},
     {"SORTBY", &eval_sortby_lazy, LazyResultShape::kArray},
-    {"STEYX", &eval_steyx_lazy, LazyResultShape::kScalar},
+    {"STEYX", &eval_steyx_lazy, LazyResultShape::kScalar, 2U},
     // SUBTOTAL is lazy so codes 101..111 can read row visibility off the
     // sheet. See `eval_subtotal_lazy`.
     {"SUBTOTAL", &eval_subtotal_lazy, LazyResultShape::kReduce},
     {"SUMIF", &eval_sumif_lazy, LazyResultShape::kReduce},
     {"SUMIFS", &eval_sumifs_lazy, LazyResultShape::kReduce},
     {"SUMPRODUCT", &eval_sumproduct_lazy, LazyResultShape::kReduce},
-    {"SUMX2MY2", &eval_sumx2my2_lazy, LazyResultShape::kReduce},
-    {"SUMX2PY2", &eval_sumx2py2_lazy, LazyResultShape::kReduce},
-    {"SUMXMY2", &eval_sumxmy2_lazy, LazyResultShape::kReduce},
+    {"SUMX2MY2", &eval_sumx2my2_lazy, LazyResultShape::kReduce, 2U},
+    {"SUMX2PY2", &eval_sumx2py2_lazy, LazyResultShape::kReduce, 2U},
+    {"SUMXMY2", &eval_sumxmy2_lazy, LazyResultShape::kReduce, 2U},
     {"SWITCH", &eval_switch_lazy, LazyResultShape::kBroadcast},
     {"T", &eval_t_lazy, LazyResultShape::kBroadcast},
     {"T.TEST", &eval_t_test_lazy, LazyResultShape::kReduce},
@@ -381,6 +384,11 @@ LazyImpl find_lazy_impl(std::string_view name) noexcept {
 LazyResultShape find_lazy_result_shape(std::string_view name) noexcept {
   const LazyEntry* entry = find_lazy_entry(name);
   return entry != nullptr ? entry->shape : LazyResultShape::kNotLazy;
+}
+
+std::uint32_t find_lazy_min_arity(std::string_view name) noexcept {
+  const LazyEntry* entry = find_lazy_entry(name);
+  return entry != nullptr ? entry->min_arity : 0U;
 }
 
 const char* const* lazy_table_names() {

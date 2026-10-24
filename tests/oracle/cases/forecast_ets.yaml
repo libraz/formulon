@@ -1,6 +1,6 @@
 suite: forecast_ets
 description: FORECAST.ETS — exponential triple smoothing closure against Mac Excel 365 (ja-JP).
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- linear trend (no seasonality) --------------------------------------
@@ -219,3 +219,89 @@ cases:
     description: "Auto-detected period on a noisy series"
     tolerance: { abs: 0, rel: 0 }
     formula: "=FORECAST.ETS(26, {20.68;23.387;21.379;23.614;22.256;23.242;25.997;24.128;25.926;25.877;26.359;26.985}, {1;2;3;4;5;6;7;8;9;10;11;12})"
+
+  # -- array target_date lifts per element ------------------------------
+  - id: forecast_ets_array_target_second
+    description: "Array target_date spills one forecast per target; second element"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=INDEX(FORECAST.ETS({13.0,14.5}, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0), 2)"
+
+  - id: forecast_ets_array_target_columns
+    description: "Array target_date spill keeps the target's shape"
+    formula: "=COLUMNS(FORECAST.ETS({13.0,14.5,16.0}, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0))"
+
+  - id: forecast_ets_confint_array_target_second
+    description: "FORECAST.ETS.CONFINT over an array target_date; second element"
+    tolerance: { abs: 0, rel: 0 }
+    formula: "=INDEX(FORECAST.ETS.CONFINT({13.0;14.5}, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0.9, 0), 2)"
+
+  - id: forecast_ets_range_target_second
+    description: "Range target_date spills; second element"
+    tolerance: { abs: 0, rel: 0 }
+    setup: { A1: 13, A2: 14.5 }
+    formula: "=INDEX(FORECAST.ETS(A1:A2, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0), 2)"
+
+  # -- far target dates ---------------------------------------------------
+  - id: forecast_ets_far_target_daily_1e15
+    description: "Daily timeline, target 1E+15"
+    formula: "=FORECAST.ETS(1E+15, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_1e18
+    description: "Daily timeline, target 1E+18"
+    formula: "=FORECAST.ETS(1E+18, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_1e300
+    description: "Daily timeline, target 1E+300"
+    formula: "=FORECAST.ETS(1E+300, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_2958465
+    description: "Daily timeline, target at the last valid date serial"
+    formula: "=FORECAST.ETS(2958465, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_2958466
+    description: "Daily timeline, target one past the last valid date serial"
+    formula: "=FORECAST.ETS(2958466, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_max_horizon
+    description: "Daily timeline, 2^31 - 1 steps past the last node"
+    formula: "=FORECAST.ETS(2147483659, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_past_max_horizon
+    description: "Daily timeline, 2^31 steps past the last node"
+    formula: "=FORECAST.ETS(2147483660, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_1e9
+    description: "Daily timeline, target 1E+9"
+    formula: "=FORECAST.ETS(1E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_daily_3e9
+    description: "Daily timeline, target 3E+9"
+    formula: "=FORECAST.ETS(3E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)"
+
+  - id: forecast_ets_far_target_negative_timeline_1e9
+    description: "Non-date timeline -12..-1, target 1E+9"
+    formula: "=FORECAST.ETS(1E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)"
+
+  - id: forecast_ets_far_target_negative_timeline_3e9
+    description: "Non-date timeline -12..-1, target 3E+9"
+    formula: "=FORECAST.ETS(3E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)"
+
+  - id: forecast_ets_confint_far_target_daily_5e18
+    description: "Daily timeline, CONFINT at target 5E+18"
+    formula: "=FORECAST.ETS.CONFINT(5E+18, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0.95, 0)"
+
+  - id: forecast_ets_far_target_monthly_1e15
+    description: "Monthly timeline, target 1E+15"
+    formula: "=FORECAST.ETS(1E+15, {100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0}, {44927.0;44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0}, 0)"
+
+  - id: forecast_ets_far_target_monthly_1e300
+    description: "Monthly timeline, target 1E+300"
+    formula: "=FORECAST.ETS(1E+300, {100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0}, {44927.0;44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0}, 0)"
+
+  - id: forecast_ets_far_target_monthly_neg_1e300
+    description: "Monthly timeline, target -1E+300"
+    formula: "=FORECAST.ETS(-1E+300, {100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0}, {44927.0;44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0}, 0)"
+
+  - id: forecast_ets_stat_type_1e300
+    description: "statistic_type 1E+300"
+    formula: "=FORECAST.ETS.STAT({10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 1E+300, 0)"

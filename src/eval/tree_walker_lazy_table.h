@@ -50,6 +50,11 @@ LazyImpl find_lazy_impl(std::string_view name) noexcept;
 /// name is not present in the dispatch table.
 LazyResultShape find_lazy_result_shape(std::string_view name) noexcept;
 
+/// Returns the inclusive minimum argument count a lazy form declares (the
+/// meaning of `FunctionDef::min_arity`), or 0 when the name is not a lazy form
+/// or its entry declares none.
+std::uint32_t find_lazy_min_arity(std::string_view name) noexcept;
+
 /// Returns a nullptr-terminated array of canonical UPPERCASE names in
 /// the lazy dispatch table. Storage has static duration; callers must
 /// not free the array. Used by `tree_walker.cpp::lazy_form_names`

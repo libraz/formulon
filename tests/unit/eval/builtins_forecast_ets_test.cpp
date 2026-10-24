@@ -1010,6 +1010,136 @@ TEST(ForecastEtsSeasonality, DetectorWindowIsLargestPowerOfTwoTail) {
   EXPECT_EQ(v.as_number(), 7.0);
 }
 
+// ---------------------------------------------------------------------------
+// Far horizons: more than 2^31 - 1 steps past the last node is #NUM!
+// ---------------------------------------------------------------------------
+
+const std::string kMonthlyArgs =
+    "{100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0},{44927.0;44958.0;44986.0;45017.0;"
+    "45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0}";
+const std::string kYearlyArgs =
+    "{100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0},{40179.0;40544.0;40909.0;41275.0;"
+    "41640.0;42005.0;42370.0;42736.0;43101.0;43466.0;43831.0;44197.0}";
+const std::string kDailyArgs =
+    "{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;"
+    "12.0}";
+
+TEST(ForecastEtsFarTarget, CalendarTimelinesTerminate) {
+  for (const std::string& args : {kMonthlyArgs, kYearlyArgs}) {
+    for (const char* target : {"3E+6"}) {
+      const Value point = EvalSource("=FORECAST.ETS(" + std::string(target) + "," + args + ",0)");
+      EXPECT_TRUE(point.is_number()) << target;
+      const Value conf = EvalSource("=FORECAST.ETS.CONFINT(" + std::string(target) + "," + args + ",0.95,0)");
+      ASSERT_TRUE(conf.is_number()) << target;
+      EXPECT_GT(conf.as_number(), 0.0) << target;
+    }
+    // 1E+15 used to walk the calendar one node at a time and never return.
+    for (const char* target : {"1E+15", "1E+300", "-1E+300", "2^53", "-1E+15"}) {
+      EXPECT_EQ(EvalError("=FORECAST.ETS(" + std::string(target) + "," + args + ",0)"), ErrorCode::Num) << target;
+      EXPECT_EQ(EvalError("=FORECAST.ETS.CONFINT(" + std::string(target) + "," + args + ",0.95,0)"), ErrorCode::Num)
+          << target;
+    }
+  }
+}
+
+TEST(ForecastEtsFarTarget, DailyHorizonBoundary) {
+  // Last node 12, step 1: 2147483659 is 2^31 - 1 steps out and still answers.
+  EXPECT_TRUE(EvalSource("=FORECAST.ETS(2147483659," + kDailyArgs + ",0)").is_number());
+  const Value conf = EvalSource("=FORECAST.ETS.CONFINT(2147483659," + kDailyArgs + ",0.95,0)");
+  ASSERT_TRUE(conf.is_number());
+  EXPECT_GT(conf.as_number(), 0.0);
+  // The bound counts steps from the last node, not date serials.
+  const std::string negative =
+      "{10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;"
+      "-3.0;-2.0;-1.0}";
+  EXPECT_TRUE(EvalSource("=FORECAST.ETS(1E+9," + negative + ",0)").is_number());
+  EXPECT_EQ(EvalError("=FORECAST.ETS(3E+9," + negative + ",0)"), ErrorCode::Num);
+  for (const char* target : {"2147483660", "3E+9", "1E+15", "2^53", "1E+18", "5E+18", "1E+300"}) {
+    EXPECT_EQ(EvalError("=FORECAST.ETS(" + std::string(target) + "," + kDailyArgs + ",0)"), ErrorCode::Num) << target;
+    EXPECT_EQ(EvalError("=FORECAST.ETS.CONFINT(" + std::string(target) + "," + kDailyArgs + ",0.95,0)"), ErrorCode::Num)
+        << target;
+  }
+}
+
+TEST(ForecastEtsFarTarget, StatTypeOutOfRangeIsNum) {
+  for (const char* stat : {"1E+300", "-1E+300", "2^63", "-2^63"}) {
+    EXPECT_EQ(EvalError("=FORECAST.ETS.STAT(" + kDailyArgs + "," + std::string(stat) + ",0)"), ErrorCode::Num) << stat;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Array target_date: one result per element, each equal to the scalar call
+// ---------------------------------------------------------------------------
+
+TEST(ForecastEtsArrayTarget, ForecastLiftsOverTargets) {
+  const double at13 = EvalExact("=FORECAST.ETS(13.0," + kDailyArgs + ",0)");
+  const double at14 = EvalExact("=FORECAST.ETS(14.5," + kDailyArgs + ",0)");
+  const Value v = EvalSource("=FORECAST.ETS({13.0,14.5,\"x\",0.0}," + kDailyArgs + ",0)");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array()->rows, 1U);
+  ASSERT_EQ(v.as_array()->cols, 4U);
+  const Value* c = v.as_array()->cells;
+  ASSERT_TRUE(c[0].is_number());
+  EXPECT_EQ(c[0].as_number(), at13);
+  ASSERT_TRUE(c[1].is_number());
+  EXPECT_EQ(c[1].as_number(), at14);
+  ASSERT_TRUE(c[2].is_error());
+  EXPECT_EQ(c[2].as_error(), ErrorCode::Value);
+  ASSERT_TRUE(c[3].is_error());
+  EXPECT_EQ(c[3].as_error(), ErrorCode::Num);
+}
+
+TEST(ForecastEtsArrayTarget, ConfintLiftsOverTargets) {
+  const double at13 = EvalExact("=FORECAST.ETS.CONFINT(13.0," + kDailyArgs + ",0.9,0)");
+  const double at14 = EvalExact("=FORECAST.ETS.CONFINT(14.5," + kDailyArgs + ",0.9,0)");
+  const Value v = EvalSource("=FORECAST.ETS.CONFINT({13.0;14.5;12.0}," + kDailyArgs + ",0.9,0)");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array()->rows, 3U);
+  ASSERT_EQ(v.as_array()->cols, 1U);
+  const Value* c = v.as_array()->cells;
+  ASSERT_TRUE(c[0].is_number());
+  EXPECT_EQ(c[0].as_number(), at13);
+  ASSERT_TRUE(c[1].is_number());
+  EXPECT_EQ(c[1].as_number(), at14);
+  ASSERT_TRUE(c[2].is_error());
+  EXPECT_EQ(c[2].as_error(), ErrorCode::Num);
+}
+
+TEST(ForecastEtsArrayTarget, RangeTargetSpills) {
+  Workbook wb = MakeLinearWorkbook();
+  wb.sheet(0).set_cell_value(0, 2, Value::number(11.0));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(12.0));
+  const Value s11 = EvalSourceIn("=FORECAST.ETS(11, B1:B10, A1:A10, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(s11.is_number());
+  const double at11 = s11.as_number();
+  const Value s12 = EvalSourceIn("=FORECAST.ETS(12, B1:B10, A1:A10, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(s12.is_number());
+  const double at12 = s12.as_number();
+  const Value v = EvalSourceIn("=FORECAST.ETS(C1:C2, B1:B10, A1:A10, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array()->rows, 2U);
+  ASSERT_EQ(v.as_array()->cols, 1U);
+  EXPECT_EQ(v.as_array()->cells[0].as_number(), at11);
+  EXPECT_EQ(v.as_array()->cells[1].as_number(), at12);
+}
+
+TEST(ForecastEtsArrayTarget, TargetErrorWinsOverSeriesError) {
+  // The series fails with #N/A (length mismatch); a target that is itself an
+  // error or non-numeric reports its own error first, as the scalar call does.
+  const std::string bad = "{1.0;2.0;3.0;4.0;5.0},{1.0;2.0;3.0;4.0}";
+  EXPECT_EQ(EvalError("=FORECAST.ETS(6.0," + bad + ",0)"), ErrorCode::NA);
+  EXPECT_EQ(EvalError("=FORECAST.ETS(\"x\"," + bad + ",0)"), ErrorCode::Value);
+  const Value v = EvalSource("=FORECAST.ETS({6.0,\"x\"}," + bad + ",0)");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array()->cols, 2U);
+  EXPECT_EQ(v.as_array()->cells[0].as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_array()->cells[1].as_error(), ErrorCode::Value);
+  const Value conf = EvalSource("=FORECAST.ETS.CONFINT({6.0,\"x\"}," + kDailyArgs + ",1.5,0)");
+  ASSERT_TRUE(conf.is_array());
+  EXPECT_EQ(conf.as_array()->cells[0].as_error(), ErrorCode::Num);
+  EXPECT_EQ(conf.as_array()->cells[1].as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

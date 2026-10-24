@@ -7,7 +7,9 @@
 #ifndef FORMULON_EVAL_ETS_SERIES_H_
 #define FORMULON_EVAL_ETS_SERIES_H_
 
+#include <cmath>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "value.h"
@@ -15,6 +17,21 @@
 namespace formulon {
 namespace eval {
 namespace ets {
+
+/// Bound on the step and day counts the family turns into integers: below
+/// 2^53 every integer is exact in a double, and the calendar and variance
+/// arithmetic on such counts stays inside the int64 range.
+inline constexpr double kMaxWholeCount = 9007199254740992.0;
+
+/// Truncates `v` toward zero, or returns nullopt when `v` is non-finite or its
+/// magnitude is not below `kMaxWholeCount`. The family's only narrowing of a
+/// double to an integer count.
+inline std::optional<std::int64_t> whole_count(double v) noexcept {
+  if (!(std::fabs(v) < kMaxWholeCount)) {
+    return std::nullopt;
+  }
+  return static_cast<std::int64_t>(v);
+}
 
 /// Aggregation applied to values sharing a grid node (option 1..7).
 enum class AggregationMode : std::uint32_t {
@@ -44,8 +61,6 @@ struct Timeline {
   /// Months per node on a calendar timeline, otherwise 0 (or -1 before
   /// classification).
   std::int64_t months = 0;
-  /// Nominal node spacing in days on a calendar timeline.
-  double nominal = 0.0;
   /// Number of steps in the chosen histogram window.
   std::int64_t count = 0;
   /// Timestamp of the last grid node.
@@ -64,7 +79,8 @@ bool prepare_series(const std::vector<SeriesCell>& values, const std::vector<Ser
                     AggregationMode aggregation, PreparedSeries* out, ErrorCode* err);
 
 /// Locates `target` on the grid as a (possibly fractional) step count from
-/// the last node; `*interpolated` is set when it falls between two steps.
+/// the last node; `*interpolated` is set when it falls between two steps. A
+/// calendar target beyond `kMaxWholeCount` days is `#NUM!`.
 bool target_position(const Timeline& timeline, double target, double* position, bool* interpolated, ErrorCode* err);
 
 /// Auto-detected seasonality length (>= 1); 1 means no seasonality.

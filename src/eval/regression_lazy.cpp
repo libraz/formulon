@@ -329,29 +329,48 @@ Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const
   if (call.as_call_arity() != 3U) {
     return Value::error(ErrorCode::Value);
   }
-  // The first argument is a scalar x-value. Evaluate eagerly and
-  // propagate any error — this is the only argument where a bare
-  // number literal is valid.
+  // The first argument is the x-value: a scalar, or an array lifted per
+  // element over one fit.
   const Value x_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (x_val.is_error()) {
-    return x_val;
+  // Excel's FORECAST rejects non-numeric x (Bool included) with #VALUE!.
+  // A scalar x is checked before the known pairs are read, so its own
+  // error wins; per element the same order holds.
+  const auto x_error = [](const Value& v) {
+    return v.is_error() ? v : v.is_number() ? Value::blank() : Value::error(ErrorCode::Value);
+  };
+  if (!x_val.is_array()) {
+    const Value bad = x_error(x_val);
+    if (bad.is_error()) {
+      return bad;
+    }
   }
-  if (!x_val.is_number()) {
-    // Excel's FORECAST rejects non-numeric scalars with #VALUE!. A
-    // Bool scalar is also rejected here because the function's
-    // signature is explicitly numeric (Excel matches this behaviour).
-    return Value::error(ErrorCode::Value);
-  }
-  const double x = x_val.as_number();
 
   const auto prepared = collect_regression_pairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx);
   double slope = 0.0;
   double intercept = 0.0;
   Value err = Value::blank();
-  if (!compute_slope_intercept(prepared, &slope, &intercept, &err)) {
-    return err;
+  const bool fitted = compute_slope_intercept(prepared, &slope, &intercept, &err);
+  const auto at = [&](const Value& v) -> Value {
+    const Value bad = x_error(v);
+    if (bad.is_error()) {
+      return bad;
+    }
+    return fitted ? to_finite_value(intercept + slope * v.as_number()) : err;
+  };
+  if (!x_val.is_array()) {
+    return at(x_val);
   }
-  return to_finite_value(intercept + slope * x);
+  const ArrayValue& in = *x_val.as_array();
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t count = static_cast<std::size_t>(in.rows) * in.cols;
+  for (std::size_t i = 0; i < count; ++i) {
+    cells[i] = at(in.cells[i]);
+  }
+  return count == 1U ? cells[0] : Value::array(out);
 }
 
 Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

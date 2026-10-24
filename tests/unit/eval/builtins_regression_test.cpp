@@ -351,6 +351,52 @@ TEST(RegressionFORECAST, LegacyAliasMatchesLinear) {
   EXPECT_DOUBLE_EQ(a.as_number(), b.as_number());
 }
 
+TEST(RegressionFORECAST, ArrayXLiftsPerElement) {
+  // Reference set: intercept 2.2, slope 0.6.
+  const Workbook wb = MakeReferenceWorkbook();
+  const Value at3 = EvalSourceIn("=FORECAST.LINEAR(3, B1:B5, A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(at3.is_number());
+  const double y3 = at3.as_number();
+  const Value at7 = EvalSourceIn("=FORECAST.LINEAR(7, B1:B5, A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(at7.is_number());
+  const double y7 = at7.as_number();
+  for (const char* fn : {"FORECAST", "FORECAST.LINEAR"}) {
+    const Value v = EvalSourceIn("=" + std::string(fn) + "({3,7,\"x\",#N/A}, B1:B5, A1:A5)", wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_array()) << fn;
+    ASSERT_EQ(v.as_array()->rows, 1U);
+    ASSERT_EQ(v.as_array()->cols, 4U);
+    const Value* c = v.as_array()->cells;
+    EXPECT_EQ(c[0].as_number(), y3);
+    EXPECT_EQ(c[1].as_number(), y7);
+    EXPECT_EQ(c[2].as_error(), ErrorCode::Value);
+    EXPECT_EQ(c[3].as_error(), ErrorCode::NA);
+  }
+}
+
+TEST(RegressionFORECAST, RangeXSpills) {
+  Workbook wb = MakeReferenceWorkbook();
+  wb.sheet(0).set_cell_value(0, 2, Value::number(3.0));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(7.0));
+  const Value at3 = EvalSourceIn("=FORECAST.LINEAR(3, B1:B5, A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(at3.is_number());
+  const double y3 = at3.as_number();
+  const Value v = EvalSourceIn("=FORECAST.LINEAR(C1:C2, B1:B5, A1:A5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array()->rows, 2U);
+  ASSERT_EQ(v.as_array()->cols, 1U);
+  EXPECT_EQ(v.as_array()->cells[0].as_number(), y3);
+}
+
+TEST(RegressionFORECAST, ArrayXFitErrorPerElement) {
+  // A zero-variance x set is #DIV/0! for every numeric element; an element
+  // that is itself an error keeps its own error, as the scalar call does.
+  const Value v = EvalSource("=FORECAST.LINEAR({1;#REF!}, {1,2,3}, {2,2,2})");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array()->rows, 2U);
+  EXPECT_EQ(v.as_array()->cells[0].as_error(), ErrorCode::Div0);
+  EXPECT_EQ(v.as_array()->cells[1].as_error(), ErrorCode::Ref);
+}
+
 TEST(RegressionFORECAST, ErrorInScalarArgPropagates) {
   // An error in the scalar x argument must take precedence over any
   // shape or DIV/0 condition in the regression.

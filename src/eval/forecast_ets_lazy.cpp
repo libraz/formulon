@@ -24,9 +24,11 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
@@ -58,6 +60,11 @@ constexpr std::int64_t kMaxSeasonalityArg = 8784;
 // is treated as no seasonality.
 constexpr std::size_t kSeasonalityLengthPercent = 70U;
 
+// Largest forecast horizon in steps past the last node; Mac Excel 365 returns
+// `#NUM!` for a target beyond it (2147483659 answers, 2147483660 does not, on
+// a 1..12 timeline).
+constexpr double kMaxHorizonSteps = 2147483647.0;
+
 using ets::AggregationMode;
 using ets::detect_seasonality;
 using ets::fit_holt_winters;
@@ -66,6 +73,8 @@ using ets::prepare_series;
 using ets::PreparedSeries;
 using ets::SeriesCell;
 using ets::target_position;
+using ets::Timeline;
+using ets::whole_count;
 
 // ---------------------------------------------------------------------------
 // Front-end: shared input preprocessing
@@ -101,17 +110,18 @@ bool read_option(const parser::AstNode* node, Arena& arena, const FunctionRegist
   if (node != nullptr && !read_double_arg(*node, arena, registry, ctx, d, &d, out_err)) {
     return false;
   }
-  if (!std::isfinite(d) || d != std::floor(d) || d < static_cast<double>(lo) || d > static_cast<double>(hi)) {
+  const std::optional<std::int64_t> v = whole_count(d);
+  if (!v || d != std::floor(d) || *v < lo || *v > hi) {
     *out_err = Value::error(ErrorCode::Num);
     return false;
   }
-  *out = static_cast<std::int64_t>(d);
+  *out = *v;
   return true;
 }
 
-bool read_required_finite_number(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                                 const EvalContext& ctx, double* out, Value* out_err, ErrorCode non_finite_error) {
-  const Value v = eval_node(node, arena, registry, ctx);
+// Coerces one scalar argument value to a number; a non-finite result is
+// `non_finite_error`.
+bool finite_number(const Value& v, double* out, Value* out_err, ErrorCode non_finite_error) {
   if (v.is_error()) {
     *out_err = v;
     return false;
@@ -130,14 +140,21 @@ bool read_required_finite_number(const parser::AstNode& node, Arena& arena, cons
   return true;
 }
 
+// Reads a required scalar truncated to an integer; a value outside the
+// `whole_count` range is `non_finite_error` like a non-finite one.
 bool read_required_truncated_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                  const EvalContext& ctx, std::int64_t* out, Value* out_err,
                                  ErrorCode non_finite_error) {
   double n = 0.0;
-  if (!read_required_finite_number(node, arena, registry, ctx, &n, out_err, non_finite_error)) {
+  if (!finite_number(eval_node(node, arena, registry, ctx), &n, out_err, non_finite_error)) {
     return false;
   }
-  *out = static_cast<std::int64_t>(n);
+  const std::optional<std::int64_t> v = whole_count(n);
+  if (!v) {
+    *out_err = Value::error(non_finite_error);
+    return false;
+  }
+  *out = *v;
   return true;
 }
 
@@ -285,19 +302,17 @@ double interpolate(std::int64_t s, double at_s, double at_next, double pos) {
   return v + at_s;
 }
 
-// Whole-step part of a fractional position, saturated to the int64 range.
-std::int64_t whole_steps(double pos) noexcept {
-  constexpr double kLimit = 9.0e18;
-  return static_cast<std::int64_t>(std::fmax(-kLimit, std::fmin(kLimit, pos)));
-}
+// A fitted model with the grid that places target dates on it.
+struct FittedSeries {
+  HoltWintersFit fit;
+  Timeline timeline;
+  std::size_t n = 0;
+};
 
 // Shared head of FORECAST.ETS and FORECAST.ETS.CONFINT: reads the options
-// from `first_optional`, prepares the series from args 1-2, fits it and
-// locates `target_date` on its grid.
-bool fit_to_target(const parser::AstNode& call, std::uint32_t arity, std::uint32_t first_optional, Arena& arena,
-                   const FunctionRegistry& registry, const EvalContext& ctx, double target_date,
-                   HoltWintersFit* out_fit, std::size_t* out_n, double* out_pos, bool* out_interpolated,
-                   Value* out_err) {
+// from `first_optional`, prepares the series from args 1-2 and fits it.
+bool fit_series(const parser::AstNode& call, std::uint32_t arity, std::uint32_t first_optional, Arena& arena,
+                const FunctionRegistry& registry, const EvalContext& ctx, FittedSeries* out, Value* out_err) {
   ForecastOptions opts;
   if (!read_forecast_options(call, arity, first_optional, arena, registry, ctx, &opts, out_err)) {
     return false;
@@ -306,16 +321,110 @@ bool fit_to_target(const parser::AstNode& call, std::uint32_t arity, std::uint32
   if (!prepare(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, opts, &pre, out_err)) {
     return false;
   }
-  if (!fit_holt_winters(pre.series.y, pre.m, out_fit, out_err)) {
+  if (!fit_holt_winters(pre.series.y, pre.m, &out->fit, out_err)) {
     return false;
   }
+  out->timeline = pre.series.timeline;
+  out->n = pre.series.y.size();
+  return true;
+}
+
+// Locates `target_date` on the grid as the fractional `*pos` and its whole
+// step `*s`; a horizon past `kMaxHorizonSteps` is `#NUM!`.
+bool locate(const FittedSeries& fs, double target_date, double* pos, std::int64_t* s, bool* interpolated,
+            Value* out_err) {
   ErrorCode err = ErrorCode::NA;
-  if (!target_position(pre.series.timeline, target_date, out_pos, out_interpolated, &err)) {
+  if (!target_position(fs.timeline, target_date, pos, interpolated, &err)) {
     *out_err = Value::error(err);
     return false;
   }
-  *out_n = pre.series.y.size();
+  const std::optional<std::int64_t> whole = whole_count(*pos);
+  if (!whole || *pos > kMaxHorizonSteps) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  *s = *whole;
   return true;
+}
+
+// Point forecast at one target date.
+Value forecast_at(const FittedSeries& fs, double target_date) {
+  double pos = 0.0;
+  std::int64_t s = 0;
+  bool interpolated = false;
+  Value err = Value::blank();
+  if (!locate(fs, target_date, &pos, &s, &interpolated, &err)) {
+    return err;
+  }
+  // A target at or before the first grid node has no forecast.
+  if (s <= -static_cast<std::int64_t>(fs.n)) {
+    return Value::error(ErrorCode::Num);
+  }
+  double f = fs.fit.forecast(s);
+  if (interpolated) {
+    f = interpolate(s, f, fs.fit.forecast(s + 1), pos);
+  }
+  return to_finite_value(fs.fit.zero_if_negligible(f));
+}
+
+// Confidence-interval half-width at one target date.
+Value confint_at(const FittedSeries& fs, double target_date, double confidence) {
+  double pos = 0.0;
+  std::int64_t s = 0;
+  bool interpolated = false;
+  Value err = Value::blank();
+  if (!locate(fs, target_date, &pos, &s, &interpolated, &err)) {
+    return err;
+  }
+  // The interval is undefined at and before the last observation.
+  if (s < 0 || (s == 0 && !interpolated)) {
+    return Value::error(ErrorCode::Num);
+  }
+  double variance = 0.0;
+  if (s != 0) {
+    variance = fs.fit.variance(s);
+    if (interpolated) {
+      variance = interpolate(s, variance, fs.fit.variance(s + 1), pos);
+    }
+  } else {
+    variance = interpolate(0, 0.0, fs.fit.variance(1), pos);
+  }
+  // half-width = z * sqrt(variance), z the normal quantile at (1 + confidence) / 2.
+  double p = 1.0 - confidence;
+  p = p / 2.0;
+  p = -p;
+  p = p + 1.0;
+  const double z = stats_detail::InverseStandardNormal(p);
+  return to_finite_value(z * (variance > 0.0 ? std::sqrt(variance) : 0.0));
+}
+
+// Applies `at` to target_date: once for a scalar, per element of an array
+// keeping its shape. As in the scalar call, which reads target_date first, a
+// target error wins over `head_err`, the failure of the rest of the call.
+template <typename At>
+Value at_each_target(const Value& target, bool head_ok, const Value& head_err, const At& at, Arena& arena) {
+  const auto one = [&](const Value& v) -> Value {
+    double t = 0.0;
+    Value err = Value::blank();
+    if (!finite_number(v, &t, &err, ErrorCode::Num)) {
+      return err;
+    }
+    return head_ok ? at(t) : head_err;
+  };
+  if (!target.is_array()) {
+    return one(target);
+  }
+  const ArrayValue& in = *target.as_array();
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t count = static_cast<std::size_t>(in.rows) * in.cols;
+  for (std::size_t i = 0; i < count; ++i) {
+    cells[i] = one(in.cells[i]);
+  }
+  return count == 1U ? cells[0] : Value::array(out);
 }
 
 }  // namespace
@@ -327,30 +436,17 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return Value::error(ErrorCode::Value);
   }
 
-  // arg 0: target_date scalar.
+  // arg 0: target_date, a scalar or an array lifted per element.
   Value err = Value::blank();
+  const Value target = eval_node(call.as_call_arg(0), arena, registry, ctx);
   double target_date = 0.0;
-  if (!read_required_finite_number(call.as_call_arg(0), arena, registry, ctx, &target_date, &err, ErrorCode::Num)) {
+  if (!target.is_array() && !finite_number(target, &target_date, &err, ErrorCode::Num)) {
     return err;
   }
 
-  HoltWintersFit fit;
-  std::size_t n = 0;
-  double pos = 0.0;
-  bool interpolated = false;
-  if (!fit_to_target(call, arity, 3U, arena, registry, ctx, target_date, &fit, &n, &pos, &interpolated, &err)) {
-    return err;
-  }
-  // A target at or before the first grid node has no forecast.
-  const std::int64_t s = whole_steps(pos);
-  if (s <= -static_cast<std::int64_t>(n)) {
-    return Value::error(ErrorCode::Num);
-  }
-  double f = fit.forecast(s);
-  if (interpolated) {
-    f = interpolate(s, f, fit.forecast(s + 1), pos);
-  }
-  return to_finite_value(fit.zero_if_negligible(f));
+  FittedSeries fs;
+  const bool fitted = fit_series(call, arity, 3U, arena, registry, ctx, &fs, &err);
+  return at_each_target(target, fitted, err, [&fs](double t) { return forecast_at(fs, t); }, arena);
 }
 
 Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -361,53 +457,27 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
   }
 
   Value err = Value::blank();
+  const Value target = eval_node(call.as_call_arg(0), arena, registry, ctx);
   double target_date = 0.0;
-  if (!read_required_finite_number(call.as_call_arg(0), arena, registry, ctx, &target_date, &err, ErrorCode::Num)) {
+  if (!target.is_array() && !finite_number(target, &target_date, &err, ErrorCode::Num)) {
     return err;
   }
 
   double confidence = 0.95;
-  if (arity > 3U) {
-    if (!read_double_arg(call.as_call_arg(3), arena, registry, ctx, 0.95, &confidence, &err)) {
-      return err;
-    }
-  }
+  bool head_ok = arity <= 3U || read_double_arg(call.as_call_arg(3), arena, registry, ctx, 0.95, &confidence, &err);
   // Mac Excel 365 accepts confidence == 0 (degenerate CI, returns 0 since
   // z = InverseStandardNormal(0.5) = 0). The lower-bound rejection is
   // strict (< 0); upper bound stays inclusive on 1 because z diverges to
   // +infinity there.
-  if (!std::isfinite(confidence) || confidence < 0.0 || confidence >= 1.0) {
-    return Value::error(ErrorCode::Num);
+  if (head_ok && (!std::isfinite(confidence) || confidence < 0.0 || confidence >= 1.0)) {
+    err = Value::error(ErrorCode::Num);
+    head_ok = false;
   }
 
-  HoltWintersFit fit;
-  std::size_t n = 0;
-  double pos = 0.0;
-  bool interpolated = false;
-  if (!fit_to_target(call, arity, 4U, arena, registry, ctx, target_date, &fit, &n, &pos, &interpolated, &err)) {
-    return err;
-  }
-  // The interval is undefined at and before the last observation.
-  const std::int64_t s = whole_steps(pos);
-  if (s < 0 || (s == 0 && !interpolated)) {
-    return Value::error(ErrorCode::Num);
-  }
-  double variance = 0.0;
-  if (s != 0) {
-    variance = fit.variance(s);
-    if (interpolated) {
-      variance = interpolate(s, variance, fit.variance(s + 1), pos);
-    }
-  } else {
-    variance = interpolate(0, 0.0, fit.variance(1), pos);
-  }
-  // half-width = z * sqrt(variance), z the normal quantile at (1 + confidence) / 2.
-  double p = 1.0 - confidence;
-  p = p / 2.0;
-  p = -p;
-  p = p + 1.0;
-  const double z = stats_detail::InverseStandardNormal(p);
-  return to_finite_value(z * (variance > 0.0 ? std::sqrt(variance) : 0.0));
+  FittedSeries fs;
+  head_ok = head_ok && fit_series(call, arity, 4U, arena, registry, ctx, &fs, &err);
+  return at_each_target(
+      target, head_ok, err, [&fs, confidence](double t) { return confint_at(fs, t, confidence); }, arena);
 }
 
 Value eval_forecast_ets_seasonality_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
