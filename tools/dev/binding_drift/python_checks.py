@@ -242,16 +242,75 @@ def _is_lib_call(node: ast.AST, attribute: Optional[str] = None) -> bool:
     return attribute is None or node.func.attr == attribute
 
 
+# `_ArgScope` (packages/python/formulon/workbook.py) owns every argument block.
+# Its allocating methods, each mapped to how the block width is derived.
+_ARG_SCOPE_CLASS = "_ArgScope"
+_ARG_SCOPE_SIZERS = {
+    "alloc": "size",
+    "out_ptr": "fixed:4",
+    "out_u64": "fixed:8",
+    "struct": "layout",
+    "struct_array": "layout_array",
+    "value_array": "value_array",
+    "buffer": "unsized",
+    "cstr": "unsized",
+    "opt_cstr": "unsized",
+    "nonempty_cstr": "unsized",
+}
+# Raw allocator entry points only `_ArgScope` itself may call.
+_RAW_ALLOCATORS = {"alloc", "free"}
+
+
+def _constant_int(node: ast.AST, constants: dict[str, int]) -> Optional[int]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    return None
+
+
+def _scope_call_width(
+    call: ast.Call, constants: dict[str, int], struct_module: object
+) -> tuple[Optional[str], Optional[int]]:
+    """Classify `scope.<method>(...)` as `("slot", width)`, `("unsized", None)` or `(None, None)`.
+
+    A slot is a single block whose width the out-parameter check compares
+    (`None` when it cannot be pinned). A string, raw buffer or multi-element
+    array is an input the callee reads by its own length, so it is not a slot.
+    """
+    callee = call.func
+    if not (isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name) and callee.value.id == "scope"):
+        return None, None
+    rule = _ARG_SCOPE_SIZERS.get(callee.attr)
+    if rule is None:
+        return None, None
+    if rule.startswith("fixed:"):
+        return "slot", int(rule.split(":")[1])
+    if rule == "size":
+        return "slot", _constant_int(call.args[0], constants) if call.args else None
+    if rule in ("layout", "layout_array"):
+        if rule == "layout_array" and (len(call.args) < 2 or _constant_int(call.args[1], constants) != 1):
+            return "unsized", None
+        layout = call.args[0] if call.args else None
+        layout_name = layout.attr if isinstance(layout, ast.Attribute) else None
+        struct = getattr(struct_module, layout_name, None) if layout_name else None
+        return "slot", struct.size if isinstance(struct, struct_module.Struct) else None
+    if rule == "value_array" and call.args and _constant_int(call.args[0], constants) == 1:
+        return "slot", constants.get("fm_value_t_size")
+    return "unsized", None
+
+
 def _scratch_slot_widths(
     function: ast.AST, constants: dict[str, int], struct_module: object
 ) -> dict[str, Optional[int]]:
     """Local name -> byte width of the WASM scratch block bound to it.
 
     A width of `None` marks a slot whose size this resolver cannot pin (an
-    array allocation sized from a runtime length, or a name rebound to two
-    different widths). Those are reported rather than skipped when the C side
-    says the parameter is a struct pointer, because an unmeasurable buffer
-    behind a by-pointer struct is exactly the case a size guard exists for.
+    allocation sized from a runtime length, or a name rebound to two
+    different widths). Those are reported rather than skipped
+    when the C side says the parameter is a struct pointer, because an
+    unmeasurable buffer behind a by-pointer struct is exactly the case a size
+    guard exists for.
     """
     widths: dict[str, Optional[int]] = {}
 
@@ -267,33 +326,74 @@ def _scratch_slot_widths(
         target = node.targets[0]
         if not isinstance(target, ast.Name) or not isinstance(node.value, ast.Call):
             continue
-        call = node.value
-        callee = call.func
-        # `x = _alloc_out_ptr()` -- the package's 4-byte out-i32 / out-ptr slot.
-        if isinstance(callee, ast.Name) and callee.id == "_alloc_out_ptr":
-            record(target.id, 4)
-        # `x = _alloc_out_u64()` -- the 8-byte out-uint64 slot.
-        elif isinstance(callee, ast.Name) and callee.id == "_alloc_out_u64":
-            record(target.id, 8)
-        # `x = S.alloc_struct(LIB, S.LAYOUT)` -- sized from the layout table
-        # `python-struct-layouts` already pins against the header.
-        elif (isinstance(callee, ast.Attribute) and callee.attr == "alloc_struct") or (
-            isinstance(callee, ast.Name) and callee.id == "alloc_struct"
-        ):
-            layout = call.args[1] if len(call.args) > 1 else None
-            layout_name = layout.attr if isinstance(layout, ast.Attribute) else None
-            struct = getattr(struct_module, layout_name, None) if layout_name else None
-            record(target.id, struct.size if isinstance(struct, struct_module.Struct) else None)
-        # `x = LIB.alloc(N)` / `LIB.alloc(CONSTANT)` -- a hand-sized block.
-        elif _is_lib_call(call, "alloc") and call.args:
-            size = call.args[0]
-            if isinstance(size, ast.Constant) and isinstance(size.value, int):
-                record(target.id, size.value)
-            elif isinstance(size, ast.Name) and size.id in constants:
-                record(target.id, constants[size.id])
-            else:
-                record(target.id, None)
+        kind, width = _scope_call_width(node.value, constants, struct_module)
+        if kind == "slot":
+            record(target.id, width)
     return widths
+
+
+def _unrecognised_allocations(tree: ast.AST, label: object) -> List[str]:
+    """Allocation shapes the width resolver does not model, reported rather than skipped.
+
+    Every argument block has to come from a `scope.<method>(...)` the resolver
+    knows; a raw `LIB.alloc`/`LIB.free` outside `_ArgScope`, a scope method
+    missing from `_ARG_SCOPE_SIZERS`, or a scope bound to another name would
+    otherwise drop out of the width check without a trace.
+    """
+    problems: List[str] = []
+    exempt: Set[int] = set()
+    for cls in ast.walk(tree):
+        if isinstance(cls, ast.ClassDef) and cls.name == _ARG_SCOPE_CLASS:
+            exempt.update(id(node) for node in ast.walk(cls))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or id(node) in exempt:
+            continue
+        site = f"python-call-signatures: {label}:{node.lineno}"
+        if isinstance(node.func, ast.Name) and "alloc" in node.func.id:
+            problems.append(f"{site}: `{node.func.id}()` allocates outside `{_ARG_SCOPE_CLASS}`")
+            continue
+        if not isinstance(node.func, ast.Attribute):
+            continue
+        receiver = node.func.value
+        attr = node.func.attr
+        if (
+            isinstance(receiver, ast.Name)
+            and receiver.id in ("LIB", "lib", "S")
+            and (attr in _RAW_ALLOCATORS or "alloc" in attr)
+        ):
+            problems.append(f"{site}: `{receiver.id}.{attr}` outside `{_ARG_SCOPE_CLASS}`; allocate through the scope")
+        elif isinstance(receiver, ast.Name) and receiver.id == "scope":
+            if attr not in _ARG_SCOPE_SIZERS:
+                problems.append(f"{site}: `scope.{attr}` is not a known `{_ARG_SCOPE_CLASS}` allocator")
+        elif (
+            attr in _ARG_SCOPE_SIZERS
+            and attr not in ("alloc", "struct")
+            and not (isinstance(receiver, ast.Name) and receiver.id in ("self", "LIB"))
+        ):
+            problems.append(
+                f"{site}: `{ast.unparse(node.func)}` looks like an `{_ARG_SCOPE_CLASS}` allocation on a "
+                "receiver not named `scope`; the width check cannot see it"
+            )
+    return problems
+
+
+def _arg_scope_methods_problems() -> List[str]:
+    """The checker's model of `_ArgScope` must match the class itself."""
+    tree = ast.parse(_read(PYTHON_WORKBOOK), filename=str(PYTHON_WORKBOOK))
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == _ARG_SCOPE_CLASS:
+            methods = {
+                item.name for item in node.body if isinstance(item, ast.FunctionDef) and not item.name.startswith("_")
+            }
+            problems = []
+            for name in sorted(methods - set(_ARG_SCOPE_SIZERS)):
+                problems.append(f"python-call-signatures: `{_ARG_SCOPE_CLASS}.{name}` is not modelled by the checker")
+            for name in sorted(set(_ARG_SCOPE_SIZERS) - methods):
+                problems.append(
+                    f"python-call-signatures: the checker models `{_ARG_SCOPE_CLASS}.{name}`, which no longer exists"
+                )
+            return problems
+    return [f"python-call-signatures: class `{_ARG_SCOPE_CLASS}` not found in {PYTHON_WORKBOOK.relative_to(REPO_ROOT)}"]
 
 
 def _scratch_slot_readers(function: ast.AST) -> dict[str, Set[object]]:
@@ -417,9 +517,9 @@ def check_python_call_signatures() -> List[str]:
       parameter count. A call that splats (`*pointers`) is checked as a lower
       bound only and named in the run's SKIPPED list.
     * **Scratch-block width.** When an argument is a local bound to a
-      recognised scratch allocation (``_alloc_out_ptr()``,
-      ``S.alloc_struct(LIB, S.LAYOUT)``, or ``LIB.alloc(...)`` with a constant
-      or module-constant size), the block is compared against the wasm32 size
+      ``_ArgScope`` allocation (``scope.out_ptr()``, ``scope.struct(S.LAYOUT)``,
+      ``scope.alloc(...)`` with a constant or module-constant size, ...), bound
+      to a local or passed inline, the block is compared against the wasm32 size
       of what the parameter addresses: never smaller, and exactly equal when
       that is a struct. This covers both pointer parameters and the by-value
       struct parameters Emscripten lowers to a pointer. A struct whose block
@@ -449,11 +549,13 @@ def check_python_call_signatures() -> List[str]:
     sources = sorted(PYTHON_PKG_DIR.glob("*.py"))
     constants = _module_int_constants(sources)
 
-    problems: List[str] = []
+    problems: List[str] = _arg_scope_methods_problems()
     checked_calls = 0
     for path in sources:
         label = path.relative_to(REPO_ROOT)
         tree = ast.parse(_read(path), filename=str(path))
+        if path.name != PYTHON_C_BINDING.name:
+            problems.extend(_unrecognised_allocations(tree, label))
         # Analysis is per enclosing function: a scratch local is only
         # meaningfully tied to the calls in the scope that allocated it.
         scopes = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
@@ -500,18 +602,18 @@ def check_python_call_signatures() -> List[str]:
                     )
                     continue
                 for position, argument in enumerate(node.args):
-                    if not isinstance(argument, ast.Name) or argument.id not in widths:
+                    if isinstance(argument, ast.Name) and argument.id in widths:
+                        width, reads = widths[argument.id], readers.get(argument.id, set())
+                    elif isinstance(argument, ast.Call):
+                        # A block allocated inline in the argument list.
+                        kind, width = _scope_call_width(argument, constants, struct_module)
+                        if kind != "slot":
+                            continue
+                        reads = set()
+                    else:
                         continue
                     problems.extend(
-                        _check_out_param_width(
-                            layouts,
-                            site,
-                            fn_name,
-                            position,
-                            params[position],
-                            widths[argument.id],
-                            readers.get(argument.id, set()),
-                        )
+                        _check_out_param_width(layouts, site, fn_name, position, params[position], width, reads)
                     )
 
     if not checked_calls:

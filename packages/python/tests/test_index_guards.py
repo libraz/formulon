@@ -62,7 +62,7 @@ _INDIRECT_CALLERS = {
 # width each one can hold. A value outside it raises ``struct.error``
 # rather than the ``ValueError`` the binding documents, which is why the
 # packed route needs the same guard as a scalar argument.
-_PACKED_INT_KINDS = {"u32": 32, "i32": 32, "u16": 16, "u8": 8}
+_PACKED_INT_KINDS = {"u32": 32, "i32": 32, "u16": 16, "u8": 8, "i64": 64}
 
 
 def _parse_header(path: Path) -> dict:
@@ -90,13 +90,23 @@ def _is_literal_int(node: ast.AST) -> bool:
     return isinstance(node, ast.Constant) and isinstance(node.value, int)
 
 
+def _is_int_call(node: ast.AST) -> bool:
+    """True for a bare ``int(...)``, which truncates a fraction and accepts a numeric string."""
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "int"
+
+
 def _is_guarded(node: ast.AST) -> bool:
     """True when ``node`` cannot reach WASM with an out-of-range value."""
     if _is_literal_int(node):
         return True
     if isinstance(node, ast.IfExp):
         return _is_literal_int(node.body) and _is_literal_int(node.orelse)
-    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("_uint", "_sint")
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in ("_uint", "_sint")
+        and not (node.args and _is_int_call(node.args[0]))
+    )
 
 
 def _lib_fn_name(node: ast.AST) -> "str | None":
@@ -292,6 +302,33 @@ def _struct_pack_slots(node: ast.Call, scope, helpers: dict, module_name: str, f
         _check_packed_field(layout, key, value, where, findings)
 
 
+# Encoders whose input a constructor has already validated, so the fields
+# they pack are checked even though no `_uint` / `_sint` is in sight.
+_VALIDATED_ENCODERS = {
+    # `Value.__post_init__` coerces `kind` and type-checks the one payload it takes.
+    "_write_value_input",
+}
+
+
+def _raw_struct_pack_slots(node: ast.Call, scope, module_name: str, findings: list) -> None:
+    """Check the values handed to a bare ``struct.pack(fmt, ...)``.
+
+    A pointer, a length or a local the binding computed is safe; a caller's
+    field read straight off an object, or anything coerced with ``int()``,
+    has not been range-checked and must go through ``_uint`` / ``_sint``.
+    """
+    if ast.unparse(node.func) != "struct.pack" or len(node.args) < 2:
+        return
+    if scope is not None and scope.name in _VALIDATED_ENCODERS:
+        return
+    for arg in node.args[1:]:
+        value = arg.value if isinstance(arg, ast.Starred) else arg
+        if _is_guarded(value):
+            continue
+        if isinstance(value, ast.Attribute) or any(_is_int_call(n) for n in ast.walk(value)):
+            findings.append(f"{module_name}:{node.lineno} struct.pack <- {ast.unparse(value)}")
+
+
 def _scopes(tree: ast.AST) -> dict:
     """Map each node to the innermost function that contains it."""
     enclosing = {}
@@ -315,6 +352,7 @@ def _sweep_source(source: str, functions: dict, module_name: str = "<probe>") ->
         _direct_call_slots(node, functions, module_name, findings)
         _indirect_call_slots(node, functions, module_name, findings)
         _struct_pack_slots(node, enclosing.get(node), helpers, module_name, findings)
+        _raw_struct_pack_slots(node, enclosing.get(node), module_name, findings)
     return findings
 
 
@@ -384,6 +422,32 @@ class ArgumentSweepTests(unittest.TestCase):
         )
         self.assertEqual(len(findings), 1, findings)
         self.assertIn("u32 spin_count", findings[0])
+
+    def test_sweep_catches_a_64_bit_field_coerced_with_int(self) -> None:
+        findings = _sweep_source('S.SHAPE.pack(LIB, ptr, {"cx": int(cx)})', _parse_header(_HEADER))
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("i64 cx <- int(cx)", findings[0])
+
+    def test_sweep_catches_int_inside_a_guard(self) -> None:
+        findings = _sweep_source('S.HYPERLINK.pack(LIB, ptr, {"row": _uint(int(row), "row")})', _parse_header(_HEADER))
+        self.assertEqual(len(findings), 1, findings)
+
+    def test_sweep_catches_a_raw_struct_pack_of_a_caller_value(self) -> None:
+        functions = _parse_header(_HEADER)
+        for source in (
+            'struct.pack("<B", int(bar.direction))',
+            'struct.pack("<B", bar.direction)',
+            'b"".join(struct.pack("<I", int(i)) for i in indices)',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(len(_sweep_source(source, functions)), 1)
+        for source in (
+            'struct.pack("<B", _uint(bar.direction, "direction", 8))',
+            'struct.pack("<I", text_ptr)',
+            'struct.pack("<I", len(values))',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(_sweep_source(source, functions), [])
 
     def test_sweep_reports_a_payload_it_cannot_read(self) -> None:
         # An unreadable payload is a hole in the sweep, not evidence that

@@ -157,6 +157,8 @@ class SheetViewProtectionTests(unittest.TestCase):
 
     def test_visibility_states_very_hidden(self) -> None:
         with Workbook.create_default() as wb:
+            # A workbook keeps one visible sheet, so sheet 1 stays shown.
+            wb.add_sheet("Shown")
             self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.VISIBLE)
             self.assertFalse(wb.get_sheet_view(0).tab_hidden)
 
@@ -179,8 +181,20 @@ class SheetViewProtectionTests(unittest.TestCase):
             wb.set_sheet_tab_hidden(0, False)
             self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.VISIBLE)
 
+    def test_visibility_rejects_hiding_the_only_visible_sheet(self) -> None:
+        with Workbook.create_default() as wb:
+            for hide in (
+                lambda: wb.set_sheet_visibility(0, SheetVisibility.HIDDEN),
+                lambda: wb.set_sheet_visibility(0, SheetVisibility.VERY_HIDDEN),
+                lambda: wb.set_sheet_tab_hidden(0, True),
+            ):
+                with self.assertRaises(FormulonError):
+                    hide()
+            self.assertEqual(wb.get_sheet_view(0).visibility, SheetVisibility.VISIBLE)
+
     def test_visibility_rejects_unknown_state(self) -> None:
         with Workbook.create_default() as wb:
+            wb.add_sheet("Shown")
             wb.set_sheet_visibility(0, SheetVisibility.VERY_HIDDEN)
             with self.assertRaises(FormulonError):
                 wb.set_sheet_visibility(0, 3)

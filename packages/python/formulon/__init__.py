@@ -514,4 +514,4 @@ def eval_formula(formula: str) -> Value:
       The scalar :class:`Value` at the formula's top-left result cell.
     """
     with Workbook.create_default() as wb:
-        return wb.evaluate_formula_array(0, 0, 0, formula)[0][0]
+        return wb._evaluate_formula_top_left(0, 0, 0, formula)

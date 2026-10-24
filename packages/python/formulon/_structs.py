@@ -133,13 +133,6 @@ class Struct:
         return self.unpack_from(lib.read_bytes(ptr, self.size))
 
 
-def alloc_struct(lib, layout: Struct) -> int:
-    """Allocate a zeroed scratch block sized for ``layout``."""
-    ptr = lib.alloc(layout.size)
-    lib.write_bytes(ptr, b"\x00" * layout.size)
-    return ptr
-
-
 def zero_struct(lib, layout: Struct, ptr: int) -> None:
     """Re-zero an already-allocated scratch block sized for ``layout``.
 
@@ -1071,27 +1064,26 @@ def write_str_field(
     layout: Struct,
     field: str,
     value: Optional[str],
-    owned: List[int],
+    scope,
     *,
     allow_empty: bool = False,
 ) -> None:
     """Encode ``value`` into WASM memory and store its pointer in a field.
 
-    ``None`` leaves the field as the NULL pointer (already zeroed by
-    :meth:`Struct.pack`). ``""`` does too, unless ``allow_empty`` is set --
-    needed for a field the C ABI itself distinguishes NULL from a
-    zero-length string on, such as ``fm_phonetic_run_t.text``: a NULL run
-    text is rejected (``kBindingNullPointer``), but Excel legitimately
-    produces empty-reading runs (see ``src/io/xlsb/sst_reader.cpp``'s
-    out-of-range kana slices), so ``get_phonetic_runs()``'s own output
-    could not always round-trip back through ``set_phonetic_runs()``.
-    Every buffer allocated here is appended to ``owned`` so the caller can
-    free them after the WASM call returns.
+    ``scope`` is the caller's ``_ArgScope``: it owns the buffer and does the
+    string-to-pointer mapping. ``None`` leaves the field as the NULL pointer
+    (already zeroed by :meth:`Struct.pack`). ``""`` does too, unless
+    ``allow_empty`` is set -- needed for a field the C ABI itself
+    distinguishes NULL from a zero-length string on, such as
+    ``fm_phonetic_run_t.text``: a NULL run text is rejected
+    (``kBindingNullPointer``), but Excel legitimately produces empty-reading
+    runs (see ``src/io/xlsb/sst_reader.cpp``'s out-of-range kana slices), so
+    ``get_phonetic_runs()``'s own output could not always round-trip back
+    through ``set_phonetic_runs()``.
     """
-    if value is None or (value == "" and not allow_empty):
+    ptr = scope.opt_cstr(value) if allow_empty else scope.nonempty_cstr(value)
+    if ptr == 0:
         return
-    ptr, _ = lib.alloc_utf8(value)
-    owned.append(ptr)
     kind, off = layout.offsets[field]
     lib.write_bytes(struct_ptr + off, struct.pack("<I", ptr))
 

@@ -8,6 +8,7 @@ allocation discipline of the collection readers.
 
 from __future__ import annotations
 
+import ast
 import inspect
 import io
 import os
@@ -16,14 +17,19 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 from unittest import mock
 
 import formulon
 from formulon import (
+    AnchorKind,
     CalcMode,
     CellStyle,
     CellXf,
+    CfColor,
+    CfValueObject,
     ConditionalFormatInput,
+    DataBar,
     DifferentialFormat,
     ErrorCode,
     ExternalLinkKind,
@@ -44,6 +50,7 @@ from formulon import (
     PivotWorksheetSource,
     TableStyle,
     TableStyleElement,
+    Value,
     ValueKind,
     Workbook,
     _c,
@@ -677,6 +684,25 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                 self.assertEqual(reloaded.table_style_count(), 0)
                 self.assertEqual(reloaded.table_style_defaults()[0], "TableStyleMedium2")
 
+    def test_table_update_empty_style_name_removes_the_style(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "A")
+            wb.set_text(0, 0, 1, "B")
+            index = wb.table_create(0, "A1:B3", "Sales", "Sales", ["A", "B"], "TableStyleMedium2")
+            wb.table_update(index, "A1:B3", style_name=None)
+            self.assertEqual(list(wb.iter_tables())[0].style_name, "TableStyleMedium2")
+
+            wb.table_update(index, "A1:B3", style_name="")
+            table = list(wb.iter_tables())[0]
+            self.assertEqual((table.style_name, table.has_style_info), ("", False))
+            data = wb.save()
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            parts = [name for name in archive.namelist() if name.startswith("xl/tables/")]
+            self.assertEqual(len(parts), 1)
+            self.assertNotIn(b"tableStyleInfo", archive.read(parts[0]))
+        with Workbook.load(data) as reloaded:
+            self.assertFalse(list(reloaded.iter_tables())[0].has_style_info)
+
     def test_table_create_rejects_a_column_count_that_does_not_match_ref(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
@@ -744,6 +770,17 @@ class OneShotEvaluationTests(unittest.TestCase):
     def test_array_results_reduce_to_their_top_left_element(self) -> None:
         self.assertEqual(formulon.eval_formula("=SEQUENCE(3)").number, 1.0)
         self.assertEqual(formulon.eval_formula("=SEQUENCE(2,3)").number, 1.0)
+
+    def test_one_shot_reads_one_cell_whatever_the_result_size(self) -> None:
+        real = _c.LIB.fm_workbook_evaluate_formula_array_cell
+        for formula, expected in (("=1+2", 3.0), ("=SEQUENCE(1000)", 1.0), ("=SEQUENCE(100,100,7)", 7.0)):
+            with self.subTest(formula=formula):
+                with mock.patch.object(
+                    _c.LIB, "fm_workbook_evaluate_formula_array_cell", wraps=real, create=True
+                ) as cell:
+                    value = formulon.eval_formula(formula)
+                self.assertEqual(cell.call_count, 1)
+                self.assertEqual((value.kind, value.number), (ValueKind.NUMBER, expected))
 
 
 class PivotFilterPersistenceTests(unittest.TestCase):
@@ -1187,6 +1224,184 @@ class EvaluateCfRangeDefaultTests(unittest.TestCase):
         self.assertEqual([c for c in omitted if c.matches], [])
         self.assertEqual(len(omitted), len(explicit_nan))
         self.assertEqual(len([c for c in zero_basis if c.matches]), 1)
+
+
+class ArgumentScopeTests(unittest.TestCase):
+    """Every WASM block a call allocates for its arguments is freed on every exit."""
+
+    def _assert_rejected_without_leak(self, call, exception=ValueError) -> int:
+        """Run ``call``, expect ``exception``, and return how many blocks it allocated."""
+        live: set = set()
+        allocations = 0
+        real_alloc, real_free = _c.LIB.alloc, _c.LIB.free
+
+        def tracking_alloc(size):
+            nonlocal allocations
+            allocations += 1
+            ptr = real_alloc(size)
+            if ptr:
+                live.add(ptr)
+            return ptr
+
+        def tracking_free(ptr):
+            live.discard(ptr)
+            return real_free(ptr)
+
+        with mock.patch.object(_c.LIB, "alloc", tracking_alloc), mock.patch.object(_c.LIB, "free", tracking_free):
+            with self.assertRaises(exception):
+                call()
+        self.assertEqual(live, set())
+        return allocations
+
+    def test_only_the_scope_allocates_or_frees_argument_memory(self) -> None:
+        # A hand-rolled alloc/free pair is how a leak on an exceptional exit
+        # keeps coming back; every argument block goes through `_ArgScope`.
+        raw = {"alloc", "free"}
+        findings = []
+        package = Path(formulon.__file__).resolve().parent
+        for module in sorted(package.glob("*.py")):
+            if module.name == "_c.py":
+                continue
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+            exempt = {
+                id(node)
+                for cls in ast.walk(tree)
+                if isinstance(cls, ast.ClassDef) and cls.name == "_ArgScope"
+                for node in ast.walk(cls)
+            }
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in ("LIB", "lib")
+                    and node.func.attr in raw
+                    and id(node) not in exempt
+                ):
+                    findings.append(f"{module.name}:{node.lineno} {ast.unparse(node.func)}")
+        self.assertEqual(findings, [])
+
+    def test_a_packer_that_raises_after_allocating_frees_everything(self) -> None:
+        runs = [PhoneticRun(i, i + 1, "\u30a2") for i in range(200)] + [PhoneticRun(-1, 1, "\u30a4")]
+        ranges = [MergeRange(0, 0, 0, 0)] * 200 + [MergeRange(-1, 0, 0, 0)]
+        bad_spec = PivotDataFieldSpec(name="Sum", field_index=-1)
+        with Workbook.create_default() as wb:
+            for name, call in (
+                ("set_phonetic_runs", lambda: wb.set_phonetic_runs(0, 0, 0, runs)),
+                ("set_sheet_selection", lambda: wb.set_sheet_selection(0, 0, 0, ranges)),
+                ("pivot_data_field_add", lambda: wb.pivot_data_field_add(0, 0, bad_spec)),
+                ("pivot_data_field_set", lambda: wb.pivot_data_field_set(0, 0, 0, bad_spec)),
+            ):
+                with self.subTest(method=name):
+                    self.assertGreater(self._assert_rejected_without_leak(call), 0)
+
+    def test_repeated_rejected_calls_do_not_grow_linear_memory(self) -> None:
+        ranges = [MergeRange(0, 0, 0, 0)] * 20000 + [MergeRange(-1, 0, 0, 0)]
+        with Workbook.create_default() as wb:
+            with self.assertRaises(ValueError):
+                wb.set_sheet_selection(0, 0, 0, ranges)
+            before = _c.LIB.memory.data_len(_c.LIB.store)
+            for _ in range(20):
+                with self.assertRaises(ValueError):
+                    wb.set_sheet_selection(0, 0, 0, ranges)
+            self.assertEqual(_c.LIB.memory.data_len(_c.LIB.store), before)
+
+    def test_a_value_of_the_wrong_type_is_rejected_before_any_allocation(self) -> None:
+        with Workbook.create_default() as wb:
+            allocations = self._assert_rejected_without_leak(lambda: wb.format_value("abc"), TypeError)
+            self.assertEqual(allocations, 0)
+
+
+class LoneSurrogateTests(unittest.TestCase):
+    """A lone surrogate is stored as U+FFFD, as the JavaScript bindings store it."""
+
+    def _assert_normalised(self, wb: Workbook) -> None:
+        self.assertEqual(wb.get_value(0, 0, 0).text, "a\ufffdb")
+        self.assertEqual(wb.get_value(0, 2, 0).text, "\U0001f600")
+        self.assertEqual(wb.sheet_name(0), "S\ufffd")
+        self.assertEqual(wb.get_formula(0, 1, 0), '="x\ufffd"')
+        formula = next(n.formula for n in wb.iter_defined_names() if n.name == "Lone")
+        self.assertIn("y\ufffd", formula)
+
+    def test_text_names_and_formulas_store_the_replacement_character(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_text(0, 0, 0, "a\ud800b")
+            # A surrogate pair is one code point, not two replacements.
+            wb.set_text(0, 2, 0, "\ud83d\ude00")
+            wb.rename_sheet(0, "S\udc00")
+            wb.set_formula(0, 1, 0, '="x\ud800"')
+            wb.set_defined_name("Lone", '="y\udfff"')
+            self._assert_normalised(wb)
+            data = wb.save()
+        with Workbook.load(data) as reloaded:
+            self._assert_normalised(reloaded)
+
+
+class ValueValidationTests(unittest.TestCase):
+    """``Value`` holds exactly the payload its kind takes, checked at construction."""
+
+    def test_an_integer_kind_is_coerced_to_value_kind(self) -> None:
+        value = Value(kind=1, number=5.5)
+        self.assertIs(value.kind, ValueKind.NUMBER)
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.format_value(value)[0], "5.5")
+
+    def test_a_missing_or_extra_payload_is_a_value_error(self) -> None:
+        for kwargs in (
+            {"kind": ValueKind.NUMBER},
+            {"kind": ValueKind.TEXT},
+            {"kind": ValueKind.ERROR},
+            {"kind": ValueKind.NUMBER, "number": 1.0, "text": "x"},
+            {"kind": ValueKind.BLANK, "boolean": True},
+            {"kind": 99},
+        ):
+            with self.subTest(**kwargs):
+                with self.assertRaises(ValueError):
+                    Value(**kwargs)
+
+    def test_a_payload_of_the_wrong_type_is_a_type_error(self) -> None:
+        for kwargs in (
+            {"kind": 3, "text": "abc".encode()},
+            {"kind": ValueKind.TEXT, "text": 123},
+            {"kind": ValueKind.BOOL, "boolean": 1},
+            {"kind": ValueKind.NUMBER, "number": "5"},
+            {"kind": "1", "number": 1.0},
+        ):
+            with self.subTest(**kwargs):
+                with self.assertRaises(TypeError):
+                    Value(**kwargs)
+
+
+class PackedIntegerGuardTests(unittest.TestCase):
+    """Packed struct fields reject a fraction, a string or an overflow as the scalar arguments do."""
+
+    def test_shape_emu_offsets(self) -> None:
+        with Workbook.create_default() as wb:
+            for bad, exception in ((1.9, ValueError), ("5", TypeError), (2**63, ValueError)):
+                with self.subTest(from_col_off=bad):
+                    with self.assertRaises(exception):
+                        wb.insert_shape(0, anchor_kind=AnchorKind.TWO_CELL, to_row=5, to_col=4, from_col_off=bad)
+            self.assertEqual(wb.list_shapes(0), [])
+
+    def test_pivot_field_order_indices(self) -> None:
+        with Workbook.create_default() as wb:
+            for indices in ([1.7], [-1], ["1"]):
+                with self.subTest(indices=indices):
+                    with self.assertRaises((TypeError, ValueError)):
+                        wb.pivot_set_row_field_order(0, 0, indices)
+
+    def test_data_bar_length_percentages(self) -> None:
+        with Workbook.create_default() as wb:
+            for bad in (1.5, 256, -1):
+                with self.subTest(min_length_pct=bad):
+                    rule = ConditionalFormatInput(
+                        sqref=[MergeRange(0, 0, 2, 0)],
+                        type=3,
+                        data_bar=DataBar(CfValueObject(3), CfValueObject(4), CfColor(0, 0, 255), min_length_pct=bad),
+                    )
+                    with self.assertRaises(ValueError):
+                        wb.add_conditional_format(0, rule)
+            self.assertEqual(wb.cf_count(0), 0)
 
 
 if __name__ == "__main__":

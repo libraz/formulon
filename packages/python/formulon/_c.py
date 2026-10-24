@@ -1016,27 +1016,6 @@ class _WasmInstance:
         with self._call_lock:
             self._call_or_poison(self._exports["free"], "free", ptr)
 
-    def alloc_utf8(self, s: str) -> Tuple[int, int]:
-        """Encode ``s`` as UTF-8 and copy it into WASM memory.
-
-        Returns ``(ptr, length_with_nul)``. The caller MUST free ``ptr``
-        with :meth:`free` once the call that consumed it returns.
-        """
-        if not isinstance(s, str):
-            raise TypeError(f"expected str, got {type(s).__name__}")
-        buf = s.encode("utf-8") + b"\x00"
-        ptr = self.alloc(len(buf))
-        self.write_bytes(ptr, buf)
-        return ptr, len(buf)
-
-    def alloc_bytes(self, data: bytes) -> int:
-        """Copy ``data`` into WASM memory; return the pointer."""
-        if len(data) == 0:
-            return 0
-        ptr = self.alloc(len(data))
-        self.write_bytes(ptr, data)
-        return ptr
-
 
 # ---------------------------------------------------------------------------
 # Module-level singleton + thin compatibility shim
