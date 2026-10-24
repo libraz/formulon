@@ -9,8 +9,8 @@
     "generated_at": "2026-10-08T06:01:33Z"
   },
   "tolerance": {
-    "abs": 1e-12,
-    "rel": 1e-12
+    "abs": 0.0,
+    "rel": 0.0
   },
   "cases": [
     {
@@ -141,6 +141,10 @@
       "expect": {
         "kind": "number",
         "value": 2576524402069.303
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -150,6 +154,10 @@
       "expect": {
         "kind": "number",
         "value": -2576524402069.303
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -159,6 +167,10 @@
       "expect": {
         "kind": "number",
         "value": 1764019651684.988
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -168,6 +180,10 @@
       "expect": {
         "kind": "number",
         "value": -1156367142008513.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -177,6 +193,10 @@
       "expect": {
         "kind": "number",
         "value": -1133036596169.1414
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -186,6 +206,10 @@
       "expect": {
         "kind": "number",
         "value": 4.2711258180315126e+30
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -195,6 +219,10 @@
       "expect": {
         "kind": "number",
         "value": -2.9132238172293094e+30
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -204,6 +232,10 @@
       "expect": {
         "kind": "number",
         "value": 9.332621544394421e+155
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -213,6 +245,10 @@
       "expect": {
         "kind": "number",
         "value": 3.91912153053999e+21
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -222,6 +258,10 @@
       "expect": {
         "kind": "number",
         "value": 6.617155560659313e+215
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     },
     {
@@ -231,6 +271,10 @@
       "expect": {
         "kind": "number",
         "value": 1.6676833067813678e+233
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

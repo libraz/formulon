@@ -1,6 +1,6 @@
 suite: text_regex
 description: REGEXTEST / REGEXEXTRACT / REGEXREPLACE — PCRE2-backed regex closure against Mac Excel 365 (ja-JP).
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

@@ -1,6 +1,6 @@
 suite: operators
 description: Arithmetic / comparison / concatenation operators with coercion
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- Arithmetic ----------------------------------------------------------

@@ -7,7 +7,7 @@ description: >
   column blocker, row blocker, mid-rectangle blocker, and merged-cell
   blocker. The formula always lives at Z1 (the xlwings driver convention),
   so blockers are placed in cells the would-be spill rectangle covers.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

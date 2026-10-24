@@ -5,7 +5,7 @@ description: >
   normalises strings starting with `=` to `{kind: formula}`). The probe
   cell `=FORMULATEXT(B1)` then reads back the source. If the target cell
   holds a literal value or is empty, FORMULATEXT returns #N/A.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: formulatext_simple_sum

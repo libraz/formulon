@@ -1,6 +1,6 @@
 suite: text_format
 description: TEXT format-string engine (number + date/time formatting)
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- TEXT: plain integer rendering --------------------------------------

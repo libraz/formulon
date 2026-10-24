@@ -36,7 +36,7 @@ description: >
   invariant). Concise mode also uses `,` and `;`; this differs from
   decimal-comma locales (de-DE, fr-FR) where `\\` and `;` show up. Those
   variants belong to the win-365-de_DE / -fr_FR targets.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # --------------------------------------------------------------------

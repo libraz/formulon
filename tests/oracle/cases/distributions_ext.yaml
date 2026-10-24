@@ -1,14 +1,7 @@
 suite: distributions_ext
 description: BETA / GAMMA / WEIBULL / LOGNORM / HYPGEOM extended distribution family
-# xlwings returns Excel-computed floats as their displayed value (typically
-# ~15 digits but with some tail-digit truncation). The values here span
-# ~0 to ~1 for CDFs / PMFs and small/moderate magnitudes for the inverses;
-# 1e-6 absolute / relative tolerances absorb display rounding while still
-# catching real divergence. Inverses polished by Newton drift at most a
-# few ulps from Excel's output; if tighter bounds become warranted, add
-# per-case tolerance entries in divergence.yaml rather than loosening the
-# whole suite.
-tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- BETA.DIST -----------------------------------------------------------
@@ -427,7 +420,6 @@ cases:
 
   - id: gamma_inv_small_p_round_trip
     description: "GAMMA.INV recovers a point whose CDF is far below 1e-50"
-    tolerance: { abs: 0.0, rel: 1.0e-12 }
     formula: "=GAMMA.INV(GAMMA.DIST(1E-5,9,2,TRUE),9,2)"
 
   - id: binom_inv_probability_zero_is_num

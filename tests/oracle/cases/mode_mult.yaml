@@ -1,6 +1,6 @@
 suite: mode_mult
 description: MODE.MULT vertical-array mode spill — five perspectives spanning two-way tie (2x1 spill), single-mode 1x1 spill, all-unique input -> #N/A, singleton input -> #N/A, and error propagation.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

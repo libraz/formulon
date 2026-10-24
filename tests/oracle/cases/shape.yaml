@@ -1,6 +1,6 @@
 suite: shape
 description: ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT lazy-dispatched builtins. Each requires per-argument AST shape (Ref / RangeOp / ArrayLiteral) so the eager dispatcher's Value-flattening path is bypassed.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- ROWS ---------------------------------------------------------------

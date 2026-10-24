@@ -16,7 +16,7 @@ description: >
   from the cell holding the formula, and the harness places every case at a
   fixed anchor, so a golden would pin the anchor rather than the semantics.
   Those live in tests/unit/eval/builtins_references_test.cpp.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: indirect_a1_true_resolves

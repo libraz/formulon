@@ -9,8 +9,8 @@
     "generated_at": "2026-10-09T14:59:38Z"
   },
   "tolerance": {
-    "abs": 1e-12,
-    "rel": 1e-12
+    "abs": 0.0,
+    "rel": 0.0
   },
   "cases": [
     {
@@ -1391,10 +1391,6 @@
       "expect": {
         "kind": "number",
         "value": 620.0
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -1477,10 +1473,6 @@
       "expect": {
         "kind": "number",
         "value": 620.0
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -1563,10 +1555,6 @@
       "expect": {
         "kind": "number",
         "value": 620.0
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -1649,10 +1637,6 @@
       "expect": {
         "kind": "number",
         "value": 620.0
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -1735,10 +1719,6 @@
       "expect": {
         "kind": "number",
         "value": 319.1818181818182
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -1821,10 +1801,6 @@
       "expect": {
         "kind": "number",
         "value": 319.1818181818182
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -1907,10 +1883,6 @@
       "expect": {
         "kind": "number",
         "value": 319.1818181818182
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -1993,10 +1965,6 @@
       "expect": {
         "kind": "number",
         "value": 319.1818181818182
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -4003,10 +3971,6 @@
       "expect": {
         "kind": "number",
         "value": 300.0
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {
@@ -4083,10 +4047,6 @@
       "expect": {
         "kind": "number",
         "value": 428.57142857142856
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 1e-06
       }
     },
     {

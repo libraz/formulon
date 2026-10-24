@@ -5,7 +5,7 @@ description: >
   ACOTH, EVEN, ODD, QUOTIENT). Kept in a separate suite from math_trig
   so the existing golden JSON stays bit-stable and only the new cases
   need to be populated by `make oracle-gen` on macOS.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- SINH ----------------------------------------------------------------

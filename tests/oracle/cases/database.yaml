@@ -1,6 +1,6 @@
 suite: database
 description: DSUM / DCOUNT / DCOUNTA / DAVERAGE / DMAX / DMIN / DPRODUCT / DSTDEV / DSTDEVP / DVAR / DVARP / DGET
-tolerance: { abs: 1.0e-10, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # Canonical 3-column fruit-sales database in A1:C5:

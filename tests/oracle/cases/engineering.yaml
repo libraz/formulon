@@ -5,7 +5,7 @@ description: >
   and the two comparators DELTA and GESTEP. Cases focus on Excel-observable
   semantic edges: two's complement decoding, lowercase hex input, `places`
   padding, shift sign flipping, and #NUM! surfacing on out-of-range input.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- *2DEC ---------------------------------------------------------------

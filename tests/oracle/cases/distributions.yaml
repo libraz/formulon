@@ -1,11 +1,7 @@
 suite: distributions
 description: NORM.DIST / NORM.S.DIST / NORM.INV / NORM.S.INV / BINOM.DIST / POISSON.DIST / EXPON.DIST — probability-distribution family
-# xlwings returns Excel-computed floats as their displayed value (typically
-# ~15 digits but with some tail-digit truncation). Stats values here have
-# magnitudes between ~1e-4 and 1e0, so 1e-6 absolute / relative tolerances
-# comfortably absorb any display-rounding artefact while still catching
-# real divergence.
-tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- NORM.DIST -----------------------------------------------------------

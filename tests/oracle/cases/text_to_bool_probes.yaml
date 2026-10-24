@@ -9,7 +9,7 @@ description: >
   directly across IF, NOT, AND, BETA.DIST cumulative, and direct
   coercion via N(). Mac's truth becomes the reference; we update
   `coerce_to_bool` only if Mac actually accepts these strings.
-tolerance: { abs: 1e-12, rel: 0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # ---------------------------------------------------------------------

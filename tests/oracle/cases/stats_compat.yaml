@@ -8,7 +8,7 @@ description: Legacy (pre-2010) statistical spellings — NORMDIST/BINOMDIST/POIS
 #   * TDIST takes (x, df, tails); `tails=1` maps to T.DIST.RT, `tails=2` to
 #     T.DIST.2T, and `x < 0` surfaces `#NUM!` even for the right-tail form.
 #   * COVAR / PEARSON are aliases of COVARIANCE.P / CORREL.
-tolerance: { abs: 1.0e-9, rel: 1.0e-9 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- NORMDIST / NORMINV / NORMSDIST / NORMSINV ---------------------------

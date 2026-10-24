@@ -6,7 +6,7 @@ description: >-
   form is its argument. The aggregator seam is separate because argument
   expansion is driven by a static name list, so a form can spill correctly
   and still be mishandled one level up.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- IF: the form on its own --------------------------------------------

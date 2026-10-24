@@ -1,6 +1,6 @@
 suite: munit
 description: MUNIT(n) — n-by-n identity matrix; spill array reduced to scalar via INDEX / SUMPRODUCT for oracle capture.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

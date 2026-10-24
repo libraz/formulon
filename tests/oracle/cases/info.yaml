@@ -1,6 +1,6 @@
 suite: info
 description: IS* predicates, T, N type-introspection and coercion
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- ISBLANK -------------------------------------------------------------

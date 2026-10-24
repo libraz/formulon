@@ -5,7 +5,7 @@ description: >
   through with default Excel rendering. Strict mode quotes text values
   and reports errors verbatim. Numbers and booleans render the same in
   both modes.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: valuetotext_number_passthrough

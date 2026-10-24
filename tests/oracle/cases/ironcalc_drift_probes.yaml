@@ -6,7 +6,7 @@ description: >
   tests/ironcalc_divergence.yaml. The IronCalc test driver already
   includes its own goldens; this suite exists to anchor the Mac probe
   values that justify each `prefer: mac` divergence.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

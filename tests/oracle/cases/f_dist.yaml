@@ -1,10 +1,7 @@
 suite: f_dist
 description: F.DIST / F.DIST.RT / F.INV / F.INV.RT — Snedecor's F distribution family
-# xlwings returns Excel-computed floats as their displayed value. F
-# quantiles for the cases here sit in [0, ~3.5] and CDFs span the full
-# [0, 1] range; 1e-6 absolute / relative tolerances absorb display
-# rounding while still catching real divergence.
-tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- F.DIST --------------------------------------------------------------

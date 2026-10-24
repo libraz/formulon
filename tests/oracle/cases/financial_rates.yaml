@@ -1,11 +1,7 @@
 suite: financial_rates
 description: Security-rate / T-Bill financial builtins — DISC / INTRATE / RECEIVED / TBILLPRICE / TBILLYIELD / TBILLEQ. See `eval/builtins/financial_rates.cpp`.
-# Matches `financial.yaml` / `financial_ext.yaml`: these rate/discount
-# results are fractions (DISC ~0.05), so a 1e-3 absolute band is a ~2%
-# relative band here, not the display-rounding slack it was meant to be.
-# The suite default stays tight; a display-rounded case gets its own
-# per-case `tolerance:` override.
-tolerance: { abs: 1.0e-9, rel: 1.0e-6 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- DISC ---------------------------------------------------------------

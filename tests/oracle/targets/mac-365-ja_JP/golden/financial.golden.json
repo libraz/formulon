@@ -9,8 +9,8 @@
     "generated_at": "2026-10-17T09:29:05Z"
   },
   "tolerance": {
-    "abs": 1e-09,
-    "rel": 1e-06
+    "abs": 0.0,
+    "rel": 0.0
   },
   "cases": [
     {
@@ -128,10 +128,6 @@
       "expect": {
         "kind": "number",
         "value": -1.0101010101010102
-      },
-      "tolerance": {
-        "abs": 0.0001,
-        "rel": 0.0
       }
     },
     {

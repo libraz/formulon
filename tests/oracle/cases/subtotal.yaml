@@ -5,7 +5,7 @@ description: >
   VAR / VARP, including hidden rows. Codes 101-111 dispatch to the same
   aggregators but exclude rows hidden via row-level hiding (column-hide
   and filter-hide are handled separately). Invalid codes -> #VALUE!.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: subtotal_average_code_1

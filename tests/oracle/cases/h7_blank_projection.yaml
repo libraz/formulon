@@ -1,6 +1,6 @@
 suite: h7_blank_projection
 description: "Blank grid projection across raw references and dynamic-array wrappers (Excel 365)."
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # Raw grid reference: visible spill cells project to 0, but nested

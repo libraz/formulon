@@ -1,6 +1,6 @@
 suite: stat_legacy
 description: Pre-2010 stat aliases (PERCENTILE / QUARTILE / STDEV / VAR) — alias dispatch verified on parallel perspectives. Result-equivalent to the .INC / .S forms covered by stats.yaml.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

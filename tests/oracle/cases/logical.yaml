@@ -1,6 +1,6 @@
 suite: logical
 description: TRUE / FALSE / NOT / AND / OR / IF / IFERROR / IFNA
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- Literal constants ---------------------------------------------------

@@ -7,7 +7,7 @@ description: >
   a 365 spill, comparison operand). Coverage spans: aligned intersection
   in an aggregator, non-overlapping operands, single-cell intersection,
   whole-column/whole-row intersection, and intersect feeding an INDEX call.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

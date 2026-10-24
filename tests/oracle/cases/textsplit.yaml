@@ -1,6 +1,6 @@
 suite: textsplit
 description: TEXTSPLIT rectangle-shaping splitter — six perspectives spanning 1D row split, 2D grid split, ignore_empty collapse, delimiter-array union (longest match wins), ragged-row padding, and match_mode out-of-range error.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

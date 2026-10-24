@@ -13,7 +13,7 @@ description: >
   through `range.value`, then VALUETOTEXT round-trips the cell value to
   text. The static oracle harness writes the literal numeric in the
   formula and reads back the surfaced text.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # ---- Group A: positive powers of ten ----------------------------------

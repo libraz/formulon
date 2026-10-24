@@ -6,7 +6,7 @@ description: >
   Boundary 3: mantissa-width effect - vary sig digits from 1..15 at fixed
     exponent (e.g. ?E-9) to determine whether the rule is "decimal width <=
     N chars" or "leading-zero count + sig digits <= N".
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # ---- Boundary 1: positive integer 1e17 .. 1e20 ------------------------

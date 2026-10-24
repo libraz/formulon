@@ -1,7 +1,7 @@
 suite: xirr_xnpv
 description: XIRR / XNPV — irregular cash-flow NPV and IRR over date schedules
 # XIRR and XNPV are compared bit-for-bit against Mac Excel.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- XNPV ----------------------------------------------------------------

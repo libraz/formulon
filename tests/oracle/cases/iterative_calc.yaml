@@ -12,7 +12,7 @@ description: >
   of 10). The result is read after the entry evaluation and one
   Calculate; every circular cell in the workbook sweeps together until
   the largest change anywhere drops below MaxChange.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 options:
   iterative: true

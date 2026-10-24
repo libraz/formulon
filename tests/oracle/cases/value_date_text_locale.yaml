@@ -6,7 +6,7 @@ description: >
   time, AM/PM spellings, and mixed fractions next to group separators.
   Dates are reported as "cy" (current year) or the year, then month, day
   and minutes, so goldens do not depend on the capture year.
-tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+tolerance: { abs: 0, rel: 0 }
 cases:
   - id: pair_13_1
     formula: "=IFERROR(LET(v,VALUE(\"13/1\"),IF(YEAR(v)=YEAR(TODAY()),\"cy\",YEAR(v))&\"-\"&MONTH(v)&\"-\"&DAY(v)&\"+\"&ROUND(MOD(v,1)*1440,3)),\"err\")"

@@ -2,8 +2,8 @@ suite: stats_scalar_argument
 description: 'The single-value argument of LARGE, SMALL, PERCENTILE, QUARTILE, TRIMMEAN and PERCENTRANK: direct coercion of
   a cell reference, per-element evaluation over an array, and the PERCENTILE.EXC / QUARTILE.EXC boundary'
 tolerance:
-  abs: 1.0e-09
-  rel: 1.0e-09
+  abs: 0
+  rel: 0
 locale: ja-JP
 cases:
 - id: percentile_exc_k_blank

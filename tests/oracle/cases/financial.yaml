@@ -1,14 +1,7 @@
 suite: financial
 description: PV / FV / PMT / NPER / NPV / IRR / RATE / IPMT / PPMT / CUMIPMT / CUMPRINC / SLN / SYD / DDB / DB — time-value-of-money and depreciation builtins
-# Mac xlwings returns some Excel-computed floats as their displayed value
-# (about 4 decimal digits) rather than the underlying double, so we cannot
-# verify to full double precision from those cases. A suite-wide 1e-3
-# absolute band would cover that, but it also silently widens every other
-# case to a ~2% relative band wherever the result magnitude is under 1 (RATE
-# is fractional, near-zero identities land here too) -- so the display-
-# rounded and near-zero-residual cases carry their own per-case `tolerance:`
-# override instead, and the suite default stays tight.
-tolerance: { abs: 1.0e-9, rel: 1.0e-6 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- PV ------------------------------------------------------------------
@@ -65,7 +58,6 @@ cases:
     description: "(1-0.99)^1000 underflows to 0; FV only multiplies by it, so -1/0.99"
     formula: "=FV(-0.99, 1000, 1)"
     # xlwings returns the displayed value, about 4 decimal digits here.
-    tolerance: { abs: 1.0e-4 }
 
   # -- PMT -----------------------------------------------------------------
   - id: pmt_basic

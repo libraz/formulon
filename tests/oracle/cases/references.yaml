@@ -1,6 +1,6 @@
 suite: references
 description: ADDRESS / INDIRECT / OFFSET reference-manipulation builtins. ADDRESS is a pure scalar text builder; INDIRECT resolves runtime-constructed A1 text to a single cell; OFFSET synthesises a reference (scalar or range) that aggregator-family callers consume through the shared `resolve_range_arg` seam. Range-producing INDIRECT and R1C1 INDIRECT are deferred until `Value::Array` lands; those cases are deliberately absent here.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- ADDRESS ------------------------------------------------------------

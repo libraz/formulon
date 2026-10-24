@@ -8,7 +8,7 @@ description: >
   members. Tolerance is loose (1e-8) because BESSELK uses Abramowitz &
   Stegun 9.8.5-9.8.8 polynomial approximations whose rated accuracy is
   |epsilon| < 1.9e-7.
-tolerance: { abs: 1e-8, rel: 1e-8 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- ERF -----------------------------------------------------------------

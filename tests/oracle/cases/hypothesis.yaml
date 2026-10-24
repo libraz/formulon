@@ -1,10 +1,7 @@
 suite: hypothesis
 description: T.TEST / TTEST / F.TEST / FTEST / CHISQ.TEST / CHITEST / Z.TEST / ZTEST / PROB — Excel hypothesis-test / probability builtins
-# P-values from these functions are bounded in [0, 1] with values on the
-# order of 10^-4 to 10^-1 for the cases in this suite, so double-precision
-# tolerance comfortably covers them. If xlwings rounds to the displayed
-# format for long decimals, widen both bounds.
-tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- T.TEST --------------------------------------------------------------
@@ -426,7 +423,6 @@ cases:
 
   - id: chisq_test_bool_pair_dropped
     description: "CHISQ.TEST drops a pair with a boolean side"
-    tolerance: { abs: 0.0, rel: 1.0e-12 }
     formula: "=CHISQ.TEST({TRUE,2},{3,4})"
 
   - id: chisq_test_bool_pair_dropped_2d
@@ -436,7 +432,6 @@ cases:
 
   - id: chisq_test_negative_values_allowed
     description: "CHISQ.TEST accepts negative values while the statistic stays non-negative"
-    tolerance: { abs: 0.0, rel: 1.0e-12 }
     formula: "=CHISQ.TEST({-1,-2},{3,-4})"
 
   - id: chisq_test_negative_statistic_is_num

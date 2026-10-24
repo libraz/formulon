@@ -6,7 +6,7 @@ description: >
   separators, date+time order, fullwidth folding, kanji and era forms.
   Year-less forms are anchored to DATE(YEAR(TODAY()),m,d) so goldens do not
   depend on the capture year (no Feb-29 shapes, whose fallback is leap-dependent).
-tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- month-name, year-less (current year) ---------------------------------

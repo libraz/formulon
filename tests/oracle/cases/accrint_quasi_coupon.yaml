@@ -2,7 +2,7 @@ suite: accrint_quasi_coupon
 description: >
   ACCRINT on the quasi-coupon grid when the issue date falls after
   first_interest, across every basis, coupon frequency and calc_method.
-tolerance: { abs: 1.0e-9, rel: 1.0e-9 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: c0_b0_f1_true

@@ -1,6 +1,6 @@
 suite: xirr_search
 description: XIRR full-precision results from Excel's bracket-and-bisect search, compared as 15 digits plus the residual
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: documentation_schedule_default_guess_digits

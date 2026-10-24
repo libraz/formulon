@@ -9,8 +9,8 @@
     "generated_at": "2026-10-09T16:47:39Z"
   },
   "tolerance": {
-    "abs": 1e-09,
-    "rel": 1e-09
+    "abs": 0.0,
+    "rel": 0.0
   },
   "cases": [
     {

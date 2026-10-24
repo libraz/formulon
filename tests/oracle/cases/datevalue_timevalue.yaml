@@ -1,9 +1,7 @@
 suite: datevalue_timevalue
 description: DATEVALUE / TIMEVALUE text-to-serial parsing (ISO / slash / kanji forms, AM-PM, embedded date-time)
-# DATEVALUE returns an integer serial (exact match); TIMEVALUE returns a
-# fractional day that can drift by a few ULPs on the Excel side, so we set
-# a relative tolerance of 1e-10 which covers the widest observed spread.
-tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+# DATEVALUE returns an integer serial; TIMEVALUE a fractional day. Both compare exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- DATEVALUE: ISO forms ------------------------------------------------

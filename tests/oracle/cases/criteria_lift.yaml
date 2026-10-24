@@ -5,7 +5,7 @@ description: >
   criterion element; a criterion that cannot supply a position takes #N/A
   there, as the operator broadcast fills it.
   A1:A3 = 1, 2, 2 and B1:B3 = 10, 20, 30 throughout.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: countif_range_criteria

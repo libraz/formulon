@@ -1,6 +1,6 @@
 suite: regression_advanced
 description: "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics."
-tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================

@@ -6,7 +6,7 @@ description: >
   SQRTPI). Kept in a separate suite so the existing math golden stays
   bit-stable and only new cases need to be populated by `make oracle-gen`
   on macOS.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- FACT ----------------------------------------------------------------

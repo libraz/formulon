@@ -4,7 +4,7 @@ description: >
   decimals and parenthesised negatives, where ja-JP DOLLAR uses `¥`, zero
   decimals and a leading minus. A value that display-rounds to zero keeps its
   sign; one rounded left of the decimal point first does not.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: usdollar_two_decimals

@@ -6,7 +6,7 @@ description: >
   Microsoft-version strings, Formulon returns its own engine identifier.
   Every probe is a documented divergence (`mode: skip-oracle`) — closure
   is a divergence-only declaration.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: info_release

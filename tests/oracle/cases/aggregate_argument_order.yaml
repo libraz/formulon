@@ -3,7 +3,7 @@ description: >
   Which failure an aggregate reports when a non-numeric text literal comes
   before or after an error argument, and how an IF argument that picks a
   plain value is read, across the numeric and A-family aggregates.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: sum_text_err

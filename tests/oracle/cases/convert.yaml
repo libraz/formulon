@@ -4,7 +4,7 @@ description: >
   spanning weight, distance, time, pressure, force, energy, power, magnetism,
   temperature, volume, area and information. The Formulon engine matches the
   documented Microsoft 365 unit list and constant table.
-tolerance: { abs: 1.0e-9, rel: 1.0e-9 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- Distance: meter -> foot --------------------------------------------

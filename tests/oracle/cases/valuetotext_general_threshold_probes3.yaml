@@ -3,7 +3,7 @@ description: >
   Round-3 probes: confirm the 20-char threshold and verify whether the
   negative sign counts toward the limit. Also pin a few mantissa-precision
   edge cases.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # ---- Sign-counts-toward-limit verification ---------------------------

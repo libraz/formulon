@@ -1,6 +1,6 @@
 suite: count
 description: COUNT / COUNTA / COUNTBLANK aggregators
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 options:
   date1904: false

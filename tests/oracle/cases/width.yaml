@@ -1,6 +1,6 @@
 suite: width
 description: ASC / JIS / DBCS width-conversion functions for Japanese text (ja-JP)
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- ASC: full-width ASCII -> half-width ASCII -----------------------------

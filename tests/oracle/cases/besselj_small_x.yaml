@@ -1,6 +1,6 @@
 suite: besselj_small_x
 description: BESSELJ below |x| = 8 at full precision, compared as 15 digits plus the residual
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   - id: besselj_0p1_0_digits

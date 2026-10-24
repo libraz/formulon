@@ -10,7 +10,7 @@
   },
   "tolerance": {
     "abs": 0.0,
-    "rel": 1e-14
+    "rel": 0.0
   },
   "cases": [
     {

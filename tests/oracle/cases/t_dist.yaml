@@ -1,11 +1,7 @@
 suite: t_dist
 description: T.DIST / T.DIST.2T / T.DIST.RT / T.INV / T.INV.2T — Student's t distribution family
-# xlwings returns Excel-computed floats as their displayed value (typically
-# ~15 digits but with some tail-digit truncation). Student's t quantiles
-# for the cases here sit in [-3, 3]; CDFs span the full [0, 1] range.
-# 1e-6 absolute / relative tolerances absorb display-rounding artefacts
-# while still catching real divergence.
-tolerance: { abs: 1.0e-6, rel: 1.0e-6 }
+# Results are compared exactly.
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # -- T.DIST --------------------------------------------------------------
@@ -197,12 +193,10 @@ cases:
 
   - id: t_inv_2t_just_above_one
     description: "T.INV.2T just above 1 keeps its relative accuracy"
-    tolerance: { abs: 0.0, rel: 1.0e-8 }
     formula: "=T.INV.2T(1.0000001,10)"
 
   - id: t_inv_2t_above_one
     description: "T.INV.2T(1.5,10) is the negative upper-tail quantile"
-    tolerance: { abs: 0.0, rel: 1.0e-12 }
     formula: "=T.INV.2T(1.5,10)"
 
   # -- Edge cases ---------------------------------------------------------

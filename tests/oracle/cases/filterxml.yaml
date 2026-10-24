@@ -43,7 +43,7 @@ description: >
   Platform note: current Mac Excel reports FILTERXML as #NAME?, so the
   primary Mac golden keeps these cases skipped. Windows variant goldens
   provide the live Excel coverage for the XPath contract.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # --------------------------------------------------------------------

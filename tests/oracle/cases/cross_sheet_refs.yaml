@@ -8,7 +8,7 @@ description: >
   per-case workbook on first use, and the C++ verifier mirrors that
   inside a single Workbook by adding sheets via add_sheet on first
   occurrence.
-tolerance: { abs: 0.0, rel: 0.0 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================
