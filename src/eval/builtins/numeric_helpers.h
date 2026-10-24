@@ -190,10 +190,12 @@ inline double round_half_away_decimals(double x, int digits) noexcept {
   return decimal_to_double(view.digits, count, exponent, view.negative);
 }
 
-/// ROUNDUP: ROUNDDOWN, plus one unit in the last kept place (away from zero) when digits were dropped.
+/// ROUNDUP: ROUNDDOWN, plus one unit in the last kept place (away from zero) when nonzero digits of the
+/// 15-digit view were dropped. Binary noise below the view never rounds up: ROUNDUP(0.1+0.2,1) is 0.3.
 inline double round_up_decimals(double x, int digits) noexcept {
+  const DecimalView view = decimal_view15(x);
   const double down = round_down_decimals(x, digits);
-  if (down == x) {
+  if (view.count == 0 || digits + view.exponent >= view.count) {
     return down;
   }
   const double step = power_of_ten_exact(-digits);

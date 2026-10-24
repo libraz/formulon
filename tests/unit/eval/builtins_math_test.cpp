@@ -540,6 +540,26 @@ TEST(MathRoundUp, SnapsBinaryRepresentationNoiseLikeRound) {
   EXPECT_EQ(v.as_number(), 0.07);
 }
 
+TEST(MathRoundUp, NoiseBelowFifteenDigitViewDoesNotRoundUp) {
+  // Mac Excel 365: only nonzero digits dropped from the 15-digit view add a unit.
+  const struct {
+    const char* formula;
+    double expected;
+  } cases[] = {
+      {"=ROUNDUP(0.1+0.2,1)", 0.3},
+      {"=ROUNDUP(3*1.1,1)", 3.3},
+      {"=ROUNDUP(0.07*100,0)", 7.0},
+      {"=ROUNDUP(1/3,15)", 0.333333333333333},
+      {"=ROUNDUP(0.285,1)", 0.30000000000000004},
+      {"=ROUNDUP(0,-1)", 0.0},
+  };
+  for (const auto& c : cases) {
+    const Value v = EvalSource(c.formula);
+    ASSERT_TRUE(v.is_number()) << c.formula;
+    EXPECT_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 TEST(MathRoundUp, ExtremePositiveDigitsIsNoOp) {
   const Value v = EvalSource("=ROUNDUP(1.5, 400)");
   ASSERT_TRUE(v.is_number());
