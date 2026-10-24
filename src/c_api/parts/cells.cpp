@@ -37,6 +37,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
@@ -120,6 +121,9 @@ extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_inde
   if (utf8 == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_text: utf8 is NULL");
   }
+  if (auto rc = check_utf8("fm_workbook_set_text", {utf8}); rc != 0) {
+    return rc;
+  }
   // Copy directly into the destination cell. Keeping every overwritten
   // input in a handle-global deque leaked one string per C-ABI write.
   return enter_cell(wb, sheet_index, row, col,
@@ -135,6 +139,9 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t s
   if (utf8 == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_cell_phonetic: utf8 is NULL");
+  }
+  if (auto rc = check_utf8("fm_workbook_set_cell_phonetic", {utf8}); rc != 0) {
+    return rc;
   }
   if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -179,6 +186,9 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, siz
       return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                                "fm_workbook_set_cell_phonetic_runs: run text is NULL",
                                "run_index=" + std::to_string(i));
+    }
+    if (auto rc = check_utf8(run.text, "fm_workbook_set_cell_phonetic_runs", "run_index", i); rc != 0) {
+      return rc;
     }
     if (run.eb < run.sb) {
       return set_binding_error(

@@ -24,6 +24,11 @@
  * before invoking another API entry point if the caller wants to keep
  * the diagnostic.
  *
+ * Text input: every caller-supplied string (argument or struct field) must be
+ * well-formed UTF-8. A lone surrogate, overlong form or truncated sequence
+ * returns `kBindingUtf8EncodingError` with the workbook unchanged; bindings
+ * holding UTF-16 replace lone surrogates with U+FFFD before the call.
+ *
  * Threading model:
  *   * Each `fm_workbook_t*` is owned by exactly one caller thread at a time.
  *     Ordinary API calls do not synchronize concurrent calls on the same
@@ -60,9 +65,10 @@
  *     be freed. Their exact invalidation boundary is part of each API's
  *     contract below; do not infer it from the C pointer type alone.
  *   * Buffers returned through `fm_workbook_save`, `fm_workbook_save_as`,
- *     `fm_workbook_save_with_diagnostics` and `fm_sheet_snapshot_drawing` are
- *     heap-allocated by the library with `new[]` and must be released by passing the same
- *     pointer to `fm_buffer_free`. Mixing `malloc`/`free` and
+ *     `fm_workbook_save_with_diagnostics`, `fm_sheet_snapshot_drawing` and
+ *     `fm_sheet_snapshot_range_style` are heap-allocated by the library with
+ *     `new[]` and must be released by passing the same pointer to
+ *     `fm_buffer_free`. Mixing `malloc`/`free` and
  *     `new[]`/`delete[]` across the boundary is undefined.
  *   * Every API that returns an owned opaque handle through an `out`
  *     parameter (including workbook, conditional-format-result, and
@@ -572,10 +578,13 @@ FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t index,
  *                   folding (C/S mappings only, without normalization).
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
- *         `kInvalidSheetName` when `utf8_name` is empty, malformed UTF-8,
+ *         `kBindingUtf8EncodingError` when `utf8_name` is malformed UTF-8;
+ *         `kInvalidSheetName` when `utf8_name` is empty,
  *         exceeds 31 UTF-16 units, contains a forbidden character
- *         (`: \ / ? * [ ]`), or collides under locale-independent Unicode
- *         simple case folding with an existing sheet;
+ *         (`: \ / ? * [ ]`), begins or ends with an apostrophe, is
+ *         `History` in any case, or collides under locale-independent
+ *         Unicode simple case folding with an existing sheet -- the rules
+ *         `fm_workbook_rename_sheet` applies;
  *         `kSheetCountLimitExceeded` when the workbook already contains
  *         the maximum supported sheet count.
  */
@@ -641,13 +650,17 @@ FM_API fm_status_t fm_workbook_set_active_sheet(fm_workbook_t* wb, uint32_t inde
  * removed, and the pivot tables bound to them, are dropped. The recalc
  * engine's dep-graph entries for cells on the removed sheet are
  * unregistered. Removing the active sheet activates its visible successor
- * (`fm_workbook_get_active_sheet`).
+ * (`fm_workbook_get_active_sheet`). A workbook keeps at least one visible
+ * sheet, so the only visible sheet cannot be removed while hidden ones
+ * remain.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kSheetIndexOutOfRange` when `index` is out of range;
  *         `kCannotRemoveLastSheet` when the workbook has only one
- *         sheet remaining.
+ *         sheet remaining;
+ *         `kInvalidArgument` when `index` is the only visible sheet
+ *         (the workbook is left unchanged).
  */
 FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
 
@@ -665,10 +678,12 @@ FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kSheetIndexOutOfRange` when `index` is out of range;
- *         `kInvalidSheetName` when `new_name` is empty, malformed UTF-8,
+ *         `kBindingUtf8EncodingError` when `new_name` is malformed UTF-8;
+ *         `kInvalidSheetName` when `new_name` is empty,
  *         exceeds 31 UTF-16 units, contains a forbidden character
- *         (`: \ / ? * [ ]`), or collides under locale-independent Unicode
- *         simple case folding with an existing sheet. Folding is not
+ *         (`: \ / ? * [ ]`), begins or ends with an apostrophe, is
+ *         `History` in any case, or collides under locale-independent
+ *         Unicode simple case folding with an existing sheet. Folding is not
  *         normalization, full (expanding) case folding, locale tailoring, or
  *         a claim of full Excel-equivalence.
  */
@@ -764,7 +779,10 @@ FM_API fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, const c
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet` is out of range, `row` is
  *         past the sheet bound, or `count == 0`. Delete operations also
- *         reject a `count` that extends past the sheet bound.
+ *         reject a `count` that extends past the sheet bound;
+ *         `kPreconditionFailed` when the edit cuts into a data table,
+ *         legacy array block or PivotTable, or would push one of them or a
+ *         table past the sheet bound; the workbook is unchanged.
  */
 FM_API fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count);
 
@@ -2950,6 +2968,11 @@ FM_API fm_status_t fm_workbook_partial_recalc(fm_workbook_t* wb, const fm_viewpo
  * verbatim to every invocation; the workbook does not take ownership
  * of it.
  *
+ * The callback runs inside the recalc and must not call any `fm_*`
+ * function on the same workbook: a nested recalc returns
+ * `kGraphRecalcReentrant`, and any other call may block or observe a
+ * half-computed sweep.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`.
  */
@@ -4348,17 +4371,16 @@ typedef struct {
  *                       from the workbook profile's pivot wording, e.g.
  *                       "Sum of Sales" (en-US) or "合計 / Sales" (ja-JP):
  *                       the aggregation label, the locale's separator and
- *                       the source pivot field's display name. That needs
- *                       `field_index` to be in range.
+ *                       the source pivot field's display name.
  *   * `field_index`   — index into `PivotTable::fields()` of the source
- *                       pivot field.
+ *                       pivot field; must be in range.
  *   * `aggregation`   — aggregation function applied to the source.
  *   * `number_format` — nullable; the data field's `numFmtId` as a decimal
  *                       string, under the same rules as
  *                       `fm_pivot_field_spec_t::number_format`.
  *   * `show_as`       — derivation mode.
  *   * `show_as_base_field` — `-1` means unset; otherwise an index into
- *                       `PivotTable::fields()`.
+ *                       `PivotTable::fields()`, which must be in range.
  *   * `show_as_base_item`  — `-1` means unset; `1048828` means "(previous)";
  *                       `1048829` means "(next)"; any other value is an
  *                       index into the base field's `items[]`.
@@ -4564,7 +4586,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_get_worksheet_source(const fm_workboo
  * @brief Sets or clears the cache's worksheet source metadata.
  *
  * Pass `present == 0` to clear `<worksheetSource>`. When present is
- * non-zero, nullable string attributes are copied; `NULL` means absent.
+ * non-zero, nullable string attributes are copied; `NULL` means absent, and
+ * the cache becomes a worksheet-type source: any other `<cacheSource>` type,
+ * attribute or child captured on load is dropped.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_t* wb, uint32_t cache_id, int32_t present,
                                                                 const char* ref, const char* sheet, const char* name);
@@ -4903,8 +4927,9 @@ FM_API fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* wb, s
  *         `kBindingNullPointer` if `wb`, `spec` or `out_idx` is `NULL`;
  *         `kInvalidArgument` when `sheet_index` or `pivot_index` is out
  *           of range, `spec->aggregation` / `spec->show_as` names no
- *           declared enumerator, or the name is derived and
- *           `spec->field_index` is out of range.
+ *           declared enumerator, or `spec->field_index` or a set
+ *           `spec->show_as_base_field` is not an index into the pivot's
+ *           fields (the pivot is left unchanged).
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     const fm_pivot_data_field_spec_t* spec, size_t* out_idx);
@@ -4921,8 +4946,9 @@ FM_API fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, size_t 
  *         `kBindingNullPointer` if `wb` or `spec` is `NULL`;
  *         `kInvalidArgument` when `sheet_index`, `pivot_index` or
  *           `data_field_idx` is out of range, `spec->aggregation` /
- *           `spec->show_as` names no declared enumerator, or the name is
- *           derived and `spec->field_index` is out of range.
+ *           `spec->show_as` names no declared enumerator, or
+ *           `spec->field_index` or a set `spec->show_as_base_field` is not
+ *           an index into the pivot's fields (the pivot is left unchanged).
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t data_field_idx, const fm_pivot_data_field_spec_t* spec);
@@ -6108,7 +6134,8 @@ FM_API fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_in
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range,
- *         `last < first`, or `last` is past the last column (16383).
+ *         `last < first`, `last` is past the last column (16383), or
+ *         `level` is above 7, the deepest outline level Excel stores.
  */
 FM_API fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                uint8_t level);
@@ -6181,8 +6208,9 @@ FM_API fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or `row`
- *         is past the last row (1048575).
+ *         `kInvalidArgument` when `sheet_index` is out of range, `row`
+ *         is past the last row (1048575), or `level` is above 7, the
+ *         deepest outline level Excel stores.
  */
 FM_API fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level);
 
@@ -6514,9 +6542,14 @@ FM_API fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint
  * @brief Sets the sheet's freeze pane in `(rows, cols)`. Either or
  *        both may be `0` to remove that axis.
  *
+ * The first unfrozen cell `(freeze_rows, freeze_cols)` must lie inside the
+ * grid, so `freeze_rows` is at most 1048575 and `freeze_cols` at most 16383.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *           `freeze_rows` / `freeze_cols` reaches past the grid (the view
+ *           is left unchanged).
  */
 FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, uint32_t freeze_rows,
                                        uint32_t freeze_cols);
@@ -6535,11 +6568,14 @@ FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, ui
  * visibility on save unless this call shows it. To state the stronger
  * visibility, or to demote very-hidden to plain hidden, call
  * `fm_sheet_set_visibility`. Hiding the active sheet activates its visible
- * successor (`fm_workbook_get_active_sheet`).
+ * successor (`fm_workbook_get_active_sheet`). A workbook keeps at least one
+ * visible sheet, so the only visible sheet cannot be hidden.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range, or
+ *           `hidden` is non-zero and the sheet is the only visible one
+ *           (the workbook is left unchanged).
  */
 FM_API fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index, int32_t hidden);
 
@@ -6555,12 +6591,14 @@ FM_API fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index
  * `visibility` is a raw signed 32-bit ordinal, not a validated enum type:
  * a value outside `fm_sheet_visibility_t` returns `kInvalidArgument` and
  * leaves the sheet unchanged. Hiding the active sheet activates its visible
- * successor (`fm_workbook_get_active_sheet`).
+ * successor (`fm_workbook_get_active_sheet`). A workbook keeps at least one
+ * visible sheet, so the only visible sheet cannot be hidden.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range or
- *           `visibility` is not an `fm_sheet_visibility_t` value.
+ *         `kInvalidArgument` when `sheet_index` is out of range,
+ *           `visibility` is not an `fm_sheet_visibility_t` value, or it
+ *           hides the only visible sheet (the workbook is left unchanged).
  */
 FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility);
 
@@ -7097,7 +7135,9 @@ FM_API fm_status_t fm_cell_get_xf_index(fm_workbook_t* wb, uint32_t sheet, uint3
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet_index` is out of range.
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *           `xf_index` is not below `fm_styles_get_cell_xf_count` (no cell
+ *           is materialised).
  */
 FM_API fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         uint32_t xf_index);
@@ -7134,7 +7174,9 @@ FM_API fm_status_t fm_cell_clear_xf_index(fm_workbook_t* wb, uint32_t sheet, uin
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` or a corner is out of range;
+ *         `kInvalidArgument` when `sheet` or a corner is out of range, or
+ *           `xf_index` is not below `fm_styles_get_cell_xf_count` (checked
+ *           before any cell is written);
  *         `kPreconditionFailed` when the rectangle exceeds the per-call
  *         cell ceiling.
  */

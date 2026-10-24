@@ -15,6 +15,7 @@
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -30,6 +31,9 @@ fm_status_t to_spec(const fm_shape& shape, const char* api, formulon::ShapeSpec&
   if ((shape.fields & ~formulon::shape_field::kAll) != 0U) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              (std::string(api) + ": unknown field bit").c_str());
+  }
+  if (auto rc = check_utf8(api, {shape.name, shape.prst, shape.text}); rc != 0) {
+    return rc;
   }
   if (shape.name != nullptr) {
     spec.name = shape.name;

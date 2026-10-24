@@ -26,6 +26,7 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_stored_formula;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
@@ -304,6 +305,17 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_table_create: NULL argument");
   }
+  if (auto rc = check_utf8("fm_workbook_table_create", {ref, name, display_name, style_name}); rc != 0) {
+    return rc;
+  }
+  for (size_t i = 0; i < column_count; ++i) {
+    if (column_names[i] == nullptr) {
+      continue;
+    }
+    if (auto rc = check_utf8(column_names[i], "fm_workbook_table_create", "column", i); rc != 0) {
+      return rc;
+    }
+  }
   formulon::Workbook& book = wb->workbook();
   if (sheet_index >= book.sheet_count() || ref[0] == '\0' || name[0] == '\0' || display_name[0] == '\0' ||
       column_count == 0U) {
@@ -383,6 +395,9 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
   if (wb == nullptr || ref == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_table_update: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_table_update", {ref, style_name}); rc != 0) {
+    return rc;
   }
   auto& tables = wb->workbook().mutable_tables();
   if (index >= tables.size() || ref[0] == '\0') {
@@ -537,6 +552,9 @@ extern "C" fm_status_t fm_workbook_table_set_style_info(fm_workbook_t* wb, size_
   if (auto rc = check_index(index, tables.size(), "fm_workbook_table_set_style_info", "index"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8("fm_workbook_table_set_style_info", {style_name}); rc != 0) {
+    return rc;
+  }
   formulon::TableStyleInfo& style = tables[index].style_info;
   style.present = true;
   style.name = style_name != nullptr ? style_name : "";
@@ -553,6 +571,9 @@ extern "C" fm_status_t fm_workbook_table_rename(fm_workbook_t* wb, size_t index,
   if (wb == nullptr || name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_table_rename: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_table_rename", {name, display_name}); rc != 0) {
+    return rc;
   }
   formulon::Workbook& book = wb->workbook();
   if (auto rc = check_index(index, book.tables().size(), "fm_workbook_table_rename", "index"); rc != 0) {
@@ -583,6 +604,9 @@ extern "C" fm_status_t fm_workbook_table_set_column_totals(fm_workbook_t* wb, si
   }
   if (auto rc = check_index(column, tables[index].columns.size(), "fm_workbook_table_set_column_totals", "column");
       rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_table_set_column_totals", {function, label}); rc != 0) {
     return rc;
   }
   const std::string_view token = function != nullptr ? function : "none";

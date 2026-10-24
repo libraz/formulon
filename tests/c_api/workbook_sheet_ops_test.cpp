@@ -89,6 +89,21 @@ TEST(WorkbookSheetOpsCApi, UnicodeMalformedUtf8Rejected) {
   EXPECT_NE(fm_workbook_rename_sheet(wb.handle, 0U, malformed), 0);
 }
 
+TEST(WorkbookSheetOpsCApi, AddRejectsNamesExcelsUiRefusesAsRenameDoes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid"), 0);
+  for (const char* name : {"History", "HISTORY", "'a", "a'"}) {
+    const fm_status_t added = fm_workbook_add_sheet(wb.handle, name);
+    EXPECT_STREQ(fm_status_string(added), "kInvalidSheetName") << name;
+    EXPECT_EQ(added, fm_workbook_rename_sheet(wb.handle, 0U, name)) << name;
+  }
+  EXPECT_EQ(fm_workbook_sheet_count(wb.handle), 1U);
+  EXPECT_STREQ(SheetName(wb.handle, 0U), "Valid");
+  // An inner apostrophe is an ordinary character.
+  EXPECT_EQ(fm_workbook_add_sheet(wb.handle, "a'b"), 0);
+}
+
 TEST(WorkbookSheetOpsCApi, RenameRejectsOutOfRange) {
   WorkbookGuard wb;
   MakeThreeSheets(wb);

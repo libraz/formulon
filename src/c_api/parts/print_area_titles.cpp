@@ -26,6 +26,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -178,6 +179,9 @@ extern "C" fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8(kFn, {ranges_a1}); rc != 0) {
+    return rc;
+  }
   const std::string_view input(ranges_a1);
   std::string formula;
   if (!input.empty()) {
@@ -242,6 +246,9 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
   static constexpr const char* kFn = "fm_sheet_set_print_titles";
   clear_last_error();
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8(kFn, {repeat_rows, repeat_cols}); rc != 0) {
     return rc;
   }
   const std::string_view rows(repeat_rows == nullptr ? "" : repeat_rows);

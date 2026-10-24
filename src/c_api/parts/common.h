@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <string>
@@ -89,13 +90,27 @@ fm_status_t finish_status(const formulon::Expected<void, formulon::Error>& r);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message);
 
+// Rejects `text` that is not well-formed UTF-8 (`sheet_names::valid_utf8`:
+// surrogate code points, overlong forms and truncated sequences fail) with
+// `kBindingUtf8EncodingError` ("<api>: text is not valid UTF-8", `context`).
+// The context string is built only on failure; the keyed forms spell it
+// `<key>=<value>` / `<key>=<index>`.
+fm_status_t check_utf8(std::string_view text, const char* api, std::string_view context);
+fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::string_view value);
+fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::size_t index);
+
+// `check_utf8` of every non-NULL entry of `texts`, context `text_index=<i>`.
+// NULL entries are left to the caller's own NULL rule.
+fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts);
+
 // Entry check for formula text a public setter is about to store: refuses the
-// whitespace Excel refuses (`parser::has_refused_whitespace`: a tab, a carriage
+// malformed UTF-8 (`check_utf8`) and the whitespace Excel refuses
+// (`parser::has_refused_whitespace`: a tab, a carriage
 // return, a run between a built-in's name and its `(`), applies the storage
 // normalization `Workbook::set_cell_formula` applies, then requires
 // `eval::parse_formula_entry` to accept it. Returns 0, or sets
 // `kParserUnexpectedToken` ("<api>: formula does not parse") with `context`.
-fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context);
+fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string_view context);
 
 // Entry form of formula text stored outside a cell (CF, DV, defined name, CF
 // threshold): a non-empty `formula` must pass `check_formula_parses`, and
@@ -103,7 +118,7 @@ fm_status_t check_formula_parses(const char* api, std::string_view formula, std:
 // (`Workbook::normalize_formula_text`, `kEntered`) without its one leading
 // '=', the spelling files carry and readers produce; a second leading '=' is
 // refused. An empty `formula` yields "".
-fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string context, std::string* out);
+fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string_view context, std::string* out);
 
 // Returns the thread-local diagnostic message buffer (always non-null).
 const char* last_error_message();
@@ -194,7 +209,7 @@ fm_status_t check_finite_non_negative(double value, const char* api, const char*
 fm_status_t check_finite(double value, const char* api, const char* field);
 
 // Converts a caller-supplied scalar into a `Value`, rejecting a non-finite
-// number, a NULL text, an out-of-range error code, and the array / reference
+// number, a NULL or malformed-UTF-8 text, an out-of-range error code, and the array / reference
 // / lambda kinds. A Text value aliases the caller's string, so the result is
 // valid only for the duration of the call.
 fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char* api);
@@ -220,7 +235,8 @@ fm_status_t check_guid(const char* text, const char* api, const char* field);
 // registered in `styles.num_fmts`.
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id);
 
-// Rejects a `numFmtId` string that is not decimal digits naming an id
+// Rejects a `numFmtId` string that is malformed UTF-8 (`check_utf8`) or is not
+// decimal digits naming an id
 // `num_fmt_id_known` accepts. NULL and the empty string pass: both mean
 // "no number format".
 fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text, const char* api);
@@ -228,22 +244,22 @@ fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text
 // Validates a conditional-formatting rule record: sqref shape and every
 // rectangle in it, plus the `type` / `op` / `time_period` /
 // `icon_set_name` / `data_bar_axis_position` / `fm_cfvo_t::type` domains
-// and the GUID shape of `id`. Checks that need the workbook (the
+// the GUID shape of `id` and the UTF-8 of `text`. Checks that need the workbook (the
 // `dxf_id` bound) stay with the entry point.
 fm_status_t validate(const fm_cf_rule_t& rule, const char* api);
 
-// Validates a data-validation record: range shape and rectangles, plus
-// the `type` / `op` / `error_style` domains.
+// Validates a data-validation record: range shape and rectangles, the
+// `type` / `op` / `error_style` domains, and the UTF-8 of the four messages.
 fm_status_t validate(const fm_data_validation& v, const char* api);
 
-// Validates a pivot field spec: required strings and the `axis` domain.
+// Validates a pivot field spec: required and UTF-8 strings and the `axis` domain.
 fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api);
 
-// Validates a pivot data-field spec: required strings and the
+// Validates a pivot data-field spec: UTF-8 strings and the
 // `aggregation` / `show_as` domains.
 fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api);
 
-// Validates a pivot filter spec: the `axis` / `type` domains. The
+// Validates a pivot filter spec: UTF-8 strings and the `axis` / `type` domains. The
 // payload-variant and data-field checks need the pivot table and stay
 // with the entry point.
 fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api);
@@ -280,6 +296,19 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
 // `size` entries. On failure writes `"<fn>: <field> out of range"` with an
 // `<field>=<index> count=<size>` context and returns the error status.
 fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field);
+
+// Deepest row / column outline level the file formats encode (`outlineLevel`
+// is 0-7 in OOXML and three bits in XLSB).
+constexpr std::uint8_t kMaxOutlineLevel = 7U;
+
+// `check_index` of `xf_index` against the workbook's cell-XF table. Every
+// setter storing a cell, row or column `xf_index` runs it before writing.
+fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index, const char* fn);
+
+// Rejects hiding or removing sheet `index` when it is the workbook's only
+// visible sheet: Excel repairs a file whose sheets are all hidden. Returns
+// `kInvalidArgument` ("<fn>: workbook needs a visible sheet") or 0.
+fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::uint32_t index, const char* fn);
 
 }  // namespace parts
 }  // namespace c_api

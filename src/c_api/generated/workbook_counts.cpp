@@ -21,6 +21,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
 extern "C" size_t fm_workbook_defined_name_count(const fm_workbook_t* wb) {
+  clear_last_error();
   if (wb == nullptr) {
     return 0;
   }
@@ -28,6 +29,7 @@ extern "C" size_t fm_workbook_defined_name_count(const fm_workbook_t* wb) {
 }
 
 extern "C" size_t fm_workbook_passthrough_count(const fm_workbook_t* wb) {
+  clear_last_error();
   if (wb == nullptr) {
     return 0;
   }
@@ -35,6 +37,7 @@ extern "C" size_t fm_workbook_passthrough_count(const fm_workbook_t* wb) {
 }
 
 extern "C" size_t fm_workbook_sheet_count(const fm_workbook_t* wb) {
+  clear_last_error();
   if (wb == nullptr) {
     return 0;
   }
@@ -42,6 +45,7 @@ extern "C" size_t fm_workbook_sheet_count(const fm_workbook_t* wb) {
 }
 
 extern "C" size_t fm_workbook_table_count(const fm_workbook_t* wb) {
+  clear_last_error();
   if (wb == nullptr) {
     return 0;
   }

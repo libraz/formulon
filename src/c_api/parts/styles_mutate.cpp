@@ -24,6 +24,7 @@
 
 using formulon::effective_num_fmt;
 using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::num_fmt_id_known;
@@ -137,6 +138,8 @@ std::string cell_xf_key(const formulon::CellXf& value) {
     append_key_scalar(out, value.locked);
     append_key_scalar(out, value.hidden);
   }
+  // Unmodelled attributes (`pivotButton`, ...) distinguish records too.
+  out.append(value.extra_attrs);
   return out;
 }
 
@@ -405,6 +408,9 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   if (fm_status_t rc = check_finite_non_negative(record.size, "fm_styles_add_font", "font.size"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8("fm_styles_add_font", {record.name}); rc != 0) {
+    return rc;
+  }
   formulon::FontRecord candidate = cell_font_from_c(record);
 
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
@@ -440,6 +446,9 @@ extern "C" fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index
   if (fm_status_t rc = check_finite_non_negative(record.size, "fm_styles_set_font", "font.size"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8("fm_styles_set_font", {record.name}); rc != 0) {
+    return rc;
+  }
   styles.fonts[font_index] = cell_font_from_c(record);
   return 0;
 }
@@ -451,6 +460,9 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, fm_font_r
                              "fm_workbook_set_default_font: NULL argument");
   }
   if (fm_status_t rc = check_finite_non_negative(record.size, "fm_workbook_set_default_font", "font.size"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_set_default_font", {record.name}); rc != 0) {
     return rc;
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
@@ -508,6 +520,9 @@ extern "C" fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* form
   clear_last_error();
   if (wb == nullptr || out_num_fmt_id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_num_fmt: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_styles_add_num_fmt", {format_code}); rc != 0) {
+    return rc;
   }
   const std::string code = (format_code != nullptr) ? std::string(format_code) : std::string();
   const formulon::StylesTable& existing_styles = wb->workbook().styles();
@@ -652,6 +667,9 @@ extern "C" fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const fm_cell
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_set_cell_style: NULL argument");
   }
+  if (auto rc = check_utf8("fm_styles_set_cell_style", {record->name}); rc != 0) {
+    return rc;
+  }
   auto& styles = wb->workbook().mutable_styles();
   if (record->name[0] == '\0' || record->xf_id >= styles.cell_style_xfs.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -695,6 +713,9 @@ extern "C" fm_status_t fm_styles_remove_cell_style(fm_workbook_t* wb, const char
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_remove_cell_style: NULL argument");
   }
+  if (auto rc = check_utf8("fm_styles_remove_cell_style", {name}); rc != 0) {
+    return rc;
+  }
   return finish_status(formulon::remove_cell_style(wb->workbook().mutable_styles(), name));
 }
 
@@ -713,6 +734,14 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
   }
   for (size_t i = 0; i < batch->font_count; ++i) {
     if (fm_status_t rc = check_finite_non_negative(batch->fonts[i].size, "fm_styles_add_batch", "font.size"); rc != 0) {
+      return rc;
+    }
+    if (auto rc = check_utf8("fm_styles_add_batch", {batch->fonts[i].name}); rc != 0) {
+      return rc;
+    }
+  }
+  for (size_t i = 0; i < batch->num_fmt_count; ++i) {
+    if (auto rc = check_utf8("fm_styles_add_batch", {batch->num_fmt_codes[i]}); rc != 0) {
       return rc;
     }
   }
@@ -871,6 +900,11 @@ extern "C" fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record
     if (fm_status_t rc = check_finite_non_negative(record.font.size, "fm_styles_add_dxf", "font.size"); rc != 0) {
       return rc;
     }
+  }
+  if (auto rc = check_utf8("fm_styles_add_dxf", {record.font_engaged != 0 ? record.font.name : nullptr,
+                                                 record.num_fmt_code, record.alignment_xml, record.protection_xml});
+      rc != 0) {
+    return rc;
   }
 
   formulon::DifferentialFormat candidate;

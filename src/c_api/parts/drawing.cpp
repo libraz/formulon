@@ -20,6 +20,7 @@
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::set_binding_error;
@@ -167,6 +168,9 @@ extern "C" fm_status_t fm_sheet_insert_image(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc =
           check_enum_domain(opts->edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), kApi, "edit_as");
       rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8(kApi, {opts->name, opts->descr}); rc != 0) {
     return rc;
   }
   formulon::ImageInsertOptions model;

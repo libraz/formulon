@@ -26,6 +26,7 @@
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -243,7 +244,17 @@ class PatchReader {
   }
 
   void text_field(std::int32_t op, const char* value, ChartPatchField<std::string>& out, const char* name) {
-    field(op, std::string(value != nullptr ? value : ""), out, name);
+    if (text_ok(value, name)) {
+      field(op, std::string(value != nullptr ? value : ""), out, name);
+    }
+  }
+
+  // Records a malformed-UTF-8 `value` as the failure; NULL passes.
+  bool text_ok(const char* value, const char* name) {
+    if (rc_ == 0 && value != nullptr) {
+      rc_ = check_utf8(value, api_, "field", name);
+    }
+    return rc_ == 0;
   }
 
   template <typename T>
@@ -339,20 +350,20 @@ formulon::ChartLabelsPatch read_labels(PatchReader& r, const fm_chart_labels_pat
   return out;
 }
 
-void read_ref(const char* text, std::optional<std::string>& out) {
-  if (text != nullptr) {
+void read_ref(PatchReader& r, const char* text, std::optional<std::string>& out, const char* name) {
+  if (text != nullptr && r.text_ok(text, name)) {
     out = std::string(text);
   }
 }
 
 formulon::ChartSeriesPatch read_series(PatchReader& r, const fm_chart_series_patch& p) {
   formulon::ChartSeriesPatch out;
-  read_ref(p.name, out.name);
-  read_ref(p.categories, out.cat);
-  read_ref(p.values, out.val);
-  read_ref(p.x, out.x);
-  read_ref(p.y, out.y);
-  read_ref(p.size, out.size);
+  read_ref(r, p.name, out.name, "name");
+  read_ref(r, p.categories, out.cat, "categories");
+  read_ref(r, p.values, out.val, "values");
+  read_ref(r, p.x, out.x, "x");
+  read_ref(r, p.y, out.y, "y");
+  read_ref(r, p.size, out.size, "size");
   out.fill = read_fill(r, p.fill);
   out.line = read_line(r, p.line);
   r.field(p.marker_op, p.marker_op == FM_CHART_PATCH_SET ? read_marker(r, p.marker) : formulon::ChartMarkerPatch{},
@@ -684,6 +695,9 @@ extern "C" fm_status_t fm_sheet_chart_preview_open(const fm_workbook_t* wb, size
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8(kApi, {overrides->source}); rc != 0) {
+    return rc;
+  }
   PatchReader r(kApi);
   formulon::ChartPreviewOverrides model;
   if (overrides->source != nullptr) {
@@ -892,6 +906,9 @@ extern "C" fm_status_t fm_sheet_insert_chart(fm_workbook_t* wb, size_t sheet_ind
   if (opts->source == nullptr || out_object_id == nullptr) {
     return null_argument(kApi);
   }
+  if (auto rc = check_utf8(kApi, {opts->source, opts->title, opts->placement.name, opts->placement.descr}); rc != 0) {
+    return rc;
+  }
   PatchReader r(kApi);
   r.enum_ok(opts->kind, formulon::ChartInsertKind::kDoughnut, "kind");
   r.enum_ok(opts->grouping, formulon::ChartGrouping::kStandard, "grouping");
@@ -960,6 +977,9 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_enum_domain(title->kind, FM_CHART_TITLE_AUTO, kApi, "kind"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8(kApi, {title->text, title->formula}); rc != 0) {
+    return rc;
+  }
   return finish(formulon::set_chart_title(wb->workbook(), sheet_index, object_id, title_of(*title)));
 }
 
@@ -999,6 +1019,8 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
   r.flag(patch->visible_op, patch->visible, model.visible, "visible_op");
   if (patch->title_op == FM_CHART_PATCH_SET) {
     r.enum_ok(patch->title.kind, formulon::ChartTitleKind::kAuto, "title.kind");
+    r.text_ok(patch->title.text, "title.text");
+    r.text_ok(patch->title.formula, "title.formula");
   }
   r.field(patch->title_op, title_of(patch->title), model.title, "title_op");
   r.field(patch->min_op, patch->min, model.min, "min_op");
@@ -1145,6 +1167,9 @@ extern "C" fm_status_t fm_sheet_set_chart_source(fm_workbook_t* wb, size_t sheet
                                                  int32_t header_column) {
   constexpr const char* kApi = "fm_sheet_set_chart_source";
   if (auto rc = edit_entry(wb, sheet_index, source, kApi); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8(kApi, {source}); rc != 0) {
     return rc;
   }
   PatchReader r(kApi);

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -29,8 +30,11 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_num_fmt_id_text;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::invalidate_pivot_result;
@@ -209,6 +213,9 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_create: NULL argument");
   }
+  if (auto rc = check_utf8("fm_workbook_pivot_create", {utf8_name}); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_pivot_create"); rc != 0) {
     return rc;
   }
@@ -251,10 +258,8 @@ extern "C" fm_status_t fm_workbook_pivot_remove(fm_workbook_t* wb, std::size_t s
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   auto& pivots = sheet.mutable_pivot_tables();
-  if (pivot_index >= pivots.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_remove: pivot_index out of range",
-                             "pivot_index=" + std::to_string(pivot_index));
+  if (auto rc = check_index(pivot_index, pivots.size(), "fm_workbook_pivot_remove", "pivot_index"); rc != 0) {
+    return rc;
   }
   pivots.erase(pivots.begin() + static_cast<std::ptrdiff_t>(pivot_index));
   wb->workbook().mark_all_formulas_dirty();
@@ -267,6 +272,9 @@ extern "C" fm_status_t fm_workbook_pivot_set_name(fm_workbook_t* wb, std::size_t
   if (wb == nullptr || utf8_name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_set_name: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_pivot_set_name", {utf8_name}); rc != 0) {
+    return rc;
   }
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_name", &table);
@@ -289,15 +297,21 @@ extern "C" fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, std::size
   }
   // A span must be at least 1x1 and its far corner must stay inside the
   // grid; reject before `set_anchor` so downstream layout never iterates
-  // an out-of-grid or wrapped rectangle. 64-bit arithmetic avoids the
-  // `anchor + span` wrap the audit flagged.
-  if (span_rows == 0U || span_cols == 0U ||
-      static_cast<std::uint64_t>(anchor_row) + span_rows > formulon::Sheet::kMaxRows ||
-      static_cast<std::uint64_t>(anchor_col) + span_cols > formulon::Sheet::kMaxCols) {
+  // an out-of-grid or wrapped rectangle. The far corner is computed in 64
+  // bits and saturated, so `anchor + span` cannot wrap back into the grid.
+  if (span_rows == 0U || span_cols == 0U) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_pivot_set_anchor: span out of grid",
-                             "row=" + std::to_string(anchor_row) + " col=" + std::to_string(anchor_col) +
-                                 " span_rows=" + std::to_string(span_rows) + " span_cols=" + std::to_string(span_cols));
+                             "span_rows=" + std::to_string(span_rows) + " span_cols=" + std::to_string(span_cols));
+  }
+  const auto far_edge = [](std::uint32_t anchor, std::uint32_t span) {
+    return static_cast<std::uint32_t>(std::min<std::uint64_t>(static_cast<std::uint64_t>(anchor) + span - 1U,
+                                                              std::numeric_limits<std::uint32_t>::max()));
+  };
+  if (auto rc = check_sheet_rect(anchor_row, anchor_col, far_edge(anchor_row, span_rows),
+                                 far_edge(anchor_col, span_cols), "fm_workbook_pivot_set_anchor");
+      rc != 0) {
+    return rc;
   }
   table->set_anchor(anchor_row, anchor_col, span_rows, span_cols);
   invalidate_pivot_result(wb->workbook(), *table);
@@ -328,6 +342,9 @@ extern "C" fm_status_t fm_workbook_pivot_set_style_info(fm_workbook_t* wb, std::
   formulon::pivot::PivotTable* table = nullptr;
   if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_style_info", &table);
       rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_pivot_set_style_info", {utf8_style_name}); rc != 0) {
     return rc;
   }
   formulon::pivot::PivotStyleInfo info;
@@ -483,9 +500,7 @@ formulon::pivot::PivotField* lookup_pivot_field_mut(fm_workbook_t* wb, std::size
   if (table == nullptr) {
     return nullptr;
   }
-  if (field_idx >= table->fields().size()) {
-    set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                      (std::string(fn) + ": field_idx out of range").c_str(), "field_idx=" + std::to_string(field_idx));
+  if (check_index(field_idx, table->fields().size(), fn, "field_idx") != 0) {
     return nullptr;
   }
   if (out_table != nullptr) {
@@ -561,6 +576,9 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, std::
   if (enum_status != 0) {
     return enum_status;
   }
+  if (auto rc = check_utf8("fm_workbook_pivot_field_set_sort", {by_field}); rc != 0) {
+    return rc;
+  }
   const bool manual = order == FM_PIVOT_SORT_MANUAL;
   if (manual && by_field != nullptr && by_field[0] != '\0') {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -591,6 +609,9 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_item(fm_workbook_t* wb, std::
   if (utf8_name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_add_item: utf8_name is NULL");
+  }
+  if (auto rc = check_utf8("fm_workbook_pivot_field_add_item", {utf8_name}); rc != 0) {
+    return rc;
   }
   formulon::pivot::PivotTable* table = nullptr;
   formulon::pivot::PivotField* field = nullptr;
@@ -662,10 +683,9 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_item_visible(fm_workbook_t* w
       rc != 0) {
     return rc;
   }
-  if (item_idx >= field->items.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_field_set_item_visible: item_idx out of range",
-                             "item_idx=" + std::to_string(item_idx));
+  if (auto rc = check_index(item_idx, field->items.size(), "fm_workbook_pivot_field_set_item_visible", "item_idx");
+      rc != 0) {
+    return rc;
   }
   field->items[item_idx].visible = visible != 0;
   invalidate_pivot_result(wb->workbook(), *table);
@@ -924,23 +944,31 @@ namespace {
 
 // Materialises a `fm_pivot_data_field_spec_t` into a `PivotDataField`.
 // The spec is already validated by `validate(*spec, api)` and
-// `check_num_fmt_id_text` at the entry point. A NULL or empty name is
-// derived from the workbook profile; that needs `field_index` in range,
-// else the binding error is set and the status returned.
+// `check_num_fmt_id_text` at the entry point. `field_index` and a set
+// `show_as_base_field` must index `table.fields()`, else the binding error
+// is set and the status returned. A NULL or empty name is derived from the
+// workbook profile.
 fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::pivot::PivotTable& table,
                             const fm_pivot_data_field_spec_t& spec, const char* api,
                             formulon::pivot::PivotDataField* out) {
+  if (auto rc = check_index(spec.field_index, table.fields().size(), api, "field_index"); rc != 0) {
+    return rc;
+  }
+  // `-1` is the only unset spelling; any other negative wraps past every field.
+  if (spec.show_as_base_field != -1) {
+    if (auto rc = check_index(static_cast<std::uint32_t>(spec.show_as_base_field), table.fields().size(), api,
+                              "show_as_base_field");
+        rc != 0) {
+      return rc;
+    }
+  }
   out->aggregation = pivot_agg_from_fm(spec.aggregation);
   if (spec.name != nullptr && spec.name[0] != '\0') {
     out->name = spec.name;
-  } else if (spec.field_index < table.fields().size()) {
+  } else {
     out->name = formulon::pivot::data_field_display_name(
         out->aggregation, formulon::pivot::pivot_field_display_name(table.fields()[spec.field_index]),
         workbook.excel_profile());
-  } else {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(api) + ": field_index out of range for a derived name").c_str(),
-                             "field_index=" + std::to_string(spec.field_index));
   }
   out->field_index = spec.field_index;
   out->number_format = spec.number_format != nullptr ? spec.number_format : "";
@@ -1022,10 +1050,10 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  if (data_field_idx >= table->data_fields().size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_data_field_set: data_field_idx out of range",
-                             "data_field_idx=" + std::to_string(data_field_idx));
+  if (auto rc = check_index(data_field_idx, table->data_fields().size(), "fm_workbook_pivot_data_field_set",
+                            "data_field_idx");
+      rc != 0) {
+    return rc;
   }
   formulon::pivot::PivotDataField df;
   if (auto rc = fill_data_field(wb->workbook(), *table, *spec, "fm_workbook_pivot_data_field_set", &df); rc != 0) {
@@ -1051,9 +1079,7 @@ const formulon::pivot::PivotField* lookup_pivot_field(const fm_workbook_t* wb, s
   if (table == nullptr) {
     return nullptr;
   }
-  if (field_idx >= table->fields().size()) {
-    set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                      (std::string(fn) + ": field_idx out of range").c_str(), "field_idx=" + std::to_string(field_idx));
+  if (check_index(field_idx, table->fields().size(), fn, "field_idx") != 0) {
     return nullptr;
   }
   if (out_table != nullptr) {
@@ -1236,10 +1262,8 @@ extern "C" fm_status_t fm_workbook_pivot_field_item_at(const fm_workbook_t* wb, 
   if (field == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  if (item_idx >= field->items.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_field_item_at: item_idx out of range",
-                             "item_idx=" + std::to_string(item_idx));
+  if (auto rc = check_index(item_idx, field->items.size(), "fm_workbook_pivot_field_item_at", "item_idx"); rc != 0) {
+    return rc;
   }
   const formulon::pivot::PivotItem& item = field->items[item_idx];
   fm_pivot_item_info_t result{};
@@ -1262,10 +1286,10 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, 
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  if (data_field_idx >= table->data_fields().size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_data_field_at: data_field_idx out of range",
-                             "data_field_idx=" + std::to_string(data_field_idx));
+  if (auto rc =
+          check_index(data_field_idx, table->data_fields().size(), "fm_workbook_pivot_data_field_at", "data_field_idx");
+      rc != 0) {
+    return rc;
   }
   const formulon::pivot::PivotDataField& df = table->data_fields()[data_field_idx];
   fm_pivot_data_field_spec_t result{};
@@ -1323,10 +1347,10 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   const bool is_value_filter = spec->type == FM_PIVOT_FILTER_VALUE_TOP_10 ||
                                spec->type == FM_PIVOT_FILTER_VALUE_GREATER_THAN ||
                                spec->type == FM_PIVOT_FILTER_VALUE_BETWEEN;
-  if (is_value_filter && spec->data_field_index >= table->data_fields().size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(api) + ": data_field_index out of range").c_str(),
-                             "data_field_index=" + std::to_string(spec->data_field_index));
+  if (is_value_filter) {
+    if (auto rc = check_index(spec->data_field_index, table->data_fields().size(), api, "data_field_index"); rc != 0) {
+      return rc;
+    }
   }
   // The engine skips a filter whose field does not resolve, so an unresolvable
   // name would leave any filter kind a silent no-op.
@@ -1403,10 +1427,8 @@ extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std:
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   const auto& filters = table->active_filters();
-  if (filter_idx >= filters.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_filter_at: filter_idx out of range",
-                             "filter_idx=" + std::to_string(filter_idx));
+  if (auto rc = check_index(filter_idx, filters.size(), "fm_workbook_pivot_filter_at", "filter_idx"); rc != 0) {
+    return rc;
   }
 
   const auto& filter = filters[filter_idx];
@@ -1481,10 +1503,10 @@ extern "C" fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, std
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  if (filter_idx >= table->active_filters().size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_filter_remove_at: filter_idx out of range",
-                             "filter_idx=" + std::to_string(filter_idx));
+  if (auto rc =
+          check_index(filter_idx, table->active_filters().size(), "fm_workbook_pivot_filter_remove_at", "filter_idx");
+      rc != 0) {
+    return rc;
   }
   std::size_t position = 0;
   table->erase_active_filters_if([&](const formulon::pivot::PivotFilter&) { return position++ == filter_idx; });

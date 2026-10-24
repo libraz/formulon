@@ -134,6 +134,7 @@ extern "C" void fm_cell_nodes_destroy(fm_cell_nodes_t* nodes) {
 }
 
 extern "C" size_t fm_cell_nodes_count(const fm_cell_nodes_t* nodes) {
+  clear_last_error();
   if (nodes == nullptr) {
     return 0;
   }

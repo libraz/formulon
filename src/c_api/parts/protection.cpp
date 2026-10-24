@@ -19,6 +19,7 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_u32;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
@@ -42,9 +43,15 @@ formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
   return out;
 }
 
-// A name is unique per sheet; `skip` is the entry being replaced.
+// Every text is UTF-8 and a name is unique per sheet; `skip` is the entry being replaced.
 fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, const formulon::ProtectedRange& range,
                        std::size_t skip, const char* fn) {
+  if (auto rc =
+          check_utf8(fn, {range.name.c_str(), range.sqref.c_str(), range.password.c_str(), range.algorithm_name.c_str(),
+                          range.hash_value.c_str(), range.salt_value.c_str(), range.security_descriptor.c_str()});
+      rc != 0) {
+    return rc;
+  }
   std::vector<formulon::MergeRange> parsed;
   if (range.name.empty() || !formulon::io::parse_sqref_text(range.sqref, parsed)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -92,6 +99,14 @@ extern "C" fm_status_t fm_workbook_set_protection(fm_workbook_t* wb, const fm_wo
   if (wb == nullptr || protection == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_protection: NULL argument");
+  }
+  if (auto rc = check_utf8(
+          "fm_workbook_set_protection",
+          {protection->workbook_password, protection->workbook_algorithm_name, protection->workbook_hash_value,
+           protection->workbook_salt_value, protection->revisions_password, protection->revisions_algorithm_name,
+           protection->revisions_hash_value, protection->revisions_salt_value});
+      rc != 0) {
+    return rc;
   }
   formulon::WorkbookProtection p;
   p.lock_structure = protection->lock_structure != 0;

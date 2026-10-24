@@ -20,6 +20,7 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -48,6 +49,9 @@ fm_status_t convert_formula(const char* api, const char* formula, const char* pr
   if (formula == nullptr || profile_id == nullptr || out_formula == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              (std::string(api) + ": NULL argument").c_str());
+  }
+  if (auto rc = check_utf8(api, {formula}); rc != 0) {
+    return rc;
   }
   formulon::ExcelProfile profile;
   if (auto rc = check_profile_id(profile_id, api, &profile); rc != 0) {

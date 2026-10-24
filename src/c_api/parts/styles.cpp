@@ -22,6 +22,9 @@
 #include "workbook.h"
 
 using formulon::effective_num_fmt;
+using formulon::c_api::parts::check_cell_xf_index;
+using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
@@ -62,6 +65,9 @@ extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, u
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_cell_set_xf_index: wb is NULL");
   }
+  if (auto rc = check_cell_xf_index(wb, xf_index, "fm_cell_set_xf_index"); rc != 0) {
+    return rc;
+  }
   return finish_status(wb->workbook().set_cell_xf_index(sheet, row, col, xf_index));
 }
 
@@ -85,9 +91,11 @@ extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, uint32_t s
   const std::uint32_t row_hi = std::max(first_row, last_row);
   const std::uint32_t col_lo = std::min(first_col, last_col);
   const std::uint32_t col_hi = std::max(first_col, last_col);
-  if (row_hi >= formulon::Sheet::kMaxRows || col_hi >= formulon::Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, kFn,
-                             "last_row=" + std::to_string(row_hi) + " last_col=" + std::to_string(col_hi));
+  if (auto rc = check_sheet_rect(row_lo, col_lo, row_hi, col_hi, kFn); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_xf_index(wb, xf_index, kFn); rc != 0) {
+    return rc;
   }
   const std::uint64_t cells =
       (static_cast<std::uint64_t>(row_hi - row_lo) + 1U) * (static_cast<std::uint64_t>(col_hi - col_lo) + 1U);
@@ -157,10 +165,8 @@ extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_inde
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_cell_xf: NULL argument");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (xf_index >= styles.cell_xfs.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_xf: xf_index out of range",
-        "xf_index=" + std::to_string(xf_index) + " cell_xfs_count=" + std::to_string(styles.cell_xfs.size()));
+  if (auto rc = check_index(xf_index, styles.cell_xfs.size(), "fm_styles_get_cell_xf", "xf_index"); rc != 0) {
+    return rc;
   }
   cell_xf_to_c(styles.cell_xfs[xf_index], out);
   return 0;
@@ -264,10 +270,8 @@ extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_font: NULL argument");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (font_index >= styles.fonts.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_font: font_index out of range",
-        "font_index=" + std::to_string(font_index) + " fonts_count=" + std::to_string(styles.fonts.size()));
+  if (auto rc = check_index(font_index, styles.fonts.size(), "fm_styles_get_font", "font_index"); rc != 0) {
+    return rc;
   }
   font_to_c(styles.fonts[font_index], out);
   return 0;
@@ -299,10 +303,8 @@ extern "C" fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_fill: NULL argument");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (fill_index >= styles.fills.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_fill: fill_index out of range",
-        "fill_index=" + std::to_string(fill_index) + " fills_count=" + std::to_string(styles.fills.size()));
+  if (auto rc = check_index(fill_index, styles.fills.size(), "fm_styles_get_fill", "fill_index"); rc != 0) {
+    return rc;
   }
   wb->gradient_stop_scratch.clear();
   fill_to_c(styles.fills[fill_index], out, wb);
@@ -315,10 +317,8 @@ extern "C" fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_i
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_border: NULL argument");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (border_index >= styles.borders.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_border: border_index out of range",
-        "border_index=" + std::to_string(border_index) + " borders_count=" + std::to_string(styles.borders.size()));
+  if (auto rc = check_index(border_index, styles.borders.size(), "fm_styles_get_border", "border_index"); rc != 0) {
+    return rc;
   }
   border_to_c(styles.borders[border_index], out);
   return 0;
@@ -340,10 +340,8 @@ extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, 
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_dxf: NULL argument");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (dxf_index >= styles.dxfs.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_dxf: dxf_index out of range",
-        "dxf_index=" + std::to_string(dxf_index) + " dxfs_count=" + std::to_string(styles.dxfs.size()));
+  if (auto rc = check_index(dxf_index, styles.dxfs.size(), "fm_styles_get_dxf", "dxf_index"); rc != 0) {
+    return rc;
   }
   *out = fm_dxf_record{};
   wb->gradient_stop_scratch.clear();
@@ -392,10 +390,8 @@ extern "C" fm_status_t fm_styles_get_cell_style(fm_workbook_t* wb, uint32_t inde
                              "fm_styles_get_cell_style: NULL argument");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (index >= styles.cell_styles.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_style: index out of range",
-        "index=" + std::to_string(index) + " cell_styles_count=" + std::to_string(styles.cell_styles.size()));
+  if (auto rc = check_index(index, styles.cell_styles.size(), "fm_styles_get_cell_style", "index"); rc != 0) {
+    return rc;
   }
   const formulon::CellStyleRecord& cs = styles.cell_styles[index];
   out->name = cs.name.c_str();
@@ -424,10 +420,8 @@ extern "C" fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t i
                              "fm_styles_get_cell_style_xf: NULL argument");
   }
   const formulon::StylesTable& styles = wb->workbook().styles();
-  if (index >= styles.cell_style_xfs.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_style_xf: index out of range",
-        "index=" + std::to_string(index) + " cell_style_xfs_count=" + std::to_string(styles.cell_style_xfs.size()));
+  if (auto rc = check_index(index, styles.cell_style_xfs.size(), "fm_styles_get_cell_style_xf", "index"); rc != 0) {
+    return rc;
   }
   cell_xf_to_c(styles.cell_style_xfs[index], out);
   // A named-style xf is itself the parent, so it never carries an `xfId`.

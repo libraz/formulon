@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <initializer_list>
 #include <limits>
 #include <new>
 #include <string>
@@ -18,6 +19,7 @@
 #include "num_fmt_locale.h"
 #include "parser/literal_spelling.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "styles.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -123,6 +125,10 @@ bool check_range_count(std::uint32_t n, const char* api) {
 }
 
 fm_status_t check_profile_id(const char* profile_id, const char* api, formulon::ExcelProfile* out) {
+  // The id is echoed into the diagnostic context, which must stay UTF-8.
+  if (auto rc = check_utf8(profile_id, api, "field=profile_id"); rc != 0) {
+    return rc;
+  }
   if (formulon::parse_excel_profile_id(profile_id, out)) {
     return 0;
   }
@@ -201,6 +207,9 @@ fm_status_t value_from_fm(const fm_value_t& in, formulon::Value* out, const char
     case FM_VAL_TEXT:
       if (in.u.text == nullptr) {
         return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "value text is NULL", api);
+      }
+      if (auto rc = check_utf8(in.u.text, api, "field=value"); rc != 0) {
+        return rc;
       }
       *out = formulon::Value::text(in.u.text);
       return 0;
@@ -378,6 +387,9 @@ fm_status_t validate(const fm_cf_rule_t& rule, const char* api) {
       }
     }
   }
+  if (auto rc = check_utf8(api, {rule.text}); rc != 0) {
+    return rc;
+  }
   // The id reaches the file as `<x14:cfRule id="...">` and `<x14:id>`,
   // both of schema type `ST_Guid`. Excel repairs a workbook whose
   // extension block holds anything else, and repairing means dropping
@@ -409,7 +421,10 @@ fm_status_t validate(const fm_data_validation& v, const char* api) {
   if (auto rc = check_enum_domain(v.op, 7, api, "op"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(v.error_style, 2, api, "error_style");
+  if (auto rc = check_enum_domain(v.error_style, 2, api, "error_style"); rc != 0) {
+    return rc;
+  }
+  return check_utf8(api, {v.error_title, v.error_message, v.prompt_title, v.prompt_message});
 }
 
 bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
@@ -427,6 +442,10 @@ bool num_fmt_id_known(const formulon::StylesTable& styles, std::uint16_t id) {
 fm_status_t check_num_fmt_id_text(const formulon::Workbook& wb, const char* text, const char* api) {
   if (text == nullptr || text[0] == '\0') {
     return 0;
+  }
+  // The text is echoed into the diagnostic context, which must stay UTF-8.
+  if (auto rc = check_utf8(text, api, "field=number_format"); rc != 0) {
+    return rc;
   }
   std::uint32_t id = 0;
   for (const char* p = text; *p != '\0'; ++p) {
@@ -455,10 +474,16 @@ fm_status_t validate(const fm_pivot_field_spec_t& spec, const char* api) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "spec->source_name is NULL",
                              std::string(api));
   }
+  if (auto rc = check_utf8(api, {spec.source_name, spec.custom_name}); rc != 0) {
+    return rc;
+  }
   return check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, api, "axis");
 }
 
 fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
+  if (auto rc = check_utf8(api, {spec.name}); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_enum_domain(spec.aggregation, FM_PIVOT_AGG_VARP, api, "aggregation"); rc != 0) {
     return rc;
   }
@@ -466,6 +491,9 @@ fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
 }
 
 fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api) {
+  if (auto rc = check_utf8(api, {spec.field_name, spec.value_text}); rc != 0) {
+    return rc;
+  }
   if (auto rc = check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, api, "axis"); rc != 0) {
     return rc;
   }
@@ -571,6 +599,59 @@ fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, con
 
 namespace {
 
+fm_status_t utf8_error(const char* api, std::string context) {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingUtf8EncodingError,
+                           (std::string(api) + ": text is not valid UTF-8").c_str(), std::move(context));
+}
+
+}  // namespace
+
+fm_status_t check_utf8(std::string_view text, const char* api, std::string_view context) {
+  return formulon::sheet_names::valid_utf8(text) ? 0 : utf8_error(api, std::string(context));
+}
+
+fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::string_view value) {
+  if (formulon::sheet_names::valid_utf8(text)) {
+    return 0;
+  }
+  std::string context(key);
+  context.append("=").append(value);
+  return utf8_error(api, std::move(context));
+}
+
+fm_status_t check_utf8(std::string_view text, const char* api, std::string_view key, std::size_t index) {
+  return formulon::sheet_names::valid_utf8(text) ? 0 : utf8_error(api, std::string(key) + "=" + std::to_string(index));
+}
+
+fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts) {
+  std::size_t index = 0;
+  for (const char* text : texts) {
+    if (text != nullptr) {
+      if (auto rc = check_utf8(text, api, "text_index", index); rc != 0) {
+        return rc;
+      }
+    }
+    ++index;
+  }
+  return 0;
+}
+
+fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index, const char* fn) {
+  return check_index(xf_index, wb->workbook().styles().cell_xfs.size(), fn, "xf_index");
+}
+
+fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::uint32_t index, const char* fn) {
+  if (workbook.sheet(index).view().visibility() != formulon::SheetVisibility::kVisible ||
+      workbook.nearest_visible_sheet(index) != index) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                           (std::string(fn) + ": workbook needs a visible sheet").c_str(),
+                           "index=" + std::to_string(index));
+}
+
+namespace {
+
 bool is_builtin_function_name(std::string_view name) {
   return formulon::eval::resolve_builtin_function_name(name) != nullptr;
 }
@@ -578,8 +659,11 @@ bool is_builtin_function_name(std::string_view name) {
 // Parse check of entered text: whitespace Excel refuses fails it, and so
 // does a stored spelling that does not parse. `*stored` receives the stored
 // spelling.
-fm_status_t check_entered_formula_parses(const char* api, std::string_view formula, std::string context,
+fm_status_t check_entered_formula_parses(const char* api, std::string_view formula, std::string_view context,
                                          std::string* stored) {
+  if (auto rc = check_utf8(formula, api, context); rc != 0) {
+    return rc;
+  }
   *stored =
       formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
   std::string_view body = *stored;
@@ -592,17 +676,18 @@ fm_status_t check_entered_formula_parses(const char* api, std::string_view formu
     return 0;
   }
   return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                           (std::string(api) + ": formula does not parse").c_str(), std::move(context));
+                           (std::string(api) + ": formula does not parse").c_str(), std::string(context));
 }
 
 }  // namespace
 
-fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string context) {
+fm_status_t check_formula_parses(const char* api, std::string_view formula, std::string_view context) {
   std::string stored;
-  return check_entered_formula_parses(api, formula, std::move(context), &stored);
+  return check_entered_formula_parses(api, formula, context, &stored);
 }
 
-fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string context, std::string* out) {
+fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string_view context,
+                                 std::string* out) {
   if (formula.empty()) {
     out->clear();
     return 0;
@@ -610,10 +695,10 @@ fm_status_t check_stored_formula(const char* api, std::string_view formula, std:
   // The parser skips one '=' of its own, so a second one is refused here.
   if (formula.front() == '=' && formula.size() > 1U && formula[1] == '=') {
     return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                             (std::string(api) + ": formula does not parse").c_str(), std::move(context));
+                             (std::string(api) + ": formula does not parse").c_str(), std::string(context));
   }
   std::string stored;
-  if (auto rc = check_entered_formula_parses(api, formula, std::move(context), &stored); rc != 0) {
+  if (auto rc = check_entered_formula_parses(api, formula, context, &stored); rc != 0) {
     return rc;
   }
   if (!stored.empty() && stored.front() == '=') {

@@ -24,6 +24,7 @@
 
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::find_cache_mut;
@@ -228,6 +229,13 @@ extern "C" fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_
     invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
     return 0;
   }
+  if (auto rc = check_utf8("fm_workbook_pivot_cache_set_worksheet_source", {ref, sheet, name}); rc != 0) {
+    return rc;
+  }
+  // A worksheet source replaces whatever source kind the cache was read with,
+  // so the captured `<cacheSource>` type and its other children go with it.
+  cache->mutable_cache_source_attrs().clear();
+  cache->mutable_cache_source_children_xml().clear();
   src.present = true;
   src.ref = ref != nullptr ? ref : "";
   src.sheet = sheet != nullptr ? sheet : "";
@@ -277,6 +285,9 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, std:
   if (wb == nullptr || utf8_name == nullptr || out_field_idx == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_cache_field_add: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_pivot_cache_field_add", {utf8_name}); rc != 0) {
+    return rc;
   }
   formulon::pivot::PivotCache* cache = nullptr;
   if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_field_add", &cache); rc != 0) {
@@ -369,6 +380,9 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_text(fm_wor
   if (utf8 == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_cache_field_add_shared_item_text: utf8 is NULL");
+  }
+  if (auto rc = check_utf8("fm_workbook_pivot_cache_field_add_shared_item_text", {utf8}); rc != 0) {
+    return rc;
   }
   formulon::pivot::PivotCache* cache = nullptr;
   if (fm_status_t rc = resolve_cache_mut(wb, cache_id, "fm_workbook_pivot_cache_field_add_shared_item_text", &cache);
@@ -562,6 +576,9 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb
   if (utf8 == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_cache_record_set_text: utf8 is NULL");
+  }
+  if (auto rc = check_utf8("fm_workbook_pivot_cache_record_set_text", {utf8}); rc != 0) {
+    return rc;
   }
   formulon::pivot::PivotCache* cache = nullptr;
   fm_status_t status = 0;

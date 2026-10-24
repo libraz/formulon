@@ -16,6 +16,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -162,6 +163,9 @@ extern "C" fm_status_t fm_styles_set_table_style(fm_workbook_t* wb, const fm_tab
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_set_table_style: NULL argument");
   }
+  if (auto rc = check_utf8("fm_styles_set_table_style", {style->name}); rc != 0) {
+    return rc;
+  }
   const std::string_view name = style->name;
   if (name.empty() || is_builtin_style_name(name)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -229,6 +233,9 @@ extern "C" fm_status_t fm_styles_remove_table_style(fm_workbook_t* wb, const cha
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_remove_table_style: NULL argument");
   }
+  if (auto rc = check_utf8("fm_styles_remove_table_style", {name}); rc != 0) {
+    return rc;
+  }
   formulon::TableStylesSection& section = wb->workbook().mutable_styles().table_styles;
   const std::size_t index = find_style(section, name);
   if (index >= section.styles.size()) {
@@ -265,6 +272,9 @@ extern "C" fm_status_t fm_styles_set_table_style_defaults(fm_workbook_t* wb, con
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_set_table_style_defaults: wb is NULL");
+  }
+  if (auto rc = check_utf8("fm_styles_set_table_style_defaults", {table_style, pivot_style}); rc != 0) {
+    return rc;
   }
   formulon::TableStylesSection& section = wb->workbook().mutable_styles().table_styles;
   if (table_style != nullptr) {

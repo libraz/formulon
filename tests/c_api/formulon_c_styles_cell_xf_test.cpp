@@ -13,6 +13,7 @@ TEST(FormulonCApiStyles, CellXfIndexDefaultsToZero) {
 TEST(FormulonCApiStyles, CellXfIndexRoundTrips) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(43);
   EXPECT_EQ(fm_cell_set_xf_index(wb.handle, 0, 5, 7, 42), 0);
   uint32_t xf = 0;
   EXPECT_EQ(fm_cell_get_xf_index(wb.handle, 0, 5, 7, &xf), 0);
@@ -497,4 +498,29 @@ TEST(FormulonCApiStyles, ClearedCellKeepsInheritanceAcrossSaveLoad) {
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 0, &style), 0);
   EXPECT_EQ(style.source, 2);
   EXPECT_EQ(style.xf_index, 1U);
+}
+
+TEST(FormulonCApiStyles, AddCellXfDoesNotReuseARecordWithUnmodelledAttributes) {
+  // A loaded record that differs from the request only in an attribute the
+  // model does not represent must not be handed back as a match.
+  for (const bool pivot_button : {true, false}) {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    auto& xfs = wb.handle->workbook().mutable_styles().cell_xfs;
+    formulon::CellXf loaded = xfs[0];
+    loaded.num_fmt_id = 2U;
+    loaded.apply_number_format = true;
+    loaded.extra_attrs = pivot_button ? " pivotButton=\"1\"" : "";
+    xfs.push_back(loaded);
+    fm_cell_xf request{};
+    ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, 1U, &request), 0);
+    uint32_t index = 99U;
+    ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, request, &index), 0) << fm_last_error_message();
+    if (pivot_button) {
+      EXPECT_EQ(index, 2U);
+      EXPECT_TRUE(xfs[index].extra_attrs.empty());
+    } else {
+      EXPECT_EQ(index, 1U);
+    }
+  }
 }

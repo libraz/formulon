@@ -48,10 +48,12 @@ extern "C" void fm_pagination_destroy(fm_pagination_t* pagination) {
 }
 
 extern "C" uint32_t fm_pagination_page_count(const fm_pagination_t* pagination) {
+  clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.page_count;
 }
 
 extern "C" size_t fm_pagination_print_area_count(const fm_pagination_t* pagination) {
+  clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.print_area.size();
 }
 
@@ -90,6 +92,7 @@ fm_status_t break_at(const fm_pagination_t* pagination, size_t index, uint32_t* 
 }  // namespace
 
 extern "C" size_t fm_pagination_horizontal_break_count(const fm_pagination_t* pagination) {
+  clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.h_breaks.size();
 }
 
@@ -100,6 +103,7 @@ extern "C" fm_status_t fm_pagination_horizontal_break_at(const fm_pagination_t* 
 }
 
 extern "C" size_t fm_pagination_vertical_break_count(const fm_pagination_t* pagination) {
+  clear_last_error();
   return pagination == nullptr ? 0U : pagination->result.v_breaks.size();
 }
 

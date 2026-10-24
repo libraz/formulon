@@ -1,6 +1,7 @@
 // Stable C ABI PivotTable definition read-back and data-field naming tests.
 
 #include "formulon_c_pivot_test_helpers.h"
+#include "pivot/pivot_cache.h"
 
 namespace {
 
@@ -661,4 +662,34 @@ TEST(FormulonCApiPivot, LoadedPivotWithoutStyleInfoStaysWithoutIt) {
   EXPECT_EQ(style.show_row_headers, 0);
   EXPECT_EQ(style.show_last_column, 0);
   EXPECT_EQ(SavedPivotXml(loaded.handle).find("<pivotTableStyleInfo"), std::string::npos);
+}
+
+TEST(FormulonCApiPivot, SettingAWorksheetSourceDropsTheCapturedSourceKind) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  formulon::pivot::PivotCache* cache = nullptr;
+  for (const auto& candidate : wb.handle->workbook().mutable_pivot_caches()) {
+    if (candidate->cache_id() == cache_id) {
+      cache = candidate.get();
+    }
+  }
+  ASSERT_NE(cache, nullptr);
+  // As read from a consolidation-sourced cache.
+  cache->mutable_cache_source_attrs() = {{"type", "consolidation"}};
+  cache->mutable_cache_source_children_xml() = "<consolidation><rangeSets count=\"0\"/></consolidation>";
+
+  ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, 1, "A1:B5", "Sheet1", nullptr), 0)
+      << fm_last_error_message();
+  EXPECT_TRUE(cache->cache_source_attrs().empty());
+  EXPECT_TRUE(cache->cache_source_children_xml().empty());
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+  const std::string definition = ExtractZipEntry(std::vector<std::uint8_t>(saved.data, saved.data + saved.len),
+                                                 "xl/pivotCache/pivotCacheDefinition1.xml");
+  EXPECT_NE(definition.find("<cacheSource type=\"worksheet\"><worksheetSource"), std::string::npos) << definition;
+  EXPECT_EQ(definition.find("consolidation"), std::string::npos) << definition;
 }

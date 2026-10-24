@@ -163,6 +163,7 @@ extern "C" void fm_cf_results_destroy(fm_cf_results_t* results) {
 }
 
 extern "C" size_t fm_cf_results_cell_count(const fm_cf_results_t* results) {
+  clear_last_error();
   if (results == nullptr) {
     return 0;
   }

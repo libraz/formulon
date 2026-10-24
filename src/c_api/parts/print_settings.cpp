@@ -46,6 +46,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fragment_within_size_limit;
 using formulon::c_api::parts::FragmentValidation;
@@ -128,6 +129,9 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
       return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, fn,
                                "element=" + std::string(slot.element) + " bytes=" + std::to_string(fragment.size()) +
                                    " limit=" + std::to_string(slot.limit_bytes));
+    }
+    if (auto rc = check_utf8(fragment, fn, "element", slot.element); rc != 0) {
+      return rc;
     }
     const FragmentValidation validation = validate_single_element_fragment(fragment, slot.element);
     if (!validation.valid) {
@@ -629,6 +633,11 @@ extern "C" fm_status_t fm_sheet_set_header_footer(fm_workbook_t* wb, size_t shee
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn, "arg=hf");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, kFn); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8(
+          kFn, {hf->odd_header, hf->odd_footer, hf->even_header, hf->even_footer, hf->first_header, hf->first_footer});
+      rc != 0) {
     return rc;
   }
   SheetPrintSettings& print = wb->workbook().sheet(sheet_index).mutable_print_settings();

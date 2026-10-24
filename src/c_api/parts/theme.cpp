@@ -21,6 +21,7 @@
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
@@ -104,6 +105,11 @@ extern "C" fm_status_t fm_workbook_set_theme_fonts(fm_workbook_t* wb, const fm_t
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_theme_fonts: NULL argument");
   }
+  if (auto rc = check_utf8("fm_workbook_set_theme_fonts",
+                           {fonts->major_latin, fonts->major_east_asian, fonts->minor_latin, fonts->minor_east_asian});
+      rc != 0) {
+    return rc;
+  }
   formulon::ThemeFonts model;
   model.major_latin = fonts->major_latin;
   model.major_ea = fonts->major_east_asian;
@@ -155,6 +161,9 @@ extern "C" fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int3
   if (wb == nullptr || script == nullptr || typeface == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_theme_script_font: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_set_theme_script_font", {script, typeface}); rc != 0) {
+    return rc;
   }
   return finish_status(wb->workbook().set_theme_script_font(major != 0, script, typeface));
 }

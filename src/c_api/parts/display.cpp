@@ -16,6 +16,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
@@ -69,6 +70,9 @@ extern "C" fm_status_t fm_workbook_format_value(const fm_workbook_t* wb, const f
   if (wb == nullptr || value == nullptr || format_code == nullptr || out_text == nullptr || out_status == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_format_value: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_format_value", {format_code}); rc != 0) {
+    return rc;
   }
   formulon::Value v = formulon::Value::blank();
   if (auto rc = value_from_fm(*value, &v, "fm_workbook_format_value"); rc != 0) {

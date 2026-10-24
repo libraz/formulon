@@ -19,6 +19,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_stored_formula;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate;
@@ -88,6 +89,9 @@ extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::uint32_t s
     return rc;
   }
   if (auto rc = check_sheet_rect(hl.row, hl.col, hl.last_row, hl.last_col, "fm_sheet_add_hyperlink"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_sheet_add_hyperlink", {hl.target, hl.location, hl.display, hl.tooltip}); rc != 0) {
     return rc;
   }
   formulon::Hyperlink out;
@@ -329,6 +333,9 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t she
     return rc;
   }
   if (auto rc = check_sheet_coord(row, col, "fm_sheet_set_comment: coordinate out of grid"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_sheet_set_comment", {author, text}); rc != 0) {
     return rc;
   }
   auto& list = wb->workbook().sheet(sheet).mutable_comments();
@@ -600,6 +607,11 @@ extern "C" fm_status_t fm_sheet_set_protection(fm_workbook_t* wb, uint32_t sheet
                              "fm_sheet_set_protection: NULL argument");
   }
   if (auto rc = check_sheet_u32(wb, sheet_index, "fm_sheet_set_protection"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_sheet_set_protection",
+                           {in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password});
+      rc != 0) {
     return rc;
   }
   formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).mutable_protection();

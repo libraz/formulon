@@ -24,6 +24,7 @@ using formulon::c_api::parts::AdhocArrayStash;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
@@ -57,6 +58,9 @@ extern "C" fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, siz
     return rc;
   }
   if (auto rc = check_sheet_rect(row, col, row, col, "fm_workbook_evaluate_formula"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_evaluate_formula", {formula}); rc != 0) {
     return rc;
   }
   // Per-call arena backs any text payload in the result until it is copied
@@ -93,6 +97,9 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* w
     return rc;
   }
   if (auto rc = check_sheet_rect(row, col, row, col, "fm_workbook_evaluate_formula_array"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_evaluate_formula_array", {formula}); rc != 0) {
     return rc;
   }
   // Per-call arena backs any text payload in the evaluated result until it is
@@ -183,6 +190,9 @@ extern "C" fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, 
   if (auto rc =
           check_sheet_rect(anchor_row, anchor_col, anchor_row, anchor_col, "fm_workbook_evaluate_cf_formula: anchor");
       rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_workbook_evaluate_cf_formula", {formula}); rc != 0) {
     return rc;
   }
   // Per-call arena, capped for the same reason as the other ad-hoc entry

@@ -22,6 +22,7 @@
 #include "value.h"
 
 using formulon::c_api::parts::check_profile_id;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::value_from_fm;
@@ -50,6 +51,9 @@ extern "C" fm_status_t fm_text_compare(const char* a, const char* b, const char*
   clear_last_error();
   if (a == nullptr || b == nullptr || profile_id == nullptr || out_order == nullptr) {
     return null_argument(kApi);
+  }
+  if (auto rc = check_utf8(kApi, {a, b}); rc != 0) {
+    return rc;
   }
   formulon::ExcelProfile profile;
   if (auto rc = check_profile_id(profile_id, kApi, &profile); rc != 0) {

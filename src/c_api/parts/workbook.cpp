@@ -26,8 +26,10 @@
 #include "value.h"
 
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_stored_formula;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::finish_status;
@@ -285,7 +287,10 @@ extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8
   if (wb == nullptr || utf8_name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_add_sheet: NULL argument");
   }
-  auto r = wb->workbook().add_sheet_validated(std::string(utf8_name));
+  if (auto rc = check_utf8("fm_workbook_add_sheet", {utf8_name}); rc != 0) {
+    return rc;
+  }
+  auto r = wb->workbook().add_sheet_entered(std::string(utf8_name));
   if (!r) {
     return set_last_error(r.error());
   }
@@ -340,6 +345,12 @@ extern "C" fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t inde
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_remove_sheet: wb is NULL");
   }
+  // Range and last-sheet refusals stay with `Workbook::remove_sheet`.
+  if (index < wb->workbook().sheet_count() && wb->workbook().sheet_count() > 1U) {
+    if (auto rc = check_keeps_visible_sheet(wb->workbook(), index, "fm_workbook_remove_sheet"); rc != 0) {
+      return rc;
+    }
+  }
   auto r = wb->workbook().remove_sheet(index);
   if (!r) {
     return set_last_error(r.error());
@@ -357,14 +368,21 @@ extern "C" fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t inde
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_rename_sheet: NULL argument");
   }
+  if (auto rc = check_utf8("fm_workbook_rename_sheet", {new_name}); rc != 0) {
+    return rc;
+  }
   return finish_status(wb->workbook().rename_sheet(index, std::string(new_name)));
 }
 
 namespace {
 
-// Shared entry check of the defined-name setters: a non-empty formula must parse,
-// and is stored without its leading '='. An empty one removes the name.
+// Shared entry check of the defined-name setters: the name must be UTF-8, a
+// non-empty formula must parse, and is stored without its leading '='. An
+// empty one removes the name.
 fm_status_t check_defined_name_formula(const char* fn, const char* name, const char* formula, std::string* out) {
+  if (auto rc = check_utf8(fn, {name}); rc != 0) {
+    return rc;
+  }
   return check_stored_formula(fn, formula, "name=" + std::string(name), out);
 }
 
@@ -403,6 +421,9 @@ extern "C" fm_status_t fm_workbook_set_defined_name_attrs(fm_workbook_t* wb, con
   if (wb == nullptr || name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_defined_name_attrs: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_set_defined_name_attrs", {name, comment}); rc != 0) {
+    return rc;
   }
   // Both setters fail only on a missing name, so the first one reports it
   // before anything is changed.

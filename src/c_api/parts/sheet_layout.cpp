@@ -31,18 +31,22 @@
 using formulon::drop_stateless_columns;
 using formulon::overlay_column_span;
 using formulon::row_override_is_empty;
+using formulon::c_api::parts::check_cell_xf_index;
 using formulon::c_api::parts::check_column_span;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_keeps_visible_sheet;
 using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_row_span;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::kMaxOutlineLevel;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::validate_single_element_fragment;
@@ -63,16 +67,6 @@ fm_status_t check_sheet_row_span(const fm_workbook_t* wb, size_t sheet_index, ui
     return rc;
   }
   return check_row_span(first, last, fn);
-}
-
-fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::uint32_t xf_index, const char* fn) {
-  const std::size_t count = wb->workbook().styles().cell_xfs.size();
-  if (static_cast<std::size_t>(xf_index) < count) {
-    return 0;
-  }
-  const std::string message = std::string(fn) + ": xf_index out of range";
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, message.c_str(),
-                           "xf_index=" + std::to_string(xf_index) + " cell_xfs_count=" + std::to_string(count));
 }
 
 }  // namespace
@@ -205,6 +199,9 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last, "fm_sheet_set_column_outline"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_index(level, kMaxOutlineLevel + 1U, "fm_sheet_set_column_outline", "level"); rc != 0) {
+    return rc;
+  }
   overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
                       [level](formulon::ColumnLayout& entry) { entry.outline_level = level; });
   return 0;
@@ -303,6 +300,9 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_row_index(row, "fm_sheet_set_row_outline"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_index(level, kMaxOutlineLevel + 1U, "fm_sheet_set_row_outline", "level"); rc != 0) {
+    return rc;
+  }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   formulon::RowLayout* entry =
       &formulon::upsert_row_override(sheet.mutable_layout(), row, sheet.format_defaults().zero_height);
@@ -374,10 +374,7 @@ fm_status_t resolve_style_rect(const fm_workbook_t* wb, size_t sheet_index, uint
   out->last_row = std::max(first_row, last_row);
   out->first_col = std::min(first_col, last_col);
   out->last_col = std::max(first_col, last_col);
-  if (out->last_row >= formulon::Sheet::kMaxRows || out->last_col >= formulon::Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, fn);
-  }
-  return 0;
+  return check_sheet_rect(out->first_row, out->first_col, out->last_row, out->last_col, fn);
 }
 
 }  // namespace
@@ -509,6 +506,12 @@ extern "C" fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_freeze"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_index(freeze_rows, formulon::Sheet::kMaxRows, "fm_sheet_set_freeze", "freeze_rows"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(freeze_cols, formulon::Sheet::kMaxCols, "fm_sheet_set_freeze", "freeze_cols"); rc != 0) {
+    return rc;
+  }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
   view.set_freeze(freeze_rows, freeze_cols);
   return 0;
@@ -534,6 +537,13 @@ extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_tab_hidden"); rc != 0) {
     return rc;
   }
+  if (hidden != 0) {
+    if (auto rc = check_keeps_visible_sheet(wb->workbook(), static_cast<std::uint32_t>(sheet_index),
+                                            "fm_sheet_set_tab_hidden");
+        rc != 0) {
+      return rc;
+    }
+  }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
   if (hidden != 0) {
     // A sheet already loaded as very-hidden stays that way: this bool
@@ -557,6 +567,13 @@ extern "C" fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_i
   if (visibility < static_cast<int32_t>(FM_SHEET_VISIBLE) || visibility > static_cast<int32_t>(FM_SHEET_VERY_HIDDEN)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_set_visibility: unknown visibility", "visibility=" + std::to_string(visibility));
+  }
+  if (visibility != static_cast<int32_t>(FM_SHEET_VISIBLE)) {
+    if (auto rc = check_keeps_visible_sheet(wb->workbook(), static_cast<std::uint32_t>(sheet_index),
+                                            "fm_sheet_set_visibility");
+        rc != 0) {
+      return rc;
+    }
   }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
   view.set_visibility(static_cast<formulon::SheetVisibility>(visibility));
@@ -736,6 +753,9 @@ extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sh
   }
   const std::string fragment(xml);
   if (!fragment.empty()) {
+    if (auto rc = check_utf8(fragment, "fm_sheet_set_auto_filter_xml", "element=autoFilter"); rc != 0) {
+      return rc;
+    }
     const FragmentValidation validation = validate_single_element_fragment(fragment, "autoFilter");
     if (!validation.valid) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -807,6 +827,9 @@ extern "C" fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_in
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_view_mode: NULL mode");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_view_mode"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_sheet_set_view_mode", {mode}); rc != 0) {
     return rc;
   }
   wb->workbook().sheet(sheet_index).mutable_view().view_mode = mode;

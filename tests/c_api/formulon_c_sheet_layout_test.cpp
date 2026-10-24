@@ -112,6 +112,8 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
 TEST(FormulonCApiSheetLayout, SetViewSetters) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible"), 0);
   ASSERT_EQ(fm_sheet_set_zoom(wb.handle, 0, 175U), 0);
   ASSERT_EQ(fm_sheet_set_freeze(wb.handle, 0, 4U, 2U), 0);
   ASSERT_EQ(fm_sheet_set_tab_hidden(wb.handle, 0, 1), 0);
@@ -127,6 +129,8 @@ TEST(FormulonCApiSheetLayout, SetViewSetters) {
 TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible"), 0);
   fm_sheet_view_t v{};
 
   // The state the bool setter cannot reach in either direction.
@@ -152,6 +156,8 @@ TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {
 TEST(FormulonCApiSheetLayout, SetTabHiddenDoesNotDemoteVeryHidden) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible"), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0);
 
   // "Hidden" says nothing a very-hidden sheet does not already satisfy, so
@@ -171,6 +177,8 @@ TEST(FormulonCApiSheetLayout, SetTabHiddenDoesNotDemoteVeryHidden) {
 TEST(FormulonCApiSheetLayout, SetVisibilityRejectsUnknownStateAndLeavesTheSheet) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // A workbook keeps one visible sheet, so sheet 0 can only be hidden beside another.
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Visible"), 0);
   ASSERT_EQ(fm_sheet_set_visibility(wb.handle, 0, FM_SHEET_VERY_HIDDEN), 0);
 
   EXPECT_EQ(fm_sheet_set_visibility(wb.handle, 0, 3), kInvalidArgument);

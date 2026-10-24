@@ -164,6 +164,7 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 #
 #   direct_size_t:
 #       extern "C" size_t NAME(const fm_workbook_t* wb) {
+#         clear_last_error();
 #         if (wb == nullptr) {
 #           return 0;
 #         }
@@ -201,6 +202,7 @@ def _select_body_template(body: str, templates: Dict[str, str]) -> str:
 
 _CAPI_BODY_DIRECT_SIZE_T = """\
 extern "C" size_t {name}(const fm_workbook_t* wb) {{
+  clear_last_error();
   if (wb == nullptr) {{
     return 0;
   }}

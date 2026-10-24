@@ -50,6 +50,7 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -117,6 +118,9 @@ extern "C" fm_status_t fm_function_metadata(const char* name, fm_function_metada
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_metadata: NULL argument");
   }
   *out = fm_function_metadata_t{};
+  if (auto rc = check_utf8("fm_function_metadata", {name}); rc != 0) {
+    return rc;
+  }
   const auto& reg = formulon::eval::default_registry();
   const auto* def = reg.lookup(std::string_view(name));
   if (def == nullptr) {
@@ -176,6 +180,9 @@ namespace {
 fm_status_t resolve_function_name(const char* fn, const char* name_field, const char* name, const char* profile_id,
                                   bool localize, const char** out) {
   *out = nullptr;
+  if (auto rc = check_utf8(fn, {name}); rc != 0) {
+    return rc;
+  }
   formulon::ExcelProfile profile;
   if (auto rc = check_profile_id(profile_id, fn, &profile); rc != 0) {
     return rc;

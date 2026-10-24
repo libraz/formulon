@@ -15,6 +15,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
@@ -340,9 +341,8 @@ extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const
                              "fm_workbook_set_excel_profile_id: NULL argument");
   }
   formulon::ExcelProfile profile;
-  if (!formulon::parse_excel_profile_id(profile_id, &profile)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_excel_profile_id: unknown profile");
+  if (auto rc = check_profile_id(profile_id, "fm_workbook_set_excel_profile_id", &profile); rc != 0) {
+    return rc;
   }
   formulon::Workbook& book = wb->workbook();
   const bool changed = !formulon::same_profile(book.excel_profile(), profile);

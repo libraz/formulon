@@ -17,6 +17,7 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -37,6 +38,9 @@ fm_status_t mentions_from_fm(const fm_mention* mentions, uint32_t count, const c
                              "mention_count=" + std::to_string(count));
   }
   for (uint32_t i = 0; i < count; ++i) {
+    if (auto rc = check_utf8(api, {mentions[i].person_id, mentions[i].mention_id}); rc != 0) {
+      return rc;
+    }
     formulon::Mention m;
     m.person_id = text_or_empty(mentions[i].person_id);
     m.mention_id = text_or_empty(mentions[i].mention_id);
@@ -122,6 +126,11 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
   }
+  if (auto rc =
+          check_utf8(kApi, {comment->id, comment->person_id, comment->created, comment->text, comment->parent_id});
+      rc != 0) {
+    return rc;
+  }
   formulon::ThreadedComment model;
   if (auto rc = mentions_from_fm(comment->mentions, comment->mention_count, kApi, &model.mentions); rc != 0) {
     return rc;
@@ -149,6 +158,9 @@ extern "C" fm_status_t fm_sheet_edit_threaded_comment(fm_workbook_t* wb, size_t 
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8(kApi, {id, text}); rc != 0) {
+    return rc;
+  }
   std::vector<formulon::Mention> model;
   if (auto rc = mentions_from_fm(mentions, mention_count, kApi, &model); rc != 0) {
     return rc;
@@ -166,6 +178,9 @@ extern "C" fm_status_t fm_sheet_set_thread_resolved(fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_thread_resolved"); rc != 0) {
     return rc;
   }
+  if (auto rc = check_utf8("fm_sheet_set_thread_resolved", {thread_id}); rc != 0) {
+    return rc;
+  }
   return forward(wb->workbook().set_thread_resolved(sheet_index, thread_id, done != 0));
 }
 
@@ -176,6 +191,9 @@ extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_
                              "fm_sheet_remove_threaded_comment: NULL id");
   }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_threaded_comment"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8("fm_sheet_remove_threaded_comment", {id}); rc != 0) {
     return rc;
   }
   return forward(wb->workbook().remove_threaded_comment(sheet_index, id));
@@ -214,6 +232,11 @@ extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person
   if (wb == nullptr || person == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_add_person: NULL argument");
   }
+  if (auto rc = check_utf8("fm_workbook_add_person",
+                           {person->id, person->display_name, person->user_id, person->provider_id});
+      rc != 0) {
+    return rc;
+  }
   formulon::Person model;
   model.id = text_or_empty(person->id);
   model.display_name = text_or_empty(person->display_name);
@@ -227,6 +250,9 @@ extern "C" fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* 
   if (wb == nullptr || id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_remove_person: NULL argument");
+  }
+  if (auto rc = check_utf8("fm_workbook_remove_person", {id}); rc != 0) {
+    return rc;
   }
   return forward(wb->workbook().remove_person(id));
 }

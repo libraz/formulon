@@ -15,6 +15,7 @@
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -34,6 +35,9 @@ fm_status_t to_spec(const fm_slicer& slicer, const char* api, formulon::SlicerSp
     if (auto rc = check_enum_domain(slicer.cross_filter, FM_SLICER_CROSS_NONE, api, "cross_filter"); rc != 0) {
       return rc;
     }
+  }
+  if (auto rc = check_utf8(api, {slicer.name, slicer.caption, slicer.style}); rc != 0) {
+    return rc;
   }
   spec.name = slicer.name != nullptr ? slicer.name : "";
   spec.caption = slicer.caption != nullptr ? slicer.caption : "";
