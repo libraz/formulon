@@ -106,10 +106,6 @@ struct LiteralOperand {
 /// operand shapes via `parse_shift_evaluate`.
 std::optional<LiteralOperand> parse_literal(const std::string& source);
 
-/// Lifts a literal operand to a double. Text returns 0.0; callers must
-/// check `kind` before reaching this branch.
-double literal_as_number(const LiteralOperand& operand);
-
 /// Three-way compare of `cell` against a literal operand. Returns
 /// `nullopt` when the kinds are incompatible (e.g. text rule against a
 /// numeric cell, any rule against an error cell).

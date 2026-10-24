@@ -891,5 +891,109 @@ TEST(CfOracleSmoke, TimePeriodNextMonthViaExpression) {
   RunTimePeriodExpressionCase(values, "AND(YEAR(A1)=2026,MONTH(A1)=6)", 29u, "time_period_next_month_via_expression");
 }
 
+// ---------------------------------------------------------------------------
+// Cell Value (cellIs) rules over mixed value kinds.
+// Mirrors cases_cf/cf_smoke.yaml :: cellis_*_mixed_kinds. The sheet is
+// A1:A8 = [5, blank, 20, "abc", TRUE, FALSE, 0, "0" (text)], plus A9 = 1
+// when `with_one` is set; the expected matches come from the golden.
+// ---------------------------------------------------------------------------
+
+void RunCellIsMixedKindsCase(CellIsOperator op, const char* formula1, const char* formula2, std::uint32_t dxf_id,
+                             bool with_one, std::string_view case_id) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(5.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(20.0));
+  harness.sheet.set_cell_value(3, 0, Value::text("abc"));
+  harness.sheet.set_cell_value(4, 0, Value::boolean(true));
+  harness.sheet.set_cell_value(5, 0, Value::boolean(false));
+  harness.sheet.set_cell_value(6, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(7, 0, Value::text("0"));
+  if (with_one) {
+    harness.sheet.set_cell_value(8, 0, Value::number(1.0));
+  }
+  const std::uint32_t last_row = with_one ? 8U : 7U;
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, last_row, 0));
+  CFRule rule;
+  rule.type = RuleType::CellIs;
+  rule.priority = 1;
+  rule.dxf_id = dxf_id;
+  rule.op = op;
+  rule.formula1 = formula1;
+  if (formula2 != nullptr) {
+    rule.formula2 = formula2;
+  }
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, last_row, 0), host).value();
+
+  VerifyAgainstGolden(case_id, matches);
+}
+
+TEST(CfOracleSmoke, CellIsLessThan10MixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::LessThan, "10", nullptr, 30u, false, "cellis_less_than_10_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsEqual0MixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::Equal, "0", nullptr, 31u, false, "cellis_equal_0_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsGreaterThan10MixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::GreaterThan, "10", nullptr, 32u, false, "cellis_greater_than_10_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsNotEqual0MixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::NotEqual, "0", nullptr, 33u, false, "cellis_not_equal_0_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsBetween0And10MixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::Between, "0", "10", 34u, false, "cellis_between_0_10_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsEqual1MixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::Equal, "1", nullptr, 35u, true, "cellis_equal_1_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsGreaterThanTextAMixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::GreaterThan, "\"a\"", nullptr, 36u, false,
+                          "cellis_greater_than_text_a_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsEqualText5VsNumber) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(5.0));
+  harness.sheet.set_cell_value(1, 0, Value::text("5"));
+
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 1, 0));
+  CFRule rule;
+  rule.type = RuleType::CellIs;
+  rule.priority = 1;
+  rule.dxf_id = 37u;
+  rule.op = CellIsOperator::Equal;
+  rule.formula1 = "\"5\"";
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 0), host).value();
+
+  VerifyAgainstGolden("cellis_equal_text_5_vs_number", matches);
+}
+
+TEST(CfOracleSmoke, CellIsLessThanTextAMixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::LessThan, "\"a\"", nullptr, 38u, false,
+                          "cellis_less_than_text_a_mixed_kinds");
+}
+
+TEST(CfOracleSmoke, CellIsEqualTrueMixedKinds) {
+  RunCellIsMixedKindsCase(CellIsOperator::Equal, "TRUE", nullptr, 39u, false, "cellis_equal_true_mixed_kinds");
+}
+
 }  // namespace
 }  // namespace formulon::cf

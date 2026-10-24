@@ -649,6 +649,386 @@
           ]
         }
       ]
+    },
+    {
+      "id": "cellis_less_than_10_mixed_kinds",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 30
+            }
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 30
+            }
+          ]
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_equal_0_mixed_kinds",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 31
+            }
+          ]
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 31
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_greater_than_10_mixed_kinds",
+      "cells": [
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 32
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 32
+            }
+          ]
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 32
+            }
+          ]
+        },
+        {
+          "row": 5,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 32
+            }
+          ]
+        },
+        {
+          "row": 7,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 32
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_not_equal_0_mixed_kinds",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 33
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 33
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 33
+            }
+          ]
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 33
+            }
+          ]
+        },
+        {
+          "row": 5,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 33
+            }
+          ]
+        },
+        {
+          "row": 7,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 33
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_between_0_10_mixed_kinds",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 34
+            }
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 34
+            }
+          ]
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 34
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_equal_1_mixed_kinds",
+      "cells": [
+        {
+          "row": 8,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 35
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_greater_than_text_a_mixed_kinds",
+      "cells": [
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 36
+            }
+          ]
+        },
+        {
+          "row": 4,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 36
+            }
+          ]
+        },
+        {
+          "row": 5,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 36
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_equal_text_5_vs_number",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 37
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_less_than_text_a_mixed_kinds",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 38
+            }
+          ]
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 38
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 38
+            }
+          ]
+        },
+        {
+          "row": 6,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 38
+            }
+          ]
+        },
+        {
+          "row": 7,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 38
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cellis_equal_true_mixed_kinds",
+      "cells": [
+        {
+          "row": 4,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 39
+            }
+          ]
+        }
+      ]
     }
   ]
 }

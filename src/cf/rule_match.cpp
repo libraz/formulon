@@ -137,16 +137,15 @@ bool is_cf_blank(const Value& cell_value) {
 // The negative form (`NotContainsText`) is the predicate complement: a
 // cell that does not contain the needle matches. A non-text cell never
 // contains a non-empty needle, so the negation fires on numeric / blank
-// cells — Excel highlights them. Error cells have no displayed text the
-// rule can search, so the whole family is inert on them.
+// cells — Excel highlights them. Error cells follow the stored formulas:
+// `ISERROR(SEARCH(..))` is TRUE for an error, so NotContainsText matches,
+// while the other three propagate the error and do not match.
 bool match_text_rule(const CFRule& rule, const Value& cell_value) {
   if (!rule.text.has_value()) {
     return false;
   }
-  // Errors carry no searchable display text; neither the positive nor the
-  // negative forms apply to them (Excel leaves error cells unhighlighted).
   if (cell_value.is_error()) {
-    return false;
+    return rule.type == RuleType::NotContainsText;
   }
   const auto coerced = eval::coerce_to_text(cell_value);
   if (!coerced.has_value()) {
@@ -395,7 +394,8 @@ bool match_rule(const CFRule& rule, const Value& cell_value) {
     case RuleType::ContainsBlanks:
       return is_cf_blank(cell_value);
     case RuleType::NotContainsBlanks:
-      return !is_cf_blank(cell_value);
+      // `LEN(TRIM(cell))>0` is an error on an error cell, so no match.
+      return !cell_value.is_error() && !is_cf_blank(cell_value);
     case RuleType::ContainsErrors:
       return cell_value.is_error();
     case RuleType::NotContainsErrors:

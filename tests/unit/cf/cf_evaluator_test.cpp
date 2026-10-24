@@ -60,7 +60,8 @@ TEST(CFEvaluator, NotContainsBlanksIsComplementOfContainsBlanks) {
   EXPECT_TRUE(match_rule(r, Value::number(1.0)));
   EXPECT_TRUE(match_rule(r, Value::text("x")));
   EXPECT_TRUE(match_rule(r, Value::boolean(true)));
-  EXPECT_TRUE(match_rule(r, Value::error(ErrorCode::Div0)));
+  // LEN(TRIM(#DIV/0!))>0 is an error, so the cell is not formatted.
+  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::Div0)));
 }
 
 TEST(CFEvaluator, ContainsErrorsMatchesAnyError) {
@@ -249,36 +250,86 @@ TEST(CFEvaluator, CellIsBooleanLiteral) {
   EXPECT_TRUE(match_rule(r, Value::boolean(false)));
 }
 
-TEST(CFEvaluator, CellIsBoolAgainstNumberLiteralCoercesToZeroOne) {
-  // Excel treats BOOLs as 1/0 in cellIs numeric comparisons.
+TEST(CFEvaluator, CellIsBoolIsNotLiftedToNumber) {
+  // A boolean is not the number 1 / 0: `= 1` misses TRUE and `= 0` misses FALSE.
   CFRule r = MakeRule(RuleType::CellIs);
   r.op = CellIsOperator::Equal;
   r.formula1 = "1";
-  EXPECT_TRUE(match_rule(r, Value::boolean(true)));
-  EXPECT_FALSE(match_rule(r, Value::boolean(false)));
+  EXPECT_FALSE(match_rule(r, Value::boolean(true)));
+  EXPECT_TRUE(match_rule(r, Value::number(1.0)));
 
   r.formula1 = "0";
-  EXPECT_FALSE(match_rule(r, Value::boolean(true)));
-  EXPECT_TRUE(match_rule(r, Value::boolean(false)));
+  EXPECT_FALSE(match_rule(r, Value::boolean(false)));
 }
 
-TEST(CFEvaluator, CellIsCrossKindReturnsFalse) {
-  // PR7 takes the conservative stance that cross-kind comparisons
-  // don't fire. Number rule against text/error/blank cells, and text
-  // rule against numeric cells, all return false.
-  CFRule num_rule = MakeRule(RuleType::CellIs);
-  num_rule.op = CellIsOperator::Equal;
-  num_rule.formula1 = "10";
-  EXPECT_FALSE(match_rule(num_rule, Value::text("10")));
-  EXPECT_FALSE(match_rule(num_rule, Value::error(ErrorCode::Div0)));
-  EXPECT_FALSE(match_rule(num_rule, Value::blank()));
+// Cell Value rules follow the worksheet comparison operators: blank is 0
+// against a number and "" against text, numbers < text < booleans, and there
+// is no text/number coercion. Error cells never match.
+TEST(CFEvaluator, CellIsFollowsWorksheetComparison) {
+  const eval::ScopedEvalProfile scope(mac_365_en_us_profile());
+  const auto rule = [](CellIsOperator op, const char* f1) {
+    CFRule r = MakeRule(RuleType::CellIs);
+    r.op = op;
+    r.formula1 = f1;
+    return r;
+  };
+  const Value blank = Value::blank();
 
-  CFRule text_rule = MakeRule(RuleType::CellIs);
-  text_rule.op = CellIsOperator::Equal;
-  text_rule.formula1 = "\"hello\"";
-  EXPECT_FALSE(match_rule(text_rule, Value::number(0.0)));
-  EXPECT_FALSE(match_rule(text_rule, Value::error(ErrorCode::Value)));
-  EXPECT_FALSE(match_rule(text_rule, Value::blank()));
+  const CFRule lt10 = rule(CellIsOperator::LessThan, "10");
+  EXPECT_TRUE(match_rule(lt10, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(lt10, blank));
+  EXPECT_TRUE(match_rule(lt10, Value::number(0.0)));
+  EXPECT_FALSE(match_rule(lt10, Value::number(20.0)));
+  EXPECT_FALSE(match_rule(lt10, Value::text("abc")));
+  EXPECT_FALSE(match_rule(lt10, Value::boolean(false)));
+
+  const CFRule eq0 = rule(CellIsOperator::Equal, "0");
+  EXPECT_TRUE(match_rule(eq0, blank));
+  EXPECT_TRUE(match_rule(eq0, Value::number(0.0)));
+  EXPECT_FALSE(match_rule(eq0, Value::text("0")));
+
+  const CFRule gt10 = rule(CellIsOperator::GreaterThan, "10");
+  EXPECT_TRUE(match_rule(gt10, Value::number(20.0)));
+  EXPECT_TRUE(match_rule(gt10, Value::text("abc")));
+  EXPECT_TRUE(match_rule(gt10, Value::text("0")));
+  EXPECT_TRUE(match_rule(gt10, Value::boolean(true)));
+  EXPECT_TRUE(match_rule(gt10, Value::boolean(false)));
+  EXPECT_FALSE(match_rule(gt10, blank));
+
+  const CFRule ne0 = rule(CellIsOperator::NotEqual, "0");
+  EXPECT_TRUE(match_rule(ne0, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(ne0, Value::text("0")));
+  EXPECT_TRUE(match_rule(ne0, Value::boolean(false)));
+  EXPECT_FALSE(match_rule(ne0, blank));
+
+  CFRule between = rule(CellIsOperator::Between, "0");
+  between.formula2 = "10";
+  EXPECT_TRUE(match_rule(between, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(between, blank));
+  EXPECT_FALSE(match_rule(between, Value::text("abc")));
+
+  EXPECT_TRUE(match_rule(rule(CellIsOperator::Equal, "TRUE"), Value::boolean(true)));
+  EXPECT_FALSE(match_rule(rule(CellIsOperator::Equal, "TRUE"), Value::number(1.0)));
+
+  const CFRule gt_a = rule(CellIsOperator::GreaterThan, "\"a\"");
+  EXPECT_TRUE(match_rule(gt_a, Value::text("abc")));
+  EXPECT_TRUE(match_rule(gt_a, Value::boolean(true)));
+  EXPECT_TRUE(match_rule(gt_a, Value::boolean(false)));
+  EXPECT_FALSE(match_rule(gt_a, Value::number(5.0)));
+
+  const CFRule lt_a = rule(CellIsOperator::LessThan, "\"a\"");
+  EXPECT_TRUE(match_rule(lt_a, Value::number(5.0)));
+  EXPECT_TRUE(match_rule(lt_a, blank));
+  EXPECT_TRUE(match_rule(lt_a, Value::text("0")));
+  EXPECT_FALSE(match_rule(lt_a, Value::boolean(true)));
+
+  const CFRule eq_text5 = rule(CellIsOperator::Equal, "\"5\"");
+  EXPECT_TRUE(match_rule(eq_text5, Value::text("5")));
+  EXPECT_FALSE(match_rule(eq_text5, Value::number(5.0)));
+
+  for (const CFRule* r : {&lt10, &eq0, &gt10, &ne0, &gt_a}) {
+    EXPECT_FALSE(match_rule(*r, Value::error(ErrorCode::Div0)));
+  }
 }
 
 TEST(CFEvaluator, CellIsMissingOperatorReturnsFalse) {
@@ -442,8 +493,14 @@ TEST(CFEvaluator, NotContainsTextMatchesNonTextCellLackingNeedle) {
   EXPECT_FALSE(match_rule(digit, Value::number(42.0)));  // "42" contains "2"
   EXPECT_TRUE(match_rule(digit, Value::number(99.0)));   // "99" lacks "2"
 
-  // Error cells carry no searchable display text; neither form applies.
-  EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA)));
+  // ISERROR(SEARCH(..)) is TRUE for an error cell; the other text forms
+  // propagate the error and do not match.
+  EXPECT_TRUE(match_rule(r, Value::error(ErrorCode::NA)));
+  for (const RuleType type : {RuleType::ContainsText, RuleType::BeginsWith, RuleType::EndsWith}) {
+    CFRule positive = MakeRule(type);
+    positive.text = "foo";
+    EXPECT_FALSE(match_rule(positive, Value::error(ErrorCode::NA)));
+  }
 }
 
 TEST(CFEvaluator, BeginsWithMatchesPrefix) {

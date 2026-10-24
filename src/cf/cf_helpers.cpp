@@ -118,62 +118,30 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
   return std::nullopt;
 }
 
-double literal_as_number(const LiteralOperand& operand) {
-  switch (operand.kind) {
-    case LiteralOperand::Kind::Number:
-      return operand.number_value;
-    case LiteralOperand::Kind::Bool:
-      return operand.bool_value ? 1.0 : 0.0;
-    case LiteralOperand::Kind::Text:
-      return 0.0;  // Caller must check kinds before reaching this branch.
-  }
-  return 0.0;
-}
-
 std::optional<int> compare_cell_to_literal(const Value& cell, const LiteralOperand& operand) {
-  if (cell.is_error() || cell.is_blank()) {
+  if (cell.is_error()) {
     return std::nullopt;
   }
 
-  // Build a `Value` view of the operand and route the comparison through the
-  // evaluator's shared `compare_values` so the cellIs rule sees exactly the
-  // ordering / case-folding the engine applies to the `=` / `<` / `>`
-  // operators. `LiteralOperand` owns its text payload, so the non-owning
-  // `Value::text` view is valid for the duration of this call.
+  // The cellIs rule is the worksheet comparison `cell <op> operand`, so it
+  // routes through the evaluator's `compare_values`: blank is 0 against a
+  // number and "" against text, and numbers < text < booleans. `LiteralOperand`
+  // owns its text payload, so the non-owning `Value::text` view is valid for
+  // the duration of this call.
+  Value rhs = Value::blank();
   switch (operand.kind) {
-    case LiteralOperand::Kind::Text: {
-      // A text operand only meaningfully orders against a text cell; a
-      // numeric / boolean cell leaves the rule inactive (Excel does not
-      // cross-coerce here).
-      if (!cell.is_text()) {
-        return std::nullopt;
-      }
-      bool unordered = false;
-      return eval::compare_values(cell, Value::text(operand.text_value), &unordered);
-    }
+    case LiteralOperand::Kind::Text:
+      rhs = Value::text(operand.text_value);
+      break;
     case LiteralOperand::Kind::Number:
-    case LiteralOperand::Kind::Bool: {
-      // A numeric / boolean operand orders against numeric or boolean cells;
-      // a text cell leaves the rule inactive. Both sides are lifted onto the
-      // numeric line (Bool -> 1/0) so a Bool cell and a Number operand (or
-      // vice versa) order by value — Excel compares cellIs numeric operands
-      // by magnitude, not by `compare_values`'s cross-kind Number < Bool
-      // ranking.
-      if (!cell.is_number() && !cell.is_boolean()) {
-        return std::nullopt;
-      }
-      const double cell_num = cell.is_number() ? cell.as_number() : (cell.as_boolean() ? 1.0 : 0.0);
-      const double lit_num = literal_as_number(operand);
-      if (cell_num < lit_num) {
-        return -1;
-      }
-      if (cell_num > lit_num) {
-        return 1;
-      }
-      return 0;
-    }
+      rhs = Value::number(operand.number_value);
+      break;
+    case LiteralOperand::Kind::Bool:
+      rhs = Value::boolean(operand.bool_value);
+      break;
   }
-  return std::nullopt;
+  bool unordered = false;
+  return eval::compare_values(cell, rhs, &unordered);
 }
 
 std::optional<LiteralOperand> value_to_operand(const Value& evaluated) {
