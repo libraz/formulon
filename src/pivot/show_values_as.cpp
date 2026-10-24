@@ -578,20 +578,6 @@ static void apply_transforms(const PivotTable& table, const PivotCache& cache, P
         }
       }
     }
-    // Grand totals switched off leave no slot: the total is still the sum of the leaf cells.
-    if (slot(result, df_idx, rows.lines[rows.grand], cols.lines[cols.grand]) == nullptr) {
-      Cell total;
-      for (std::size_t r = 0; r < row_leaves; ++r) {
-        for (std::size_t c = 0; c < col_leaves; ++c) {
-          const Cell& x = grid.n[r][c];
-          if (x.num()) {
-            total = total.blank() ? x : make_num(total.n + x.n);
-          }
-        }
-      }
-      grid.n[rows.grand][cols.grand] = total;
-    }
-
     for (std::size_t ri = 0; ri < rows.lines.size(); ++ri) {
       for (std::size_t ci = 0; ci < cols.lines.size(); ++ci) {
         Value* v = slot(result, df_idx, rows.lines[ri], cols.lines[ci]);

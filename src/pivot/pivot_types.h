@@ -508,9 +508,9 @@ inline constexpr std::int32_t kValuesFieldPosition = -2;
 ///     field's siblings.
 ///
 /// When the show-as mode requires the grand total (`PercentOfTotal`,
-/// `Index`) but the table has both `grand_totals_rows == false` and
-/// `grand_totals_cols == false`, the transform falls back to recomputing
-/// the total over the surviving values matrix.
+/// `Index`) the denominator is the whole-table aggregate re-aggregated from
+/// the records with the data field's own aggregation, whether or not the
+/// grand-total strips are displayed.
 enum class ShowValuesAs : std::uint8_t {
   Normal = 0,
   PercentOfRow = 1,

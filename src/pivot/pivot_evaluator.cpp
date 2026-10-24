@@ -660,8 +660,10 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
 
   // 6. Grand totals, one slot per data field. The legacy single-value
-  // `grand_total` mirrors slot 0 for existing GETPIVOTDATA callers.
-  if ((table.grand_totals_rows() || table.grand_totals_cols()) && data_field_count > 0) {
+  // `grand_total` mirrors slot 0 for existing GETPIVOTDATA callers. Computed
+  // even with both strips hidden: Percent of Grand Total and Index divide by
+  // the whole-table aggregate, which is dropped again after step 8.
+  if (data_field_count > 0) {
     result.grand_totals.reserve(data_field_count);
     // Leaf order, not source order: the SUM snap makes the order observable.
     std::vector<RecordIndexSpan> spans;
@@ -686,6 +688,11 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
 
   // 8. Show-values-as transforms.
   apply_show_values_as_transforms(table, cache, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+
+  if (!table.grand_totals_rows() && !table.grand_totals_cols()) {
+    result.grand_totals.clear();
+    result.grand_total = Value::blank();
+  }
 
   return result;
 }

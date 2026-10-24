@@ -77,6 +77,28 @@ TEST(PivotEvaluator, ShowAsPercentOfRowReaggregatesNonAdditiveDenominator) {
   EXPECT_DOUBLE_EQ(r.values[north][gadget][0].as_number(), 50.0 / north_avg);
 }
 
+TEST(PivotEvaluator, ShowAsPercentOfTotalReaggregatesNonAdditiveDenominatorWithTotalsHidden) {
+  // The denominator is AVERAGE over every record = 675 / 5, not the sum of the
+  // leaf-cell averages, and the hidden grand totals stay absent from the result.
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.mutable_data_fields()[0].aggregation = Aggregation::Average;
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::PercentOfTotal;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  const std::size_t north = row_index(r, "North");
+  const std::size_t gadget = (r.cols[0].label == "Gadget") ? 0U : 1U;
+  const std::size_t widget = 1U - gadget;
+  EXPECT_DOUBLE_EQ(r.values[north][widget][0].as_number(), 62.5 / 135.0);
+  EXPECT_DOUBLE_EQ(r.values[north][gadget][0].as_number(), 50.0 / 135.0);
+  EXPECT_TRUE(r.grand_totals.empty());
+  EXPECT_TRUE(r.grand_total.is_blank());
+}
+
 TEST(PivotEvaluator, ShowAsPercentOfCol) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
