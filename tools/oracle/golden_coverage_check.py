@@ -18,7 +18,8 @@ during capture (a timeout, a bridge failure) -- and only the first is
 backed by a reason and a `cause` a reviewer can see. An unbacked skip is a
 permanent `GTEST_SKIP` that never shows up in `divergence_check.py`'s
 per-cause tally, which is the release gate's sole accounting of what is
-skipped and why.
+skipped and why. That check runs over every target and every track
+directory (`golden*/`), not only the primary formula goldens.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ except ImportError:  # pragma: no cover
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CASES_DIR = REPO_ROOT / "tests/oracle/cases"
 GOLDEN_DIR = REPO_ROOT / "tests/oracle/targets/mac-365-ja_JP/golden"
+TARGETS_DIR = REPO_ROOT / "tests/oracle/targets"
 # The target `tests/oracle/targets/mac-365-ja_JP/golden/` goldens are captured against -- see
 # `tools/oracle/targets.yaml`'s global `primary:`. Hardcoded rather than
 # read from targets.yaml because this script is scoped to that one
@@ -132,9 +134,43 @@ def load_golden_ids() -> tuple[set[tuple[str, str]], list[str]]:
     return pairs, errors
 
 
+def find_unbacked_skips() -> list[str]:
+    """Reports baked `skipped` fields, in any target or track, no registry entry selects.
+
+    Covers `golden/`, `golden_cf/`, `golden_wb/` and every other `golden*/`
+    directory under each target. An entry applies when it targets that
+    directory's target, either in `tests/divergence.yaml` or in the target's
+    own `divergence.yaml`.
+    """
+
+    errors: list[str] = []
+    suites = case_schema.discover_suites(CASES_DIR) if CASES_DIR.is_dir() else []
+    for target_dir in sorted(p for p in TARGETS_DIR.iterdir() if p.is_dir()):
+        target = target_dir.name
+        selected = set(_load_divergence_skips(DEFAULT_DIVERGENCE, target, suites=suites))
+        local = target_dir / "divergence.yaml"
+        if local.is_file():
+            selected |= set(_load_divergence_skips(local, target, suites=suites))
+        for path in sorted(target_dir.glob("golden*/*.golden.json")):
+            try:
+                doc: Any = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                errors.append(f"{path}: cannot parse JSON: {exc}")
+                continue
+            cases = doc.get("cases") if isinstance(doc, dict) else None
+            for case in cases if isinstance(cases, list) else []:
+                if isinstance(case, dict) and "skipped" in case and case.get("id") not in selected:
+                    errors.append(
+                        f"{path.relative_to(REPO_ROOT)}: case {case.get('id')!r} has a baked 'skipped' field "
+                        f"with no skip-oracle entry applying to {target}"
+                    )
+    return errors
+
+
 def main() -> int:
     case_pairs, _suite_names = load_case_catalog()
     golden_pairs, errors = load_golden_ids()
+    errors.extend(find_unbacked_skips())
     missing = sorted(case_pairs - golden_pairs)
     if missing:
         rendered = ", ".join(f"{suite}:{case_id}" for suite, case_id in missing)

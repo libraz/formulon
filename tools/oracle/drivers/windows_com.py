@@ -62,6 +62,25 @@ class CellAdapter:
         return self.api.Value2
 
 
+class Value2Range:
+    """An xlwings ``Range`` whose ``.value`` is read through ``Value2``.
+
+    Everything else (``api``, ``get_address``, ``offset``) is the wrapped
+    range's own, so ``classify_value`` and its fallbacks see the usual surface.
+    """
+
+    def __init__(self, rng) -> None:
+        self._rng = rng
+        self.api = rng.api
+
+    @property
+    def value(self) -> Any:
+        return self.api.Value2
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._rng, name)
+
+
 def format_com_error(exc: BaseException) -> str:
     """Returns a one-line summary of a pywin32 / xlwings exception.
 

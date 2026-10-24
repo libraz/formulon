@@ -6,11 +6,39 @@ from __future__ import annotations
 import base64
 import io
 import os
+import types
 import unittest
 from unittest.mock import patch
 
 from tools.oracle import divergence_check
 from tools.oracle.drivers import windows_excel
+
+
+class _FakeValueRange:
+    """A range whose xlwings ``value`` is the OLE-converted date and ``Value2`` the raw serial."""
+
+    def __init__(self):
+        self.value = -1.0
+        self.api = types.SimpleNamespace(Value2=0.0)
+        self.row = 3
+
+    def offset(self, rows, cols):
+        return self
+
+
+class WindowsValue2ReadTest(unittest.TestCase):
+    """Formula-track result cells are read through Value2, never Range.Value."""
+
+    def test_value2_range_reads_the_raw_serial(self):
+        cell = windows_excel._Value2Range(_FakeValueRange())
+        self.assertEqual(cell.value, 0.0)
+        self.assertEqual(cell.row, 3)
+
+    def test_result_classification_uses_value2(self):
+        sheet = types.SimpleNamespace(range=lambda addr: _FakeValueRange())
+        with patch.object(windows_excel, "_evaluate_spill_shape", return_value=(1, 1)):
+            result = windows_excel._classify_result_cell(types.SimpleNamespace(), sheet, "A1")
+        self.assertEqual((result.kind, result.value), ("number", 0.0))
 
 
 class _FakeVersionApi:

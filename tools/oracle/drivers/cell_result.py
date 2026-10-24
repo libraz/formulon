@@ -223,18 +223,20 @@ def classify_shape_result(
     displayed_text: DisplayedText,
     app_evaluate: Callable[[Any], Callable[[str], Any]],
     spill_shape: Callable[..., tuple[int, int]],
+    read_cell: Callable[[Any], Any] = lambda cell: cell,
 ) -> CaseResult:
     """Records a spill as its shape plus the case's declared sample cells.
 
     For results too large to materialise cell by cell. The shape comes from
     the same non-invasive probe the cell walk uses; only the listed cells
-    are read.
+    are read, each through ``read_cell``.
     """
 
     rows, cols = spill_shape(app, sht.range(anchor_addr), max_cells=None)
     evaluate = app_evaluate(app)
     values = {
-        addr: array_cell_from_scalar(classify_value(sht.range(addr), evaluate, displayed_text)) for addr in samples
+        addr: array_cell_from_scalar(classify_value(read_cell(sht.range(addr)), evaluate, displayed_text))
+        for addr in samples
     }
     return CaseResult(id="", kind="array_shape", value=values, array_shape=[rows, cols])
 
@@ -264,17 +266,24 @@ def classify_result_cell(
     displayed_text: DisplayedText,
     app_evaluate: Callable[[Any], Callable[[str], Any]],
     spill_shape: Callable[..., tuple[int, int]],
+    read_cell: Callable[[Any], Any] = lambda cell: cell,
 ) -> CaseResult:
-    """Classifies the anchor scalar or the full dynamic spill if present."""
+    """Classifies the anchor scalar or the full dynamic spill if present.
+
+    Every cell is read through ``read_cell``, which lets a platform choose
+    how ``.value`` is obtained.
+    """
 
     shape = spill_shape(app, sht.range(anchor_addr))
     rows, cols = shape
     evaluate = app_evaluate(app)
     if rows == 1 and cols == 1:
-        return classify_value(sht.range(anchor_addr), evaluate, displayed_text)
+        return classify_value(read_cell(sht.range(anchor_addr)), evaluate, displayed_text)
     anchor = sht.range(anchor_addr)
     flat: List[Any] = []
     for r in range(rows):
         for c in range(cols):
-            flat.append(array_cell_from_scalar(classify_value(anchor.offset(r, c), evaluate, displayed_text)))
+            flat.append(
+                array_cell_from_scalar(classify_value(read_cell(anchor.offset(r, c)), evaluate, displayed_text))
+            )
     return CaseResult(id="", kind="array", value=flat, array_shape=[rows, cols])

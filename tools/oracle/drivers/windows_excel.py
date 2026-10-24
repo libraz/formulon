@@ -105,7 +105,7 @@ def _ensure_windows() -> None:
 
 # Shared helpers re-exported under the names this driver has always carried.
 _cell_displayed_text = windows_com.cell_displayed_text
-_CellAdapter = windows_com.CellAdapter
+_Value2Range = windows_com.Value2Range
 _format_com_error = windows_com.format_com_error
 _com_scalar = windows_com.com_scalar
 _com_bool = windows_com.com_bool
@@ -168,6 +168,7 @@ def _classify_shape_result(app, sht, anchor_addr: str, samples: List[str]) -> Ca
         displayed_text=_cell_displayed_text,
         app_evaluate=_app_evaluate,
         spill_shape=_evaluate_spill_shape,
+        read_cell=_Value2Range,
     )
 
 
@@ -189,6 +190,7 @@ def _classify_result_cell(app, sht, anchor_addr: str = DEFAULT_FORMULA_CELL) -> 
         displayed_text=_cell_displayed_text,
         app_evaluate=_app_evaluate,
         spill_shape=_evaluate_spill_shape,
+        read_cell=_Value2Range,
     )
 
 

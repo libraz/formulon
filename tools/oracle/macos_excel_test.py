@@ -95,6 +95,7 @@ class _FakeAnchor:
         offsets=None,
     ):
         self.value = value
+        self.api = SimpleNamespace(Value2=value)
         self._address = address
         self.row = row
         self.column = column
