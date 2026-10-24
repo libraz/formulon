@@ -1,6 +1,7 @@
 # Hand-rolled type stubs for the Formulon public surface.
 # IDEs and type-checkers consume this rather than the runtime module.
 
+import builtins
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import (
@@ -56,12 +57,13 @@ __version__: str
 # Value / iteration
 # ---------------------------------------------------------------------------
 
+@dataclass(frozen=True)
 class Value:
     kind: ValueKind
-    number: Optional[float]
-    boolean: Optional[bool]
-    text: Optional[str]
-    error_code: Optional[int]
+    number: Optional[float] = ...
+    boolean: Optional[bool] = ...
+    text: Optional[str] = ...
+    error_code: Optional[int] = ...
     def to_python(self) -> Union[None, float, bool, str, "Value"]: ...
 
 class Cell(NamedTuple):
@@ -131,6 +133,7 @@ class IterativeSettings(NamedTuple):
     max_iterations: int
     max_change: float
 
+@dataclass(frozen=True)
 class PaginationResult:
     page_count: int
     # The declared `_xlnm.Print_Area`; empty when the sheet declares none
@@ -149,18 +152,21 @@ class PaginationResult:
     horizontal_break_manual: List[bool]
     vertical_break_manual: List[bool]
 
+@dataclass(frozen=True)
 class RectPt:
     x: float
     y: float
     width: float
     height: float
 
+@dataclass(frozen=True)
 class PaperInfo:
     width_pt: float
     height_pt: float
     landscape: bool
     known: bool
 
+@dataclass(frozen=True)
 class MarginsPt:
     left: float
     right: float
@@ -169,6 +175,7 @@ class MarginsPt:
     header: float
     footer: float
 
+@dataclass(frozen=True)
 class PrintTitles:
     has_rows: bool
     first_row: int
@@ -177,6 +184,7 @@ class PrintTitles:
     first_col: int
     last_col: int
 
+@dataclass(frozen=True)
 class PageLayout:
     area_index: int
     first_row: int
@@ -211,6 +219,7 @@ class SheetFormatDefaults:
         zero_height: Optional[bool] = ...,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class WidthModel:
     points_per_char: float
     padding_pt: float
@@ -219,12 +228,14 @@ class WidthModel:
     normal_font_name: str
     platform: str
 
+@dataclass(frozen=True)
 class PageBreak:
     id: int
     min: int
     max: int
     manual: bool
 
+@dataclass(frozen=True)
 class PageSetup:
     orientation: int
     paper_size: int
@@ -241,6 +252,7 @@ class PageSetup:
     fit_to_height_stated: bool
     fit_to_page_stated: bool
 
+@dataclass(frozen=True)
 class PageMargins:
     left: float
     right: float
@@ -263,7 +275,7 @@ class FormulonError(Exception):
     def __init__(self, status: int, *, op: str = ...) -> None: ...
 
 class SaveDiagnostics:
-    bytes: bytes
+    bytes: builtins.bytes
     downgraded_formula_count: int
     deferred_feature_count: int
     dropped_part_count: int
@@ -271,7 +283,7 @@ class SaveDiagnostics:
     renumbered_part_count: int
     def __init__(
         self,
-        bytes: bytes,
+        bytes: builtins.bytes,
         downgraded_formula_count: int,
         deferred_feature_count: int,
         dropped_part_count: int,
@@ -307,6 +319,7 @@ class CollationStrength(IntEnum):
     DYNAMIC = 1
     CLASSIC_EXACT = 2
 
+@dataclass(frozen=True)
 class CollationClasses:
     class_ids: List[int]
     class_count: int
@@ -611,6 +624,7 @@ class MergeRange:
     last_col: int
     def __init__(self, first_row: int, first_col: int, last_row: int, last_col: int) -> None: ...
 
+@dataclass(frozen=True)
 class Hyperlink:
     row: int
     col: int
@@ -621,10 +635,12 @@ class Hyperlink:
     display: str
     tooltip: str
 
+@dataclass(frozen=True)
 class Comment:
     author: str
     text: str
 
+@dataclass(frozen=True)
 class DataValidation:
     ranges: List[MergeRange]
     type: int
@@ -1592,35 +1608,38 @@ class SheetProtection:
         pivot_tables: bool = ...,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class CivilTime:
     year: int
     month: int
     day: int
-    hour: int
-    minute: int
-    second: int
+    hour: int = ...
+    minute: int = ...
+    second: int = ...
 
+@dataclass(frozen=True)
 class SheetView:
     zoom_scale: int
     freeze_rows: int
     freeze_cols: int
     tab_hidden: bool
-    visibility: SheetVisibility
-    show_grid_lines: bool
-    show_row_col_headers: bool
-    show_zeros: bool
-    right_to_left: bool
-    tab_selected: bool
-    view_mode: str
-    top_left_row: int
-    top_left_col: int
-    pane_top_left_row: int
-    pane_top_left_col: int
-    split_x: float
-    split_y: float
-    show_formulas: bool
-    show_outline_symbols: bool
+    visibility: SheetVisibility = ...
+    show_grid_lines: bool = ...
+    show_row_col_headers: bool = ...
+    show_zeros: bool = ...
+    right_to_left: bool = ...
+    tab_selected: bool = ...
+    view_mode: str = ...
+    top_left_row: int = ...
+    top_left_col: int = ...
+    pane_top_left_row: int = ...
+    pane_top_left_col: int = ...
+    split_x: float = ...
+    split_y: float = ...
+    show_formulas: bool = ...
+    show_outline_symbols: bool = ...
 
+@dataclass(frozen=True)
 class ColumnLayout:
     first: int
     last: int
@@ -1628,22 +1647,24 @@ class ColumnLayout:
     hidden: bool
     outline_level: int
     # True when width is logically explicit, including legacy non-zero widths.
-    has_width: bool
-    has_style: bool
-    style_xf: int
-    collapsed: bool
+    has_width: bool = ...
+    has_style: bool = ...
+    style_xf: int = ...
+    collapsed: bool = ...
 
+@dataclass(frozen=True)
 class RowLayout:
     row: int
     height: float
     hidden: bool
     outline_level: int
-    has_style: bool
-    style_xf: int
-    has_height: bool
-    custom_height: bool
-    collapsed: bool
+    has_style: bool = ...
+    style_xf: int = ...
+    has_height: bool = ...
+    custom_height: bool = ...
+    collapsed: bool = ...
 
+@dataclass(frozen=True)
 class CfMatch:
     kind: int
     priority: int
@@ -1660,8 +1681,9 @@ class CfMatch:
     icon_set_name: int
     icon_index: int
     # The rule's direction: 0 = context, 1 = left to right, 2 = right to left.
-    bar_direction: int
+    bar_direction: int = ...
 
+@dataclass(frozen=True)
 class CfCellResult:
     row: int
     col: int
@@ -1751,6 +1773,7 @@ class IconSet:
         icons: List[CfIcon] = ...,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class ConditionalFormat:
     id: str
     type: int
@@ -1818,11 +1841,13 @@ class ConditionalFormatInput:
         icon_set: Optional[IconSet] = ...,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class CellNode:
     sheet: int
     row: int
     col: int
 
+@dataclass(frozen=True)
 class SpillInfo:
     engaged: bool
     anchor_row: int
@@ -1830,6 +1855,7 @@ class SpillInfo:
     rows: int
     cols: int
 
+@dataclass(frozen=True)
 class FunctionMetadata:
     name: str
     min_arity: int
@@ -1838,11 +1864,13 @@ class FunctionMetadata:
     signature_template: Optional[str]
     description: Optional[str]
 
+@dataclass(frozen=True)
 class ErrorName:
     canonical: str
     localized: str
     measured: bool
 
+@dataclass(frozen=True)
 class LocaleFacts:
     decimal_separator: str
     group_separator: str
@@ -1872,6 +1900,7 @@ class FunctionMetadataEntry(TypedDict, total=False):
 
 FunctionMetadataProvider = Dict[str, FunctionMetadataEntry]
 
+@dataclass(frozen=True)
 class MergedFunctionMetadata:
     name: str
     min_arity: int
@@ -2186,6 +2215,7 @@ class EffectiveStyle:
         num_fmt_code: str,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class ExternalLink:
     index: int
     rel_id: str
@@ -2194,6 +2224,7 @@ class ExternalLink:
     target_external: bool
     kind: ExternalLinkKind
 
+@dataclass(frozen=True)
 class PivotCell:
     row: int
     col: int
@@ -2203,6 +2234,7 @@ class PivotCell:
     field_name: str
     number_format: str
 
+@dataclass(frozen=True)
 class PivotLayout:
     top: int
     left: int
@@ -2211,9 +2243,9 @@ class PivotLayout:
     cells: List[PivotCell]
 
 class PivotReportLayout(IntEnum):
-    COMPACT: int
-    TABULAR: int
-    OUTLINE: int
+    COMPACT = 0
+    TABULAR = 1
+    OUTLINE = 2
 
 class PivotSortOrder(IntEnum):
     DESCENDING = 0
@@ -2241,6 +2273,7 @@ class PivotFieldSpec:
         number_format: str = ...,
     ) -> None: ...
 
+@dataclass(frozen=True)
 class PivotFieldInfo:
     source_name: str
     custom_name: str
@@ -2261,11 +2294,13 @@ class PivotFieldInfo:
     default_subtotal: bool
     subtotal_fns: Tuple[PivotAggregation, ...]
 
+@dataclass(frozen=True)
 class PivotItemInfo:
     name: str
     cache_index: int
     visible: bool
 
+@dataclass(frozen=True)
 class PivotStyleInfo:
     present: bool
     name: str
