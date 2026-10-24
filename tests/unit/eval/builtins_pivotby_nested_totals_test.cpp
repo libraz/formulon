@@ -207,10 +207,10 @@ TEST(PivotBy, ColSubtotalSortKeepsOuterGroupsContiguous) {
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"},"
       "         {\"Y\",\"N\";\"X\",\"M\";\"Y\",\"O\";\"X\",\"P\"},"
-      "         {1;2;3;4}, SUM, 0, 0, , 2, 1)");
+      "         {1;2;3;4}, SUM, 0, 0, , 2, 3)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_cols(), 8U);
-  // col_sort_order=1 orders leaves by totals Y(1), X(2), Y(3), X(4), but
+  // col_sort_order=3 (the value column after two col_fields) orders leaves by totals Y(1), X(2), Y(3), X(4), but
   // the subtotal block plan re-bundles those leaves by outer key: Y,Y,Y,
   // then X,X,X.
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "Y");

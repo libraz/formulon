@@ -89,13 +89,29 @@ struct OuterGrouping {
 OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                    const std::vector<std::vector<std::uint32_t>>& group_rows);
 
+/// A resolved aggregator. A one-parameter aggregator receives each group's
+/// value slice; a two-parameter one (PERCENTOF's `(subset, all)` shape) also
+/// receives `all_by_column[value_col]`, every filtered row of that column.
+struct Aggregator {
+  const LambdaValue* fn = nullptr;
+  std::uint32_t arity = 1U;
+  std::vector<const ArrayValue*> all_by_column;
+};
+
 /// Resolves the aggregator argument (3rd for GROUPBY, 4th for PIVOTBY)
-/// through the shared lambda-helper resolver (`resolve_callable`) at the
-/// aggregator's arity of one: an inline or name-bound `LAMBDA`, or a bare
-/// built-in name. Returns nullptr and writes the scalar error to `*out_err`
-/// on failure.
-const LambdaValue* resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                                      const EvalContext& ctx, Value* out_err);
+/// through the shared lambda-helper resolver (`resolve_callable`): an inline
+/// or name-bound `LAMBDA`, or a bare built-in name. It takes two arguments
+/// when the `LAMBDA` or built-in requires exactly two; otherwise one. Returns
+/// false and writes the scalar error to `*out_err` on failure.
+bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, Aggregator* out, Value* out_err);
+
+/// Returns `agg` with `all_by_column` bound for a two-parameter aggregator:
+/// one slice per value column over `all_rows`, the rows of the result column
+/// the cells sit in. A one-parameter aggregator comes back unchanged. False
+/// on allocation failure.
+bool bind_aggregator_totals(const ArrayValue& values, const std::vector<std::uint32_t>& all_rows, Arena& arena,
+                            const Aggregator& agg, Aggregator* out);
 
 /// Reads an array argument via the standard `eval_node_as_array` seam so a
 /// Ref / RangeOp / ArrayLiteral / OFFSET-call argument keeps its 2D shape.
@@ -129,18 +145,38 @@ bool read_field_headers(const parser::AstNode& call, std::uint32_t arg_index, st
 bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err);
 
-/// Reads an optional `sort_order` slot, defaulting to 0.
-///
-/// Excel reads the argument as a signed column index, and that domain has no
-/// zero member: a call that spells `0` there returns #VALUE! even though
-/// leaving the argument out sorts the keys ascending.
-/// The two are told apart the way the rest of the engine does it — an absent
-/// slot and a syntactically omitted one (`f(a,,c)`) both take the default,
-/// and only a supplied value is rejected. Bounds-checking the index against
-/// the value-column count stays with the caller, which is the only side that
-/// knows the count.
-bool read_optional_sort_order(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
-                              const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err);
+/// Reads an optional sort-order slot (GROUPBY `sort_order`, PIVOTBY
+/// `row_sort_order` / `col_sort_order`): one signed 1-based column index, or
+/// a vector of them. Absent or syntactically omitted leaves `*out` empty (the
+/// default key-ascending sort); a supplied 0, a blank or a non-finite entry
+/// is #VALUE!. `plan_group_sort` checks the indices against the columns.
+bool read_optional_sort_spec(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
+                             const FunctionRegistry& registry, const EvalContext& ctx, std::vector<int>* out,
+                             Value* out_err);
+
+/// How one axis orders its groups. A sort spec numbers `key_cols` key
+/// columns first, then `val_cols` value columns.
+struct GroupSort {
+  /// Per key column; keys order the groups column by column, first outermost.
+  std::vector<bool> key_descending;
+  /// 1-based value column to sort by, ties broken by the keys ascending; 0
+  /// sorts by the keys.
+  std::uint32_t value_col = 0U;
+  bool value_descending = false;
+};
+
+/// Plans `spec` over `key_cols` keys and `val_cols` values: key indices set
+/// the direction of their key column, a lone value index sorts by that value.
+/// False (#VALUE!) for an index past the last column or a vector naming a
+/// value column.
+bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::uint32_t val_cols, GroupSort* out);
+
+/// Fills `*order` with the group indices ordered by `plan`; error-keyed
+/// groups sink to the bottom. `value_keys[g]` is group g's sort value, read
+/// only for a value sort.
+void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+                  const std::vector<bool>& is_error, const std::vector<Value>& value_keys,
+                  std::vector<std::size_t>* order);
 
 /// `field_headers` value that requests header detection from the values
 /// argument; `resolve_auto_field_headers` turns it into a concrete mode.
@@ -200,15 +236,16 @@ std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
 const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t value_col,
                                     const std::vector<std::uint32_t>& row_indices, Arena& arena);
 
-/// Invokes the resolved aggregator for one group's column slice and returns
-/// whatever it produced. Errors are returned verbatim (the per-group error
-/// isolation seam). A multi-cell array return surfaces as `#CALC!`.
-Value invoke_aggregator_for_group(const LambdaValue* agg, const ArrayValue* slice, Arena& arena,
+/// Invokes the resolved aggregator for one group's slice of value column
+/// `value_col` and returns whatever it produced. Errors are returned verbatim
+/// (the per-group error isolation seam). A multi-cell array return surfaces
+/// as `#CALC!`.
+Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col, const ArrayValue* slice, Arena& arena,
                                   const FunctionRegistry& registry, const EvalContext& ctx);
 
 /// Aggregates each value column over the given row indices.
 std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
-                                           const std::vector<std::uint32_t>& row_indices, const LambdaValue* agg,
+                                           const std::vector<std::uint32_t>& row_indices, const Aggregator& agg,
                                            Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                                            ErrorCode empty_error);
 

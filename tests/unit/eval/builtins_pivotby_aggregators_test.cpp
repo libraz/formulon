@@ -98,9 +98,43 @@ TEST(PivotBy, NonLambdaNonNameAggregatorYieldsValueError) {
 }
 
 TEST(PivotBy, LambdaWrongArityYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, LAMBDA(a, b, a+b), 0, 0,, 0)");
+  // One or two arguments are supplied; a lambda requiring three cannot take them.
+  const Value v = EvalSrc("=PIVOTBY({\"A\"}, {\"X\"}, {1}, LAMBDA(a, b, c, a+b+c), 0, 0,, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// A two-parameter aggregator's second argument is every row of the result
+// column the cell sits in: its column group, or all rows in the grand-total
+// column.
+TEST(PivotBy, PercentofIsRelativeToTheColumnTotal) {
+  for (const char* agg : {"PERCENTOF", "LAMBDA(x,y,PERCENTOF(x,y))"}) {
+    const Value v = EvalSrc(std::string("=PIVOTBY({\"a\";\"b\";\"a\"},{\"p\";\"p\";\"q\"},{1;2;3},") + agg + ")");
+    ASSERT_TRUE(v.is_array()) << agg << " -> " << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), 4U) << agg;
+    ASSERT_EQ(v.as_array_cols(), 4U) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0 / 3.0) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 1.0) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 4.0 / 6.0) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 2.0 / 3.0) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 2.0 / 6.0) << agg;
+    for (std::uint32_t c = 1; c < 4U; ++c) {
+      EXPECT_DOUBLE_EQ(Cell(v, 3, c).as_number(), 1.0) << agg << " col " << c;
+    }
+  }
+}
+
+TEST(PivotBy, TwoArgumentLambdaSeesItsResultColumn) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"a\";\"a\";\"b\";\"b\";\"c\";\"c\"}, {\"p\";\"q\";\"p\";\"q\";\"p\";\"q\"},"
+      "         {1;2;3;4;5;6}, LAMBDA(x,y,ROWS(x)&\"/\"&ROWS(y)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_EQ(v.as_array_cols(), 4U);
+  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "1/3");  // a / p column
+  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "2/6");  // a / grand-total column
+  EXPECT_EQ(std::string(Cell(v, 4, 2).as_text()), "3/3");  // grand-total row / q column
+  EXPECT_EQ(std::string(Cell(v, 4, 3).as_text()), "6/6");
 }
 
 TEST(PivotBy, LambdaWithTrailingOptionalIsAccepted) {

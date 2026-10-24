@@ -1,6 +1,7 @@
 
 #include "eval/groupby_pivotby/common.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -26,6 +27,7 @@
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
+#include "eval/tree_walker_lazy_table.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -39,9 +41,20 @@ namespace eval {
 
 namespace {
 
-// Number of arguments an aggregator receives per group: the group's value
-// slice, and nothing else.
-constexpr std::uint32_t kAggregatorCallArity = 1U;
+// Arguments an aggregator receives per group: two, `(group_values,
+// all_values)`, for a LAMBDA or built-in that requires exactly two; else one.
+std::uint32_t aggregator_arity(const LambdaValue& lv, const FunctionRegistry& registry) {
+  std::uint32_t required = lv.param_count - lv.optional_count;
+  if (!lv.builtin.empty()) {
+    if (find_lazy_impl(lv.builtin) != nullptr) {
+      required = find_lazy_min_arity(lv.builtin);
+    } else {
+      const FunctionDef* def = registry.lookup(lv.builtin);
+      required = def != nullptr ? def->min_arity : 0U;
+    }
+  }
+  return required == 2U ? 2U : 1U;
+}
 
 }  // namespace
 
@@ -96,9 +109,32 @@ OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std
   return out;
 }
 
-const LambdaValue* resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                                      const EvalContext& ctx, Value* out_err) {
-  return resolve_callable(arg, kAggregatorCallArity, arena, registry, ctx, out_err);
+bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, Aggregator* out, Value* out_err) {
+  // The arity depends on the callable, so read it before resolving at that
+  // arity; `resolve_callable` reports every error the peek skips.
+  const Value peek = eval_node(arg, arena, registry, ctx);
+  const std::uint32_t arity = peek.is_lambda() ? aggregator_arity(*peek.as_lambda(), registry) : 1U;
+  out->fn = resolve_callable(arg, arity, arena, registry, ctx, out_err);
+  out->arity = arity;
+  out->all_by_column.clear();
+  return out->fn != nullptr;
+}
+
+bool bind_aggregator_totals(const ArrayValue& values, const std::vector<std::uint32_t>& all_rows, Arena& arena,
+                            const Aggregator& agg, Aggregator* out) {
+  *out = agg;
+  if (agg.arity < 2U) {
+    return true;
+  }
+  out->all_by_column.assign(values.cols, nullptr);
+  for (std::uint32_t c = 0; c < values.cols; ++c) {
+    out->all_by_column[c] = build_group_slice(values, c, all_rows, arena);
+    if (out->all_by_column[c] == nullptr) {
+      return false;
+    }
+  }
+  return true;
 }
 
 const ArrayValue* read_array_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -163,28 +199,92 @@ bool read_total_depth(const parser::AstNode& call, std::uint32_t arg_index, std:
                                   sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), out, out_err);
 }
 
-bool read_optional_sort_order(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
-                              const FunctionRegistry& registry, const EvalContext& ctx, int* out, Value* out_err) {
-  *out = 0;
-  if (arity <= arg_index) {
+bool read_optional_sort_spec(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, Arena& arena,
+                             const FunctionRegistry& registry, const EvalContext& ctx, std::vector<int>* out,
+                             Value* out_err) {
+  out->clear();
+  if (arity <= arg_index || is_omitted_arg(call.as_call_arg(arg_index))) {
     return true;
   }
-  const parser::AstNode& arg = call.as_call_arg(arg_index);
-  if (is_omitted_arg(arg)) {
-    return true;
-  }
-  if (!read_int(arg, arena, registry, ctx, out, out_err)) {
+  const ArrayValue* spec = nullptr;
+  if (!resolve_array_value(call.as_call_arg(arg_index), arena, registry, ctx, &spec, out_err)) {
     return false;
   }
-  if (*out == 0) {
-    // Reached only by a supplied value, so the default is still available
-    // through omission. A fraction truncates before this check, which puts
-    // `0.5` out of domain as well -- consistent with reading the slot as a
-    // column index rather than as a magnitude.
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
+  const std::size_t n = static_cast<std::size_t>(spec->rows) * spec->cols;
+  out->reserve(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    const Value& cell = spec->cells[i];
+    if (cell.is_error()) {
+      *out_err = cell;
+      return false;
+    }
+    auto number = coerce_to_number(cell);
+    if (!number) {
+      *out_err = Value::error(number.error());
+      return false;
+    }
+    const int index = std::isfinite(number.value()) ? truncate_saturated_int(number.value()) : 0;
+    if (index == 0) {
+      *out_err = Value::error(ErrorCode::Value);
+      return false;
+    }
+    out->push_back(index);
   }
   return true;
+}
+
+bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::uint32_t val_cols, GroupSort* out) {
+  out->key_descending.assign(key_cols, false);
+  out->value_col = 0U;
+  out->value_descending = false;
+  for (const int n : spec) {
+    const std::int64_t magnitude = n > 0 ? static_cast<std::int64_t>(n) : -static_cast<std::int64_t>(n);
+    if (magnitude > static_cast<std::int64_t>(key_cols) + val_cols || (magnitude > key_cols && spec.size() != 1U)) {
+      return false;
+    }
+    const auto column = static_cast<std::uint32_t>(magnitude);
+    if (column > key_cols) {
+      out->value_col = column - key_cols;
+      out->value_descending = n < 0;
+    } else {
+      out->key_descending[column - 1U] = n < 0;
+    }
+  }
+  return true;
+}
+
+void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+                  const std::vector<bool>& is_error, const std::vector<Value>& value_keys,
+                  std::vector<std::size_t>* order) {
+  order->resize(repr.size());
+  for (std::size_t i = 0; i < order->size(); ++i) {
+    (*order)[i] = i;
+  }
+  const auto cmp_keys = [&](std::size_t a, std::size_t b) {
+    for (std::uint32_t c = 0; c < keys.cols; ++c) {
+      const int r = cmp_value_asc(keys.cells[static_cast<std::size_t>(repr[a]) * keys.cols + c],
+                                  keys.cells[static_cast<std::size_t>(repr[b]) * keys.cols + c]);
+      if (r != 0) {
+        return plan.key_descending[c] ? -r : r;
+      }
+    }
+    return 0;
+  };
+  sort_group_order(*order, [&](std::size_t a, std::size_t b) {
+    // Error-keyed groups always go last regardless of direction, matching
+    // Mac Excel's "errors trail" surface for the dynamic-array sort family.
+    if (is_error[a] != is_error[b]) {
+      return !is_error[a];
+    }
+    if (plan.value_col != 0U) {
+      const int c = cmp_value_asc(value_keys[a], value_keys[b]);
+      if (c != 0) {
+        return plan.value_descending ? (c > 0) : (c < 0);
+      }
+      return cmp_keys_asc(keys, repr[a], repr[b]) < 0;
+    }
+    return cmp_keys(a, b) < 0;
+  });
 }
 
 int resolve_auto_field_headers(int field_headers, const ArrayValue& values) {
@@ -409,10 +509,12 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
   return arr;
 }
 
-Value invoke_aggregator_for_group(const LambdaValue* agg, const ArrayValue* slice, Arena& arena,
+Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col, const ArrayValue* slice, Arena& arena,
                                   const FunctionRegistry& registry, const EvalContext& ctx) {
+  const ArrayValue* all = agg.arity == 2U ? agg.all_by_column[value_col] : nullptr;
   const parser::AstNode* slice_ast = array_literal_ast(slice, arena);
-  if (slice_ast == nullptr) {
+  const parser::AstNode* all_ast = all != nullptr ? array_literal_ast(all, arena) : nullptr;
+  if (slice_ast == nullptr || (agg.arity == 2U && all_ast == nullptr)) {
     return Value::error(ErrorCode::Num);
   }
   // The slice is bound with both its Value and a synthetic ArrayLiteral
@@ -420,9 +522,9 @@ Value invoke_aggregator_for_group(const LambdaValue* agg, const ArrayValue* slic
   // flattens it through the dispatcher's ArrayLiteral branch. Errors are
   // not filtered: whatever the body produced -- including an error -- lands
   // in this group's cell.
-  const Value slice_v = Value::array(slice);
-  const parser::AstNode* ast_args[1] = {slice_ast};
-  const Value res = invoke_lambda_values_with_ast(agg, kAggregatorCallArity, &slice_v, ast_args, arena, registry, ctx);
+  const Value args[2] = {Value::array(slice), all != nullptr ? Value::array(all) : Value::blank()};
+  const parser::AstNode* ast_args[2] = {slice_ast, all_ast};
+  const Value res = invoke_lambda_values_with_ast(agg.fn, agg.arity, args, ast_args, arena, registry, ctx);
   if (res.is_array()) {
     return Value::error(ErrorCode::Calc);
   }
@@ -433,7 +535,7 @@ Value invoke_aggregator_for_group(const LambdaValue* agg, const ArrayValue* slic
 }
 
 std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
-                                           const std::vector<std::uint32_t>& row_indices, const LambdaValue* agg,
+                                           const std::vector<std::uint32_t>& row_indices, const Aggregator& agg,
                                            Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                                            ErrorCode empty_error) {
   std::vector<Value> cells(val_cols, Value::blank());
@@ -449,7 +551,7 @@ std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32
       cells[v] = Value::error(ErrorCode::Num);
       continue;
     }
-    cells[v] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+    cells[v] = invoke_aggregator_for_group(agg, v, slice, arena, registry, ctx);
   }
   return cells;
 }

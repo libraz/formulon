@@ -1,6 +1,6 @@
 suite: groupby
 description: GROUPBY dynamic-array group-and-aggregate (Excel 365). Perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, filter_array empty selection -> #VALUE!, and sort_order 0 -> #VALUE!. Inline array arguments are fine; it is a literal 0 in the sort_order slot that Excel rejects, since that argument is a signed column index with no zero member.
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================
@@ -305,3 +305,65 @@ cases:
     description: "Excel 365: 3x2 array [\"a\", 2, \"b\", 4, \"合計\", 6]"
     setup: { A1: "k", B1: "v", A2: "b", B2: 1, A3: "a", B3: 2, A4: "b", B4: 3 }
     formula: "=GROUPBY(A2:A4,B2:B4,SUM)"
+
+  # -- sort_order column numbering -----------------------------------------
+  # Keys {b;a;c;a} with values {1;5;3;4} sum to a=9, b=1, c=3, so key order
+  # (a,b,c) and value order (b,c,a) differ and the golden shows which output
+  # column each sort_order selects.
+  - id: groupby_sort_order_pos1
+    formula: '=GROUPBY({"b";"a";"c";"a"},{1;5;3;4},SUM,0,0,1)'
+
+  - id: groupby_sort_order_neg1
+    formula: '=GROUPBY({"b";"a";"c";"a"},{1;5;3;4},SUM,0,0,-1)'
+
+  - id: groupby_sort_order_pos2
+    formula: '=GROUPBY({"b";"a";"c";"a"},{1;5;3;4},SUM,0,0,2)'
+
+  - id: groupby_sort_order_neg2
+    formula: '=GROUPBY({"b";"a";"c";"a"},{1;5;3;4},SUM,0,0,-2)'
+
+  - id: groupby_sort_order_past_last_column
+    formula: '=GROUPBY({"b";"a";"c";"a"},{1;5;3;4},SUM,0,0,3)'
+
+  - id: groupby_sort_order_vector
+    formula: '=GROUPBY({"x","b";"y","a";"x","a";"y","b"},{1;2;3;4},SUM,0,0,{1,-3})'
+
+  - id: groupby_sort_order_vector_second_key_desc
+    formula: '=GROUPBY({"x","b";"y","a";"x","a";"y","b"},{1;2;3;4},SUM,0,0,{-2})'
+
+  # -- Two-parameter aggregators -------------------------------------------
+  # PERCENTOF takes (subset, all): the golden shows which `all` each body,
+  # subtotal and grand-total cell receives.
+  - id: groupby_percentof_bare
+    formula: '=GROUPBY({"a";"b";"a"},{1;2;3},PERCENTOF,0,1)'
+
+  - id: groupby_percentof_lambda
+    formula: '=GROUPBY({"a";"b";"a"},{1;2;3},LAMBDA(x,y,PERCENTOF(x,y)),0,1)'
+
+  - id: groupby_percentof_subtotals
+    formula: '=GROUPBY({"x","b";"y","a";"x","a";"y","b"},{1;2;3;4},PERCENTOF,0,2)'
+
+  - id: groupby_percentof_filtered
+    formula: '=GROUPBY({"a";"b";"a";"c"},{1;2;3;4},PERCENTOF,0,1,,{TRUE;TRUE;TRUE;FALSE})'
+
+  # Every aggregator requiring exactly two arguments is called as
+  # (group values, whole value column), built-ins included.
+  - id: groupby_two_param_lambda_rows
+    setup: { B2: "a", B3: "a", B4: "b", B5: "b", B6: "c", B7: "c", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6 }
+    formula: '=GROUPBY(B2:B7,C2:C7,LAMBDA(x,y,ROWS(x)&"/"&ROWS(y)))'
+
+  - id: groupby_correl_bare
+    setup: { B2: "a", B3: "a", B4: "b", B5: "b", B6: "c", B7: "c", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6 }
+    formula: '=GROUPBY(B2:B7,C2:C7,CORREL)'
+
+  - id: groupby_covariance_p_bare
+    setup: { B2: "a", B3: "a", B4: "b", B5: "b", B6: "c", B7: "c", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6 }
+    formula: '=GROUPBY(B2:B7,C2:C7,COVARIANCE.P)'
+
+  - id: groupby_percentof_range
+    setup: { B2: "a", B3: "a", B4: "b", B5: "b", B6: "c", B7: "c", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6 }
+    formula: '=GROUPBY(B2:B7,C2:C7,PERCENTOF)'
+
+  - id: groupby_correl_two_value_columns
+    setup: { B2: "a", B3: "a", B4: "b", B5: "b", B6: "c", B7: "c", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6, D2: 2, D3: 3, D4: 5, D5: 7, D6: 11, D7: 13 }
+    formula: '=GROUPBY(B2:B7,C2:D7,CORREL)'

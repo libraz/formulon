@@ -1,6 +1,6 @@
 suite: pivotby
 description: PIVOTBY dynamic-array pivot (Excel 365). Perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, filter_array empty selection -> error, and row_sort_order 0 -> #VALUE! (both sort_order slots take a signed column index with no zero member).
-tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
   # =========================================================================
@@ -300,3 +300,47 @@ cases:
     description: "Excel 365: 4x4 array [\"\", \"p\", \"q\", \"合計\", \"x\", 1, ...]"
     setup: { A1: "r", B1: "c", C1: "v", A2: "x", B2: "p", C2: 1, A3: "y", B3: "q", C3: 2, A4: "x", B4: "q", C4: 3 }
     formula: "=PIVOTBY(A2:A4,B2:B4,C2:C4,SUM)"
+
+  # -- sort_order column numbering -----------------------------------------
+  # Row keys {b;a;c;a} with values {1;5;3;4} total a=9, b=1, c=3, so key order
+  # and total order differ; the golden shows which column each sort_order
+  # selects on either axis.
+  - id: pivotby_row_sort_order_pos1
+    formula: '=PIVOTBY({"b";"a";"c";"a"},{"p";"q";"p";"q"},{1;5;3;4},SUM,0,1,1)'
+
+  - id: pivotby_row_sort_order_neg1
+    formula: '=PIVOTBY({"b";"a";"c";"a"},{"p";"q";"p";"q"},{1;5;3;4},SUM,0,1,-1)'
+
+  - id: pivotby_row_sort_order_pos2
+    formula: '=PIVOTBY({"b";"a";"c";"a"},{"p";"q";"p";"q"},{1;5;3;4},SUM,0,1,2)'
+
+  - id: pivotby_row_sort_order_neg2
+    formula: '=PIVOTBY({"b";"a";"c";"a"},{"p";"q";"p";"q"},{1;5;3;4},SUM,0,1,-2)'
+
+  - id: pivotby_row_sort_order_pos3
+    formula: '=PIVOTBY({"b";"a";"c";"a"},{"p";"q";"p";"q"},{1;5;3;4},SUM,0,1,3)'
+
+  - id: pivotby_row_sort_order_vector
+    formula: '=PIVOTBY({"x","b";"y","a";"x","a";"y","b"},{"p";"q";"p";"q"},{1;2;3;4},SUM,0,1,{1,-2})'
+
+  - id: pivotby_col_sort_order_neg1
+    formula: '=PIVOTBY({"b";"a";"c";"a"},{"p";"q";"p";"q"},{1;5;3;4},SUM,0,1,,1,-1)'
+
+  - id: pivotby_col_sort_order_pos2
+    formula: '=PIVOTBY({"b";"a";"c";"a"},{"p";"q";"p";"q"},{1;5;3;4},SUM,0,1,,1,2)'
+
+  # -- Two-parameter aggregators -------------------------------------------
+  - id: pivotby_percentof_bare
+    formula: '=PIVOTBY({"a";"b";"a"},{"p";"p";"q"},{1;2;3},PERCENTOF)'
+
+  - id: pivotby_percentof_lambda
+    formula: '=PIVOTBY({"a";"b";"a"},{"p";"p";"q"},{1;2;3},LAMBDA(x,y,PERCENTOF(x,y)))'
+
+  # A two-argument built-in gets (cell values, every row of its result column).
+  - id: pivotby_correl_bare
+    setup: { A2: "a", A3: "a", A4: "b", A5: "b", A6: "c", A7: "c", B2: "p", B3: "q", B4: "p", B5: "q", B6: "p", B7: "q", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6 }
+    formula: '=PIVOTBY(A2:A7,B2:B7,C2:C7,CORREL)'
+
+  - id: pivotby_two_param_lambda_rows
+    setup: { A2: "a", A3: "a", A4: "b", A5: "b", A6: "c", A7: "c", B2: "p", B3: "q", B4: "p", B5: "q", B6: "p", B7: "q", C2: 1, C3: 2, C4: 3, C5: 4, C6: 5, C7: 6 }
+    formula: '=PIVOTBY(A2:A7,B2:B7,C2:C7,LAMBDA(x,y,ROWS(x)&"/"&ROWS(y)))'

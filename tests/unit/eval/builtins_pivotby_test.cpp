@@ -266,12 +266,14 @@ TEST(PivotBy, OmittedRowSortOrderSortsKeysAscending) {
   EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "C");
 }
 
+// A sort order numbers its axis's key columns first, then the value columns,
+// which order the groups by their axis totals.
 TEST(PivotBy, RowSortOrderPositiveAscendingByRowTotal) {
   // Row totals: A=2+4=6, B=1, C=3. Ascending row-total: B, C, A. Row 0 is
   // the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"B\";\"A\";\"C\";\"A\"}, {\"X\";\"X\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, 1, 1)");
+      "         {1;2;3;4}, SUM, 0, 0, 2, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "B");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "C");
@@ -282,11 +284,34 @@ TEST(PivotBy, RowSortOrderNegativeDescendingByRowTotal) {
   // Row 0 is the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"B\";\"A\";\"C\";\"A\"}, {\"X\";\"X\";\"X\";\"Y\"},"
-      "         {1;2;3;4}, SUM, 0, 0, -1, 1)");
+      "         {1;2;3;4}, SUM, 0, 0, -2, 1)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "C");
   EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "B");
+}
+
+// A key-column vector sets each row key's direction; the first key stays
+// outermost: x/b, x/a, y/b, y/a.
+TEST(PivotBy, RowSortOrderVectorSetsKeyDirections) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"}, {\"p\";\"q\";\"p\";\"q\"},"
+      "         {1;2;3;4}, SUM, 0, 1, {1,-2})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 6U);
+  const char* want[4][2] = {{"x", "b"}, {"x", "a"}, {"y", "b"}, {"y", "a"}};
+  for (std::uint32_t r = 0; r < 4U; ++r) {
+    EXPECT_EQ(std::string(Cell(v, r + 1U, 0).as_text()), want[r][0]) << r;
+    EXPECT_EQ(std::string(Cell(v, r + 1U, 1).as_text()), want[r][1]) << r;
+  }
+}
+
+TEST(PivotBy, RowSortOrderKeyColumnSortsTheKeys) {
+  const Value v = EvalSrc("=PIVOTBY({\"b\";\"a\";\"c\";\"a\"}, {\"p\";\"q\";\"p\";\"q\"}, {1;5;3;4}, SUM, 0, 1, -1)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "c");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "b");
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "a");
 }
 
 TEST(PivotBy, SuppliedRowSortOrderZeroYieldsValueError) {
@@ -318,7 +343,7 @@ TEST(PivotBy, ColSortOrderPositiveAscendingByColTotal) {
   // Col totals: Y=1, X=6, Z=3. Ascending col-total: Y(1), Z(3), X(6).
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"}, {\"Y\";\"X\";\"Z\";\"X\"},"
-      "         {1;2;3;4}, SUM, 0, 1,, 0, 1)");
+      "         {1;2;3;4}, SUM, 0, 1,, 0, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   // Layout: col-axis row (row 0, always emitted), the single "A" body
   // row (row 1), then the bottom totals row (row_total_depth=1, row 2).
@@ -333,7 +358,7 @@ TEST(PivotBy, ColSortOrderNegativeDescendingByColTotal) {
   // Descending: X(6), Z(3), Y(1). Row 0 is the col-axis label row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"}, {\"Y\";\"X\";\"Z\";\"X\"},"
-      "         {1;2;3;4}, SUM, 0, 1,, 0, -1)");
+      "         {1;2;3;4}, SUM, 0, 1,, 0, -2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 6.0);  // X
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 3.0);  // Z
@@ -413,15 +438,15 @@ TEST(PivotBy, JapaneseFoldingAppliesToRowAndColKeys) {
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 30.0);
 }
 
-TEST(PivotBy, RowSortOrderAbsTwoYieldsValueError) {
-  // First-commit scope: only ±1 / 0 are supported on the sort orders.
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 2, 0)");
+TEST(PivotBy, RowSortOrderPastTheLastColumnYieldsValueError) {
+  // One key column and one value column: 3 names no column.
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 3, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(PivotBy, ColSortOrderAbsTwoYieldsValueError) {
-  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0,, 0, 2)");
+TEST(PivotBy, ColSortOrderPastTheLastColumnYieldsValueError) {
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0,, 0, -3)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

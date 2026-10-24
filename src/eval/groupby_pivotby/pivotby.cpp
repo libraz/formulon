@@ -31,55 +31,32 @@ struct ColSlot {
   std::size_t outer_group = 0;
 };
 
-// Orders one axis's groups into `*out_order`. Error-keyed groups sink to the
-// bottom; an omitted sort_order otherwise sorts by key ascending, and ±1 sorts
-// by the first value column's axis total (aggregated on the fly when
-// `totals_emitted` is false), ties broken by key. Other values are #VALUE!.
-bool order_axis_groups(int sort_order, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+// Orders one axis's groups by `plan` (see `plan_group_sort`). A value sort
+// reads each group's axis total for that value column: `totals` when the
+// layout emits them, otherwise aggregated here with the group's aggregator.
+void order_axis_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
                        const std::vector<std::vector<std::uint32_t>>& members, const std::vector<bool>& is_error,
                        const std::vector<std::vector<Value>>& totals, bool totals_emitted, const ArrayValue& values,
-                       const LambdaValue* agg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                       std::vector<std::size_t>* out_order) {
-  std::vector<std::size_t>& order = *out_order;
-  order.resize(repr.size());
-  for (std::size_t i = 0; i < order.size(); ++i) {
-    order[i] = i;
-  }
-  if (sort_order == 0) {
-    sort_group_order(order, [&](std::size_t a, std::size_t b) {
-      if (is_error[a] != is_error[b]) {
-        return !is_error[a];
+                       const std::vector<const Aggregator*>& agg_of_group, Arena& arena,
+                       const FunctionRegistry& registry, const EvalContext& ctx, std::vector<std::size_t>* out_order) {
+  // One sort key per group, aggregated before the sort so the comparator
+  // never invokes the aggregator.
+  std::vector<Value> value_keys;
+  if (plan.value_col != 0U) {
+    const std::uint32_t v = plan.value_col - 1U;
+    value_keys.reserve(repr.size());
+    for (std::size_t g = 0; g < repr.size(); ++g) {
+      if (totals_emitted) {
+        value_keys.push_back(totals[g][v]);
+        continue;
       }
-      return cmp_keys_asc(keys, repr[a], repr[b]) < 0;
-    });
-    return true;
+      const ArrayValue* slice = build_group_slice(values, v, members[g], arena);
+      value_keys.push_back((slice != nullptr)
+                               ? invoke_aggregator_for_group(*agg_of_group[g], v, slice, arena, registry, ctx)
+                               : Value::error(ErrorCode::Num));
+    }
   }
-  if (sort_order != 1 && sort_order != -1) {
-    // Only ±1 / 0 are supported. With V > 1 the spec for |sort_order|
-    // indexing a specific value column is not yet captured by the
-    // oracle; reserved for future work.
-    return false;
-  }
-  const bool descending = (sort_order < 0);
-  sort_group_order(order, [&](std::size_t a, std::size_t b) {
-    if (is_error[a] != is_error[b]) {
-      return !is_error[a];
-    }
-    Value va = totals[a][0];
-    Value vb = totals[b][0];
-    if (!totals_emitted) {
-      const ArrayValue* sa = build_group_slice(values, 0U, members[a], arena);
-      const ArrayValue* sb = build_group_slice(values, 0U, members[b], arena);
-      va = (sa != nullptr) ? invoke_aggregator_for_group(agg, sa, arena, registry, ctx) : Value::error(ErrorCode::Num);
-      vb = (sb != nullptr) ? invoke_aggregator_for_group(agg, sb, arena, registry, ctx) : Value::error(ErrorCode::Num);
-    }
-    const int c = cmp_value_asc(va, vb);
-    if (c != 0) {
-      return descending ? (c > 0) : (c < 0);
-    }
-    return cmp_keys_asc(keys, repr[a], repr[b]) < 0;
-  });
-  return true;
+  order_groups(plan, keys, repr, is_error, value_keys, out_order);
 }
 
 }  // namespace
@@ -162,8 +139,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // ("Field N" / "Value N") rather than ja-JP labels.
 
   // -- arg 3: aggregator ----------------------------------------------------
-  const LambdaValue* agg = resolve_aggregator(call.as_call_arg(3), arena, registry, ctx, &err);
-  if (agg == nullptr) {
+  Aggregator agg_arg;
+  if (!resolve_aggregator(call.as_call_arg(3), arena, registry, ctx, &agg_arg, &err)) {
     return err;
   }
 
@@ -185,10 +162,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- arg 6: row_sort_order; omitted sorts the keys ascending -------------
-  // Sort the row groups by their row totals (`SUM`-like aggregation over
-  // every (row_group, col_group) cell of the row). positive means ascending; negative descending.
-  int row_sort_order = 0;
-  if (!read_optional_sort_order(call, 6, arity, arena, registry, ctx, &row_sort_order, &err)) {
+  // Numbers the row_fields columns, then the value columns (ordering by the
+  // row totals); negative descends.
+  std::vector<int> row_sort_order;
+  if (!read_optional_sort_spec(call, 6, arity, arena, registry, ctx, &row_sort_order, &err)) {
     return err;
   }
 
@@ -207,8 +184,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // signed-column-index domain, so the same rule is applied to both rather
   // than leaving one half of a symmetric argument pair accepting a value the
   // other rejects.
-  int col_sort_order = 0;
-  if (!read_optional_sort_order(call, 8, arity, arena, registry, ctx, &col_sort_order, &err)) {
+  std::vector<int> col_sort_order;
+  if (!read_optional_sort_spec(call, 8, arity, arena, registry, ctx, &col_sort_order, &err)) {
     return err;
   }
 
@@ -265,6 +242,21 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t col_levels = col_fields->cols;
   const std::uint32_t val_cols = values->cols;
 
+  // A two-parameter aggregator's second argument is every row of the result
+  // column its cell sits in: the column group for body and grand-total-row
+  // cells, all filtered rows for the grand-total column.
+  const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
+  Aggregator all_agg;
+  if (!bind_aggregator_totals(*values, all_rows, arena, agg_arg, &all_agg)) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::vector<Aggregator> col_agg(n_cols);
+  for (std::size_t cg = 0; cg < n_cols; ++cg) {
+    if (!bind_aggregator_totals(*values, col_members[cg], arena, agg_arg, &col_agg[cg])) {
+      return Value::error(ErrorCode::Num);
+    }
+  }
+
   // -- Aggregate per (row_group, col_group, value_col) --------------------
   // For each (rg, cg) pair, build the intersection row list once and reuse
   // it across every value column. Per-cell error isolation: an aggregator
@@ -297,7 +289,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
           body[rg][cg][v] = Value::error(ErrorCode::Num);
           continue;
         }
-        body[rg][cg][v] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+        body[rg][cg][v] = invoke_aggregator_for_group(col_agg[cg], v, slice, arena, registry, ctx);
       }
     }
   }
@@ -311,7 +303,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_row_totals_col) {
     for (std::size_t rg = 0; rg < n_rows; ++rg) {
       row_totals[rg] =
-          aggregate_value_columns(*values, val_cols, row_members[rg], agg, arena, registry, ctx, ErrorCode::Calc);
+          aggregate_value_columns(*values, val_cols, row_members[rg], all_agg, arena, registry, ctx, ErrorCode::Calc);
     }
   }
 
@@ -323,8 +315,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<std::vector<Value>> col_totals(n_cols, std::vector<Value>(val_cols, placeholder_cell()));
   if (emit_col_totals_row) {
     for (std::size_t cg = 0; cg < n_cols; ++cg) {
-      col_totals[cg] =
-          aggregate_value_columns(*values, val_cols, col_members[cg], agg, arena, registry, ctx, ErrorCode::Calc);
+      col_totals[cg] = aggregate_value_columns(*values, val_cols, col_members[cg], col_agg[cg], arena, registry, ctx,
+                                               ErrorCode::Calc);
     }
   }
 
@@ -332,23 +324,31 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // The grand total cells exist only when both axes emit totals.
   std::vector<Value> grand_totals(val_cols, placeholder_cell());
   if (emit_row_totals_col && emit_col_totals_row) {
-    const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
-    grand_totals = aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
+    grand_totals = aggregate_value_columns(*values, val_cols, all_rows, all_agg, arena, registry, ctx, ErrorCode::Calc);
   }
 
   // -- Sort row and col groups -------------------------------------------
   // The first/only value column reduces to the axis total in
   // single-column-values scope.
+  // Each sort order numbers its own axis's key columns first, then the value
+  // columns, whose axis totals order the groups.
+  GroupSort row_plan;
+  GroupSort col_plan;
+  if (!plan_group_sort(row_sort_order, key_cols, val_cols, &row_plan) ||
+      !plan_group_sort(col_sort_order, col_levels, val_cols, &col_plan)) {
+    return Value::error(ErrorCode::Value);
+  }
+  const std::vector<const Aggregator*> row_axis_agg(n_rows, &all_agg);
+  std::vector<const Aggregator*> col_axis_agg(n_cols);
+  for (std::size_t cg = 0; cg < n_cols; ++cg) {
+    col_axis_agg[cg] = &col_agg[cg];
+  }
   std::vector<std::size_t> row_order;
-  if (!order_axis_groups(row_sort_order, *row_fields, row_repr, row_members, row_is_error, row_totals,
-                         emit_row_totals_col, *values, agg, arena, registry, ctx, &row_order)) {
-    return Value::error(ErrorCode::Value);
-  }
+  order_axis_groups(row_plan, *row_fields, row_repr, row_members, row_is_error, row_totals, emit_row_totals_col,
+                    *values, row_axis_agg, arena, registry, ctx, &row_order);
   std::vector<std::size_t> col_order;
-  if (!order_axis_groups(col_sort_order, *col_fields, col_repr, col_members, col_is_error, col_totals,
-                         emit_col_totals_row, *values, agg, arena, registry, ctx, &col_order)) {
-    return Value::error(ErrorCode::Value);
-  }
+  order_axis_groups(col_plan, *col_fields, col_repr, col_members, col_is_error, col_totals, emit_col_totals_row,
+                    *values, col_axis_agg, arena, registry, ctx, &col_order);
 
   // A two-level column axis can expose one value-wide subtotal block for
   // every outer key. Build the physical block plan once and let all of the
@@ -393,8 +393,15 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // body cells; an aggregator error is retained in that one cell.
   std::vector<std::vector<std::vector<Value>>> col_subtotal_body;
   std::vector<std::vector<Value>> col_subtotal_totals;
+  std::vector<Aggregator> outer_col_agg;
   if (emit_col_subtotals) {
     const std::size_t outer_count = col_hierarchy.repr_of_outer.size();
+    outer_col_agg.resize(outer_count);
+    for (std::size_t outer = 0; outer < outer_count; ++outer) {
+      if (!bind_aggregator_totals(*values, col_hierarchy.rows_of_outer[outer], arena, agg_arg, &outer_col_agg[outer])) {
+        return Value::error(ErrorCode::Num);
+      }
+    }
     col_subtotal_body.assign(
         n_rows, std::vector<std::vector<Value>>(outer_count, std::vector<Value>(val_cols, placeholder_cell())));
     for (std::size_t rg = 0; rg < n_rows; ++rg) {
@@ -407,16 +414,17 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
           }
         }
         if (!intersection.empty()) {
-          col_subtotal_body[rg][outer] =
-              aggregate_value_columns(*values, val_cols, intersection, agg, arena, registry, ctx, ErrorCode::Calc);
+          col_subtotal_body[rg][outer] = aggregate_value_columns(*values, val_cols, intersection, outer_col_agg[outer],
+                                                                 arena, registry, ctx, ErrorCode::Calc);
         }
       }
     }
     if (emit_col_totals_row) {
       col_subtotal_totals.assign(outer_count, std::vector<Value>(val_cols, placeholder_cell()));
       for (std::size_t outer = 0; outer < outer_count; ++outer) {
-        col_subtotal_totals[outer] = aggregate_value_columns(*values, val_cols, col_hierarchy.rows_of_outer[outer], agg,
-                                                             arena, registry, ctx, ErrorCode::Calc);
+        col_subtotal_totals[outer] =
+            aggregate_value_columns(*values, val_cols, col_hierarchy.rows_of_outer[outer], outer_col_agg[outer], arena,
+                                    registry, ctx, ErrorCode::Calc);
       }
     }
   }
@@ -674,8 +682,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         if (intersection.empty()) {
           continue;  // no data at this intersection; Excel leaves it blank.
         }
+        const Aggregator& slot_agg =
+            slot.kind == ColSlotKind::Leaf ? col_agg[slot.col_group] : outer_col_agg[slot.outer_group];
         const std::vector<Value> cells =
-            aggregate_value_columns(*values, val_cols, intersection, agg, arena, registry, ctx, ErrorCode::Calc);
+            aggregate_value_columns(*values, val_cols, intersection, slot_agg, arena, registry, ctx, ErrorCode::Calc);
         const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
         for (std::uint32_t v = 0; v < val_cols; ++v) {
           row[base + v] = cells[v];
@@ -685,7 +695,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       // for the single-value-column layout.
       if (emit_row_totals_col && val_cols == 1U) {
         const std::vector<Value> totals = aggregate_value_columns(*values, val_cols, row_hierarchy.rows_of_outer[o],
-                                                                  agg, arena, registry, ctx, ErrorCode::Calc);
+                                                                  all_agg, arena, registry, ctx, ErrorCode::Calc);
         for (std::uint32_t v = 0; v < val_cols; ++v) {
           row[grand_total_block_start + v] = totals[v];
         }

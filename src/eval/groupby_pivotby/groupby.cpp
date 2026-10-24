@@ -52,8 +52,8 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- arg 2: aggregator ----------------------------------------------------
-  const LambdaValue* agg = resolve_aggregator(call.as_call_arg(2), arena, registry, ctx, &err);
-  if (agg == nullptr) {
+  Aggregator agg_arg;
+  if (!resolve_aggregator(call.as_call_arg(2), arena, registry, ctx, &agg_arg, &err)) {
     return err;
   }
 
@@ -71,8 +71,8 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- arg 5: sort_order ----------------------------------------------------
-  int sort_order = 0;
-  if (!read_optional_sort_order(call, 5, arity, arena, registry, ctx, &sort_order, &err)) {
+  std::vector<int> sort_spec;
+  if (!read_optional_sort_spec(call, 5, arity, arena, registry, ctx, &sort_spec, &err)) {
     return err;
   }
 
@@ -112,6 +112,13 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (group_repr.empty()) {
     return Value::error(ErrorCode::Value);
   }
+  // A two-parameter aggregator's second argument is the whole filtered column,
+  // for group, subtotal and grand-total cells alike.
+  const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
+  Aggregator agg;
+  if (!bind_aggregator_totals(*values, all_rows, arena, agg_arg, &agg)) {
+    return Value::error(ErrorCode::Num);
+  }
 
   // -- Aggregate per group -------------------------------------------------
   // Output has `row_fields->cols` key columns followed by `values->cols`
@@ -138,53 +145,27 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         row[key_cols + vc] = Value::error(ErrorCode::Num);
         continue;
       }
-      row[key_cols + vc] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+      row[key_cols + vc] = invoke_aggregator_for_group(agg, vc, slice, arena, registry, ctx);
     }
     agg_rows.push_back(std::move(row));
   }
 
   // -- Sort ---------------------------------------------------------------
-  // sort_order semantics:
-  //   * omitted -> ascending by the key columns, errors last.
-  //   * N>0 -> stable-sort ascending by the N-th aggregated value column
-  //     (1-based; out-of-range -> #VALUE!). Tie-break on group key.
-  //   * N<0 -> stable-sort descending by |N|-th column.
-  // Error-keyed groups always sort to the bottom (after all valid groups).
-  std::vector<std::size_t> order(agg_rows.size());
-  for (std::size_t i = 0; i < order.size(); ++i) {
-    order[i] = i;
+  // sort_order numbers the output columns, key columns first; omitted sorts
+  // by the keys ascending (see `plan_group_sort`).
+  GroupSort sort_plan;
+  if (!plan_group_sort(sort_spec, key_cols, val_cols, &sort_plan)) {
+    return Value::error(ErrorCode::Value);
   }
-  if (sort_order != 0) {
-    const int abs_sort = sort_order > 0 ? sort_order : -sort_order;
-    if (abs_sort < 1 || static_cast<std::uint32_t>(abs_sort) > val_cols) {
-      return Value::error(ErrorCode::Value);
+  std::vector<Value> value_keys;
+  if (sort_plan.value_col != 0U) {
+    value_keys.reserve(agg_rows.size());
+    for (const std::vector<Value>& row : agg_rows) {
+      value_keys.push_back(row[key_cols + sort_plan.value_col - 1U]);
     }
-    const std::uint32_t value_col_idx = static_cast<std::uint32_t>(abs_sort - 1);
-    const bool descending = (sort_order < 0);
-    sort_group_order(order, [&](std::size_t a, std::size_t b) {
-      // Error-keyed groups always go last regardless of
-      // direction; this matches Mac Excel's "errors trail"
-      // surface for the dynamic-array sort family.
-      if (group_is_error[a] != group_is_error[b]) {
-        return !group_is_error[a];
-      }
-      const Value& va = agg_rows[a][key_cols + value_col_idx];
-      const Value& vb = agg_rows[b][key_cols + value_col_idx];
-      const int c = cmp_value_asc(va, vb);
-      if (c != 0) {
-        return descending ? (c > 0) : (c < 0);
-      }
-      // Tie-break on group key (always ascending).
-      return cmp_keys_asc(*row_fields, group_repr[a], group_repr[b]) < 0;
-    });
-  } else {
-    sort_group_order(order, [&](std::size_t a, std::size_t b) {
-      if (group_is_error[a] != group_is_error[b]) {
-        return !group_is_error[a];
-      }
-      return cmp_keys_asc(*row_fields, group_repr[a], group_repr[b]) < 0;
-    });
   }
+  std::vector<std::size_t> order;
+  order_groups(sort_plan, *row_fields, group_repr, group_is_error, value_keys, &order);
 
   // -- Compute grand total (if requested) ---------------------------------
   // The grand total aggregates over EVERY filtered data row. It is rendered
@@ -202,7 +183,6 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     grand_total_row.assign(out_cols, placeholder_cell());
     grand_total_row[0] =
         Value::text(arena.intern(emit_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
-    const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
     const std::vector<Value> totals =
         aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
     for (std::uint32_t vc = 0; vc < val_cols; ++vc) {

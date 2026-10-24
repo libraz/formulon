@@ -406,7 +406,7 @@ TEST(GroupBy, SubtotalsKeepEachOuterGroupContiguousUnderASort) {
   // The hierarchy is primary: sorting by the aggregate reorders groups
   // within an outer group and reorders the outer groups themselves, but it
   // never interleaves rows from different outer groups.
-  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"Y\",\"B\";\"X\",\"C\"}, {10;5;1}, SUM, 0, 2, 1)");
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"Y\",\"B\";\"X\",\"C\"}, {10;5;1}, SUM, 0, 2, 3)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 6U);
   // Ascending by value: X/C (1) sorts first, so outer group X leads, with
@@ -486,9 +486,11 @@ TEST(GroupBy, UnknownAggregatorOutranksASuppliedSortOrderZero) {
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
+// sort_order numbers the output columns with the key columns first, so with
+// one key column 2 names the aggregate.
 TEST(GroupBy, SortOrderPositiveAscendingByAggregate) {
   // Aggregates: A=2+4=6, B=1, C=3. Ascending: B(1), C(3), A(6).
-  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 1)");
+  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "B");
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 1.0);
@@ -500,12 +502,51 @@ TEST(GroupBy, SortOrderPositiveAscendingByAggregate) {
 
 TEST(GroupBy, SortOrderNegativeDescendingByAggregate) {
   // Same aggregates as above, descending: A(6), C(3), B(1).
-  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, -1)");
+  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, -2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 6.0);
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "C");
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
+}
+
+TEST(GroupBy, SortOrderKeyColumnSetsTheKeyDirection) {
+  const Value asc = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 1)");
+  ASSERT_TRUE(asc.is_array()) << asc.debug_to_string();
+  EXPECT_EQ(std::string(Cell(asc, 0, 0).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(asc, 2, 0).as_text()), "C");
+  const Value desc = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, -1)");
+  ASSERT_TRUE(desc.is_array()) << desc.debug_to_string();
+  EXPECT_EQ(std::string(Cell(desc, 0, 0).as_text()), "C");
+  EXPECT_EQ(std::string(Cell(desc, 1, 0).as_text()), "B");
+  EXPECT_EQ(std::string(Cell(desc, 2, 0).as_text()), "A");
+}
+
+// A descending inner key keeps the outer key outermost and ascending:
+// x/b, x/a, y/b, y/a.
+TEST(GroupBy, SortOrderVectorDescendingInnerKeyKeepsTheOuterKeyFirst) {
+  const Value v = EvalSrc("=GROUPBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"}, {1;2;3;4}, SUM, 0, 0, {-2})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 4U);
+  const char* want[4][2] = {{"x", "b"}, {"x", "a"}, {"y", "b"}, {"y", "a"}};
+  const double sums[4] = {1.0, 3.0, 4.0, 2.0};
+  for (std::uint32_t r = 0; r < 4U; ++r) {
+    EXPECT_EQ(std::string(Cell(v, r, 0).as_text()), want[r][0]) << r;
+    EXPECT_EQ(std::string(Cell(v, r, 1).as_text()), want[r][1]) << r;
+    EXPECT_DOUBLE_EQ(Cell(v, r, 2).as_number(), sums[r]) << r;
+  }
+}
+
+TEST(GroupBy, SortOrderVectorNamingAValueColumnIsValueError) {
+  const Value v = EvalSrc("=GROUPBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"}, {1;2;3;4}, SUM, 0, 0, {1,-3})");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(GroupBy, SortOrderPastTheLastColumnIsValueError) {
+  const Value v = EvalSrc("=GROUPBY({\"B\";\"A\";\"C\";\"A\"}, {1;2;3;4}, SUM, 0, 0, 3)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(GroupBy, SortOrderOutOfRangeYieldsValueError) {
@@ -596,19 +637,80 @@ TEST(GroupBy, NonLambdaNonNameAggregatorYieldsValueError) {
 }
 
 TEST(GroupBy, LambdaWrongArityYieldsValueError) {
-  // GROUPBY calls the aggregator with one argument; a lambda that requires
-  // two cannot be called and surfaces #VALUE!.
-  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, LAMBDA(a, b, a+b), 0, 0, 0)");
+  // GROUPBY calls the aggregator with one or two arguments; a lambda that
+  // requires three cannot be called and surfaces #VALUE!.
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {1;2}, LAMBDA(a, b, c, a+b+c), 0, 0)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// A two-parameter aggregator receives (group values, all filtered values of
+// the column) in every cell: groups, subtotals and the grand total.
+TEST(GroupBy, PercentofReceivesTheGroupAndTheWholeColumn) {
+  for (const char* agg : {"PERCENTOF", "LAMBDA(x,y,PERCENTOF(x,y))"}) {
+    const Value v = EvalSrc(std::string("=GROUPBY({\"a\";\"b\";\"a\"},{1;2;3},") + agg + ",0,1)");
+    ASSERT_TRUE(v.is_array()) << agg << " -> " << v.debug_to_string();
+    ASSERT_EQ(v.as_array_rows(), 3U) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 4.0 / 6.0) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 2.0 / 6.0) << agg;
+    EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 1.0) << agg;
+  }
+}
+
+// Every aggregator requiring exactly two arguments, built-ins included, is
+// called as (group values, whole value column).
+TEST(GroupBy, TwoArgumentAggregatorsReceiveTheWholeColumn) {
+  const std::string keys = "{\"a\";\"a\";\"b\";\"b\";\"c\";\"c\"},{1;2;3;4;5;6},";
+  const Value rows = EvalSrc("=GROUPBY(" + keys + "LAMBDA(x,y,ROWS(x)&\"/\"&ROWS(y)))");
+  ASSERT_TRUE(rows.is_array()) << rows.debug_to_string();
+  ASSERT_EQ(rows.as_array_rows(), 4U);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    EXPECT_EQ(std::string(Cell(rows, r, 1).as_text()), "2/6") << r;
+  }
+  EXPECT_EQ(std::string(Cell(rows, 3, 1).as_text()), "6/6");
+
+  const Value correl = EvalSrc("=GROUPBY(" + keys + "CORREL)");
+  ASSERT_TRUE(correl.is_array()) << correl.debug_to_string();
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    ASSERT_TRUE(Cell(correl, r, 1).is_error()) << r;
+    EXPECT_EQ(Cell(correl, r, 1).as_error(), ErrorCode::NA) << r;
+  }
+  EXPECT_DOUBLE_EQ(Cell(correl, 3, 1).as_number(), 1.0);
+
+  const Value covariance = EvalSrc("=GROUPBY(" + keys + "COVARIANCE.P)");
+  ASSERT_TRUE(covariance.is_array()) << covariance.debug_to_string();
+  EXPECT_EQ(Cell(covariance, 0, 1).as_error(), ErrorCode::NA);
+  EXPECT_DOUBLE_EQ(Cell(covariance, 3, 1).as_number(), 2.9166666666666665);
+
+  const Value percent = EvalSrc("=GROUPBY(" + keys + "PERCENTOF)");
+  ASSERT_TRUE(percent.is_array()) << percent.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(percent, 0, 1).as_number(), 3.0 / 21.0);
+  EXPECT_DOUBLE_EQ(Cell(percent, 1, 1).as_number(), 7.0 / 21.0);
+  EXPECT_DOUBLE_EQ(Cell(percent, 2, 1).as_number(), 11.0 / 21.0);
+  EXPECT_DOUBLE_EQ(Cell(percent, 3, 1).as_number(), 1.0);
+}
+
+TEST(GroupBy, PercentofSubtotalsAndFilterUseTheFilteredColumn) {
+  const Value sub = EvalSrc("=GROUPBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"},{1;2;3;4},PERCENTOF,0,2)");
+  ASSERT_TRUE(sub.is_array()) << sub.debug_to_string();
+  ASSERT_EQ(sub.as_array_rows(), 7U);
+  const double want[7] = {0.3, 0.1, 0.4, 0.2, 0.4, 0.6, 1.0};
+  for (std::uint32_t r = 0; r < 7U; ++r) {
+    EXPECT_DOUBLE_EQ(Cell(sub, r, 2).as_number(), want[r]) << r;
+  }
+  const Value filtered = EvalSrc("=GROUPBY({\"a\";\"b\";\"a\";\"c\"},{1;2;3;4},PERCENTOF,0,1,,{TRUE;TRUE;TRUE;FALSE})");
+  ASSERT_TRUE(filtered.is_array()) << filtered.debug_to_string();
+  ASSERT_EQ(filtered.as_array_rows(), 3U);
+  EXPECT_DOUBLE_EQ(Cell(filtered, 0, 1).as_number(), 4.0 / 6.0);
+  EXPECT_DOUBLE_EQ(Cell(filtered, 2, 1).as_number(), 1.0);
 }
 
 // ---------------------------------------------------------------------------
 // Optional (`[name]`) params on the aggregator lambda
 //
-// GROUPBY supplies exactly one argument per group, so a lambda is callable
-// when `param_count - optional_count <= 1 <= param_count`. The params it
-// does not supply bind to the sentinel `ISOMITTED` detects.
+// A lambda requiring one parameter gets one argument per group, so it is
+// callable when `param_count - optional_count <= 1 <= param_count`. The
+// params it does not supply bind to the sentinel `ISOMITTED` detects.
 // ---------------------------------------------------------------------------
 
 TEST(GroupBy, LambdaWithTrailingOptionalIsAccepted) {
@@ -670,8 +772,8 @@ TEST(GroupBy, LetBoundLambdaWithOptionalIsAccepted) {
 }
 
 TEST(GroupBy, LetBoundLambdaBelowRequiredArityStillRejected) {
-  // `LAMBDA(a, b, a+b)` requires two args through Form B as well.
-  const Value v = EvalSrc("=LET(f, LAMBDA(a, b, a+b), GROUPBY({\"A\";\"B\"}, {1;2}, f, 0, 0))");
+  // A lambda requiring three args is not callable through Form B either.
+  const Value v = EvalSrc("=LET(f, LAMBDA(a, b, c, a+b+c), GROUPBY({\"A\";\"B\"}, {1;2}, f, 0, 0))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
