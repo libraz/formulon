@@ -415,6 +415,33 @@ ErrorCode EvalError(std::string_view src, const Workbook& wb) {
   return v.is_error() ? v.as_error() : ErrorCode::Value;
 }
 
+// A single-cell pick from a whole-column reference reads the cell by its
+// declared position without walking the populated extent; row, column and
+// array selections still span the walked extent. Every result matches the
+// bounded reference.
+TEST(BuiltinsIndex, WholeColumnPicksMatchTheBoundedReference) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(10.0 * static_cast<double>(r + 1)));
+  }
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A:B,2,2)", wb), 20.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A:A,3)", wb), 3.0);
+  const Value beyond = EvalSourceIn("=ISBLANK(INDEX(A:A,500))", wb, wb.sheet(0));
+  ASSERT_TRUE(beyond.is_boolean()) << beyond.debug_to_string();
+  EXPECT_TRUE(beyond.as_boolean());
+
+  Value v = EvalSourceIn("=INDEX(A:B,0,2)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 3U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 30.0);
+  v = EvalSourceIn("=INDEX(A:B,3,0)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 30.0);
+  v = EvalSourceIn("=INDEX(A:A,{1;3})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 3.0);
+}
+
 TEST(BuiltinsIndex, ColumnSnapsNearIntegerUp) {
   const Workbook wb = SnapWorkbook();
   EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.9999999)", wb), 20.0);

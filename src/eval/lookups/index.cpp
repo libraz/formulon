@@ -842,8 +842,10 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (is_three_d_reference(source_node)) {
     return Value::error(ErrorCode::Value);
   }
+  // A single-cell pick reads one cell by its declared position, so the
+  // whole-axis extent walk waits until a selection spans a line or more.
   ReferenceTable table;
-  const auto by_reference = resolve_reference_table(source_node, ctx, &table);
+  const auto by_reference = resolve_reference_table(source_node, ctx, &table, TableWalk::kDeferred);
   ErrorCode source_error = ErrorCode::Value;
   std::optional<IndexSource> source;
   if (!by_reference) {
@@ -870,6 +872,13 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
   }
   if (row_val.is_array() || col_val.is_array()) {
+    if (source_ok) {
+      const auto walked = walk_reference_table(&table, ctx);
+      if (!walked) {
+        source_error = walked.error();
+        source_ok = false;
+      }
+    }
     if (source_ok && !source->load(arena, registry, ctx, &source_error)) {
       source_ok = false;
     }
@@ -894,6 +903,12 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const auto pick = index_pick(rows, cols, row.index, col.index, col_explicit, by_reference && by_reference.value());
   if (!pick) {
     return Value::error(pick.error());
+  }
+  if (pick.value().kind != IndexPickKind::kCell) {
+    const auto walked = walk_reference_table(&table, ctx);
+    if (!walked) {
+      return Value::error(walked.error());
+    }
   }
   switch (pick.value().kind) {
     case IndexPickKind::kRow:

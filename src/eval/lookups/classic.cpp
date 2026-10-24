@@ -503,7 +503,7 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   // lookup_array: must be a range / Ref with a 1-D shape. A static
   // reference is judged by its declared shape, and a 2-D one is not read.
   ReferenceTable table;
-  const auto by_reference = resolve_reference_table(call.as_call_arg(1), ctx, &table);
+  const auto by_reference = resolve_reference_table(call.as_call_arg(1), ctx, &table, TableWalk::kDeferred);
   if (by_reference && by_reference.value() && table.declared.rows() != 1U && table.declared.cols() != 1U) {
     return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
   }
@@ -648,18 +648,21 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   const std::uint32_t lrows = lookup_resolved.value().rows;
   const std::uint32_t lcols = lookup_resolved.value().cols;
   std::vector<Value> lookup_cells = std::move(lookup_resolved.value().cells);
-  if (lrows == 0U || lcols == 0U) {
-    return Value::error(ErrorCode::Ref);
-  }
 
   // The orientation is the declared one: `A:C` is taller than wide however
   // few of its rows hold values.
   std::uint32_t lshape_rows = lrows;
   std::uint32_t lshape_cols = lcols;
   static_reference_shape(call.as_call_arg(1), ctx, &lshape_rows, &lshape_cols);
+  if (lshape_rows == 0U || lshape_cols == 0U) {
+    return Value::error(ErrorCode::Ref);
+  }
   const LookupAxis axis = lshape_rows >= lshape_cols ? LookupAxis::Column : LookupAxis::Row;
-  const std::size_t off =
-      lookup_scan(lookup_cells, lrows, lcols, axis, lookup, /*approximate=*/true, ctx.excel_profile());
+  // A whole-axis vector with nothing populated walks no cells; every declared
+  // cell is blank, so nothing matches.
+  const std::size_t off = lookup_cells.empty() ? SIZE_MAX
+                                               : lookup_scan(lookup_cells, lrows, lcols, axis, lookup,
+                                                             /*approximate=*/true, ctx.excel_profile());
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }
@@ -690,18 +693,23 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   const std::uint32_t rrows = result_resolved.value().rows;
   const std::uint32_t rcols = result_resolved.value().cols;
   std::vector<Value> result_cells = std::move(result_resolved.value().cells);
-  if (rrows == 0U || rcols == 0U) {
-    return Value::error(ErrorCode::Ref);
-  }
   // Index the result vector along its own long axis. Excel treats the
   // result vector as parallel to the lookup vector, so the "axis position"
   // maps to the same offset regardless of orientation.
   std::uint32_t rshape_rows = rrows;
   std::uint32_t rshape_cols = rcols;
   static_reference_shape(call.as_call_arg(2), ctx, &rshape_rows, &rshape_cols);
+  if (rshape_rows == 0U || rshape_cols == 0U) {
+    return Value::error(ErrorCode::Ref);
+  }
   const LookupAxis raxis = rshape_rows >= rshape_cols ? LookupAxis::Column : LookupAxis::Row;
   const std::size_t flat = raxis == LookupAxis::Column ? (off * static_cast<std::size_t>(rcols)) : off;
-  return flat < result_cells.size() ? result_cells[flat] : Value::error(ErrorCode::NA);
+  if (flat < result_cells.size()) {
+    return result_cells[flat];
+  }
+  // Past the walked extent but inside the declared vector the cell is blank.
+  const std::uint32_t rlength = raxis == LookupAxis::Column ? rshape_rows : rshape_cols;
+  return off < rlength ? Value::blank(BlankGridProjection::kReferenceGridZero) : Value::error(ErrorCode::NA);
 }
 
 }  // namespace eval

@@ -381,6 +381,39 @@ TEST(BuiltinsLookup, TwoArgFormReturnsLookupVectorCell) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+// A whole-axis vector is read in its declared shape: how far its populated
+// extent reaches never decides the result.
+TEST(BuiltinsLookup, EmptyWholeColumnLookupVectorIsNA) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 1, Value::number(1.0));
+  for (const char* src : {"=LOOKUP(1, A:A)", "=LOOKUP(1, A:A, B:B)", "=LOOKUP(1, 5:5)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << src << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::NA) << src;
+  }
+}
+
+TEST(BuiltinsLookup, WholeAxisResultVectorPastPopulatedCellsIsBlank) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 3, Value::number(7.0));  // D1 only
+  // Same top-level result as the bounded reference to a blank cell (0).
+  const Value bounded = EvalSourceIn("=LOOKUP(2, {1,2}, D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(bounded.is_number()) << bounded.debug_to_string();
+  EXPECT_DOUBLE_EQ(bounded.as_number(), 0.0);
+  for (const char* src : {"=LOOKUP(1, {1,2}, C:C)", "=LOOKUP(1, {1,2}, 3:3)", "=LOOKUP(2, {1,2}, D:D)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), 0.0) << src;
+  }
+  const Value d1 = EvalSourceIn("=LOOKUP(1, {1,2}, D:D)", wb, wb.sheet(0));
+  ASSERT_TRUE(d1.is_number()) << d1.debug_to_string();
+  EXPECT_DOUBLE_EQ(d1.as_number(), 7.0);
+  // A bounded result vector shorter than the match offset stays #N/A.
+  const Value short_result = EvalSourceIn("=LOOKUP(3, {1,2,3}, D1:D2)", wb, wb.sheet(0));
+  ASSERT_TRUE(short_result.is_error()) << short_result.debug_to_string();
+  EXPECT_EQ(short_result.as_error(), ErrorCode::NA);
+}
+
 // ---- text collation ----
 
 Value EvalWithProfile(const std::string& formula, ExcelProfile profile) {

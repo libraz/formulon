@@ -45,8 +45,10 @@ struct ReferenceTable {
   parser::Reference rhs;
   DeclaredRect declared;
   // What a full expansion would walk. A whole-axis reference with nothing
-  // populated walks its first line. Every cell beyond it is blank.
+  // populated walks its first line. Every cell beyond it is blank. Unset
+  // while `walk_pending`.
   DeclaredRect walked;
+  bool walk_pending = false;
   // The supporting workbook a cross-workbook table reads from, and its sheet
   // there; null for a table on this workbook. Its cells come from the
   // external link's cache, where an uncached address reads 0.
@@ -54,12 +56,21 @@ struct ReferenceTable {
   std::uint32_t external_sheet = 0;
 };
 
+// Whether `resolve_reference_table` computes `walked` up front, or leaves it
+// to `walk_reference_table` so a single-cell read never pays for the
+// whole-axis extent walk.
+enum class TableWalk : std::uint8_t { kNow, kDeferred };
+
 // True with `*out` filled when `arg` (after LET passthrough) is a static
 // reference, including a single-sheet cell-form `ExternalRef`; false for
 // every other shape. A static reference that does not
 // resolve reports the error its expansion would.
 Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, const EvalContext& ctx,
-                                                  ReferenceTable* out);
+                                                  ReferenceTable* out, TableWalk walk = TableWalk::kNow);
+
+// Fills `table->walked` for a table resolved with `TableWalk::kDeferred`; a
+// no-op once it is filled.
+Expected<void, ErrorCode> walk_reference_table(ReferenceTable* table, const EvalContext& ctx);
 
 // Expands the bounded sheet rectangle `[row_first..row_last] x
 // [col_first..col_last]` of `table`'s sheet, row-major.

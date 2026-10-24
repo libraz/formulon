@@ -26,7 +26,7 @@ Value promote_array_result_cell(const Value& value) {
 }
 
 Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, const EvalContext& ctx,
-                                                  ReferenceTable* out) {
+                                                  ReferenceTable* out, TableWalk walk) {
   const parser::AstNode& node = resolve_name_ast(arg, ctx.name_env());
   const parser::Reference* external_lhs = nullptr;
   const parser::Reference* external_rhs = nullptr;
@@ -50,22 +50,37 @@ Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, co
   if (!declared) {
     return declared.error();
   }
-  const auto walked = ctx.walked_range_rect(out->lhs, out->rhs);
-  if (!walked) {
-    return walked.error();
-  }
   out->declared = declared.value();
-  if (walked.value().has_value()) {
-    out->walked = *walked.value();
-  } else {
-    out->walked = declared.value();
-    if (out->walked.rows() == Sheet::kMaxRows) {
-      out->walked.row_last = out->walked.row_first;
-    } else {
-      out->walked.col_last = out->walked.col_first;
+  out->walk_pending = true;
+  if (walk == TableWalk::kNow) {
+    const auto walked = walk_reference_table(out, ctx);
+    if (!walked) {
+      return walked.error();
     }
   }
   return true;
+}
+
+Expected<void, ErrorCode> walk_reference_table(ReferenceTable* table, const EvalContext& ctx) {
+  if (!table->walk_pending) {
+    return Expected<void, ErrorCode>::Ok();
+  }
+  const auto walked = ctx.walked_range_rect(table->lhs, table->rhs);
+  if (!walked) {
+    return Expected<void, ErrorCode>::Err(walked.error());
+  }
+  if (walked.value().has_value()) {
+    table->walked = *walked.value();
+  } else {
+    table->walked = table->declared;
+    if (table->walked.rows() == Sheet::kMaxRows) {
+      table->walked.row_last = table->walked.row_first;
+    } else {
+      table->walked.col_last = table->walked.col_first;
+    }
+  }
+  table->walk_pending = false;
+  return Expected<void, ErrorCode>::Ok();
 }
 
 Expected<std::vector<Value>, ErrorCode> read_table_block(const ReferenceTable& table, std::uint32_t row_first,
