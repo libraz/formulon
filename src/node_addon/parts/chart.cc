@@ -627,18 +627,17 @@ void ReadPointPatch(CheckedSpecReader& r, const Napi::Object& spec, fm_chart_poi
   ReadMarkerPatch(r, spec, out.marker_op, out.marker);
 }
 
-/// Reads the optional object argument `info[idx]`; absent reads as `{}`. False after
-/// throwing when a value other than an object was supplied.
-bool ObjectArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Napi::Object* out) {
-  if (info.Length() <= idx || info[idx].IsUndefined()) {
+/// Reads the patch object argument `info[idx]`; absent reads as `{}`. False after
+/// throwing when a value other than a plain object was supplied.
+bool PatchObjectArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Napi::Object* out) {
+  if (info[idx].IsUndefined()) {
     *out = Napi::Object::New(info.Env());
     return true;
   }
-  if (!info[idx].IsObject() || info[idx].IsArray()) {
+  if (info[idx].IsArray() || !ObjectArg(info, idx, out)) {
     Napi::TypeError::New(info.Env(), std::string(api) + " expects an object argument").ThrowAsJavaScriptException();
     return false;
   }
-  *out = info[idx].As<Napi::Object>();
   return true;
 }
 
@@ -717,7 +716,7 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
     return ReadResult(env, kBindingInvalidHandle, "data", env.Null());
   }
   Napi::Object spec;
-  if (!ObjectArg(info, 2, "previewChartData", &spec)) {
+  if (!PatchObjectArg(info, 2, "previewChartData", &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -764,12 +763,8 @@ Napi::Value Workbook::InsertChart(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    out.Set("status", MakeBindingArgumentError(env, "insertChart expects (sheet:number, options:object)"));
-    return out;
-  }
   CheckedSpecReader reader(env);
-  const Napi::Object spec = info[1].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 1);
   std::string source;
   std::string name;
   std::string descr;
@@ -828,10 +823,12 @@ Napi::Value Workbook::SetChartTitle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const Napi::Value arg = info.Length() > 2 ? info[2] : env.Null();
+  // The registration guard requires `title`; a wrong type throws as the WASM
+  // reader does.
+  const Napi::Value arg = info[2];
   if (!arg.IsNull() && !arg.IsString() && !arg.IsObject()) {
-    return MakeBindingArgumentError(
-        env, "setChartTitle expects (sheet:number, objectId:number, title:string|null|{kind,text?,formula?})");
+    Napi::TypeError::New(env, "title must be a string, null or an object").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
   CheckedSpecReader reader(env);
   Arena arena;
@@ -874,7 +871,7 @@ Napi::Value Workbook::SetChartAxis(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   Napi::Object spec;
-  if (!ObjectArg(info, 3, "setChartAxis", &spec)) {
+  if (!PatchObjectArg(info, 3, "setChartAxis", &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -922,7 +919,7 @@ Napi::Value Workbook::SetChartSeries(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   Napi::Object spec;
-  if (!ObjectArg(info, 4, "setChartSeries", &spec)) {
+  if (!PatchObjectArg(info, 4, "setChartSeries", &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -943,7 +940,7 @@ Napi::Value Workbook::SetChartPoint(const Napi::CallbackInfo& info) {
   }
   // A null or empty patch removes the point's formatting.
   Napi::Object spec = Napi::Object::New(env);
-  if (info.Length() > 5 && !info[5].IsNull() && !ObjectArg(info, 5, "setChartPoint", &spec)) {
+  if (info.Length() > 5 && !info[5].IsNull() && !PatchObjectArg(info, 5, "setChartPoint", &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -962,7 +959,7 @@ Napi::Value Workbook::SetChartPlot(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   Napi::Object spec;
-  if (!ObjectArg(info, 3, "setChartPlot", &spec)) {
+  if (!PatchObjectArg(info, 3, "setChartPlot", &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);
@@ -1004,7 +1001,7 @@ Napi::Value Workbook::AddChartSeries(const Napi::CallbackInfo& info) {
     return out;
   }
   Napi::Object spec;
-  if (!ObjectArg(info, 3, "addChartSeries", &spec)) {
+  if (!PatchObjectArg(info, 3, "addChartSeries", &spec)) {
     return env.Undefined();
   }
   CheckedSpecReader reader(env);

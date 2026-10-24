@@ -56,16 +56,13 @@ Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len);
 /// code table). The C ABI itself uses 7001 for a NULL pointer; 7000
 /// identifies a wrapper whose handle was already destroyed.
 constexpr fm_status_t kBindingInvalidHandle = 7000;
-/// The C ABI's NULL-pointer / wrong-argument-shape code, reused when a
-/// binding entry point rejects a JS argument before any C call.
-constexpr fm_status_t kBindingNullPointer = 7001;
 /// A JS callable handed to the binding threw. Reported on the envelope of
 /// the call that ran it.
 constexpr fm_status_t kBindingCallbackException = 7003;
 /// `formulon::FormulonErrorCode::kInvalidArgument` (src/utils/error.h),
-/// mirrored here the same way as the 7000-band codes above: a value out
-/// of a binding-enforced range, used when the binding itself rejects the
-/// argument before any C call.
+/// mirrored here the same way as the 7000-band codes above: the status of
+/// every argument the binding itself rejects before any C call, on this
+/// surface and the WASM one alike.
 constexpr fm_status_t kInvalidArgument = 2;
 
 // ---------------------------------------------------------------------
@@ -89,9 +86,9 @@ Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code);
 /// previous call.
 Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* message);
 
-/// `MakeBindingError` with `kBindingNullPointer`, for an entry point that
-/// rejects a missing or wrongly-shaped JS argument before calling the C
-/// ABI. `message` names the offending parameter.
+/// `MakeBindingError` with `kInvalidArgument`, for an entry point that
+/// rejects a wrongly-shaped JS argument before calling the C ABI.
+/// `message` names the offending parameter.
 Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message);
 
 /// Builds the Status envelope for `rc == 0 && callback_threw`: the engine
@@ -255,6 +252,27 @@ bool ReadMergeRange(CheckedSpecReader& reader, const Napi::Object& range, fm_mer
 /// Reads the range at `info[idx]`; a missing/nullish argument reads as all
 /// zeros, while a supplied non-object is rejected by the reader.
 bool MergeRangeArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_merge_range* out);
+
+// ---------------------------------------------------------------------
+// Positional arguments. The registration guard in `workbook_class.cc`
+// checks presence and type for every position its masks name before a
+// method runs; these accessors are the only place a binding unwraps a JS
+// argument, and they never coerce. A value of another type reads as the
+// default (or `false`), so a method branching on one is reading an
+// optional position the guard leaves to it.
+
+/// The number at `value`, or `dflt` when it is not a number.
+double NumberValue(const Napi::Value& value, double dflt);
+/// `info[idx]` as a number, or `dflt` when absent or not a number.
+double NumberArg(const Napi::CallbackInfo& info, size_t idx, double dflt);
+/// `info[idx]` as UTF-8 (lone surrogates become U+FFFD), or "" when it is
+/// not a string.
+std::string StringArg(const Napi::CallbackInfo& info, size_t idx);
+bool ObjectArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out);
+bool ArrayArg(const Napi::CallbackInfo& info, size_t idx, Napi::Array* out);
+bool FunctionArg(const Napi::CallbackInfo& info, size_t idx, Napi::Function* out);
+/// `info[idx]` when it is a `Uint8Array` (not merely another typed array).
+bool BytesArg(const Napi::CallbackInfo& info, size_t idx, Napi::Uint8Array* out);
 
 /// Builds an `fm_pivot_data_field_spec_t` from a JS spec object. The
 /// `name_buf` / `nfmt_buf` strings keep the borrowed `const char*`

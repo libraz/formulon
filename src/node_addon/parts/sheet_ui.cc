@@ -47,7 +47,9 @@ Napi::Value SheetListResult(const Napi::CallbackInfo& info, fm_workbook_t* handl
 // Shared body of the per-sheet merge add / remove entries taking `(sheet, range)`.
 using MergeEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, fm_merge_range);
 
-Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* handle, MergeEditFn fn) {
+// `handle` aliases the wrapper's member, so the C call sees the handle as it
+// is after the range getters ran, not a copy taken before them.
+Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, MergeEditFn fn) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
     return MakeErrorStatus(env, kBindingInvalidHandle);
@@ -238,7 +240,7 @@ Napi::Value Workbook::SetWorkbookProtection(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  Napi::Object in = ArgObjectOrEmpty(info, 0);
+  Napi::Object in = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   std::string text[8];
   (void)reader.String(in, "workbookPassword", &text[0]);
@@ -284,14 +286,15 @@ Napi::Object ProtectedRangeToJs(Napi::Env env, const fm_protected_range_t& r) {
   return item;
 }
 
-// Reads the range spec at `info[idx]` and hands it to `edit`.
+// Reads the range spec at `info[idx]` and hands it to `edit`. `handle`
+// aliases the wrapper's member, as in `InvokeMergeEdit`.
 template <typename Edit>
-Napi::Value EditProtectedRange(fm_workbook_t* handle, const Napi::CallbackInfo& info, size_t idx, Edit edit) {
+Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::CallbackInfo& info, size_t idx, Edit edit) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
     return MakeErrorStatus(env, kBindingInvalidHandle);
   }
-  Napi::Object in = Workbook::ArgObjectOrEmpty(info, idx);
+  Napi::Object in = Workbook::ArgObject(info, idx);
   CheckedSpecReader reader(env);
   std::string text[7];
   (void)reader.String(in, "name", &text[0]);
@@ -477,12 +480,8 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "addValidation expects (sheet:number, validation:object)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   const uint32_t sheet = ArgU32(info, 0);
-  Napi::Object v = info[1].As<Napi::Object>();
+  Napi::Object v = ArgObject(info, 1);
   CheckedSpecReader reader(env);
 
   // Pull every JS field into local storage first; the C ABI receives
@@ -640,11 +639,8 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    return MakeBindingArgumentError(env, "addThreadedComment expects (sheet:number, comment:object)");
-  }
   CheckedSpecReader reader(env);
-  const Napi::Object spec = info[1].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 1);
   std::string id;
   std::string person_id;
   std::string created;
@@ -742,11 +738,8 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 1 || !info[0].IsObject()) {
-    return MakeBindingArgumentError(env, "addPerson expects (person:object)");
-  }
   CheckedSpecReader reader(env);
-  const Napi::Object spec = info[0].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 0);
   std::string id;
   std::string display_name;
   std::string user_id;

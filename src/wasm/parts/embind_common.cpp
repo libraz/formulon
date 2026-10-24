@@ -51,8 +51,10 @@ enum ArgumentErrorKind : int32_t {
 // string/bytes snapshot may still return `undefined` for an unsupported
 // input; the C++ reader turns that into its normal type error. A thrown proxy,
 // getter, or typed-array hook reports success == 0 and returns an owned
-// `undefined` handle. The body is JavaScript source; keep formatting disabled
-// so clang-format cannot rewrite its operators.
+// `undefined` handle. A string snapshot replaces each lone surrogate with
+// U+FFFD, as N-API's UTF-8 conversion does, so ill-formed UTF-8 never reaches
+// the engine. The body is JavaScript source; keep formatting disabled so
+// clang-format cannot rewrite its operators.
 // FORMULON-ALLOW: this JavaScript try/catch is the required no-escape boundary
 // for caller-owned getters and typed-array operations in a -fno-exceptions WASM
 // build; a C++ try/catch cannot safely intercept those throws here.
@@ -71,7 +73,21 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
       result = Array.isArray(owner);
     } else if (operation === 3) {
       if (typeof owner === 'string') {
-        result = owner;
+        if (typeof owner.toWellFormed === 'function') {
+          result = owner.toWellFormed();
+        } else {
+          result = '';
+          for (var i = 0; i < owner.length; i++) {
+            var unit = owner.charCodeAt(i);
+            var next = i + 1 < owner.length ? owner.charCodeAt(i + 1) : 0;
+            if (unit >= 0xD800 && unit <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) {
+              result += owner.substring(i, i + 2);
+              i++;
+            } else {
+              result += unit >= 0xD800 && unit <= 0xDFFF ? String.fromCharCode(0xFFFD) : owner.charAt(i);
+            }
+          }
+        }
       } else if (owner instanceof ArrayBuffer) {
         var bufferCopy = new Uint8Array(owner.byteLength);
         bufferCopy.set(new Uint8Array(owner));

@@ -37,6 +37,8 @@ MASK_NAMES = (
     "optionalU32",
     "optionalU64",
     "optionalNull",
+    "object",
+    "required",
 )
 MASK_TOKEN = re.compile(r"0x([0-9a-fA-F]+)ULL\Z")
 METHOD_MARKER = re.compile(r"\bGuardedInstanceMethod(?=\s*<)")
@@ -44,18 +46,18 @@ WASM_METHOD = re.compile(r"\.function\(\s*\"([A-Za-z0-9_]+)\"")
 WASM_FREE_FUNCTION = re.compile(r"\bfunction\(\s*\"([A-Za-z0-9_]+)\"")
 
 # The Node class has two lifecycle helpers that are intentionally not exposed
-# by the embind class. Two embind methods have no Node counterpart and carry
-# only nested/object arguments, so they do not need a primitive positional
-# guard. Keeping these sets explicit makes a future binding drift fail at
-# generation time instead of silently losing validation.
+# by the embind class. Three embind methods have no Node counterpart:
+# getSheetAutoFilterXml and setSheetAutoFilterXml (WASM_ONLY_GUARDS) and
+# addCellStyleXf, which carries only an object argument (WASM_UNGUARDED_METHODS).
+# Every method both surfaces share takes its spec from the Node registration.
+# Keeping these sets explicit makes a future binding drift fail at generation
+# time instead of silently losing validation.
 NODE_ONLY_METHODS = frozenset(("dispose", "memoryUsage"))
-WASM_UNGUARDED_METHODS = frozenset(("addCellStyleXf", "createTable"))
+WASM_UNGUARDED_METHODS = frozenset(("addCellStyleXf",))
 
 WASM_ONLY_GUARDS = {
     "getSheetAutoFilterXml": {"u32": 0x1},
     "setSheetAutoFilterXml": {"u32": 0x1, "string": 0x2},
-    "updateTable": {"u32": 0x1},
-    "removeTable": {"u32": 0x1},
 }
 
 FREE_FUNCTION_GUARDS = {
@@ -172,25 +174,25 @@ def _parse_node_registrations(source: Path) -> list[Registration]:
 
 
 def _validate_masks(js_name: str, masks: tuple[int, ...], source: Path, offset: int) -> None:
-    required = masks[:5]
-    optional = masks[5:7]
-    optional_null = masks[7]
+    optional_null_index = MASK_NAMES.index("optionalNull")
+    optional = masks[MASK_NAMES.index("optionalU32")] | masks[MASK_NAMES.index("optionalU64")]
     for index, mask in enumerate(masks):
         if mask >= (1 << 32):
             raise GuardGenerationError(
                 f"{source}:{offset}: {js_name} mask {MASK_NAMES[index]} uses a positional bit >= 32"
             )
-    if optional[0] & optional[1]:
-        raise GuardGenerationError(f"{source}:{offset}: {js_name} optional u32/u64 masks overlap")
-    if optional_null & ~(optional[0] | optional[1]):
+    if masks[optional_null_index] & ~optional:
         raise GuardGenerationError(f"{source}:{offset}: {js_name} optional-null mask is not optional")
-    for index, mask in enumerate(required):
-        other_mask = 0
-        for other_index, other in enumerate(masks):
-            if other_index != index:
-                other_mask |= other
-        if mask & other_mask:
-            raise GuardGenerationError(f"{source}:{offset}: {js_name} mask {MASK_NAMES[index]} overlaps another type")
+    # Every mask but optionalNull states a position's whole rule, so a
+    # position may carry at most one of them.
+    for index, mask in enumerate(masks):
+        if index == optional_null_index:
+            continue
+        for other_index in range(index + 1, len(masks)):
+            if other_index != optional_null_index and mask & masks[other_index]:
+                raise GuardGenerationError(
+                    f"{source}:{offset}: {js_name} mask {MASK_NAMES[index]} overlaps {MASK_NAMES[other_index]}"
+                )
 
 
 def _parse_wasm_methods(source: Path) -> set[str]:
@@ -249,6 +251,10 @@ def _render(metadata: dict[str, object]) -> str:
   const metadata = Object.freeze({data});
   const installKey = Symbol.for('formulon.checkedPositionalArguments');
   const activeWorkbookCalls = new WeakMap();
+  // Native addresses of the workbooks whose iterative progress callback is
+  // running, kept by the native trampoline. The callback runs inside the
+  // recalc, so every method of such a workbook is refused, as on Node.
+  const progressCallbackKey = Symbol.for('formulon.progressCallbackWorkbooks');
   const UINT32_MAX = 0xffffffff;
   const INT32_MIN = -0x80000000;
   const INT32_MAX = 0x7fffffff;
@@ -267,6 +273,10 @@ def _render(metadata: dict[str, object]) -> str:
 
   function argumentType(name, index, expected) {{
     throw new TypeError(name + ' argument ' + (index + 1) + ' must be a primitive ' + expected);
+  }}
+
+  function argumentRequired(name, index) {{
+    throw new TypeError(name + ' argument ' + (index + 1) + ' is required');
   }}
 
   function argumentRange(name, index, expected) {{
@@ -302,11 +312,23 @@ def _render(metadata: dict[str, object]) -> str:
       ['optionalU64', spec.optionalU64 ?? 0, 'uint64'],
     ];
     const optionalNull = spec.optionalNull ?? 0;
-    for (let index = 0; index < args.length; index += 1) {{
+    const objectMask = spec.object ?? 0;
+    const requiredMask = spec.required ?? 0;
+    // Positions every mask but the optional ones treat as present, so an
+    // omitted trailing argument fails its own check instead of being skipped.
+    const presentMask = ((spec.u32 ?? 0) | (spec.i32 ?? 0) | (spec.u64 ?? 0) | (spec.double ?? 0) |
+                         (spec.string ?? 0) | objectMask | requiredMask) >>> 0;
+    const checked = Math.max(args.length, 32 - Math.clz32(presentMask));
+    for (let index = 0; index < checked; index += 1) {{
       const bit = 2 ** index;
+      const value = args[index];
+      if ((objectMask & bit) !== 0 &&
+          (value === null || (typeof value !== 'object' && typeof value !== 'function'))) {{
+        argumentType(name, index, 'object');
+      }}
+      if ((requiredMask & bit) !== 0 && value === undefined) argumentRequired(name, index);
       for (const [kind, mask, numericKind] of masks) {{
         if ((mask & bit) === 0) continue;
-        const value = args[index];
         if (kind === 'double') {{
           if (typeof value !== 'number') argumentType(name, index, 'number');
         }} else if (kind === 'string') {{
@@ -320,6 +342,23 @@ def _render(metadata: dict[str, object]) -> str:
         }}
       }}
     }}
+  }}
+
+  // Embind would forward a lone UTF-16 surrogate as WTF-8 bytes; replace it
+  // with U+FFFD as N-API's UTF-8 conversion does.
+  const loneSurrogate = /[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?<![\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]/g;
+  function wellFormed(text) {{
+    return typeof text.toWellFormed === 'function' ? text.toWellFormed() : text.replace(loneSurrogate, '\\uFFFD');
+  }}
+
+  // Returns `args` with every string-mask position made well-formed. The
+  // array is the wrapper's own rest parameter, never the caller's.
+  function wellFormedStrings(args, spec) {{
+    const stringMask = spec.string ?? 0;
+    for (let index = 0; index < args.length; index += 1) {{
+      if ((stringMask & 2 ** index) !== 0) args[index] = wellFormed(args[index]);
+    }}
+    return args;
   }}
 
   function receiverStateKey(receiver) {{
@@ -340,6 +379,11 @@ def _render(metadata: dict[str, object]) -> str:
     const wrapped = function (...args) {{
       validateArguments(name, args, spec);
       const receiverKey = trackWorkbookCall ? receiverStateKey(this) : null;
+      const busy = module[progressCallbackKey];
+      if (busy !== undefined && busy.size > 0 && receiverKey !== null && busy.has(receiverKey.ptr)) {{
+        throw new TypeError('cannot call a Workbook method from its iterative progress callback ' +
+                            '(kGraphRecalcReentrant, 4005)');
+      }}
       const receiverTracked = receiverKey !== null;
       if (receiverTracked) activeWorkbookCalls.set(receiverKey, (activeWorkbookCalls.get(receiverKey) ?? 0) + 1);
       // A getter may re-enter another wrapped method mid-read; each call
@@ -350,7 +394,7 @@ def _render(metadata: dict[str, object]) -> str:
       let pending;
       let result;
       try {{
-        result = Reflect.apply(original, this, args);
+        result = Reflect.apply(original, this, wellFormedStrings(args, spec));
       }} finally {{
         argumentErrors.depth -= 1;
         pending = argumentErrors.pending;

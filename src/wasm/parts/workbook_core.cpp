@@ -58,15 +58,34 @@ EM_JS_DEPS(fm_wasm_js_callback, "$Emval");
 // lines that null out its pointer) and, if the caller is the progress
 // callback itself, on into the `try`/`catch` in
 // `fm_wasm_invoke_js_callback` above -- the same path an ordinarily
-// throwing callback takes. Message matches the Node addon's guard
-// (`lifecycle.cc`'s `Workbook::Dispose`) so the two surfaces read alike.
+// throwing callback takes. Error and message match the pre-js lifecycle
+// guard and the Node addon's `Workbook::Dispose`, so every path refuses alike.
 //
 // FORMULON-ALLOW: JavaScript source again, for the same reason as the
 // callback trampoline above -- it is the one place a JS-visible exception
 // can be raised from a binary built with -fno-exceptions.
 // clang-format off
 EM_JS(void, fm_wasm_throw_dispose_during_callback, (), {
-  throw new Error('cannot dispose a Workbook from its iterative progress callback');
+  throw new TypeError('cannot dispose Workbook during an active method call');
+});
+// clang-format on
+
+// Publishes which workbooks are inside their iterative progress callback, by
+// native address (the embind handle's `$$.ptr`). The pre-js method wrapper
+// refuses every call on such a workbook, as the Node addon does.
+// clang-format off
+EM_JS(void, fm_wasm_mark_progress_callback, (uintptr_t workbook, int32_t active), {
+  var key = Symbol.for('formulon.progressCallbackWorkbooks');
+  var busy = Module[key];
+  if (!busy) {
+    busy = new Set();
+    Module[key] = busy;
+  }
+  if (active) {
+    busy.add(workbook);
+  } else {
+    busy.delete(workbook);
+  }
 });
 // clang-format on
 
@@ -91,6 +110,11 @@ JsStatus progress_callback_threw_status() {
   s.message = "the iterative progress callback threw; the solve was aborted";
   s.context = "Workbook.setIterativeProgress";
   return s;
+}
+
+/// `typeof value === 'function'`, which never runs user code.
+bool is_js_function(const emscripten::val& value) {
+  return value.typeOf().as<std::string>() == "function";
 }
 
 }  // namespace
@@ -671,7 +695,9 @@ int32_t JsWorkbook::iterativeProgressTrampoline(uint32_t iteration, double max_r
   args.set(1, max_residual);
   args.set(2, max_iterations);
   self->in_iterative_progress_callback_ = true;
+  fm_wasm_mark_progress_callback(reinterpret_cast<uintptr_t>(self), 1);
   const JsCallbackOutcome outcome = call_js_callback(self->progress_callback_, args);
+  fm_wasm_mark_progress_callback(reinterpret_cast<uintptr_t>(self), 0);
   self->in_iterative_progress_callback_ = false;
   if (outcome == JsCallbackOutcome::kThrew) {
     // Abort the solve so every frame between here and the recalc entry
@@ -699,6 +725,10 @@ JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
     progress_callback_ = emscripten::val::null();
     fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
     return status_from_rc(rc);
+  }
+  // Rejected at install, as on the Node surface; the installed callback stays.
+  if (!is_js_function(cb)) {
+    return binding_error_status(kInvalidArgument, "setIterativeProgress: `callback` must be a function or null");
   }
   progress_callback_ = cb;
   fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, this);
@@ -791,6 +821,9 @@ JsStatus set_log_sink(emscripten::val sink) {
   if (sink.isNull() || sink.isUndefined()) {
     js_log_sink() = emscripten::val::null();
     return status_from_rc(fm_set_log_sink(nullptr, nullptr));
+  }
+  if (!is_js_function(sink)) {
+    return binding_error_status(kInvalidArgument, "setLogSink: `sink` must be a function or null");
   }
   js_log_sink() = sink;
   return status_from_rc(fm_set_log_sink(&log_sink_trampoline, nullptr));

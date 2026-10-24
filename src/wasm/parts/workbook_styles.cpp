@@ -309,8 +309,10 @@ emscripten::val js_cell_xf_record(const fm_cell_xf& xf) {
   o.set("applyProtection", xf.apply_protection != 0);
   o.set("quotePrefix", xf.quote_prefix != 0);
   o.set("hasProtection", xf.has_protection != 0);
-  o.set("locked", xf.locked != 0);
-  o.set("hidden", xf.hidden != 0);
+  // Without a `<protection>` child the model default applies: locked, not
+  // hidden. This also fixes the all-default record a failed read reports.
+  o.set("locked", xf.has_protection == 0 || xf.locked != 0);
+  o.set("hidden", xf.has_protection != 0 && xf.hidden != 0);
   return o;
 }
 

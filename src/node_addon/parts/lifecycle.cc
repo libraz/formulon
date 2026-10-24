@@ -41,10 +41,7 @@ Napi::Object MakeSaveResult(Napi::Env env, fm_status_t rc, uint8_t* buf, std::si
 }
 
 bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
-  if (info.Length() == 0 || !info[0].IsNumber()) {
-    return false;
-  }
-  const double value = info[0].As<Napi::Number>().DoubleValue();
+  const double value = NumberArg(info, 0, std::nan(""));
   if (!std::isfinite(value) || std::trunc(value) != value || value < 0.0 || value > 8.0) {
     return false;
   }
@@ -156,12 +153,12 @@ Napi::Value Workbook::SetPinnedNow(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  // Missing arguments fall through as 0, which the C layer rejects: the
-  // calendar domain is validated in exactly one place.
+  // The registration guard requires all six as int32; the calendar domain
+  // is validated in exactly one place, the C layer.
   fm_civil_time_t now{};
   std::int32_t* const fields[] = {&now.year, &now.month, &now.day, &now.hour, &now.minute, &now.second};
   for (std::size_t index = 0; index < 6; ++index) {
-    *fields[index] = info.Length() > index ? info[index].ToNumber().Int32Value() : 0;
+    *fields[index] = ArgI32(info, index);
   }
   return MakeStatus(env, fm_workbook_set_pinned_now(handle_, &now));
 }
@@ -262,18 +259,16 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "recomputed", 0);
   }
   // Embind takes the viewport as a JS object; we mirror that shape.
+  const Napi::Object vpobj = ArgObject(info, 0);
   fm_viewport vp{};
-  if (info.Length() > 0 && info[0].IsObject()) {
-    Napi::Object vpobj = info[0].As<Napi::Object>();
-    CheckedSpecReader reader(env);
-    vp.sheet = reader.U32(vpobj, "sheet", 0U);
-    vp.first_row = reader.U32(vpobj, "firstRow", 0U);
-    vp.last_row = reader.U32(vpobj, "lastRow", 0U);
-    vp.first_col = reader.U32(vpobj, "firstCol", 0U);
-    vp.last_col = reader.U32(vpobj, "lastCol", 0U);
-    if (!reader.ok()) {
-      return env.Undefined();
-    }
+  CheckedSpecReader reader(env);
+  vp.sheet = reader.U32(vpobj, "sheet", 0U);
+  vp.first_row = reader.U32(vpobj, "firstRow", 0U);
+  vp.last_row = reader.U32(vpobj, "lastRow", 0U);
+  vp.first_col = reader.U32(vpobj, "firstCol", 0U);
+  vp.last_col = reader.U32(vpobj, "lastCol", 0U);
+  if (!reader.ok()) {
+    return env.Undefined();
   }
   uint32_t recomputed = 0;
   (void)TakeIterativeProgressThrew();
@@ -325,40 +320,45 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  // Passing null / undefined clears the callback. Anything else MUST be
-  // a JS function -- we surface a 7000-band error if it is not.
-  if (info.Length() < 1 || info[0].IsNull() || info[0].IsUndefined()) {
-    iterative_progress_callback_.Reset();
-    fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
-    return MakeStatus(env, rc);
+  // Passing null clears the callback. Anything else MUST be a JS function;
+  // a rejected value leaves the installed callback in place.
+  Napi::Function callback;
+  if (info[0].IsNull()) {
+    (void)Value().Delete(IterativeProgressKey(env));
+    return MakeStatus(env, fm_workbook_set_iterative_progress(handle_, nullptr, nullptr));
   }
-  if (!info[0].IsFunction()) {
+  if (!FunctionArg(info, 0, &callback)) {
     return MakeBindingArgumentError(env, "setIterativeProgress: `callback` must be a function or null");
   }
-  // Persist the function on this wrapper, then let the C ABI give the
-  // trampoline this wrapper as user-data. Replacing a callback on another
-  // Workbook never changes this instance's callback.
-  iterative_progress_callback_.Reset();
-  iterative_progress_callback_ = Napi::Persistent(info[0].As<Napi::Function>());
-  fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &Workbook::IterativeProgressTrampoline, this);
-  return MakeStatus(env, rc);
+  // The function lives on this wrapper, and the C ABI hands the trampoline
+  // this wrapper as user-data, so replacing a callback on another Workbook
+  // never changes this instance's callback.
+  (void)Value().Set(IterativeProgressKey(env), callback);
+  return MakeStatus(env, fm_workbook_set_iterative_progress(handle_, &Workbook::IterativeProgressTrampoline, this));
 }
 
 int32_t Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
                                               void* user_data) {
   auto* const workbook = static_cast<Workbook*>(user_data);
-  if (workbook == nullptr || workbook->iterative_progress_callback_.IsEmpty()) {
+  if (workbook == nullptr) {
     return 1;
   }
-  Napi::Env env = workbook->iterative_progress_callback_.Env();
+  Napi::Env env = workbook->Env();
   Napi::HandleScope scope(env);
-  workbook->in_iterative_progress_callback_ = true;
-  Napi::Value ret = workbook->iterative_progress_callback_.Call({
-      Napi::Number::New(env, iteration),
-      Napi::Number::New(env, max_residual),
-      Napi::Number::New(env, max_iterations),
-  });
-  workbook->in_iterative_progress_callback_ = false;
+  const Napi::Value callback = workbook->Value().Get(IterativeProgressKey(env));
+  Napi::Value ret;
+  if (!env.IsExceptionPending()) {
+    if (!callback.IsFunction()) {
+      return 1;
+    }
+    workbook->in_iterative_progress_callback_ = true;
+    ret = callback.As<Napi::Function>().Call({
+        Napi::Number::New(env, iteration),
+        Napi::Number::New(env, max_residual),
+        Napi::Number::New(env, max_iterations),
+    });
+    workbook->in_iterative_progress_callback_ = false;
+  }
   if (env.IsExceptionPending()) {
     // Abort the solve and leave the reason behind for the recalc entry
     // point: without it the throw is indistinguishable from a deliberate
@@ -372,11 +372,14 @@ int32_t Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_res
 
 Napi::Value Workbook::Dispose(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (in_iterative_progress_callback_) {
-    Napi::Error::New(env, "cannot dispose a Workbook from its iterative progress callback")
-        .ThrowAsJavaScriptException();
+  // This call is one of the active ones; any other means a method of this
+  // workbook is still on the stack, reached here through a getter or a
+  // callback, and is about to use the handle again.
+  if (active_calls_ > 1) {
+    Napi::TypeError::New(env, "cannot dispose Workbook during an active method call").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  (void)Value().Delete(IterativeProgressKey(env));
   DestroyHandle(env);
   return env.Undefined();
 }
@@ -410,30 +413,19 @@ Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SaveAs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1) {
-    // `format` has no sane default (unlike the other setters' 0-valued
-    // fallbacks): a silent default would pick a container format the
-    // caller never asked for. Reject like the WASM binding (embind
-    // arity check) and the Python binding (required positional arg).
-    Napi::TypeError::New(env, "saveAs requires 1 argument (format)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  // `format` is required by the registration guard: a silent default would
+  // pick a container format the caller never asked for.
   uint8_t* buf = nullptr;
   std::size_t len = 0;
   fm_status_t rc = kBindingInvalidHandle;
   if (handle_ != nullptr) {
-    const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
-    rc = fm_workbook_save_as(handle_, format, &buf, &len);
+    rc = fm_workbook_save_as(handle_, ArgI32(info, 0), &buf, &len);
   }
   return MakeSaveResult(env, rc, buf, len);
 }
 
 Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 1) {
-    Napi::TypeError::New(env, "saveWithDiagnostics requires 1 argument (format)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   Napi::Object out = Napi::Object::New(env);
   out.Set("bytes", env.Null());
   out.Set("downgradedFormulaCount", Napi::Number::New(env, 0));
@@ -445,11 +437,10 @@ Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
   uint8_t* buf = nullptr;
   std::size_t len = 0;
   fm_save_diagnostics_t d{};
-  fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &buf, &len, &d);
+  fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, ArgI32(info, 0), &buf, &len, &d);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;

@@ -7,10 +7,19 @@ export function registerStyles(Module, test) {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.setNumber(0, 2, 3, 5).ok);
-      assert.ok(wb.setCellXfIndex(0, 2, 3, 9).ok);
+      // An index past the xf table is refused and leaves the cell alone.
+      const missing = wb.setCellXfIndex(0, 2, 3, 9);
+      assert.equal(missing.ok, false);
+      assert.equal(missing.status, 2);
+      assert.equal(wb.getCellXfIndex(0, 2, 3).xfIndex, 0);
+      const font = wb.addFont({ name: 'Arial', size: 12, bold: true });
+      assert.ok(font.status.ok, JSON.stringify(font.status));
+      const xf = wb.addXf({ fontIndex: font.index });
+      assert.ok(xf.status.ok, JSON.stringify(xf.status));
+      assert.ok(wb.setCellXfIndex(0, 2, 3, xf.index).ok);
       const r = wb.getCellXfIndex(0, 2, 3);
       assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
-      assert.equal(r.xfIndex, 9);
+      assert.equal(r.xfIndex, xf.index);
     } finally {
       wb.delete();
     }

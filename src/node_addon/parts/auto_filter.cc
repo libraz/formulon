@@ -237,10 +237,10 @@ void ReadSortCondition(CheckedSpecReader& reader, const Napi::Object& spec, Auto
 
 // Reads the `AutoFilter` record at `info[idx]`; false when it is not an object.
 bool ReadAutoFilter(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, AutoFilterInput& in) {
-  if (info.Length() <= idx || !info[idx].IsObject()) {
+  Napi::Object spec;
+  if (!ObjectArg(info, idx, &spec)) {
     return false;
   }
-  const Napi::Object spec = info[idx].As<Napi::Object>();
   fm_auto_filter& f = in.filter;
   PullRange(reader, spec, "range", &f.range);
   Napi::Array columns;
@@ -359,7 +359,9 @@ Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_work
 using AutoFilterSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const fm_auto_filter*);
 using AutoFilterOpFn = fm_status_t (*)(fm_workbook_t*, size_t);
 
-Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* handle, AutoFilterSetFn fn,
+// `handle` aliases the wrapper's member, so the C call sees the handle as it
+// is after the spec getters ran, not a copy taken before them.
+Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, AutoFilterSetFn fn,
                               const char* usage) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {

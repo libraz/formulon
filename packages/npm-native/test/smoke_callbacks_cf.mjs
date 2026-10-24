@@ -52,7 +52,7 @@ test('dispose is rejected while this workbook is executing its progress callback
   assert.ok(
     wb.setIterativeProgress(() => {
       calls += 1;
-      assert.throws(() => wb.dispose(), /cannot dispose a Workbook/);
+      assert.throws(() => wb.dispose(), /cannot dispose Workbook during an active method call/);
       return true;
     }).ok,
   );
@@ -73,7 +73,7 @@ test('evaluateCfRange returns ok envelope with empty cells for a CF-less workboo
   assert.equal(r.cells.length, 0);
 });
 
-test('evaluateCfRange with todaySerial omitted disables timePeriod rules', async () => {
+test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   // timePeriod rule (type 15) for "today" (period 0) over A1. The cell
@@ -90,15 +90,13 @@ test('evaluateCfRange with todaySerial omitted disables timePeriod rules', async
   assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
   assert.ok(wb.recalc().ok);
 
-  // Omitting todaySerial must behave like passing NaN (the documented
-  // disabling value), not like passing 0 -- which is the valid serial for
-  // 1899-12-30 and would make the rule match.
-  const omitted = wb.evaluateCfRange(0, 0, 0, 0, 0);
-  assert.ok(omitted.status.ok, `evaluateCfRange: ${JSON.stringify(omitted.status)}`);
+  // todaySerial is required: an omitted one is rejected rather than read as
+  // 0, the valid serial for 1899-12-30 that would make the rule match. NaN
+  // is the documented disabling value.
+  assert.throws(() => wb.evaluateCfRange(0, 0, 0, 0, 0), TypeError);
   const explicitNaN = wb.evaluateCfRange(0, 0, 0, 0, 0, Number.NaN);
   assert.ok(explicitNaN.status.ok, `evaluateCfRange: ${JSON.stringify(explicitNaN.status)}`);
-  assert.equal(omitted.cells.length, explicitNaN.cells.length);
-  assert.equal(omitted.cells.length, 0);
+  assert.equal(explicitNaN.cells.length, 0);
 
   // A concrete basis of 0 does engage the rule, proving the default is
   // not merely a no-op for this workbook.

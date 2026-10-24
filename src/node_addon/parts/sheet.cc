@@ -238,10 +238,7 @@ Napi::Value Workbook::CreateTable(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeIndexResult(env, NullHandleError(env), 0U);
   }
-  if (info.Length() < 1 || !info[0].IsObject()) {
-    return MakeIndexResult(env, MakeBindingArgumentError(env, "createTable: `input` must be an object"), 0U);
-  }
-  const Napi::Object spec = info[0].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   const uint32_t sheet = reader.U32(spec, "sheetIndex", 0U);
   std::string ref;
@@ -300,7 +297,7 @@ Napi::Value Workbook::UpdateTable(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
-  const Napi::Object spec = ArgObjectOrEmpty(info, 1);
+  const Napi::Object spec = ArgObject(info, 1);
   CheckedSpecReader reader(env);
   std::string ref;
   std::string style_name;
@@ -369,7 +366,7 @@ Napi::Value Workbook::SetTableColumnTotals(const Napi::CallbackInfo& info) {
   }
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t column = static_cast<std::size_t>(ArgU32(info, 1));
-  const Napi::Object totals = ArgObjectOrEmpty(info, 2);
+  const Napi::Object totals = ArgObject(info, 2);
   CheckedSpecReader reader(env);
   std::string function;
   std::string label;
@@ -461,8 +458,7 @@ Napi::Value Workbook::SetDefinedNameScoped(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const std::string name = ArgString(info, 0);
     const std::string formula = ArgString(info, 1);
-    const int32_t local_sheet_id = info.Length() > 2 ? info[2].As<Napi::Number>().Int32Value() : -1;
-    return fm_workbook_set_defined_name_scoped(handle, name.c_str(), formula.c_str(), local_sheet_id);
+    return fm_workbook_set_defined_name_scoped(handle, name.c_str(), formula.c_str(), ArgI32(info, 2));
   });
 }
 
@@ -473,7 +469,7 @@ Napi::Value Workbook::SetDefinedNameAttrs(const Napi::CallbackInfo& info) {
   }
   const std::string name = ArgString(info, 0);
   const int32_t local_sheet_id = ArgI32(info, 1);
-  Napi::Object attrs = ArgObjectOrEmpty(info, 2);
+  Napi::Object attrs = ArgObject(info, 2);
   CheckedSpecReader reader(env);
   std::string comment;
   bool has_hidden = false;

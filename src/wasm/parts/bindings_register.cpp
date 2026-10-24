@@ -454,6 +454,29 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotFieldItemAt", &JsWorkbook::pivotFieldItemAt)
       .function("pivotFieldSetAxis", &JsWorkbook::pivotFieldSetAxis)
       .function("pivotFieldSetDateGroup", &JsWorkbook::pivotFieldSetDateGroup)
+      // The trailing three default as on the Node surface: one-day intervals
+      // and an automatic Start / End window.
+      .function("pivotFieldSetDateGroup",
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                                 uint32_t granularity, uint32_t calendar, int32_t startYear,
+                                                 int32_t endYear, uint32_t intervalDays, double startSerial) {
+                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, granularity, calendar, startYear,
+                                                     endYear, intervalDays, startSerial, -1.0);
+                }))
+      .function("pivotFieldSetDateGroup",
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                                 uint32_t granularity, uint32_t calendar, int32_t startYear,
+                                                 int32_t endYear, uint32_t intervalDays) {
+                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, granularity, calendar, startYear,
+                                                     endYear, intervalDays, -1.0, -1.0);
+                }))
+      .function("pivotFieldSetDateGroup",
+                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                                 uint32_t granularity, uint32_t calendar, int32_t startYear,
+                                                 int32_t endYear) {
+                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, granularity, calendar, startYear,
+                                                     endYear, 1U, -1.0, -1.0);
+                }))
       .function("pivotFieldSetItemVisible", &JsWorkbook::pivotFieldSetItemVisible)
       .function("pivotFieldSetNumberFormat", &JsWorkbook::pivotFieldSetNumberFormat)
       .function("pivotFieldSetSort", &JsWorkbook::pivotFieldSetSort)

@@ -539,8 +539,33 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   static double ArgDouble(const Napi::CallbackInfo& info, size_t idx);
   static std::string ArgString(const Napi::CallbackInfo& info, size_t idx);
   static bool ArgBool(const Napi::CallbackInfo& info, size_t idx);
-  /// `info[idx]` when it is an object, else a fresh empty object.
-  static Napi::Object ArgObjectOrEmpty(const Napi::CallbackInfo& info, size_t idx);
+  /// `info[idx]` for a position the registration's `object` mask guarantees.
+  static Napi::Object ArgObject(const Napi::CallbackInfo& info, size_t idx);
+
+  /// Message of the refusal every method but `dispose()` throws while this
+  /// workbook's iterative progress callback runs; the WASM pre-js guard
+  /// throws the same text.
+  static constexpr const char* kProgressCallbackReentryMessage =
+      "cannot call a Workbook method from its iterative progress callback (kGraphRecalcReentrant, 4005)";
+
+  /// Runs one JS-visible method with this wrapper's active-call count
+  /// raised. A getter or callback the method runs may call back into JS;
+  /// `dispose()` from there is refused while the count shows the outer call
+  /// still using `handle_`, as the WASM wrapper refuses `delete()`. Every
+  /// other method is refused while the progress callback runs.
+  template <typename Method>
+  Napi::Value RunActive(Method method, const Napi::CallbackInfo& info) {
+    if (in_iterative_progress_callback_ && method != static_cast<Method>(&Workbook::Dispose)) {
+      // The solver holds this workbook mid-sweep: a write would deadlock or
+      // change state under it, and a read would see half-computed values.
+      Napi::TypeError::New(info.Env(), kProgressCallbackReentryMessage).ThrowAsJavaScriptException();
+      return info.Env().Undefined();
+    }
+    ++active_calls_;
+    Napi::Value result = (this->*method)(info);
+    --active_calls_;
+    return result;
+  }
 
   /// Bool argument as the C ABI's `int32_t` flag.
   static int32_t ArgFlag(const Napi::CallbackInfo& info, size_t idx) { return ArgBool(info, idx) ? 1 : 0; }
@@ -587,11 +612,11 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
     if (handle_ == nullptr) {
       return NullHandleError(env);
     }
-    if (info.Length() < 2 || !info[1].IsObject()) {
+    Napi::Object spec;
+    if (!ObjectArg(info, 1, &spec)) {
       Napi::TypeError::New(env, usage).ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    const Napi::Object spec = info[1].As<Napi::Object>();
     CheckedSpecReader reader(env);
     pull(reader, spec);
     if (!reader.ok()) {
@@ -603,15 +628,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   }
 
   /// `{status, index}` entry adding a style-pool record: `pull(reader, record)`
-  /// fills the caller's record from `info[0]` (an empty object when absent),
-  /// and `add(handle_, &index)` stores it.
+  /// fills the caller's record from the `info[0]` object, and
+  /// `add(handle_, &index)` stores it.
   template <typename Pull, typename Add>
   Napi::Value AddStyleRecord(const Napi::CallbackInfo& info, Pull&& pull, Add&& add) {
     Napi::Env env = info.Env();
     if (handle_ == nullptr) {
       return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
     }
-    const Napi::Object record = ArgObjectOrEmpty(info, 0);
+    const Napi::Object record = ArgObject(info, 0);
     CheckedSpecReader reader(env);
     pull(reader, record);
     if (!reader.ok()) {
@@ -713,8 +738,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
     return threw;
   }
 
+  /// The JS property of this wrapper holding the iterative progress callback.
+  /// Kept on the wrapper rather than in a persistent reference so that a
+  /// callback closing over the workbook forms a cycle the collector can see.
+  static Napi::Symbol IterativeProgressKey(Napi::Env env);
+
   fm_workbook_t* handle_ = nullptr;
-  Napi::FunctionReference iterative_progress_callback_;
+  /// JS-visible methods of this wrapper currently on the stack.
+  uint32_t active_calls_ = 0;
+  /// Set while the iterative progress callback runs.
   bool in_iterative_progress_callback_ = false;
   /// Set when the installed progress callback threw during the pass that
   /// is still unwinding. Consumed by the recalc entry points.

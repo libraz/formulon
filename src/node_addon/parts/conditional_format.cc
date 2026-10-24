@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <vector>
 
@@ -57,12 +56,9 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   const uint32_t first_col = ArgU32(info, 2);
   const uint32_t last_row = ArgU32(info, 3);
   const uint32_t last_col = ArgU32(info, 4);
-  // A missing `todaySerial` must disable `timePeriod` rules, matching the
-  // Python binding and the C ABI contract. `ArgDouble`'s 0.0 fallback is a
-  // valid Excel serial (1899-12-30), so it would silently evaluate those
-  // rules against that date instead of skipping them.
-  const double today_serial =
-      info.Length() > 5 ? info[5].ToNumber().DoubleValue() : std::numeric_limits<double>::quiet_NaN();
+  // The registration guard requires `todaySerial`; NaN disables
+  // `timePeriod` rules, as the C ABI documents.
+  const double today_serial = ArgDouble(info, 5);
   fm_cf_results_t* results = nullptr;
   fm_status_t rc =
       fm_workbook_cf_evaluate_range(handle_, sheet, first_row, first_col, last_row, last_col, today_serial, &results);
@@ -252,12 +248,8 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
-  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "addConditionalFormat expects (sheet:number, rule:object)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  Napi::Object v = info[1].As<Napi::Object>();
+  Napi::Object v = ArgObject(info, 1);
 
   // Pull every JS field into local storage first; the C ABI receives
   // borrowed `const char*` views that must stay valid until

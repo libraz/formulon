@@ -69,16 +69,15 @@ void LogSinkTrampoline(const char* record, std::size_t len, void* /*user_data*/)
   }
 }
 
+// Same contract as the Workbook registration guard: required, an integer in
+// int32 range.
 bool ReadInt32(const Napi::CallbackInfo& info, std::size_t idx, std::int32_t* out) {
-  if (idx >= info.Length()) {
-    return true;
-  }
   const Napi::Value value = info[idx];
   if (!value.IsNumber()) {
     Napi::TypeError::New(info.Env(), "positional argument must be a number").ThrowAsJavaScriptException();
     return false;
   }
-  const double number = value.As<Napi::Number>().DoubleValue();
+  const double number = NumberValue(value, 0.0);
   if (!std::isfinite(number) || std::trunc(number) != number ||
       number < static_cast<double>(std::numeric_limits<std::int32_t>::min()) ||
       number > static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
@@ -98,14 +97,11 @@ bool ReadInt32(const Napi::CallbackInfo& info, std::size_t idx, std::int32_t* ou
 // what a one-shot helper should mean nor what the other two surfaces do.
 Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  std::string formula;
-  if (info.Length() > 0) {
-    if (!info[0].IsString()) {
-      Napi::TypeError::New(env, "formula must be a string").ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    formula = info[0].As<Napi::String>().Utf8Value();
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "formula must be a string").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
+  const std::string formula = StringArg(info, 0);
 
   fm_workbook_t* wb = nullptr;
   fm_status_t rc = fm_workbook_create_empty(&wb);
@@ -174,8 +170,9 @@ Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info) {
 
 Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const bool clearing = info.Length() == 0 || info[0].IsNull() || info[0].IsUndefined();
-  if (!clearing && !info[0].IsFunction()) {
+  const bool clearing = info[0].IsNull() || info[0].IsUndefined();
+  Napi::Function sink;
+  if (!clearing && !FunctionArg(info, 0, &sink)) {
     return MakeBindingArgumentError(env, "setLogSink: `sink` must be a function or null");
   }
 
@@ -186,8 +183,7 @@ Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
     return MakeStatus(env, rc);
   }
 
-  Napi::ThreadSafeFunction fresh =
-      Napi::ThreadSafeFunction::New(env, info[0].As<Napi::Function>(), "formulon.logSink", 0, 1);
+  Napi::ThreadSafeFunction fresh = Napi::ThreadSafeFunction::New(env, sink, "formulon.logSink", 0, 1);
   // A registered sink must not by itself keep the process alive.
   fresh.Unref(env);
   {

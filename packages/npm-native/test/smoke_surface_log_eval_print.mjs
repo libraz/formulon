@@ -83,7 +83,7 @@ test('setLogSink accepts a function and null, and rejects a non-function', async
   assert.ok(mod.setLogSink().ok);
   const bad = mod.setLogSink(42);
   assert.equal(bad.ok, false);
-  assert.equal(bad.status, 7001);
+  assert.equal(bad.status, 2);
   assert.ok(mod.setLogSink(null).ok);
 });
 

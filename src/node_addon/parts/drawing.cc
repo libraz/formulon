@@ -16,11 +16,10 @@ namespace {
 
 // Returns the bytes of the Uint8Array at `info[idx]`; false when it is not one.
 bool ReadImageBytes(const Napi::CallbackInfo& info, size_t idx, const uint8_t*& data, size_t& len) {
-  if (info.Length() <= idx || !info[idx].IsTypedArray() ||
-      info[idx].As<Napi::TypedArray>().TypedArrayType() != napi_uint8_array) {
+  Napi::Uint8Array u8;
+  if (!BytesArg(info, idx, &u8)) {
     return false;
   }
-  const Napi::Uint8Array u8 = info[idx].As<Napi::Uint8Array>();
   data = u8.Data();
   len = u8.ElementLength();
   return true;
@@ -36,12 +35,14 @@ struct BytesWithOpts {
 // a rejected argument list sets `result.status` and returns false.
 bool ReadBytesWithOpts(const Napi::CallbackInfo& info, const char* usage, Napi::Object& result, BytesWithOpts& args) {
   Napi::Env env = info.Env();
-  const bool has_opts = info.Length() > 2 && info[2].IsObject();
-  if (!ReadImageBytes(info, 1, args.data, args.len) || (info.Length() > 2 && !info[2].IsUndefined() && !has_opts)) {
+  const bool has_opts = ObjectArg(info, 2, &args.spec);
+  if (!ReadImageBytes(info, 1, args.data, args.len) || (!info[2].IsUndefined() && !has_opts)) {
     result.Set("status", MakeBindingArgumentError(env, usage));
     return false;
   }
-  args.spec = has_opts ? info[2].As<Napi::Object>() : Napi::Object::New(env);
+  if (!has_opts) {
+    args.spec = Napi::Object::New(env);
+  }
   return true;
 }
 
@@ -181,11 +182,8 @@ Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeBindingArgumentError(env, "setDrawingAnchor expects (sheet:number, objectId:number, placement:object)");
-  }
   CheckedSpecReader reader(env);
-  const Napi::Object spec = info[2].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 2);
   fm_drawing_anchor anchor{};
   PullPlacement(reader, spec, anchor, FM_ANCHOR_KIND_ONE_CELL);
   if (!reader.ok()) {

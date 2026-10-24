@@ -473,7 +473,7 @@ test('chart calls report failures in their status and reject malformed arguments
     assert.equal(bad.objectId, 0);
     assert.equal(wb.listDrawingObjects(0).length, 1);
     assert.equal(wb.insertChart(0, { kind: 99, source: 'A1:B2' }).status.ok, false);
-    assert.equal(wb.insertChart(0, 'A1:B2').status.ok, false);
+    assert.throws(() => wb.insertChart(0, 'A1:B2'), TypeError);
 
     assert.equal(wb.setChartSeries(0, id, 0, 0, { values: '' }).ok, false);
     assert.equal(wb.setChartSeries(0, id, 0, 0, { values: 'NoSuchSheet!A1:A2' }).status, 5026);
@@ -500,7 +500,7 @@ test('chart calls report failures in their status and reject malformed arguments
     assert.throws(() => wb.setChartAxis(0, id, 1, { min: 'low' }), TypeError);
     assert.throws(() => wb.setChartFilter(0, id, [1, 'x'], []), TypeError);
     assert.throws(() => wb.setChartFilter(0, id, 'x', []), TypeError);
-    assert.equal(wb.setChartTitle(0, id, 5).ok, false);
+    assert.throws(() => wb.setChartTitle(0, id, 5), TypeError);
   } finally {
     wb.dispose();
   }

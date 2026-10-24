@@ -17,9 +17,11 @@ struct WorkbookClassState {
 };
 
 // Positional arguments are checked by the registration wrapper before a
-// part-TU method gets to call a coercing N-API helper. The masks are indexed
-// by the JavaScript argument position; an unset bit means that position is
-// either an object/spec or is deliberately handled by the method itself.
+// part-TU method reads them. The masks are indexed by the JavaScript argument
+// position. A typed, `object` or `required` position must be present; an
+// unset bit means the position is optional and handled by the method itself.
+// `tools/codegen/gen_wasm_positional_guards.py` emits the same table into the
+// WASM pre-js, so both surfaces reject the same arguments the same way.
 struct PositionalArgSpec {
   std::uint64_t u32_mask;
   std::uint64_t i32_mask;
@@ -29,6 +31,10 @@ struct PositionalArgSpec {
   std::uint64_t optional_u32_mask;
   std::uint64_t optional_u64_mask;
   std::uint64_t optional_null_mask;
+  /// A non-null object (arrays, typed arrays and functions included).
+  std::uint64_t object_mask;
+  /// Present, of any type: `undefined` and a missing argument are rejected.
+  std::uint64_t required_mask;
 };
 
 // A uint64 argument arrives as a Number, which is exact only up to 2^53 - 1;
@@ -47,17 +53,24 @@ bool RejectArgumentRange(const Napi::CallbackInfo& info, std::size_t idx, const 
   return false;
 }
 
+// One past the highest set bit of `mask`.
+std::size_t MaskWidth(std::uint64_t mask) {
+  std::size_t width = 0;
+  while (mask != 0) {
+    mask >>= 1U;
+    ++width;
+  }
+  return width;
+}
+
 bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgSpec& spec) {
-  // A number that is an integer in [min_value, max_value]; absent passes.
+  // A number that is an integer in [min_value, max_value].
   const auto validate_integer = [&](std::size_t idx, double min_value, double max_value, const char* range_message) {
-    if (idx >= info.Length()) {
-      return true;
-    }
     const Napi::Value value = info[idx];
     if (!value.IsNumber()) {
       return RejectArgumentType(info, idx, "positional argument must be a number");
     }
-    const double number = value.As<Napi::Number>().DoubleValue();
+    const double number = NumberValue(value, 0.0);
     if (!std::isfinite(number) || std::trunc(number) != number || number < min_value || number > max_value) {
       return RejectArgumentRange(info, idx, range_message);
     }
@@ -65,7 +78,12 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
   };
   constexpr double kU32Max = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
 
-  const std::size_t positional_count = info.Length() < 64 ? info.Length() : 64;
+  // Required positions are checked even past the supplied arguments, where
+  // `info[idx]` reads `undefined`.
+  const std::size_t required_width = MaskWidth(spec.u32_mask | spec.i32_mask | spec.u64_mask | spec.double_mask |
+                                               spec.string_mask | spec.object_mask | spec.required_mask);
+  const std::size_t supplied = info.Length() < 64 ? info.Length() : 64;
+  const std::size_t positional_count = supplied > required_width ? supplied : required_width;
   for (std::size_t idx = 0; idx < positional_count; ++idx) {
     const std::uint64_t bit = std::uint64_t{1} << idx;
     if ((spec.u32_mask & bit) != 0 &&
@@ -102,11 +120,17 @@ bool ValidatePositionalArgs(const Napi::CallbackInfo& info, const PositionalArgS
         return false;
       }
     }
-    if ((spec.double_mask & bit) != 0 && idx < info.Length() && !info[idx].IsNumber()) {
+    if ((spec.double_mask & bit) != 0 && !info[idx].IsNumber()) {
       return RejectArgumentType(info, idx, "positional argument must be a number");
     }
-    if ((spec.string_mask & bit) != 0 && idx < info.Length() && !info[idx].IsString()) {
+    if ((spec.string_mask & bit) != 0 && !info[idx].IsString()) {
       return RejectArgumentType(info, idx, "positional argument must be a string");
+    }
+    if ((spec.object_mask & bit) != 0 && !info[idx].IsObject()) {
+      return RejectArgumentType(info, idx, "positional argument must be an object");
+    }
+    if ((spec.required_mask & bit) != 0 && info[idx].IsUndefined()) {
+      return RejectArgumentType(info, idx, "positional argument is required");
     }
   }
   return true;
@@ -116,15 +140,18 @@ using InstanceMethodCallback = Napi::Value (Workbook::*)(const Napi::CallbackInf
 
 template <InstanceMethodCallback method, std::uint64_t u32_mask, std::uint64_t i32_mask, std::uint64_t u64_mask,
           std::uint64_t double_mask, std::uint64_t string_mask, std::uint64_t optional_u32_mask,
-          std::uint64_t optional_u64_mask, std::uint64_t optional_null_mask>
+          std::uint64_t optional_u64_mask, std::uint64_t optional_null_mask, std::uint64_t object_mask,
+          std::uint64_t required_mask>
 struct GuardedMethodSpec {
   static constexpr PositionalArgSpec value{u32_mask,    i32_mask,          u64_mask,          double_mask,
-                                           string_mask, optional_u32_mask, optional_u64_mask, optional_null_mask};
+                                           string_mask, optional_u32_mask, optional_u64_mask, optional_null_mask,
+                                           object_mask, required_mask};
 };
 
 template <InstanceMethodCallback method, std::uint64_t u32_mask, std::uint64_t i32_mask, std::uint64_t u64_mask,
           std::uint64_t double_mask, std::uint64_t string_mask, std::uint64_t optional_u32_mask,
-          std::uint64_t optional_u64_mask, std::uint64_t optional_null_mask>
+          std::uint64_t optional_u64_mask, std::uint64_t optional_null_mask, std::uint64_t object_mask,
+          std::uint64_t required_mask>
 napi_value GuardedInstanceMethodCallback(napi_env raw_env, napi_callback_info raw_info) {
   return Napi::details::WrapCallback(raw_env, [&] {
     Napi::CallbackInfo info(raw_env, raw_info);
@@ -133,22 +160,23 @@ napi_value GuardedInstanceMethodCallback(napi_env raw_env, napi_callback_info ra
       return info.Env().Undefined();
     }
     Workbook* const instance = Workbook::Unwrap(info.This().As<Napi::Object>());
-    return instance == nullptr ? Napi::Value() : (instance->*method)(info);
+    return instance == nullptr ? Napi::Value() : instance->RunActive(method, info);
   });
 }
 
 template <InstanceMethodCallback method, std::uint64_t u32_mask = 0, std::uint64_t i32_mask = 0,
           std::uint64_t u64_mask = 0, std::uint64_t double_mask = 0, std::uint64_t string_mask = 0,
           std::uint64_t optional_u32_mask = 0, std::uint64_t optional_u64_mask = 0,
-          std::uint64_t optional_null_mask = 0>
+          std::uint64_t optional_null_mask = 0, std::uint64_t object_mask = 0, std::uint64_t required_mask = 0>
 Napi::ClassPropertyDescriptor<Workbook> GuardedInstanceMethod(const char* name) {
   napi_property_descriptor descriptor{};
   descriptor.utf8name = name;
-  descriptor.method = &GuardedInstanceMethodCallback<method, u32_mask, i32_mask, u64_mask, double_mask, string_mask,
-                                                     optional_u32_mask, optional_u64_mask, optional_null_mask>;
-  descriptor.data = const_cast<void*>(
-      static_cast<const void*>(&GuardedMethodSpec<method, u32_mask, i32_mask, u64_mask, double_mask, string_mask,
-                                                  optional_u32_mask, optional_u64_mask, optional_null_mask>::value));
+  descriptor.method =
+      &GuardedInstanceMethodCallback<method, u32_mask, i32_mask, u64_mask, double_mask, string_mask, optional_u32_mask,
+                                     optional_u64_mask, optional_null_mask, object_mask, required_mask>;
+  descriptor.data = const_cast<void*>(static_cast<const void*>(
+      &GuardedMethodSpec<method, u32_mask, i32_mask, u64_mask, double_mask, string_mask, optional_u32_mask,
+                         optional_u64_mask, optional_null_mask, object_mask, required_mask>::value));
   descriptor.attributes = napi_default;
   return descriptor;
 }
@@ -168,15 +196,18 @@ Workbook::~Workbook() {
   DestroyHandle(Env());
 }
 
+Napi::Symbol Workbook::IterativeProgressKey(Napi::Env env) {
+  return Napi::Symbol::For(env, "formulon.iterativeProgress");
+}
+
 void Workbook::DestroyHandle(Napi::Env env) {
   if (handle_ != nullptr) {
     // Clear this workbook's C callback before destroying its user-data
-    // wrapper, then release the JS callback reference below.
+    // wrapper.
     (void)fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
     fm_workbook_destroy(handle_);
     handle_ = nullptr;
   }
-  iterative_progress_callback_.Reset();
   // With the handle gone the measurement is zero, so this hands the
   // whole reported amount back to V8. Doing it after the destroy (rather
   // than before) keeps the accounting from ever going negative if the
@@ -203,31 +234,26 @@ void Workbook::ApplyExternalMemoryEstimate(Napi::Env env, size_t bytes) {
 }
 
 uint32_t Workbook::ArgU32(const Napi::CallbackInfo& info, size_t idx) {
-  if (idx >= info.Length()) {
-    return 0;
-  }
-  return info[idx].ToNumber().Uint32Value();
+  const double number = NumberArg(info, idx, 0.0);
+  return number >= 0.0 && number <= static_cast<double>(std::numeric_limits<uint32_t>::max())
+             ? static_cast<uint32_t>(number)
+             : 0U;
 }
 
 int32_t Workbook::ArgI32(const Napi::CallbackInfo& info, size_t idx) {
-  if (idx >= info.Length()) {
-    return 0;
-  }
-  return info[idx].ToNumber().Int32Value();
+  const double number = NumberArg(info, idx, 0.0);
+  return number >= static_cast<double>(std::numeric_limits<int32_t>::min()) &&
+                 number <= static_cast<double>(std::numeric_limits<int32_t>::max())
+             ? static_cast<int32_t>(number)
+             : 0;
 }
 
 double Workbook::ArgDouble(const Napi::CallbackInfo& info, size_t idx) {
-  if (idx >= info.Length()) {
-    return 0.0;
-  }
-  return info[idx].ToNumber().DoubleValue();
+  return NumberArg(info, idx, 0.0);
 }
 
 std::string Workbook::ArgString(const Napi::CallbackInfo& info, size_t idx) {
-  if (idx >= info.Length()) {
-    return std::string();
-  }
-  return info[idx].ToString().Utf8Value();
+  return StringArg(info, idx);
 }
 
 bool Workbook::ArgBool(const Napi::CallbackInfo& info, size_t idx) {
@@ -237,8 +263,9 @@ bool Workbook::ArgBool(const Napi::CallbackInfo& info, size_t idx) {
   return info[idx].ToBoolean().Value();
 }
 
-Napi::Object Workbook::ArgObjectOrEmpty(const Napi::CallbackInfo& info, size_t idx) {
-  return (info.Length() > idx && info[idx].IsObject()) ? info[idx].As<Napi::Object>() : Napi::Object::New(info.Env());
+Napi::Object Workbook::ArgObject(const Napi::CallbackInfo& info, size_t idx) {
+  Napi::Object object;
+  return ObjectArg(info, idx, &object) ? object : Napi::Object::New(info.Env());
 }
 
 Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEditFn fn) {
@@ -297,16 +324,11 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   Napi::Function ctor = GetClass(env);
   Napi::Object jsobj = ctor.New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
-  if (info.Length() < 1 || !info[0].IsTypedArray()) {
+  Napi::Uint8Array u8;
+  if (!BytesArg(info, 0, &u8)) {
     (void)fm_workbook_load(nullptr, 0, &wb->handle_);
     return jsobj;
   }
-  Napi::TypedArray ta = info[0].As<Napi::TypedArray>();
-  if (ta.TypedArrayType() != napi_uint8_array) {
-    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
-    return jsobj;
-  }
-  Napi::Uint8Array u8 = ta.As<Napi::Uint8Array>();
   const uint8_t* data = u8.Data();
   const std::size_t len = u8.ElementLength();
   if (data == nullptr || len == 0) {
@@ -339,24 +361,24 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           StaticMethod<&Workbook::CreateEmpty>("createEmpty"),
           StaticMethod<&Workbook::CreateForProfile>("createForProfile"),
           StaticMethod<&Workbook::LoadBytes>("loadBytes"),
-          GuardedInstanceMethod<&Workbook::AddBorder>("addBorder"),
-          GuardedInstanceMethod<&Workbook::AddConditionalFormat, 0x1ULL>("addConditionalFormat"),
-          GuardedInstanceMethod<&Workbook::AddDxf>("addDxf"),
-          GuardedInstanceMethod<&Workbook::AddFill>("addFill"),
-          GuardedInstanceMethod<&Workbook::AddFont>("addFont"),
+          GuardedInstanceMethod<&Workbook::AddBorder, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addBorder"),
+          GuardedInstanceMethod<&Workbook::AddConditionalFormat, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addConditionalFormat"),
+          GuardedInstanceMethod<&Workbook::AddDxf, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addDxf"),
+          GuardedInstanceMethod<&Workbook::AddFill, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addFill"),
+          GuardedInstanceMethod<&Workbook::AddFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addFont"),
           GuardedInstanceMethod<&Workbook::AddHyperlink, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x78ULL>("addHyperlink"),
           GuardedInstanceMethod<&Workbook::AddHyperlinkRange, 0x1FULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1E0ULL>("addHyperlinkRange"),
-          GuardedInstanceMethod<&Workbook::AddMerge, 0x1ULL>("addMerge"),
+          GuardedInstanceMethod<&Workbook::AddMerge, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addMerge"),
           GuardedInstanceMethod<&Workbook::AddNumFmt, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addNumFmt"),
           GuardedInstanceMethod<&Workbook::AddSheet, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addSheet"),
-          GuardedInstanceMethod<&Workbook::AddValidation, 0x1ULL>("addValidation"),
-          GuardedInstanceMethod<&Workbook::AddPerson>("addPerson"),
-          GuardedInstanceMethod<&Workbook::AddThreadedComment, 0x1ULL>("addThreadedComment"),
+          GuardedInstanceMethod<&Workbook::AddValidation, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addValidation"),
+          GuardedInstanceMethod<&Workbook::AddPerson, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addPerson"),
+          GuardedInstanceMethod<&Workbook::AddThreadedComment, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addThreadedComment"),
           GuardedInstanceMethod<&Workbook::ApplyAutoFilter, 0x1ULL>("applyAutoFilter"),
           GuardedInstanceMethod<&Workbook::ApplyTableAutoFilter, 0x1ULL>("applyTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::ClearAutoFilter, 0x1ULL>("clearAutoFilter"),
           GuardedInstanceMethod<&Workbook::ClearTableAutoFilter, 0x1ULL>("clearTableAutoFilter"),
-          GuardedInstanceMethod<&Workbook::EditThreadedComment, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL>("editThreadedComment"),
+          GuardedInstanceMethod<&Workbook::EditThreadedComment, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("editThreadedComment"),
           GuardedInstanceMethod<&Workbook::EvaluateAutoFilter, 0x1ULL>("evaluateAutoFilter"),
           GuardedInstanceMethod<&Workbook::EvaluateTableAutoFilter, 0x1ULL>("evaluateTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::GetAutoFilter, 0x1ULL>("getAutoFilter"),
@@ -368,53 +390,53 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::RemovePerson, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("removePerson"),
           GuardedInstanceMethod<&Workbook::RemoveTableAutoFilter, 0x1ULL>("removeTableAutoFilter"),
           GuardedInstanceMethod<&Workbook::RemoveThreadedComment, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeThreadedComment"),
-          GuardedInstanceMethod<&Workbook::SetAutoFilter, 0x1ULL>("setAutoFilter"),
-          GuardedInstanceMethod<&Workbook::SetTableAutoFilter, 0x1ULL>("setTableAutoFilter"),
-          GuardedInstanceMethod<&Workbook::SetThreadResolved, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setThreadResolved"),
-          GuardedInstanceMethod<&Workbook::ValidateValue, 0x7ULL>("validateValue"),
-          GuardedInstanceMethod<&Workbook::ProbeImage>("probeImage"),
+          GuardedInstanceMethod<&Workbook::SetAutoFilter, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setAutoFilter"),
+          GuardedInstanceMethod<&Workbook::SetTableAutoFilter, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setTableAutoFilter"),
+          GuardedInstanceMethod<&Workbook::SetThreadResolved, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setThreadResolved"),
+          GuardedInstanceMethod<&Workbook::ValidateValue, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("validateValue"),
+          GuardedInstanceMethod<&Workbook::ProbeImage, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("probeImage"),
           GuardedInstanceMethod<&Workbook::ListDrawingObjects, 0x1ULL>("listDrawingObjects"),
           GuardedInstanceMethod<&Workbook::GetImage, 0x3ULL>("getImage"),
-          GuardedInstanceMethod<&Workbook::InsertImage, 0x1ULL>("insertImage"),
+          GuardedInstanceMethod<&Workbook::InsertImage, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("insertImage"),
           GuardedInstanceMethod<&Workbook::RemoveDrawing, 0x3ULL>("removeDrawing"),
-          GuardedInstanceMethod<&Workbook::SetDrawingAnchor, 0x3ULL>("setDrawingAnchor"),
+          GuardedInstanceMethod<&Workbook::SetDrawingAnchor, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setDrawingAnchor"),
           GuardedInstanceMethod<&Workbook::SetDrawingZOrder, 0x7ULL>("setDrawingZOrder"),
           GuardedInstanceMethod<&Workbook::SnapshotDrawing, 0x3ULL>("snapshotDrawing"),
-          GuardedInstanceMethod<&Workbook::RestoreDrawing, 0x1ULL>("restoreDrawing"),
+          GuardedInstanceMethod<&Workbook::RestoreDrawing, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("restoreDrawing"),
           GuardedInstanceMethod<&Workbook::ListShapes, 0x1ULL>("listShapes"),
-          GuardedInstanceMethod<&Workbook::InsertShape, 0x1ULL>("insertShape"),
-          GuardedInstanceMethod<&Workbook::UpdateShape, 0x3ULL>("updateShape"),
+          GuardedInstanceMethod<&Workbook::InsertShape, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("insertShape"),
+          GuardedInstanceMethod<&Workbook::UpdateShape, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateShape"),
           GuardedInstanceMethod<&Workbook::RemoveShape, 0x3ULL>("removeShape"),
           GuardedInstanceMethod<&Workbook::ListSlicers, 0x1ULL>("listSlicers"),
-          GuardedInstanceMethod<&Workbook::AddSlicer, 0x7ULL>("addSlicer"),
-          GuardedInstanceMethod<&Workbook::UpdateSlicer, 0x3ULL>("updateSlicer"),
+          GuardedInstanceMethod<&Workbook::AddSlicer, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("addSlicer"),
+          GuardedInstanceMethod<&Workbook::UpdateSlicer, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateSlicer"),
           GuardedInstanceMethod<&Workbook::RemoveSlicer, 0x3ULL>("removeSlicer"),
-          GuardedInstanceMethod<&Workbook::AddDataTable, 0x1ULL>("addDataTable"),
+          GuardedInstanceMethod<&Workbook::AddDataTable, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addDataTable"),
           GuardedInstanceMethod<&Workbook::GetDataTable, 0x7ULL>("getDataTable"),
           GuardedInstanceMethod<&Workbook::RemoveDataTable, 0x7ULL>("removeDataTable"),
           GuardedInstanceMethod<&Workbook::RecalcDataTables>("recalcDataTables"),
           GuardedInstanceMethod<&Workbook::ListSparklineGroups, 0x1ULL>("listSparklineGroups"),
-          GuardedInstanceMethod<&Workbook::AddSparklineGroup, 0x1ULL>("addSparklineGroup"),
-          GuardedInstanceMethod<&Workbook::UpdateSparklineGroup, 0x3ULL>("updateSparklineGroup"),
-          GuardedInstanceMethod<&Workbook::SetSparklineGroupSparklines, 0x3ULL>("setSparklineGroupSparklines"),
+          GuardedInstanceMethod<&Workbook::AddSparklineGroup, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addSparklineGroup"),
+          GuardedInstanceMethod<&Workbook::UpdateSparklineGroup, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateSparklineGroup"),
+          GuardedInstanceMethod<&Workbook::SetSparklineGroupSparklines, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setSparklineGroupSparklines"),
           GuardedInstanceMethod<&Workbook::RemoveSparklineGroup, 0x3ULL>("removeSparklineGroup"),
           GuardedInstanceMethod<&Workbook::GetChart, 0x3ULL>("getChart"),
           GuardedInstanceMethod<&Workbook::GetChartData, 0x3ULL>("getChartData"),
-          GuardedInstanceMethod<&Workbook::PreviewChartData, 0x3ULL>("previewChartData"),
-          GuardedInstanceMethod<&Workbook::InsertChart, 0x1ULL>("insertChart"),
-          GuardedInstanceMethod<&Workbook::SetChartType, 0x7ULL, 0x18ULL>("setChartType"),
-          GuardedInstanceMethod<&Workbook::SetChartTitle, 0x3ULL>("setChartTitle"),
-          GuardedInstanceMethod<&Workbook::SetChartLegend, 0x3ULL, 0x4ULL>("setChartLegend"),
-          GuardedInstanceMethod<&Workbook::SetChartAxis, 0x7ULL>("setChartAxis"),
-          GuardedInstanceMethod<&Workbook::SetChartDisplay, 0x3ULL, 0x4ULL>("setChartDisplay"),
-          GuardedInstanceMethod<&Workbook::SetChartSeries, 0xFULL>("setChartSeries"),
-          GuardedInstanceMethod<&Workbook::SetChartPoint, 0x1FULL>("setChartPoint"),
-          GuardedInstanceMethod<&Workbook::SetChartPlot, 0x7ULL>("setChartPlot"),
-          GuardedInstanceMethod<&Workbook::SetChartFilter, 0x3ULL>("setChartFilter"),
-          GuardedInstanceMethod<&Workbook::AddChartSeries, 0x7ULL>("addChartSeries"),
+          GuardedInstanceMethod<&Workbook::PreviewChartData, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("previewChartData"),
+          GuardedInstanceMethod<&Workbook::InsertChart, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("insertChart"),
+          GuardedInstanceMethod<&Workbook::SetChartType, 0x7ULL, 0x8ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("setChartType"),
+          GuardedInstanceMethod<&Workbook::SetChartTitle, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setChartTitle"),
+          GuardedInstanceMethod<&Workbook::SetChartLegend, 0x3ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setChartLegend"),
+          GuardedInstanceMethod<&Workbook::SetChartAxis, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setChartAxis"),
+          GuardedInstanceMethod<&Workbook::SetChartDisplay, 0x3ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setChartDisplay"),
+          GuardedInstanceMethod<&Workbook::SetChartSeries, 0xFULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("setChartSeries"),
+          GuardedInstanceMethod<&Workbook::SetChartPoint, 0x1FULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x20ULL>("setChartPoint"),
+          GuardedInstanceMethod<&Workbook::SetChartPlot, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setChartPlot"),
+          GuardedInstanceMethod<&Workbook::SetChartFilter, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xCULL>("setChartFilter"),
+          GuardedInstanceMethod<&Workbook::AddChartSeries, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("addChartSeries"),
           GuardedInstanceMethod<&Workbook::RemoveChartSeries, 0xFULL>("removeChartSeries"),
           GuardedInstanceMethod<&Workbook::SetChartSource, 0x3ULL, 0x8ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setChartSource"),
-          GuardedInstanceMethod<&Workbook::AddXf>("addXf"),
+          GuardedInstanceMethod<&Workbook::AddXf, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("addXf"),
           GuardedInstanceMethod<&Workbook::BorderCount>("borderCount"),
           GuardedInstanceMethod<&Workbook::CalcMode>("calcMode"),
           GuardedInstanceMethod<&Workbook::FullPrecision>("fullPrecision"),
@@ -427,14 +449,14 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::ClearRowStyle, 0x7ULL>("clearRowStyle"),
           GuardedInstanceMethod<&Workbook::ColumnCharsToPt, 0x1ULL, 0x2ULL, 0x0ULL, 0x4ULL>("columnCharsToPt"),
           GuardedInstanceMethod<&Workbook::ColumnPtToChars, 0x1ULL, 0x2ULL, 0x0ULL, 0x4ULL>("columnPtToChars"),
-          GuardedInstanceMethod<&Workbook::FormatValue, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("formatValue"),
-          GuardedInstanceMethod<&Workbook::GetCellRectPt, 0x1ULL, 0x4ULL>("getCellRectPt"),
-          GuardedInstanceMethod<&Workbook::GetCellsInRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL, 0x4ULL, 0xCULL>("getCellsInRange"),
+          GuardedInstanceMethod<&Workbook::FormatValue, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("formatValue"),
+          GuardedInstanceMethod<&Workbook::GetCellRectPt, 0x1ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("getCellRectPt"),
+          GuardedInstanceMethod<&Workbook::GetCellsInRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL, 0x4ULL, 0xCULL, 0x2ULL>("getCellsInRange"),
           GuardedInstanceMethod<&Workbook::GetColumnWidthPt, 0x3ULL, 0x4ULL>("getColumnWidthPt"),
           GuardedInstanceMethod<&Workbook::GetDisplayText, 0x7ULL>("getDisplayText"),
           GuardedInstanceMethod<&Workbook::GetFormula, 0x7ULL>("getFormula"),
           GuardedInstanceMethod<&Workbook::GetFormulaR1C1, 0x7ULL>("getFormulaR1C1"),
-          GuardedInstanceMethod<&Workbook::GetMergesInRange, 0x1ULL>("getMergesInRange"),
+          GuardedInstanceMethod<&Workbook::GetMergesInRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("getMergesInRange"),
           GuardedInstanceMethod<&Workbook::GetRowHeightPt, 0x3ULL>("getRowHeightPt"),
           GuardedInstanceMethod<&Workbook::GetSheetFormatDefaults, 0x1ULL>("getSheetFormatDefaults"),
           GuardedInstanceMethod<&Workbook::GetWidthModel, 0x1ULL, 0x2ULL>("getWidthModel"),
@@ -472,17 +494,17 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetEffectiveStyle, 0x7ULL>("getEffectiveStyle"),
           GuardedInstanceMethod<&Workbook::GetTheme>("getTheme"),
           GuardedInstanceMethod<&Workbook::RemoveCellStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("removeCellStyle"),
-          GuardedInstanceMethod<&Workbook::ResolveColor, 0x0ULL, 0x2ULL>("resolveColor"),
-          GuardedInstanceMethod<&Workbook::SetCellStyle>("setCellStyle"),
+          GuardedInstanceMethod<&Workbook::ResolveColor, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("resolveColor"),
+          GuardedInstanceMethod<&Workbook::SetCellStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setCellStyle"),
           GuardedInstanceMethod<&Workbook::TableStyleCount>("tableStyleCount"),
           GuardedInstanceMethod<&Workbook::GetTableStyle, 0x1ULL>("getTableStyle"),
-          GuardedInstanceMethod<&Workbook::SetTableStyle>("setTableStyle"),
+          GuardedInstanceMethod<&Workbook::SetTableStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setTableStyle"),
           GuardedInstanceMethod<&Workbook::RemoveTableStyle, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("removeTableStyle"),
           GuardedInstanceMethod<&Workbook::GetTableStyleDefaults>("getTableStyleDefaults"),
-          GuardedInstanceMethod<&Workbook::SetTableStyleDefaults>("setTableStyleDefaults"),
-          GuardedInstanceMethod<&Workbook::SetThemeColors>("setThemeColors"),
-          GuardedInstanceMethod<&Workbook::SetThemeFonts>("setThemeFonts"),
-          GuardedInstanceMethod<&Workbook::SetThemeScriptFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL>("setThemeScriptFont"),
+          GuardedInstanceMethod<&Workbook::SetTableStyleDefaults, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setTableStyleDefaults"),
+          GuardedInstanceMethod<&Workbook::SetThemeColors, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setThemeColors"),
+          GuardedInstanceMethod<&Workbook::SetThemeFonts, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setThemeFonts"),
+          GuardedInstanceMethod<&Workbook::SetThemeScriptFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setThemeScriptFont"),
           GuardedInstanceMethod<&Workbook::ResetTheme>("resetTheme"),
           GuardedInstanceMethod<&Workbook::GetCellXf, 0x1ULL>("getCellXf"),
           GuardedInstanceMethod<&Workbook::GetCellXfIndex, 0x7ULL>("getCellXfIndex"),
@@ -516,17 +538,17 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::InsertCols, 0x7ULL>("insertCols"),
           GuardedInstanceMethod<&Workbook::InsertRows, 0x7ULL>("insertRows"),
           GuardedInstanceMethod<&Workbook::IsValid>("isValid"),
-          GuardedInstanceMethod<&Workbook::CollationClasses, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("collationClasses"),
+          GuardedInstanceMethod<&Workbook::CollationClasses, 0x2ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("collationClasses"),
           GuardedInstanceMethod<&Workbook::CompareText, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xBULL>("compareText"),
           GuardedInstanceMethod<&Workbook::LocaleFacts, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("localeFacts"),
           GuardedInstanceMethod<&Workbook::LocalizeFormula, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("localizeFormula"),
           GuardedInstanceMethod<&Workbook::LocalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("localizeFunctionName"),
           GuardedInstanceMethod<&Workbook::MemoryUsage>("memoryUsage"),
           GuardedInstanceMethod<&Workbook::MoveSheet, 0x3ULL>("moveSheet"),
-          GuardedInstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
+          GuardedInstanceMethod<&Workbook::PartialRecalc, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("partialRecalc"),
           GuardedInstanceMethod<&Workbook::Paginate, 0x1ULL>("paginate"),
           GuardedInstanceMethod<&Workbook::GetSheetPageSetupXml, 0x1ULL>("getSheetPageSetupXml"),
-          GuardedInstanceMethod<&Workbook::SetSheetFormatDefaults, 0x1ULL>("setSheetFormatDefaults"),
+          GuardedInstanceMethod<&Workbook::SetSheetFormatDefaults, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetFormatDefaults"),
           GuardedInstanceMethod<&Workbook::SetSheetPageSetupXml, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetPageSetupXml"),
           GuardedInstanceMethod<&Workbook::GetSheetPageMarginsXml, 0x1ULL>("getSheetPageMarginsXml"),
           GuardedInstanceMethod<&Workbook::SetSheetPageMarginsXml, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetPageMarginsXml"),
@@ -536,22 +558,22 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetSheetHeaderFooterXml, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetHeaderFooterXml"),
           GuardedInstanceMethod<&Workbook::GetSheetSheetPrXml, 0x1ULL>("getSheetSheetPrXml"),
           GuardedInstanceMethod<&Workbook::SetSheetSheetPrXml, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetSheetPrXml"),
-          GuardedInstanceMethod<&Workbook::SetSheetFitToPage, 0x1ULL>("setSheetFitToPage"),
+          GuardedInstanceMethod<&Workbook::SetSheetFitToPage, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetFitToPage"),
           GuardedInstanceMethod<&Workbook::GetSheetPrintArea, 0x1ULL>("getSheetPrintArea"),
           GuardedInstanceMethod<&Workbook::SetSheetPrintArea, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetPrintArea"),
           GuardedInstanceMethod<&Workbook::GetSheetPrintTitles, 0x1ULL>("getSheetPrintTitles"),
           GuardedInstanceMethod<&Workbook::SetSheetPrintTitles, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL>("setSheetPrintTitles"),
-          GuardedInstanceMethod<&Workbook::AddSheetRowBreak, 0x3ULL>("addSheetRowBreak"),
-          GuardedInstanceMethod<&Workbook::AddSheetColBreak, 0x3ULL>("addSheetColBreak"),
+          GuardedInstanceMethod<&Workbook::AddSheetRowBreak, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("addSheetRowBreak"),
+          GuardedInstanceMethod<&Workbook::AddSheetColBreak, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("addSheetColBreak"),
           GuardedInstanceMethod<&Workbook::RemoveSheetRowBreak, 0x3ULL>("removeSheetRowBreak"),
           GuardedInstanceMethod<&Workbook::RemoveSheetColBreak, 0x3ULL>("removeSheetColBreak"),
           GuardedInstanceMethod<&Workbook::ClearSheetBreaks, 0x1ULL>("clearSheetBreaks"),
           GuardedInstanceMethod<&Workbook::GetSheetRowBreaks, 0x1ULL>("getSheetRowBreaks"),
           GuardedInstanceMethod<&Workbook::GetSheetColBreaks, 0x1ULL>("getSheetColBreaks"),
-          GuardedInstanceMethod<&Workbook::SetSheetPageSetup, 0x1ULL>("setSheetPageSetup"),
-          GuardedInstanceMethod<&Workbook::SetSheetPageMargins, 0x1ULL>("setSheetPageMargins"),
-          GuardedInstanceMethod<&Workbook::SetSheetPrintOptions, 0x1ULL>("setSheetPrintOptions"),
-          GuardedInstanceMethod<&Workbook::SetSheetHeaderFooter, 0x1ULL>("setSheetHeaderFooter"),
+          GuardedInstanceMethod<&Workbook::SetSheetPageSetup, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetPageSetup"),
+          GuardedInstanceMethod<&Workbook::SetSheetPageMargins, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetPageMargins"),
+          GuardedInstanceMethod<&Workbook::SetSheetPrintOptions, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetPrintOptions"),
+          GuardedInstanceMethod<&Workbook::SetSheetHeaderFooter, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetHeaderFooter"),
           GuardedInstanceMethod<&Workbook::GetSheetPageSetup, 0x1ULL>("getSheetPageSetup"),
           GuardedInstanceMethod<&Workbook::GetSheetPageMargins, 0x1ULL>("getSheetPageMargins"),
           GuardedInstanceMethod<&Workbook::PassthroughAt, 0x1ULL>("passthroughAt"),
@@ -560,7 +582,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotCacheCreate, 0x1ULL>("pivotCacheCreate"),
           GuardedInstanceMethod<&Workbook::PivotCacheFieldAdd, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("pivotCacheFieldAdd"),
           GuardedInstanceMethod<&Workbook::PivotCacheFieldAddSharedItemBlank, 0x3ULL>("pivotCacheFieldAddSharedItemBlank"),
-          GuardedInstanceMethod<&Workbook::PivotCacheFieldAddSharedItemBool, 0x3ULL>("pivotCacheFieldAddSharedItemBool"),
+          GuardedInstanceMethod<&Workbook::PivotCacheFieldAddSharedItemBool, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotCacheFieldAddSharedItemBool"),
           GuardedInstanceMethod<&Workbook::PivotCacheFieldAddSharedItemError, 0x3ULL, 0x4ULL>("pivotCacheFieldAddSharedItemError"),
           GuardedInstanceMethod<&Workbook::PivotCacheFieldAddSharedItemNumber, 0x3ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotCacheFieldAddSharedItemNumber"),
           GuardedInstanceMethod<&Workbook::PivotCacheFieldAddSharedItemText, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotCacheFieldAddSharedItemText"),
@@ -576,23 +598,23 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotCacheRecordClear, 0x1ULL>("pivotCacheRecordClear"),
           GuardedInstanceMethod<&Workbook::PivotCacheRecordCount, 0x1ULL>("pivotCacheRecordCount"),
           GuardedInstanceMethod<&Workbook::PivotCacheRecordSetBlank, 0x7ULL>("pivotCacheRecordSetBlank"),
-          GuardedInstanceMethod<&Workbook::PivotCacheRecordSetBool, 0x7ULL>("pivotCacheRecordSetBool"),
+          GuardedInstanceMethod<&Workbook::PivotCacheRecordSetBool, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotCacheRecordSetBool"),
           GuardedInstanceMethod<&Workbook::PivotCacheRecordSetError, 0x7ULL, 0x8ULL>("pivotCacheRecordSetError"),
           GuardedInstanceMethod<&Workbook::PivotCacheRecordSetNumber, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotCacheRecordSetNumber"),
           GuardedInstanceMethod<&Workbook::PivotCacheRecordSetText, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotCacheRecordSetText"),
           GuardedInstanceMethod<&Workbook::PivotCacheRemove, 0x1ULL>("pivotCacheRemove"),
-          GuardedInstanceMethod<&Workbook::PivotCacheSetWorksheetSource, 0x1ULL>("pivotCacheSetWorksheetSource"),
+          GuardedInstanceMethod<&Workbook::PivotCacheSetWorksheetSource, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("pivotCacheSetWorksheetSource"),
           GuardedInstanceMethod<&Workbook::PivotColFieldOrder, 0x3ULL>("pivotColFieldOrder"),
           GuardedInstanceMethod<&Workbook::PivotCount, 0x1ULL>("pivotCount"),
           GuardedInstanceMethod<&Workbook::PivotCreate, 0x1DULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("pivotCreate"),
-          GuardedInstanceMethod<&Workbook::PivotDataFieldAdd, 0x3ULL>("pivotDataFieldAdd"),
+          GuardedInstanceMethod<&Workbook::PivotDataFieldAdd, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotDataFieldAdd"),
           GuardedInstanceMethod<&Workbook::PivotDataFieldAt, 0x7ULL>("pivotDataFieldAt"),
           GuardedInstanceMethod<&Workbook::PivotDataFieldClear, 0x3ULL>("pivotDataFieldClear"),
           GuardedInstanceMethod<&Workbook::PivotDataFieldCount, 0x3ULL>("pivotDataFieldCount"),
-          GuardedInstanceMethod<&Workbook::PivotDataFieldSet, 0x7ULL>("pivotDataFieldSet"),
-          GuardedInstanceMethod<&Workbook::PivotFieldAdd, 0x3ULL>("pivotFieldAdd"),
-          GuardedInstanceMethod<&Workbook::PivotFieldAddItem, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotFieldAddItem"),
-          GuardedInstanceMethod<&Workbook::PivotFieldAddItemAt, 0xFULL>("pivotFieldAddItemAt"),
+          GuardedInstanceMethod<&Workbook::PivotDataFieldSet, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotDataFieldSet"),
+          GuardedInstanceMethod<&Workbook::PivotFieldAdd, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotFieldAdd"),
+          GuardedInstanceMethod<&Workbook::PivotFieldAddItem, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("pivotFieldAddItem"),
+          GuardedInstanceMethod<&Workbook::PivotFieldAddItemAt, 0xFULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("pivotFieldAddItemAt"),
           GuardedInstanceMethod<&Workbook::PivotFieldAddSubtotalFn, 0x7ULL, 0x8ULL>("pivotFieldAddSubtotalFn"),
           GuardedInstanceMethod<&Workbook::PivotFieldAt, 0x7ULL>("pivotFieldAt"),
           GuardedInstanceMethod<&Workbook::PivotFieldClear, 0x3ULL>("pivotFieldClear"),
@@ -603,12 +625,12 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotFieldItemAt, 0xFULL>("pivotFieldItemAt"),
           GuardedInstanceMethod<&Workbook::PivotFieldItemCount, 0x7ULL>("pivotFieldItemCount"),
           GuardedInstanceMethod<&Workbook::PivotFieldSetAxis, 0x7ULL, 0x8ULL>("pivotFieldSetAxis"),
-          GuardedInstanceMethod<&Workbook::PivotFieldSetDateGroup, 0x87ULL, 0x78ULL, 0x0ULL, 0x300ULL>("pivotFieldSetDateGroup"),
-          GuardedInstanceMethod<&Workbook::PivotFieldSetItemVisible, 0xFULL>("pivotFieldSetItemVisible"),
+          GuardedInstanceMethod<&Workbook::PivotFieldSetDateGroup, 0x7ULL, 0x78ULL>("pivotFieldSetDateGroup"),
+          GuardedInstanceMethod<&Workbook::PivotFieldSetItemVisible, 0xFULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("pivotFieldSetItemVisible"),
           GuardedInstanceMethod<&Workbook::PivotFieldSetNumberFormat, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotFieldSetNumberFormat"),
           GuardedInstanceMethod<&Workbook::PivotFieldSetSort, 0x7ULL, 0x8ULL, 0x0ULL, 0x0ULL, 0x10ULL>("pivotFieldSetSort"),
-          GuardedInstanceMethod<&Workbook::PivotFieldSetSubtotalTop, 0x7ULL>("pivotFieldSetSubtotalTop"),
-          GuardedInstanceMethod<&Workbook::PivotFilterAdd, 0x3ULL>("pivotFilterAdd"),
+          GuardedInstanceMethod<&Workbook::PivotFieldSetSubtotalTop, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotFieldSetSubtotalTop"),
+          GuardedInstanceMethod<&Workbook::PivotFilterAdd, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotFilterAdd"),
           GuardedInstanceMethod<&Workbook::PivotFilterAt, 0x7ULL>("pivotFilterAt"),
           GuardedInstanceMethod<&Workbook::PivotFilterClear, 0x3ULL>("pivotFilterClear"),
           GuardedInstanceMethod<&Workbook::PivotFilterCount, 0x3ULL>("pivotFilterCount"),
@@ -616,9 +638,9 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotLayout, 0x3ULL>("pivotLayout"),
           GuardedInstanceMethod<&Workbook::PivotRemove, 0x3ULL>("pivotRemove"),
           GuardedInstanceMethod<&Workbook::PivotSetAnchor, 0x3FULL>("pivotSetAnchor"),
-          GuardedInstanceMethod<&Workbook::PivotSetColFieldOrder, 0x3ULL>("pivotSetColFieldOrder"),
-          GuardedInstanceMethod<&Workbook::PivotSetGrandTotals, 0x3ULL>("pivotSetGrandTotals"),
-          GuardedInstanceMethod<&Workbook::PivotSetStyleInfo, 0x3ULL>("pivotSetStyleInfo"),
+          GuardedInstanceMethod<&Workbook::PivotSetColFieldOrder, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotSetColFieldOrder"),
+          GuardedInstanceMethod<&Workbook::PivotSetGrandTotals, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xCULL>("pivotSetGrandTotals"),
+          GuardedInstanceMethod<&Workbook::PivotSetStyleInfo, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotSetStyleInfo"),
           GuardedInstanceMethod<&Workbook::PivotGetGrandTotals, 0x3ULL>("pivotGetGrandTotals"),
           GuardedInstanceMethod<&Workbook::PivotGetStyleInfo, 0x3ULL>("pivotGetStyleInfo"),
           GuardedInstanceMethod<&Workbook::PivotGetLayout, 0x3ULL>("pivotGetLayout"),
@@ -626,14 +648,14 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotRowFieldOrder, 0x3ULL>("pivotRowFieldOrder"),
           GuardedInstanceMethod<&Workbook::PivotSetLayout, 0x3ULL, 0x4ULL>("pivotSetLayout"),
           GuardedInstanceMethod<&Workbook::PivotSetName, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotSetName"),
-          GuardedInstanceMethod<&Workbook::PivotSetRowFieldOrder, 0x3ULL>("pivotSetRowFieldOrder"),
+          GuardedInstanceMethod<&Workbook::PivotSetRowFieldOrder, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("pivotSetRowFieldOrder"),
           GuardedInstanceMethod<&Workbook::Precedents, 0xFULL>("precedents"),
           GuardedInstanceMethod<&Workbook::Recalc>("recalc"),
           GuardedInstanceMethod<&Workbook::RecalcParallel>("recalcParallel"),
           GuardedInstanceMethod<&Workbook::RemoveConditionalFormatAt, 0x3ULL>("removeConditionalFormatAt"),
           GuardedInstanceMethod<&Workbook::RemoveHyperlink, 0x7ULL>("removeHyperlink"),
           GuardedInstanceMethod<&Workbook::RemoveHyperlinkAt, 0x3ULL>("removeHyperlinkAt"),
-          GuardedInstanceMethod<&Workbook::RemoveMerge, 0x1ULL>("removeMerge"),
+          GuardedInstanceMethod<&Workbook::RemoveMerge, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("removeMerge"),
           GuardedInstanceMethod<&Workbook::RemoveMergeAt, 0x3ULL>("removeMergeAt"),
           GuardedInstanceMethod<&Workbook::RemoveSheet, 0x1ULL>("removeSheet"),
           GuardedInstanceMethod<&Workbook::RemoveValidationAt, 0x3ULL>("removeValidationAt"),
@@ -643,65 +665,65 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SaveWithDiagnostics, 0x0ULL, 0x1ULL>("saveWithDiagnostics"),
           GuardedInstanceMethod<&Workbook::ReadDiagnostics>("readDiagnostics"),
           GuardedInstanceMethod<&Workbook::SetBlank, 0x7ULL>("setBlank"),
-          GuardedInstanceMethod<&Workbook::SetBool, 0x7ULL>("setBool"),
+          GuardedInstanceMethod<&Workbook::SetBool, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setBool"),
           GuardedInstanceMethod<&Workbook::SetCalcMode, 0x0ULL, 0x1ULL>("setCalcMode"),
-          GuardedInstanceMethod<&Workbook::SetFullPrecision>("setFullPrecision"),
-          GuardedInstanceMethod<&Workbook::SetCalcOnSave>("setCalcOnSave"),
+          GuardedInstanceMethod<&Workbook::SetFullPrecision, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setFullPrecision"),
+          GuardedInstanceMethod<&Workbook::SetCalcOnSave, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setCalcOnSave"),
           GuardedInstanceMethod<&Workbook::SetRefMode, 0x0ULL, 0x1ULL>("setRefMode"),
-          GuardedInstanceMethod<&Workbook::SetDate1904>("setDate1904"),
+          GuardedInstanceMethod<&Workbook::SetDate1904, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDate1904"),
           GuardedInstanceMethod<&Workbook::SetPinnedNow, 0x0ULL, 0x3FULL>("setPinnedNow"),
           GuardedInstanceMethod<&Workbook::SetCellXfIndex, 0xFULL>("setCellXfIndex"),
           GuardedInstanceMethod<&Workbook::ClearCellXfIndex, 0x7ULL>("clearCellXfIndex"),
           GuardedInstanceMethod<&Workbook::SetCellPhonetic, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCellPhonetic"),
-          GuardedInstanceMethod<&Workbook::SetCellPhoneticRuns, 0x7ULL>("setCellPhoneticRuns"),
-          GuardedInstanceMethod<&Workbook::SetCellPhoneticProperties, 0x7ULL>("setCellPhoneticProperties"),
-          GuardedInstanceMethod<&Workbook::SetCellShowPhonetic, 0x7ULL>("setCellShowPhonetic"),
+          GuardedInstanceMethod<&Workbook::SetCellPhoneticRuns, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCellPhoneticRuns"),
+          GuardedInstanceMethod<&Workbook::SetCellPhoneticProperties, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCellPhoneticProperties"),
+          GuardedInstanceMethod<&Workbook::SetCellShowPhonetic, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCellShowPhonetic"),
           GuardedInstanceMethod<&Workbook::SetRangeXfIndex, 0x3FULL>("setRangeXfIndex"),
-          GuardedInstanceMethod<&Workbook::SetColumnHidden, 0x7ULL>("setColumnHidden"),
+          GuardedInstanceMethod<&Workbook::SetColumnHidden, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setColumnHidden"),
           GuardedInstanceMethod<&Workbook::SetColumnOutline, 0xFULL>("setColumnOutline"),
-          GuardedInstanceMethod<&Workbook::SetColumnCollapsed, 0x7ULL>("setColumnCollapsed"),
+          GuardedInstanceMethod<&Workbook::SetColumnCollapsed, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setColumnCollapsed"),
           GuardedInstanceMethod<&Workbook::SetColumnStyle, 0xFULL>("setColumnStyle"),
           GuardedInstanceMethod<&Workbook::SetColumnWidth, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setColumnWidth"),
           GuardedInstanceMethod<&Workbook::SetComment, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x18ULL>("setComment"),
-          GuardedInstanceMethod<&Workbook::SetCommentVisible, 0x7ULL>("setCommentVisible"),
-          GuardedInstanceMethod<&Workbook::SetWorkbookProtection>("setWorkbookProtection"),
-          GuardedInstanceMethod<&Workbook::AddProtectedRange, 0x1ULL>("addProtectedRange"),
-          GuardedInstanceMethod<&Workbook::UpdateProtectedRange, 0x3ULL>("updateProtectedRange"),
+          GuardedInstanceMethod<&Workbook::SetCommentVisible, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setCommentVisible"),
+          GuardedInstanceMethod<&Workbook::SetWorkbookProtection, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setWorkbookProtection"),
+          GuardedInstanceMethod<&Workbook::AddProtectedRange, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addProtectedRange"),
+          GuardedInstanceMethod<&Workbook::UpdateProtectedRange, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateProtectedRange"),
           GuardedInstanceMethod<&Workbook::RemoveProtectedRange, 0x3ULL>("removeProtectedRange"),
           GuardedInstanceMethod<&Workbook::SetDefinedName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("setDefinedName"),
           GuardedInstanceMethod<&Workbook::SetDefinedNameScoped, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x3ULL>("setDefinedNameScoped"),
-          GuardedInstanceMethod<&Workbook::SetDefinedNameAttrs, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefinedNameAttrs"),
-          GuardedInstanceMethod<&Workbook::SetDefaultFont>("setDefaultFont"),
-          GuardedInstanceMethod<&Workbook::SetFont, 0x1ULL>("setFont"),
+          GuardedInstanceMethod<&Workbook::SetDefinedNameAttrs, 0x0ULL, 0x2ULL, 0x0ULL, 0x0ULL, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setDefinedNameAttrs"),
+          GuardedInstanceMethod<&Workbook::SetDefaultFont, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setDefaultFont"),
+          GuardedInstanceMethod<&Workbook::SetFont, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setFont"),
           GuardedInstanceMethod<&Workbook::SetError, 0x7ULL, 0x8ULL>("setError"),
           GuardedInstanceMethod<&Workbook::SetExcelProfileId, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setExcelProfileId"),
           GuardedInstanceMethod<&Workbook::SetFormula, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setFormula"),
-          GuardedInstanceMethod<&Workbook::SetIterative, 0x0ULL, 0x2ULL, 0x0ULL, 0x4ULL>("setIterative"),
-          GuardedInstanceMethod<&Workbook::SetIterativeProgress>("setIterativeProgress"),
+          GuardedInstanceMethod<&Workbook::SetIterative, 0x0ULL, 0x2ULL, 0x0ULL, 0x4ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setIterative"),
+          GuardedInstanceMethod<&Workbook::SetIterativeProgress, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("setIterativeProgress"),
           GuardedInstanceMethod<&Workbook::SetNumber, 0x7ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setNumber"),
           GuardedInstanceMethod<&Workbook::SetRowHeight, 0x3ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setRowHeight"),
-          GuardedInstanceMethod<&Workbook::SetRowHidden, 0x3ULL>("setRowHidden"),
+          GuardedInstanceMethod<&Workbook::SetRowHidden, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setRowHidden"),
           GuardedInstanceMethod<&Workbook::SetRowOutline, 0x7ULL>("setRowOutline"),
-          GuardedInstanceMethod<&Workbook::SetRowCollapsed, 0x3ULL>("setRowCollapsed"),
+          GuardedInstanceMethod<&Workbook::SetRowCollapsed, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setRowCollapsed"),
           GuardedInstanceMethod<&Workbook::SetRowStyle, 0xFULL>("setRowStyle"),
           GuardedInstanceMethod<&Workbook::RangeStyleBases, 0x1FULL>("rangeStyleBases"),
-          GuardedInstanceMethod<&Workbook::RemapRangeStyle, 0x1FULL>("remapRangeStyle"),
+          GuardedInstanceMethod<&Workbook::RemapRangeStyle, 0x1FULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x60ULL>("remapRangeStyle"),
           GuardedInstanceMethod<&Workbook::SnapshotRangeStyle, 0x1FULL>("snapshotRangeStyle"),
-          GuardedInstanceMethod<&Workbook::RestoreRangeStyle, 0x1ULL>("restoreRangeStyle"),
+          GuardedInstanceMethod<&Workbook::RestoreRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("restoreRangeStyle"),
           GuardedInstanceMethod<&Workbook::SetSheetFreeze, 0x7ULL>("setSheetFreeze"),
-          GuardedInstanceMethod<&Workbook::SetSheetProtection, 0x1ULL>("setSheetProtection"),
-          GuardedInstanceMethod<&Workbook::SetSheetRightToLeft, 0x1ULL>("setSheetRightToLeft"),
-          GuardedInstanceMethod<&Workbook::SetSheetShowGridLines, 0x1ULL>("setSheetShowGridLines"),
-          GuardedInstanceMethod<&Workbook::SetSheetShowRowColHeaders, 0x1ULL>("setSheetShowRowColHeaders"),
-          GuardedInstanceMethod<&Workbook::SetSheetShowZeros, 0x1ULL>("setSheetShowZeros"),
-          GuardedInstanceMethod<&Workbook::SetSheetShowFormulas, 0x1ULL>("setSheetShowFormulas"),
-          GuardedInstanceMethod<&Workbook::SetSheetShowOutlineSymbols, 0x1ULL>("setSheetShowOutlineSymbols"),
-          GuardedInstanceMethod<&Workbook::SetSheetTabHidden, 0x1ULL>("setSheetTabHidden"),
+          GuardedInstanceMethod<&Workbook::SetSheetProtection, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetProtection"),
+          GuardedInstanceMethod<&Workbook::SetSheetRightToLeft, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetRightToLeft"),
+          GuardedInstanceMethod<&Workbook::SetSheetShowGridLines, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetShowGridLines"),
+          GuardedInstanceMethod<&Workbook::SetSheetShowRowColHeaders, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetShowRowColHeaders"),
+          GuardedInstanceMethod<&Workbook::SetSheetShowZeros, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetShowZeros"),
+          GuardedInstanceMethod<&Workbook::SetSheetShowFormulas, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetShowFormulas"),
+          GuardedInstanceMethod<&Workbook::SetSheetShowOutlineSymbols, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetShowOutlineSymbols"),
+          GuardedInstanceMethod<&Workbook::SetSheetTabHidden, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetTabHidden"),
           GuardedInstanceMethod<&Workbook::SetSheetPaneTopLeft, 0x7ULL>("setSheetPaneTopLeft"),
           GuardedInstanceMethod<&Workbook::SetSheetSplit, 0x1ULL, 0x0ULL, 0x0ULL, 0x6ULL>("setSheetSplit"),
-          GuardedInstanceMethod<&Workbook::SetSheetSelection, 0x1ULL>("setSheetSelection"),
+          GuardedInstanceMethod<&Workbook::SetSheetSelection, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetSelection"),
           GuardedInstanceMethod<&Workbook::SetSheetTopLeft, 0x7ULL>("setSheetTopLeft"),
-          GuardedInstanceMethod<&Workbook::SetSheetTabSelected, 0x1ULL>("setSheetTabSelected"),
+          GuardedInstanceMethod<&Workbook::SetSheetTabSelected, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetTabSelected"),
           GuardedInstanceMethod<&Workbook::SetSheetViewMode, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetViewMode"),
           GuardedInstanceMethod<&Workbook::SetSheetVisibility, 0x1ULL, 0x2ULL>("setSheetVisibility"),
           GuardedInstanceMethod<&Workbook::SetSheetZoom, 0x3ULL>("setSheetZoom"),
@@ -712,10 +734,10 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SheetName, 0x1ULL>("sheetName"),
           GuardedInstanceMethod<&Workbook::SpillInfo, 0x7ULL>("spillInfo"),
           GuardedInstanceMethod<&Workbook::TableAt, 0x1ULL>("tableAt"),
-          GuardedInstanceMethod<&Workbook::CreateTable>("createTable"),
-          GuardedInstanceMethod<&Workbook::UpdateTable, 0x1ULL>("updateTable"),
+          GuardedInstanceMethod<&Workbook::CreateTable, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("createTable"),
+          GuardedInstanceMethod<&Workbook::UpdateTable, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("updateTable"),
           GuardedInstanceMethod<&Workbook::RemoveTable, 0x1ULL>("removeTable"),
-          GuardedInstanceMethod<&Workbook::SetTableColumnTotals, 0x3ULL>("setTableColumnTotals"),
+          GuardedInstanceMethod<&Workbook::SetTableColumnTotals, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("setTableColumnTotals"),
           GuardedInstanceMethod<&Workbook::TableCount>("tableCount"),
           GuardedInstanceMethod<&Workbook::XfCount>("xfCount"),
       });

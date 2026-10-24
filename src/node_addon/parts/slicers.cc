@@ -106,14 +106,9 @@ Napi::Value Workbook::AddSlicer(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  if (info.Length() < 4 || !info[3].IsObject()) {
-    out.Set("status", MakeBindingArgumentError(
-                          env, "addSlicer expects (sheet:number, table:number, column:number, spec:object)"));
-    return out;
-  }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer slicer = PullSlicer(reader, info[3].As<Napi::Object>(), store);
+  const fm_slicer slicer = PullSlicer(reader, ArgObject(info, 3), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -130,12 +125,9 @@ Napi::Value Workbook::UpdateSlicer(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeBindingArgumentError(env, "updateSlicer expects (sheet:number, index:number, spec:object)");
-  }
   CheckedSpecReader reader(env);
   SlicerText store;
-  const fm_slicer slicer = PullSlicer(reader, info[2].As<Napi::Object>(), store);
+  const fm_slicer slicer = PullSlicer(reader, ArgObject(info, 2), store);
   if (!reader.ok()) {
     return env.Undefined();
   }

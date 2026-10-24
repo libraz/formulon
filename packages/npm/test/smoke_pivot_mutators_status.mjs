@@ -900,3 +900,39 @@ test('iterative progress callbacks are per Workbook, not per module', async () =
     second.delete();
   }
 });
+
+test('pivotFieldSetDateGroup defaults its trailing three arguments', async () => {
+  const mod = await getModule();
+  const explicit = buildPivot(mod);
+  const defaulted = buildPivot(mod);
+  try {
+    dateRows(explicit);
+    dateRows(defaulted);
+    const days = 4; // PivotDateGrouping.Days
+    assert.ok(explicit.wb.pivotFieldSetDateGroup(0, explicit.pivot, explicit.date, days, 0, -1, -1, 1, -1, -1).ok);
+    const r = defaulted.wb.pivotFieldSetDateGroup(0, defaulted.pivot, defaulted.date, days, 0, -1, -1);
+    assert.ok(r.ok, JSON.stringify(r));
+    const field = defaulted.wb.pivotFieldAt(0, defaulted.pivot, defaulted.date);
+    assert.equal(field.dateGranularity, days);
+    assert.equal(field.dateIntervalDays, 1);
+    assert.deepEqual(field, explicit.wb.pivotFieldAt(0, explicit.pivot, explicit.date));
+    assert.deepEqual(pivotGrid(defaulted.wb), pivotGrid(explicit.wb));
+  } finally {
+    explicit.wb.delete();
+    defaulted.wb.delete();
+  }
+});
+
+test('a pivot cache error setter without errorCode throws and changes nothing', async () => {
+  const mod = await getModule();
+  const b = buildPivot(mod);
+  try {
+    const items = b.wb.pivotCacheFieldSharedItemCount(b.cacheId, 0).value;
+    assert.throws(() => b.wb.pivotCacheFieldAddSharedItemError(b.cacheId, 0), TypeError);
+    assert.equal(b.wb.pivotCacheFieldSharedItemCount(b.cacheId, 0).value, items);
+    assert.throws(() => b.wb.pivotCacheRecordSetError(b.cacheId, 0, 2), TypeError);
+    assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
+  } finally {
+    b.wb.delete();
+  }
+});

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import { assert, getModule } from './smoke_support.mjs';
 
-test('nested recalc keeps its diagnostic inside an iterative progress callback', async () => {
+test('a nested recalc from the iterative progress callback throws on serial and parallel passes', async () => {
   const mod = await getModule();
   const runOuterRecalc = (recalcOuter) => {
     const wb = mod.Workbook.createDefault();
@@ -13,7 +13,11 @@ test('nested recalc keeps its diagnostic inside an iterative progress callback',
       assert.ok(
         wb.setIterativeProgress(() => {
           calls += 1;
-          nested = wb.recalc();
+          try {
+            wb.recalc();
+          } catch (err) {
+            nested = err;
+          }
           return false;
         }).ok,
       );
@@ -22,15 +26,12 @@ test('nested recalc keeps its diagnostic inside an iterative progress callback',
       const outerStatus = typeof outer.status === 'object' ? outer.status : outer;
       assert.ok(outerStatus.ok, `outer recalc: ${JSON.stringify(outerStatus)}`);
       assert.equal(calls, 1);
-      assert.ok(nested, 'the progress callback must attempt a nested recalc');
-      assert.equal(nested.ok, false);
-      assert.equal(nested.status, 4005);
-      assert.equal(nested.message, 'RecalcEngine::recalc called recursively on the same thread');
-      assert.equal(nested.context, 'the engine does not support nested recalc; the inner call is rejected');
+      assert.ok(nested instanceof TypeError, `the nested recalc must throw: ${String(nested)}`);
+      assert.match(nested.message, /kGraphRecalcReentrant, 4005/);
 
       const value = wb.getValue(0, 0, 0);
       assert.ok(value.status.ok, `workbook remains usable: ${JSON.stringify(value.status)}`);
-      return { status: nested.status, message: nested.message, context: nested.context };
+      return nested.message;
     } finally {
       wb.setIterativeProgress(null);
       wb.dispose();
@@ -39,7 +40,7 @@ test('nested recalc keeps its diagnostic inside an iterative progress callback',
 
   const serial = runOuterRecalc((wb) => wb.recalc());
   const parallel = runOuterRecalc((wb) => wb.recalcParallel(2));
-  assert.deepEqual(parallel, serial, 'serial and parallel outer recalcs preserve the same nested error');
+  assert.equal(parallel, serial, 'serial and parallel outer recalcs refuse the nested call alike');
 });
 
 test('a throwing iterative progress callback aborts the solve and reports a status', async () => {
@@ -338,18 +339,17 @@ test('a rejected argument reports its own diagnostic, not the previous call', as
     assert.ok(stale.status.message.length > 0);
 
     // An argument the binding rejects before any C call carries its own
-    // message, and a code that names an argument fault rather than the
-    // destroyed-handle code.
-    const missingSpec = wb.pivotFieldAdd(0, 0);
-    assert.equal(missingSpec.status.ok, false);
-    assert.equal(missingSpec.status.status, 7001);
-    assert.match(missingSpec.status.message, /pivotFieldAdd/);
-    assert.notEqual(missingSpec.status.message, stale.status.message);
-    assert.equal(missingSpec.status.context, '');
+    // message, and kInvalidArgument rather than the destroyed-handle code.
+    const shortColors = wb.setThemeColors([1, 2]);
+    assert.equal(shortColors.ok, false);
+    assert.equal(shortColors.status, 2);
+    assert.match(shortColors.message, /setThemeColors/);
+    assert.notEqual(shortColors.message, stale.status.message);
+    assert.equal(shortColors.context, '');
 
     const badCallback = wb.setIterativeProgress(42);
     assert.equal(badCallback.ok, false);
-    assert.equal(badCallback.status, 7001);
+    assert.equal(badCallback.status, 2);
     assert.match(badCallback.message, /callback/);
   } finally {
     wb.setIterativeProgress(null);
@@ -361,7 +361,7 @@ test('a call on a disposed workbook names the destroyed handle', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   wb.dispose();
-  // 7000 is reserved for this: an argument fault reports 7001 instead, so
+  // 7000 is reserved for this: an argument fault reports 2 instead, so
   // "make a new workbook" stays the correct recovery for exactly this code.
   const after = wb.recalc();
   assert.equal(after.ok, false);
@@ -445,6 +445,24 @@ test('setSheetVisibility states veryHidden, which the bool setter cannot', async
     };
     assert.equal(read().visibility, mod.SheetVisibility.Visible);
     assert.equal(read().tabHidden, 0);
+    // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
+    for (const refused of [wb.setSheetVisibility(0, mod.SheetVisibility.Hidden), wb.setSheetTabHidden(0, true)]) {
+      assert.equal(refused.ok, false);
+      assert.equal(refused.status, 2);
+    }
+    assert.equal(read().visibility, mod.SheetVisibility.Visible);
+    // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
+    assert.equal(wb.removeSheet(0).status, 5052);
+    assert.equal(wb.sheetCount().value, 1);
+    // A second sheet lets the first one change state, but removing the first
+    // while the second is hidden would leave no visible sheet.
+    assert.ok(wb.addSheet('Second').ok);
+    assert.ok(wb.setSheetTabHidden(1, true).ok);
+    const lastVisible = wb.removeSheet(0);
+    assert.equal(lastVisible.ok, false);
+    assert.equal(lastVisible.status, 2);
+    assert.equal(wb.sheetCount().value, 2);
+    assert.ok(wb.setSheetTabHidden(1, false).ok);
 
     assert.ok(wb.setSheetVisibility(0, mod.SheetVisibility.VeryHidden).ok);
     // The two-state view stays consistent: a very-hidden sheet reads as

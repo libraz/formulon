@@ -278,11 +278,11 @@ Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("classIds", Napi::Uint32Array::New(env, 0));
   out.Set("classCount", Napi::Number::New(env, 0));
-  if (info.Length() < 1 || !info[0].IsArray()) {
+  Napi::Array array;
+  if (!ArrayArg(info, 0, &array)) {
     out.Set("status", MakeBindingArgumentError(env, "collationClasses expects (values:Value[], strength, profileId)"));
     return out;
   }
-  const Napi::Array array = info[0].As<Napi::Array>();
   const uint32_t n = array.Length();
   const auto strength = static_cast<fm_collation_strength_t>(ArgU32(info, 1));
   const std::string profile_id = ArgString(info, 2);

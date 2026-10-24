@@ -359,6 +359,55 @@ int64_t CheckedSpecReader::I64(const Napi::Value& value, const char* key, int64_
   return NarrowI64(number, key, dflt);
 }
 
+double NumberValue(const Napi::Value& value, double dflt) {
+  return value.IsNumber() ? value.As<Napi::Number>().DoubleValue() : dflt;
+}
+
+double NumberArg(const Napi::CallbackInfo& info, size_t idx, double dflt) {
+  return NumberValue(info[idx], dflt);
+}
+
+std::string StringArg(const Napi::CallbackInfo& info, size_t idx) {
+  const Napi::Value value = info[idx];
+  return value.IsString() ? value.As<Napi::String>().Utf8Value() : std::string();
+}
+
+bool ObjectArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out) {
+  const Napi::Value value = info[idx];
+  if (!value.IsObject()) {
+    return false;
+  }
+  *out = value.As<Napi::Object>();
+  return true;
+}
+
+bool ArrayArg(const Napi::CallbackInfo& info, size_t idx, Napi::Array* out) {
+  const Napi::Value value = info[idx];
+  if (!value.IsArray()) {
+    return false;
+  }
+  *out = value.As<Napi::Array>();
+  return true;
+}
+
+bool FunctionArg(const Napi::CallbackInfo& info, size_t idx, Napi::Function* out) {
+  const Napi::Value value = info[idx];
+  if (!value.IsFunction()) {
+    return false;
+  }
+  *out = value.As<Napi::Function>();
+  return true;
+}
+
+bool BytesArg(const Napi::CallbackInfo& info, size_t idx, Napi::Uint8Array* out) {
+  const Napi::Value value = info[idx];
+  if (!value.IsTypedArray() || value.As<Napi::TypedArray>().TypedArrayType() != napi_uint8_array) {
+    return false;
+  }
+  *out = value.As<Napi::Uint8Array>();
+  return true;
+}
+
 Napi::Object MakeOkStatus(Napi::Env env) {
   return MakeStatusEnvelope(env, true, 0, "", "");
 }
@@ -368,7 +417,7 @@ Napi::Object MakeBindingError(Napi::Env env, fm_status_t code, const char* messa
 }
 
 Napi::Object MakeBindingArgumentError(Napi::Env env, const char* message) {
-  return MakeBindingError(env, kBindingNullPointer, message);
+  return MakeBindingError(env, kInvalidArgument, message);
 }
 
 Napi::Object MakeCallbackThrewStatus(Napi::Env env) {

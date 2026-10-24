@@ -222,13 +222,9 @@ Napi::Value Workbook::InsertShape(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    out.Set("status", MakeBindingArgumentError(env, "insertShape expects (sheet:number, spec:object)"));
-    return out;
-  }
   CheckedSpecReader reader(env);
   ShapeText store;
-  const fm_shape shape = PullShape(reader, info[1].As<Napi::Object>(), store);
+  const fm_shape shape = PullShape(reader, ArgObject(info, 1), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -244,12 +240,9 @@ Napi::Value Workbook::UpdateShape(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeBindingArgumentError(env, "updateShape expects (sheet:number, objectId:number, spec:object)");
-  }
   CheckedSpecReader reader(env);
   ShapeText store;
-  const fm_shape shape = PullShape(reader, info[2].As<Napi::Object>(), store);
+  const fm_shape shape = PullShape(reader, ArgObject(info, 2), store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -319,11 +312,8 @@ Napi::Value Workbook::AddSparklineGroup(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    return MakeBindingArgumentError(env, "addSparklineGroup expects (sheet:number, spec:object)");
-  }
   CheckedSpecReader reader(env);
-  const Napi::Object spec = info[1].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 1);
   std::string ref_store;
   std::vector<std::string> texts;
   std::vector<fm_sparkline> items;
@@ -346,12 +336,9 @@ Napi::Value Workbook::UpdateSparklineGroup(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeBindingArgumentError(env, "updateSparklineGroup expects (sheet:number, index:number, spec:object)");
-  }
   CheckedSpecReader reader(env);
   std::string ref_store;
-  const fm_sparkline_group group = PullGroup(reader, info[2].As<Napi::Object>(), ref_store);
+  const fm_sparkline_group group = PullGroup(reader, ArgObject(info, 2), ref_store);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -363,14 +350,15 @@ Napi::Value Workbook::SetSparklineGroupSparklines(const Napi::CallbackInfo& info
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 3 || !info[2].IsArray()) {
+  Napi::Array sparklines;
+  if (!ArrayArg(info, 2, &sparklines)) {
     return MakeBindingArgumentError(
         env, "setSparklineGroupSparklines expects (sheet:number, index:number, sparklines:array)");
   }
   CheckedSpecReader reader(env);
   std::vector<std::string> texts;
   std::vector<fm_sparkline> items;
-  if (!PullSparklines(reader, info[2].As<Napi::Array>(), texts, items) && !reader.ok()) {
+  if (!PullSparklines(reader, sparklines, texts, items) && !reader.ok()) {
     return env.Undefined();
   }
   fm_sparkline none{};

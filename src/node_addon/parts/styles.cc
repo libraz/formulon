@@ -481,7 +481,7 @@ Napi::Value Workbook::SetFont(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const uint32_t font_index = ArgU32(info, 0);
-  Napi::Object record = ArgObjectOrEmpty(info, 1);
+  Napi::Object record = ArgObject(info, 1);
   CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
@@ -498,7 +498,7 @@ Napi::Value Workbook::SetDefaultFont(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
+  Napi::Object record = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   std::string name;
   fm_font_record fr{};
@@ -711,7 +711,7 @@ Napi::Value Workbook::SetCellStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
+  Napi::Object record = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   std::string name;
   reader.String(record, "name", &name);
@@ -776,7 +776,7 @@ Napi::Value Workbook::SetTableStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const Napi::Object record = ArgObjectOrEmpty(info, 0);
+  const Napi::Object record = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   std::string name;
   reader.String(record, "name", &name);
@@ -845,7 +845,7 @@ Napi::Value Workbook::SetTableStyleDefaults(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const Napi::Object defaults = ArgObjectOrEmpty(info, 0);
+  const Napi::Object defaults = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   std::string table;
   std::string pivot;
@@ -902,10 +902,10 @@ Napi::Value Workbook::SetThemeColors(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 1 || !info[0].IsArray() || info[0].As<Napi::Array>().Length() != 12) {
+  Napi::Array arr;
+  if (!ArrayArg(info, 0, &arr) || arr.Length() != 12) {
     return MakeBindingArgumentError(env, "setThemeColors expects an array of 12 ARGB numbers");
   }
-  Napi::Array arr = info[0].As<Napi::Array>();
   CheckedSpecReader reader(env);
   fm_theme_colors colors{};
   for (uint32_t i = 0; i < 12; ++i) {
@@ -923,7 +923,7 @@ Napi::Value Workbook::SetThemeFonts(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  Napi::Object record = ArgObjectOrEmpty(info, 0);
+  Napi::Object record = ArgObject(info, 0);
   CheckedSpecReader reader(env);
   std::string major_latin;
   std::string major_ea;

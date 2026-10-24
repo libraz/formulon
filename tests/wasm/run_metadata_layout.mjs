@@ -441,6 +441,24 @@ export function registerMetadataLayout(Module, test) {
       };
       assert.equal(read().visibility, 0);
       assert.equal(read().tabHidden, 0);
+      // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
+      for (const refused of [wb.setSheetVisibility(0, 1), wb.setSheetTabHidden(0, true)]) {
+        assert.equal(refused.ok, false);
+        assert.equal(refused.status, 2);
+      }
+      assert.equal(read().visibility, 0);
+      // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
+      assert.equal(wb.removeSheet(0).status, 5052);
+      assert.equal(wb.sheetCount().value, 1);
+      // A second sheet lets the first one change state, but removing the first
+      // while the second is hidden would leave no visible sheet.
+      assert.ok(wb.addSheet('Second').ok);
+      assert.ok(wb.setSheetTabHidden(1, true).ok);
+      const lastVisible = wb.removeSheet(0);
+      assert.equal(lastVisible.ok, false);
+      assert.equal(lastVisible.status, 2);
+      assert.equal(wb.sheetCount().value, 2);
+      assert.ok(wb.setSheetTabHidden(1, false).ok);
 
       assert.ok(wb.setSheetVisibility(0, 2).ok);
       // The two-state view stays consistent: a very-hidden sheet reads as

@@ -164,11 +164,12 @@ test('paging cursor and limit reject values outside native integer ranges', () =
   }
 });
 
-test('missing optional positional arguments retain their existing defaults', () => {
+test('missing required positional arguments are rejected; optional ones keep their defaults', () => {
   const wb = addon.Workbook.createDefault();
   try {
-    assert.equal(wb.setIterative(true).ok, true);
-    assert.equal(wb.setSheetVisibility(0).ok, true);
+    assert.throws(() => wb.setIterative(true), TypeError);
+    assert.throws(() => wb.setSheetVisibility(0), TypeError);
+    assert.equal(wb.getIterative().maxIterations, 100, 'the rejected setIterative must not store a cap');
     assert.equal(wb.functionMetadata('SUM').ok, true);
     const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, undefined, undefined));
@@ -180,14 +181,13 @@ test('missing optional positional arguments retain their existing defaults', () 
   }
 });
 
-test('getCellsInRange reads its range argument like the merge methods', () => {
+test('getCellsInRange requires its range argument like the merge methods', () => {
   const wb = addon.Workbook.createDefault();
   try {
     assert.equal(wb.setNumber(0, 0, 0, 7).ok, true);
-    const nullish = wb.getCellsInRange(0, null);
-    assert.equal(nullish.status.ok, true);
-    assert.equal(nullish.cells.length, 1);
-    assert.equal(wb.getMergesInRange(0, null).status.ok, true);
+    assert.throws(() => wb.getCellsInRange(0, null), TypeError);
+    assert.throws(() => wb.getMergesInRange(0, null), TypeError);
+    assert.throws(() => wb.getCellsInRange(0), TypeError);
     assert.throws(() => wb.getCellsInRange(0, 5), TypeError);
     assert.throws(() => wb.getMergesInRange(0, 5), TypeError);
   } finally {

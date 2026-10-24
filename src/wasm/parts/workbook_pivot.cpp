@@ -662,9 +662,6 @@ JsStatus set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivot
     return invalid_handle_status();
   }
   JsNarrowNumericReader reader("pivotFieldOrder");
-  if (!js_value_present(indices)) {
-    return status_from_rc(fn(wb, sheet, pivotIdx, nullptr, 0));
-  }
   if (!reader.is_array(indices, "pivotFieldOrder")) {
     return binding_error_status(kInvalidArgument, "pivot field order must be an array");
   }

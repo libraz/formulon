@@ -132,7 +132,7 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
     });
     assert.equal(bad.ok, false);
     assert.equal(wb.getAutoFilter(0).autoFilter, null);
-    assert.equal(wb.setAutoFilter(0, null).ok, false);
+    assert.throws(() => wb.setAutoFilter(0, null), TypeError);
   } finally {
     wb.dispose();
   }
@@ -191,7 +191,7 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
     const text = wb.validateValue(0, 0, 1, { kind: mod.ValueKind.Text, text: '5' });
     assert.equal(text.valid, false, 'text "5" is text, not a number');
     assert.equal(wb.validateValue(99, 0, 0, { kind: mod.ValueKind.Number, number: 1 }).status.ok, false);
-    assert.equal(wb.validateValue(0, 0, 0, null).status.ok, false);
+    assert.throws(() => wb.validateValue(0, 0, 0, null), TypeError);
     const noKind = wb.validateValue(0, 0, 0, { number: 50 });
     assert.equal(noKind.status.ok, false, 'a value without `kind` is rejected, not read as blank');
     assert.match(noKind.status.message, /requires a `kind`/);
@@ -295,7 +295,7 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
     assert.equal(wb.removePerson(ANN).ok, false, 'a person with comments stays');
     assert.equal(wb.editThreadedComment(0, '{00000000-0000-0000-0000-000000000000}', 'x', []).ok, false);
     assert.equal(wb.setThreadResolved(0, REPLY, true).ok, false, 'a reply is not a thread');
-    assert.equal(wb.addThreadedComment(0, null).ok, false);
+    assert.throws(() => wb.addThreadedComment(0, null), TypeError);
     assert.equal(wb.getThreadedComments(99).status.ok, false);
 
     must(wb.removeThreadedComment(0, REPLY), 'remove reply');

@@ -91,10 +91,7 @@ Napi::Value Workbook::PivotSetStyleInfo(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeBindingArgumentError(env, "pivotSetStyleInfo: `info` must be an object");
-  }
-  const Napi::Object style = info[2].As<Napi::Object>();
+  const Napi::Object style = ArgObject(info, 2);
   CheckedSpecReader reader(env);
   std::string name;
   const bool has_name = reader.String(style, "name", &name);
@@ -309,10 +306,7 @@ Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeIndexResult(env, MakeBindingArgumentError(env, "pivotFieldAdd: `spec` must be an object"), 0);
-  }
-  Napi::Object spec = info[2].As<Napi::Object>();
+  Napi::Object spec = ArgObject(info, 2);
 
   CheckedSpecReader reader(env);
   std::string source_name;
@@ -412,19 +406,23 @@ Napi::Value Workbook::PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info)
 }
 
 Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const PivotFieldArgs field = ReadPivotField(info);
-    const std::int32_t granularity = ArgI32(info, 3);
-    const std::int32_t calendar = ArgI32(info, 4);
-    const int32_t start_year = info.Length() > 5 ? info[5].As<Napi::Number>().Int32Value() : -1;
-    const int32_t end_year = info.Length() > 6 ? info[6].As<Napi::Number>().Int32Value() : -1;
-    const std::uint32_t interval_days = info.Length() > 7 ? info[7].As<Napi::Number>().Uint32Value() : 1;
-    const double start_serial = info.Length() > 8 ? info[8].As<Napi::Number>().DoubleValue() : -1.0;
-    const double end_serial = info.Length() > 9 ? info[9].As<Napi::Number>().DoubleValue() : -1.0;
-    return fm_workbook_pivot_field_set_date_group(handle, field.sheet, field.pivot_idx, field.field_idx, granularity,
-                                                  calendar, start_year, end_year, interval_days, start_serial,
-                                                  end_serial);
-  });
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  // The trailing three are optional on both surfaces: one-day intervals and
+  // the source data's own bounds (-1).
+  CheckedSpecReader reader(env);
+  const std::uint32_t interval_days = reader.U32(info[7], "intervalDays", 1U);
+  const double start_serial = reader.Double(info[8], "startSerial", -1.0);
+  const double end_serial = reader.Double(info[9], "endSerial", -1.0);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  const PivotFieldArgs field = ReadPivotField(info);
+  return MakeStatus(env, fm_workbook_pivot_field_set_date_group(
+                             handle_, field.sheet, field.pivot_idx, field.field_idx, ArgI32(info, 3), ArgI32(info, 4),
+                             ArgI32(info, 5), ArgI32(info, 6), interval_days, start_serial, end_serial));
 }
 
 Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {
@@ -447,20 +445,18 @@ Napi::Value Workbook::InvokePivotFieldOrder(const Napi::CallbackInfo& info, Pivo
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  Napi::Array array;
+  if (!ArrayArg(info, 2, &array)) {
+    return MakeBindingArgumentError(env, "pivot field order must be an array");
+  }
   CheckedSpecReader reader(env);
   std::vector<uint32_t> indices;
-  if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
-    Napi::Array array;
-    if (!reader.Array(info[2], "indices", &array)) {
-      return env.Undefined();
-    }
-    const uint32_t length = array.Length();
-    indices.reserve(length);
-    for (uint32_t i = 0; i < length; ++i) {
-      Napi::Value value;
-      (void)reader.ArrayElement(array, i, &value);
-      indices.push_back(reader.U32(value, "indices element", 0U));
-    }
+  const uint32_t length = array.Length();
+  indices.reserve(length);
+  for (uint32_t i = 0; i < length; ++i) {
+    Napi::Value value;
+    (void)reader.ArrayElement(array, i, &value);
+    indices.push_back(reader.U32(value, "indices element", 0U));
   }
   if (!reader.ok()) {
     return env.Undefined();
@@ -488,10 +484,7 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeIndexResult(env, MakeBindingArgumentError(env, "pivotDataFieldAdd: `spec` must be an object"), 0);
-  }
-  Napi::Object spec = info[2].As<Napi::Object>();
+  Napi::Object spec = ArgObject(info, 2);
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
@@ -544,10 +537,7 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t data_field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  if (info.Length() < 4 || !info[3].IsObject()) {
-    return MakeBindingArgumentError(env, "pivotDataFieldSet: `spec` must be an object");
-  }
-  Napi::Object spec = info[3].As<Napi::Object>();
+  Napi::Object spec = ArgObject(info, 3);
   fm_pivot_data_field_spec_t c_spec{};
   std::string name_buf;
   std::string nfmt_buf;
@@ -602,10 +592,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeBindingArgumentError(env, "pivotFilterAdd: `spec` must be an object");
-  }
-  Napi::Object spec = info[2].As<Napi::Object>();
+  Napi::Object spec = ArgObject(info, 2);
 
   CheckedSpecReader reader(env);
   std::string field_name;

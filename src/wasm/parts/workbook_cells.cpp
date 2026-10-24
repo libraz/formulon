@@ -40,15 +40,12 @@ JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscri
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
-  // Unlike setNumber/setBool/setText, there is no sane zero-value default
-  // here: an omitted `errorCode` silently writing `#NULL!` (error code 0)
-  // would mask a caller bug instead of surfacing it. `errorCode` is taken
-  // as `emscripten::val` rather than `int32_t` so a missing argument is
-  // still distinguishable from a literal `0` at this point -- matching
-  // the Node binding's `info.Length() < 4` rejection for the same call.
+  // An omitted `errorCode` silently writing `#NULL!` (error code 0) would
+  // mask a caller bug. The pre-js guard rejects it as the Node guard does;
+  // `emscripten::val` keeps a missing argument distinguishable from `0`
+  // here as well.
   if (!js_value_present(errorCode)) {
-    return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kBindingNullPointer),
-                                "setError: `errorCode` is required");
+    return binding_error_status(kInvalidArgument, "setError: `errorCode` is required");
   }
   fm_status_t rc =
       fm_workbook_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(errorCode.as<int32_t>()));
@@ -876,8 +873,10 @@ emscripten::val JsWorkbook::listInvalidCells(uint32_t sheet, emscripten::val cur
 
 emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val value) const {
   emscripten::val o = emscripten::val::object();
+  // A failed call reports every payload field at its zero value, `valid`
+  // included, as the Node surface does.
   o.set("hasRule", false);
-  o.set("valid", true);
+  o.set("valid", false);
   o.set("ruleIndex", 0U);
   o.set("errorStyle", 0U);
   if (handle_ == nullptr) {

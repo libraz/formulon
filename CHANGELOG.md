@@ -215,6 +215,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name and id: creating or renaming a table onto either is refused, and
   structured references to them are written back instead of failing the save
   (a defined name) or losing the formula (a cell).
+- JS packages: both packages check every positional argument the same way
+  before any engine call, as the documented `Status` contract states. A
+  missing required argument, a value of the wrong type, or a primitive or
+  `null` where an object is declared throws `TypeError`; the native package
+  no longer substitutes `0`, `""`, `false` or an empty object (for example
+  `setNumber(0, 0, 0)`, `setIterative(true)` and `addFont(null)`). Malformed
+  arguments a method reports as a status return 2 (`kInvalidArgument`) on
+  both packages; the native package returned 7001.
+- JS packages: any `Workbook` method called from that workbook's iterative
+  progress callback throws `TypeError` naming `kGraphRecalcReentrant` (4005)
+  and changes nothing, instead of blocking forever (native and threads
+  builds) or changing the workbook mid-sweep (single-threaded build).
+- `@libraz/formulon-native`: `dispose()` from a spec getter or callback while
+  a method of the same workbook is running throws `TypeError` (`cannot
+  dispose Workbook during an active method call`), as `delete()` does on the
+  WASM package, instead of freeing the handle the running method still uses.
+- `@libraz/formulon-native`: a workbook with an iterative progress callback
+  is garbage-collected once unreachable, also when the callback refers to
+  the workbook.
+- `@libraz/formulon`: `setIterativeProgress` and `setLogSink` reject a value
+  that is not a function or `null` with status 2 and keep the installed
+  callback, as the native package does, instead of accepting it and failing
+  at the next recalc.
+- `@libraz/formulon`: a string field of a spec object that holds a lone UTF-16
+  surrogate is stored with U+FFFD in its place, as on the native package,
+  instead of reaching the engine as ill-formed UTF-8.
+- `pivotFieldSetDateGroup` takes 7 to 10 arguments on both JS packages, with
+  `intervalDays` defaulting to 1 and `startSerial` / `endSerial` to -1.
+- A failed `getCellXf` / `getCellStyleXf` reports `locked: true` and a failed
+  `validateValue` reports `valid: false` on both JS packages.
+- The `@libraz/formulon-native` TypeScript declarations type pivot fields and
+  parameters with the same enum types as `@libraz/formulon` (`PivotAxis`,
+  `PivotAggregation`, `PivotSortOrder`, ...), so code written against one
+  package's types compiles against the other's.
 
 ## [0.17.0] - 2026-10-21
 
@@ -3070,7 +3104,7 @@ for the full auto-generated change list.
 
 ### Added
 
-- Full binding-surface parity across C API, Node addon, WASM, and Python:
+- Binding-surface parity across C API, Node addon, WASM, and Python for
   pivot-cache worksheet-source/layout, sheet-view display/orientation
   flags, `save_ex` (XLSX/XLSB selector), a static cell-error setter,
   sheet-scoped defined names, CF `ColorScale`/`DataBar`/`IconSet`

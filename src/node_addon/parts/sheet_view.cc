@@ -16,7 +16,7 @@ namespace {
 
 // Reads a geometry mode ordinal; an absent argument is the display mode.
 int32_t ArgMode(const Napi::CallbackInfo& info, size_t idx) {
-  return idx < info.Length() ? info[idx].ToNumber().Int32Value() : static_cast<int32_t>(FM_GEOMETRY_DISPLAY);
+  return info[idx].IsUndefined() ? static_cast<int32_t>(FM_GEOMETRY_DISPLAY) : Workbook::ArgI32(info, idx);
 }
 
 Napi::Object DefaultSheetView(Napi::Env env) {
@@ -206,13 +206,8 @@ Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
-    Napi::TypeError::New(env, "setSheetProtection expects (sheet:number, protection:object)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  Napi::Object in = info[1].As<Napi::Object>();
+  Napi::Object in = ArgObject(info, 1);
 
   // Keep the std::string buffers alive until after the C ABI call so the
   // borrowed `const char*` fields stay valid.
@@ -343,10 +338,7 @@ Napi::Value Workbook::SetSheetSelection(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    return MakeBindingArgumentError(env, "setSheetSelection: `selection` must be an object");
-  }
-  const Napi::Object selection = info[1].As<Napi::Object>();
+  const Napi::Object selection = ArgObject(info, 1);
   CheckedSpecReader reader(env);
   const uint32_t row = reader.U32(selection, "activeRow", 0U);
   const uint32_t col = reader.U32(selection, "activeCol", 0U);
@@ -464,10 +456,7 @@ Napi::Value Workbook::SetSheetFormatDefaults(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 2 || !info[1].IsObject()) {
-    return MakeBindingArgumentError(env, "setSheetFormatDefaults expects (sheet:number, defaults:object)");
-  }
-  const Napi::Object spec = info[1].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 1);
   CheckedSpecReader reader(env);
   bool has_default_col_width = false;
   bool has_default_row_height = false;
@@ -497,10 +486,8 @@ Napi::Value Workbook::GetCellRectPt(const Napi::CallbackInfo& info) {
   Napi::Object status = Napi::Object::New(env);
   if (handle_ == nullptr) {
     status = NullHandleError(env);
-  } else if (info.Length() < 2 || !info[1].IsObject()) {
-    status = MakeBindingArgumentError(env, "getCellRectPt expects (sheet:number, range:object, mode:number)");
   } else {
-    const Napi::Object range = info[1].As<Napi::Object>();
+    const Napi::Object range = ArgObject(info, 1);
     CheckedSpecReader reader(env);
     const uint32_t first_row = reader.U32(range, "firstRow", 0U);
     const uint32_t first_col = reader.U32(range, "firstCol", 0U);
@@ -635,12 +622,12 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 7 || !info[5].IsArray() || !info[6].IsArray()) {
+  Napi::Array from_arr;
+  Napi::Array to_arr;
+  if (!ArrayArg(info, 5, &from_arr) || !ArrayArg(info, 6, &to_arr)) {
     return MakeBindingArgumentError(
         env, "remapRangeStyle expects (sheet, firstRow, firstCol, lastRow, lastCol, fromXfs:number[], toXfs:number[])");
   }
-  const Napi::Array from_arr = info[5].As<Napi::Array>();
-  const Napi::Array to_arr = info[6].As<Napi::Array>();
   if (from_arr.Length() != to_arr.Length()) {
     return MakeBindingArgumentError(env, "remapRangeStyle: fromXfs and toXfs must have the same length");
   }
@@ -689,11 +676,10 @@ Napi::Value Workbook::RestoreRangeStyle(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  if (info.Length() < 2 || !info[1].IsTypedArray() ||
-      info[1].As<Napi::TypedArray>().TypedArrayType() != napi_uint8_array) {
+  Napi::Uint8Array u8;
+  if (!BytesArg(info, 1, &u8)) {
     return MakeBindingArgumentError(env, "restoreRangeStyle expects (sheet:number, bytes:Uint8Array)");
   }
-  const Napi::Uint8Array u8 = info[1].As<Napi::Uint8Array>();
   return MakeStatus(env, fm_sheet_restore_range_style(handle_, static_cast<std::size_t>(ArgU32(info, 0)), u8.Data(),
                                                       u8.ElementLength()));
 }

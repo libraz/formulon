@@ -64,29 +64,13 @@ Napi::Value Workbook::SetBool(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetError(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 4) {
-    // Unlike the other cell-mutation setters, a missing 4th argument
-    // here has no sane zero-value default: `error_code = 0` silently
-    // writes `#NULL!`, masking a caller bug instead of surfacing it.
-    // Reject it the same way the WASM (embind arity check) and Python
-    // (required positional parameter) bindings already do.
-    Napi::TypeError::New(env, "setError requires 4 arguments (sheet, row, col, errorCode)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  if (!info[3].IsNumber()) {
-    // `.As<Napi::Number>()` below is an unchecked cast: on a non-number
-    // 4th argument it does not itself throw, so without this check the
-    // mutation below would run first and any resulting exception would
-    // only surface afterwards, on return to JS.
-    Napi::TypeError::New(env, "setError: `errorCode` must be a number").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
+  // The registration guard requires `errorCode`: a zero default would
+  // silently write `#NULL!`.
   const CellAddressArgs address = ReadCellAddress(info);
-  const int32_t error_code = info[3].As<Napi::Number>().Int32Value();
+  const int32_t error_code = ArgI32(info, 3);
   fm_status_t rc =
       fm_workbook_set_error(handle_, address.sheet, address.row, address.col, static_cast<fm_error_code_t>(error_code));
   return MakeStatus(env, rc);
@@ -106,10 +90,10 @@ Napi::Value Workbook::SetCellPhoneticRuns(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   const CellAddressArgs address = ReadCellAddress(info);
-  if (info.Length() <= 3 || !info[3].IsArray()) {
+  Napi::Array runs;
+  if (!ArrayArg(info, 3, &runs)) {
     return MakeBindingArgumentError(env, "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
   }
-  const Napi::Array runs = info[3].As<Napi::Array>();
   const uint32_t count = runs.Length();
   CheckedSpecReader reader(env);
   // Two passes so no `c_str()` is taken before `texts` has finished growing.
@@ -156,11 +140,7 @@ Napi::Value Workbook::SetCellPhoneticProperties(const Napi::CallbackInfo& info) 
     return NullHandleError(env);
   }
   const CellAddressArgs address = ReadCellAddress(info);
-  if (info.Length() <= 3 || !info[3].IsObject()) {
-    return MakeBindingArgumentError(
-        env, "setCellPhoneticProperties: `properties` must be an object { fontId, type, alignment }");
-  }
-  const Napi::Object props = info[3].As<Napi::Object>();
+  const Napi::Object props = ArgObject(info, 3);
   CheckedSpecReader reader(env);
   const uint32_t font_id = reader.U32(props, "fontId", 0U);
   const uint32_t type = reader.U32(props, "type", 0U);
@@ -490,14 +470,9 @@ Napi::Value Workbook::GetCellsInRange(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  if (info.Length() < 2) {
-    out.Set("status",
-            MakeBindingArgumentError(env, "getCellsInRange expects (sheet:number, range:object, cursor?, limit?)"));
-    return out;
-  }
-  const bool has_cursor = info.Length() > 2 && info[2].IsNumber();
-  const uint64_t cursor = has_cursor ? static_cast<uint64_t>(info[2].As<Napi::Number>().DoubleValue()) : 0U;
-  const uint32_t limit = info.Length() > 3 && info[3].IsNumber() ? ArgU32(info, 3) : 0U;
+  // The guard checked `cursor` as a safe integer and `limit` as uint32 when present.
+  const uint64_t cursor = static_cast<uint64_t>(NumberArg(info, 2, 0.0));
+  const uint32_t limit = ArgU32(info, 3);
   CheckedSpecReader reader(env);
   fm_merge_range range{};
   if (!MergeRangeArg(reader, info, 1, &range)) {
@@ -523,9 +498,8 @@ Napi::Value Workbook::ListInvalidCells(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  const bool has_cursor = info.Length() > 1 && info[1].IsNumber();
-  const uint64_t cursor = has_cursor ? static_cast<uint64_t>(info[1].As<Napi::Number>().DoubleValue()) : 0U;
-  const uint32_t limit = info.Length() > 2 && info[2].IsNumber() ? ArgU32(info, 2) : 0U;
+  const uint64_t cursor = static_cast<uint64_t>(NumberArg(info, 1, 0.0));
+  const uint32_t limit = ArgU32(info, 2);
   fm_cell_range_t* page = nullptr;
   const fm_status_t rc = fm_sheet_list_invalid_cells(handle_, ArgU32(info, 0), cursor, limit, &page);
   FillCellsPage(env, out, page, rc);
@@ -543,14 +517,9 @@ Napi::Value Workbook::ValidateValue(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  if (info.Length() < 4 || !info[3].IsObject()) {
-    out.Set("status",
-            MakeBindingArgumentError(env, "validateValue expects (sheet:number, row:number, col:number, value:Value)"));
-    return out;
-  }
   std::string text;
   fm_value_t value{};
-  const Napi::Object spec = info[3].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 3);
   if (!spec.Has("kind")) {
     out.Set("status", MakeBindingError(env, kInvalidArgument, "validateValue: `value` requires a `kind`"));
     return out;
@@ -592,12 +561,7 @@ Napi::Value Workbook::FormatValue(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return MakeDisplayResult(env, kBindingInvalidHandle, nullptr, 0);
   }
-  if (info.Length() < 1 || !info[0].IsObject()) {
-    Napi::Object out = MakeDisplayResult(env, kBindingNullPointer, nullptr, 0);
-    out.Set("status", MakeBindingArgumentError(env, "formatValue expects (value:Value, formatCode:string)"));
-    return out;
-  }
-  const Napi::Object spec = info[0].As<Napi::Object>();
+  const Napi::Object spec = ArgObject(info, 0);
   if (!spec.Has("kind")) {
     Napi::Object out = MakeDisplayResult(env, kInvalidArgument, nullptr, 0);
     out.Set("status", MakeBindingError(env, kInvalidArgument, "formatValue: `value` requires a `kind`"));

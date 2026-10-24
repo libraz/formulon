@@ -113,7 +113,7 @@ Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& inf
     return NullHandleError(env);
   }
   const uint32_t cache_id = ArgU32(info, 0);
-  Napi::Object source = ArgObjectOrEmpty(info, 1);
+  Napi::Object source = ArgObject(info, 1);
   CheckedSpecReader reader(env);
   const bool present = reader.Bool(source, "present", true);
   std::string ref;
@@ -204,7 +204,7 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemError(const Napi::CallbackInfo
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const uint32_t cache_id = ArgU32(info, 0);
     const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
-    const fm_error_code_t error = static_cast<fm_error_code_t>(info[2].As<Napi::Number>().Int32Value());
+    const fm_error_code_t error = static_cast<fm_error_code_t>(ArgI32(info, 2));
     return fm_workbook_pivot_cache_field_add_shared_item_error(handle, cache_id, field_idx, error);
   });
 }
@@ -260,7 +260,7 @@ Napi::Value Workbook::PivotCacheRecordSetBlank(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CacheRecordArgs record = ReadCacheRecord(info);
-    const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
+    const int32_t error_code = ArgI32(info, 3);
     return fm_workbook_pivot_cache_record_set_error(handle, record.cache_id, record.record_idx, record.field_idx,
                                                     static_cast<fm_error_code_t>(error_code));
   });

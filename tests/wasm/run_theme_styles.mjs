@@ -95,7 +95,7 @@ export function registerThemeStyles(Module, test) {
   test('setThemeColors rejects a malformed colour list', () => {
     withWorkbook(Module, (wb) => {
       assert.equal(wb.setThemeColors([1, 2, 3]).ok, false);
-      assert.equal(wb.setThemeColors(null).ok, false);
+      assert.throws(() => wb.setThemeColors(null), TypeError);
     });
   });
 
