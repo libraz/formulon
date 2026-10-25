@@ -1,0 +1,688 @@
+{
+  "suite": "xirr_search",
+  "description": "XIRR full-precision results from Excel's bracket-and-bisect search, compared as 15 digits plus the residual",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T13:28:34Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "documentation_schedule_default_guess_digits",
+      "formula": "=TEXT(XIRR({-10000,2750,4250,3250,2750},{39448,39508,39751,39859,39904}),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "373.362.535.238.266E-15"
+      }
+    },
+    {
+      "id": "documentation_schedule_default_guess_residual",
+      "formula": "=TEXT((XIRR({-10000,2750,4250,3250,2750},{39448,39508,39751,39859,39904}))-VALUE(TEXT(XIRR({-10000,2750,4250,3250,2750},{39448,39508,39751,39859,39904}),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-111.022.302.462.516E-30"
+      }
+    },
+    {
+      "id": "bracket_doubles_to_root_digits",
+      "formula": "=TEXT(XIRR({-1,2},{39448,39813}),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "999.999.988.079.071E-15"
+      }
+    },
+    {
+      "id": "bracket_doubles_to_root_residual",
+      "formula": "=TEXT((XIRR({-1,2},{39448,39813}))-VALUE(TEXT(XIRR({-1,2},{39448,39813}),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "111.022.302.462.516E-30"
+      }
+    },
+    {
+      "id": "root_on_midpoint_digits",
+      "formula": "=TEXT(XIRR({-1,2},{39448,39813},1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "999.999.985.098.839E-15"
+      }
+    },
+    {
+      "id": "root_on_midpoint_residual",
+      "formula": "=TEXT((XIRR({-1,2},{39448,39813},1))-VALUE(TEXT(XIRR({-1,2},{39448,39813},1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-222.044.604.925.031E-30"
+      }
+    },
+    {
+      "id": "root_at_zero_digits",
+      "formula": "=TEXT(XIRR({-1,1},{39448,39813},0.5),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.000.003.725.290E-15"
+      }
+    },
+    {
+      "id": "root_at_zero_residual",
+      "formula": "=TEXT((XIRR({-1,1},{39448,39813},0.5))-VALUE(TEXT(XIRR({-1,1},{39448,39813},0.5),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "zero_guess_digits",
+      "formula": "=TEXT(XIRR({-1,2},{39448,39848},0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "882.304.462.890.625E-15"
+      }
+    },
+    {
+      "id": "zero_guess_residual",
+      "formula": "=TEXT((XIRR({-1,2},{39448,39848},0))-VALUE(TEXT(XIRR({-1,2},{39448,39848},0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-111.022.302.462.516E-30"
+      }
+    },
+    {
+      "id": "guess_above_root_digits",
+      "formula": "=TEXT(XIRR({-100,110},{39448,39813},3),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "099.999.999.627.471E-15"
+      }
+    },
+    {
+      "id": "guess_above_root_residual",
+      "formula": "=TEXT((XIRR({-100,110},{39448,39813},3))-VALUE(TEXT(XIRR({-100,110},{39448,39813},3),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-027.755.575.615.629E-30"
+      }
+    },
+    {
+      "id": "negative_root_lower_bracket_digits",
+      "formula": "=TEXT(XIRR({-1,0.2},{39448,39848},0.5),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-769.755.177.199.841E-15"
+      }
+    },
+    {
+      "id": "negative_root_lower_bracket_residual",
+      "formula": "=TEXT((XIRR({-1,0.2},{39448,39848},0.5))-VALUE(TEXT(XIRR({-1,0.2},{39448,39848},0.5),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "444.089.209.850.063E-30"
+      }
+    },
+    {
+      "id": "negative_root_on_minus_guess_digits",
+      "formula": "=TEXT(XIRR({-2,1},{39448,39813},0.5),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-500.000.007.450.581E-15"
+      }
+    },
+    {
+      "id": "negative_root_on_minus_guess_residual",
+      "formula": "=TEXT((XIRR({-2,1},{39448,39813},0.5))-VALUE(TEXT(XIRR({-2,1},{39448,39813},0.5),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "444.089.209.850.063E-30"
+      }
+    },
+    {
+      "id": "negative_root_upper_bracket_digits",
+      "formula": "=TEXT(XIRR({-1,0.8},{39448,39848},0.3),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-184.226.466.715.336E-15"
+      }
+    },
+    {
+      "id": "negative_root_upper_bracket_residual",
+      "formula": "=TEXT((XIRR({-1,0.8},{39448,39848},0.3))-VALUE(TEXT(XIRR({-1,0.8},{39448,39848},0.3),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "166.533.453.693.773E-30"
+      }
+    },
+    {
+      "id": "multi_flow_large_root_digits",
+      "formula": "=TEXT(XIRR(A1:A6,B1:B6,0),\"0.00000000000000E+00\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -5440000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 63700000.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.0717
+        },
+        "A4": {
+          "kind": "number",
+          "value": -48800.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2870000.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0146
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40004.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 40066.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 41395.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 61205.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 75734.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "000.000.000.000.004E+00"
+      }
+    },
+    {
+      "id": "multi_flow_large_root_residual",
+      "formula": "=TEXT(XIRR(A1:A6,B1:B6,0)-VALUE(TEXT(XIRR(A1:A6,B1:B6,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -5440000.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 63700000.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": -0.0717
+        },
+        "A4": {
+          "kind": "number",
+          "value": -48800.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": -2870000.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 0.0146
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 40004.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 40066.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 41395.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 61205.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 75734.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "nan_at_minus_one_digits",
+      "formula": "=TEXT(XIRR({-100;-20;60},{40000;40100;40200},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-753.937.705.606.222E-15"
+      }
+    },
+    {
+      "id": "nan_at_minus_one_residual",
+      "formula": "=TEXT(XIRR({-100;-20;60},{40000;40100;40200},0.1)-VALUE(TEXT(XIRR({-100;-20;60},{40000;40100;40200},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-222.044.604.925.031E-30"
+      }
+    },
+    {
+      "id": "negative_root_guess_at_least_one",
+      "formula": "=XIRR({-2,1},{39448,39813},1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "gate_equality_collapses_to_zero_digits",
+      "formula": "=TEXT(XIRR({-2.5,-4,1.5},{40000,40365,40730},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.000.002.980.232E-15"
+      }
+    },
+    {
+      "id": "gate_equality_collapses_to_zero_residual",
+      "formula": "=TEXT(XIRR({-2.5,-4,1.5},{40000,40365,40730},0.1)-VALUE(TEXT(XIRR({-2.5,-4,1.5},{40000,40365,40730},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "gate_fails_negative_lower_bracket_digits",
+      "formula": "=TEXT(XIRR({-2.55,-4,1.5},{40000,40365,40730},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-687.325.433.641.672E-15"
+      }
+    },
+    {
+      "id": "gate_fails_negative_lower_bracket_residual",
+      "formula": "=TEXT(XIRR({-2.55,-4,1.5},{40000,40365,40730},0.1)-VALUE(TEXT(XIRR({-2.55,-4,1.5},{40000,40365,40730},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-333.066.907.387.547E-30"
+      }
+    },
+    {
+      "id": "doubling_passes_near_root_digits",
+      "formula": "=TEXT(XIRR({3.85,-124,3340,-0.00297},{40000,42848,61195,74036},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "560.488.039.255.142E-15"
+      }
+    },
+    {
+      "id": "doubling_passes_near_root_residual",
+      "formula": "=TEXT(XIRR({3.85,-124,3340,-0.00297},{40000,42848,61195,74036},0.1)-VALUE(TEXT(XIRR({3.85,-124,3340,-0.00297},{40000,42848,61195,74036},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "111.022.302.462.516E-30"
+      }
+    },
+    {
+      "id": "gate_routes_three_roots_negative_digits",
+      "formula": "=TEXT(XIRR({1,-2.65,2.23,-0.5775},{40000,40365,40730,41095},0.045),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-500.000.005.550.682E-15"
+      }
+    },
+    {
+      "id": "gate_routes_three_roots_negative_residual",
+      "formula": "=TEXT(XIRR({1,-2.65,2.23,-0.5775},{40000,40365,40730,41095},0.045)-VALUE(TEXT(XIRR({1,-2.65,2.23,-0.5775},{40000,40365,40730,41095},0.045),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-444.089.209.850.063E-30"
+      }
+    },
+    {
+      "id": "lower_bracket_from_minus_one_digits",
+      "formula": "=TEXT(XIRR({230000000,-6030000,0.0275},{39448,64923,74785},0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-050.834.574.911.804E-15"
+      }
+    },
+    {
+      "id": "lower_bracket_from_minus_one_residual",
+      "formula": "=TEXT(XIRR({230000000,-6030000,0.0275},{39448,64923,74785},0)-VALUE(TEXT(XIRR({230000000,-6030000,0.0275},{39448,64923,74785},0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "062.450.045.135.165E-30"
+      }
+    },
+    {
+      "id": "negative_side_with_large_guess_digits",
+      "formula": "=TEXT(XIRR({-4,-4,1.5},{40000,40365,40730},1.5),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-709.430.585.615.337E-15"
+      }
+    },
+    {
+      "id": "negative_side_with_large_guess_residual",
+      "formula": "=TEXT(XIRR({-4,-4,1.5},{40000,40365,40730},1.5)-VALUE(TEXT(XIRR({-4,-4,1.5},{40000,40365,40730},1.5),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "111.022.302.462.516E-30"
+      }
+    },
+    {
+      "id": "positive_side_no_residual_test_digits",
+      "formula": "=TEXT(XIRR(A1:A7,B1:B7,0.3),\"0.00000000000000E+00\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -4.688
+        },
+        "A2": {
+          "kind": "number",
+          "value": 5.168
+        },
+        "A3": {
+          "kind": "number",
+          "value": -97.437
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.811
+        },
+        "A5": {
+          "kind": "number",
+          "value": 6.091
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.528
+        },
+        "A7": {
+          "kind": "number",
+          "value": -2.993
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39592.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 40251.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 41650.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 42073.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 42951.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 43103.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "000.000.004.470.348E-15"
+      }
+    },
+    {
+      "id": "positive_side_no_residual_test_residual",
+      "formula": "=TEXT(XIRR(A1:A7,B1:B7,0.3)-VALUE(TEXT(XIRR(A1:A7,B1:B7,0.3),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -4.688
+        },
+        "A2": {
+          "kind": "number",
+          "value": 5.168
+        },
+        "A3": {
+          "kind": "number",
+          "value": -97.437
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.811
+        },
+        "A5": {
+          "kind": "number",
+          "value": 6.091
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.528
+        },
+        "A7": {
+          "kind": "number",
+          "value": -2.993
+        },
+        "B1": {
+          "kind": "number",
+          "value": 39448.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 39592.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 40251.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 41650.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 42073.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 42951.0
+        },
+        "B7": {
+          "kind": "number",
+          "value": 43103.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "positive_side_stops_on_step_digits",
+      "formula": "=TEXT(XIRR({-0.799,0.527,0.987},{39448,42861,43057},0.3),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "068.121.255.934.238E-15"
+      }
+    },
+    {
+      "id": "positive_side_stops_on_step_residual",
+      "formula": "=TEXT(XIRR({-0.799,0.527,0.987},{39448,42861,43057},0.3)-VALUE(TEXT(XIRR({-0.799,0.527,0.987},{39448,42861,43057},0.3),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "444.089.209.850.063E-30"
+      }
+    },
+    {
+      "id": "negative_residual_by_first_flow_digits",
+      "formula": "=TEXT(XIRR({-2.6,-4,1.5},{40000,41825,43650},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-207.906.028.907.746E-15"
+      }
+    },
+    {
+      "id": "negative_residual_by_first_flow_residual",
+      "formula": "=TEXT(XIRR({-2.6,-4,1.5},{40000,41825,43650},0.1)-VALUE(TEXT(XIRR({-2.6,-4,1.5},{40000,41825,43650},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-083.266.726.846.887E-30"
+      }
+    },
+    {
+      "id": "negative_residual_first_flow_small_digits",
+      "formula": "=TEXT(XIRR({-10,-60,68},{40000,40300,40711},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-023.060.269.653.797E-15"
+      }
+    },
+    {
+      "id": "negative_residual_first_flow_small_residual",
+      "formula": "=TEXT(XIRR({-10,-60,68},{40000,40300,40711},0.1)-VALUE(TEXT(XIRR({-10,-60,68},{40000,40300,40711},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-149.186.218.934.005E-30"
+      }
+    },
+    {
+      "id": "first_flow_added_last_digits",
+      "formula": "=TEXT(XIRR({1,-2.1,1.08},{40000,40365,40730},0.2),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "199.999.994.039.536E-15"
+      }
+    },
+    {
+      "id": "first_flow_added_last_residual",
+      "formula": "=TEXT(XIRR({1,-2.1,1.08},{40000,40365,40730},0.2)-VALUE(TEXT(XIRR({1,-2.1,1.08},{40000,40365,40730},0.2),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-471.844.785.465.692E-30"
+      }
+    },
+    {
+      "id": "later_flows_in_listed_order_digits",
+      "formula": "=TEXT(XIRR({1,-2,1.13,-0.154},{40000,40365,40730,41095},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100.000.005.960.464E-15"
+      }
+    },
+    {
+      "id": "later_flows_in_listed_order_residual",
+      "formula": "=TEXT(XIRR({1,-2,1.13,-0.154},{40000,40365,40730,41095},0.1)-VALUE(TEXT(XIRR({1,-2,1.13,-0.154},{40000,40365,40730,41095},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "485.722.573.273.506E-30"
+      }
+    },
+    {
+      "id": "unsorted_dates_accepted_digits",
+      "formula": "=TEXT(XIRR({-1,2,-0.3},{40365,40730,40000},0.1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "406.514.817.476.272E-15"
+      }
+    },
+    {
+      "id": "unsorted_dates_accepted_residual",
+      "formula": "=TEXT(XIRR({-1,2,-0.3},{40365,40730,40000},0.1)-VALUE(TEXT(XIRR({-1,2,-0.3},{40365,40730,40000},0.1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "499.600.361.081.320E-30"
+      }
+    },
+    {
+      "id": "gate_skips_positive_bracket",
+      "formula": "=XIRR({1,-2.63,1.695},{40000,40365,40730},0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "unsorted_first_pair_anchors",
+      "formula": "=XIRR({2,-1},{40365,40000},0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

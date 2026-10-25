@@ -2,11 +2,11 @@
   "suite": "xirr_xnpv",
   "description": "XIRR / XNPV — irregular cash-flow NPV and IRR over date schedules",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "zh-CN",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T15:11:10Z"
+    "generated_at": "2026-10-25T07:31:08Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -937,6 +937,276 @@
       "expect": {
         "kind": "number",
         "value": 0.09110234677791595
+      }
+    },
+    {
+      "id": "xirr_negative_guess_00_gm0p2",
+      "formula": "=XIRR({-7655.62;3049.09;1527.8},{44382;45951;46005},-0.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.11157377362251283
+      }
+    },
+    {
+      "id": "xirr_negative_guess_01_gm0p9",
+      "formula": "=XIRR({-7655.62;3049.09;1527.8},{44382;45951;46005},-0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.11157377623021603
+      }
+    },
+    {
+      "id": "xirr_negative_guess_02_gm0p99",
+      "formula": "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.34404021698981524
+      }
+    },
+    {
+      "id": "xirr_negative_guess_03_gm0p5",
+      "formula": "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.344040222465992
+      }
+    },
+    {
+      "id": "xirr_negative_guess_04_gm0p7",
+      "formula": "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-0.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.1615686438977718
+      }
+    },
+    {
+      "id": "xirr_negative_guess_05_gm0p9",
+      "formula": "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.16156863681972028
+      }
+    },
+    {
+      "id": "xirr_negative_guess_06_gm0p2",
+      "formula": "=XIRR({-5152.23;989.51;42.47;2748.5;-116.35;-131.51},{43249;43290;43586;44288;44704;45187},-0.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.1714193403720856
+      }
+    },
+    {
+      "id": "xirr_negative_guess_07_gm0p2",
+      "formula": "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-0.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.16156863570213323
+      }
+    },
+    {
+      "id": "xirr_negative_guess_08_gm0p9",
+      "formula": "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.34404022134840495
+      }
+    },
+    {
+      "id": "xirr_negative_guess_09_gm0p4",
+      "formula": "=XIRR({-7655.62;3049.09;1527.8},{44382;45951;46005},-0.4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.11157377362251283
+      }
+    },
+    {
+      "id": "xirr_negative_guess_10_gm1",
+      "formula": "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xirr_negative_guess_11_gm1p5",
+      "formula": "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xirr_solver_widening_00",
+      "formula": "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.02)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.3440402217209339
+      }
+    },
+    {
+      "id": "xirr_solver_widening_01",
+      "formula": "=XIRR({-5152.23;989.51;42.47;2748.5;-116.35;-131.51},{43249;43290;43586;44288;44704;45187},-0.02)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.17141933523118497
+      }
+    },
+    {
+      "id": "xirr_solver_widening_02",
+      "formula": "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.4240471743047237
+      }
+    },
+    {
+      "id": "xirr_solver_widening_03",
+      "formula": "=XIRR({-7655.62;3049.09;1527.8},{44382;45951;46005},-0.005)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.1115737728215754
+      }
+    },
+    {
+      "id": "xirr_solver_widening_04",
+      "formula": "=XIRR({-5152.23;989.51;42.47;2748.5;-116.35;-131.51},{43249;43290;43586;44288;44704;45187},-0.12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.1714193385839462
+      }
+    },
+    {
+      "id": "xirr_solver_widening_05",
+      "formula": "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.34404021725058564
+      }
+    },
+    {
+      "id": "xirr_solver_widening_06",
+      "formula": "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.4240471726655961
+      }
+    },
+    {
+      "id": "xirr_solver_widening_07",
+      "formula": "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.005)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.4240471734665332
+      }
+    },
+    {
+      "id": "xirr_solver_widening_08",
+      "formula": "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.05)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.3440402191132308
+      }
+    },
+    {
+      "id": "xirr_solver_widening_09",
+      "formula": "=XIRR({-1000;100;100;100},{43831;44197;44562;44927},-0.05)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.4240471731871367
+      }
+    },
+    {
+      "id": "xirr_solver_widening_10",
+      "formula": "=XIRR({-6390.17;2529.16;494.31;3.81},{40182;40249;41906;42115},-0.15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.3440402168780564
+      }
+    },
+    {
+      "id": "xirr_solver_widening_11",
+      "formula": "=XIRR({-5735.12;3912.46;-152.91;148.55},{43364;44142;44332;44699},-0.005)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.1615686394833028
+      }
+    },
+    {
+      "id": "xirr_solver_edge_00",
+      "formula": "=XIRR({-100},{43831})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xirr_solver_edge_01",
+      "formula": "=XIRR({-100;50},{43831;44196},1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xirr_solver_edge_02",
+      "formula": "=XIRR({-1000;300;300;300;300},{43831;44196;44561;44926;45291},-0.3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "xirr_solver_edge_03",
+      "formula": "=XIRR({-1000;1000},{43831;44196},-0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.9802322387695314e-09
+      }
+    },
+    {
+      "id": "xirr_solver_edge_04",
+      "formula": "=XIRR({100;-50},{43831;44196},0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.4999999962747097
+      }
+    },
+    {
+      "id": "xirr_solver_edge_05",
+      "formula": "=XIRR({-100;150},{43831;44196},1E+300)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
       }
     }
   ]

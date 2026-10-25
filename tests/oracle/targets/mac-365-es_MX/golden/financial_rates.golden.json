@@ -2,11 +2,11 @@
   "suite": "financial_rates",
   "description": "Security-rate / T-Bill financial builtins — DISC / INTRATE / RECEIVED / TBILLPRICE / TBILLYIELD / TBILLEQ. See `eval/builtins/financial_rates.cpp`.",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "es-MX",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T15:38:16Z"
+    "generated_at": "2026-10-25T12:27:51Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -760,6 +760,318 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_37657_37893",
+      "formula": "=TBILLEQ(37657,37893,0.007)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0071241878851331245
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_42162_42375",
+      "formula": "=TBILLEQ(42162,42375,0.0227)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.023289765574092833
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_42497_42822",
+      "formula": "=TBILLEQ(42497,42822,0.1412)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1585642432543346
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_43298_43648",
+      "formula": "=TBILLEQ(43298,43648,0.0273)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.028242978355725944
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_37131_37467",
+      "formula": "=TBILLEQ(37131,37467,0.1955)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.2303363602982335
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_39174_39396",
+      "formula": "=TBILLEQ(39174,39396,0.0887)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09434386190433507
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_37492_37840",
+      "formula": "=TBILLEQ(37492,37840,0.1158)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.12829384280568332
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "tbilleq_long_serial_43791_44080",
+      "formula": "=TBILLEQ(43791,44080,0.0843)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09017651837255443
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_43983_44742_43845_0p05",
+      "formula": "=PRICEMAT(43983,44742,43845,0.05,0.04,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 101.77052158246602
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_45350_45352_43889_0p0713",
+      "formula": "=PRICEMAT(45350,45352,43889,0.0713,0.0291,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.01855428990011
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_43891_46813_43889_0p05",
+      "formula": "=PRICEMAT(43891,46813,43889,0.05,0.04,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 106.04457951743095
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_43890_45715_43524_0p05",
+      "formula": "=PRICEMAT(43890,45715,43524,0.05,0.04,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 103.32839380614486
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_43891_44256_43800_0p0713",
+      "formula": "=PRICEMAT(43891,44256,43800,0.0713,0.0291,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 104.0397869858818
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_45350_46813_43524_0p05",
+      "formula": "=PRICEMAT(45350,46813,43524,0.05,0.04,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.00125973199653
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_45352_46813_45351_0p0713",
+      "formula": "=PRICEMAT(45352,46813,45351,0.0713,0.0291,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 115.09024212001057
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "pricemat_basis_1_serial_45350_45352_43524_0p05",
+      "formula": "=PRICEMAT(45350,45352,43524,0.05,0.04,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.00000199753799
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_44256_46813_43524_0p05_101p25",
+      "formula": "=YIELDMAT(44256,46813,43524,0.05,101.25,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04333136695986958
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43983_45351_43890_0p0713_98p4",
+      "formula": "=YIELDMAT(43983,45351,43890,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0754210193830201
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_44256_44742_43891_0p0713_98p4",
+      "formula": "=YIELDMAT(44256,44742,43891,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07895049834677308
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43890_44256_43845_0p0713_98p4",
+      "formula": "=YIELDMAT(43890,44256,43845,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08793609511424837
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43889_44742_43524_0p0713_98p4",
+      "formula": "=YIELDMAT(43889,44742,43524,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07405138290962297
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43889_44742_43800_0p0713_98p4",
+      "formula": "=YIELDMAT(43889,44742,43800,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07803830391797356
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_43889_44196_43524_0p0713_98p4",
+      "formula": "=YIELDMAT(43889,44196,43524,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.08558969137016155
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yieldmat_basis_1_serial_45350_46813_43524_0p0713_98p4",
+      "formula": "=YIELDMAT(45350,46813,43524,0.0713,98.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.056175122767518536
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

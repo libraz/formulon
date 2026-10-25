@@ -1,0 +1,238 @@
+{
+  "suite": "subnormal_flush",
+  "description": "Multiply, divide, PRODUCT and the BESSELK recurrence flush a subnormal result to 0; add, subtract, SUM and EXP keep it",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "it-IT",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T10:37:27Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "mul_literals",
+      "formula": "=SQRT(ABS(1E-300*1E-10))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mul_by_one",
+      "formula": "=SQRT(ABS(EXP(-720)*1))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mul_by_minus_one",
+      "formula": "=SQRT(ABS(EXP(-720)*-1))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "div_by_one",
+      "formula": "=SQRT(ABS(EXP(-720)/1))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "div_to_subnormal",
+      "formula": "=SQRT(ABS(1E-300/1E10))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mul_of_normals",
+      "formula": "=SQRT(ABS(EXP(-700)*EXP(-20)))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_args",
+      "formula": "=SQRT(ABS(PRODUCT(1E-300,1E-10)))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "product_single_subnormal",
+      "formula": "=SQRT(ABS(PRODUCT(EXP(-720))))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.50802706560016e+43
+      }
+    },
+    {
+      "id": "add_keeps",
+      "formula": "=SQRT(ABS(EXP(-720)+EXP(-720)))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.375313015716734e+43
+      }
+    },
+    {
+      "id": "sub_keeps",
+      "formula": "=SQRT(ABS(2.5E-308-2.4E-308))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.1622776601683744e+45
+      }
+    },
+    {
+      "id": "exp_keeps",
+      "formula": "=SQRT(ABS(EXP(-709.5)))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.590778960031843e+45
+      }
+    },
+    {
+      "id": "negate_keeps",
+      "formula": "=SQRT(ABS(-(-EXP(-720))))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.50802706560016e+43
+      }
+    },
+    {
+      "id": "sum_keeps",
+      "formula": "=SQRT(ABS(SUM(EXP(-720),EXP(-720))))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.375313015716734e+43
+      }
+    },
+    {
+      "id": "mul_back_to_normal",
+      "formula": "=SQRT(ABS(EXP(-720)*2^60))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.840457204058884e+52
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_recurrence_flush",
+      "formula": "=IF(BESSELK(700,2)=BESSELK(700,0),1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_700_5",
+      "formula": "=BESSELK(700,5)*1E300",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.7536244028498924e-06
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_700_100",
+      "formula": "=BESSELK(700,100)*1E300",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.005798889591158857
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "exp_subnormal_result_minus_744",
+      "formula": "=EXP(-744)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-323
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "exp_subnormal_result_minus_745",
+      "formula": "=EXP(-745)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5e-324
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "exp_subnormal_result_minus_745_13",
+      "formula": "=EXP(-745.13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5e-324
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "exp_underflow_minus_745_14",
+      "formula": "=EXP(-745.14)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}

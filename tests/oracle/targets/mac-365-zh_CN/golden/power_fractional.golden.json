@@ -1,0 +1,215 @@
+{
+  "suite": "power_fractional",
+  "description": "Last-bit behaviour of ^ and POWER for a positive base: a fractional exponent goes through exp(log(x)*y) rather than a correctly rounded pow, 0.5 is a square root, a negative exponent is the reciprocal of the positive power, and an integer exponent is square-and-multiply. Values far from 1 are scaled so the readback keeps every digit.\n",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "zh-CN",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T07:18:46Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "cube_root_8",
+      "formula": "=8^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9999999999999998
+      }
+    },
+    {
+      "id": "cube_root_8_fn",
+      "formula": "=POWER(8,1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9999999999999998
+      }
+    },
+    {
+      "id": "cube_root_27",
+      "formula": "=27^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.9999999999999996
+      }
+    },
+    {
+      "id": "cube_root_2",
+      "formula": "=2^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2599210498948732
+      }
+    },
+    {
+      "id": "cube_root_7",
+      "formula": "=7^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.912931182772389
+      }
+    },
+    {
+      "id": "cube_root_1000",
+      "formula": "=1000^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999998
+      }
+    },
+    {
+      "id": "cube_root_0_001",
+      "formula": "=0.001^(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.10000000000000002
+      }
+    },
+    {
+      "id": "cube_root_1e300_scaled",
+      "formula": "=1E300^(1/3)/1E100",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9999999999999826
+      }
+    },
+    {
+      "id": "cube_root_1e_neg300_scaled",
+      "formula": "=1E-300^(1/3)*1E100",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000173
+      }
+    },
+    {
+      "id": "neg_cube_root_8",
+      "formula": "=8^(-1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5000000000000001
+      }
+    },
+    {
+      "id": "neg_cube_root_125",
+      "formula": "=125^(-1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.19999999999999996
+      }
+    },
+    {
+      "id": "half_2",
+      "formula": "=2^0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "half_2_fn",
+      "formula": "=POWER(2,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4142135623730951
+      }
+    },
+    {
+      "id": "half_9",
+      "formula": "=9^0.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "tenth_10",
+      "formula": "=10^0.1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2589254117941673
+      }
+    },
+    {
+      "id": "seventh_3",
+      "formula": "=3^(1/7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.169930812758687
+      }
+    },
+    {
+      "id": "fifth_32",
+      "formula": "=32^0.2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "fifth_2",
+      "formula": "=2^0.2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.148698354997035
+      }
+    },
+    {
+      "id": "three_halves_2",
+      "formula": "=2^1.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.82842712474619
+      }
+    },
+    {
+      "id": "e_to_pi",
+      "formula": "=EXP(1)^PI()",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 23.140692632779267
+      }
+    },
+    {
+      "id": "integer_square",
+      "formula": "=5^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "integer_1000th",
+      "formula": "=1.0001^1000",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.105165392603197
+      }
+    }
+  ]
+}

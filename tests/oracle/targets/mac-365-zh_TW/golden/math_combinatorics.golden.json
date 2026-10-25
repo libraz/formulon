@@ -2,11 +2,11 @@
   "suite": "math_combinatorics",
   "description": "Combinatorial, numeral-system, precise-rounding, and miscellaneous scalar math builtins (ARABIC, ROMAN, BASE, DECIMAL, CEILING.PRECISE, FLOOR.PRECISE, ISO.CEILING, COMBIN, COMBINA, FACT, FACTDOUBLE, GCD, LCM, MULTINOMIAL, SQRTPI). Kept in a separate suite so the existing math golden stays bit-stable and only new cases need to be populated by `make oracle-gen` on macOS.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "zh-TW",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T20:53:53Z"
+    "generated_at": "2026-10-25T09:51:24Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -210,6 +210,19 @@
     {
       "id": "combina_negative_is_num",
       "formula": "=COMBINA(-1, 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "combina_zero_positive_is_num",
+      "formula": "=COMBINA(0, 3)",
       "setup": {},
       "expect": {
         "kind": "error",
@@ -1292,6 +1305,1037 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_10_3",
+      "formula": "=COMBIN(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_10_3",
+      "formula": "=COMBINA(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 220.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_10_3",
+      "formula": "=PERMUT(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 720.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_10_3",
+      "formula": "=PERMUTATIONA(10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_50_25",
+      "formula": "=COMBIN(50,25)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 126410606437751.98
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_50_25",
+      "formula": "=COMBINA(50,25)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.5059031427432595e+19
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_50_25",
+      "formula": "=PERMUT(50,25)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9607814681608194e+39
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_50_25",
+      "formula": "=PERMUTATIONA(50,25)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.9802322387695315e+42
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_100_50",
+      "formula": "=COMBIN(100,50)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0089134454556413e+29
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_100_50",
+      "formula": "=COMBINA(100,50)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.3419107273154626e+40
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_100_50",
+      "formula": "=PERMUT(100,50)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0685187562549655e+93
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_100_50",
+      "formula": "=PERMUTATIONA(100,50)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000002e+100
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_1029_514",
+      "formula": "=COMBIN(1029,514)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.4298206864989032e+308
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_1029_514",
+      "formula": "=COMBINA(1029,514)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_1029_514",
+      "formula": "=PERMUT(1029,514)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_1029_514",
+      "formula": "=PERMUTATIONA(1029,514)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_1030_515",
+      "formula": "=COMBIN(1030,515)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_1030_515",
+      "formula": "=COMBINA(1030,515)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_1030_515",
+      "formula": "=PERMUT(1030,515)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_1030_515",
+      "formula": "=PERMUTATIONA(1030,515)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_2000_1000",
+      "formula": "=COMBIN(2000,1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_2000_1000",
+      "formula": "=COMBINA(2000,1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_2000_1000",
+      "formula": "=PERMUT(2000,1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_2000_1000",
+      "formula": "=PERMUTATIONA(2000,1000)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_60_30",
+      "formula": "=COMBIN(60,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1826458156486144e+17
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_60_30",
+      "formula": "=COMBINA(60,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.4875531633772e+23
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_60_30",
+      "formula": "=PERMUT(60,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.137001847457161e+49
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_60_30",
+      "formula": "=PERMUTATIONA(60,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2107391972073335e+53
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_170_85",
+      "formula": "=COMBIN(170,85)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.144841845131565e+49
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_170_85",
+      "formula": "=COMBINA(170,85)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0926446010344746e+69
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_170_85",
+      "formula": "=PERMUT(170,85)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5761971587279537e+178
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_170_85",
+      "formula": "=PERMUTATIONA(170,85)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.8739884106085687e+189
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_5_7",
+      "formula": "=COMBIN(5,7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_5_7",
+      "formula": "=COMBINA(5,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 330.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_5_7",
+      "formula": "=PERMUT(5,7)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_5_7",
+      "formula": "=PERMUTATIONA(5,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 78125.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_1_0",
+      "formula": "=COMBIN(-1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_1_0",
+      "formula": "=COMBINA(-1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_1_0",
+      "formula": "=PERMUT(-1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_1_0",
+      "formula": "=PERMUTATIONA(-1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_10_9_3_9",
+      "formula": "=COMBIN(10.9,3.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_10_9_3_9",
+      "formula": "=COMBINA(10.9,3.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 220.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_10_9_3_9",
+      "formula": "=PERMUT(10.9,3.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 720.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_10_9_3_9",
+      "formula": "=PERMUTATIONA(10.9,3.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_1e_15_2",
+      "formula": "=COMBIN(1E+15,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_1e_15_2",
+      "formula": "=COMBINA(1E+15,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_1e_15_2",
+      "formula": "=PERMUT(1E+15,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_1e_15_2",
+      "formula": "=PERMUTATIONA(1E+15,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_1e_15_3",
+      "formula": "=COMBIN(1E+15,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_1e_15_3",
+      "formula": "=COMBINA(1E+15,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_1e_15_3",
+      "formula": "=PERMUT(1E+15,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_1e_15_3",
+      "formula": "=PERMUTATIONA(1E+15,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_1e_16_1",
+      "formula": "=COMBIN(1E+16,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_1e_16_1",
+      "formula": "=COMBINA(1E+16,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permut_1e_16_1",
+      "formula": "=PERMUT(1E+16,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_permutationa_1e_16_1",
+      "formula": "=PERMUTATIONA(1E+16,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combin_2147483647_0",
+      "formula": "=COMBIN(2147483647,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "cr_combina_2147483646_2",
+      "formula": "=COMBINA(2147483646,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_base_0_2_256",
+      "formula": "=BASE(0,2,256)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_base_7_2_1",
+      "formula": "=BASE(7,2,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_base_65535_2_256",
+      "formula": "=BASE(65535,2,256)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_decimal_ff_16",
+      "formula": "=DECIMAL(\"FF \",16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_decimal_ff_36",
+      "formula": "=DECIMAL(\"FF \",36)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_decimal_0x1f_16",
+      "formula": "=DECIMAL(\"0x1F\",16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_decimal_0x1f_16_5",
+      "formula": "=DECIMAL(\"0x1F\",16.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_decimal_7fffffffffffffff_16",
+      "formula": "=DECIMAL(\"7fffffffffffffff\",16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.223372036854776e+18
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_decimal_7fffffffffffffff_36",
+      "formula": "=DECIMAL(\"7fffffffffffffff\",36)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.6422634036397336e+24
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_decimal_abcdefghijklmnopqrstuvwxyz_36",
+      "formula": "=DECIMAL(\"abcdefghijklmnopqrstuvwxyz\",36)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.337503854730415e+39
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_decimal_55_ones_base_10",
+      "formula": "=DECIMAL(\"1111111111111111111111111111111111111111111111111111111\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1111111111111112e+54
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_decimal_55_ones_base_36",
+      "formula": "=DECIMAL(\"1111111111111111111111111111111111111111111111111111111\",36)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1286765392180857e+84
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_decimal_55_ones_base_2",
+      "formula": "=DECIMAL(\"1111111111111111111111111111111111111111111111111111111\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.602879701896397e+16
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_00_decimal_rept_z_200_36",
+      "formula": "=DECIMAL(REPT(\"Z\",200),36)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_01_decimal_rept_9_255_10",
+      "formula": "=DECIMAL(REPT(\"9\",255),10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+255
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_02_decimal_rept_f_255_16",
+      "formula": "=DECIMAL(REPT(\"F\",255),16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1235582092889474e+307
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_03_decimal_rept_9_256_10",
+      "formula": "=DECIMAL(REPT(\"9\",256),10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_04_decimal_rept_f_256_16",
+      "formula": "=DECIMAL(REPT(\"F\",256),16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_05_decimal_rept_1_300_2",
+      "formula": "=DECIMAL(REPT(\"1\",300),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_06_decimal_10",
+      "formula": "=DECIMAL(\" \",10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_07_decimal_16",
+      "formula": "=DECIMAL(\"  \",16)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_08_decimal_1_2",
+      "formula": "=DECIMAL(\" 1\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_b_09_decimal_1_10",
+      "formula": "=DECIMAL(\"1 \",10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_10_decimal_0_10",
+      "formula": "=DECIMAL(\"-0\",10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_11_decimal_0_16",
+      "formula": "=DECIMAL(\"+0\",16)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
       }
     }
   ]

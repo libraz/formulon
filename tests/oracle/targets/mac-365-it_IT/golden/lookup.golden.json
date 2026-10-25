@@ -2,11 +2,11 @@
   "suite": "lookup",
   "description": "MATCH / INDEX / CHOOSE / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "it-IT",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T22:20:06Z"
+    "generated_at": "2026-10-25T10:25:07Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -4826,6 +4826,4416 @@
       "expect": {
         "kind": "number",
         "value": 2.0
+      }
+    },
+    {
+      "id": "err_cells_a1_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "err_cells_a1_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a1_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a1_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a1_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a1_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 90.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "err_cells_a2_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "err_cells_a2_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a2_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a2_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a2_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a2_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a3_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_a3_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a3_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a3_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a3_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a3_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a4_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "err_cells_a4_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a4_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a4_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a4_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a4_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a5_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "err_cells_a5_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a5_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a5_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a5_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a5_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 60.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "err_cells_a6_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a6_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a6_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a6_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a6_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a6_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a7_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "err_cells_a7_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a7_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a7_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a7_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a7_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "err_cells_a8_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a8_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a8_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a8_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a8_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a8_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a9_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_a9_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a9_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "err_cells_a9_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "err_cells_a9_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a9_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a10_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "err_cells_a10_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a10_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a10_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a10_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a10_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_a11_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "err_cells_a11_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a11_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "err_cells_a11_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "err_cells_a11_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a11_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 90.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 80.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a12_match1_80",
+      "formula": "=IFERROR(MATCH(80,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(80,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_a12_lookup_80",
+      "formula": "=IFERROR(LOOKUP(80,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(80,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 80.0
+      }
+    },
+    {
+      "id": "err_cells_a12_match1_75",
+      "formula": "=IFERROR(MATCH(75,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(75,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "err_cells_a12_lookup_75",
+      "formula": "=IFERROR(LOOKUP(75,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(75,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 70.0
+      }
+    },
+    {
+      "id": "err_cells_a12_match1_95",
+      "formula": "=IFERROR(MATCH(95,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(95,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_a12_lookup_95",
+      "formula": "=IFERROR(LOOKUP(95,A1:A8),\"#\"&ERROR.TYPE(LOOKUP(95,A1:A8)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 50.0
+      }
+    },
+    {
+      "id": "err_cells_err1_xmatch_80_m1",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "err_cells_err1_xmatch_80_mn",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err1_xmatch_95_m1",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "err_cells_err1_xmatch_95_mn",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err1_xmatch_10_m1",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "err_cells_err1_xmatch_10_mn",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "err_cells_err1_xlookup_next_larger",
+      "formula": "=IFERROR(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1),\"#\"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#2"
+      }
+    },
+    {
+      "id": "err_cells_err1_xmatch_binary_80",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,2),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 50.0
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A7": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 70.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "err_cells_err2_xmatch_80_m1",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_err2_xmatch_80_mn",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err2_xmatch_95_m1",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_err2_xmatch_95_mn",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err2_xmatch_10_m1",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err2_xmatch_10_mn",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err2_xlookup_next_larger",
+      "formula": "=IFERROR(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1),\"#\"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#1"
+      }
+    },
+    {
+      "id": "err_cells_err2_xmatch_binary_80",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,2),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "err_cells_err3_xmatch_80_m1",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "err_cells_err3_xmatch_80_mn",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "err_cells_err3_xmatch_95_m1",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "err_cells_err3_xmatch_95_mn",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "err_cells_err3_xmatch_10_m1",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "err_cells_err3_xmatch_10_mn",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "err_cells_err3_xlookup_next_larger",
+      "formula": "=IFERROR(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1),\"#\"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#1"
+      }
+    },
+    {
+      "id": "err_cells_err3_xmatch_binary_80",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,2),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#NULL!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#REF!"
+        },
+        "A6": {
+          "kind": "error",
+          "code": "#NAME?"
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A8": {
+          "kind": "error",
+          "code": "#N/A"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "err_cells_err4_xmatch_80_m1",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_err4_xmatch_80_mn",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err4_xmatch_95_m1",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_err4_xmatch_95_mn",
+      "formula": "=IFERROR(XMATCH(95,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(95,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "err_cells_err4_xmatch_10_m1",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "err_cells_err4_xmatch_10_mn",
+      "formula": "=IFERROR(XMATCH(10,A1:A8,-1,1),\"#\"&ERROR.TYPE(XMATCH(10,A1:A8,-1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "err_cells_err4_xlookup_next_larger",
+      "formula": "=IFERROR(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1),\"#\"&ERROR.TYPE(XLOOKUP(95,A1:A8,A1:A8,\"nf\",1,1)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#2"
+      }
+    },
+    {
+      "id": "err_cells_err4_xmatch_binary_80",
+      "formula": "=IFERROR(XMATCH(80,A1:A8,1,2),\"#\"&ERROR.TYPE(XMATCH(80,A1:A8,1,2)))",
+      "setup": {
+        "A1": {
+          "kind": "error",
+          "code": "#NUM!"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#VALUE!"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A5": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A8": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "err_cells_desc_vlookup",
+      "formula": "=IFERROR(MATCH(45,A1:A8,1),\"#\"&ERROR.TYPE(MATCH(45,A1:A8,1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 80.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 70.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 60.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
       }
     }
   ]

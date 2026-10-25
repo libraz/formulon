@@ -2,11 +2,11 @@
   "suite": "text",
   "description": "LEN / LEFT / RIGHT / MID / CONCAT / EXACT / FIND / SEARCH / UPPER / LOWER / PROPER / TRIM / CLEAN / SUBSTITUTE / REPT / TEXTJOIN / UNICHAR / UNICODE",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "de-DE",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T19:12:25Z"
+    "generated_at": "2026-10-25T05:59:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2332,6 +2332,681 @@
       "expect": {
         "kind": "number",
         "value": 249.0
+      }
+    },
+    {
+      "id": "case_map_upper_latin",
+      "formula": "=UPPER(\"é\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "É"
+      }
+    },
+    {
+      "id": "case_map_upper_sharp_s",
+      "formula": "=UPPER(\"ß\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ß"
+      }
+    },
+    {
+      "id": "case_map_upper_final_sigma_forms",
+      "formula": "=UPPER(\"σς\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ΣΣ"
+      }
+    },
+    {
+      "id": "case_map_upper_titlecase_digraph",
+      "formula": "=UPPER(\"ǅ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ǆ"
+      }
+    },
+    {
+      "id": "case_map_upper_dotless_i",
+      "formula": "=UPPER(\"ı\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "case_map_upper_fullwidth",
+      "formula": "=UPPER(\"ａｂ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ＡＢ"
+      }
+    },
+    {
+      "id": "case_map_upper_cyrillic",
+      "formula": "=UPPER(\"щ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Щ"
+      }
+    },
+    {
+      "id": "case_map_upper_greek",
+      "formula": "=UPPER(\"αβγ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ΑΒΓ"
+      }
+    },
+    {
+      "id": "case_map_upper_greek_tonos",
+      "formula": "=UPPER(\"άέ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ΑΕ"
+      }
+    },
+    {
+      "id": "case_map_upper_ligature",
+      "formula": "=UPPER(\"ﬁ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ﬁ"
+      }
+    },
+    {
+      "id": "case_map_upper_circled",
+      "formula": "=UPPER(\"ⓐ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ⓐ"
+      }
+    },
+    {
+      "id": "case_map_upper_georgian",
+      "formula": "=UPPER(\"ა\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ა"
+      }
+    },
+    {
+      "id": "case_map_upper_supplementary",
+      "formula": "=UPPER(\"𐐨\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "𐐨"
+      }
+    },
+    {
+      "id": "case_map_lower_latin",
+      "formula": "=LOWER(\"É\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "é"
+      }
+    },
+    {
+      "id": "case_map_lower_dotted_capital_i",
+      "formula": "=LOWER(\"İ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_alone",
+      "formula": "=LOWER(\"Σ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ς"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_final",
+      "formula": "=LOWER(\"ΑΣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ας"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_initial",
+      "formula": "=LOWER(\"ΣΑ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "σα"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_before_period",
+      "formula": "=LOWER(\"ΑΣ.\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ας."
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_before_paren",
+      "formula": "=LOWER(\"ΑΣ(Α\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ασ(α"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_before_digit",
+      "formula": "=LOWER(\"ΑΣ1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ασ1"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_before_space",
+      "formula": "=LOWER(\"ΑΣ Α\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ας α"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_double",
+      "formula": "=LOWER(\"ΑΣΣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ασς"
+      }
+    },
+    {
+      "id": "case_map_lower_sigma_word",
+      "formula": "=LOWER(\"ΟΔΥΣΣΕΥΣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "οδυσσευς"
+      }
+    },
+    {
+      "id": "case_map_lower_titlecase_digraph",
+      "formula": "=LOWER(\"ǅ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ǆ"
+      }
+    },
+    {
+      "id": "case_map_lower_cyrillic",
+      "formula": "=LOWER(\"Щ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "щ"
+      }
+    },
+    {
+      "id": "case_map_lower_fullwidth",
+      "formula": "=LOWER(\"Ａ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ａ"
+      }
+    },
+    {
+      "id": "case_map_lower_circled",
+      "formula": "=LOWER(\"Ⓐ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ⓐ"
+      }
+    },
+    {
+      "id": "case_map_lower_sharp_s_capital",
+      "formula": "=LOWER(\"ẞ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ẞ"
+      }
+    },
+    {
+      "id": "case_map_lower_supplementary",
+      "formula": "=LOWER(\"𐐀\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "𐐀"
+      }
+    },
+    {
+      "id": "case_map_proper_accented",
+      "formula": "=PROPER(\"éa aé\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Éa Aé"
+      }
+    },
+    {
+      "id": "case_map_proper_digraph",
+      "formula": "=PROPER(\"ǆa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ǆa"
+      }
+    },
+    {
+      "id": "case_map_proper_sharp_s",
+      "formula": "=PROPER(\"ßa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ßa"
+      }
+    },
+    {
+      "id": "case_map_proper_sigma_words",
+      "formula": "=PROPER(\"ΑΣ ΣΑ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ας Σα"
+      }
+    },
+    {
+      "id": "case_map_proper_tonos",
+      "formula": "=PROPER(\"άΑ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Άα"
+      }
+    },
+    {
+      "id": "case_map_proper_ideograph_then_latin",
+      "formula": "=PROPER(\"日a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "日a"
+      }
+    },
+    {
+      "id": "case_map_proper_digit_boundary",
+      "formula": "=PROPER(\"a1b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A1B"
+      }
+    },
+    {
+      "id": "case_map_proper_dotted_capital_i",
+      "formula": "=PROPER(\"İ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "I"
+      }
+    },
+    {
+      "id": "case_map_proper_fullwidth",
+      "formula": "=PROPER(\"ａｂ ＡＢ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Ａｂ Ａｂ"
+      }
+    },
+    {
+      "id": "case_map_proper_circled",
+      "formula": "=PROPER(\"Ⓐb\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ⓐB"
+      }
+    },
+    {
+      "id": "case_map_proper_apostrophe",
+      "formula": "=PROPER(\"a'b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A'B"
+      }
+    },
+    {
+      "id": "case_map_proper_combining",
+      "formula": "=PROPER(\"éa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Éa"
+      }
+    },
+    {
+      "id": "case_map_len_upper_sharp_s",
+      "formula": "=LEN(UPPER(\"ß\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "case_map_len_upper_ligature",
+      "formula": "=LEN(UPPER(\"ﬁ\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "case_map_proper_hiragana_then_latin",
+      "formula": "=PROPER(\"あbc\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "あbc"
+      }
+    },
+    {
+      "id": "supp_len_emoji",
+      "formula": "=LEN(\"😀\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "supp_len_deseret",
+      "formula": "=LEN(\"𐐨\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "supp_len_cjk_ext_b",
+      "formula": "=LEN(\"𠀀\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "supp_len_mixed",
+      "formula": "=LEN(\"a😀b𐐨c𠀀d\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "supp_len_two_emoji",
+      "formula": "=LEN(\"😀😀\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "supp_left_mixed",
+      "formula": "=LEFT(\"a😀b𐐨c𠀀d\",4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a😀b𐐨"
+      }
+    },
+    {
+      "id": "supp_right_mixed",
+      "formula": "=RIGHT(\"a😀b𐐨c𠀀d\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "c𠀀d"
+      }
+    },
+    {
+      "id": "supp_right_mixed_pair",
+      "formula": "=RIGHT(\"a😀b𐐨c𠀀d\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "𠀀d"
+      }
+    },
+    {
+      "id": "supp_mid_mixed",
+      "formula": "=MID(\"a😀b𐐨c𠀀d\",2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "😀b𐐨"
+      }
+    },
+    {
+      "id": "supp_mid_single_astral",
+      "formula": "=MID(\"a😀b𐐨c𠀀d\",4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "𐐨"
+      }
+    },
+    {
+      "id": "supp_mid_past_end",
+      "formula": "=MID(\"a😀b𐐨c𠀀d\",8,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
+    },
+    {
+      "id": "supp_left_len",
+      "formula": "=LEN(LEFT(\"😀😀😀\",2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "supp_find_after_astral",
+      "formula": "=FIND(\"b\",\"a😀b𐐨c𠀀d\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "supp_search_after_astral",
+      "formula": "=SEARCH(\"c\",\"a😀b𐐨c𠀀d\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "supp_find_astral",
+      "formula": "=FIND(\"𐐨\",\"a😀b𐐨c𠀀d\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "supp_find_start_num",
+      "formula": "=FIND(\"😀\",\"😀😀😀\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "supp_find_start_past_end",
+      "formula": "=IFERROR(FIND(\"😀\",\"😀😀😀\",4),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "supp_search_start_num",
+      "formula": "=SEARCH(\"c\",\"a😀b𐐨c𠀀d\",5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "supp_replace_astral",
+      "formula": "=REPLACE(\"a😀b𐐨c𠀀d\",2,2,\"X\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aX𐐨c𠀀d"
+      }
+    },
+    {
+      "id": "supp_replace_with_astral",
+      "formula": "=LEN(REPLACE(\"a😀b\",2,1,\"😀😀\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "supp_unicode_of_mid",
+      "formula": "=UNICODE(MID(\"a😀b𐐨c𠀀d\",4,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 66600.0
+      }
+    },
+    {
+      "id": "supp_substitute_instance",
+      "formula": "=SUBSTITUTE(\"😀😀😀\",\"😀\",\"X\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "😀X😀"
+      }
+    },
+    {
+      "id": "supp_textbefore_len",
+      "formula": "=LEN(TEXTBEFORE(\"a😀b𐐨c𠀀d\",\"c\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "supp_search_question_half",
+      "formula": "=IFERROR(SEARCH(\"a?b\",\"a😀b\"),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "supp_search_two_questions",
+      "formula": "=SEARCH(\"a??b\",\"a😀b\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "supp_search_question_alone",
+      "formula": "=SEARCH(\"?\",\"😀\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "supp_rept_at_cap",
+      "formula": "=LEN(REPT(\"😀\",16383))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16383.0
+      }
+    },
+    {
+      "id": "supp_rept_past_cap",
+      "formula": "=IFERROR(LEN(REPT(\"😀\",16384)),\"err\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "err"
+      }
+    },
+    {
+      "id": "supp_concat_at_cap",
+      "formula": "=LEN(CONCAT(REPT(\"😀\",16383),\"a\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16384.0
+      }
+    },
+    {
+      "id": "supp_lenb_mixed",
+      "formula": "=LENB(\"a😀b𐐨c𠀀d\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
       }
     }
   ]

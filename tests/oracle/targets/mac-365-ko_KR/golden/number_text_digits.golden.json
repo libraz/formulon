@@ -1,0 +1,260 @@
+{
+  "suite": "number_text_digits",
+  "description": "Significant digits of a number converted to text near exponent 99, and 15-digit scientific TEXT formats whose mantissa is all nines",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "ko-KR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T07:57:02Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "concat_exponent_98_keeps_15",
+      "formula": "=1.23456789012345E+98&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23456789012345E+98"
+      }
+    },
+    {
+      "id": "concat_exponent_99_keeps_14",
+      "formula": "=1.23456789012345E+99&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.2345678901235E+99"
+      }
+    },
+    {
+      "id": "concat_exponent_200_keeps_14",
+      "formula": "=1.23456789012345E+200&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.2345678901235E+200"
+      }
+    },
+    {
+      "id": "concat_exponent_minus_98_keeps_15",
+      "formula": "=1.23456789012345E-98&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23456789012345E-98"
+      }
+    },
+    {
+      "id": "concat_exponent_minus_99_keeps_14",
+      "formula": "=1.23456789012345E-99&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.2345678901235E-99"
+      }
+    },
+    {
+      "id": "concat_rounds_up_to_exponent_100",
+      "formula": "=9.99999999999999E+99&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1E+100"
+      }
+    },
+    {
+      "id": "concat_rounds_up_to_1e308",
+      "formula": "=LEN(9.99999999999999E+307&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "concat_negative_near_dbl_min",
+      "formula": "=(0-2^-1022*1.2)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2.6700886302086E-308"
+      }
+    },
+    {
+      "id": "value_of_rounded_max_rejected",
+      "formula": "=VALUE(9.99999999999999E+307&\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "numbervalue_number_argument_14_digits",
+      "formula": "=NUMBERVALUE(1.23456789012345E+99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2345678901235e+99
+      }
+    },
+    {
+      "id": "text_sci_all_nines_15_digits",
+      "formula": "=TEXT(999999999999999,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "9.99999999999999E+14"
+      }
+    },
+    {
+      "id": "text_sci_all_nines_then_8",
+      "formula": "=TEXT(9.99999999999998E+20,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "9.99999999999998E+20"
+      }
+    },
+    {
+      "id": "text_sci_all_nines_near_max",
+      "formula": "=TEXT(9.99999999999999E+307,\"0.00000000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "9.99999999999999000E+307"
+      }
+    },
+    {
+      "id": "text_sci_rounds_up_on_15_digits",
+      "formula": "=TEXT(999999999999999+0.5,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "9.99999999999999E+14"
+      }
+    },
+    {
+      "id": "text_sci_all_nines_short_mantissa",
+      "formula": "=TEXT(999999999999999,\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.00E+15"
+      }
+    },
+    {
+      "id": "tie_even_last_digit_sci",
+      "formula": "=TEXT(100000000000000+0.5,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.00000000000000E+14"
+      }
+    },
+    {
+      "id": "tie_odd_last_digit_sci",
+      "formula": "=TEXT(100000000000001+0.5,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.00000000000001E+14"
+      }
+    },
+    {
+      "id": "tie_even_last_digit_concat",
+      "formula": "=(100000000000000+0.5)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000"
+      }
+    },
+    {
+      "id": "tie_odd_last_digit_concat",
+      "formula": "=(100000000000001+0.5)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000001"
+      }
+    },
+    {
+      "id": "tie_all_nines_concat",
+      "formula": "=(999999999999999+0.5)&\"\"",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "999999999999999"
+      }
+    },
+    {
+      "id": "tie_fixed_format",
+      "formula": "=TEXT(100000000000001+0.5,\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000001"
+      }
+    },
+    {
+      "id": "tie_small_magnitude_sci",
+      "formula": "=TEXT(1.000000000000015,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.00000000000001E+00"
+      }
+    },
+    {
+      "id": "above_tie_sci",
+      "formula": "=TEXT(100000000000001+0.5+0.125,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.00000000000002E+14"
+      }
+    },
+    {
+      "id": "round_tie_at_16th_digit",
+      "formula": "=ROUND(100000000000001+0.5,0)-100000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "round_above_tie_at_16th_digit",
+      "formula": "=ROUND(100000000000001+0.625,0)-100000000000001",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "round_tie_small_magnitude",
+      "formula": "=ROUND(1.000000000000015,14)-1",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.992007221626409e-15
+      }
+    },
+    {
+      "id": "fixed_tie_at_16th_digit",
+      "formula": "=FIXED(100000000000001+0.5,0,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000001"
+      }
+    }
+  ]
+}

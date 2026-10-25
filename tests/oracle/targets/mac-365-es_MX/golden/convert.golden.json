@@ -2,11 +2,11 @@
   "suite": "convert",
   "description": "CONVERT unit-conversion lookup. Excel exposes a fixed table of constants spanning weight, distance, time, pressure, force, energy, power, magnetism, temperature, volume, area and information. The Formulon engine matches the documented Microsoft 365 unit list and constant table.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "es-MX",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T15:10:58Z"
+    "generated_at": "2026-10-25T12:16:52Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -113,6 +113,585 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "convert_exact_weight_hweight",
+      "formula": "=CONVERT(1,\"hweight\",\"g\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 50802.34544
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_weight_cwt_ratio",
+      "formula": "=CONVERT(1,\"hweight\",\"cwt\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.1199999999999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_pressure_si_at",
+      "formula": "=CONVERT(1,\"SI_at\",\"Pa\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 98066.51
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_pressure_at_to_si_at",
+      "formula": "=CONVERT(1,\"at\",\"SI_at\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.033227347440018
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_distance_foot_ratio",
+      "formula": "=CONVERT(3,\"m\",\"ft\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.84251968503937
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_distance_mile_to_km",
+      "formula": "=CONVERT(1,\"mi\",\"km\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.609344
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_distance_pica",
+      "formula": "=CONVERT(1,\"Pica\",\"in\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.01388888888888889
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_volume_litre_to_gal",
+      "formula": "=CONVERT(1,\"l\",\"gal\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.26417205235814845
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_volume_tsp_to_cup",
+      "formula": "=CONVERT(1,\"tsp\",\"cup\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.020833333333333332
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_volume_bushel",
+      "formula": "=CONVERT(1,\"bushel\",\"l\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 35.23907016688
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_area_acre_to_m2",
+      "formula": "=CONVERT(1,\"us_acre\",\"m2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4046.8726098742522
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_energy_cal_to_j",
+      "formula": "=CONVERT(1,\"cal\",\"J\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.1868
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_energy_hph_to_j",
+      "formula": "=CONVERT(1,\"HPh\",\"J\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2684519.537696173
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_force_lbf_to_n",
+      "formula": "=CONVERT(1,\"lbf\",\"N\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.4482216152605005
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_magnetism_gauss_to_t",
+      "formula": "=CONVERT(1,\"ga\",\"T\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_deka",
+      "formula": "=CONVERT(1,\"dam\",\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_deka_e",
+      "formula": "=CONVERT(1,\"em\",\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_deka_squared",
+      "formula": "=CONVERT(1,\"dam2\",\"m2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_km2",
+      "formula": "=CONVERT(1,\"km2\",\"m2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_mm3_caret",
+      "formula": "=CONVERT(1,\"mm^3\",\"m^3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-09
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_extreme_cubed",
+      "formula": "=CONVERT(1,\"Ym3\",\"ym3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+144
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_binary_kibit",
+      "formula": "=CONVERT(1,\"kibit\",\"bit\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1024.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_binary_on_distance",
+      "formula": "=CONVERT(1,\"kim\",\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_deka_alone",
+      "formula": "=CONVERT(1,\"da\",\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_case_sensitive",
+      "formula": "=CONVERT(1,\"KM\",\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_no_trimming",
+      "formula": "=CONVERT(1,\"km \",\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_pc_to_joule",
+      "formula": "=CONVERT(1,\"pc\",\"J\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.184e-12
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_pc_from_calorie",
+      "formula": "=CONVERT(1,\"c\",\"pc\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_pc_distance_parsec",
+      "formula": "=CONVERT(1,\"pc\",\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0856775812815532e+16
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_pc_kpc_energy_unknown",
+      "formula": "=CONVERT(1,\"kpc\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_kelvin_prefix_to_c",
+      "formula": "=CONVERT(1,\"kK\",\"C\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 726.85
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_c_to_prefixed_k",
+      "formula": "=CONVERT(1,\"C\",\"kK\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.27415
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_reaumur_to_prefixed_k",
+      "formula": "=CONVERT(1,\"Reau\",\"kK\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 274.4
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_prefixed_k_to_rankine",
+      "formula": "=CONVERT(1,\"kK\",\"Rank\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.8
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_prefixed_k_to_f",
+      "formula": "=CONVERT(1,\"kK\",\"F\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1340.3300000000002
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_f_to_c_small",
+      "formula": "=CONVERT(0.00075,\"F\",\"C\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -17.777361111111112
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_c_self_small",
+      "formula": "=CONVERT(0.00075,\"C\",\"C\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00075
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_temp_prefix_on_celsius",
+      "formula": "=CONVERT(1,\"kC\",\"K\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_overflow_distance",
+      "formula": "=CONVERT(A1,\"m\",\"ft\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1e+308
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_overflow_cubed_fallback",
+      "formula": "=CONVERT(A1,\"ang3\",\"ly3\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1e+308
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.1809349884417085e+230
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_overflow_prefix_ratio",
+      "formula": "=CONVERT(A1,\"Yg\",\"yg\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1e+308
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_overflow_temperature",
+      "formula": "=CONVERT(A1,\"C\",\"F\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1e+308
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "convert_exact_prefix_small_input_flush",
+      "formula": "=CONVERT(2.5E-308,\"g\",\"Yg\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

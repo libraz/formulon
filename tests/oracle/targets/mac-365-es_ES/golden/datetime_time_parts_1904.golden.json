@@ -1,0 +1,116 @@
+{
+  "suite": "datetime_time_parts_1904",
+  "description": "HOUR / MINUTE / SECOND bound their serial by the 1904 system's last day, like YEAR",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "es-ES",
+    "date1904": true,
+    "iterative": false,
+    "generated_at": "2026-10-25T11:42:22Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "hour_last_day",
+      "formula": "=HOUR(2957003.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "minute_last_day",
+      "formula": "=MINUTE(2957003.75)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "second_last_day",
+      "formula": "=SECOND(2957003.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "year_last_day",
+      "formula": "=YEAR(2957003.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9999.0
+      }
+    },
+    {
+      "id": "hour_past_last_day",
+      "formula": "=HOUR(2957004.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "minute_past_last_day",
+      "formula": "=MINUTE(2957004.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "second_past_last_day",
+      "formula": "=SECOND(2957004.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "year_past_last_day",
+      "formula": "=YEAR(2957004.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hour_1900_last_day",
+      "formula": "=HOUR(2958465.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hour_date_text_last_day",
+      "formula": "=HOUR(\"9999/12/31 18:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "hour_negative",
+      "formula": "=HOUR(-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

@@ -1,0 +1,629 @@
+{
+  "suite": "besselj_large_x",
+  "description": "BESSELJ at |x| >= 8 and around the phase limit, compared as 15 digits plus the residual",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T12:54:43Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "besselj_8_0_digits",
+      "formula": "=TEXT(BESSELJ(8,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "171.650.807.317.694E-15"
+      }
+    },
+    {
+      "id": "besselj_8_0_residual",
+      "formula": "=TEXT((BESSELJ(8,0))-VALUE(TEXT(BESSELJ(8,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-444.089.209.850.063E-30"
+      }
+    },
+    {
+      "id": "besselj_8_1_digits",
+      "formula": "=TEXT(BESSELJ(8,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "234.628.386.507.074E-15"
+      }
+    },
+    {
+      "id": "besselj_8_1_residual",
+      "formula": "=TEXT((BESSELJ(8,1))-VALUE(TEXT(BESSELJ(8,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "416.333.634.234.434E-30"
+      }
+    },
+    {
+      "id": "besselj_m7p999_1_digits",
+      "formula": "=TEXT(BESSELJ(-7.999,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-234.493.896.238.099E-15"
+      }
+    },
+    {
+      "id": "besselj_m7p999_1_residual",
+      "formula": "=TEXT((BESSELJ(-7.999,1))-VALUE(TEXT(BESSELJ(-7.999,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-138.777.878.078.145E-30"
+      }
+    },
+    {
+      "id": "besselj_10_1_digits",
+      "formula": "=TEXT(BESSELJ(10,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "043.472.249.652.254E-15"
+      }
+    },
+    {
+      "id": "besselj_10_1_residual",
+      "formula": "=TEXT((BESSELJ(10,1))-VALUE(TEXT(BESSELJ(10,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "152.655.665.885.959E-30"
+      }
+    },
+    {
+      "id": "besselj_10_1p9999999_digits",
+      "formula": "=TEXT(BESSELJ(10,1.9999999),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "043.472.249.652.254E-15"
+      }
+    },
+    {
+      "id": "besselj_10_1p9999999_residual",
+      "formula": "=TEXT((BESSELJ(10,1.9999999))-VALUE(TEXT(BESSELJ(10,1.9999999),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "152.655.665.885.959E-30"
+      }
+    },
+    {
+      "id": "besselj_m12p3_1_digits",
+      "formula": "=TEXT(BESSELJ(-12.3,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "194.258.301.894.669E-15"
+      }
+    },
+    {
+      "id": "besselj_m12p3_1_residual",
+      "formula": "=TEXT((BESSELJ(-12.3,1))-VALUE(TEXT(BESSELJ(-12.3,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "111.022.302.462.516E-30"
+      }
+    },
+    {
+      "id": "besselj_m8p5_0_digits",
+      "formula": "=TEXT(BESSELJ(-8.5,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "041.939.251.993.220E-15"
+      }
+    },
+    {
+      "id": "besselj_m8p5_0_residual",
+      "formula": "=TEXT((BESSELJ(-8.5,0))-VALUE(TEXT(BESSELJ(-8.5,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-471.844.785.465.692E-30"
+      }
+    },
+    {
+      "id": "besselj_15p25_1_digits",
+      "formula": "=TEXT(BESSELJ(15.25,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "191.944.860.685.828E-15"
+      }
+    },
+    {
+      "id": "besselj_15p25_1_residual",
+      "formula": "=TEXT((BESSELJ(15.25,1))-VALUE(TEXT(BESSELJ(15.25,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "333.066.907.387.547E-30"
+      }
+    },
+    {
+      "id": "besselj_22_1_digits",
+      "formula": "=TEXT(BESSELJ(22,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "117.177.779.416.664E-15"
+      }
+    },
+    {
+      "id": "besselj_22_1_residual",
+      "formula": "=TEXT((BESSELJ(22,1))-VALUE(TEXT(BESSELJ(22,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-124.900.090.270.330E-30"
+      }
+    },
+    {
+      "id": "besselj_14p928451337535938_0_digits",
+      "formula": "=TEXT(BESSELJ(14.928451337535938,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.509.461.804.407E-15"
+      }
+    },
+    {
+      "id": "besselj_14p928451337535938_0_residual",
+      "formula": "=TEXT((BESSELJ(14.928451337535938,0))-VALUE(TEXT(BESSELJ(14.928451337535938,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "besselj_24p2546099394925_0_digits",
+      "formula": "=TEXT(BESSELJ(24.2546099394925,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-015.830.955.273.951E-15"
+      }
+    },
+    {
+      "id": "besselj_24p2546099394925_0_residual",
+      "formula": "=TEXT((BESSELJ(24.2546099394925,0))-VALUE(TEXT(BESSELJ(24.2546099394925,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "190.819.582.357.449E-30"
+      }
+    },
+    {
+      "id": "besselj_8p5_2_digits",
+      "formula": "=TEXT(BESSELJ(8.5,2),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "022.323.169.478.446E-15"
+      }
+    },
+    {
+      "id": "besselj_8p5_2_residual",
+      "formula": "=TEXT((BESSELJ(8.5,2))-VALUE(TEXT(BESSELJ(8.5,2),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-308.780.778.723.872E-30"
+      }
+    },
+    {
+      "id": "besselj_10_10_digits",
+      "formula": "=TEXT(BESSELJ(10,10),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "207.486.106.634.021E-15"
+      }
+    },
+    {
+      "id": "besselj_10_10_residual",
+      "formula": "=TEXT((BESSELJ(10,10))-VALUE(TEXT(BESSELJ(10,10),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-360.822.483.003.176E-30"
+      }
+    },
+    {
+      "id": "besselj_10p000000001_10_digits",
+      "formula": "=TEXT(BESSELJ(10.000000001,10),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "207.486.706.783.885E-15"
+      }
+    },
+    {
+      "id": "besselj_10p000000001_10_residual",
+      "formula": "=TEXT((BESSELJ(10.000000001,10))-VALUE(TEXT(BESSELJ(10.000000001,10),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "305.311.331.771.918E-30"
+      }
+    },
+    {
+      "id": "besselj_9p5_10_digits",
+      "formula": "=TEXT(BESSELJ(9.5,10),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "165.026.404.726.313E-15"
+      }
+    },
+    {
+      "id": "besselj_9p5_10_residual",
+      "formula": "=TEXT((BESSELJ(9.5,10))-VALUE(TEXT(BESSELJ(9.5,10),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "277.555.756.156.289E-30"
+      }
+    },
+    {
+      "id": "besselj_1000_1_digits",
+      "formula": "=TEXT(BESSELJ(1000,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "004.728.311.885.696E-15"
+      }
+    },
+    {
+      "id": "besselj_1000_1_residual",
+      "formula": "=TEXT((BESSELJ(1000,1))-VALUE(TEXT(BESSELJ(1000,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "068.521.577.301.084E-30"
+      }
+    },
+    {
+      "id": "besselj_100000000_0_digits",
+      "formula": "=TEXT(BESSELJ(100000000,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.032.060.295.839E-15"
+      }
+    },
+    {
+      "id": "besselj_100000000_0_residual",
+      "formula": "=TEXT((BESSELJ(100000000,0))-VALUE(TEXT(BESSELJ(100000000,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "besselj_134217727p5_0_digits",
+      "formula": "=TEXT(BESSELJ(134217727.5,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-000.037.925.127.876E-15"
+      }
+    },
+    {
+      "id": "besselj_134217727p5_0_residual",
+      "formula": "=TEXT((BESSELJ(134217727.5,0))-VALUE(TEXT(BESSELJ(134217727.5,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "besselj_134217729_1_digits",
+      "formula": "=TEXT(BESSELJ(134217729,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-000.041.896.665.585E-15"
+      }
+    },
+    {
+      "id": "besselj_134217729_1_residual",
+      "formula": "=TEXT((BESSELJ(134217729,1))-VALUE(TEXT(BESSELJ(134217729,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "besselj_8_100_digits",
+      "formula": "=TEXT(BESSELJ(8,100),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.000.014.694.094E-105"
+      }
+    },
+    {
+      "id": "besselj_8_100_residual",
+      "formula": "=TEXT((BESSELJ(8,100))-VALUE(TEXT(BESSELJ(8,100),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "besselj_8_300_digits",
+      "formula": "=TEXT(BESSELJ(8,300),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.000.000.000.000E+00"
+      }
+    },
+    {
+      "id": "besselj_8_300_residual",
+      "formula": "=TEXT((BESSELJ(8,300))-VALUE(TEXT(BESSELJ(8,300),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "besselj_134217727p8_0",
+      "formula": "=BESSELJ(134217727.8,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217730_1",
+      "formula": "=BESSELJ(134217730,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217727p7_0",
+      "formula": "=BESSELJ(134217727.7,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.574804505332463e-05
+      }
+    },
+    {
+      "id": "besselj_134217729p3_1",
+      "formula": "=BESSELJ(134217729.3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.387189777331845e-05
+      }
+    },
+    {
+      "id": "besselj_m134217729_1",
+      "formula": "=BESSELJ(-134217729,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.1896665584849795e-05
+      }
+    },
+    {
+      "id": "besselj_134217727p5_2",
+      "formula": "=BESSELJ(134217727.5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.7925127019616966e-05
+      }
+    },
+    {
+      "id": "besselj_134217727p7_2",
+      "formula": "=BESSELJ(134217727.7,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.5748044101488518e-05
+      }
+    },
+    {
+      "id": "besselj_134217727p5_10",
+      "formula": "=BESSELJ(134217727.5,10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.792510646029881e-05
+      }
+    },
+    {
+      "id": "besselj_100000000_0",
+      "formula": "=BESSELJ(100000000,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.206029583928179e-05
+      }
+    },
+    {
+      "id": "besselj_m100000000_1",
+      "formula": "=BESSELJ(-100000000,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -7.306391160326758e-05
+      }
+    },
+    {
+      "id": "besselj_134217728_0",
+      "formula": "=BESSELJ(134217728,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217729p4_1",
+      "formula": "=BESSELJ(134217729.4,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_m134217730_1",
+      "formula": "=BESSELJ(-134217730,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217727p9_2",
+      "formula": "=BESSELJ(134217727.9,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217728_2",
+      "formula": "=BESSELJ(134217728,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_134217729_3",
+      "formula": "=BESSELJ(134217729,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483647_0",
+      "formula": "=BESSELJ(2147483647,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483648_0",
+      "formula": "=BESSELJ(2147483648,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483648_1",
+      "formula": "=BESSELJ(2147483648,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_2147483648p5_0",
+      "formula": "=BESSELJ(2147483648.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_4294967296_1",
+      "formula": "=BESSELJ(4294967296,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_6442450944_0",
+      "formula": "=BESSELJ(6442450944,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_m2147483649_0",
+      "formula": "=BESSELJ(-2147483649,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_4294967296_10",
+      "formula": "=BESSELJ(4294967296,10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_1E300_0",
+      "formula": "=BESSELJ(1E+300,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "besselj_m1E300_3",
+      "formula": "=BESSELJ(-1E+300,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

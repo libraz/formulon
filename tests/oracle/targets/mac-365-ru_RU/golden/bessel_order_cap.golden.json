@@ -1,0 +1,173 @@
+{
+  "suite": "bessel_order_cap",
+  "description": "BESSELI / BESSELJ / BESSELK / BESSELY accept a truncated order up to 1E7 and return",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "ru-RU",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T08:53:37Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "besseli_order_at_cap",
+      "formula": "=BESSELI(1,10000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besseli_order_past_cap",
+      "formula": "=BESSELI(1,10000001)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besseli_order_text_past_cap",
+      "formula": "=BESSELI(1,\"10000001\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besseli_order_2_pow_30",
+      "formula": "=BESSELI(1,1073741824)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselj_order_at_cap",
+      "formula": "=BESSELJ(1,10000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselj_order_truncates_to_cap",
+      "formula": "=BESSELJ(1,10000000.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselj_order_past_cap",
+      "formula": "=BESSELJ(1,10000001)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselj_order_2_pow_31",
+      "formula": "=BESSELJ(1,2147483648)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_order_at_cap",
+      "formula": "=BESSELK(1E7,10000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_order_past_cap",
+      "formula": "=BESSELK(1E7,10000001)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_order_at_cap",
+      "formula": "=BESSELY(1E7,10000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.0035961127347932617
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_order_past_cap",
+      "formula": "=BESSELY(1E7,10000001)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,1025 @@
+{
+  "suite": "value_date_text_recogniser",
+  "description": "VALUE / DATEVALUE / TIMEVALUE / implicit coercion of date and time text: month-name forms, numeric pair fallbacks (m/d -> d/m -> y/m), two-digit year window, time field limits and millisecond rounding, trailing separators, date+time order, fullwidth folding, kanji and era forms. Year-less forms are anchored to DATE(YEAR(TODAY()),m,d) so goldens do not depend on the capture year (no Feb-29 shapes, whose fallback is leap-dependent).\n",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "ru-RU",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T09:27:15Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "mmm_space_day",
+      "formula": "=VALUE(\"Jan 1\")-DATE(YEAR(TODAY()),1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_attached_day",
+      "formula": "=VALUE(\"Jan1\")-DATE(YEAR(TODAY()),1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_full_name",
+      "formula": "=VALUE(\"January 31\")-DATE(YEAR(TODAY()),1,31)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_prefix_four_letters",
+      "formula": "=VALUE(\"Sept 1\")-DATE(YEAR(TODAY()),9,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_two_letter_prefix_rejected",
+      "formula": "=VALUE(\"Ma 1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_hyphen_day",
+      "formula": "=VALUE(\"Jan-1\")-DATE(YEAR(TODAY()),1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "day_mmm",
+      "formula": "=VALUE(\"1 Jan\")-DATE(YEAR(TODAY()),1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "day_hyphen_mmm",
+      "formula": "=VALUE(\"26-Jan\")-DATE(YEAR(TODAY()),1,26)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "day_mmm_invalid_day_rejected",
+      "formula": "=VALUE(\"32 Jan\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_day_beyond_month_is_year",
+      "formula": "=VALUE(\"Jan 32\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_zero_is_year_2000",
+      "formula": "=VALUE(\"Jan 0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_four_digit_year",
+      "formula": "=VALUE(\"Jan 2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_three_digit_rejected",
+      "formula": "=VALUE(\"Jan 100\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_day_comma_year",
+      "formula": "=VALUE(\"Jan 1, 2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_day_blank_comma_year",
+      "formula": "=VALUE(\"Jan 1 , 2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_attached_day_comma_year",
+      "formula": "=VALUE(\"Jan1, 2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_day_comma_no_blank_rejected",
+      "formula": "=VALUE(\"Jan 1,2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_day_year_no_comma_rejected",
+      "formula": "=VALUE(\"Jan 1 2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mmm_day_comma_two_digit_year",
+      "formula": "=VALUE(\"Jan 1, 29\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "day_mmm_year_mixed_separators",
+      "formula": "=VALUE(\"1-Jan 2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "day_mmm_dot_rejected",
+      "formula": "=VALUE(\"1.Jan.2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pair_month_day",
+      "formula": "=VALUE(\"1/13\")-DATE(YEAR(TODAY()),1,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4760.0
+      }
+    },
+    {
+      "id": "pair_day_month_when_first_exceeds_12",
+      "formula": "=VALUE(\"13/1\")-DATE(YEAR(TODAY()),1,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "pair_year_month_when_first_exceeds_31",
+      "formula": "=VALUE(\"32/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pair_year_month_after_invalid_day_month",
+      "formula": "=VALUE(\"31/4\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pair_four_digit_year_month",
+      "formula": "=VALUE(\"2026/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pair_month_year_rejected",
+      "formula": "=VALUE(\"1/2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "pair_zero_month_rejected",
+      "formula": "=VALUE(\"0/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pair_blanks_around_separator",
+      "formula": "=VALUE(\"1 / 2\")-DATE(YEAR(TODAY()),1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "pair_trailing_separator_rejected",
+      "formula": "=VALUE(\"1/2-\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "triple_two_digit_year_29",
+      "formula": "=VALUE(\"29/1/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 36920.0
+      }
+    },
+    {
+      "id": "triple_two_digit_year_30",
+      "formula": "=VALUE(\"30/1/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 36921.0
+      }
+    },
+    {
+      "id": "triple_mdy_rejected",
+      "formula": "=VALUE(\"1/2/2026\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46054.0
+      }
+    },
+    {
+      "id": "triple_three_digit_day_rejected",
+      "formula": "=VALUE(\"2026/1/001\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "triple_leading_zero_year_rejected",
+      "formula": "=VALUE(\"1/2/0026\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_hour_colon_only",
+      "formula": "=VALUE(\"1:\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.041666666666666664
+      }
+    },
+    {
+      "id": "time_minute_second_fraction",
+      "formula": "=VALUE(\"1:30.5\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_fraction_rounds_to_ms_half_up",
+      "formula": "=VALUE(\"1:30:00.0005\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_fraction_below_half_ms_drops",
+      "formula": "=VALUE(\"1:30:00.0004\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_fraction_decimal_half_up_0035",
+      "formula": "=VALUE(\"1:30:00.0035\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_fraction_carries_to_next_day",
+      "formula": "=VALUE(\"23:59:59.9995\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_one_overflow_minute",
+      "formula": "=VALUE(\"1:99\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.11041666666666666
+      }
+    },
+    {
+      "id": "time_one_overflow_hour_9999",
+      "formula": "=VALUE(\"9999:59\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 416.6659722222222
+      }
+    },
+    {
+      "id": "time_hour_10000_rejected",
+      "formula": "=VALUE(\"10000:0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_two_overflows_rejected",
+      "formula": "=VALUE(\"99:99\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_three_digit_field_below_100_rejected",
+      "formula": "=VALUE(\"001:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_four_digit_field_at_least_100",
+      "formula": "=VALUE(\"0100:0\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.166666666666667
+      }
+    },
+    {
+      "id": "time_trailing_separator",
+      "formula": "=VALUE(\"1:30-\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "time_trailing_separator_after_blank",
+      "formula": "=VALUE(\"1:30 -\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "time_trailing_dot_after_fraction_rejected",
+      "formula": "=VALUE(\"1:30:00.5.\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_marker_p_m_rejected",
+      "formula": "=VALUE(\"1:30 P.M.\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_marker_overflow_rejected",
+      "formula": "=VALUE(\"12:60 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_kanji_hour_24_rejected",
+      "formula": "=VALUE(\"24時00分\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_odd_fraction_then_colon",
+      "formula": "=VALUE(\"1:30.5:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_mmm_time",
+      "formula": "=VALUE(\"Jan 1 1:30 PM\")-DATE(YEAR(TODAY()),1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_time_then_mmm",
+      "formula": "=VALUE(\"1:30 Aug 1\")-DATE(YEAR(TODAY()),8,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_pair_year_month_time",
+      "formula": "=VALUE(\"2026/1 1:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_ideographic_blank",
+      "formula": "=VALUE(\"2026/1/1　1:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_tab_rejected",
+      "formula": "=VALUE(\"2026/1/1\"&CHAR(9)&\"1:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_kanji_date_time_rejected",
+      "formula": "=VALUE(\"2026年1月1日 1:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_era_time_rejected",
+      "formula": "=VALUE(\"R8.1.1 1:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datetime_trailing_separator",
+      "formula": "=VALUE(\"2026/1/1 1:30-\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0625
+      }
+    },
+    {
+      "id": "datetime_ignored_numeric_tail",
+      "formula": "=VALUE(\"2026/1/1 1:30 1/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0625
+      }
+    },
+    {
+      "id": "fullwidth_separators",
+      "formula": "=VALUE(\"２０２６／１／１　１：３０\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_month_name",
+      "formula": "=VALUE(\"Ｊａｎ １, ２０２６\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_pm",
+      "formula": "=VALUE(\"１：３０　ＰＭ\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "leading_ideographic_blank_rejected",
+      "formula": "=VALUE(\"　1/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "length_255_accepted",
+      "formula": "=VALUE(\"1:30\"&REPT(\" \",251))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "length_256_rejected",
+      "formula": "=VALUE(\"1:30\"&REPT(\" \",252))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_letter_slash",
+      "formula": "=VALUE(\"R8/1/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_year_above_99_rejected",
+      "formula": "=VALUE(\"R100.1.1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_meiji_rejected",
+      "formula": "=VALUE(\"M6.1.1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "kanji_day_leading_zeros",
+      "formula": "=VALUE(\"2026年001月0001日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_time_only_is_zero",
+      "formula": "=DATEVALUE(\"1:30 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "datevalue_overflow_hours_integer_part",
+      "formula": "=DATEVALUE(\"9999:59\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 416.0
+      }
+    },
+    {
+      "id": "datevalue_rounded_time_carries",
+      "formula": "=DATEVALUE(\"2026/1/1 23:59:59.9999\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46023.0
+      }
+    },
+    {
+      "id": "timevalue_date_only_is_zero",
+      "formula": "=TIMEVALUE(\"2026/1/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "timevalue_overflow_fraction_part",
+      "formula": "=TIMEVALUE(\"25:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04166666666666674
+      }
+    },
+    {
+      "id": "coerce_year_less_pair",
+      "formula": "=\"13/1\"+0-DATE(YEAR(TODAY()),1,13)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "coerce_trailing_blank",
+      "formula": "=\"1/2 \"+0-DATE(YEAR(TODAY()),1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "coerce_leading_blank_rejected",
+      "formula": "=\" 1/2\"+0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "coerce_mixed_fraction",
+      "formula": "=\"1 1/2\"+0",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "era_meiji_33_first_accepted_year",
+      "formula": "=DATEVALUE(\"明治33年1月1日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_meiji_32_before_1900_rejected",
+      "formula": "=VALUE(\"明治32年12月31日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_meiji_45_last_day",
+      "formula": "=VALUE(\"明治45年7月29日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_meiji_46_overruns",
+      "formula": "=VALUE(\"明治46年1月1日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_meiji_letter_form",
+      "formula": "=VALUE(\"M45.7.29\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_taisho_1_before_start",
+      "formula": "=VALUE(\"大正1年7月29日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_showa_64_after_end",
+      "formula": "=VALUE(\"昭和64年1月8日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_heisei_1_before_start",
+      "formula": "=VALUE(\"平成1年1月7日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "era_gannen_rejected",
+      "formula": "=VALUE(\"令和元年5月1日\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_parts_at_32767",
+      "formula": "=VALUE(\"1 32767/32767\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_numerator_32768_rejected",
+      "formula": "=VALUE(\"1 32768/1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_denominator_32768_rejected",
+      "formula": "=VALUE(\"1 1/32768\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_five_digits_leading_zeros",
+      "formula": "=VALUE(\"1 00001/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_six_digits_rejected",
+      "formula": "=VALUE(\"1 000001/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_zero_over_zero_rejected",
+      "formula": "=VALUE(\"1 0/0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mixed_fraction_large_whole",
+      "formula": "=VALUE(\"99999999999999 1/2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99999999999999.5
+      }
+    },
+    {
+      "id": "criteria_year_less_current_year",
+      "formula": "=COUNTIF(B1,\"1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_year_less_other_year",
+      "formula": "=COUNTIF(B1,\"1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY())-1,1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_year_less_ge",
+      "formula": "=COUNTIF(B1,\">=1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,1)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_month_name",
+      "formula": "=SUMIF(B1,\"Jan 2\",B1)-B1",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -46024.0
+      }
+    },
+    {
+      "id": "criteria_kanji_month_day",
+      "formula": "=COUNTIF(B1,\"1月2日\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_date_time",
+      "formula": "=COUNTIF(B1,\"1/2 12:00\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)+0.5"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "criteria_pair_fallback_is_m_d",
+      "formula": "=COUNTIF(B1,\"02/1\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=DATE(YEAR(TODAY()),1,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "criteria_text_cell_matches_text",
+      "formula": "=COUNTIF(B1,\"1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=\"1/2\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "criteria_mixed_fraction",
+      "formula": "=COUNTIF(B1,\"1 1/2\")",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}

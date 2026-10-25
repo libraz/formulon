@@ -2,11 +2,11 @@
   "suite": "datetime",
   "description": "DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / DAYS360 / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / NETWORKDAYS.INTL / WORKDAY / WORKDAY.INTL",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T08:13:53Z"
+    "generated_at": "2026-10-25T04:51:46Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -363,10 +363,7 @@
       "id": "weeknum_invalid_type_is_num",
       "formula": "=WEEKNUM(DATE(2024,1,1),99)",
       "setup": {},
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "WEEKNUM(DATE(2024,1,1),99), WEEKNUM(10,-2), WEEKNUM(DATE(2025,3,1),-2): Mac Excel 365 returns #NUM! or the type-1 week number for the same formula, flipping between cells and runs (about 20-35% #NUM! for return_type 22 and above, and for negative types). The documented types 1, 2, 11-17 and 21 are stable, as are the always-#NUM! types 0, 3-10 and 18-20. Formulon returns #NUM! for every unsupported type on every host."
     },
     {
       "id": "isoweeknum_mid_year",
@@ -1546,10 +1543,7 @@
       "id": "weeknum_return_type_negative",
       "formula": "=WEEKNUM(10,-2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#NUM!"
-      }
+      "skipped": "WEEKNUM(DATE(2024,1,1),99), WEEKNUM(10,-2), WEEKNUM(DATE(2025,3,1),-2): Mac Excel 365 returns #NUM! or the type-1 week number for the same formula, flipping between cells and runs (about 20-35% #NUM! for return_type 22 and above, and for negative types). The documented types 1, 2, 11-17 and 21 are stable, as are the always-#NUM! types 0, 3-10 and 18-20. Formulon returns #NUM! for every unsupported type on every host."
     },
     {
       "id": "eomonth_blank_cell",
@@ -2277,10 +2271,7 @@
       "id": "weeknum_neg2",
       "formula": "=WEEKNUM(DATE(2025,3,1),-2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#NUM!"
-      }
+      "skipped": "WEEKNUM(DATE(2024,1,1),99), WEEKNUM(10,-2), WEEKNUM(DATE(2025,3,1),-2): Mac Excel 365 returns #NUM! or the type-1 week number for the same formula, flipping between cells and runs (about 20-35% #NUM! for return_type 22 and above, and for negative types). The documented types 1, 2, 11-17 and 21 are stable, as are the always-#NUM! types 0, 3-10 and 18-20. Formulon returns #NUM! for every unsupported type on every host."
     },
     {
       "id": "yearfrac_bool_basis_m",
@@ -2979,6 +2970,318 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "workday_fractional_start_at_limit",
+      "formula": "=WORKDAY(2958465.9,-30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958423.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "workday_fractional_start_zero_days",
+      "formula": "=WORKDAY(2958465.9,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "workday_intl_fractional_start_code",
+      "formula": "=WORKDAY.INTL(2958465.9,-30,11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958430.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "workday_intl_fractional_start_mask",
+      "formula": "=WORKDAY.INTL(2958465.9,-1,\"0101000\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958463.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "eomonth_before_calendar_start",
+      "formula": "=EOMONTH(1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "date_march_day_zero_1900",
+      "formula": "=DATE(1900,3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "days360_into_ghost_day",
+      "formula": "=DAYS360(59,60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "days360_out_of_ghost_day",
+      "formula": "=DAYS360(60,61)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_59_36584",
+      "formula": "=YEARFRAC(59,36584,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.000677690431
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_62",
+      "formula": "=YEARFRAC(1,62,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.16712328767123288
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_60_426",
+      "formula": "=YEARFRAC(60,426,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0027397260273974
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_2958465",
+      "formula": "=YEARFRAC(1,2958465,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8100.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_2_2958465",
+      "formula": "=YEARFRAC(2,2958465,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8099.997262092761
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_60_2958465",
+      "formula": "=YEARFRAC(60,2958465,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8099.838463472937
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_731",
+      "formula": "=YEARFRAC(1,731,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_serial_1_1462",
+      "formula": "=YEARFRAC(1,1462,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.000547645125958
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44256_45656",
+      "formula": "=DATEDIF(44256,45656,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 304.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_43830_45292",
+      "formula": "=DATEDIF(43830,45292,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44985_45349",
+      "formula": "=DATEDIF(44985,45349,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 364.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_43888_45350",
+      "formula": "=DATEDIF(43888,45350,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_45291_45351",
+      "formula": "=DATEDIF(45291,45351,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44381_45290",
+      "formula": "=DATEDIF(44381,45290,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 179.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_44560_44986",
+      "formula": "=DATEDIF(44560,44986,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_yd_serial_43466_45290",
+      "formula": "=DATEDIF(43466,45290,\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 363.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

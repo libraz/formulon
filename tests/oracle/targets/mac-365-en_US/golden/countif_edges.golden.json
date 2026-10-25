@@ -2,11 +2,11 @@
   "suite": "countif_edges",
   "description": "COUNTIF / SUMIF criteria-engine edge cases observed in IronCalc's COUNTIF_Rows / COUNTIF_Columns / COUNTIFS_Rows2 suites. Each case here probes a specific semantic question that the existing `countif.yaml` coverage does not answer, so we can confirm whether Mac Excel 365 (ja-JP) agrees with Formulon, with IronCalc, or with neither. The author-side `expect:` value below each case is Formulon's current return, included as a documentation aid; the verifier compares against the Excel-observed golden JSON (not this field) once oracle-gen has been run.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T08:07:52Z"
+    "generated_at": "2026-10-25T04:50:25Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1994,6 +1994,992 @@
         "A4": {
           "kind": "text",
           "value": "apple"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_question_one",
+      "formula": "=COUNTIF(A1:A6,\"?\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_question_two",
+      "formula": "=COUNTIF(A1:A6,\"??\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_question_three",
+      "formula": "=COUNTIF(A1:A6,\"???\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "countif_question_mid",
+      "formula": "=COUNTIF(A1:A6,\"a?b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_question_mid2",
+      "formula": "=COUNTIF(A1:A6,\"a??b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_question_mid3",
+      "formula": "=COUNTIF(A1:A6,\"a???b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "countif_question_star_then_question",
+      "formula": "=COUNTIF(A1:A6,\"*?b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "countif_question_question_prefix",
+      "formula": "=COUNTIF(A1:A6,\"??b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "sumif_question_two",
+      "formula": "=SUMIF(A1:A6,\"??\",B1:B6)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "countifs_question_three",
+      "formula": "=COUNTIFS(A1:A6,\"???\",B1:B6,\">0\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_question_two",
+      "formula": "=IFERROR(MATCH(\"??\",A1:A6,0),0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "match_question_three",
+      "formula": "=IFERROR(MATCH(\"???\",A1:A6,0),0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "xmatch_question_two",
+      "formula": "=IFERROR(XMATCH(\"??\",A1:A6,2),0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "xlookup_question_three",
+      "formula": "=IFERROR(XLOOKUP(\"???\",A1:A6,B1:B6,0,2),0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "vlookup_question_three",
+      "formula": "=IFERROR(VLOOKUP(\"???\",A1:B6,2,FALSE),0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 16.0
+      }
+    },
+    {
+      "id": "countif_escaped_question",
+      "formula": "=COUNTIF(A1:A6,\"a~?b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "countif_star_between",
+      "formula": "=COUNTIF(A1:A6,\"a*b\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a😀b"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "😀"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "ab"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "😀😀"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "x😀"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "a?b"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 16.0
+        },
+        "B6": {
+          "kind": "number",
+          "value": 32.0
         }
       },
       "expect": {

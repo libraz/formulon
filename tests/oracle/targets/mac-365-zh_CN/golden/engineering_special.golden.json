@@ -2,11 +2,11 @@
   "suite": "engineering_special",
   "description": "Continuous-math engineering built-ins: error function family (ERF, ERF.PRECISE, ERFC, ERFC.PRECISE) and Bessel function family (BESSELJ, BESSELY, BESSELI, BESSELK). Cases cover canonical handbook values, oddness / integral form for ERF, order truncation for BESSEL*, and singularity / negative-domain rejection for the second-kind Bessel members. Tolerance is loose (1e-8) because BESSELK uses Abramowitz & Stegun 9.8.5-9.8.8 polynomial approximations whose rated accuracy is |epsilon| < 1.9e-7.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "zh-CN",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T14:20:45Z"
+    "generated_at": "2026-10-25T07:05:22Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -336,7 +336,7 @@
       "id": "erf_precise_two_arg_rejected",
       "formula": "=ERF.PRECISE(1,2)",
       "setup": {},
-      "skipped": "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+      "skipped": "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "erfc_large_positive_to_zero",
@@ -652,7 +652,7 @@
       "id": "erfc_precise_two_arg_rejected",
       "formula": "=ERFC.PRECISE(1,2)",
       "setup": {},
-      "skipped": "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/variants/win-365-ja_JP/golden/), so no Excel host produces a value."
+      "skipped": "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected. Windows Excel 365 ja-JP 16.0.20326 refuses it at entry as well (COM 0x800A03EC, recorded as a driver skip in tests/oracle/targets/win-365-ja_JP/golden/), so no Excel host produces a value."
     },
     {
       "id": "atp_erf_bool",
@@ -855,6 +855,214 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "bessel_floor_neg_j",
+      "formula": "=BESSELJ(-100,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessel_floor_neg_y",
+      "formula": "=BESSELY(1,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessel_floor_neg_i",
+      "formula": "=BESSELI(-40,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessel_floor_neg_k",
+      "formula": "=BESSELK(1,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_phase_cap_at",
+      "formula": "=BESSELY(134217727,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.2268202740407304e-05
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_phase_cap_past",
+      "formula": "=BESSELY(134217728,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_phase_cap_far",
+      "formula": "=BESSELY(10000000000,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_9",
+      "formula": "=BESSELY(3.689,9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -80.6131965133635
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_4",
+      "formula": "=BESSELY(1.593,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.947281953491971
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_2",
+      "formula": "=BESSELY(1.5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.9321937606262339
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "bessely_small_x_order_3",
+      "formula": "=BESSELY(1.5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0735414014407203
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besseli_renorm_flush_490",
+      "formula": "=BESSELI(100,490)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besseli_renorm_flush_300",
+      "formula": "=BESSELI(10,300)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_asymptotic_flush_n0",
+      "formula": "=BESSELK(710,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_asymptotic_flush_n1",
+      "formula": "=BESSELK(710,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "besselk_asymptotic_flush_high_order",
+      "formula": "=BESSELK(710,1000000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

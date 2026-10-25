@@ -1,0 +1,197 @@
+{
+  "suite": "besselj_small_x",
+  "description": "BESSELJ below |x| = 8 at full precision, compared as 15 digits plus the residual",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T12:55:17Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "besselj_0p1_0_digits",
+      "formula": "=TEXT(BESSELJ(0.1,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "997.501.564.770.017E-15"
+      }
+    },
+    {
+      "id": "besselj_0p1_0_residual",
+      "formula": "=TEXT((BESSELJ(0.1,0))-VALUE(TEXT(BESSELJ(0.1,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-222.044.604.925.031E-30"
+      }
+    },
+    {
+      "id": "besselj_1_0_digits",
+      "formula": "=TEXT(BESSELJ(1,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "765.197.683.754.859E-15"
+      }
+    },
+    {
+      "id": "besselj_1_0_residual",
+      "formula": "=TEXT((BESSELJ(1,0))-VALUE(TEXT(BESSELJ(1,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "222.044.604.925.031E-30"
+      }
+    },
+    {
+      "id": "besselj_1p5_2_digits",
+      "formula": "=TEXT(BESSELJ(1.5,2),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "232.087.679.017.448E-15"
+      }
+    },
+    {
+      "id": "besselj_1p5_2_residual",
+      "formula": "=TEXT((BESSELJ(1.5,2))-VALUE(TEXT(BESSELJ(1.5,2),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-055.511.151.231.258E-30"
+      }
+    },
+    {
+      "id": "besselj_2_2_digits",
+      "formula": "=TEXT(BESSELJ(2,2),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "352.834.207.514.176E-15"
+      }
+    },
+    {
+      "id": "besselj_2_2_residual",
+      "formula": "=TEXT((BESSELJ(2,2))-VALUE(TEXT(BESSELJ(2,2),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-388.578.058.618.805E-30"
+      }
+    },
+    {
+      "id": "besselj_5_0_digits",
+      "formula": "=TEXT(BESSELJ(5,0),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-177.596.774.112.343E-15"
+      }
+    },
+    {
+      "id": "besselj_5_0_residual",
+      "formula": "=TEXT((BESSELJ(5,0))-VALUE(TEXT(BESSELJ(5,0),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-277.555.756.156.289E-30"
+      }
+    },
+    {
+      "id": "besselj_5_2_digits",
+      "formula": "=TEXT(BESSELJ(5,2),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "046.565.118.685.798E-15"
+      }
+    },
+    {
+      "id": "besselj_5_2_residual",
+      "formula": "=TEXT((BESSELJ(5,2))-VALUE(TEXT(BESSELJ(5,2),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-006.938.893.903.907E-30"
+      }
+    },
+    {
+      "id": "besselj_7p9_1_digits",
+      "formula": "=TEXT(BESSELJ(7.9,1),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "219.179.396.275.878E-15"
+      }
+    },
+    {
+      "id": "besselj_7p9_1_residual",
+      "formula": "=TEXT((BESSELJ(7.9,1))-VALUE(TEXT(BESSELJ(7.9,1),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "471.844.785.465.692E-30"
+      }
+    },
+    {
+      "id": "besselj_3p7_20_digits",
+      "formula": "=TEXT(BESSELJ(3.7,20),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.000.000.000.077E-15"
+      }
+    },
+    {
+      "id": "besselj_3p7_20_residual",
+      "formula": "=TEXT((BESSELJ(3.7,20))-VALUE(TEXT(BESSELJ(3.7,20),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "besselj_m2p5_3_digits",
+      "formula": "=TEXT(BESSELJ(-2.5,3),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-216.600.402.807.342E-15"
+      }
+    },
+    {
+      "id": "besselj_m2p5_3_residual",
+      "formula": "=TEXT((BESSELJ(-2.5,3))-VALUE(TEXT(BESSELJ(-2.5,3),\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "333.066.907.387.547E-30"
+      }
+    },
+    {
+      "id": "besselj_0p5_100_digits",
+      "formula": "=TEXT(BESSELJ(0.5,100)*1E219,\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.000.000.000.007E+00"
+      }
+    },
+    {
+      "id": "besselj_0p5_100_residual",
+      "formula": "=TEXT((BESSELJ(0.5,100)*1E219)-VALUE(TEXT(BESSELJ(0.5,100)*1E219,\"0.00000000000000E+00\")),\"0.00000000000000E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

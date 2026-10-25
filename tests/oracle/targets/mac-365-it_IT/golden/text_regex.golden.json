@@ -2,11 +2,11 @@
   "suite": "text_regex",
   "description": "REGEXTEST / REGEXEXTRACT / REGEXREPLACE — PCRE2-backed regex closure against Mac Excel 365 (ja-JP).",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "it-IT",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-16T07:51:35Z"
+    "generated_at": "2026-10-25T10:44:26Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -178,6 +178,717 @@
       "expect": {
         "kind": "text",
         "value": "xbc"
+      }
+    },
+    {
+      "id": "regextest_empty_pattern",
+      "formula": "=REGEXTEST(\"abc\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "regexextract_empty_pattern",
+      "formula": "=REGEXEXTRACT(\"abc\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
+    },
+    {
+      "id": "regexextract_empty_pattern_type",
+      "formula": "=TYPE(REGEXEXTRACT(\"abc\",\"\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "regexextract_empty_pattern_all_columns",
+      "formula": "=COLUMNS(REGEXEXTRACT(\"abc\",\"\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "regexreplace_empty_pattern",
+      "formula": "=REGEXREPLACE(\"abc\",\"\",\"-\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-a-b-c-"
+      }
+    },
+    {
+      "id": "regexextract_mode1_single_is_array",
+      "formula": "=TYPE(REGEXEXTRACT(\"abc\",\"b\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "regexextract_mode2_single_is_array",
+      "formula": "=TYPE(REGEXEXTRACT(\"abc\",\"(b)\",2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "regexextract_mode0_is_text",
+      "formula": "=TYPE(REGEXEXTRACT(\"abc\",\"b\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "type_of_array_literal",
+      "formula": "=TYPE({1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "type_of_sequence",
+      "formula": "=TYPE(SEQUENCE(3))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "regexreplace_dollar_whole_match",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$&\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_dollar_before_after",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$`$'\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aacc"
+      }
+    },
+    {
+      "id": "regexreplace_dollar_subject",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$_\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aabcc"
+      }
+    },
+    {
+      "id": "regexreplace_dollar_bare",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_dollar_unknown",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_dollar_trailing",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"x$\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_dollar_plus",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$+\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_dollar_zero_pair",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$0$0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abbc"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_tab_code",
+      "formula": "=CODE(MID(REGEXREPLACE(\"abc\",\"b\",\"\\t\"),2,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "regexreplace_backslash_hex",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\x41\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aAc"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_hex_braced",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\x{41}\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aAc"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_octal",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\101\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aAc"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_unknown",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\q\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_trailing",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"x\\\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_zero",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_escaped_backslash",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\\\n\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a\\nc"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_escaped_dollar",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\$1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a$1c"
+      }
+    },
+    {
+      "id": "regexreplace_group_ref_ok",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"$1x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abxc"
+      }
+    },
+    {
+      "id": "regexreplace_group_braced",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"${1}x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abxc"
+      }
+    },
+    {
+      "id": "regexreplace_group_two_digit_missing",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"$11\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_group_missing",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"$2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_group_unmatched_empty",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)|(x)\",\"[$2]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a[]c"
+      }
+    },
+    {
+      "id": "regexreplace_group_named_unbraced",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<g>b)\",\"$g\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_group_named_longer",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<g>b)\",\"$gx\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_group_named_angle",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<g>b)\",\"$<g>\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_group_backslash_ref",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"\\1\\1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abbc"
+      }
+    },
+    {
+      "id": "regexreplace_group_backslash_g",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"\\g<1>\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_group_backslash_g_name",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<g>b)\",\"\\g<g>\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_group_backslash_g_bare",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"\\g1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_group_backslash_k",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<g>b)\",\"\\k<g>\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_group_backslash_two_digit_missing",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"\\10\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"\\u\\1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aBc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_run",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"\\U\\1\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aBc"
+      }
+    },
+    {
+      "id": "regexreplace_quote_span",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"\\Q\\1\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a\\1c"
+      }
+    },
+    {
+      "id": "regexreplace_before_after_nth",
+      "formula": "=REGEXREPLACE(\"abcb\",\"b\",\"[$`|$']\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc[abc|]"
+      }
+    },
+    {
+      "id": "regexreplace_two_digit_group_ok",
+      "formula": "=REGEXREPLACE(\"abcdefghijkl\",\"(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)\",\"$11\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "kl"
+      }
+    },
+    {
+      "id": "regexreplace_backslash_ten_ok",
+      "formula": "=REGEXREPLACE(\"abcdefghijkl\",\"(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)\",\"\\10\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "jl"
+      }
+    },
+    {
+      "id": "regexreplace_unicode_u_literal",
+      "formula": "=REGEXREPLACE(\"aéb\",\"é\",\"\\u00e9\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a00e9b"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next",
+      "formula": "=REGEXREPLACE(\"B\",\"(B)\",\"\\l\\1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "regexreplace_lower_run",
+      "formula": "=REGEXREPLACE(\"BC\",\"(B)(C)\",\"\\L\\1\\EX\\2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bXC"
+      }
+    },
+    {
+      "id": "regexreplace_lower_run_unterminated",
+      "formula": "=REGEXREPLACE(\"BC\",\"(B)(C)\",\"\\L\\1\\2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bc"
+      }
+    },
+    {
+      "id": "regexreplace_title_compose",
+      "formula": "=REGEXREPLACE(\"BC\",\"(BC)\",\"\\u\\L\\1\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Bc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_upper_compose",
+      "formula": "=REGEXREPLACE(\"bc\",\"(bc)\",\"\\l\\U\\1\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bC"
+      }
+    },
+    {
+      "id": "regexreplace_lone_end_ignored",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"x\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "axc"
+      }
+    },
+    {
+      "id": "regexreplace_nul_length",
+      "formula": "=LEN(REGEXREPLACE(\"abc\",\"b\",\"\\00\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "regexreplace_nul_code",
+      "formula": "=CODE(MID(REGEXREPLACE(\"abc\",\"b\",\"\\x00\"),2,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "regexreplace_nul_tail",
+      "formula": "=RIGHT(REGEXREPLACE(\"abc\",\"b\",\"\\x{0}\"),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "c"
+      }
+    },
+    {
+      "id": "regexreplace_angle_numeric",
+      "formula": "=REGEXREPLACE(\"abc\",\"(b)\",\"$<1>\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "regexreplace_angle_named_ok",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<g>b)\",\"$<g>x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abxc"
+      }
+    },
+    {
+      "id": "regexreplace_subject_then_literal",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$_x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aabcxc"
+      }
+    },
+    {
+      "id": "regexreplace_subject_with_group_name",
+      "formula": "=REGEXREPLACE(\"abc\",\"(?<_x>b)\",\"$_x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aabcxc"
+      }
+    },
+    {
+      "id": "regexreplace_malformed_no_match",
+      "formula": "=REGEXREPLACE(\"abc\",\"x\",\"$1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_malformed_missing_occurrence",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"$1\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_accented",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uéa\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aÉac"
+      }
+    },
+    {
+      "id": "regexreplace_upper_run_greek",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\Uαςβ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aΑΣΒc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_digraph",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uǆ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aǄc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_digraph_title",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uǅ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aǄc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next_digraph_title",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\lǲ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aǳc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_sharp_s_kept",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\Uß\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aßc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_final_sigma",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΑΣ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aαςc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_medial_sigma",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΣΑ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aσαc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_lone_sigma",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΣ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aςc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_span_sigma_between",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΑΣΑ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aασαc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next_sigma_first",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\lΣΑ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aςΑc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_next_sigma_alone",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\lΣ\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aςc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_dotted",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\uı\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aIc"
+      }
+    },
+    {
+      "id": "regexreplace_lower_dotted_capital",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\LΙ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aιc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_fullwidth",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\Uａ\\E\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aＡc"
+      }
+    },
+    {
+      "id": "regexreplace_upper_next_digit",
+      "formula": "=REGEXREPLACE(\"abc\",\"b\",\"\\u1x\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a1xc"
       }
     }
   ]

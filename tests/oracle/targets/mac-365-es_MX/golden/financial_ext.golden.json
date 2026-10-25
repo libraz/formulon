@@ -2,11 +2,11 @@
   "suite": "financial_ext",
   "description": "Non-DCC financial builtins — DOLLARDE / DOLLARFR / EFFECT / NOMINAL / FVSCHEDULE / PDURATION / RRI / MIRR / ISPMT. See `eval/builtins/financial.cpp` and `eval/financial_lazy.cpp` (MIRR).",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "es-MX",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T15:37:43Z"
+    "generated_at": "2026-10-25T12:27:17Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -635,6 +635,84 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "rri_exp_log_form_a",
+      "formula": "=RRI(3,25232.91,976406.04)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.382369422704911
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rri_exp_log_form_b",
+      "formula": "=RRI(38.9,54123.17,821882.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07243471583009375
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rri_exp_log_form_c",
+      "formula": "=RRI(38,85802.61,589618.18)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05203010438694311
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "xnpv_exp_log_form_a",
+      "formula": "=XNPV(0.2036,{-6330.59;3480.01;1130.15;3587.31},{44205;45070;46123;46186})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2348.615433109875
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "xnpv_exp_log_form_b",
+      "formula": "=XNPV(0.263,{-2570.64;102.19;2936.41;1394.33;-117.67},{38615;38960;39138;39696;40565})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 277.26245335237104
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "xnpv_exp_log_form_c",
+      "formula": "=XNPV(0.0785,{-4662.44;4053.52;4284.38;3790.09;2926.3;-294.17;602.24},{37622;38044;38509;38797;38834;39003;39459})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8056.725418895475
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

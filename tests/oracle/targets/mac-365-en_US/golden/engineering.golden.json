@@ -2,11 +2,11 @@
   "suite": "engineering",
   "description": "Simple integer-only engineering built-ins: base conversion (BIN/OCT/HEX <-> DEC), bit operations (BITAND / BITOR / BITXOR / BITLSHIFT / BITRSHIFT), and the two comparators DELTA and GESTEP. Cases focus on Excel-observable semantic edges: two's complement decoding, lowercase hex input, `places` padding, shift sign flipping, and #NUM! surfacing on out-of-range input.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T05:43:39Z"
+    "generated_at": "2026-10-25T04:55:38Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1183,6 +1183,1040 @@
       "expect": {
         "kind": "text",
         "value": "101"
+      }
+    },
+    {
+      "id": "radix_dec2bin_ff_0",
+      "formula": "=DEC2BIN(\"FF\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_dec2oct_ff_0",
+      "formula": "=DEC2OCT(\"FF\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_dec2hex_ff_0",
+      "formula": "=DEC2HEX(\"FF\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_bin2dec",
+      "formula": "=BIN2DEC(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_oct2dec",
+      "formula": "=OCT2DEC(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "radix_bin2hex",
+      "formula": "=BIN2HEX(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_bin2oct",
+      "formula": "=BIN2OCT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_oct2bin",
+      "formula": "=OCT2BIN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_oct2hex",
+      "formula": "=OCT2HEX(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_b_12_bin2dec",
+      "formula": "=BIN2DEC(\" \")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_13_bin2dec_1",
+      "formula": "=BIN2DEC(\" 1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_14_hex2dec_1",
+      "formula": "=HEX2DEC(\"1 \")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "radix_b_15_bin2hex",
+      "formula": "=BIN2HEX(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_b_16_hex2bin",
+      "formula": "=HEX2BIN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "radix_b_17_dec2bin",
+      "formula": "=DEC2BIN(\" \")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_18_dec2bin",
+      "formula": "=DEC2BIN(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "radix_b_19_dec2bin_1",
+      "formula": "=DEC2BIN(\" 1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "radix_b_20_dec2bin_1",
+      "formula": "=DEC2BIN(\"1 \")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "radix_b_21_dec2bin_1e1",
+      "formula": "=DEC2BIN(\"1e1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1010"
+      }
+    },
+    {
+      "id": "radix_b_22_dec2hex_1e1",
+      "formula": "=DEC2HEX(\"1e1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "radix_b_23_dec2hex_0x1",
+      "formula": "=DEC2HEX(\"0x1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "bitlshift_n0_sm60",
+      "formula": "=BITLSHIFT(0,-60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_sm54",
+      "formula": "=BITLSHIFT(0,-54)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_sm53",
+      "formula": "=BITLSHIFT(0,-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_sm49",
+      "formula": "=BITLSHIFT(0,-49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_sm48",
+      "formula": "=BITLSHIFT(0,-48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_sm47",
+      "formula": "=BITLSHIFT(0,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_sm1",
+      "formula": "=BITLSHIFT(0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s1",
+      "formula": "=BITLSHIFT(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s40",
+      "formula": "=BITLSHIFT(0,40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s47",
+      "formula": "=BITLSHIFT(0,47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s48",
+      "formula": "=BITLSHIFT(0,48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s49",
+      "formula": "=BITLSHIFT(0,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s53",
+      "formula": "=BITLSHIFT(0,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s54",
+      "formula": "=BITLSHIFT(0,54)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n0_s60",
+      "formula": "=BITLSHIFT(0,60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_sm60",
+      "formula": "=BITRSHIFT(0,-60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_sm54",
+      "formula": "=BITRSHIFT(0,-54)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_sm53",
+      "formula": "=BITRSHIFT(0,-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_sm49",
+      "formula": "=BITRSHIFT(0,-49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_sm48",
+      "formula": "=BITRSHIFT(0,-48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_sm47",
+      "formula": "=BITRSHIFT(0,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_sm1",
+      "formula": "=BITRSHIFT(0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s1",
+      "formula": "=BITRSHIFT(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s40",
+      "formula": "=BITRSHIFT(0,40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s47",
+      "formula": "=BITRSHIFT(0,47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s48",
+      "formula": "=BITRSHIFT(0,48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s49",
+      "formula": "=BITRSHIFT(0,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s53",
+      "formula": "=BITRSHIFT(0,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s54",
+      "formula": "=BITRSHIFT(0,54)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n0_s60",
+      "formula": "=BITRSHIFT(0,60)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_sm60",
+      "formula": "=BITLSHIFT(1,-60)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n1_sm54",
+      "formula": "=BITLSHIFT(1,-54)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n1_sm53",
+      "formula": "=BITLSHIFT(1,-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_sm49",
+      "formula": "=BITLSHIFT(1,-49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_sm48",
+      "formula": "=BITLSHIFT(1,-48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_sm47",
+      "formula": "=BITLSHIFT(1,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_sm1",
+      "formula": "=BITLSHIFT(1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_s1",
+      "formula": "=BITLSHIFT(1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_s40",
+      "formula": "=BITLSHIFT(1,40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1099511627776.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_s47",
+      "formula": "=BITLSHIFT(1,47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 140737488355328.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_s48",
+      "formula": "=BITLSHIFT(1,48)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n1_s49",
+      "formula": "=BITLSHIFT(1,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_s53",
+      "formula": "=BITLSHIFT(1,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1_s54",
+      "formula": "=BITLSHIFT(1,54)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n1_s60",
+      "formula": "=BITLSHIFT(1,60)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n1_sm60",
+      "formula": "=BITRSHIFT(1,-60)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n1_sm54",
+      "formula": "=BITRSHIFT(1,-54)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n1_sm53",
+      "formula": "=BITRSHIFT(1,-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_sm49",
+      "formula": "=BITRSHIFT(1,-49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_sm48",
+      "formula": "=BITRSHIFT(1,-48)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n1_sm47",
+      "formula": "=BITRSHIFT(1,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 140737488355328.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_sm1",
+      "formula": "=BITRSHIFT(1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_s1",
+      "formula": "=BITRSHIFT(1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_s40",
+      "formula": "=BITRSHIFT(1,40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_s47",
+      "formula": "=BITRSHIFT(1,47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_s48",
+      "formula": "=BITRSHIFT(1,48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_s49",
+      "formula": "=BITRSHIFT(1,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_s53",
+      "formula": "=BITRSHIFT(1,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1_s54",
+      "formula": "=BITRSHIFT(1,54)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n1_s60",
+      "formula": "=BITRSHIFT(1,60)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n255_sm60",
+      "formula": "=BITLSHIFT(255,-60)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n255_s40",
+      "formula": "=BITLSHIFT(255,40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 280375465082880.0
+      }
+    },
+    {
+      "id": "bitlshift_n255_s47",
+      "formula": "=BITLSHIFT(255,47)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n255_s54",
+      "formula": "=BITLSHIFT(255,54)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n255_sm48",
+      "formula": "=BITRSHIFT(255,-48)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n255_sm47",
+      "formula": "=BITRSHIFT(255,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n255_s47",
+      "formula": "=BITRSHIFT(255,47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n255_s49",
+      "formula": "=BITRSHIFT(255,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1048576_sm53",
+      "formula": "=BITLSHIFT(1048576,-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1048576_sm47",
+      "formula": "=BITLSHIFT(1048576,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1048576_s47",
+      "formula": "=BITLSHIFT(1048576,47)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n1048576_s53",
+      "formula": "=BITLSHIFT(1048576,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1048576_s49",
+      "formula": "=BITRSHIFT(1048576,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1099511627776_sm60",
+      "formula": "=BITLSHIFT(1099511627776,-60)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n1099511627776_s49",
+      "formula": "=BITLSHIFT(1099511627776,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n1099511627776_s53",
+      "formula": "=BITLSHIFT(1099511627776,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitrshift_n1099511627776_sm53",
+      "formula": "=BITRSHIFT(1099511627776,-53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n140737488355328_sm54",
+      "formula": "=BITLSHIFT(140737488355328,-54)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n140737488355328_s48",
+      "formula": "=BITLSHIFT(140737488355328,48)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n140737488355328_s54",
+      "formula": "=BITLSHIFT(140737488355328,54)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n140737488355328_s1",
+      "formula": "=BITRSHIFT(140737488355328,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 70368744177664.0
+      }
+    },
+    {
+      "id": "bitrshift_n140737488355328_s47",
+      "formula": "=BITRSHIFT(140737488355328,47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "bitlshift_n281474976710655_sm49",
+      "formula": "=BITLSHIFT(281474976710655,-49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n281474976710655_sm48",
+      "formula": "=BITLSHIFT(281474976710655,-48)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n281474976710655_sm47",
+      "formula": "=BITLSHIFT(281474976710655,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "bitlshift_n281474976710655_s40",
+      "formula": "=BITLSHIFT(281474976710655,40)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitlshift_n281474976710655_s49",
+      "formula": "=BITLSHIFT(281474976710655,49)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n281474976710655_s53",
+      "formula": "=BITLSHIFT(281474976710655,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bitlshift_n281474976710655_s60",
+      "formula": "=BITLSHIFT(281474976710655,60)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n281474976710655_sm47",
+      "formula": "=BITRSHIFT(281474976710655,-47)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "bitrshift_n281474976710655_s40",
+      "formula": "=BITRSHIFT(281474976710655,40)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 255.0
+      }
+    },
+    {
+      "id": "bitrshift_n281474976710655_s47",
+      "formula": "=BITRSHIFT(281474976710655,47)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "bitrshift_n281474976710655_s53",
+      "formula": "=BITRSHIFT(281474976710655,53)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     }
   ]

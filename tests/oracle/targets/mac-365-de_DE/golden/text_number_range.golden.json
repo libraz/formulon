@@ -1,0 +1,323 @@
+{
+  "suite": "text_number_range",
+  "description": "Text-to-number acceptance range, 15-digit truncation, percent folding and the length cap (VALUE and arithmetic on text)",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "de-DE",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T06:04:29Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "largest_accepted",
+      "formula": "=VALUE(\"9.99999999999999E+307\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "upper_bound_rejected",
+      "formula": "=VALUE(\"1e308\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sixteenth_digit_truncated",
+      "formula": "=VALUE(\"9.999999999999995e307\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "normalised_upper_rejected",
+      "formula": "=VALUE(\"1000e305\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "normalised_into_range",
+      "formula": "=VALUE(\"0.1e308\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "lower_bound_flushed",
+      "formula": "=VALUE(\"1e-309\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "below_lower_bound",
+      "formula": "=VALUE(\"1e-310\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "normalised_lower_accepted",
+      "formula": "=VALUE(\"10e-310\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "normalised_below_lower",
+      "formula": "=VALUE(\"0.1e-309\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "below_lower_written_fine",
+      "formula": "=VALUE(\"9.99e-310\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dbl_min_cut_below_flushed",
+      "formula": "=VALUE(\"2.2250738585072014e-308\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2250738585072e-292
+      }
+    },
+    {
+      "id": "just_above_dbl_min_kept",
+      "formula": "=VALUE(\"2.22507385850721e-308\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.22507385850721e-294
+      }
+    },
+    {
+      "id": "zero_written_exponent_rejected",
+      "formula": "=VALUE(\"0e309\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "zero_fraction_shifts_exponent",
+      "formula": "=VALUE(\"0.0e309\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "zero_negative_exponent_rejected",
+      "formula": "=VALUE(\"0e-309\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "zero_negative_exponent_accepted",
+      "formula": "=VALUE(\"0e-308\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "percent_folded_upper",
+      "formula": "=VALUE(\"1e309%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+307
+      }
+    },
+    {
+      "id": "percent_folded_lower",
+      "formula": "=VALUE(\"1e-308%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sixteen_digit_integer",
+      "formula": "=VALUE(\"9999999999999999\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9999999999999990.0
+      }
+    },
+    {
+      "id": "seventeen_nines_fraction",
+      "formula": "=VALUE(\"0.99999999999999999\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "double_percent_rejected",
+      "formula": "=VALUE(\"1e-306%%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "percent_folded_exactly",
+      "formula": "=VALUE(\"1e-9%\")=1E-11",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "length_cap_255_accepted",
+      "formula": "=VALUE(REPT(\" \",254)&\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "length_cap_256_rejected",
+      "formula": "=VALUE(REPT(\" \",255)&\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dropped_integer_digits_scale",
+      "formula": "=\"1234567890123456789e289\"+0",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.23456789012345e+307
+      }
+    },
+    {
+      "id": "dropped_integer_digits_reject",
+      "formula": "=\"1234567890123456789e290\"+0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arithmetic_lower_bound",
+      "formula": "=\"1e-310\"+0",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "leading_percent",
+      "formula": "=VALUE(\"%5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05
+      }
+    },
+    {
+      "id": "percent_before_sign",
+      "formula": "=VALUE(\"%-5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.05
+      }
+    },
+    {
+      "id": "percent_after_parenthesised_negative",
+      "formula": "=VALUE(\"(5)%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.05
+      }
+    },
+    {
+      "id": "percent_inside_parentheses",
+      "formula": "=VALUE(\"(%5)\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.05
+      }
+    },
+    {
+      "id": "two_percents_rejected",
+      "formula": "=VALUE(\"%5%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "length_cap_counts_characters",
+      "formula": "=VALUE(REPT(\"　\",254)&\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "length_cap_characters_rejected",
+      "formula": "=VALUE(REPT(\"　\",255)&\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

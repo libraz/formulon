@@ -2,11 +2,11 @@
   "suite": "aggregate_reference_arguments",
   "description": "AGGREGATE functions 1-13 accept references only; the array form's k and a fourth array argument evaluate per element",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "es-ES",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T06:42:40Z"
+    "generated_at": "2026-10-25T11:32:55Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1615,6 +1615,5370 @@
       "expect": {
         "kind": "number",
         "value": 60.0
+      }
+    },
+    {
+      "id": "agg14_o0_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,6,#,#,#,5,#,#"
+      }
+    },
+    {
+      "id": "agg14_o2_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,6,#,#,#,5,#,#"
+      }
+    },
+    {
+      "id": "agg14_o4_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,6,#,#,#,5,#,#"
+      }
+    },
+    {
+      "id": "agg14_o6_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,6,#,#,#,5,#,#"
+      }
+    },
+    {
+      "id": "agg14_o0_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,5,6,5,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg14_o2_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,5,6,5,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg14_o4_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,5,6,5,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg14_o6_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,6,5,6,5,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg14_o0_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg14_o2_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,5,5,#,#,#,4,#,#"
+      }
+    },
+    {
+      "id": "agg14_o4_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg14_o6_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,5,5,#,#,#,4,#,#"
+      }
+    },
+    {
+      "id": "agg14_o0_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg14_o2_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg14_o4_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg14_o6_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg14_o0_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg14_o2_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg14_o4_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg14_o6_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(14,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o0_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,1,1,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o2_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,1,1,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o4_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,1,1,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o6_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,1,1,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o0_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1,25,0,-1,25,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o2_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1,25,0,-1,25,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o4_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1,25,0,-1,25,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o6_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-1,25,0,-1,25,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o0_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg15_o2_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3,4,3,#,#,#,5,#,#"
+      }
+    },
+    {
+      "id": "agg15_o4_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg15_o6_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3,4,3,#,#,#,5,#,#"
+      }
+    },
+    {
+      "id": "agg15_o0_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg15_o2_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg15_o4_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg15_o6_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg15_o0_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o2_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o4_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg15_o6_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(15,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg16_o0_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,5,1,75,1,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o2_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,5,1,75,1,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o4_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,5,1,75,1,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o6_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,5,1,75,1,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o0_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,75,1,5,-1,25,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o2_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,75,1,5,-1,25,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o4_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,75,1,5,-1,25,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o6_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,3,75,1,5,-1,25,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o0_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o2_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,4,5,3,75,3,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o4_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o6_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "9,#,#,4,5,3,75,3,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o0_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,7,7,7,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o2_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,7,7,7,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o4_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,7,7,7,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o6_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,#,#,7,7,7,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o0_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,#,#,2,2,2,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o2_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,#,#,2,2,2,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o4_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,#,#,2,2,2,#,#,#"
+      }
+    },
+    {
+      "id": "agg16_o6_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(16,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,#,#,2,2,2,#,#,#"
+      }
+    },
+    {
+      "id": "agg17_o0_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,75,3,5,1,75,1,1,1,5,25,#,#"
+      }
+    },
+    {
+      "id": "agg17_o2_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,75,3,5,1,75,1,1,1,5,25,#,#"
+      }
+    },
+    {
+      "id": "agg17_o4_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,75,3,5,1,75,1,1,1,5,25,#,#"
+      }
+    },
+    {
+      "id": "agg17_o6_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,75,3,5,1,75,1,1,1,5,25,#,#"
+      }
+    },
+    {
+      "id": "agg17_o0_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,5,3,75,1,5,-1,25,-1,25,-1,25,5,9375,#,#"
+      }
+    },
+    {
+      "id": "agg17_o2_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,5,3,75,1,5,-1,25,-1,25,-1,25,5,9375,#,#"
+      }
+    },
+    {
+      "id": "agg17_o4_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,5,3,75,1,5,-1,25,-1,25,-1,25,5,9375,#,#"
+      }
+    },
+    {
+      "id": "agg17_o6_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,5,3,75,1,5,-1,25,-1,25,-1,25,5,9375,#,#"
+      }
+    },
+    {
+      "id": "agg17_o0_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg17_o2_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3,75,4,5,3,75,3,3,3,6,#,#"
+      }
+    },
+    {
+      "id": "agg17_o4_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg17_o6_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3,75,4,5,3,75,3,3,3,6,#,#"
+      }
+    },
+    {
+      "id": "agg17_o0_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,7,7,7,7,7,7,#,#"
+      }
+    },
+    {
+      "id": "agg17_o2_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,7,7,7,7,7,7,#,#"
+      }
+    },
+    {
+      "id": "agg17_o4_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,7,7,7,7,7,7,#,#"
+      }
+    },
+    {
+      "id": "agg17_o6_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7,7,7,7,7,7,7,#,#"
+      }
+    },
+    {
+      "id": "agg17_o0_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,2,2,2,2,#,#"
+      }
+    },
+    {
+      "id": "agg17_o2_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,2,2,2,2,#,#"
+      }
+    },
+    {
+      "id": "agg17_o4_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,2,2,2,2,#,#"
+      }
+    },
+    {
+      "id": "agg17_o6_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(17,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,2,2,2,2,#,#"
+      }
+    },
+    {
+      "id": "agg18_o0_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,5,1,25,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o2_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,5,1,25,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o4_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,5,1,25,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o6_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,5,1,25,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o0_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,75,0,5,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o2_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,75,0,5,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o4_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,75,0,5,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o6_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,3,75,0,5,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o0_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o2_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,4,5,3,25,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o4_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o6_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,4,5,3,25,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o0_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,7,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o2_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,7,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o4_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,7,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o6_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,7,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o0_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,2,2,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o2_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,2,2,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o4_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,2,2,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg18_o6_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(18,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,2,2,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg19_o0_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,25,3,5,1,25,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg19_o2_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,25,3,5,1,25,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg19_o4_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,25,3,5,1,25,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg19_o6_k_a",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "1,25,3,5,1,25,#,#,#,5,75,#,#"
+      }
+    },
+    {
+      "id": "agg19_o0_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0,5,3,75,0,5,#,#,#,6,3125,#,#"
+      }
+    },
+    {
+      "id": "agg19_o2_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0,5,3,75,0,5,#,#,#,6,3125,#,#"
+      }
+    },
+    {
+      "id": "agg19_o4_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0,5,3,75,0,5,#,#,#,6,3125,#,#"
+      }
+    },
+    {
+      "id": "agg19_o6_k_b",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.5
+        },
+        "A2": {
+          "kind": "number",
+          "value": -1.25
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.75
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 6.5
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0,5,3,75,0,5,#,#,#,6,3125,#,#"
+      }
+    },
+    {
+      "id": "agg19_o0_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg19_o2_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3,25,4,5,3,25,#,#,#,8,#,#"
+      }
+    },
+    {
+      "id": "agg19_o4_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,#,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg19_o6_k_g",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3,25,4,5,3,25,#,#,#,8,#,#"
+      }
+    },
+    {
+      "id": "agg19_o0_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,7,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg19_o2_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,7,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg19_o4_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,7,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg19_o6_k_d",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#,7,#,#,#,#,#,#,#"
+      }
+    },
+    {
+      "id": "agg19_o0_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,0,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg19_o2_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,2,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg19_o4_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,4,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg19_o6_k_e",
+      "formula": "=TEXTJOIN(\",\",FALSE,IFERROR(AGGREGATE(19,6,A1:A8,{1,2,1.5,0.5,0.25,0,3,8.5,9}),\"#\"))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "2,2,2,#,#,#,2,#,#"
+      }
+    },
+    {
+      "id": "agg2_o0_errors_g",
+      "formula": "=AGGREGATE(2,0,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "agg2_o2_errors_g",
+      "formula": "=AGGREGATE(2,2,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "agg2_o3_errors_g",
+      "formula": "=AGGREGATE(2,3,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "agg2_o4_errors_g",
+      "formula": "=AGGREGATE(2,4,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "agg2_o6_errors_g",
+      "formula": "=AGGREGATE(2,6,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "agg2_o7_errors_g",
+      "formula": "=AGGREGATE(2,7,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "agg3_o0_errors_g",
+      "formula": "=AGGREGATE(3,0,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "agg3_o2_errors_g",
+      "formula": "=AGGREGATE(3,2,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "agg3_o3_errors_g",
+      "formula": "=AGGREGATE(3,3,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "agg3_o4_errors_g",
+      "formula": "=AGGREGATE(3,4,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "agg3_o6_errors_g",
+      "formula": "=AGGREGATE(3,6,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "agg3_o7_errors_g",
+      "formula": "=AGGREGATE(3,7,A1:A8)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A4": {
+          "kind": "error",
+          "code": "#N/A"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "A7": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A8": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "percentile_exc_order_0",
+      "formula": "=PERCENTILE.EXC(A1:A8,0.333)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 199.8
+      }
+    },
+    {
+      "id": "percentile_exc_order_1",
+      "formula": "=PERCENTILE.EXC(A1:A8,0.333)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.9970000000000003
+      }
+    },
+    {
+      "id": "percentile_exc_order_2",
+      "formula": "=AGGREGATE(18,0,A1:A8,0.333)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 400.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 500.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 199.8
+      }
+    },
+    {
+      "id": "percentile_exc_order_3",
+      "formula": "=AGGREGATE(18,0,A1:A8,0.333)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "A6": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A7": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A8": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.9970000000000003
+      }
+    },
+    {
+      "id": "percentile_exc_extreme_span",
+      "formula": "=IFERROR(PERCENTILE.EXC(A1:A2,0.5),\"#\"&ERROR.TYPE(PERCENTILE.EXC(A1:A2,0.5)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": -1e+308
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1e+308
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "afam_array_0",
+      "formula": "=IFERROR(AVERAGEA({TRUE;1;2}),\"#\"&ERROR.TYPE(AVERAGEA({TRUE;1;2})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "afam_array_1",
+      "formula": "=IFERROR(AVERAGEA({\"x\";1;2}),\"#\"&ERROR.TYPE(AVERAGEA({\"x\";1;2})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "afam_array_2",
+      "formula": "=IFERROR(AVERAGEA({\"1\";2;3}),\"#\"&ERROR.TYPE(AVERAGEA({\"1\";2;3})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.6666666666666667
+      }
+    },
+    {
+      "id": "afam_array_3",
+      "formula": "=IFERROR(AVERAGEA({TRUE}),\"#\"&ERROR.TYPE(AVERAGEA({TRUE})))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "#2"
+      }
+    },
+    {
+      "id": "afam_array_4",
+      "formula": "=IFERROR(MAXA({TRUE}),\"#\"&ERROR.TYPE(MAXA({TRUE})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "afam_array_5",
+      "formula": "=IFERROR(MINA({\"a\";1;2}),\"#\"&ERROR.TYPE(MINA({\"a\";1;2})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "afam_array_6",
+      "formula": "=IFERROR(MINA({TRUE;FALSE;TRUE;3}),\"#\"&ERROR.TYPE(MINA({TRUE;FALSE;TRUE;3})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "afam_array_7",
+      "formula": "=IFERROR(STDEVA({TRUE;1;2}),\"#\"&ERROR.TYPE(STDEVA({TRUE;1;2})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7071067811865476
+      }
+    },
+    {
+      "id": "afam_array_8",
+      "formula": "=IFERROR(STDEVA({TRUE;FALSE;TRUE;3}),\"#\"&ERROR.TYPE(STDEVA({TRUE;FALSE;TRUE;3})))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "#2"
+      }
+    },
+    {
+      "id": "afam_array_9",
+      "formula": "=IFERROR(STDEVPA({\"a\";1;2}),\"#\"&ERROR.TYPE(STDEVPA({\"a\";1;2})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "afam_array_10",
+      "formula": "=IFERROR(VARA({TRUE;1;2}),\"#\"&ERROR.TYPE(VARA({TRUE;1;2})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "afam_array_11",
+      "formula": "=IFERROR(VARA({\"1\";2;3}),\"#\"&ERROR.TYPE(VARA({\"1\";2;3})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "afam_array_12",
+      "formula": "=IFERROR(VARPA({TRUE;1;2}),\"#\"&ERROR.TYPE(VARPA({TRUE;1;2})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.25
+      }
+    },
+    {
+      "id": "afam_array_13",
+      "formula": "=IFERROR(VARPA({1;\"\";3}),\"#\"&ERROR.TYPE(VARPA({1;\"\";3})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "afam_array_14",
+      "formula": "=IFERROR(AVERAGEA(1,2,{TRUE;\"x\";3}),\"#\"&ERROR.TYPE(AVERAGEA(1,2,{TRUE;\"x\";3})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "afam_array_15",
+      "formula": "=IFERROR(STDEVA(1,2,{TRUE;\"x\";3}),\"#\"&ERROR.TYPE(STDEVA(1,2,{TRUE;\"x\";3})))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "afam_ref_0",
+      "formula": "=IFERROR(AVERAGEA(A1:A3,{TRUE;5}),\"#\"&ERROR.TYPE(AVERAGEA(A1:A3,{TRUE;5})))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.25
+      }
+    },
+    {
+      "id": "afam_ref_1",
+      "formula": "=IFERROR(STDEVA(A1:A3,{\"x\";5;7}),\"#\"&ERROR.TYPE(STDEVA(A1:A3,{\"x\";5;7})))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6832815729997477
+      }
+    },
+    {
+      "id": "afam_ref_2",
+      "formula": "=IFERROR(VARPA(A1:A3,{TRUE;5}),\"#\"&ERROR.TYPE(VARPA(A1:A3,{TRUE;5})))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6875
+      }
+    },
+    {
+      "id": "afam_ref_3",
+      "formula": "=IFERROR(MINA(A1:A3,{\"x\";5;7}),\"#\"&ERROR.TYPE(MINA(A1:A3,{\"x\";5;7})))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "afam_ref_4",
+      "formula": "=IFERROR(AVERAGEA(A1:A3),\"#\"&ERROR.TYPE(AVERAGEA(A1:A3)))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.3333333333333333
+      }
+    },
+    {
+      "id": "afam_ref_5",
+      "formula": "=IFERROR(STDEVA(A1:A3),\"#\"&ERROR.TYPE(STDEVA(A1:A3)))",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.5773502691896258
+      }
+    },
+    {
+      "id": "afam_ref_6",
+      "formula": "=IFERROR(AVERAGEA(A1:A3,{TRUE;5}),\"#\"&ERROR.TYPE(AVERAGEA(A1:A3,{TRUE;5})))",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "afam_ref_7",
+      "formula": "=IFERROR(MINA(A1:A3,{\"x\";5;7}),\"#\"&ERROR.TYPE(MINA(A1:A3,{\"x\";5;7})))",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "afam_ref_8",
+      "formula": "=IFERROR(VARA(A1:A3,{TRUE;5}),\"#\"&ERROR.TYPE(VARA(A1:A3,{TRUE;5})))",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "afam_ref_9",
+      "formula": "=IFERROR(AVERAGEA(A1:A3,{TRUE;5}),\"#\"&ERROR.TYPE(AVERAGEA(A1:A3,{TRUE;5})))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "afam_ref_10",
+      "formula": "=IFERROR(STDEVPA(A1:A3,{\"x\";5;7}),\"#\"&ERROR.TYPE(STDEVPA(A1:A3,{\"x\";5;7})))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.6076809620810595
+      }
+    },
+    {
+      "id": "afam_ref_11",
+      "formula": "=IFERROR(AVERAGEA(A1:A3),\"#\"&ERROR.TYPE(AVERAGEA(A1:A3)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "afam_ref_12",
+      "formula": "=IFERROR(AVERAGEA(J1:J3,{TRUE;5}),\"#\"&ERROR.TYPE(AVERAGEA(J1:J3,{TRUE;5})))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "afam_ref_13",
+      "formula": "=IFERROR(MINA(J1:J3,{TRUE;5}),\"#\"&ERROR.TYPE(MINA(J1:J3,{TRUE;5})))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "afam_ref_14",
+      "formula": "=IFERROR(STDEVA(J1:J3,{TRUE;5}),\"#\"&ERROR.TYPE(STDEVA(J1:J3,{TRUE;5})))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#2"
+      }
+    },
+    {
+      "id": "afam_ref_15",
+      "formula": "=IFERROR(VARA(J1:J3,{\"x\";5;7}),\"#\"&ERROR.TYPE(VARA(J1:J3,{\"x\";5;7})))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "afam_ref_16",
+      "formula": "=IFERROR(VARPA(J1:J3,{TRUE;5}),\"#\"&ERROR.TYPE(VARPA(J1:J3,{TRUE;5})))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "median_even_0",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "-1e+308"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "1e+308"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "median_even_1",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1e+308"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.5e+308
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.5e+308
+      }
+    },
+    {
+      "id": "median_even_2",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.7e+308
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.7e+308
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.7e+308
+      }
+    },
+    {
+      "id": "median_even_3",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 8.9e+307
+        },
+        "B1": {
+          "kind": "number",
+          "value": -8.9e+307
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "median_even_4",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "9e+307"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "-9e+307"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "median_even_5",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": -6.046
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": -1.5230000000000006
+      }
+    },
+    {
+      "id": "median_even_6",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.1
+        },
+        "B1": {
+          "kind": "number",
+          "value": 0.2
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.15000000000000002
+      }
+    },
+    {
+      "id": "median_even_7",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1e-320"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "2e-320"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "median_even_8",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 2.5e-308
+        },
+        "B1": {
+          "kind": "text",
+          "value": "3e-308"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.5e-308
+      }
+    },
+    {
+      "id": "median_even_9",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "-3e-308"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "5e-308"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "median_even_10",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "-3e-308"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "-5e-308"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "median_even_11",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1e-320"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "3e-320"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "median_even_12",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "3e-320"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "#6"
+      }
+    },
+    {
+      "id": "median_even_13",
+      "formula": "=IFERROR(MEDIAN(A1:B1),\"#\"&ERROR.TYPE(MEDIAN(A1:B1)))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.79e+308
+        },
+        "B1": {
+          "kind": "number",
+          "value": 1.7e+308
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.745e+308
       }
     }
   ]

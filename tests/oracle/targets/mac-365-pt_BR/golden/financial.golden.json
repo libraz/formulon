@@ -2,11 +2,11 @@
   "suite": "financial",
   "description": "PV / FV / PMT / NPER / NPV / IRR / RATE / IPMT / PPMT / CUMIPMT / CUMPRINC / SLN / SYD / DDB / DB — time-value-of-money and depreciation builtins",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "pt-BR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-16T07:35:58Z"
+    "generated_at": "2026-10-25T13:04:08Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -941,6 +941,1301 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "ddb_period_half",
+      "formula": "=DDB(10000,1000,5,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4000.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_period_fraction_after_one",
+      "formula": "=DDB(10000,1000,5,1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3098.386676965934
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_period_fraction_late",
+      "formula": "=DDB(10000,1000,5,4.25)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 760.4165405894919
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_period_exactly_life",
+      "formula": "=DDB(973279,25039.99,4,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60829.9375
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_product_order_integer",
+      "formula": "=DDB(135229.88,42371.69,7,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 19712.81049562682
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_salvage_cap",
+      "formula": "=DDB(2400,2000,10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_factor_three",
+      "formula": "=DDB(5000,500,6,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1250.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_factor_above_life_first",
+      "formula": "=DDB(1000,100,1.5,1,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 900.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_factor_above_life_later",
+      "formula": "=DDB(1000,100,1.5,1.2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_zero_period",
+      "formula": "=DDB(10000,1000,5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_period_beyond_life",
+      "formula": "=DDB(10000,1000,5,5.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_zero_cost",
+      "formula": "=DDB(0,0,5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ddb_negative_factor",
+      "formula": "=DDB(10000,1000,5,2,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_01",
+      "formula": "=DB(135229.88,42371.69,5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27992.58516
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_02",
+      "formula": "=DB(135229.88,42371.69,5,1,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 11663.57715
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_03",
+      "formula": "=DB(135229.88,42371.69,5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 22198.12003188
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_04",
+      "formula": "=DB(135229.88,42371.69,5,2,8)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 24129.60840792
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_05",
+      "formula": "=DB(135229.88,42371.69,5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 17603.10918528084
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_06",
+      "formula": "=DB(135229.88,42371.69,5,3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 21432.28489078014
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_07",
+      "formula": "=DB(135229.88,42371.69,5,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27992.58516
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_08",
+      "formula": "=DB(135229.88,42371.69,5,0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2332.7154299999997
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_09",
+      "formula": "=DB(135229.88,42371.69,5,1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27992.58516
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_10",
+      "formula": "=DB(135229.88,42371.69,5,1.5,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9330.861719999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_11",
+      "formula": "=DB(135229.88,42371.69,5,10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_12",
+      "formula": "=DB(135229.88,42371.69,5,10,6)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_13",
+      "formula": "=DB(135229.88,42371.69,5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_14",
+      "formula": "=DB(135229.88,42371.69,5,0,11)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_15",
+      "formula": "=DB(973279.0,25039.99,0.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_16",
+      "formula": "=DB(973279.0,25039.99,0.5,1,9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60951.41488518749
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_17",
+      "formula": "=DB(973279.0,25039.99,0.5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_18",
+      "formula": "=DB(973279.0,25039.99,0.5,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_19",
+      "formula": "=DB(973279.0,25039.99,0.5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_20",
+      "formula": "=DB(973279.0,25039.99,0.5,3,8)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_21",
+      "formula": "=DB(973279.0,25039.99,0.5,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 972305.721
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_22",
+      "formula": "=DB(973279.0,25039.99,0.5,1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_23",
+      "formula": "=DB(973279.0,25039.99,0.5,1.5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 547104.2753851876
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_24",
+      "formula": "=DB(973279.0,25039.99,0.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_25",
+      "formula": "=DB(973279.0,25039.99,0.5,0,9)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_26",
+      "formula": "=DB(944050.9,38976.99,1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_27",
+      "formula": "=DB(944050.9,38976.99,1,2,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 235615.98760927503
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_28",
+      "formula": "=DB(944050.9,38976.99,1,1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 905344.8131
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_29",
+      "formula": "=DB(944050.9,38976.99,1,1.5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 150890.80218333332
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_30",
+      "formula": "=DB(571661.46,8813.79,12.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 162351.85463999998
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_31",
+      "formula": "=DB(571661.46,8813.79,12.5,1,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 94705.24853999999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_32",
+      "formula": "=DB(571661.46,8813.79,12.5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 116243.92792224
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_33",
+      "formula": "=DB(571661.46,8813.79,12.5,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 158509.52741351997
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_34",
+      "formula": "=DB(571661.46,8813.79,12.5,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 83230.65239232383
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_35",
+      "formula": "=DB(571661.46,8813.79,12.5,3,11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 85981.7586864835
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_36",
+      "formula": "=DB(571661.46,8813.79,12.5,0.5,9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 121763.89097999998
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_37",
+      "formula": "=DB(571661.46,8813.79,12.5,1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 162351.85463999998
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_38",
+      "formula": "=DB(571661.46,8813.79,12.5,1.5,11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 148822.53341999996
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_39",
+      "formula": "=DB(579503.54,1540.42,10,11,9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 208.2035608315651
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_40",
+      "formula": "=DB(100000,10000,2.5,3,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8373.880200000001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_41",
+      "formula": "=DB(100000,10000,2.5,2.7,6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42079.799999999996
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_42",
+      "formula": "=DB(100000,10000,1.2,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 50332.331249999996
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_43",
+      "formula": "=DB(100000,10000,3,3.99,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 11539.8656
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_44",
+      "formula": "=DB(0,10000,3,1,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_45",
+      "formula": "=DB(100000,0,3,2,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_46",
+      "formula": "=DB(100000,10000,5,1,0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "db_whole_year_rule_47",
+      "formula": "=DB(100000,10000,4294967296,1,12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_00",
+      "formula": "=IRR({-1;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.11814510280868662
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_01",
+      "formula": "=IRR({-270.28;2866.71;1712.79;1047.43;363.31;4216.45})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.204826214680601
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_02",
+      "formula": "=IRR({-8918.6;2604.46;4587.87;2017.73;1024.51})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06720200649861763
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_03",
+      "formula": "=IRR({-5389.87;3723.73;2428.86;-140.72;-277.8;231.59;416.04;2460.15})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.21076373810033822
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_04",
+      "formula": "=IRR({-6113.64;3719.37;3327.08;964.82;3910.05;2751.34})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.41261347973304385
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_05",
+      "formula": "=IRR({-7655.62;3049.09;1527.8})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.3117552895490948
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_06",
+      "formula": "=IRR({-100;60;60},0.15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1306623862918075
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_07",
+      "formula": "=IRR({100;-50;-60},0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06394102980628036
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_08",
+      "formula": "=IRR({-1000;300;300;300;300},1e-09)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0771384729520821
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_09",
+      "formula": "=IRR({100;-50;-60},-0.99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0639410298049854
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_10",
+      "formula": "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},1e-09)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09851049098444498
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_11",
+      "formula": "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},-0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09851049098444498
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_12",
+      "formula": "=IRR({-100;50;50;50;50},0.2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3490344565609991
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_13",
+      "formula": "=IRR({-50;-50;60;60;60},0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.27109694242567395
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "irr_secant_14",
+      "formula": "=IRR({-5735.12;3912.46;-152.91;148.55},-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "irr_secant_15",
+      "formula": "=IRR({-123456789.12;23456789.1;34567890.2;45678901.3;56789012.4},-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rate_secant_00",
+      "formula": "=RATE(10,-100,800,,,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.042774978035587
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_01",
+      "formula": "=RATE(10,-100,800,0,-1,0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.053446167391177954
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_02",
+      "formula": "=RATE(12,-50,500,100,,1E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.6721666757297297e-09
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_03",
+      "formula": "=RATE(10,-100,1000,,,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.1308422739320756e-09
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_04",
+      "formula": "=RATE(10,100,-800,,,1E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.042774978034258976
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_05",
+      "formula": "=RATE(5,-200,1000,0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.6302285183735498e-09
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_06",
+      "formula": "=RATE(10,100,-800,,,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04277497803511595
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_07",
+      "formula": "=RATE(24,-500,10000,0,1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.01655011906671201
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "rate_secant_08",
+      "formula": "=RATE(20,-100,1000,-500,,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rate_secant_09",
+      "formula": "=RATE(6,-1000,5000,200,1,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rate_secant_10",
+      "formula": "=RATE(10,100,-800,,,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rate_secant_11",
+      "formula": "=RATE(3,-1000,2500,,,-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_12",
+      "formula": "=RATE(-5,-100,800,,,-0.9)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_13",
+      "formula": "=RATE(360,-1000,150000,,,0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_14",
+      "formula": "=RATE(0.5,-60,100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_15",
+      "formula": "=RATE(0.5,-60,100,,,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rate_secant_16",
+      "formula": "=RATE(0.5,-60,100,,,0.01)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ispmt_op_order_00",
+      "formula": "=ISPMT(0.027,4,12,268742.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4837.356
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_01",
+      "formula": "=ISPMT(0.13516,15,29,492858.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -32158.814548965518
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_02",
+      "formula": "=ISPMT(0.1059,8,12,648554.6)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -22893.977379999997
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_03",
+      "formula": "=ISPMT(0.10299,10,10,426665.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_04",
+      "formula": "=ISPMT(0.0771,20,37,994836.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -35241.39311351351
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_05",
+      "formula": "=ISPMT(0.1244,27,35,360063.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -10238.134217142857
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_06",
+      "formula": "=ISPMT(0.027,5,12,268742.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4232.6865
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_07",
+      "formula": "=ISPMT(0.146,1,3,291531.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -28375.683999999997
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_08",
+      "formula": "=ISPMT(0.0771,19,37,994836.0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -37314.41623783784
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ispmt_op_order_09",
+      "formula": "=ISPMT(0.143,16,23,972381.41)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -42319.73006130435
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]
