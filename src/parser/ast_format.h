@@ -86,6 +86,10 @@ const char* binop_token(BinOp op) noexcept;
 /// when `force_quote` is set or the name needs quoting. No trailing `!`.
 void append_sheet_name(std::string_view sheet, bool force_quote, std::string& out);
 
+/// Appends a sheet name quoted exactly when `quote` is set, for callers that
+/// decide quoting by a rule other than the stored-formula one. No trailing `!`.
+void append_sheet_name_quoted_if(std::string_view sheet, bool quote, std::string& out);
+
 /// Appends the qualifier of the cross-workbook reference `node`, through
 /// its `!`, as the formula bar spells it: `[Book.xlsx]Sheet!`, or one quoted
 /// unit around directory, book and sheets (`'/dir/[Book.xlsx]Sheet'!`) when

@@ -17,6 +17,9 @@
 #include <string_view>
 
 namespace formulon {
+
+struct LocaleFacts;
+
 namespace parser {
 
 /// Structural A1-style cell reference.
@@ -76,6 +79,15 @@ bool whole_axis_pair_is_single(const Reference& lhs, const Reference& rhs) noexc
 /// A1 cell inside the grid, and names shaped like an R1C1 reference (`R`,
 /// `C`, `R2`, `C3`, `R2C3`, `RC3`, `R2C`, `RC`).
 bool local_sheet_needs_quoting_a1(std::string_view name) noexcept;
+
+/// The quoting rule of a sheet name that a display producer (ADDRESS) writes
+/// under the active locale. Unlike the stored-formula rule, which stays
+/// English: U+3000 leaves the bare run only in double-byte locales, TRUE /
+/// FALSE count only where the locale's boolean names are English, the
+/// locale's own boolean names and R1C1 letters (`Z`, `S`, `ZS`, `L1C1`)
+/// count only in that locale, and `RC` stays bare where the row letter is
+/// `R` and the column letter is not `C`.
+bool local_sheet_needs_quoting_display(std::string_view name, const LocaleFacts& facts) noexcept;
 
 /// The R1C1 counterpart of `local_sheet_needs_quoting_a1`: the same rule
 /// minus the A1 cell shape, which is no reference in R1C1 notation (`S2`,

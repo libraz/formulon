@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 
+#include "excel_locale.h"
 #include "parser/parser_detail.h"
 #include "utils/a1_column.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -59,26 +60,65 @@ bool IsA1CellShaped(std::string_view name) noexcept {
   return row >= 1U && row <= detail::kMaxRow;
 }
 
-// `R`, `C`, `R<n>`, `C<n>`, `R<n>C<n>`, `RC<n>`, `R<n>C`, `RC`, ASCII
+// `<row>`, `<col>`, `<row><n>`, `<col><n>`, `<row><n><col><n>`, `<row><col><n>`,
+// `<row><n><col>`, `<row><col>` for the given R1C1 letters, ASCII
 // case-insensitively: the absolute R1C1 shapes a sheet name could be read as.
-bool IsR1C1Shaped(std::string_view name) noexcept {
+bool IsR1C1ShapedWith(std::string_view name, char row_letter, char col_letter) noexcept {
   std::size_t i = 0;
   const auto at = [&](char upper) { return i < name.size() && strings::ascii_to_upper(name[i]) == upper; };
-  if (at('R')) {
+  if (at(row_letter)) {
     ++i;
     SkipDigits(name, &i);
-    if (at('C')) {
+    if (at(col_letter)) {
       ++i;
       SkipDigits(name, &i);
     }
     return i == name.size();
   }
-  if (at('C')) {
+  if (at(col_letter)) {
     ++i;
     SkipDigits(name, &i);
     return i == name.size();
   }
   return false;
+}
+
+bool IsR1C1Shaped(std::string_view name) noexcept {
+  return IsR1C1ShapedWith(name, 'R', 'C');
+}
+
+// `R<n>K<n>`: read as a reference in every locale, not only where `K` is the
+// column letter.
+bool IsRowKColShaped(std::string_view name) noexcept {
+  std::size_t i = 0;
+  const auto letter = [&](char upper) {
+    if (i >= name.size() || strings::ascii_to_upper(name[i]) != upper) {
+      return false;
+    }
+    ++i;
+    return true;
+  };
+  return letter('R') && SkipDigits(name, &i) != 0 && letter('K') && SkipDigits(name, &i) != 0 && i == name.size();
+}
+
+// The bare qualifier run, with U+3000 allowed where the locale is not
+// double-byte.
+bool IsBareRunIn(std::string_view name, bool dbcs) noexcept {
+  if (dbcs) {
+    return IsBareRun(name);
+  }
+  constexpr std::string_view kIdeographicSpace = "\xE3\x80\x80";
+  std::size_t begin = 0;
+  while (true) {
+    const std::size_t end = name.find(kIdeographicSpace, begin);
+    if (!IsBareRun(name.substr(begin, end == std::string_view::npos ? end : end - begin))) {
+      return false;
+    }
+    if (end == std::string_view::npos) {
+      return true;
+    }
+    begin = end + kIdeographicSpace.size();
+  }
 }
 
 // The rules both notations share: an empty name, a byte outside the bare
@@ -94,6 +134,21 @@ bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
 
 bool local_sheet_needs_quoting_a1(std::string_view name) noexcept {
   return LocalSheetNeedsQuotingInEitherNotation(name) || IsA1CellShaped(name);
+}
+
+bool local_sheet_needs_quoting_display(std::string_view name, const LocaleFacts& facts) noexcept {
+  if (name.empty() || !IsBareRunIn(name, facts.dbcs_codepage != DbcsCodepage::kNone) ||
+      detail::IsAsciiDigit(name.front()) || IsA1CellShaped(name) || IsRowKColShaped(name)) {
+    return true;
+  }
+  const bool english_bool = strings::case_insensitive_eq(facts.true_name, "TRUE");
+  if ((english_bool && (strings::case_insensitive_eq(name, "TRUE") || strings::case_insensitive_eq(name, "FALSE"))) ||
+      strings::case_insensitive_eq(name, facts.true_name) || strings::case_insensitive_eq(name, facts.false_name)) {
+    return true;
+  }
+  // Where the row letter stays `R` and the column letter moves (nl), `RC` is no reference.
+  const bool rc_free = facts.r1c1_row == 'R' && facts.r1c1_col != 'C' && strings::case_insensitive_eq(name, "RC");
+  return (IsR1C1Shaped(name) && !rc_free) || IsR1C1ShapedWith(name, facts.r1c1_row, facts.r1c1_col);
 }
 
 bool local_sheet_needs_quoting_r1c1(std::string_view name) noexcept {

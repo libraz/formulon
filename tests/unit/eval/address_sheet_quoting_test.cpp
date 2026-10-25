@@ -1,5 +1,6 @@
 // ADDRESS quotes its sheet_text by the same rule as an A1 sheet qualifier in
-// formula display, in both reference styles (Mac Excel 365 ja-JP).
+// formula display, in both reference styles. The locale-dependent rows
+// (U+3000, localized booleans and R1C1 letters) are in references_locale_test.cpp.
 
 #include <string>
 
@@ -28,8 +29,6 @@ TEST(AddressSheetQuoting, QuotesCellAndR1C1AndBoolShapes) {
   ExpectText("=ADDRESS(1,1,1,TRUE,\"1abc\")", "'1abc'!$A$1");
   ExpectText("=ADDRESS(1,1,1,TRUE,\"a-b\")", "'a-b'!$A$1");
   ExpectText("=ADDRESS(1,1,1,TRUE,\"a'b\")", "'a''b'!$A$1");
-  ExpectText("=ADDRESS(1,1,1,TRUE,\"\xE5\x85\xA8\xE3\x80\x80\xE8\xA7\x92\")",
-             "'\xE5\x85\xA8\xE3\x80\x80\xE8\xA7\x92'!$A$1");  // 全　角
 }
 
 TEST(AddressSheetQuoting, LeavesBareNamesUnquoted) {

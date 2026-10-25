@@ -20,6 +20,7 @@
 #include "eval/function_registry.h"
 #include "excel_locale.h"
 #include "parser/ast_format.h"
+#include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -63,11 +64,12 @@ Expected<bool, ErrorCode> read_optional_bool(const Value* args, std::uint32_t ar
 }
 
 // Appends `name` and the `!` separator. An empty sheet_text stays bare
-// (`!$A$1`); any other name is quoted by the A1 sheet-qualifier rule in both
-// reference styles.
+// (`!$A$1`); any other name is quoted by the A1 sheet-qualifier rule of the
+// active locale in both reference styles.
 void append_quoted_sheet(std::string* out, std::string_view name) {
   if (!name.empty()) {
-    parser::append_sheet_name(name, /*force_quote=*/false, *out);
+    const bool quote = parser::local_sheet_needs_quoting_display(name, locale_facts(current_eval_profile()));
+    parser::append_sheet_name_quoted_if(name, quote, *out);
   }
   out->push_back('!');
 }

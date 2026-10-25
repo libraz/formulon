@@ -1140,7 +1140,11 @@ const char* binop_token(BinOp op) noexcept {
 }
 
 void append_sheet_name(std::string_view sheet, bool force_quote, std::string& out) {
-  if (force_quote || local_sheet_needs_quoting_a1(sheet)) {
+  append_sheet_name_quoted_if(sheet, force_quote || local_sheet_needs_quoting_a1(sheet), out);
+}
+
+void append_sheet_name_quoted_if(std::string_view sheet, bool quote, std::string& out) {
+  if (quote) {
     out.push_back('\'');
     AppendQuoteEscaped(sheet, out);
     out.push_back('\'');

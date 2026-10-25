@@ -48,6 +48,32 @@ TEST(ReferencesLocale, AddressR1C1Letters) {
   EXPECT_EQ(text_as(ExcelLocale::kJaJP, "=ADDRESS(2,3,4,FALSE)", wb), "R[2]C[3]");
 }
 
+TEST(ReferencesLocale, AddressQuotesSheetNamesByLocale) {
+  const Workbook wb = Workbook::create();
+  EXPECT_EQ(text_as(ExcelLocale::kDeDE, "=ADDRESS(1,1,1,TRUE,\"Z\")", wb), "'Z'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kEnUS, "=ADDRESS(1,1,1,TRUE,\"Z\")", wb), "Z!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kFrFR, "=ADDRESS(1,1,1,TRUE,\"L1C1\")", wb), "'L1C1'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kEsES, "=ADDRESS(1,1,1,TRUE,\"FC\")", wb), "'FC'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kNlNL, "=ADDRESS(1,1,1,TRUE,\"RC\")", wb), "RC!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kNlNL, "=ADDRESS(1,1,1,TRUE,\"RK\")", wb), "'RK'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kEnUS, "=ADDRESS(1,1,1,TRUE,\"RC\")", wb), "'RC'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kEnUS, "=ADDRESS(1,1,1,TRUE,\"TRUE\")", wb), "'TRUE'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kDeDE, "=ADDRESS(1,1,1,TRUE,\"TRUE\")", wb), "TRUE!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kDeDE, "=ADDRESS(1,1,1,TRUE,\"WAHR\")", wb), "'WAHR'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kJaJP,
+                    "=ADDRESS(1,1,1,TRUE,\"a\xE3\x80\x80"
+                    "b\")",
+                    wb),
+            "'a\xE3\x80\x80"
+            "b'!$A$1");
+  EXPECT_EQ(text_as(ExcelLocale::kDeDE,
+                    "=ADDRESS(1,1,1,TRUE,\"a\xE3\x80\x80"
+                    "b\")",
+                    wb),
+            "a\xE3\x80\x80"
+            "b!$A$1");
+}
+
 TEST(ReferencesLocale, IndirectAcceptsOnlyLocaleLetters) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 2, Value::number(7.0));  // C2

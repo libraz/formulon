@@ -4,9 +4,13 @@
 // notation, while the book and sheet parts of a cross-workbook qualifier
 // follow their own, narrower rule.
 
+#include <cstddef>
+#include <iterator>
 #include <string>
 #include <string_view>
 
+#include "excel_locale.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -166,6 +170,44 @@ TEST(SheetQuoting, StorageRequoteOnlyForBareQualifiersNeedingQuotes) {
     ASSERT_NE(root, nullptr) << row.entered;
     ASSERT_TRUE(p.errors().empty()) << row.entered;
     EXPECT_EQ(formula_needs_storage_requote(*root), row.requote) << row.entered;
+  }
+}
+
+// Quoting of a sheet name as ADDRESS displays it, per locale (Mac Excel 365).
+// `quoted` holds one flag per locale in kDisplayLocales order.
+TEST(SheetQuoting, DisplayRuleFollowsTheLocale) {
+  constexpr ExcelLocale kDisplayLocales[] = {ExcelLocale::kJaJP, ExcelLocale::kEnUS, ExcelLocale::kDeDE,
+                                             ExcelLocale::kFrFR, ExcelLocale::kEsES, ExcelLocale::kPtBR,
+                                             ExcelLocale::kItIT, ExcelLocale::kNlNL, ExcelLocale::kThTH};
+  struct Row {
+    const char* name;
+    const char* quoted;
+  };
+  constexpr Row kRows[] = {
+      {"R", "111111111"},         {"C", "111111111"},
+      {"K", "000000010"},         {"Z", "001000000"},
+      {"S", "001000000"},         {"L", "000101000"},
+      {"F", "000010000"},         {"RK", "000000010"},
+      {"ZS", "001000000"},        {"LC", "000101000"},
+      {"FC", "000010000"},        {"R1", "111111111"},
+      {"C1", "111111111"},        {"K1", "111111111"},
+      {"R1K1", "111111111"},      {"Z1S1", "001000000"},
+      {"L1C1", "000101000"},      {"F1C1", "000010000"},
+      {"RC", "111111101"},        {"RC1", "111111111"},
+      {"R1C", "111111111"},       {"RK1", "111111111"},
+      {"WAHR", "001000000"},      {"FALSCH", "001000000"},
+      {"FALSE", "110000001"},     {"TRUE", "110000001"},
+      {"WAAR", "000000010"},      {"ONWAAR", "000000010"},
+      {"VRAI", "000100000"},      {"FAUX", "000100000"},
+      {"VERDADERO", "000010000"}, {"VERDADEIRO", "000001000"},
+      {"VERO", "000000100"},      {"\xE5\x85\xA8\xE8\xA7\x92\xE3\x80\x80\xE7\xA9\xBA\xE7\x99\xBD", "100000000"},
+  };
+  for (const Row& row : kRows) {
+    for (std::size_t i = 0; i < std::size(kDisplayLocales); ++i) {
+      const LocaleFacts& facts = locale_facts(ExcelProfile{ExcelHost::kMac365, kDisplayLocales[i]});
+      EXPECT_EQ(local_sheet_needs_quoting_display(row.name, facts), row.quoted[i] == '1')
+          << row.name << " locale " << i;
+    }
   }
 }
 
