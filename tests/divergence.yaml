@@ -882,10 +882,10 @@ entries:
       - forecast_ets_far_target_monthly_1e15
       - forecast_ets_far_target_monthly_1e300
       - forecast_ets_far_target_monthly_neg_1e300
-    applies_to: [mac]
+    applies_to: [mac, win-365-ja_JP]
     mode: skip-oracle
     cause: excel-no-value
-    reason: "Mac Excel does not finish evaluating FORECAST.ETS on a monthly timeline with a target outside about [timeline start, 1E+6]; it holds 100% CPU past 200 s, so no host produces a value. Targets 45292 and 1E+6 answer at once; 1E+7, 1E+8 and -1 hang as well. Daily-timeline far targets capture normally. Formulon returns the model value at the calendar horizon, or #NUM! past 2^53 days."
+    reason: "Mac Excel does not finish evaluating FORECAST.ETS on a monthly timeline with a target outside about [timeline start, 1E+6]; it holds 100% CPU past 200 s, so no host produces a value. Targets 45292 and 1E+6 answer at once; 1E+7, 1E+8 and -1 hang as well. Daily-timeline far targets capture normally. Windows Excel 365 16.0.20527 hangs the same way: the forecast_ets capture held one core for over three hours, and evaluated one at a time in a fresh instance each of these three ran past 90 s while every daily-timeline far target answered within 0.5 s with the Mac values. Formulon returns the model value at the calendar horizon, or #NUM! past 2^53 days."
     prefer: formulon
     first_noted: 2026-10-24
     last_verified_excel_version: "16.114.1"
