@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T21:53:52Z"
+    "generated_at": "2026-10-24T20:21:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -650,6 +650,24 @@
     {
       "id": "forecast_ets_far_target_negative_timeline_3e9",
       "formula": "=FORECAST.ETS(3E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_negative_timeline_max_horizon",
+      "formula": "=FORECAST.ETS(2147483646, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2160717370.063682
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_negative_timeline_past_max_horizon",
+      "formula": "=FORECAST.ETS(2147483647, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)",
       "setup": {},
       "expect": {
         "kind": "error",

@@ -1054,6 +1054,9 @@ TEST(ForecastEtsFarTarget, DailyHorizonBoundary) {
       "-3.0;-2.0;-1.0}";
   EXPECT_TRUE(EvalSource("=FORECAST.ETS(1E+9," + negative + ",0)").is_number());
   EXPECT_EQ(EvalError("=FORECAST.ETS(3E+9," + negative + ",0)"), ErrorCode::Num);
+  // Last node -1: 2147483646 is 2^31 - 1 steps out, 2147483647 is one past.
+  EXPECT_TRUE(EvalSource("=FORECAST.ETS(2147483646," + negative + ",0)").is_number());
+  EXPECT_EQ(EvalError("=FORECAST.ETS(2147483647," + negative + ",0)"), ErrorCode::Num);
   for (const char* target : {"2147483660", "3E+9", "1E+15", "2^53", "1E+18", "5E+18", "1E+300"}) {
     EXPECT_EQ(EvalError("=FORECAST.ETS(" + std::string(target) + "," + kDailyArgs + ",0)"), ErrorCode::Num) << target;
     EXPECT_EQ(EvalError("=FORECAST.ETS.CONFINT(" + std::string(target) + "," + kDailyArgs + ",0.95,0)"), ErrorCode::Num)

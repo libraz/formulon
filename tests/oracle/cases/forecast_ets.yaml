@@ -286,6 +286,14 @@ cases:
     description: "Non-date timeline -12..-1, target 3E+9"
     formula: "=FORECAST.ETS(3E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)"
 
+  - id: forecast_ets_far_target_negative_timeline_max_horizon
+    description: "Non-date timeline -12..-1, 2^31 - 1 steps past the last node"
+    formula: "=FORECAST.ETS(2147483646, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)"
+
+  - id: forecast_ets_far_target_negative_timeline_past_max_horizon
+    description: "Non-date timeline -12..-1, 2^31 steps past the last node"
+    formula: "=FORECAST.ETS(2147483647, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)"
+
   - id: forecast_ets_confint_far_target_daily_5e18
     description: "Daily timeline, CONFINT at target 5E+18"
     formula: "=FORECAST.ETS.CONFINT(5E+18, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0.95, 0)"
