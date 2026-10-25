@@ -462,9 +462,8 @@ def _clang_format(content: str, path: Path) -> str:
 
     Ensures generated files agree with the project-wide format-check (which
     runs `clang-format --dry-run --Werror` over `src/`). Falls back to the
-    raw content if clang-format is unavailable, so a stripped CI image can
-    still run the generator's --check mode against a previously-formatted
-    snapshot.
+    raw content if clang-format is unavailable; that output differs from the
+    formatted snapshot, so `--check` reports drift on such a host.
     """
     cf = shutil.which("clang-format")
     if cf is None:

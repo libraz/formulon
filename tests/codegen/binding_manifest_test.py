@@ -20,6 +20,7 @@ Run directly:
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 import unittest
@@ -144,9 +145,11 @@ class BindingManifestTest(unittest.TestCase):
 
     # ---- Snapshot (generator vs checked-in output) -----------------------
 
+    @unittest.skipIf(shutil.which("clang-format") is None, "clang-format not on PATH")
     def test_generator_runs_clean(self) -> None:
         # `--check` exits 0 if the on-disk generated files match the
-        # output the manifest would produce; non-zero means drift.
+        # output the manifest would produce; non-zero means drift. The
+        # snapshot is clang-formatted, so without clang-format every file reads as drift.
         result = subprocess.run(
             [sys.executable, str(GEN_SCRIPT), "--check"],
             cwd=REPO_ROOT,
