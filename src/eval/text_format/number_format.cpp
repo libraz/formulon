@@ -11,6 +11,7 @@
 
 #include "eval/text_format/number_format.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -66,6 +67,41 @@ void parse_format(std::string_view format, FormatDialect dialect, ParsedFormat& 
   }
 }
 
+// A number format asks for at most this many decimal places in a TEXT() argument.
+constexpr int kMaxFormatDecimalPlaces = 127;
+
+// The most digit placeholders (`0`, `#`, `?`) following a decimal point in any section of a stored-dialect `format`;
+// quoted text, escaped characters and bracketed parts are skipped.
+int format_decimal_places(std::string_view format) {
+  int most = 0;
+  int run = 0;
+  bool after_point = false;
+  for (std::size_t i = 0; i < format.size(); ++i) {
+    const char c = format[i];
+    if (c == '"') {
+      const std::size_t close = format.find('"', i + 1);
+      i = close == std::string_view::npos ? format.size() : close;
+    } else if (c == '\\') {
+      ++i;
+    } else if (c == '[') {
+      const std::size_t close = format.find(']', i + 1);
+      i = close == std::string_view::npos ? format.size() : close;
+    } else if (c == ';') {
+      after_point = false;
+      run = 0;
+    } else if (c == '.') {
+      after_point = true;
+      run = 0;
+    } else if (after_point && (c == '0' || c == '#' || c == '?')) {
+      most = std::max(most, ++run);
+    } else {
+      after_point = false;
+      run = 0;
+    }
+  }
+  return most;
+}
+
 bool valid_format(const ParsedFormat& parsed) noexcept {
   if (!parsed.spelling_valid || parsed.sections.size() > 4U) {
     return false;
@@ -81,8 +117,8 @@ bool valid_format(const ParsedFormat& parsed) noexcept {
 
 }  // namespace
 
-FormatStatus apply_format(double value, std::string_view format, std::string& out, bool date1904,
-                          FormatDialect dialect) {
+FormatStatus apply_format(double value, std::string_view format, std::string& out, bool date1904, FormatDialect dialect,
+                          bool cap_decimals) {
   if (format.empty()) {
     return FormatStatus::kOk;
   }
@@ -92,7 +128,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
   }
   ParsedFormat parsed;
   parse_format(format, dialect, parsed);
-  if (!valid_format(parsed)) {
+  if (!valid_format(parsed) || (cap_decimals && format_decimal_places(parsed.normalized) > kMaxFormatDecimalPlaces)) {
     return FormatStatus::kValueError;
   }
   const std::vector<std::string_view>& sections_raw = parsed.raw;

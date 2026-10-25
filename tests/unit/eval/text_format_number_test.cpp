@@ -1051,6 +1051,20 @@ TEST(NumberFormatFraction, ImproperFractionExpandsBeyondPlaceholderWidth) {
   EXPECT_EQ(out, "prefix");
 }
 
+TEST(NumberFormatFraction, GroupSeparatedIntegerPlaceholdersAllCount) {
+  EXPECT_EQ(Render(0.5, "0,0 ?/?"), "00 1/2");
+  EXPECT_EQ(RenderEnUs(0.5, "0,0 ?/?"), "00 1/2");
+  EXPECT_EQ(Render(1234.5, "#,##0 ?/?"), "1,234 1/2");  // text_format.tf_grouped_integer_fraction
+  EXPECT_EQ(RenderEnUs(1234.5, "#,##0 ?/?"), "1,234 1/2");
+}
+
+TEST(NumberFormatScientific, SubnormalExponentIsTheNegatedIntegerGroup) {
+  const double tiny = std::ldexp(1.0, -1024);  // subnormal above the flush-to-zero threshold
+  EXPECT_EQ(Render(tiny, "0.00E+00"), "0.00E-01");
+  EXPECT_EQ(RenderEnUs(tiny, "0.00E+00"), "0.00E-01");
+  EXPECT_EQ(RenderEnUs(tiny, "000.0E+00"), "000.0E-03");
+}
+
 TEST(NumberFormatFraction, NearEqualApproximationsPreferSmallerDenominator) {
   // Mac Excel 16.113.3 chooses 1/8 at this Farey-neighbour boundary,
   // including the adjacent binary64 values represented by these literals.

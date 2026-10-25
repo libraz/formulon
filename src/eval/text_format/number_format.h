@@ -76,8 +76,9 @@ enum class FormatStatus : int {
 /// serial->calendar conversion shifts by 1462 days under the 1904 system).
 /// Callers that render a value from a date1904 workbook (the TEXT builtin)
 /// must pass the workbook flag; the pure-numeric callers leave it false.
+/// `cap_decimals` applies TEXT()'s limit of 127 decimal places per section.
 FormatStatus apply_format(double value, std::string_view format, std::string& out, bool date1904 = false,
-                          FormatDialect dialect = FormatDialect::kLocalized);
+                          FormatDialect dialect = FormatDialect::kLocalized, bool cap_decimals = false);
 
 /// Renders the text value `text` through the text section of `format`: the
 /// fourth section, or a single section containing `@`, with `@` replaced by

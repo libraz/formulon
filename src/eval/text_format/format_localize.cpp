@@ -158,8 +158,12 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
   out.reserve(s.size() + 8U);
 
   std::size_t i = 0;
+  bool blank_run_groups = false;
   while (i < s.size()) {
     const char c = s[i];
+    if (c != group) {
+      blank_run_groups = false;
+    }
     if (c == '"') {
       const std::size_t close = s.find('"', i + 1);
       const std::size_t end = close == std::string_view::npos ? s.size() : close + 1;
@@ -231,8 +235,9 @@ LocalizedFormat localize_format(std::string_view fmt, FormatDialect dialect, Exc
       if (c == group) {
         // A blank after a digit placeholder groups (`# ##0`) or, trailing, scales by 1000
         // (locale_tokens.lcid_numeral_fields); elsewhere it is text.
-        const bool groups = group != ' ' || (i > 0 && is_digit_placeholder(s[i - 1]));
+        const bool groups = group != ' ' || (i > 0 && (is_digit_placeholder(s[i - 1]) || blank_run_groups));
         out.push_back(groups ? ',' : c);
+        blank_run_groups = groups && group == ' ';
         ++i;
         continue;
       }

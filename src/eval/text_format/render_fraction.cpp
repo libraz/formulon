@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
@@ -127,6 +129,10 @@ std::string add_decimal(std::string_view digits, std::uint64_t addend) {
   return reversed;
 }
 
+bool is_digit_placeholder_tok(Tok k) {
+  return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad;
+}
+
 // Emit the non-negative integer `digits` right-aligned to `width` characters
 // using the placeholder kinds in `[begin, end)`. Each placeholder kind
 // determines how unused leading positions render: `0` -> '0' pad, `?` ->
@@ -134,46 +140,76 @@ std::string add_decimal(std::string_view digits, std::uint64_t addend) {
 // (and to `0`-pad positions) but never to spaces or absent positions.
 void emit_fraction_digits(const Section& section, std::string_view digits, int begin, int end, std::string& out,
                           bool trailing_pad = false) {
-  const int width = end - begin;
+  std::vector<Tok> kinds;
+  bool grouped = false;
+  for (int k = begin; k < end; ++k) {
+    const Tok kind = section.tokens[static_cast<std::size_t>(k)].kind;
+    if (kind == Tok::Comma) {
+      grouped = true;
+    } else {
+      kinds.push_back(kind);
+    }
+  }
+  const int width = static_cast<int>(kinds.size());
   if (width <= 0) {
     return;
   }
+  // One piece per emitted position; `is_digit` marks the positions a group separator counts.
+  std::vector<std::string> pieces;
+  std::vector<bool> is_digit;
+  const auto add_digit = [&](char d) {
+    pieces.emplace_back();
+    append_digit_dbnum(pieces.back(), section.digit_style, d);
+    is_digit.push_back(true);
+  };
   if (static_cast<int>(digits.size()) > width) {
-    // Overflow: Excel never produces this for our caps, but be defensive.
-    // Emit the digits verbatim (the widest available run cap is enforced
-    // by the search above so this case is essentially unreachable).
-    append_chars_dbnum(out, section.digit_style, digits);
-    return;
-  }
-  const int pad = width - static_cast<int>(digits.size());
-  // Iterate placeholder kinds left-to-right. The first `pad` placeholders
-  // are leading positions with no digit; the remaining `digits.size()`
-  // placeholders consume the digit string in order.
-  // A trailing `0` after an optional `#` pads nothing.
-  bool zero_pad_silent = false;
-  if (trailing_pad) {
-    for (int k = 0; k < width; ++k) {
-      zero_pad_silent = zero_pad_silent || section.tokens[static_cast<std::size_t>(begin + k)].kind == Tok::DigitOpt;
+    // Overflow: the digits show in full (the search above caps their count).
+    for (const char d : digits) {
+      add_digit(d);
     }
-  }
-  std::size_t digit_cursor = 0;
-  for (int k = 0; k < width; ++k) {
-    const Tok kind = section.tokens[static_cast<std::size_t>(begin + k)].kind;
-    const bool is_padding = trailing_pad ? k >= static_cast<int>(digits.size()) : k < pad;
-    if (is_padding) {
-      // Leading-position behaviour by placeholder kind.
-      if (kind == Tok::DigitZero) {
-        if (!zero_pad_silent) {
-          append_digit_dbnum(out, section.digit_style, '0');
-        }
-      } else if (kind == Tok::DigitPad) {
-        out.push_back(' ');
+  } else {
+    const int pad = width - static_cast<int>(digits.size());
+    // The first `pad` placeholders are leading positions with no digit; the rest consume `digits` in order.
+    // A trailing `0` after an optional `#` pads nothing.
+    bool zero_pad_silent = false;
+    if (trailing_pad) {
+      for (int k = 0; k < width; ++k) {
+        zero_pad_silent = zero_pad_silent || kinds[static_cast<std::size_t>(k)] == Tok::DigitOpt;
       }
-      // `#`: emit nothing.
-    } else {
-      const char d = trailing_pad ? digits[static_cast<std::size_t>(k)] : digits[digit_cursor++];
-      append_digit_dbnum(out, section.digit_style, d);
     }
+    std::size_t digit_cursor = 0;
+    for (int k = 0; k < width; ++k) {
+      const Tok kind = kinds[static_cast<std::size_t>(k)];
+      const bool is_padding = trailing_pad ? k >= static_cast<int>(digits.size()) : k < pad;
+      if (is_padding) {
+        if (kind == Tok::DigitZero) {
+          if (!zero_pad_silent) {
+            add_digit('0');
+          }
+        } else if (kind == Tok::DigitPad) {
+          pieces.emplace_back(" ");
+          is_digit.push_back(false);
+        }
+        // `#`: emit nothing.
+      } else {
+        add_digit(trailing_pad ? digits[static_cast<std::size_t>(k)] : digits[digit_cursor++]);
+      }
+    }
+  }
+  // A separator between integer placeholders groups every three digits from the right.
+  std::size_t digits_right = 0;
+  std::vector<std::string> reversed;
+  for (std::size_t k = pieces.size(); k-- > 0;) {
+    reversed.push_back(std::move(pieces[k]));
+    if (grouped && is_digit[k]) {
+      ++digits_right;
+      if (digits_right % 3 == 0 && k > 0 && is_digit[k - 1]) {
+        reversed.emplace_back(",");
+      }
+    }
+  }
+  for (auto it = reversed.rbegin(); it != reversed.rend(); ++it) {
+    out += *it;
   }
 }
 
@@ -219,7 +255,6 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     fraction_num = 0;
     den = 1;
   }
-  const int int_begin = section.fraction_int_begin;
   const int int_end = section.fraction_int_end;
   const int num_begin = section.fraction_num_begin;
   const int num_end = section.fraction_num_end;
@@ -227,6 +262,15 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   const int den_end = section.fraction_den_end;
   const int slash_index = section.fraction_slash_index;
   const auto kind_at = [&](int index) { return section.tokens[static_cast<std::size_t>(index)].kind; };
+  // A group separator between integer placeholders is inert; the placeholders on both sides all count.
+  int int_begin = section.fraction_int_begin;
+  while (has_int_group && int_begin >= 2 && kind_at(int_begin - 1) == Tok::Comma &&
+         kind_at(int_begin - 2) != Tok::Comma && is_digit_placeholder_tok(kind_at(int_begin - 2))) {
+    int_begin -= 2;
+    while (int_begin > 0 && is_digit_placeholder_tok(kind_at(int_begin - 1))) {
+      --int_begin;
+    }
+  }
   const bool literal_numerator = kind_at(num_begin) == Tok::Literal;
   bool zero_placeholder_numerator = false;
   for (int k = num_begin; k < num_end; ++k) {
@@ -312,7 +356,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
       // takes no separator.
       bool int_all_optional = true;
       for (int k = int_begin; k < int_end; ++k) {
-        int_all_optional = int_all_optional && kind_at(k) == Tok::DigitOpt;
+        int_all_optional = int_all_optional && (kind_at(k) == Tok::DigitOpt || kind_at(k) == Tok::Comma);
       }
       const bool skip_separator = integer_part == 0.0 && int_all_optional && kind_at(num_begin) == Tok::DigitOpt;
       while (i < static_cast<std::size_t>(num_begin)) {

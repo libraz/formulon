@@ -1,12 +1,16 @@
 #include "eval/text_format/format_localize.h"
 
+#include <cmath>
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/text_format.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "utils/arena.h"
+#include "value.h"
 
 namespace formulon {
 namespace text_format {
@@ -109,6 +113,44 @@ TEST(FormatLocalizeRender, LocaleNumberSyntax) {
   EXPECT_EQ(Render(0.5, "# ?/?", kDe).text, " 1/2");
   // A stored code renders with the locale's separators.
   EXPECT_EQ(Render(1234.5, "#,##0.00", kDe, FormatDialect::kStored).text, "1.234,50");
+}
+
+TEST(FormatLocalizeRender, SubnormalScientificFollowsLocaleIntegerGroup) {
+  const double tiny = std::ldexp(1.0, -1024);  // subnormal above the flush-to-zero threshold
+  EXPECT_EQ(Render(tiny, "0.00E+00", mac_365_en_us_profile()).text, "0.00E-01");
+  EXPECT_EQ(Render(tiny, "0.00E+00", mac_365_ja_jp_profile()).text, "0.00E-01");
+  EXPECT_EQ(Render(tiny, "0.00E+00", kFr).text, "0.00E-03");  // subnormal_text_render.sci2_pa
+  EXPECT_EQ(Render(tiny, "0.00E+00", kDe).text, "0.000E-04");
+}
+
+TEST(FormatLocalizeRender, BlankRunAfterPlaceholderGroupsInFraction) {
+  EXPECT_EQ(Render(0.5, "#  #/#", kFr).status, FormatStatus::kValueError);  // text_format.tf_frac_rule_016
+  EXPECT_EQ(Localize("#  #", kFr).text, "#,,#");
+  EXPECT_EQ(Localize("# a  #", kFr).text, "#,a  #");
+}
+
+TEST(FormatLocalizeRender, FractionIntegerGroupSeparatorCounts) {
+  EXPECT_EQ(Render(0.5, "0.0 ?/?", kDe).text, "00 1/2");  // text_format.tf_frac_rule_err_001
+  // The comma is the decimal separator in de, which a fraction format rejects (tf_grouped_integer_fraction).
+  EXPECT_EQ(Render(1234.5, "#,##0 ?/?", kDe).status, FormatStatus::kValueError);
+  EXPECT_EQ(Render(0.5, "0,0 ?/?", kDe).status, FormatStatus::kValueError);
+}
+
+Value TextOf(double number, std::string_view format, ExcelProfile profile) {
+  const eval::ScopedEvalProfile scope(profile);
+  static Arena arena;
+  const Value args[2] = {Value::number(number), Value::text(arena.intern(format))};
+  return eval::text_builtin_impl(args, 2, arena, false);
+}
+
+TEST(FormatLocalizeRender, DecimalCapReadsTheLocalizedFormat) {
+  const std::string over(128, '0');
+  // en: '.' is the decimal point; de: '.' groups and ',' is the decimal point.
+  EXPECT_TRUE(TextOf(1.0, "0." + over, mac_365_en_us_profile()).is_error());
+  EXPECT_TRUE(TextOf(1.0, "0." + over, mac_365_ja_jp_profile()).is_error());
+  EXPECT_FALSE(TextOf(1.0, "0." + over, kDe).is_error());  // text_format.text_decimals_128_over
+  EXPECT_TRUE(TextOf(1.0, "0," + over, kDe).is_error());
+  EXPECT_FALSE(TextOf(1.0, "0." + over, kFr).is_error());
 }
 
 TEST(FormatLocalizeRender, InvariantGapsAcrossLocales) {

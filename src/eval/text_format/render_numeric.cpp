@@ -359,10 +359,11 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         std::max(1, section.integer_zero_digits + section.integer_opt_digits + section.integer_pad_digits);
     const int integer_group = section.thousands_separator ? std::max(placeholder_group, 4) : placeholder_group;
     double mantissa = scaled;
-    // A subnormal renders as a zero mantissa at exponent -1 that keeps its sign (`-0.00E-01`).
+    // A subnormal renders as a zero mantissa whose exponent is a raw -1 floored to the integer group
+    // (`0.00E-01`, `0.000E-04` for four integer placeholders), keeping its sign.
     subnormal = mantissa != 0.0 && flush_subnormal(mantissa) == 0.0;
     if (subnormal) {
-      exponent = -1;
+      exponent = -integer_group;
       mantissa = 0.0;
     } else if (mantissa != 0.0) {
       const int raw_exponent = decimal_exponent15(std::fabs(mantissa));
