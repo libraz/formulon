@@ -90,3 +90,20 @@ entries:
     prefer: formulon
     first_noted: 2026-10-23
     last_verified_excel_version: "16.0.20430"
+  # Windows Excel abandons evaluated arrays at a lower element count than Mac.
+  - ids:
+      - axis_rows_of_negated_wide_cols
+      - axis_rows_of_double_negated_wide_cols
+      - axis_rows_of_wide_cols_plus_zero
+      - axis_columns_of_negated_wide_cols
+      - axis_sum_of_negated_wide_cols
+      - rows_of_cross_broadcast_3277
+      - rows_of_sequence_3277_plus_zero
+      - rows_of_cx_plus_zero
+    applies_to: [win-365-ja_JP]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Windows Excel abandons the formula to the number 0 for every evaluated array here, the smallest being 3277x16384 (53,690,368 elements); Mac Excel evaluates up to 107,374,182 elements, which is the bound Formulon applies on every profile. The exact Windows bound below 53,690,368 is not measured, and the win profiles do not emulate it."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.0.20527"
