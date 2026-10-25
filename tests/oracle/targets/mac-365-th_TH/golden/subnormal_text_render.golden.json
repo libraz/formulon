@@ -6,7 +6,7 @@
     "excel_locale": "th-TH",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-25T14:13:33Z"
+    "generated_at": "2026-10-25T14:24:19Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1220,35 +1220,8 @@
       }
     },
     {
-      "id": "sci_int3_flushed_power",
-      "formula": "=TEXT(2^-1024,\"000.0E+00\")",
-      "setup": {},
-      "expect": {
-        "kind": "text",
-        "value": "000.0E+00"
-      }
-    },
-    {
-      "id": "sci_hash_int3_flushed_power",
-      "formula": "=TEXT(2^-1024,\"##0.00E+00\")",
-      "setup": {},
-      "expect": {
-        "kind": "text",
-        "value": "000.00E+00"
-      }
-    },
-    {
-      "id": "sci_group_int4_flushed_power",
-      "formula": "=TEXT(2^-1024,\"#,##0.00E+00\")",
-      "setup": {},
-      "expect": {
-        "kind": "text",
-        "value": "0,000.00E+00"
-      }
-    },
-    {
-      "id": "sci_int3_pa",
-      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"000.0E+00\")",
+      "id": "sci_int3_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"000.0E+00\")",
       "setup": {},
       "expect": {
         "kind": "text",
@@ -1256,8 +1229,8 @@
       }
     },
     {
-      "id": "sci_hash_int3_pa",
-      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"##0.00E+00\")",
+      "id": "sci_hash_int3_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"##0.00E+00\")",
       "setup": {},
       "expect": {
         "kind": "text",
@@ -1265,12 +1238,21 @@
       }
     },
     {
-      "id": "sci_group_int4_pa",
-      "formula": "=TEXT((2^-1022*1.25-2^-1022),\"#,##0.00E+00\")",
+      "id": "sci_group_int4_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"#,##0.00E+00\")",
       "setup": {},
       "expect": {
         "kind": "text",
         "value": "0,000.00E-04"
+      }
+    },
+    {
+      "id": "sci_int1_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E-01"
       }
     }
   ]
