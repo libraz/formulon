@@ -382,11 +382,11 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
       emit_record(out, kBrtEndCustomFilters, ByteSpan{});
       return col.custom.filters.size() > 2U ? 1U : 0U;
     case FilterKind::kTop10: {
-      std::uint8_t flags = 0;
+      std::uint32_t flags = 0;
       flags |= col.top10.top ? 0x01U : 0U;
       flags |= col.top10.percent ? 0x02U : 0U;
       flags |= col.top10.filter_val ? 0x04U : 0U;
-      emit_u8(payload, flags);
+      emit_u8(payload, static_cast<std::uint8_t>(flags));
       emit_double(payload, col.top10.val);
       emit_double(payload, col.top10.filter_val.value_or(0.0));
       emit_record(out, kBrtTop10Filter, payload);

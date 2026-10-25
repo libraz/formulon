@@ -167,7 +167,10 @@ bool EmitBookView(std::vector<std::uint8_t>& dst, const pugi::xml_node& node, st
   if (node) {
     const std::string_view visibility = attr_str(node, "visibility", "visible");
     // A very hidden window also has the properties of a hidden one.
-    flags |= visibility == "hidden" ? kViewHidden : visibility == "veryHidden" ? kViewHidden | kViewVeryHidden : 0U;
+    // The operands are single-bit masks, so the result fits the byte.
+    flags |= static_cast<std::uint8_t>(visibility == "hidden"       ? kViewHidden
+                                       : visibility == "veryHidden" ? kViewHidden | kViewVeryHidden
+                                                                    : 0U);
     carried = visibility == "visible" || visibility == "hidden" || visibility == "veryHidden";
     for (const pugi::xml_attribute attr : node.attributes()) {
       const std::string_view name = attr.name();
