@@ -55,9 +55,9 @@ TEST(SubnormalFlushPower, NegativeExponentOfUnderflowIsDivByZero) {
   ExpectErr("=(1E-160)^-2", ErrorCode::Div0);
 }
 
-TEST(SubnormalFlushPower, OperatorSquareIsNotFlushed) {
-  ExpectNum("=(2^-530)^2*2^600*2^474", 16384.0);
-  ExpectNum("=(2^-530)^(1+1)*2^600*2^474", 16384.0);
+TEST(SubnormalFlushPower, OperatorSquareFlushes) {
+  ExpectNum("=(2^-530)^2*2^600*2^474", 0.0);
+  ExpectNum("=(2^-530)^(1+1)*2^600*2^474", 0.0);
   ExpectNum("=POWER(2^-530,2)*2^600*2^474", 0.0);
 }
 

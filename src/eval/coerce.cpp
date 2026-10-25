@@ -260,7 +260,7 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {
 
 namespace {
 
-Expected<double, ErrorCode> apply_pow_with(double base, double exp, bool operator_form, bool x87) {
+Expected<double, ErrorCode> apply_pow_with(double base, double exp, bool x87) {
   // Excel treats 0^0 as indeterminate and reports #NUM!, diverging from the
   // IEEE-754 pow convention of 1. Guarded explicitly before the std::pow
   // call so both the POWER() builtin and the `^` binary operator share the
@@ -295,17 +295,11 @@ Expected<double, ErrorCode> apply_pow_with(double base, double exp, bool operato
     }
     return -odd_root.value();
   }
-  // The `^` operator squares a subnormal-producing base without flushing.
-  double r = 0.0;
-  if (operator_form && exp == 2.0) {
-    r = x87 ? x87_mul(base, base) : base * base;
-  } else {
-    auto p = signed_exponent_pow(base, exp, x87);
-    if (!p) {
-      return p.error();
-    }
-    r = p.value();
+  auto p = signed_exponent_pow(base, exp, x87);
+  if (!p) {
+    return p.error();
   }
+  const double r = p.value();
   // Overflow / underflow to Inf is #NUM!.
   if (std::isnan(r) || std::isinf(r)) {
     return ErrorCode::Num;
@@ -315,12 +309,12 @@ Expected<double, ErrorCode> apply_pow_with(double base, double exp, bool operato
 
 }  // namespace
 
-Expected<double, ErrorCode> apply_pow(double base, double exp, bool operator_form) {
-  return apply_pow_with(base, exp, operator_form, current_eval_profile().host == ExcelHost::kWin365);
+Expected<double, ErrorCode> apply_pow(double base, double exp) {
+  return apply_pow_with(base, exp, current_eval_profile().host == ExcelHost::kWin365);
 }
 
 Expected<double, ErrorCode> apply_pow_ieee(double base, double exp) {
-  return apply_pow_with(base, exp, /*operator_form=*/false, /*x87=*/false);
+  return apply_pow_with(base, exp, /*x87=*/false);
 }
 
 Expected<double, ErrorCode> matrix_strict_number(const Value& v) {

@@ -1,0 +1,458 @@
+{
+  "suite": "subnormal_flush_ops",
+  "description": "Where Excel flushes a subnormal result: POWER and ^, unary % and minus, per-product sums, the AVERAGE division, SIGN and truthiness, MOD; read back exactly by scaling",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "en-US",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T05:15:48Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "pow_negative_integer_divides_and_flushes",
+      "formula": "=SQRT(ABS(2^-1023))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "pow_negative_overflowing_magnitude_is_zero",
+      "formula": "=2^-1060.5",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "pow_negative_underflowing_magnitude_div0",
+      "formula": "=(1E-200)^-2",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "pow_negative_square_has_no_exception",
+      "formula": "=(1E-160)^-2",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "caret_square_flushes",
+      "formula": "=(2^-530)^2*2^600*2^474",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "power_square_flushes",
+      "formula": "=POWER(2^-530,2)*2^600*2^474",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "caret_square_by_value_flushes",
+      "formula": "=(2^-530)^(1+1)*2^600*2^474",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "integer_power_loop_flushes",
+      "formula": "=(2^-354)^3*2^600*2^474",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "integer_power_dbl_min_kept",
+      "formula": "=0.5^1022*2^600*2^474",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4503599627370496.0
+      }
+    },
+    {
+      "id": "integer_power_below_dbl_min_flushed",
+      "formula": "=SQRT(ABS(0.5^1023))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "fractional_power_keeps_subnormal",
+      "formula": "=(2^-530)^2.0000001*2^600*2^474",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16383.0
+      }
+    },
+    {
+      "id": "integer_power_loop_limit",
+      "formula": "=IF(EXP(-720/4294967294)^4294967294>0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "integer_power_beyond_loop_limit",
+      "formula": "=IF(EXP(-720/4294967295)^4294967295>0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "integer_power_loop_normal_result",
+      "formula": "=(1-2^-30)^(2^31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.13533528122258104
+      }
+    },
+    {
+      "id": "power_beyond_loop_normal_result",
+      "formula": "=(1-2^-30)^(2^32)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.018315638854618645
+      }
+    },
+    {
+      "id": "sumproduct_flushes_each_product",
+      "formula": "=SUMPRODUCT({1.5E-154,1.5E-154},{1.1E-154,1.1E-154})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumproduct_control",
+      "formula": "=SUMPRODUCT({1.6E-154,1.6E-154},{1.6E-154,1.6E-154})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.12e-308
+      }
+    },
+    {
+      "id": "sumproduct_left_to_right_flush",
+      "formula": "=SUMPRODUCT({1E-200},{1E-110},{1E180})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumproduct_left_to_right_kept",
+      "formula": "=SUMPRODUCT({1E180},{1E-200},{1E-110})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-130
+      }
+    },
+    {
+      "id": "mmult_flushes_each_product",
+      "formula": "=MMULT({1.5E-154,1.5E-154},{1.1E-154;1.1E-154})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumsq_flushes_each_square",
+      "formula": "=SUMSQ(1.3E-154,1.3E-154)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sumsq_control",
+      "formula": "=SUMSQ(1.6E-154,1.6E-154)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.12e-308
+      }
+    },
+    {
+      "id": "sumxmy2_flushes_each_square",
+      "formula": "=SUMXMY2({1.3E-154,1.3E-154},{0,0})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "devsq_flushes_each_square",
+      "formula": "=DEVSQ(1.3E-154,-1.3E-154)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "seriessum_uses_flushing_power",
+      "formula": "=SQRT(ABS(SERIESSUM(2^-530,2,0,{1})))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "average_division_flushes",
+      "formula": "=SQRT(ABS(AVERAGE(EXP(-720),EXP(-720))))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "percent_flushes",
+      "formula": "=SQRT(ABS((1E-307)%))*1E200",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "percent_normal",
+      "formula": "=(1E-300)%",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-302
+      }
+    },
+    {
+      "id": "sign_below_threshold",
+      "formula": "=SIGN(EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sign_at_threshold",
+      "formula": "=SIGN(2^-1022*(1+2^-4)-2^-1022)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "if_below_threshold_is_false",
+      "formula": "=IF(EXP(-720),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "comparison_stays_exact",
+      "formula": "=IF(EXP(-720)<>0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "not_below_threshold",
+      "formula": "=NOT(EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "negation_drops_sign_below_threshold",
+      "formula": "=-EXP(-720)*2^600",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.432773354194498e-133
+      }
+    },
+    {
+      "id": "subtraction_keeps_sign",
+      "formula": "=(0-EXP(-720))*2^600",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -8.432773354194498e-133
+      }
+    },
+    {
+      "id": "negation_keeps_sign_at_threshold",
+      "formula": "=-(2^-1022*(1+2^-4)-2^-1022)*2^600",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.770611636116085e-129
+      }
+    },
+    {
+      "id": "subtraction_keeps_subnormal_result",
+      "formula": "=(1E-300*1.000000000001-1E-300)*2^600*2^474",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 202433888256.0
+      }
+    },
+    {
+      "id": "mod_subnormal_remainder_num",
+      "formula": "=MOD(5E-308,3E-308)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mod_normal_remainder",
+      "formula": "=MOD(9E-308,3.3E-308)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.4000000000000006e-308
+      }
+    },
+    {
+      "id": "mod_subnormal_dividend_num",
+      "formula": "=MOD(EXP(-720),1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mod_subnormal_divisor_div0",
+      "formula": "=MOD(1,EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "sign_negative_below_threshold",
+      "formula": "=SIGN(0-EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "sign_negative_ulp",
+      "formula": "=SIGN(2^-1022-2^-1022*(1+2^-52))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "if_negative_below_threshold",
+      "formula": "=IF(0-EXP(-720),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "not_negative_below_threshold",
+      "formula": "=NOT(0-EXP(-720))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "negation_of_negative_below_threshold",
+      "formula": "=-(0-EXP(-720))*2^600",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.432773354194498e-133
+      }
+    },
+    {
+      "id": "compare_negative_below_threshold",
+      "formula": "=IF((0-EXP(-720))<0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "compare_positive_below_threshold",
+      "formula": "=IF(EXP(-720)>0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "compare_equal_zero_below_threshold",
+      "formula": "=IF(EXP(-720)=0,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    }
+  ]
+}

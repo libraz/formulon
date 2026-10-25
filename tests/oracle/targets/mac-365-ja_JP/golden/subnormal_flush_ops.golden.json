@@ -2,11 +2,11 @@
   "suite": "subnormal_flush_ops",
   "description": "Where Excel flushes a subnormal result: POWER and ^, unary % and minus, per-product sums, the AVERAGE division, SIGN and truthiness, MOD; read back exactly by scaling",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-15T08:41:05Z"
+    "generated_at": "2026-10-25T13:43:56Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -50,12 +50,12 @@
       }
     },
     {
-      "id": "caret_square_is_raw",
+      "id": "caret_square_flushes",
       "formula": "=(2^-530)^2*2^600*2^474",
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 16384.0
+        "value": 0.0
       }
     },
     {
@@ -68,12 +68,12 @@
       }
     },
     {
-      "id": "caret_square_by_value",
+      "id": "caret_square_by_value_flushes",
       "formula": "=(2^-530)^(1+1)*2^600*2^474",
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 16384.0
+        "value": 0.0
       }
     },
     {

@@ -11,11 +11,11 @@ cases:
     formula: "=(1E-200)^-2"
   - id: pow_negative_square_has_no_exception
     formula: "=(1E-160)^-2"
-  - id: caret_square_is_raw
+  - id: caret_square_flushes
     formula: "=(2^-530)^2*2^600*2^474"
   - id: power_square_flushes
     formula: "=POWER(2^-530,2)*2^600*2^474"
-  - id: caret_square_by_value
+  - id: caret_square_by_value_flushes
     formula: "=(2^-530)^(1+1)*2^600*2^474"
   - id: integer_power_loop_flushes
     formula: "=(2^-354)^3*2^600*2^474"

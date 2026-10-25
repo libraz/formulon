@@ -234,7 +234,7 @@ Value apply_arithmetic(parser::BinOp op, double lhs, double rhs) {
     case parser::BinOp::Pow: {
       // Delegates to the shared `apply_pow` helper so the `^` operator and
       // the `POWER()` builtin cannot drift apart on edge cases.
-      auto r = apply_pow(lhs, rhs, /*operator_form=*/true);
+      auto r = apply_pow(lhs, rhs);
       if (!r) {
         return Value::error(r.error());
       }
