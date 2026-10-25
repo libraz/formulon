@@ -2,11 +2,11 @@
   "suite": "collation_functions",
   "description": "Mac Excel text collation through the worksheet functions: the 16 function columns (SORT, SORTBY, UNIQUE, MATCH 0/1, VLOOKUP FALSE/TRUE, HLOOKUP FALSE, XLOOKUP, XMATCH, COUNTIF, SUMIF, SWITCH, FILTER, GROUPBY, DCOUNTA) against 8 representative pairs, plus a pairwise selection of further pairs, directions and data positions on one function per strength and addition rule. Every probe resolves to a single scalar. Range-based functions use setup cells; no setup cell is empty.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

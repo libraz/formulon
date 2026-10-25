@@ -2,11 +2,11 @@
   "suite": "iterative_calc",
   "description": "Iterative-calc convergence. With Excel's \"Enable iterative calculation\" toggle ON (`Application.Iteration = True` on COM, `enable_iterative_calculation` on appscript), circular formulas converge to a fixed point instead of raising #CIRC!. The driver flips that flag for this suite via `options.iterative`; Excel defaults are MaxIterations=100, MaxChange=0.001, which give exact integer fixed points for monotonic clamp formulas, and for slow linear convergence a value that stops at the first sweep whose change is below MaxChange (the smoothing case stops short of its fixed point of 10). The result is read after the entry evaluation and one Calculate; every circular cell in the workbook sweeps together until the largest change anywhere drops below MaxChange.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": true,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

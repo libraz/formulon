@@ -2,11 +2,11 @@
   "suite": "engineering_special",
   "description": "Continuous-math engineering built-ins: error function family (ERF, ERF.PRECISE, ERFC, ERFC.PRECISE) and Bessel function family (BESSELJ, BESSELY, BESSELI, BESSELK). Cases cover canonical handbook values, oddness / integral form for ERF, order truncation for BESSEL*, and singularity / negative-domain rejection for the second-kind Bessel members. Tolerance is loose (1e-8) because BESSELK uses Abramowitz & Stegun 9.8.5-9.8.8 polynomial approximations whose rated accuracy is |epsilon| < 1.9e-7.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

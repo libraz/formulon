@@ -2,11 +2,11 @@
   "suite": "datetime",
   "description": "DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / DAYS360 / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / NETWORKDAYS.INTL / WORKDAY / WORKDAY.INTL",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -364,8 +364,8 @@
       "formula": "=WEEKNUM(DATE(2024,1,1),99)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "error",
+        "code": "#NUM!"
       }
     },
     {
@@ -1272,7 +1272,11 @@
       "id": "date_year_snap_1900",
       "formula": "=DATE(1899.9999999,1,1)",
       "setup": {},
-      "skipped": "DATE(1899.9999999,1,1): the golden records 0 because the Windows driver read the date-formatted cell through Range.Value, whose OLE date has no 1900-02-29 and lands one day early below serial 61. Read through Value2 on the same host, Excel returns 1, as Formulon does; the next capture with the Value2 driver replaces the golden."
+      "skipped": "DATE(1899.9999999,1,1): the golden records 0 because the Windows driver read the date-formatted cell through Range.Value, whose OLE date has no 1900-02-29 and lands one day early below serial 61. Read through Value2 on the same host, Excel returns 1, as Formulon does; the next capture with the Value2 driver replaces the golden.",
+      "observed": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "time_second_snap",
@@ -3046,7 +3050,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": 59.0
+        "value": 60.0
       },
       "tolerance": {
         "abs": 0.0,

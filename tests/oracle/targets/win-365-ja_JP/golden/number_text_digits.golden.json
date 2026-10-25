@@ -2,11 +2,11 @@
   "suite": "number_text_digits",
   "description": "Significant digits of a number converted to text near exponent 99, and 15-digit scientific TEXT formats whose mantissa is all nines",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

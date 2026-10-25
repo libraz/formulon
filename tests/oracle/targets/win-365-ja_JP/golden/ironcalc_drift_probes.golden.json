@@ -2,11 +2,11 @@
   "suite": "ironcalc_drift_probes",
   "description": "Mac Excel 365 reference values for cases where Formulon and Mac agree but the IronCalc-imported golden in tests/oracle/external/ironcalc/golden/ does not. Each case here is the citation cited by an entry in tests/ironcalc_divergence.yaml. The IronCalc test driver already includes its own goldens; this suite exists to anchor the Mac probe values that justify each `prefer: mac` divergence.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "criteria_lift",
   "description": "An array criterion lifts the *IF / *IFS family: the call returns an array shaped by its criteria under the operator broadcast rule, one result per criterion element; a criterion that cannot supply a position takes #N/A there, as the operator broadcast fills it. A1:A3 = 1, 2, 2 and B1:B3 = 10, 20, 30 throughout.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

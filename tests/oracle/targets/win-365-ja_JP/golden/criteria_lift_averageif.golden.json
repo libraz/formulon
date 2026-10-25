@@ -2,11 +2,11 @@
   "suite": "criteria_lift_averageif",
   "description": "AVERAGEIF with an array criterion whose last element matches nothing. Kept apart from criteria_lift so it runs alone in a fresh workbook.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

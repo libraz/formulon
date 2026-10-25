@@ -2,11 +2,11 @@
   "suite": "arithmetic_cancellation",
   "description": "Results that cancel to within 2^-50 of their operands: when the outermost + or - of a formula reads as 0, which wrappers keep the residue, and the same rule inside SUM, AVERAGE and SUBTOTAL but not SUMPRODUCT or SUMIF.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

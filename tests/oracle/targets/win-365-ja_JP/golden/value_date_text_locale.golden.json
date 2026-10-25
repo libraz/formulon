@@ -2,11 +2,11 @@
   "suite": "value_date_text_locale",
   "description": "Date / time text recognition across UI locales: numeric pair and triple order with their fallbacks, dotted dates, month-name matching, CJK width folding, kanji and era forms, the fraction and trailing separators of a time, AM/PM spellings, and mixed fractions next to group separators. Dates are reported as \"cy\" (current year) or the year, then month, day and minutes, so goldens do not depend on the capture year.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "financial_accrual",
   "description": "Accrued-interest and specialized-depreciation financial builtins — ACCRINT / ACCRINTM / VDB / AMORDEGRC / AMORLINC. See `eval/builtins/financial_accrual.cpp` and `eval/builtins/financial_depreciation.cpp`.",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -80,8 +80,8 @@
       "formula": "=VDB(2400, 300, 10*365, 0, 1, 2, FALSE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "1.3151"
+        "kind": "number",
+        "value": 1.3150684931506849
       },
       "tolerance": {
         "abs": 0.0,
@@ -94,8 +94,8 @@
       "formula": "=VDB(2400, 300, 10, 0, 0.875, 1.5, FALSE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "315"
+        "kind": "number",
+        "value": 315.0
       },
       "tolerance": {
         "abs": 0.0,
@@ -108,8 +108,8 @@
       "formula": "=VDB(2400, 300, 10, 0, 10, 2, FALSE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "2100"
+        "kind": "number",
+        "value": 2100.0
       },
       "tolerance": {
         "abs": 0.0,
@@ -122,8 +122,8 @@
       "formula": "=VDB(2400, 300, 10, 0, 10, 2, TRUE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "2100"
+        "kind": "number",
+        "value": 2100.000000000001
       },
       "tolerance": {
         "abs": 0.0,
@@ -332,8 +332,8 @@
       "formula": "=VDB(2400, 300, 10, 0, 1, 1, FALSE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "240"
+        "kind": "number",
+        "value": 240.0
       },
       "tolerance": {
         "abs": 0.0,
@@ -356,8 +356,8 @@
       "formula": "=VDB(2400, 300, 10, 5, 5, 2, FALSE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "0"
+        "kind": "number",
+        "value": 0.0
       },
       "tolerance": {
         "abs": 0.0,
@@ -370,8 +370,8 @@
       "formula": "=VDB(2400, 300, 10, 0, 5, 0, FALSE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "1050"
+        "kind": "number",
+        "value": 1050.0
       },
       "tolerance": {
         "abs": 0.0,
@@ -384,8 +384,8 @@
       "formula": "=VDB(300, 2400, 10, 0, 5, 2, FALSE)",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "-2100"
+        "kind": "number",
+        "value": -2100.0
       },
       "tolerance": {
         "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "datetime_time_parts_1904",
   "description": "HOUR / MINUTE / SECOND bound their serial by the 1904 system's last day, like YEAR",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": true,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

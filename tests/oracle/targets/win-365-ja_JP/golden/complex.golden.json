@@ -2,11 +2,11 @@
   "suite": "complex",
   "description": "Excel's complex-number family: COMPLEX + the 24 IM* functions. Cases focus on the formatting rules (pure real, pure imag, +/-1 coefficient elision, alternate 'j' suffix), the arithmetic core (IMSUM / IMSUB / IMPRODUCT / IMDIV / IMPOWER) including mixed-suffix error cases, and exponential / logarithmic / root operations where floating-point drift is most likely. Trigonometric and hyperbolic variants are exercised at stable points (z=0, pure real) to keep goldens robust.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2010,6 +2010,129 @@
       "expect": {
         "kind": "text",
         "value": "0"
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imsum_array_folds",
+      "formula": "=IMSUM({\"1+i\",\"2+i\"})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+2i"
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "improduct_array_and_scalar_fold",
+      "formula": "=IMPRODUCT({\"1+i\";\"2\"},\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2+2i"
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imsum_range_folds",
+      "formula": "=IMSUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "2+3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7+4i"
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "improduct_range_folds",
+      "formula": "=IMPRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "2+3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-4+20i"
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imsum_range_blank_cell",
+      "formula": "=IMSUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "2+i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3+2i"
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "improduct_range_blank_cell",
+      "formula": "=IMPRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "2+i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imsum_range_error_cell",
+      "formula": "=IMSUM(A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
       },
       "compare_mode": "complex_text"
     }

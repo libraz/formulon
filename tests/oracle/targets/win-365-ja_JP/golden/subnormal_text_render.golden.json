@@ -2,11 +2,11 @@
   "suite": "subnormal_text_render",
   "description": "How a subnormal number renders as text: concatenation, TEXT with General, fixed, scientific, fraction and sectioned formats, FIXED and DOLLAR",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1217,6 +1217,42 @@
       "expect": {
         "kind": "text",
         "value": "1+0i"
+      }
+    },
+    {
+      "id": "sci_int3_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"000.0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.0E-03"
+      }
+    },
+    {
+      "id": "sci_hash_int3_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"##0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000.00E-03"
+      }
+    },
+    {
+      "id": "sci_group_int4_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"#,##0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0,000.00E-04"
+      }
+    },
+    {
+      "id": "sci_int1_pd",
+      "formula": "=TEXT((2^-1022*1.5-2^-1022),\"0.00E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00E-01"
       }
     }
   ]

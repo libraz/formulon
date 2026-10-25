@@ -2,11 +2,11 @@
   "suite": "array_conditions",
   "description": "Condition-armed lazy forms (IF / SWITCH / IFS / CHOOSE) whose selector is a range rather than a scalar. Two seams are covered per function: the value the form spills on its own, and the value an aggregator computes when the form is its argument. The aggregator seam is separate because argument expansion is driven by a static name list, so a form can spill correctly and still be mishandled one level up.",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "cancellation_snap_rule",
   "description": "The cancellation snap threshold (8 ulps of the left operand) and its single application to the final addition of SUM-style aggregates",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

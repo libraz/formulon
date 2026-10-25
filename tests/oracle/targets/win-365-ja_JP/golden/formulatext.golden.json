@@ -2,11 +2,11 @@
   "suite": "formulatext",
   "description": "FORMULATEXT returns the formula source string from a referenced cell. Setup writes a formula into a cell with the `=` shorthand (case_schema normalises strings starting with `=` to `{kind: formula}`). The probe cell `=FORMULATEXT(B1)` then reads back the source. If the target cell holds a literal value or is empty, FORMULATEXT returns #N/A.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "text_length_cap",
   "description": "Results that would pass Excel's 32,767 UTF-16-unit text limit. The functions do not agree on what happens there: REPT, SUBSTITUTE and REPLACE are #VALUE!, CONCAT and TEXTJOIN are #CALC!, and `&` and CONCATENATE cut the result to the limit. A cut that would split a surrogate pair leaves 32,766 units. Long results are read through LEN so no case stores text near the limit in a cell.\nThe whole-column TEXTJOIN cases show that the blank cells past the populated head take a delimiter each when empty cells are kept.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

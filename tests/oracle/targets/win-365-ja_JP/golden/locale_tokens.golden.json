@@ -2,11 +2,11 @@
   "suite": "locale_tokens",
   "description": "Locale-dependent spellings Excel accepts or produces: date format tokens across every month and weekday, General and colour keywords, AM/PM designators, currency text parsing, error names in text output, and formula text separators. Each case is captured under every target, so a token another locale ignores still records what it does here.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

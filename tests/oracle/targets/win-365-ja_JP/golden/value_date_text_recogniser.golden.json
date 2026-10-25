@@ -2,11 +2,11 @@
   "suite": "value_date_text_recogniser",
   "description": "VALUE / DATEVALUE / TIMEVALUE / implicit coercion of date and time text: month-name forms, numeric pair fallbacks (m/d -> d/m -> y/m), two-digit year window, time field limits and millisecond rounding, trailing separators, date+time order, fullwidth folding, kanji and era forms. Year-less forms are anchored to DATE(YEAR(TODAY()),m,d) so goldens do not depend on the capture year (no Feb-29 shapes, whose fallback is leap-dependent).\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -19,7 +19,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -28,7 +28,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -37,7 +37,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -46,7 +46,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -64,7 +64,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -73,7 +73,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -82,7 +82,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -208,7 +208,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -217,7 +217,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -271,7 +271,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -505,7 +505,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -0.4375
+        "value": 0.5625
       }
     },
     {
@@ -514,7 +514,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -0.9375
+        "value": 0.0625
       }
     },
     {
@@ -721,7 +721,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -730,7 +730,7 @@
       "setup": {},
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {
@@ -948,7 +948,7 @@
       },
       "expect": {
         "kind": "number",
-        "value": -1.0
+        "value": 0.0
       }
     },
     {

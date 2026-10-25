@@ -2,11 +2,11 @@
   "suite": "locale_profile_rules",
   "description": "Behaviour that may differ between Excel locales and hosts: width and kana folding at COUNTIF criteria, exact MATCH / XLOOKUP / VLOOKUP and DCOUNT criteria; a blank scalar reference in GCD / LCM; a fractional INDEX row; and two-digit years in DATEVALUE and VALUE.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,

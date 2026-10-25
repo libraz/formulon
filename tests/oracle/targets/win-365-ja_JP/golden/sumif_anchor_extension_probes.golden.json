@@ -2,11 +2,11 @@
   "suite": "sumif_anchor_extension_probes",
   "description": "Mac Excel SUMIF / AVERAGEIF extend a single-cell sum_range / average_range to the shape of criteria_range starting at the given anchor. Probe both vertical and horizontal anchors, with and without matches, to pin Mac's exact rule before implementing the alignment fix in conditional_aggregates.cpp.\n",
   "environment": {
-    "excel_version": "16.0.20430",
+    "excel_version": "16.0.20527",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-23T04:17:11Z"
+    "generated_at": "2026-10-25T22:45:18Z"
   },
   "tolerance": {
     "abs": 0.0,
