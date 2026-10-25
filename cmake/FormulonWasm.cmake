@@ -198,7 +198,13 @@ else()
   # object (no LTO); eval/parser/recalc/sheet stay -O3: raw -600 KB, Brotli
   # -111 KB, recalc unchanged, save/load ~5-9% slower (measured 2026-10-22).
   # The hot load readers below stay -O3: Brotli -107 KB, load back to ~1%.
-  set(_FM_WASM_COLD_SOURCE_REGEX "^src/(io|c_api|chart|drawing|pivot)/")
+  # Cold eval families (special functions, financial, ETS, format parsing,
+  # GROUPBY/PIVOTBY) join them, with PCRE2: Brotli -26 KB, results
+  # bit-identical, per-call time within noise (measured 2026-10-25).
+  string(CONCAT _FM_WASM_COLD_SOURCE_REGEX
+    "^src/(io|c_api|chart|drawing|pivot)/|"
+    "^src/eval/(stats/|builtins/(financial|engineering|complex_num|distributions|cube|web)|builtins/stats/stats_distributions|builtins/(math_combinatorics|text_dbcs|text_width)|text_format/|groupby_pivotby/)|"
+    "^src/eval/(ets_series|date_text_parse|regex_lazy|locale_function_names|holt_winters|forecast_ets_lazy|financial_lazy|coupon_schedule|database_lazy|getpivotdata_lazy|hypothesis_lazy|linest_lazy|regression_lazy)\\.cpp$")
   set(_FM_WASM_HOT_LOAD_REGEX
     "^src/io/(cell_parser|sheet_reader|sst_reader|styles_reader|sax_xml_reader|xml_utils|xsd_double)\\.cpp$")
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")

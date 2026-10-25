@@ -76,6 +76,11 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(pcre2)
 
+# The WASM matcher is not a load-path hot spot; -Oz trades regex speed for size.
+if(EMSCRIPTEN AND TARGET pcre2-8-static)
+  target_compile_options(pcre2-8-static PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-Oz>")
+endif()
+
 # Upstream target layout (10.49): the static 8-bit library is exposed as
 # `pcre2-8-static`. We alias it under the `formulon::pcre2` namespace so
 # downstream targets can link without caring about the upstream name.
