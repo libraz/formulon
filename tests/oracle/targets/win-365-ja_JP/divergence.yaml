@@ -76,7 +76,7 @@ entries:
     reason: "DATE(1899.9999999,1,1): the golden records 0 because the Windows driver read the date-formatted cell through Range.Value, whose OLE date has no 1900-02-29 and lands one day early below serial 61. Read through Value2 on the same host, Excel returns 1, as Formulon does; the next capture with the Value2 driver replaces the golden."
     prefer: formulon
     first_noted: 2026-10-13
-    last_verified_excel_version: "16.0.20430"
+    last_verified_excel_version: "needs live Windows recapture through Value2"
   # Undocumented WEEKNUM return types have no stable answer on Windows.
   - id: weeknum_neg2
     applies_to: [win-365-ja_JP]
