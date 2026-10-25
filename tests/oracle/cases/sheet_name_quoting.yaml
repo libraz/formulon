@@ -45,3 +45,65 @@ cases:
     formula: "=ADDRESS(1,1,1,FALSE,\"A01\")"
   - id: address_r1c1_style_cell_shape
     formula: "=ADDRESS(1,1,1,FALSE,\"A1\")"
+  - id: address_name_r
+    formula: "=ADDRESS(1,1,1,TRUE,\"R\")"
+  - id: address_name_c
+    formula: "=ADDRESS(1,1,1,TRUE,\"C\")"
+  - id: address_name_k
+    formula: "=ADDRESS(1,1,1,TRUE,\"K\")"
+  - id: address_name_z
+    formula: "=ADDRESS(1,1,1,TRUE,\"Z\")"
+  - id: address_name_s
+    formula: "=ADDRESS(1,1,1,TRUE,\"S\")"
+  - id: address_name_l
+    formula: "=ADDRESS(1,1,1,TRUE,\"L\")"
+  - id: address_name_f
+    formula: "=ADDRESS(1,1,1,TRUE,\"F\")"
+  - id: address_name_rk
+    formula: "=ADDRESS(1,1,1,TRUE,\"RK\")"
+  - id: address_name_zs
+    formula: "=ADDRESS(1,1,1,TRUE,\"ZS\")"
+  - id: address_name_lc
+    formula: "=ADDRESS(1,1,1,TRUE,\"LC\")"
+  - id: address_name_fc
+    formula: "=ADDRESS(1,1,1,TRUE,\"FC\")"
+  - id: address_name_r1
+    formula: "=ADDRESS(1,1,1,TRUE,\"R1\")"
+  - id: address_name_c1
+    formula: "=ADDRESS(1,1,1,TRUE,\"C1\")"
+  - id: address_name_k1
+    formula: "=ADDRESS(1,1,1,TRUE,\"K1\")"
+  - id: address_name_r1k1
+    formula: "=ADDRESS(1,1,1,TRUE,\"R1K1\")"
+  - id: address_name_z1s1
+    formula: "=ADDRESS(1,1,1,TRUE,\"Z1S1\")"
+  - id: address_name_l1c1
+    formula: "=ADDRESS(1,1,1,TRUE,\"L1C1\")"
+  - id: address_name_f1c1
+    formula: "=ADDRESS(1,1,1,TRUE,\"F1C1\")"
+  - id: address_name_rc1
+    formula: "=ADDRESS(1,1,1,TRUE,\"RC1\")"
+  - id: address_name_r1c
+    formula: "=ADDRESS(1,1,1,TRUE,\"R1C\")"
+  - id: address_name_rk1
+    formula: "=ADDRESS(1,1,1,TRUE,\"RK1\")"
+  - id: address_name_wahr
+    formula: "=ADDRESS(1,1,1,TRUE,\"WAHR\")"
+  - id: address_name_falsch
+    formula: "=ADDRESS(1,1,1,TRUE,\"FALSCH\")"
+  - id: address_name_false
+    formula: "=ADDRESS(1,1,1,TRUE,\"FALSE\")"
+  - id: address_name_waar
+    formula: "=ADDRESS(1,1,1,TRUE,\"WAAR\")"
+  - id: address_name_onwaar
+    formula: "=ADDRESS(1,1,1,TRUE,\"ONWAAR\")"
+  - id: address_name_vrai
+    formula: "=ADDRESS(1,1,1,TRUE,\"VRAI\")"
+  - id: address_name_faux
+    formula: "=ADDRESS(1,1,1,TRUE,\"FAUX\")"
+  - id: address_name_verdadero
+    formula: "=ADDRESS(1,1,1,TRUE,\"VERDADERO\")"
+  - id: address_name_verdadeiro
+    formula: "=ADDRESS(1,1,1,TRUE,\"VERDADEIRO\")"
+  - id: address_name_vero
+    formula: "=ADDRESS(1,1,1,TRUE,\"VERO\")"

@@ -2,11 +2,11 @@
   "suite": "numbervalue_rules",
   "description": "NUMBERVALUE as a pre-pass over the VALUE recogniser: separators, percent, whitespace, length cap, range and script digits",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-15T09:27:29Z"
+    "generated_at": "2026-10-25T14:05:04Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -650,6 +650,33 @@
       "expect": {
         "kind": "number",
         "value": 123.0
+      }
+    },
+    {
+      "id": "value_leading_zero_comma_group",
+      "formula": "=VALUE(\"043,472\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43472.0
+      }
+    },
+    {
+      "id": "value_double_zero_comma_group",
+      "formula": "=VALUE(\"00,123\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_leading_zero_dot_group",
+      "formula": "=VALUE(\"043.472\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43.472
       }
     }
   ]

@@ -974,3 +974,14 @@ cases:
 
   - id: tf_general_rule_038
     formula: "=TEXT(VALUE(\"1.5e-308\"),\"@\")"
+
+  - id: tf_trailing_double_space
+    formula: "=TEXT(1234567,\"0  \")"
+  - id: tf_inner_double_space_group
+    formula: "=TEXT(1234,\"#  ##0\")"
+  - id: tf_comma_in_integer_fraction
+    formula: "=TEXT(0.5,\"0,0 ?/?\")"
+  - id: tf_grouped_integer_fraction
+    formula: "=TEXT(1234.5,\"#,##0 ?/?\")"
+  - id: tf_sci_three_zero_integer_control
+    formula: "=TEXT(0.5,\"000.0E+00\")"

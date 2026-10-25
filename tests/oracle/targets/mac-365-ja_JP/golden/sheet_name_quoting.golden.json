@@ -2,11 +2,11 @@
   "suite": "sheet_name_quoting",
   "description": "ADDRESS quotes sheet_text by the A1 sheet-qualifier rule of formula display, in both reference styles",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-15T02:50:56Z"
+    "generated_at": "2026-10-25T14:01:11Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -200,6 +200,285 @@
       "expect": {
         "kind": "text",
         "value": "'A1'!R1C1"
+      }
+    },
+    {
+      "id": "address_name_r",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"R\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'R'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_c",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"C\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'C'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_k",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"K\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "K!$A$1"
+      }
+    },
+    {
+      "id": "address_name_z",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"Z\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Z!$A$1"
+      }
+    },
+    {
+      "id": "address_name_s",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"S\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "S!$A$1"
+      }
+    },
+    {
+      "id": "address_name_l",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"L\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "L!$A$1"
+      }
+    },
+    {
+      "id": "address_name_f",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"F\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "F!$A$1"
+      }
+    },
+    {
+      "id": "address_name_rk",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"RK\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "RK!$A$1"
+      }
+    },
+    {
+      "id": "address_name_zs",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"ZS\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ZS!$A$1"
+      }
+    },
+    {
+      "id": "address_name_lc",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"LC\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "LC!$A$1"
+      }
+    },
+    {
+      "id": "address_name_fc",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"FC\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FC!$A$1"
+      }
+    },
+    {
+      "id": "address_name_r1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"R1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'R1'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_c1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"C1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'C1'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_k1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"K1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'K1'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_r1k1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"R1K1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'R1K1'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_z1s1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"Z1S1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Z1S1!$A$1"
+      }
+    },
+    {
+      "id": "address_name_l1c1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"L1C1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "L1C1!$A$1"
+      }
+    },
+    {
+      "id": "address_name_f1c1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"F1C1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "F1C1!$A$1"
+      }
+    },
+    {
+      "id": "address_name_rc1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"RC1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'RC1'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_r1c",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"R1C\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'R1C'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_rk1",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"RK1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'RK1'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_wahr",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"WAHR\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "WAHR!$A$1"
+      }
+    },
+    {
+      "id": "address_name_falsch",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"FALSCH\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FALSCH!$A$1"
+      }
+    },
+    {
+      "id": "address_name_false",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"FALSE\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'FALSE'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_waar",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"WAAR\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "WAAR!$A$1"
+      }
+    },
+    {
+      "id": "address_name_onwaar",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"ONWAAR\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ONWAAR!$A$1"
+      }
+    },
+    {
+      "id": "address_name_vrai",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"VRAI\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "VRAI!$A$1"
+      }
+    },
+    {
+      "id": "address_name_faux",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"FAUX\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FAUX!$A$1"
+      }
+    },
+    {
+      "id": "address_name_verdadero",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"VERDADERO\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "VERDADERO!$A$1"
+      }
+    },
+    {
+      "id": "address_name_verdadeiro",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"VERDADEIRO\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "VERDADEIRO!$A$1"
+      }
+    },
+    {
+      "id": "address_name_vero",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"VERO\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "VERO!$A$1"
       }
     }
   ]

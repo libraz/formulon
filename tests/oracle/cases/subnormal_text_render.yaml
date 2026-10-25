@@ -271,3 +271,11 @@ cases:
     formula: "=COMPLEX(1,0-EXP(-720))"
   - id: complex_imag_pa
     formula: "=COMPLEX(1,2^-1022*1.25-2^-1022)"
+  - id: sci_int3_pd
+    formula: "=TEXT((2^-1022*1.5-2^-1022),\"000.0E+00\")"
+  - id: sci_hash_int3_pd
+    formula: "=TEXT((2^-1022*1.5-2^-1022),\"##0.00E+00\")"
+  - id: sci_group_int4_pd
+    formula: "=TEXT((2^-1022*1.5-2^-1022),\"#,##0.00E+00\")"
+  - id: sci_int1_pd
+    formula: "=TEXT((2^-1022*1.5-2^-1022),\"0.00E+00\")"

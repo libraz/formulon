@@ -145,3 +145,9 @@ cases:
     formula: "=VALUE(\"¥1%\")"
   - id: value_arabic_indic_digits
     formula: "=VALUE(\"١٢٣\")"
+  - id: value_leading_zero_comma_group
+    formula: "=VALUE(\"043,472\")"
+  - id: value_double_zero_comma_group
+    formula: "=VALUE(\"00,123\")"
+  - id: value_leading_zero_dot_group
+    formula: "=VALUE(\"043.472\")"

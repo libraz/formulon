@@ -1,0 +1,683 @@
+{
+  "suite": "numbervalue_rules",
+  "description": "NUMBERVALUE as a pre-pass over the VALUE recogniser: separators, percent, whitespace, length cap, range and script digits",
+  "environment": {
+    "excel_version": "16.114.1",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-10-25T14:10:38Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "sixteenth_digit_truncated",
+      "formula": "=NUMBERVALUE(\"9.999999999999995e307\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fraction_digits_truncated",
+      "formula": "=NUMBERVALUE(\"0.99999999999999999\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.99999999999999e+16
+      }
+    },
+    {
+      "id": "integer_digits_truncated",
+      "formula": "=NUMBERVALUE(\"9999999999999999\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9999999999999990.0
+      }
+    },
+    {
+      "id": "upper_bound_rejected",
+      "formula": "=NUMBERVALUE(\"1e308\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "lower_bound_flushed",
+      "formula": "=NUMBERVALUE(\"1e-309\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "below_lower_bound",
+      "formula": "=NUMBERVALUE(\"1e-310\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dbl_min_cut_flushed",
+      "formula": "=NUMBERVALUE(\"2.2250738585072014e-308\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2250738585072e-292
+      }
+    },
+    {
+      "id": "zero_written_exponent_rejected",
+      "formula": "=NUMBERVALUE(\"0e309\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "huge_negative_exponent_rejected",
+      "formula": "=NUMBERVALUE(\"1e-999\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trailing_percent_not_folded",
+      "formula": "=NUMBERVALUE(\"1e309%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "leading_percent_folded",
+      "formula": "=NUMBERVALUE(\"%1e309\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+307
+      }
+    },
+    {
+      "id": "trailing_percent_divides",
+      "formula": "=NUMBERVALUE(\"1e-9%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0000000000000001e-11
+      }
+    },
+    {
+      "id": "leading_percent_exact",
+      "formula": "=NUMBERVALUE(\"%1e-9\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e-11
+      }
+    },
+    {
+      "id": "percent_result_flushed",
+      "formula": "=NUMBERVALUE(\"2.2e-306%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2e-307
+      }
+    },
+    {
+      "id": "percent_result_kept",
+      "formula": "=NUMBERVALUE(\"2.3e-306%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.3e-307
+      }
+    },
+    {
+      "id": "three_percents",
+      "formula": "=NUMBERVALUE(\"50%%%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5e-05
+      }
+    },
+    {
+      "id": "leading_and_trailing_percents",
+      "formula": "=NUMBERVALUE(\"%5%%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5e-06
+      }
+    },
+    {
+      "id": "two_leading_percents",
+      "formula": "=NUMBERVALUE(\"%%5\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "percent_inside_parens_once",
+      "formula": "=NUMBERVALUE(\"(5%)\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.05
+      }
+    },
+    {
+      "id": "two_percents_inside_parens",
+      "formula": "=NUMBERVALUE(\"(5%%)\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "percents_after_parens",
+      "formula": "=NUMBERVALUE(\"(5)%%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.0005
+      }
+    },
+    {
+      "id": "percent_only_is_zero",
+      "formula": "=NUMBERVALUE(\"%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "group_separators_only_is_zero",
+      "formula": "=NUMBERVALUE(\",,\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_percent_not_stripped",
+      "formula": "=NUMBERVALUE(\"５％％\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_then_ascii_percent",
+      "formula": "=NUMBERVALUE(\"５％%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tab_inside_digits",
+      "formula": "=NUMBERVALUE(\"1\"&CHAR(9)&\"2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "lf_inside_digits",
+      "formula": "=NUMBERVALUE(\"1\"&CHAR(10)&\"2\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "only_spaces_is_zero",
+      "formula": "=NUMBERVALUE(\"   \")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "fullwidth_space_inside_digits",
+      "formula": "=NUMBERVALUE(\"1　2\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_space_after_sign",
+      "formula": "=NUMBERVALUE(\"-　5\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "length_cap_counts_spaces",
+      "formula": "=NUMBERVALUE(REPT(\" \",255)&\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "length_cap_255_accepted",
+      "formula": "=NUMBERVALUE(REPT(\"0\",254)&\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "length_cap_256_rejected",
+      "formula": "=NUMBERVALUE(REPT(\"0\",255)&\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "two_arg_comma_swaps_group",
+      "formula": "=NUMBERVALUE(\"1.234.567,5\",\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234567.5
+      }
+    },
+    {
+      "id": "two_arg_other_decimal_keeps_dot",
+      "formula": "=NUMBERVALUE(\"1.5\",\":\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "locale_dot_survives_explicit_args",
+      "formula": "=NUMBERVALUE(\"1.500\",\"x\",\";\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1500.0
+      }
+    },
+    {
+      "id": "locale_comma_strict_under_explicit_args",
+      "formula": "=NUMBERVALUE(\"1,500\",\".\",\";\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "locale_comma_short_group_rejected",
+      "formula": "=NUMBERVALUE(\"1,5\",\".\",\";\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "group_after_decimal_rejected",
+      "formula": "=NUMBERVALUE(\"1.5,000\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "group_in_exponent_dropped",
+      "formula": "=NUMBERVALUE(\"1e1,0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "group_in_exponent_after_point_rejected",
+      "formula": "=NUMBERVALUE(\"1.5e1,0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "untracked_dot_lets_group_pass",
+      "formula": "=NUMBERVALUE(\"1.5,000\",\":\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "separator_first_char_only",
+      "formula": "=NUMBERVALUE(\"1,5\",\",;\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "digit_as_decimal_separator",
+      "formula": "=NUMBERVALUE(\"105\",\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "true_as_decimal_separator",
+      "formula": "=NUMBERVALUE(\"1T5\",TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "same_separator_unused_rejected",
+      "formula": "=NUMBERVALUE(\"15\",\".\",\".\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_comma_needs_three_digits",
+      "formula": "=NUMBERVALUE(\"1，5\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_comma_long_group",
+      "formula": "=NUMBERVALUE(\"1，2345\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_comma_not_matched_by_ascii_arg",
+      "formula": "=NUMBERVALUE(\"1，5\",\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "fullwidth_dollar_prefix",
+      "formula": "=NUMBERVALUE(\"＄５\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "currency_with_percent_inside_parens",
+      "formula": "=NUMBERVALUE(\"(¥1%)\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "currency_parens_then_percent",
+      "formula": "=NUMBERVALUE(\"(¥1)%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "currency_before_parens",
+      "formula": "=NUMBERVALUE(\"¥(1)\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "euro_suffix_then_percent",
+      "formula": "=NUMBERVALUE(\"5€%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05
+      }
+    },
+    {
+      "id": "percent_then_euro_suffix",
+      "formula": "=NUMBERVALUE(\"5%€\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "time_then_percent",
+      "formula": "=NUMBERVALUE(\"1:30%\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.000625
+      }
+    },
+    {
+      "id": "time_with_space_pm_rejected",
+      "formula": "=NUMBERVALUE(\"1:30 PM\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "date_with_time_rejected",
+      "formula": "=NUMBERVALUE(\"2026/1/1 1:30\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "explicit_decimal_breaks_date",
+      "formula": "=NUMBERVALUE(\"2026/1/1\",\"/\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "group_removed_before_time",
+      "formula": "=NUMBERVALUE(\"1,:30\",\".\",\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0625
+      }
+    },
+    {
+      "id": "arabic_indic_digits",
+      "formula": "=NUMBERVALUE(\"١٢٣.٥\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1235.0
+      }
+    },
+    {
+      "id": "thai_digits",
+      "formula": "=NUMBERVALUE(\"๑๒๓\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 123.0
+      }
+    },
+    {
+      "id": "ethiopic_digits",
+      "formula": "=NUMBERVALUE(\"፩፩\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "nko_digits_rejected",
+      "formula": "=NUMBERVALUE(\"߁߂߃\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arabic_digit_as_separator_arg",
+      "formula": "=NUMBERVALUE(\"1٢5\",\"٢\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "number_arg_comma_decimal",
+      "formula": "=NUMBERVALUE(1.5,\",\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "value_long_group",
+      "formula": "=VALUE(\"1,2345\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2345
+      }
+    },
+    {
+      "id": "value_leading_zero_group_rejected",
+      "formula": "=VALUE(\"0,123\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.123
+      }
+    },
+    {
+      "id": "value_space_after_sign",
+      "formula": "=VALUE(\"- 5\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "value_currency_with_percent_rejected",
+      "formula": "=VALUE(\"¥1%\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "value_arabic_indic_digits",
+      "formula": "=VALUE(\"١٢٣\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 123.0
+      }
+    },
+    {
+      "id": "value_leading_zero_comma_group",
+      "formula": "=VALUE(\"043,472\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43.472
+      }
+    },
+    {
+      "id": "value_double_zero_comma_group",
+      "formula": "=VALUE(\"00,123\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.123
+      }
+    },
+    {
+      "id": "value_leading_zero_dot_group",
+      "formula": "=VALUE(\"043.472\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43472.0
+      }
+    }
+  ]
+}

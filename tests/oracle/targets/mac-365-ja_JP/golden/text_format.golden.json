@@ -2,11 +2,11 @@
   "suite": "text_format",
   "description": "TEXT format-string engine (number + date/time formatting)",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T11:06:56Z"
+    "generated_at": "2026-10-25T14:01:39Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2846,6 +2846,51 @@
       "expect": {
         "kind": "text",
         "value": "0"
+      }
+    },
+    {
+      "id": "tf_trailing_double_space",
+      "formula": "=TEXT(1234567,\"0  \")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1234567  "
+      }
+    },
+    {
+      "id": "tf_inner_double_space_group",
+      "formula": "=TEXT(1234,\"#  ##0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1  234"
+      }
+    },
+    {
+      "id": "tf_comma_in_integer_fraction",
+      "formula": "=TEXT(0.5,\"0,0 ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00 1/2"
+      }
+    },
+    {
+      "id": "tf_grouped_integer_fraction",
+      "formula": "=TEXT(1234.5,\"#,##0 ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1,234 1/2"
+      }
+    },
+    {
+      "id": "tf_sci_three_zero_integer_control",
+      "formula": "=TEXT(0.5,\"000.0E+00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "500.0E-03"
       }
     }
   ]
