@@ -2,11 +2,11 @@
   "suite": "pivotby",
   "description": "PIVOTBY dynamic-array pivot (Excel 365). Perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "fr-FR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T12:17:26Z"
+    "generated_at": "2026-10-24T21:12:48Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1477,6 +1477,564 @@
         ],
         "shape": [
           4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_pos1",
+      "formula": "=PIVOTBY({\"b\";\"a\";\"c\";\"a\"},{\"p\";\"q\";\"p\";\"q\"},{1;5;3;4},SUM,0,1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "a",
+          "",
+          9.0,
+          9.0,
+          "b",
+          1.0,
+          "",
+          1.0,
+          "c",
+          3.0,
+          "",
+          3.0,
+          "Total",
+          4.0,
+          9.0,
+          13.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_neg1",
+      "formula": "=PIVOTBY({\"b\";\"a\";\"c\";\"a\"},{\"p\";\"q\";\"p\";\"q\"},{1;5;3;4},SUM,0,1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "c",
+          3.0,
+          "",
+          3.0,
+          "b",
+          1.0,
+          "",
+          1.0,
+          "a",
+          "",
+          9.0,
+          9.0,
+          "Total",
+          4.0,
+          9.0,
+          13.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_pos2",
+      "formula": "=PIVOTBY({\"b\";\"a\";\"c\";\"a\"},{\"p\";\"q\";\"p\";\"q\"},{1;5;3;4},SUM,0,1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "b",
+          1.0,
+          "",
+          1.0,
+          "c",
+          3.0,
+          "",
+          3.0,
+          "a",
+          "",
+          9.0,
+          9.0,
+          "Total",
+          4.0,
+          9.0,
+          13.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_neg2",
+      "formula": "=PIVOTBY({\"b\";\"a\";\"c\";\"a\"},{\"p\";\"q\";\"p\";\"q\"},{1;5;3;4},SUM,0,1,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "a",
+          "",
+          9.0,
+          9.0,
+          "c",
+          3.0,
+          "",
+          3.0,
+          "b",
+          1.0,
+          "",
+          1.0,
+          "Total",
+          4.0,
+          9.0,
+          13.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_pos3",
+      "formula": "=PIVOTBY({\"b\";\"a\";\"c\";\"a\"},{\"p\";\"q\";\"p\";\"q\"},{1;5;3;4},SUM,0,1,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_row_sort_order_vector",
+      "formula": "=PIVOTBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"},{\"p\";\"q\";\"p\";\"q\"},{1;2;3;4},SUM,0,1,{1,-2})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "",
+          "p",
+          "q",
+          "Total",
+          "x",
+          "b",
+          1.0,
+          "",
+          1.0,
+          "x",
+          "a",
+          3.0,
+          "",
+          3.0,
+          "y",
+          "b",
+          "",
+          4.0,
+          4.0,
+          "y",
+          "a",
+          "",
+          2.0,
+          2.0,
+          "Total",
+          "",
+          4.0,
+          6.0,
+          10.0
+        ],
+        "shape": [
+          6,
+          5
+        ]
+      }
+    },
+    {
+      "id": "pivotby_col_sort_order_neg1",
+      "formula": "=PIVOTBY({\"b\";\"a\";\"c\";\"a\"},{\"p\";\"q\";\"p\";\"q\"},{1;5;3;4},SUM,0,1,,1,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "q",
+          "p",
+          "Total",
+          "a",
+          9.0,
+          "",
+          9.0,
+          "b",
+          "",
+          1.0,
+          1.0,
+          "c",
+          "",
+          3.0,
+          3.0,
+          "Total",
+          9.0,
+          4.0,
+          13.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_col_sort_order_pos2",
+      "formula": "=PIVOTBY({\"b\";\"a\";\"c\";\"a\"},{\"p\";\"q\";\"p\";\"q\"},{1;5;3;4},SUM,0,1,,1,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "a",
+          "",
+          9.0,
+          9.0,
+          "b",
+          1.0,
+          "",
+          1.0,
+          "c",
+          3.0,
+          "",
+          3.0,
+          "Total",
+          4.0,
+          9.0,
+          13.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_percentof_bare",
+      "formula": "=PIVOTBY({\"a\";\"b\";\"a\"},{\"p\";\"p\";\"q\"},{1;2;3},PERCENTOF)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "a",
+          0.3333333333333333,
+          1.0,
+          0.6666666666666666,
+          "b",
+          0.6666666666666666,
+          "",
+          0.3333333333333333,
+          "Total",
+          1.0,
+          1.0,
+          1.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_percentof_lambda",
+      "formula": "=PIVOTBY({\"a\";\"b\";\"a\"},{\"p\";\"p\";\"q\"},{1;2;3},LAMBDA(x,y,PERCENTOF(x,y)))",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "a",
+          0.3333333333333333,
+          1.0,
+          0.6666666666666666,
+          "b",
+          0.6666666666666666,
+          "",
+          0.3333333333333333,
+          "Total",
+          1.0,
+          1.0,
+          1.0
+        ],
+        "shape": [
+          4,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_correl_bare",
+      "formula": "=PIVOTBY(A2:A7,B2:B7,C2:C7,CORREL)",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "p"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "q"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "p"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "a",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "c",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "Total",
+          1.0,
+          1.0,
+          1.0
+        ],
+        "shape": [
+          5,
+          4
+        ]
+      }
+    },
+    {
+      "id": "pivotby_two_param_lambda_rows",
+      "formula": "=PIVOTBY(A2:A7,B2:B7,C2:C7,LAMBDA(x,y,ROWS(x)&\"/\"&ROWS(y)))",
+      "setup": {
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "A6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "A7": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B2": {
+          "kind": "text",
+          "value": "p"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "q"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "p"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "q"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "p"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "q"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "",
+          "p",
+          "q",
+          "Total",
+          "a",
+          "1/3",
+          "1/3",
+          "2/6",
+          "b",
+          "1/3",
+          "1/3",
+          "2/6",
+          "c",
+          "1/3",
+          "1/3",
+          "2/6",
+          "Total",
+          "3/3",
+          "3/3",
+          "6/6"
+        ],
+        "shape": [
+          5,
           4
         ]
       }

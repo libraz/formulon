@@ -2,11 +2,11 @@
   "suite": "whole_axis_spill",
   "description": "Bare whole-axis references (`=A:A`, `=A:C`, `=1:2`) used as the whole formula, i.e. as a spilling expression rather than as a function argument. Every case declares its own `formula_cell`, because the observable result depends on where the formula sits.\nExcel 365 treats a bare whole-axis reference like any other bare range: the value is the array of the *declared* rectangle — rows 1..1048576 for a column span, columns A..XFD for a row span — and it spills from the formula cell. Nothing is trimmed to the populated extent, and cells with no content spill as 0. Three consequences are directly observable and are what this suite pins:\n\n  * the rectangle must fit inside the grid measured from the formula\n    cell, so a whole-column reference only spills from row 1 and a\n    whole-row reference only from column A; anywhere else is `#SPILL!`;\n  * any occupied cell anywhere in that rectangle blocks the spill, even\n    one far below or far to the right of the populated data, which is\n    what shows the footprint is the full declared rectangle;\n  * a formula that sits inside the axis it references is a circular\n    reference, so it never spills at all.\n\nThe four full-rectangle spills use `capture: shape`: their results are far larger than the cell-by-cell capture ceiling (the smallest is 16,384 cells against a 4,096 ceiling), so the golden records the dynamic-array shape plus the listed sample cells instead of every cell. Excel answers them normally; only the recording differs.\nThe remaining seven are recorded cell by cell and are currently registered in tests/divergence.yaml. Each `expect` block below is Excel's observed answer; deleting an entry and regenerating this suite turns the corresponding case back into a verified golden.\n",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "es-MX",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T20:57:34Z"
+    "generated_at": "2026-10-25T00:24:32Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2137,6 +2137,429 @@
     {
       "id": "axis_sum_col_plus_row_axis",
       "formula": "=SUM(Sheet2!A:A+Sheet2!1:1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "axis_rows_of_negated_wide_cols",
+      "formula": "=ROWS(-Sheet2!A:BB)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_rows_of_double_negated_wide_cols",
+      "formula": "=ROWS(--Sheet2!A:BB)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_rows_of_wide_cols_plus_zero",
+      "formula": "=ROWS(Sheet2!A:BB+0)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "rows_of_cross_broadcast_3277",
+      "formula": "=ROWS(Sheet2!A1:A3277+Sheet2!A1:XFD1)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 3277.0
+      }
+    },
+    {
+      "id": "rows_of_sequence_3277_plus_zero",
+      "formula": "=ROWS(SEQUENCE(3277,16384)+0)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 3277.0
+      }
+    },
+    {
+      "id": "rows_of_cx_plus_zero",
+      "formula": "=ROWS(Sheet2!A:CX+0)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 1048576.0
+      }
+    },
+    {
+      "id": "axis_columns_of_negated_wide_cols",
+      "formula": "=COLUMNS(-Sheet2!A:BB)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "number",
+        "value": 54.0
+      }
+    },
+    {
+      "id": "axis_sum_of_negated_wide_cols",
+      "formula": "=SUM(-Sheet2!A:BB)",
+      "setup": {
+        "Sheet2!A1": {
+          "kind": "text",
+          "value": "k1"
+        },
+        "Sheet2!A2": {
+          "kind": "text",
+          "value": "k2"
+        },
+        "Sheet2!A3": {
+          "kind": "text",
+          "value": "k3"
+        },
+        "Sheet2!A5": {
+          "kind": "text",
+          "value": "k5"
+        },
+        "Sheet2!B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "Sheet2!B2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "Sheet2!B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Sheet2!B4": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "Sheet2!B5": {
+          "kind": "number",
+          "value": 50.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "axis_sum_of_negated_empty_wide_cols",
+      "formula": "=SUM(-Sheet2!C:BD)",
       "setup": {
         "Sheet2!A1": {
           "kind": "text",

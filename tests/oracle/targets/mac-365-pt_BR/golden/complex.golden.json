@@ -2,11 +2,11 @@
   "suite": "complex",
   "description": "Excel's complex-number family: COMPLEX + the 24 IM* functions. Cases focus on the formatting rules (pure real, pure imag, +/-1 coefficient elision, alternate 'j' suffix), the arithmetic core (IMSUM / IMSUB / IMPRODUCT / IMDIV / IMPOWER) including mixed-suffix error cases, and exponential / logarithmic / root operations where floating-point drift is most likely. Trigonometric and hyperbolic variants are exercised at stable points (z=0, pure real) to keep goldens robust.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "pt-BR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T16:58:55Z"
+    "generated_at": "2026-10-25T00:27:42Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2001,6 +2001,577 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_space_leading",
+      "formula": "=IMABS(\" 3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_space_around_sign",
+      "formula": "=IMABS(\"3 + 4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_space_before_suffix",
+      "formula": "=IMSQRT(\"3+4 i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2+i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_percent_part",
+      "formula": "=IMABS(\"3%+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.000112498418013
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_date_text_part",
+      "formula": "=IMABS(\"1/2+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46054.00001085681
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_leading_plus",
+      "formula": "=IMABS(\"+3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_double_sign_negative",
+      "formula": "=IMCONJUGATE(\"3+-4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_double_sign_positive",
+      "formula": "=IMCONJUGATE(\"3--4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3-4i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_uppercase_suffix",
+      "formula": "=IMABS(\"3+4I\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_suffix_not_last",
+      "formula": "=IMABS(\"3+i4\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_part_out_of_range",
+      "formula": "=IMABS(\"1E+308+1E+308i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_part_subnormal",
+      "formula": "=IMREAL(\"1e-320i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_sum_suffix_mismatch",
+      "formula": "=IMSUM(\"1+i\",\"1+j\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_product_suffix_mismatch",
+      "formula": "=IMPRODUCT(\"1+i\",\"1+j\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_sub_suffix_mismatch",
+      "formula": "=IMSUB(\"1+i\",\"1+j\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_div_suffix_mismatch",
+      "formula": "=IMDIV(\"1+i\",\"1-j\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_div_real_takes_suffix",
+      "formula": "=IMDIV(\"1\",\"3+4j\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0,12-0,16j"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_div_scaled_small_divisor",
+      "formula": "=IMDIV(\"1+i\",\"1E-300+1E-300i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1E+300"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_product_overflow",
+      "formula": "=IMPRODUCT(\"1E+200+1E+200i\",\"1E+200+1E+200i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_abs_scaled",
+      "formula": "=IMABS(\"1e3+2e-2i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000.0000002
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_abs_pure_imaginary_large",
+      "formula": "=IMABS(\"1E+300i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+300
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_ln_pure_imaginary_large",
+      "formula": "=IMLN(\"1E+300i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "690,775527898214+1,5707963267949i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_ln_square_overflow",
+      "formula": "=IMLN(\"1E+200+1E+200i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_ln_square_underflow",
+      "formula": "=IMLN(\"1e-160+1e-160i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_sqrt_pure_imaginary_large",
+      "formula": "=IMSQRT(\"1E+300i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_sqrt_square_underflow",
+      "formula": "=IMSQRT(\"1e-160+1e-160i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_power_negative_pure_imaginary",
+      "formula": "=IMPOWER(\"1E+300i\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1E-300i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_power_square_underflow_negative",
+      "formula": "=IMPOWER(\"1e-160+1e-160i\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_exp_clamped_magnitude",
+      "formula": "=IMEXP(\"1e3+1i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "9,71297746009434E+307+1,51270661257499E+308i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_exp_real_overflow",
+      "formula": "=IMEXP(\"1000\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_exp_sincos_cap",
+      "formula": "=IMEXP(\"1e10+1e10i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_sin_cap",
+      "formula": "=IMSIN(\"1e10+1i\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_sec_far_branch",
+      "formula": "=IMSEC(\"1e10+1e10i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_tan_far_branch",
+      "formula": "=IMTAN(\"1E+300+1E+300i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "im_rules_csch_far_branch",
+      "formula": "=IMCSCH(\"1e10+1e10i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "imsum_array_folds",
+      "formula": "=IMSUM({\"1+i\",\"2+i\"})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+2i"
+      }
+    },
+    {
+      "id": "improduct_array_and_scalar_fold",
+      "formula": "=IMPRODUCT({\"1+i\";\"2\"},\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2+2i"
+      }
+    },
+    {
+      "id": "imsum_range_folds",
+      "formula": "=IMSUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "2+3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "7+4i"
+      }
+    },
+    {
+      "id": "improduct_range_folds",
+      "formula": "=IMPRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "2+3i"
+        },
+        "A3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "-4+20i"
+      }
+    },
+    {
+      "id": "imsum_range_blank_cell",
+      "formula": "=IMSUM(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "2+i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "3+2i"
+      }
+    },
+    {
+      "id": "improduct_range_blank_cell",
+      "formula": "=IMPRODUCT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "2+i"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imsum_range_error_cell",
+      "formula": "=IMSUM(A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "1+i"
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
       }
     }
   ]

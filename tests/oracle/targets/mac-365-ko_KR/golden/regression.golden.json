@@ -2,11 +2,11 @@
   "suite": "regression",
   "description": "CORREL / COVARIANCE.P / COVARIANCE.S / SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR — pairwise linear-regression builtins",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "ko-KR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T16:19:24Z"
+    "generated_at": "2026-10-24T22:00:04Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2809,6 +2809,60 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "forecast_linear_array_x_second",
+      "formula": "=INDEX(FORECAST.LINEAR({3,7}, {2;4;5;4;5}, {1;2;3;4;5}), 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.4
+      }
+    },
+    {
+      "id": "forecast_linear_array_x_columns",
+      "formula": "=COLUMNS(FORECAST.LINEAR({3,7,9}, {2;4;5;4;5}, {1;2;3;4;5}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "forecast_legacy_array_x_second",
+      "formula": "=INDEX(FORECAST({3,7}, {2;4;5;4;5}, {1;2;3;4;5}), 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.4
+      }
+    },
+    {
+      "id": "forecast_linear_range_x_second",
+      "formula": "=INDEX(FORECAST.LINEAR(A1:A2, {2;4;5;4;5}, {1;2;3;4;5}), 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 6.4
+      }
+    },
+    {
+      "id": "forecast_linear_array_x_text_element",
+      "formula": "=INDEX(FORECAST.LINEAR({3,\"x\"}, {2;4;5;4;5}, {1;2;3;4;5}), 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

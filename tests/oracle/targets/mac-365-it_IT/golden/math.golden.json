@@ -2,11 +2,11 @@
   "suite": "math",
   "description": "ABS / SIGN / INT / TRUNC / MOD / ROUND* / POWER / SQRT / EXP / LN / LOG / LOG10 / PI / VALUE",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "it-IT",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T22:23:59Z"
+    "generated_at": "2026-10-24T23:12:31Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -3938,6 +3938,630 @@
       "expect": {
         "kind": "number",
         "value": 25.0
+      }
+    },
+    {
+      "id": "power_ten_op_100",
+      "formula": "=10^100",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+100
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "power_ten_op_300",
+      "formula": "=10^300",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+300
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "power_ten_fn_200",
+      "formula": "=POWER(10,200)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+200
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "power_ten_op_308",
+      "formula": "=10^308",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+308
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_step_tenth",
+      "formula": "=SERIESSUM(1.5,0,0.1,{1;1;1;1;1;1;1;1;1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.145276319531888
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_step_tenth_offset",
+      "formula": "=SERIESSUM(1.5,0.2,0.1,{1;1;1;1;1;1;1;1;1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 16.424624635521308
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_negative_base_half_step",
+      "formula": "=SERIESSUM(-2.2,0,0.5,{1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_negative_base_third",
+      "formula": "=SERIESSUM(-8,1/3,1,{1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "seriessum_ten_large_exponents",
+      "formula": "=SERIESSUM(10,100,100,{1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1e+300
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_negative_divisor",
+      "formula": "=MOD(-771618.708616,-22.69)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -22.56861599997459
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_positive_both",
+      "formula": "=MOD(931127,63.4079)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.39640000003038
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_negative_dividend",
+      "formula": "=MOD(-108663,8.9404)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.562000000004215
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_mixed_signs",
+      "formula": "=MOD(953952.3,-55.3608)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -25.00559999991151
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_fraction_dividend",
+      "formula": "=MOD(751068.5,-85.85)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -33.14999999995027
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_near_two_pow_27",
+      "formula": "=MOD(0.7*134217727,0.7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.6999999970197677
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_half_step",
+      "formula": "=MOD(12345.678*134217727+12345.678/2,12345.678)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6172.8391328125
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_exact_large_quotient",
+      "formula": "=MOD(1E+15,7.45058059692383E+06)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7450580.34692383
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_roundup_fraction",
+      "formula": "=ROUNDUP(0.285,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.30000000000000004
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_roundup_cents",
+      "formula": "=ROUNDUP(2.675,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.6799999999999997
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_roundup_large",
+      "formula": "=ROUNDUP(123456789012.345,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 123456789012.34999
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_round_at_1e15",
+      "formula": "=ROUND(1E+15,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000000.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_round_many_places",
+      "formula": "=ROUND(1234567.891,12)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234567.891
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_trunc_fifteen_digits",
+      "formula": "=TRUNC(123456789012.345,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 123456789012.345
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_rounddown_fifteen_digits",
+      "formula": "=ROUNDDOWN(123456789012.345,7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 123456789012.345
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_round_carry",
+      "formula": "=ROUND(99.995,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_round_negative_half",
+      "formula": "=ROUND(-2.5,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_round_negative_places",
+      "formula": "=ROUND(1234.5,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1200.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_roundup_negative",
+      "formula": "=ROUNDUP(-0.285,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -0.30000000000000004
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "round_digit_string_rounddown_below_unit",
+      "formula": "=ROUNDDOWN(0.0049,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ceiling_fifteen_digit_quotient_below",
+      "formula": "=CEILING(1E+15,0.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 999999999999999.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "floor_fifteen_digit_quotient_above",
+      "formula": "=FLOOR(1E+15,0.07)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000001.1
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ceiling_fifteen_digit_quotient_wide",
+      "formula": "=CEILING(1.23456789012345E+15,0.07)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1234567890123449.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ceiling_small_significance",
+      "formula": "=CEILING(1E+12,1E-5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000.0001
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ceiling_math_fifteen_digit_quotient",
+      "formula": "=CEILING.MATH(1E+15,0.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 999999999999999.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "floor_math_fifteen_digit_quotient",
+      "formula": "=FLOOR.MATH(1E+15,0.07)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000001.1
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "ceiling_precise_fifteen_digit_quotient",
+      "formula": "=CEILING.PRECISE(1E+15,0.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 999999999999999.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "floor_precise_fifteen_digit_quotient",
+      "formula": "=FLOOR.PRECISE(1E+15,0.07)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1000000000000001.1
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "iso_ceiling_fifteen_digit_quotient",
+      "formula": "=ISO.CEILING(1E+15,0.3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 999999999999999.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_below_quotient_cap",
+      "formula": "=MOD(1125899999999.5,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_at_quotient_cap",
+      "formula": "=MOD(1125900000000,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_below_quotient_cap_two",
+      "formula": "=MOD(2251799999999,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_above_quotient_cap_two",
+      "formula": "=MOD(2251800000001,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_negative_dividend_at_cap",
+      "formula": "=MOD(-1125900000000,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "mod_negative_divisor_at_cap",
+      "formula": "=MOD(1125900000000,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "roundup_noisy_sum",
+      "formula": "=ROUNDUP(0.1+0.2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "roundup_noisy_product",
+      "formula": "=ROUNDUP(3*1.1,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.3
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "roundup_noisy_scaled",
+      "formula": "=ROUNDUP(0.07*100,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "roundup_third_fifteen_places",
+      "formula": "=ROUNDUP(1/3,15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.333333333333333
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
       }
     }
   ]

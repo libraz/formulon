@@ -2,11 +2,11 @@
   "suite": "groupby",
   "description": "GROUPBY dynamic-array group-and-aggregate (Excel 365). Perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "ru-RU",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T18:58:15Z"
+    "generated_at": "2026-10-24T22:27:55Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1321,6 +1321,644 @@
         "shape": [
           3,
           2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_pos1",
+      "formula": "=GROUPBY({\"b\";\"a\";\"c\";\"a\"},{1;5;3;4},SUM,0,0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          9.0,
+          "b",
+          1.0,
+          "c",
+          3.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_neg1",
+      "formula": "=GROUPBY({\"b\";\"a\";\"c\";\"a\"},{1;5;3;4},SUM,0,0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "c",
+          3.0,
+          "b",
+          1.0,
+          "a",
+          9.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_pos2",
+      "formula": "=GROUPBY({\"b\";\"a\";\"c\";\"a\"},{1;5;3;4},SUM,0,0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "b",
+          1.0,
+          "c",
+          3.0,
+          "a",
+          9.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_neg2",
+      "formula": "=GROUPBY({\"b\";\"a\";\"c\";\"a\"},{1;5;3;4},SUM,0,0,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          9.0,
+          "c",
+          3.0,
+          "b",
+          1.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_sort_order_past_last_column",
+      "formula": "=GROUPBY({\"b\";\"a\";\"c\";\"a\"},{1;5;3;4},SUM,0,0,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "groupby_sort_order_vector",
+      "formula": "=GROUPBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"},{1;2;3;4},SUM,0,0,{1,-3})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "groupby_sort_order_vector_second_key_desc",
+      "formula": "=GROUPBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"},{1;2;3;4},SUM,0,0,{-2})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "b",
+          1.0,
+          "x",
+          "a",
+          3.0,
+          "y",
+          "b",
+          4.0,
+          "y",
+          "a",
+          2.0
+        ],
+        "shape": [
+          4,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_percentof_bare",
+      "formula": "=GROUPBY({\"a\";\"b\";\"a\"},{1;2;3},PERCENTOF,0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          0.6666666666666666,
+          "b",
+          0.3333333333333333,
+          "Итого",
+          1.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_percentof_lambda",
+      "formula": "=GROUPBY({\"a\";\"b\";\"a\"},{1;2;3},LAMBDA(x,y,PERCENTOF(x,y)),0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          0.6666666666666666,
+          "b",
+          0.3333333333333333,
+          "Итого",
+          1.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_percentof_subtotals",
+      "formula": "=GROUPBY({\"x\",\"b\";\"y\",\"a\";\"x\",\"a\";\"y\",\"b\"},{1;2;3;4},PERCENTOF,0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "x",
+          "a",
+          0.3,
+          "x",
+          "b",
+          0.1,
+          "x",
+          "",
+          0.4,
+          "y",
+          "a",
+          0.2,
+          "y",
+          "b",
+          0.4,
+          "y",
+          "",
+          0.6,
+          "Общий итог",
+          "",
+          1.0
+        ],
+        "shape": [
+          7,
+          3
+        ]
+      }
+    },
+    {
+      "id": "groupby_percentof_filtered",
+      "formula": "=GROUPBY({\"a\";\"b\";\"a\";\"c\"},{1;2;3;4},PERCENTOF,0,1,,{TRUE;TRUE;TRUE;FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          0.6666666666666666,
+          "b",
+          0.3333333333333333,
+          "Итого",
+          1.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_two_param_lambda_rows",
+      "formula": "=GROUPBY(B2:B7,C2:C7,LAMBDA(x,y,ROWS(x)&\"/\"&ROWS(y)))",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "2/6",
+          "b",
+          "2/6",
+          "c",
+          "2/6",
+          "Итого",
+          "6/6"
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_correl_bare",
+      "formula": "=GROUPBY(B2:B7,C2:C7,CORREL)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "c",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "Итого",
+          1.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_covariance_p_bare",
+      "formula": "=GROUPBY(B2:B7,C2:C7,COVARIANCE.P)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "c",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "Итого",
+          2.9166666666666665
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_percentof_range",
+      "formula": "=GROUPBY(B2:B7,C2:C7,PERCENTOF)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          0.14285714285714285,
+          "b",
+          0.3333333333333333,
+          "c",
+          0.5238095238095238,
+          "Итого",
+          1.0
+        ],
+        "shape": [
+          4,
+          2
+        ]
+      }
+    },
+    {
+      "id": "groupby_correl_two_value_columns",
+      "formula": "=GROUPBY(B2:B7,C2:D7,CORREL)",
+      "setup": {
+        "B2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B5": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B6": {
+          "kind": "text",
+          "value": "c"
+        },
+        "B7": {
+          "kind": "text",
+          "value": "c"
+        },
+        "C2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C5": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C6": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C7": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "D6": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "D7": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "b",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "c",
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          {
+            "kind": "error",
+            "code": "#N/A"
+          },
+          "Итого",
+          1.0,
+          1.0000000000000002
+        ],
+        "shape": [
+          4,
+          3
         ]
       }
     }

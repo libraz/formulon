@@ -2,17 +2,53 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "nl-NL",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-09T23:24:49Z"
+    "generated_at": "2026-10-24T23:27:56Z"
   },
   "tolerance": {
     "abs": 0.0,
     "rel": 0.0
   },
   "cases": [
+    {
+      "id": "rows_of_scalar_error_plus_array",
+      "formula": "=ROWS(1/0+{1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_if_scalar_error_plus_array",
+      "formula": "=ROWS(IF(TRUE,1/0+{1;2;3}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_iferror_scalar_error_plus_array",
+      "formula": "=ROWS(IFERROR(1/0+{1;2;3},0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "rows_of_iserror_scalar_error_plus_array",
+      "formula": "=ROWS(ISERROR(1/0+{1;2;3}))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
     {
       "id": "sequence_3",
       "formula": "=SEQUENCE(3)",

@@ -2,11 +2,11 @@
   "suite": "forecast_ets",
   "description": "FORECAST.ETS — exponential triple smoothing closure against Mac Excel 365 (ja-JP).",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "zh-CN",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T17:29:28Z"
+    "generated_at": "2026-10-24T21:26:02Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -498,6 +498,216 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_array_target_second",
+      "formula": "=INDEX(FORECAST.ETS({13.0,14.5}, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0), 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 23.574108766155803
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_array_target_columns",
+      "formula": "=COLUMNS(FORECAST.ETS({13.0,14.5,16.0}, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "forecast_ets_confint_array_target_second",
+      "formula": "=INDEX(FORECAST.ETS.CONFINT({13.0;14.5}, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0.9, 0), 2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.6357314266737304
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_range_target_second",
+      "formula": "=INDEX(FORECAST.ETS(A1:A2, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0), 2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 14.5
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 23.574108766155803
+      },
+      "tolerance": {
+        "abs": 0.0,
+        "rel": 0.0
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_1e15",
+      "formula": "=FORECAST.ETS(1E+15, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_1e18",
+      "formula": "=FORECAST.ETS(1E+18, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_1e300",
+      "formula": "=FORECAST.ETS(1E+300, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_2958465",
+      "formula": "=FORECAST.ETS(2958465, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2976705.2966692615
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_2958466",
+      "formula": "=FORECAST.ETS(2958466, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2976706.3028316842
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_max_horizon",
+      "formula": "=FORECAST.ETS(2147483659, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2160717370.063682
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_past_max_horizon",
+      "formula": "=FORECAST.ETS(2147483660, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_1e9",
+      "formula": "=FORECAST.ETS(1E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1006162431.699109
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_daily_3e9",
+      "formula": "=FORECAST.ETS(3E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_negative_timeline_1e9",
+      "formula": "=FORECAST.ETS(1E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1006162444.7792205
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_negative_timeline_3e9",
+      "formula": "=FORECAST.ETS(3E+9, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_negative_timeline_max_horizon",
+      "formula": "=FORECAST.ETS(2147483646, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2160717370.063682
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_negative_timeline_past_max_horizon",
+      "formula": "=FORECAST.ETS(2147483647, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {-12.0;-11.0;-10.0;-9.0;-8.0;-7.0;-6.0;-5.0;-4.0;-3.0;-2.0;-1.0}, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_confint_far_target_daily_5e18",
+      "formula": "=FORECAST.ETS.CONFINT(5E+18, {10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 0.95, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "forecast_ets_far_target_monthly_1e15",
+      "formula": "=FORECAST.ETS(1E+15, {100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0}, {44927.0;44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0}, 0)",
+      "setup": {},
+      "skipped": "Mac Excel does not finish evaluating FORECAST.ETS on a monthly timeline with a target outside about [timeline start, 1E+6]; it holds 100% CPU past 200 s, so no host produces a value. Targets 45292 and 1E+6 answer at once; 1E+7, 1E+8 and -1 hang as well. Daily-timeline far targets capture normally. Formulon returns the model value at the calendar horizon, or #NUM! past 2^53 days."
+    },
+    {
+      "id": "forecast_ets_far_target_monthly_1e300",
+      "formula": "=FORECAST.ETS(1E+300, {100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0}, {44927.0;44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0}, 0)",
+      "setup": {},
+      "skipped": "Mac Excel does not finish evaluating FORECAST.ETS on a monthly timeline with a target outside about [timeline start, 1E+6]; it holds 100% CPU past 200 s, so no host produces a value. Targets 45292 and 1E+6 answer at once; 1E+7, 1E+8 and -1 hang as well. Daily-timeline far targets capture normally. Formulon returns the model value at the calendar horizon, or #NUM! past 2^53 days."
+    },
+    {
+      "id": "forecast_ets_far_target_monthly_neg_1e300",
+      "formula": "=FORECAST.ETS(-1E+300, {100.0;104.0;109.0;103.0;108.0;114.0;107.0;113.0;119.0;111.0;118.0;125.0}, {44927.0;44958.0;44986.0;45017.0;45047.0;45078.0;45108.0;45139.0;45170.0;45200.0;45231.0;45261.0}, 0)",
+      "setup": {},
+      "skipped": "Mac Excel does not finish evaluating FORECAST.ETS on a monthly timeline with a target outside about [timeline start, 1E+6]; it holds 100% CPU past 200 s, so no host produces a value. Targets 45292 and 1E+6 answer at once; 1E+7, 1E+8 and -1 hang as well. Daily-timeline far targets capture normally. Formulon returns the model value at the calendar horizon, or #NUM! past 2^53 days."
+    },
+    {
+      "id": "forecast_ets_stat_type_1e300",
+      "formula": "=FORECAST.ETS.STAT({10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0}, {1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0}, 1E+300, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
       }
     }
   ]
