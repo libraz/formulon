@@ -86,26 +86,6 @@ entries:
     prefer: formulon
     first_noted: 2026-10-13
     last_verified_excel_version: "16.0.20430"
-  # Windows goldens that hold a baked skip and no expectation. Each is
-  # selected here so the per-cause tally counts it; a recapture records the
-  # observed value beside the skip while the last-verified stamp is pending.
-  - ids:
-      - scale_50_shrinks_breaks
-      - scale_25_extreme_shrink
-      - zoom_75_dense_fit_off
-      - zoom_50_dense_fit_off
-      - zoom_25_dense_fit_off
-      - scale_50_short_row
-      - scale_50_flat_rows
-      - scale_75_short_row
-      - scale_75_flat_rows
-    applies_to: [win-365-ja_JP]
-    mode: skip-oracle
-    cause: harness-cannot-capture
-    reason: "The committed Windows print-scale goldens were baked as skipped and hold no expect. Mac Excel 16.113 breaks these cases at printable width / (column width x scale), and Formulon matches it; the Windows pagination for them has not been recorded in an expect. Recapture on Windows with the layout settled after the page setup."
-    prefer: formulon
-    first_noted: 2026-05-17
-    last_verified_excel_version: "needs live Windows recapture"
   - ids:
       - filterxml_arity_zero
       - filterxml_arity_one
