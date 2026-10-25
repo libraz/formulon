@@ -43,13 +43,6 @@ entries:
     prefer: formulon
     first_noted: 2026-05-08
     last_verified_excel_version: "16.0.20228"
-  # The Windows golden records -1 for a date difference that is 0.
-  - id: datevalue_agrees_with_date
-    compare_mode: datevalue_roundtrip_readback
-    reason: "DATEVALUE(\"2026-04-23\")-DATE(2026,4,23) is 0, which Formulon returns, but the Windows golden records -1. The compare mode accepts exactly that pair (golden -1, engine 0) and compares every other value normally. The -1 is consistent with the Range.Value read that date_year_snap_1900 records, which lands one day early below serial 61; the next capture through the Value2 driver replaces it."
-    prefer: formulon
-    first_noted: 2026-05-08
-    last_verified_excel_version: "16.0.20228"
   # The four aggregator cases carried `prefer: formulon` here and
   # `prefer: mac-excel-365` in tests/divergence.yaml -- the same
   # divergence recorded with opposite verdicts. Both files also blamed the
@@ -66,17 +59,6 @@ entries:
     prefer: formulon
     first_noted: 2026-09-30
     last_verified_excel_version: "16.0.20228"
-  # The COM bridge read this date-formatted result through Range.Value, which
-  # converts serial 1 to the OLE date 1899-12-31 and back to 0. The driver now
-  # reads Value2; Excel answers 1, as Formulon does.
-  - id: date_year_snap_1900
-    applies_to: [win-365-ja_JP]
-    mode: skip-oracle
-    cause: harness-cannot-capture
-    reason: "DATE(1899.9999999,1,1): the golden records 0 because the Windows driver read the date-formatted cell through Range.Value, whose OLE date has no 1900-02-29 and lands one day early below serial 61. Read through Value2 on the same host, Excel returns 1, as Formulon does; the next capture with the Value2 driver replaces the golden."
-    prefer: formulon
-    first_noted: 2026-10-13
-    last_verified_excel_version: "needs live Windows recapture through Value2"
   # Undocumented WEEKNUM return types have no stable answer on Windows.
   - id: weeknum_neg2
     applies_to: [win-365-ja_JP]

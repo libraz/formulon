@@ -490,8 +490,6 @@ inline std::string compare_value(const JsonValue& expect, const Value& raw_actua
       return "golden missing 'value'";
     double want = val_v->as_number();
     double got = actual.as_number();
-    if (compare_mode == "datevalue_roundtrip_readback" && want == -1.0 && got == 0.0)
-      return {};
     // Exact equality is the strict path. When tolerances are non-zero, we
     // accept a match if either absolute or relative diff fits. NaN matches
     // NaN (Excel treats NaN as #NUM!, so this usually doesn't arise).

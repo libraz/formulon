@@ -62,10 +62,6 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
         }
         self.assertEqual(loosened, expected)
         self.assertTrue(all(probes[case_id].tolerance.rel == 0.001 for case_id in expected))
-        date_case = next(
-            case for case in self.by_name["datevalue_timevalue"].cases if case.id == "datevalue_agrees_with_date"
-        )
-        self.assertEqual(date_case.compare_mode, "datevalue_roundtrip_readback")
 
     def test_variant_goldens_match_generated_metadata(self) -> None:
         for name in ("financial", "financial_accrual", "complex", "datevalue_timevalue", "ironcalc_drift_probes"):

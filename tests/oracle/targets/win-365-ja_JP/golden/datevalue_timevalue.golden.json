@@ -218,8 +218,7 @@
       "expect": {
         "kind": "number",
         "value": 0.0
-      },
-      "compare_mode": "datevalue_roundtrip_readback"
+      }
     },
     {
       "id": "timevalue_hours_minutes",

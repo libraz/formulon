@@ -33,7 +33,6 @@ KINDS = {"blank", "number", "bool", "text", "error", "formula"}
 COMPARE_MODES = {
     "exact",
     "complex_text",
-    "datevalue_roundtrip_readback",
     "host_libm",
     "numeric_text",
 }
