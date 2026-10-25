@@ -104,7 +104,8 @@ std::string_view strip_trailing_currency(std::string_view s) noexcept {
 
 // Assembles a canonical C-locale numeric string (digits, one optional `.`,
 // optional exponent `e[+/-]digits`), rejecting any other byte. Grouping: the
-// first group is 1+ digits not starting with `0`, every later one 3+.
+// first group is 1+ digits with at least one nonzero (all-zero is rejected),
+// every later one 3+.
 bool canonical_number(std::string_view s, char decimal_sep, char group_sep, std::string* out) {
   std::string& canonical = *out;
   canonical.reserve(s.size());
@@ -113,9 +114,9 @@ bool canonical_number(std::string_view s, char decimal_sep, char group_sep, std:
   bool seen_exp = false;
   bool seen_group_sep = false;
   int digits_in_current_group = 0;
-  bool group_starts_with_zero = false;
+  bool first_group_has_nonzero = false;
   const auto group_ok = [&]() {
-    return seen_group_sep ? digits_in_current_group >= 3 : !group_starts_with_zero && digits_in_current_group >= 1;
+    return seen_group_sep ? digits_in_current_group >= 3 : first_group_has_nonzero && digits_in_current_group >= 1;
   };
   for (std::size_t i = 0; i < s.size(); ++i) {
     const char c = s[i];
@@ -123,8 +124,7 @@ bool canonical_number(std::string_view s, char decimal_sep, char group_sep, std:
       canonical.push_back(c);
       seen_digit = true;
       if (!seen_point && !seen_exp) {
-        group_starts_with_zero =
-            group_starts_with_zero || (digits_in_current_group == 0 && c == '0' && !seen_group_sep);
+        first_group_has_nonzero = first_group_has_nonzero || (c != '0' && !seen_group_sep);
         ++digits_in_current_group;
       }
       continue;

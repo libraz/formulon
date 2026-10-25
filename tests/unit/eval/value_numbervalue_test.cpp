@@ -841,6 +841,29 @@ TEST(NumberValueFunction, NumericPassthrough) {
   EXPECT_EQ(v.as_number(), 42.0);
 }
 
+TEST(ValueGroupingRules, FirstGroupRejectedOnlyWhenAllZeros) {
+  Workbook en = Workbook::create();
+  en.set_excel_profile(mac_365_en_us_profile());
+  const Value grouped = EvalSourceIn("=VALUE(\"043,472\")", en, en.sheet(0));
+  ASSERT_TRUE(grouped.is_number());
+  EXPECT_EQ(grouped.as_number(), 43472.0);
+  for (const char* formula : {"=VALUE(\"0,123\")", "=VALUE(\"00,123\")"}) {
+    SCOPED_TRACE(formula);
+    const Value rejected = EvalSourceIn(formula, en, en.sheet(0));
+    ASSERT_TRUE(rejected.is_error());
+    EXPECT_EQ(rejected.as_error(), ErrorCode::Value);
+  }
+
+  Workbook de = Workbook::create();
+  de.set_excel_profile(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kDeDE});
+  const Value tiny = EvalSourceIn("=VALUE(\"046.565.118.685.798E-15\")", de, de.sheet(0));
+  ASSERT_TRUE(tiny.is_number());
+  EXPECT_EQ(tiny.as_number(), 46565118685798e-15);
+  const Value zero_group = EvalSourceIn("=VALUE(\"000.509\")", de, de.sheet(0));
+  ASSERT_TRUE(zero_group.is_error());
+  EXPECT_EQ(zero_group.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
