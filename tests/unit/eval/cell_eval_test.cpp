@@ -20,10 +20,12 @@
 #include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -111,6 +113,40 @@ TEST(BuiltinsCellAddress, RangeUsesTopLeft) {
   const Value v = EvalSourceIn("=CELL(\"address\", B5:D7)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(std::string(v.as_text()), "$B$5");
+}
+
+// The sheet qualifier follows the cross-workbook rule: R1C1-, cell- and
+// bool-shaped names stay bare, and U+3000 quotes only in double-byte locales.
+TEST(BuiltinsCellAddress, OtherSheetQuotedByCrossWorkbookRule) {
+  struct Row {
+    const char* sheet;
+    const char* formula;
+    const char* ja;
+    const char* en;
+  };
+  constexpr Row kRows[] = {
+      {"R1", "=CELL(\"address\",R1!A1)", "R1!$A$1", "R1!$A$1"},  // sheet_name_quoting.cell_address_sheet_r1
+      {"TRUE", "=CELL(\"address\",'TRUE'!A1)", "TRUE!$A$1", "TRUE!$A$1"},
+      {"XFD1", "=CELL(\"address\",'XFD1'!A1)", "XFD1!$A$1", "XFD1!$A$1"},
+      {"1abc", "=CELL(\"address\",'1abc'!A1)", "'1abc'!$A$1", "'1abc'!$A$1"},
+      {"it's", "=CELL(\"address\",'it''s'!A1)", "'it''s'!$A$1", "'it''s'!$A$1"},
+      {"My Sheet", "=CELL(\"address\",'My Sheet'!A1)", "'My Sheet'!$A$1", "'My Sheet'!$A$1"},
+      {"\xE5\x85\xA8\xE8\xA7\x92\xE3\x80\x80\xE7\xA9\xBA\xE7\x99\xBD",  // 全角　空白
+       "=CELL(\"address\",'\xE5\x85\xA8\xE8\xA7\x92\xE3\x80\x80\xE7\xA9\xBA\xE7\x99\xBD'!A1)",
+       "'\xE5\x85\xA8\xE8\xA7\x92\xE3\x80\x80\xE7\xA9\xBA\xE7\x99\xBD'!$A$1",
+       "\xE5\x85\xA8\xE8\xA7\x92\xE3\x80\x80\xE7\xA9\xBA\xE7\x99\xBD!$A$1"},
+  };
+  for (const Row& row : kRows) {
+    for (const bool ja : {true, false}) {
+      const ExcelProfile profile = ja ? mac_365_ja_jp_profile() : mac_365_en_us_profile();
+      Workbook wb = Workbook::create_for_profile(profile);
+      wb.add_sheet(row.sheet);
+      const eval::ScopedEvalProfile scope(profile);
+      const Value v = EvalSourceIn(row.formula, wb, wb.sheet(0));
+      ASSERT_TRUE(v.is_text()) << row.sheet;
+      EXPECT_EQ(std::string(v.as_text()), ja ? row.ja : row.en) << row.sheet;
+    }
+  }
 }
 
 TEST(BuiltinsCellAddress, OmittedReferenceUsesFormulaCell) {

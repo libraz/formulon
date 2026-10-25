@@ -1,5 +1,5 @@
 suite: sheet_name_quoting
-description: ADDRESS quotes sheet_text by the A1 sheet-qualifier rule of formula display, in both reference styles
+description: ADDRESS quotes sheet_text by the A1 sheet-qualifier rule of formula display, in both reference styles; CELL("address") quotes its sheet by the cross-workbook rule (the book name is stripped so the case reads the same in every workbook)
 tolerance: { abs: 0, rel: 0 }
 locale: ja-JP
 cases:
@@ -107,3 +107,83 @@ cases:
     formula: "=ADDRESS(1,1,1,TRUE,\"VERDADEIRO\")"
   - id: address_name_vero
     formula: "=ADDRESS(1,1,1,TRUE,\"VERO\")"
+
+  - id: address_name_cell_shape_two_letters
+    formula: "=ADDRESS(1,1,1,TRUE,\"ab1\")"
+  - id: address_name_past_last_column
+    formula: "=ADDRESS(1,1,1,TRUE,\"XFE1\")"
+  - id: address_name_rc_row_offset
+    formula: "=ADDRESS(1,1,1,TRUE,\"RC9\")"
+  - id: cell_address_sheet_r
+    setup:
+      "'R'!A1": 1
+    formula: '=LET(c,CELL("address",''R''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_r1
+    setup:
+      "'R1'!A1": 1
+    formula: '=LET(c,CELL("address",''R1''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_rc
+    setup:
+      "'RC'!A1": 1
+    formula: '=LET(c,CELL("address",''RC''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_rc9
+    setup:
+      "'RC9'!A1": 1
+    formula: '=LET(c,CELL("address",''RC9''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_z1s1
+    setup:
+      "'Z1S1'!A1": 1
+    formula: '=LET(c,CELL("address",''Z1S1''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_l1c1
+    setup:
+      "'L1C1'!A1": 1
+    formula: '=LET(c,CELL("address",''L1C1''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_true
+    setup:
+      "'TRUE'!A1": 1
+    formula: '=LET(c,CELL("address",''TRUE''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_wahr
+    setup:
+      "'WAHR'!A1": 1
+    formula: '=LET(c,CELL("address",''WAHR''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_cell_shape
+    setup:
+      "'A1'!A1": 1
+    formula: '=LET(c,CELL("address",''A1''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_last_column_cell
+    setup:
+      "'XFD1'!A1": 1
+    formula: '=LET(c,CELL("address",''XFD1''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_digit_lead
+    setup:
+      "'1abc'!A1": 1
+    formula: '=LET(c,CELL("address",''1abc''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_dot_lead
+    setup:
+      "'.ab'!A1": 1
+    formula: '=LET(c,CELL("address",''.ab''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_apostrophe
+    setup:
+      "'it''s'!A1": 1
+    formula: '=LET(c,CELL("address",''it''''s''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_space
+    setup:
+      "'My Sheet'!A1": 1
+    formula: '=LET(c,CELL("address",''My Sheet''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_ideographic_space
+    setup:
+      "'全角　空白'!A1": 1
+    formula: '=LET(c,CELL("address",''全角　空白''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: cell_address_sheet_plain
+    setup:
+      "'Plain'!A1": 1
+    formula: '=LET(c,CELL("address",''Plain''!A1),p,IFERROR(FIND("]",c),0),IF(p,IF(LEFT(c)="''","''","")&MID(c,p+1,99),c))'
+  - id: address_name_dot_lead
+    formula: "=ADDRESS(1,1,1,TRUE,\".ab\")"
+  - id: address_r1c1_name_dot_lead
+    formula: "=ADDRESS(1,1,1,FALSE,\".ab\")"
+  - id: stored_sheet_dot_lead
+    setup:
+      "'.ab'!A1": 1
+      B1: "='.ab'!A1"
+    formula: "=FORMULATEXT(B1)"

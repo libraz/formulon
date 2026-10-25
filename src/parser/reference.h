@@ -75,7 +75,7 @@ bool whole_axis_pair_is_single(const Reference& lhs, const Reference& rhs) noexc
 /// Returns true iff the local sheet `name` must be wrapped in single quotes
 /// when written into an A1 reference: names leaving the bare qualifier run
 /// (ASCII letters, digits, `.`, `_` and non-ASCII characters other than
-/// U+3000 and U+FEFF), digit-leading names, TRUE / FALSE, names shaped like an
+/// U+3000 and U+FEFF), names opening with a digit or `.`, TRUE / FALSE, names shaped like an
 /// A1 cell inside the grid, and names shaped like an R1C1 reference (`R`,
 /// `C`, `R2`, `C3`, `R2C3`, `RC3`, `R2C`, `RC`).
 bool local_sheet_needs_quoting_a1(std::string_view name) noexcept;
@@ -100,10 +100,15 @@ bool local_sheet_needs_quoting_r1c1(std::string_view name) noexcept;
 /// characters other than U+3000 and U+FEFF.
 bool external_book_needs_quoting(std::string_view book) noexcept;
 
-/// True iff the sheet part of a cross-workbook qualifier opens with a digit
+/// True iff the sheet part of a cross-workbook qualifier opens with a digit or `.`
 /// or contains a byte outside the bare run. Unlike a local sheet, a cell-,
 /// R1C1- or bool-shaped name stays bare (`[Book.xlsx]S2!A1`).
 bool external_sheet_needs_quoting(std::string_view sheet) noexcept;
+
+/// `external_sheet_needs_quoting` as shown under the active locale, the rule
+/// CELL("address") prints its qualifier by: U+3000 leaves the bare run only
+/// in double-byte locales.
+bool external_sheet_needs_quoting_display(std::string_view sheet, const LocaleFacts& facts) noexcept;
 
 }  // namespace parser
 }  // namespace formulon

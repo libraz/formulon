@@ -32,6 +32,7 @@
 #include "eval/text_format/number_format.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
+#include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "style_resolve.h"
@@ -370,10 +371,9 @@ Value resolve_cell_width(std::string_view sheet_name, std::uint32_t col, Arena& 
 }
 
 // Builds the `"address"` answer: an A1 absolute address (`$Col$Row`)
-// optionally prefixed with a sheet qualifier. Sheet prefixing follows
-// Excel's bare-name rule (no quoting for plain identifiers); we keep
-// the formatting minimal because the workbook has no filename to wrap
-// in `[Workbook]` brackets.
+// optionally prefixed with a sheet qualifier, quoted by the cross-workbook
+// sheet rule of the active locale. The workbook has no filename, so no
+// `[Workbook]` part precedes the sheet.
 Value build_address(Arena& arena, std::string_view sheet, std::uint32_t row, std::uint32_t col) {
   // `a1::encode_a1` returns an unanchored address (e.g. "A1"); we splice the
   // `$` anchors in manually because the caller wants an absolute form.
@@ -390,7 +390,8 @@ Value build_address(Arena& arena, std::string_view sheet, std::uint32_t row, std
   std::string result;
   result.reserve(sheet.size() + a1.size() + 4);
   if (!sheet.empty()) {
-    result.append(sheet);
+    parser::append_sheet_name_quoted_if(
+        sheet, parser::external_sheet_needs_quoting_display(sheet, locale_facts(current_eval_profile())), result);
     result.push_back('!');
   }
   result.push_back('$');

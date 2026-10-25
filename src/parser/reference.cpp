@@ -29,6 +29,11 @@ bool IsBareRun(std::string_view name) noexcept {
   return detail::BareQualifierRunLength(name, 0) == name.size();
 }
 
+// A leading digit or `.` would read as the start of a number (`1abc`, `.ab`).
+bool OpensLikeNumber(std::string_view name) noexcept {
+  return !name.empty() && (detail::IsAsciiDigit(name.front()) || name.front() == '.');
+}
+
 // Advances `*i` over a run of ASCII digits and returns how many it skipped.
 std::size_t SkipDigits(std::string_view name, std::size_t* i) noexcept {
   const std::size_t start = *i;
@@ -122,12 +127,11 @@ bool IsBareRunIn(std::string_view name, bool dbcs) noexcept {
 }
 
 // The rules both notations share: an empty name, a byte outside the bare
-// qualifier run, a leading digit (read as a number), TRUE / FALSE (read as a
+// qualifier run, a leading digit or `.` (read as a number), TRUE / FALSE (read as a
 // bool) and an R1C1 shape.
 bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
-  return name.empty() || !IsBareRun(name) || detail::IsAsciiDigit(name.front()) ||
-         strings::case_insensitive_eq(name, "TRUE") || strings::case_insensitive_eq(name, "FALSE") ||
-         IsR1C1Shaped(name);
+  return name.empty() || !IsBareRun(name) || OpensLikeNumber(name) || strings::case_insensitive_eq(name, "TRUE") ||
+         strings::case_insensitive_eq(name, "FALSE") || IsR1C1Shaped(name);
 }
 
 }  // namespace
@@ -137,8 +141,8 @@ bool local_sheet_needs_quoting_a1(std::string_view name) noexcept {
 }
 
 bool local_sheet_needs_quoting_display(std::string_view name, const LocaleFacts& facts) noexcept {
-  if (name.empty() || !IsBareRunIn(name, facts.dbcs_codepage != DbcsCodepage::kNone) ||
-      detail::IsAsciiDigit(name.front()) || IsA1CellShaped(name) || IsRowKColShaped(name)) {
+  if (name.empty() || !IsBareRunIn(name, facts.dbcs_codepage != DbcsCodepage::kNone) || OpensLikeNumber(name) ||
+      IsA1CellShaped(name) || IsRowKColShaped(name)) {
     return true;
   }
   const bool english_bool = strings::case_insensitive_eq(facts.true_name, "TRUE");
@@ -160,7 +164,11 @@ bool external_book_needs_quoting(std::string_view book) noexcept {
 }
 
 bool external_sheet_needs_quoting(std::string_view sheet) noexcept {
-  return !sheet.empty() && (detail::IsAsciiDigit(sheet.front()) || !IsBareRun(sheet));
+  return !sheet.empty() && (OpensLikeNumber(sheet) || !IsBareRun(sheet));
+}
+
+bool external_sheet_needs_quoting_display(std::string_view sheet, const LocaleFacts& facts) noexcept {
+  return !sheet.empty() && (OpensLikeNumber(sheet) || !IsBareRunIn(sheet, facts.dbcs_codepage != DbcsCodepage::kNone));
 }
 
 std::string format_a1(const Reference& r) {

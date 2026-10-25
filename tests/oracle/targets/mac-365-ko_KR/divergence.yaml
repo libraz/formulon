@@ -4,4 +4,95 @@
 # skips and entries whose applies_to includes mac-365-ko_KR) and override it
 # on key collision. Schema is identical to tests/divergence.yaml.
 
-entries: []
+entries:
+  # CELL("address") on another sheet prints "[book]sheet!", quoted as a whole
+  # when either part needs it. The default ko-KR book name contains a space,
+  # so Excel quotes every such qualifier; Formulon has no book name to print.
+  - id: cell_address_sheet_r
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_r1
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_rc
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_rc9
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_z1s1
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_l1c1
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_true
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_wahr
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_cell_shape
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_last_column_cell
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"
+  - id: cell_address_sheet_plain
+    applies_to: [mac-365-ko_KR]
+    mode: skip-oracle
+    cause: accepted-divergence
+    reason: "Mac Excel ko-KR quotes the qualifier because the unsaved book's default name (통합 문서N) contains a space; the sheet name alone stays bare, which Formulon prints as it has no book name."
+    prefer: formulon
+    first_noted: 2026-10-26
+    last_verified_excel_version: "16.114.1"

@@ -1,12 +1,12 @@
 {
   "suite": "sheet_name_quoting",
-  "description": "ADDRESS quotes sheet_text by the A1 sheet-qualifier rule of formula display, in both reference styles",
+  "description": "ADDRESS quotes sheet_text by the A1 sheet-qualifier rule of formula display, in both reference styles; CELL(\"address\") quotes its sheet by the cross-workbook rule (the book name is stripped so the case reads the same in every workbook)",
   "environment": {
     "excel_version": "16.114.1",
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-25T14:12:08Z"
+    "generated_at": "2026-10-25T17:30:24Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -479,6 +479,293 @@
       "expect": {
         "kind": "text",
         "value": "VERO!$A$1"
+      }
+    },
+    {
+      "id": "address_name_cell_shape_two_letters",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"ab1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'ab1'!$A$1"
+      }
+    },
+    {
+      "id": "address_name_past_last_column",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"XFE1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "XFE1!$A$1"
+      }
+    },
+    {
+      "id": "address_name_rc_row_offset",
+      "formula": "=ADDRESS(1,1,1,TRUE,\"RC9\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'RC9'!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_r",
+      "formula": "=LET(c,CELL(\"address\",'R'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'R'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_r1",
+      "formula": "=LET(c,CELL(\"address\",'R1'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'R1'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "R1!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_rc",
+      "formula": "=LET(c,CELL(\"address\",'RC'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'RC'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "RC!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_rc9",
+      "formula": "=LET(c,CELL(\"address\",'RC9'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'RC9'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "RC9!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_z1s1",
+      "formula": "=LET(c,CELL(\"address\",'Z1S1'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'Z1S1'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Z1S1!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_l1c1",
+      "formula": "=LET(c,CELL(\"address\",'L1C1'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'L1C1'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "L1C1!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_true",
+      "formula": "=LET(c,CELL(\"address\",'TRUE'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'TRUE'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "TRUE!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_wahr",
+      "formula": "=LET(c,CELL(\"address\",'WAHR'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'WAHR'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "WAHR!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_cell_shape",
+      "formula": "=LET(c,CELL(\"address\",'A1'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'A1'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "A1!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_last_column_cell",
+      "formula": "=LET(c,CELL(\"address\",'XFD1'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'XFD1'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "XFD1!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_digit_lead",
+      "formula": "=LET(c,CELL(\"address\",'1abc'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'1abc'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "'1abc'!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_dot_lead",
+      "formula": "=LET(c,CELL(\"address\",'.ab'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'.ab'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "'.ab'!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_apostrophe",
+      "formula": "=LET(c,CELL(\"address\",'it''s'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'it''s'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "'it''s'!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_space",
+      "formula": "=LET(c,CELL(\"address\",'My Sheet'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'My Sheet'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "'My Sheet'!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_ideographic_space",
+      "formula": "=LET(c,CELL(\"address\",'全角　空白'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'全角　空白'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "全角　空白!$A$1"
+      }
+    },
+    {
+      "id": "cell_address_sheet_plain",
+      "formula": "=LET(c,CELL(\"address\",'Plain'!A1),p,IFERROR(FIND(\"]\",c),0),IF(p,IF(LEFT(c)=\"'\",\"'\",\"\")&MID(c,p+1,99),c))",
+      "setup": {
+        "'Plain'!A1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "Plain!$A$1"
+      }
+    },
+    {
+      "id": "address_name_dot_lead",
+      "formula": "=ADDRESS(1,1,1,TRUE,\".ab\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'.ab'!$A$1"
+      }
+    },
+    {
+      "id": "address_r1c1_name_dot_lead",
+      "formula": "=ADDRESS(1,1,1,FALSE,\".ab\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "'.ab'!R1C1"
+      }
+    },
+    {
+      "id": "stored_sheet_dot_lead",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "'.ab'!A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "='.ab'!A1"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "='.ab'!A1"
       }
     }
   ]

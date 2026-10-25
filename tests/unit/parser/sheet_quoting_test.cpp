@@ -173,6 +173,39 @@ TEST(SheetQuoting, StorageRequoteOnlyForBareQualifiersNeedingQuotes) {
   }
 }
 
+// A leading `.` reads as the start of a number, like a leading digit; an inner one stays bare.
+TEST(SheetQuoting, LeadingDotQuotesInEveryRule) {
+  const LocaleFacts& facts = locale_facts(mac_365_ja_jp_profile());
+  for (const char* sheet : {".ab", ".", ".5"}) {  // sheet_name_quoting.stored_sheet_dot_lead
+    EXPECT_TRUE(local_sheet_needs_quoting_a1(sheet)) << sheet;
+    EXPECT_TRUE(local_sheet_needs_quoting_r1c1(sheet)) << sheet;
+    EXPECT_TRUE(local_sheet_needs_quoting_display(sheet, facts)) << sheet;
+    EXPECT_TRUE(external_sheet_needs_quoting(sheet)) << sheet;
+  }
+  EXPECT_FALSE(local_sheet_needs_quoting_a1("a.b"));
+  EXPECT_FALSE(local_sheet_needs_quoting_display("a.b", facts));
+}
+
+// The cross-workbook sheet rule as CELL("address") displays it (Mac Excel 365).
+TEST(SheetQuoting, ExternalSheetDisplayRuleQuotesIdeographicSpaceInDbcsLocales) {
+  constexpr const char* kIdeographicSpaced =
+      "\xE5\x85\xA8\xE8\xA7\x92\xE3\x80\x80\xE7\xA9\xBA\xE7\x99\xBD";  // 全角　空白
+  for (const ExcelLocale locale : {ExcelLocale::kJaJP, ExcelLocale::kZhCN, ExcelLocale::kZhTW}) {
+    EXPECT_TRUE(external_sheet_needs_quoting_display(kIdeographicSpaced,
+                                                     locale_facts(ExcelProfile{ExcelHost::kMac365, locale})));
+  }
+  for (const ExcelLocale locale : {ExcelLocale::kEnUS, ExcelLocale::kDeDE, ExcelLocale::kThTH}) {
+    const LocaleFacts& facts = locale_facts(ExcelProfile{ExcelHost::kMac365, locale});
+    EXPECT_FALSE(external_sheet_needs_quoting_display(kIdeographicSpaced, facts));
+    for (const char* sheet : {"R", "RC9", "Z1S1", "WAHR", "TRUE", "A1", "XFD1", "a.b", "_ab"}) {
+      EXPECT_FALSE(external_sheet_needs_quoting_display(sheet, facts)) << sheet;
+    }
+    for (const char* sheet : {"1abc", "1.5", ".ab", "it's", "a b", "a-b"}) {
+      EXPECT_TRUE(external_sheet_needs_quoting_display(sheet, facts)) << sheet;
+    }
+  }
+}
+
 // Quoting of a sheet name as ADDRESS displays it, per locale (Mac Excel 365).
 // `quoted` holds one flag per locale in kDisplayLocales order.
 TEST(SheetQuoting, DisplayRuleFollowsTheLocale) {
