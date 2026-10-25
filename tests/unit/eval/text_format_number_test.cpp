@@ -1058,6 +1058,13 @@ TEST(NumberFormatFraction, GroupSeparatedIntegerPlaceholdersAllCount) {
   EXPECT_EQ(RenderEnUs(1234.5, "#,##0 ?/?"), "1,234 1/2");
 }
 
+TEST(NumberFormatFraction, LiteralBetweenIntegerPlaceholdersPrintsInPlace) {
+  EXPECT_EQ(Render(1234.5, "# ##0 ?/?"), "1 234 1/2");  // text_format.tf_fraction_space_inside_integer
+  EXPECT_EQ(Render(1234.5, "#\xC2\xA0##0 ?/?"),
+            "1\xC2\xA0"
+            "234 1/2");  // text_format.tf_fraction_nbsp_inside_integer
+}
+
 TEST(NumberFormatScientific, SubnormalExponentIsTheNegatedIntegerGroup) {
   const double tiny = std::ldexp(1.0, -1024);  // subnormal above the flush-to-zero threshold
   EXPECT_EQ(Render(tiny, "0.00E+00"), "0.00E-01");

@@ -6,7 +6,7 @@
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-25T14:12:26Z"
+    "generated_at": "2026-10-25T17:18:28Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2891,6 +2891,60 @@
       "expect": {
         "kind": "text",
         "value": "500.0E-03"
+      }
+    },
+    {
+      "id": "tf_fraction_dot_grouped_integer",
+      "formula": "=TEXT(1234.5, \"#.##0 ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tf_fraction_dot_grouped_millions",
+      "formula": "=TEXT(1234567.25, \"#.##0 ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tf_fraction_dot_zero_integer",
+      "formula": "=TEXT(0.5, \"0.0 ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tf_fraction_dot_grouped_negative",
+      "formula": "=TEXT(-1234.75, \"#.##0 ??/??\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tf_fraction_space_inside_integer",
+      "formula": "=TEXT(1234.5, \"# ##0 ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1 234 1/2"
+      }
+    },
+    {
+      "id": "tf_fraction_nbsp_inside_integer",
+      "formula": "=TEXT(1234.5, \"# ##0 ?/?\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1 234 1/2"
       }
     }
   ]

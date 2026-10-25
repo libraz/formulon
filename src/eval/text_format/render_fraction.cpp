@@ -14,9 +14,11 @@
 #include <utility>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
 #include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
+#include "excel_locale.h"
 #include "utils/number_text.h"
 
 namespace formulon {
@@ -133,21 +135,27 @@ bool is_digit_placeholder_tok(Tok k) {
   return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad;
 }
 
-// Emit the non-negative integer `digits` right-aligned to `width` characters
-// using the placeholder kinds in `[begin, end)`. Each placeholder kind
-// determines how unused leading positions render: `0` -> '0' pad, `?` ->
-// space pad, `#` -> nothing emitted. The DBNum mapping applies to digits
-// (and to `0`-pad positions) but never to spaces or absent positions.
-void emit_fraction_digits(const Section& section, std::string_view digits, int begin, int end, std::string& out,
-                          bool trailing_pad = false) {
+// Emit the non-negative integer `digits` right-aligned to the placeholders
+// in `[begin, end)`. Each placeholder kind determines how unused leading
+// positions render: `0` -> '0' pad, `?` -> space pad, `#` -> nothing
+// emitted. Literals between placeholders print in place. The DBNum mapping
+// applies to digits (and to `0`-pad positions) but never to spaces or
+// absent positions.
+void emit_fraction_digits(const Section& section, std::string_view fmt, std::string_view digits, int begin, int end,
+                          std::string& out, bool trailing_pad = false) {
   std::vector<Tok> kinds;
+  // `literals_after[k]`: token indices of the literals that follow placeholder `k`.
+  std::vector<std::vector<std::size_t>> literals_after;
   bool grouped = false;
   for (int k = begin; k < end; ++k) {
     const Tok kind = section.tokens[static_cast<std::size_t>(k)].kind;
     if (kind == Tok::Comma) {
       grouped = true;
-    } else {
+    } else if (is_digit_placeholder_tok(kind)) {
       kinds.push_back(kind);
+      literals_after.emplace_back();
+    } else if (!literals_after.empty()) {
+      literals_after.back().push_back(static_cast<std::size_t>(k));
     }
   }
   const int width = static_cast<int>(kinds.size());
@@ -162,10 +170,21 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
     append_digit_dbnum(pieces.back(), section.digit_style, d);
     is_digit.push_back(true);
   };
+  const auto add_literals = [&](int placeholder) {
+    for (const std::size_t idx : literals_after[static_cast<std::size_t>(placeholder)]) {
+      const Token& tk = section.tokens[idx];
+      pieces.emplace_back(tk.kind == Tok::Literal ? fmt.substr(tk.lit_begin, tk.lit_end - tk.lit_begin) : " ");
+      is_digit.push_back(false);
+    }
+  };
   if (static_cast<int>(digits.size()) > width) {
-    // Overflow: the digits show in full (the search above caps their count).
-    for (const char d : digits) {
-      add_digit(d);
+    // Overflow: the digits show in full (the search above caps their count); the excess sits on the first placeholder.
+    const std::size_t excess = digits.size() - static_cast<std::size_t>(width);
+    for (std::size_t d = 0; d < digits.size(); ++d) {
+      add_digit(digits[d]);
+      if (d >= excess) {
+        add_literals(static_cast<int>(d - excess));
+      }
     }
   } else {
     const int pad = width - static_cast<int>(digits.size());
@@ -194,9 +213,11 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
       } else {
         add_digit(trailing_pad ? digits[static_cast<std::size_t>(k)] : digits[digit_cursor++]);
       }
+      add_literals(k);
     }
   }
-  // A separator between integer placeholders groups every three digits from the right.
+  // A separator between integer placeholders groups every three digits from the right, in the locale's symbol.
+  const char group_separator = locale_facts(eval::current_eval_profile()).group_separator;
   std::size_t digits_right = 0;
   std::vector<std::string> reversed;
   for (std::size_t k = pieces.size(); k-- > 0;) {
@@ -204,7 +225,7 @@ void emit_fraction_digits(const Section& section, std::string_view digits, int b
     if (grouped && is_digit[k]) {
       ++digits_right;
       if (digits_right % 3 == 0 && k > 0 && is_digit[k - 1]) {
-        reversed.emplace_back(",");
+        reversed.emplace_back(1, group_separator);
       }
     }
   }
@@ -262,10 +283,12 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   const int den_end = section.fraction_den_end;
   const int slash_index = section.fraction_slash_index;
   const auto kind_at = [&](int index) { return section.tokens[static_cast<std::size_t>(index)].kind; };
-  // A group separator between integer placeholders is inert; the placeholders on both sides all count.
+  // A group separator or a literal between integer placeholders splits nothing; the placeholders on both sides
+  // all count.
   int int_begin = section.fraction_int_begin;
-  while (has_int_group && int_begin >= 2 && kind_at(int_begin - 1) == Tok::Comma &&
-         kind_at(int_begin - 2) != Tok::Comma && is_digit_placeholder_tok(kind_at(int_begin - 2))) {
+  const auto joins_integer = [&](Tok kind) { return kind == Tok::Comma || kind == Tok::Literal || kind == Tok::Space; };
+  while (has_int_group && int_begin >= 2 && joins_integer(kind_at(int_begin - 1)) &&
+         is_digit_placeholder_tok(kind_at(int_begin - 2))) {
     int_begin -= 2;
     while (int_begin > 0 && is_digit_placeholder_tok(kind_at(int_begin - 1))) {
       --int_begin;
@@ -335,7 +358,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     // its integer, zero included.
     const bool fraction_visible = !blank_fraction && !drop_fraction;
     const std::string_view shown_digits = integer_part == 0.0 && fraction_visible ? "" : std::string_view(int_digits);
-    emit_fraction_digits(section, shown_digits, int_begin, int_end, result);
+    emit_fraction_digits(section, fmt, shown_digits, int_begin, int_end, result);
     i = static_cast<std::size_t>(int_end);
     if (blank_fraction) {
       for (; i < static_cast<std::size_t>(den_end); ++i) {
@@ -356,7 +379,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
       // takes no separator.
       bool int_all_optional = true;
       for (int k = int_begin; k < int_end; ++k) {
-        int_all_optional = int_all_optional && (kind_at(k) == Tok::DigitOpt || kind_at(k) == Tok::Comma);
+        int_all_optional = int_all_optional && (kind_at(k) == Tok::DigitOpt || joins_integer(kind_at(k)));
       }
       const bool skip_separator = integer_part == 0.0 && int_all_optional && kind_at(num_begin) == Tok::DigitOpt;
       while (i < static_cast<std::size_t>(num_begin)) {
@@ -381,7 +404,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
       emit_token_verbatim(static_cast<std::size_t>(k));
     }
   } else {
-    emit_fraction_digits(section, numerator_digits, num_begin, num_end, result);
+    emit_fraction_digits(section, fmt, numerator_digits, num_begin, num_end, result);
   }
   i = static_cast<std::size_t>(num_end);
   // 5) Literals up to the slash; the slash itself writes `/` even when spelled `／`.
@@ -408,7 +431,7 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
     // Runs starting with `0` right-align, others left-align (`?0` -> `20`, `0?` -> `02`).
     const bool denominator_trailing_pad =
         den_begin < den_end && section.tokens[static_cast<std::size_t>(den_begin)].kind != Tok::DigitZero;
-    emit_fraction_digits(section, denominator_digits, den_begin, den_end, result, denominator_trailing_pad);
+    emit_fraction_digits(section, fmt, denominator_digits, den_begin, den_end, result, denominator_trailing_pad);
   }
   i = static_cast<std::size_t>(den_end);
   // 7) Trailing literals.

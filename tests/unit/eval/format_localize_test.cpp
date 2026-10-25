@@ -136,6 +136,14 @@ TEST(FormatLocalizeRender, FractionIntegerGroupSeparatorCounts) {
   EXPECT_EQ(Render(0.5, "0,0 ?/?", kDe).status, FormatStatus::kValueError);
 }
 
+TEST(FormatLocalizeRender, FractionIntegerGroupsInLocaleSymbol) {
+  EXPECT_EQ(Render(1234.5, "#.##0 ?/?", kDe).text, "1.234 1/2");  // text_format.tf_fraction_dot_grouped_integer
+  EXPECT_EQ(Render(1234567.25, "#.##0 ?/?", kDe).text, "1.234.567 1/4");
+  EXPECT_EQ(Render(-1234.75, "#.##0 ?\?/?\?", kDe).text, "-1.234  3/4 ");
+  EXPECT_EQ(Render(1234.5, "# ##0 ?/?", kDe).text, "1 234 1/2");  // text_format.tf_fraction_space_inside_integer
+  EXPECT_EQ(Render(1234.5, "# ##0 ?/?", kFr).status, FormatStatus::kValueError);
+}
+
 Value TextOf(double number, std::string_view format, ExcelProfile profile) {
   const eval::ScopedEvalProfile scope(profile);
   static Arena arena;
