@@ -250,8 +250,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The evaluated-array element bound is raised from 53,687,091 to
   107,374,182, as measured on Mac Excel 365: `A:CX+0` evaluates, while
   `A:CY+0` and `SEQUENCE(1048576,103)` give the number 0. The bound applies
-  under every profile, though Windows Excel abandons smaller arrays. `SUM`, `AVERAGE`, `MIN`, `MAX`, `PRODUCT` and `COUNTA` fold
-  whole-axis operation results without materialising them.
+  under every profile, though Windows Excel abandons smaller arrays. `SUM`,
+  `AVERAGE`, `MIN`, `MAX`, `PRODUCT` and `COUNTA` fold whole-axis operation
+  results without materialising them.
 - Recalc visits cells in a deterministic order, so spill winners and legacy
   array blocks resolve the same way on every run; a legacy array block whose
   formula fails to parse keeps its rectangle.
