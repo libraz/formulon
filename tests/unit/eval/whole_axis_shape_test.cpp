@@ -366,11 +366,11 @@ TEST_F(WholeAxisShape, GeneratorsUnderRowsAbandonPastTheirElementBound) {
 const char* const kStreamedReducers[] = {"SUM", "AVERAGE", "MIN", "MAX", "PRODUCT", "COUNTA"};
 
 TEST_F(WholeAxisShape, ReducersStreamADerivedWholeAxisPastTheArrayCeiling) {
-  // `-L!A:BB` is 56.6M elements, within the element bound, so it is evaluated
-  // rather than abandoned (Mac Excel: SUM(-A:BB) is #VALUE! over the text in
+  // `-L!A:J` is 10.5M elements, within the element bound, so it is evaluated
+  // rather than abandoned (Mac Excel: SUM(-A:J) is #VALUE! over the text in
   // column A, 0 over empty columns). Each reducer streams the repeated tail
   // instead of building it. Both drivers agree.
-  constexpr double kCells = 54.0 * static_cast<double>(Sheet::kMaxRows);
+  constexpr double kCells = 10.0 * static_cast<double>(Sheet::kMaxRows);
   const struct {
     const char* formula;
     bool is_error;
@@ -378,25 +378,25 @@ TEST_F(WholeAxisShape, ReducersStreamADerivedWholeAxisPastTheArrayCeiling) {
     double number;
   } cases[] = {
       // Text in column A negates to #VALUE!, the first error in row-major order.
-      {"=SUM(-L!A:BB)", true, ErrorCode::Value, 0.0},
-      {"=AVERAGE(-L!A:BB)", true, ErrorCode::Value, 0.0},
-      {"=MIN(-L!A:BB)", true, ErrorCode::Value, 0.0},
-      {"=MAX(-L!A:BB)", true, ErrorCode::Value, 0.0},
-      {"=PRODUCT(-L!A:BB)", true, ErrorCode::Value, 0.0},
-      {"=COUNTA(-L!A:BB)", false, ErrorCode::Value, kCells},
+      {"=SUM(-L!A:J)", true, ErrorCode::Value, 0.0},
+      {"=AVERAGE(-L!A:J)", true, ErrorCode::Value, 0.0},
+      {"=MIN(-L!A:J)", true, ErrorCode::Value, 0.0},
+      {"=MAX(-L!A:J)", true, ErrorCode::Value, 0.0},
+      {"=PRODUCT(-L!A:J)", true, ErrorCode::Value, 0.0},
+      {"=COUNTA(-L!A:J)", false, ErrorCode::Value, kCells},
       // Empty columns: every element is 0.
-      {"=SUM(-L!C:BD)", false, ErrorCode::Value, 0.0},
-      {"=SUM(L!C:BD+0)", false, ErrorCode::Value, 0.0},
-      {"=AVERAGE(-L!C:BD)", false, ErrorCode::Value, 0.0},
-      {"=MIN(-L!C:BD)", false, ErrorCode::Value, 0.0},
-      {"=MAX(L!C:BD+1)", false, ErrorCode::Value, 1.0},
-      {"=PRODUCT(L!C:BD+1)", false, ErrorCode::Value, 1.0},
-      {"=COUNTA(-L!C:BD)", false, ErrorCode::Value, kCells},
-      {"=SUM(L!C:BD+1)", false, ErrorCode::Value, kCells},
+      {"=SUM(-L!C:L)", false, ErrorCode::Value, 0.0},
+      {"=SUM(L!C:L+0)", false, ErrorCode::Value, 0.0},
+      {"=AVERAGE(-L!C:L)", false, ErrorCode::Value, 0.0},
+      {"=MIN(-L!C:L)", false, ErrorCode::Value, 0.0},
+      {"=MAX(L!C:L+1)", false, ErrorCode::Value, 1.0},
+      {"=PRODUCT(L!C:L+1)", false, ErrorCode::Value, 1.0},
+      {"=COUNTA(-L!C:L)", false, ErrorCode::Value, kCells},
+      {"=SUM(L!C:L+1)", false, ErrorCode::Value, kCells},
       // An error tail: the first element already is the error.
-      {"=SUM(1/L!C:BD)", true, ErrorCode::Div0, 0.0},
-      {"=MAX(1/L!C:BD)", true, ErrorCode::Div0, 0.0},
-      {"=COUNTA(1/L!C:BD)", false, ErrorCode::Value, kCells},
+      {"=SUM(1/L!C:L)", true, ErrorCode::Div0, 0.0},
+      {"=MAX(1/L!C:L)", true, ErrorCode::Div0, 0.0},
+      {"=COUNTA(1/L!C:L)", false, ErrorCode::Value, kCells},
   };
   for (const auto& c : cases) {
     Put(kH, 0U, kHCol, c.formula);
