@@ -42,14 +42,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrong type raises `TypeError`. Packed integer arguments are range-checked
   before the C call.
 - Sheet names: a name that begins or ends with an apostrophe is refused on
-  add and rename (`kInvalidSheetName`), as Excel refuses it and fails to
-  open a file carrying one. `History`, in any case, is refused under the
+  add and rename (`kInvalidSheetName`), and an `.xlsx` or `.xlsb` file
+  carrying one fails to load (`kIoSheetCorrupt`), as Excel refuses the name
+  and fails to open the file. `History`, in any case, is refused under the
   `win-*` profiles, the default included; Mac profiles accept it, as Mac
   Excel does.
-- Row and column inserts and deletes that cut through a legacy array block
-  or a PivotTable, or that would push a data table, array block, PivotTable
-  or table past the grid edge, are refused with `kPreconditionFailed`, as
-  Excel refuses them. Data tables were already refused this way.
+- Row and column inserts and deletes that cut through a data table, a
+  legacy array block or a PivotTable, or that would push one of them or a
+  table past the grid edge, are refused with `kPreconditionFailed`, as Excel
+  refuses them.
+- What-If data tables in a loaded file are modelled (see Added) rather than
+  frozen into values, so a write into a result cell is refused with
+  `kPreconditionFailed`.
+- A formula nesting more than 65 function calls is refused with
+  `NestedFormulaTooDeep`, as Excel refuses it; up to 127 nested calls parsed
+  before.
 
 ### Added
 
@@ -144,7 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   authors table of its comments part, including authors no remaining note
   names, are kept across a resave; adding, removing or showing a note
   regenerates the drawing without resetting the other notes' boxes or
-  visibility, and a box follows its note through row and column edits.
+  visibility, and a box follows its note through row and column edits. Each
+  remaining note re-emits its own original `<v:shape>` (fill, stroke, shadow,
+  text box style, font, size) with only its anchor, visibility and cell
+  patched; only a new note gets the default shape.
 - Drawing shapes: the `xdr:sp` shapes and text boxes, `xdr:cxnSp` lines and
   connectors and `xdr:grpSp` groups of a sheet's drawing can be listed (id,
   name, kind, preset geometry, anchor, text, solid fill, outline colour and
@@ -233,15 +243,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Formula nesting follows Excel's limits: 65 nested function calls, 256
-  parentheses and 1024 unary signs parse and evaluate. The WASM stack
-  (1.5 MiB) and the worker-thread stack are sized for them.
-- The evaluated-array element bound is 107,374,182, as measured on Mac Excel
-  365: `A:CX+0` evaluates, while `A:CY+0` and `SEQUENCE(1048576,103)` give
-  the number 0. `SUM`, `AVERAGE`, `MIN`, `MAX`, `PRODUCT` and `COUNTA` fold
+- Formula nesting follows Excel's limits: 256 parentheses and 1024 unary
+  signs parse and evaluate, where an expression depth of 128 was the limit
+  before. The WASM stack (1.5 MiB) and the worker-thread stack are sized for
+  them.
+- The evaluated-array element bound is raised from 53,687,091 to
+  107,374,182, as measured on Mac Excel 365: `A:CX+0` evaluates, while
+  `A:CY+0` and `SEQUENCE(1048576,103)` give the number 0. The bound applies
+  under every profile, though Windows Excel abandons smaller arrays. `SUM`, `AVERAGE`, `MIN`, `MAX`, `PRODUCT` and `COUNTA` fold
   whole-axis operation results without materialising them.
 - Recalc visits cells in a deterministic order, so spill winners and legacy
-  array blocks resolve the same way on every run.
+  array blocks resolve the same way on every run; a legacy array block whose
+  formula fails to parse keeps its rectangle.
 
 ### Performance
 
@@ -250,7 +263,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PIVOTBY`, regex, database, regression) and PCRE2 for size, about 26 KB
   smaller over Brotli with bit-identical results.
 - Chart point gathering and sheet-name comparison allocate and decode less;
-  table-name comparison and pivot field-order updates are linear.
+  table-name comparison allocates less, and pivot field-order updates are
+  linear.
 
 ### Fixed
 
@@ -279,26 +293,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   columns, and call a two-argument aggregator (`PERCENTOF`, a two-parameter
   `LAMBDA`) with the group slice and the whole filtered column.
 - `LOOKUP`, `MATCH` and `INDEX` read whole-axis references by their declared
-  shape: an empty whole-axis vector is `#N/A`, and a result past the
-  populated extent is blank.
+  shape. In `LOOKUP` an empty whole-axis vector is `#N/A`, and a result past
+  the populated extent is blank.
 - `REGEXREPLACE` bounds an unterminated `\U` / `\L` run by the text cap, and
   `XMATCH` / `XLOOKUP` in regex mode return `#VALUE!` when the match limit is
   exhausted, as `REGEXTEST` does.
 - Scalar errors broadcast against arrays.
 - Conditional formatting: Cell Value rules compare with worksheet
   semantics (blank is 0 against a number and `""` against text; numbers <
-  text < booleans), and error cells match "does not contain" text rules.
+  text < booleans). Error cells match "does not contain" text rules and no
+  longer match No Blanks.
 - PivotTables: Percent of Grand Total and Index divide by the whole-table
   aggregate when the grand totals are hidden.
 - Structural edits: `:` chain operands shift on their qualified sheet,
   whole-axis references stay anchored, structured references to a removed
   table or column become `#REF!`, and internal hyperlink locations are left
   as written.
+- Formula text that shows `SINGLE` / `ANCHORARRAY` as `@` / `#`, or places
+  an implied `@`, is no longer garbled when the formula holds non-ASCII text
+  (a Japanese sheet name, a string literal), and `ANCHORARRAY` of a cell
+  that is not a spill anchor keeps its call spelling instead of an
+  unparsable `x#`.
 - Pivot field-order updates accept getter-owned storage and keep the values
   marker in place when fields move between axes.
 - `.xlsx`: unmodelled attributes and children of comments, conditional
   formats, styles, pivot caches and tables are kept across a resave, and
-  sizes read from a file are bounded on load, recalc and save.
+  sizes read from a file are bounded on load, recalc and save (a pivot cache
+  above 2^25 record slots fails the load with `kIoFileTooLarge`).
 - `.xlsx` and `.xlsb` keep the source sheet ids instead of renumbering them
   by position.
 - Python: the type stub declares the runtime dataclass constructors and enum
@@ -306,14 +327,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workbook-level extension entries that name a relationship by `r:id` (slicer
   caches, timeline caches) follow the relationship ids the writer assigns
   instead of pointing at a stale id after a resave.
-- Legacy notes: when notes are added or removed, each note that remains
-  re-emits its own original `<v:shape>` (fill, stroke, shadow, text box style,
-  font, size) with only its anchor, visibility and cell patched; only a new
-  note gets the default shape.
 - `.xlsb` tables kept verbatim (a part the model cannot hold) keep their
-  name and id: creating or renaming a table onto either is refused, and
-  structured references to them are written back instead of failing the save
-  (a defined name) or losing the formula (a cell).
+  name and id: creating a table onto either is refused.
 - JS packages: any `Workbook` method called from that workbook's iterative
   progress callback throws `TypeError` naming `kGraphRecalcReentrant` (4005)
   and changes nothing, instead of blocking forever (native and threads
