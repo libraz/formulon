@@ -407,16 +407,20 @@ Expected<void, Error> Workbook::recalc_data_tables(const eval::FunctionRegistry&
   return compute_data_tables(registry);
 }
 
-Expected<void, Error> Workbook::recalc_data_tables_after_pass(bool evaluated_any,
-                                                              const eval::FunctionRegistry& registry) {
-  bool any_table = false;
+bool Workbook::has_data_tables() const {
+  // A concurrent sheet removal moves `sheets_` under the engine mutex.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   for (const Sheet& sheet : sheets_) {
     if (!sheet.data_tables().empty()) {
-      any_table = true;
-      break;
+      return true;
     }
   }
-  if (!any_table) {
+  return false;
+}
+
+Expected<void, Error> Workbook::recalc_data_tables_after_pass(bool evaluated_any,
+                                                              const eval::FunctionRegistry& registry) {
+  if (!has_data_tables()) {
     data_tables_pending_ = false;
     return Expected<void, Error>::Ok();
   }

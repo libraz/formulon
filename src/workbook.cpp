@@ -26,6 +26,7 @@
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/recalc_reentry.h"
 #include "eval/scheduler.h"
 #include "external_link.h"
 #include "io/auto_filter_xml.h"
@@ -1829,9 +1830,19 @@ Expected<void, Error> Workbook::clear_merges(std::size_t sheet_index) {
   return Expected<void, Error>::Ok();
 }
 
+bool Workbook::has_dirty_cells() const {
+  // A nested call already holds the mutex; the engine rejects it as re-entrant.
+  if (eval::detail::g_in_recalc) {
+    return false;
+  }
+  // Another thread's mutation writes the dirty set under the engine mutex.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  return engine_->dirty().size() != 0U;
+}
+
 Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry& registry) {
   // A write that dirtied only a data table's header or input cell evaluates nothing, yet changes the table.
-  const bool had_dirty = engine_->dirty().size() != 0U;
+  const bool had_dirty = has_dirty_cells();
   auto result = engine_->recalc(*this, registry);
   if (!result) {
     return result;
@@ -1844,7 +1855,7 @@ Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& re
                                                 const eval::SchedulerConfig& cfg, eval::SchedulerStats* stats) {
   eval::SchedulerStats local_stats;
   eval::SchedulerStats& pass_stats = stats != nullptr ? *stats : local_stats;
-  const bool had_dirty = engine_->dirty().size() != 0U;
+  const bool had_dirty = has_dirty_cells();
   RETURN_IF_ERROR(eval::recalc_parallel(*this, registry, cfg, &pass_stats));
   return recalc_data_tables_after_pass(had_dirty || pass_stats.cells_evaluated != 0U, registry);
 }

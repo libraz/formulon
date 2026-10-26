@@ -1227,6 +1227,10 @@ class Workbook {
   // `set_cell_value` without the array / data-table write refusals.
   void put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
   void put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  // Whether the dirty set is non-empty, read under the engine mutex.
+  bool has_dirty_cells() const;
+  // Whether any sheet holds a data table, read under the engine mutex.
+  bool has_data_tables() const;
   // The data-table step of `recalc()` / `recalc_parallel()`.
   Expected<void, Error> recalc_data_tables_after_pass(bool evaluated_any, const eval::FunctionRegistry& registry);
   Expected<void, Error> compute_data_tables(const eval::FunctionRegistry& registry);
