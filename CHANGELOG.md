@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-26
+
 ### BREAKING
 
 - **C ABI:** `fm_sheet_view_t` grows by `split_x` / `split_y`,
@@ -21,6 +23,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `effective_*` members, which move (48 to 56 bytes). `fm_column_layout_t` and
   `fm_row_layout_t` keep their size and take `collapsed` from padding. A caller
   compiled against an earlier header must be recompiled.
+- **C ABI:** text arguments that are not well-formed UTF-8 (surrogate code
+  points, overlong forms, truncated sequences) are rejected with
+  `kBindingUtf8EncodingError` (7002), and index, count and outline-level
+  arguments are range-checked before anything changes (an outline level
+  above 7, an `xf_index` outside the cell-XF table, hiding or removing the
+  only visible sheet). Every binding reports the same statuses.
+- JS packages: both packages check every positional argument the same way
+  before any engine call, as the documented `Status` contract states. A
+  missing required argument, a value of the wrong type, or a primitive or
+  `null` where an object is declared throws `TypeError`; the native package
+  no longer substitutes `0`, `""`, `false` or an empty object (for example
+  `setNumber(0, 0, 0)`, `setIterative(true)` and `addFont(null)`). Malformed
+  arguments a method reports as a status return 2 (`kInvalidArgument`) on
+  both packages; the native package returned 7001.
+- Python: `Value` validates its payload on construction. A payload the kind
+  does not take, or a missing one, raises `ValueError`; a payload of the
+  wrong type raises `TypeError`. Packed integer arguments are range-checked
+  before the C call.
+- Sheet names: a name that begins or ends with an apostrophe is refused on
+  add and rename (`kInvalidSheetName`), as Excel refuses it and fails to
+  open a file carrying one. `History`, in any case, is refused under the
+  `win-*` profiles, the default included; Mac profiles accept it, as Mac
+  Excel does.
+- Row and column inserts and deletes that cut through a legacy array block
+  or a PivotTable, or that would push a data table, array block, PivotTable
+  or table past the grid edge, are refused with `kPreconditionFailed`, as
+  Excel refuses them. Data tables were already refused this way.
 
 ### Added
 
@@ -202,8 +231,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pivot tables from an `.xlsx` source are not written to `.xlsb` and are
   counted in `deferred_feature_count`.
 
+### Changed
+
+- Formula nesting follows Excel's limits: 65 nested function calls, 256
+  parentheses and 1024 unary signs parse and evaluate. The WASM stack
+  (1.5 MiB) and the worker-thread stack are sized for them.
+- The evaluated-array element bound is 107,374,182, as measured on Mac Excel
+  365: `A:CX+0` evaluates, while `A:CY+0` and `SEQUENCE(1048576,103)` give
+  the number 0. `SUM`, `AVERAGE`, `MIN`, `MAX`, `PRODUCT` and `COUNTA` fold
+  whole-axis operation results without materialising them.
+- Recalc visits cells in a deterministic order, so spill winners and legacy
+  array blocks resolve the same way on every run.
+
+### Performance
+
+- The `.wasm` builds compile the cold evaluator families (special
+  functions, financial, `FORECAST.ETS`, format parsing, `GROUPBY` /
+  `PIVOTBY`, regex, database, regression) and PCRE2 for size, about 26 KB
+  smaller over Brotli with bit-identical results.
+- Chart point gathering and sheet-name comparison allocate and decode less;
+  table-name comparison and pivot field-order updates are linear.
+
 ### Fixed
 
+- `ADDRESS` quotes a sheet name by the active locale's rules (its own R1C1
+  letters and boolean names, U+3000 in double-byte locales), and
+  `CELL("address")` on another sheet quotes it by the cross-workbook rule
+  instead of appending it bare. A sheet name opening with `.` is quoted in
+  every sheet qualifier, like a leading digit.
+- `TEXT` and number formats: a subnormal scientific exponent follows the
+  integer placeholder count; a fraction format's integer part is grouped,
+  with the locale's group separator and with literals between its
+  placeholders kept in the group; in fr-FR / ru-RU a blank run after a digit
+  placeholder is one grouping run; the 127-decimal cap is checked on the
+  stored format.
+- `VALUE` and text-to-number coercion reject a grouped number only when its
+  first group is all zeros (`046.565.118` parses in de-DE; `000.509` and
+  `0,123` are `#VALUE!`).
+- The `^` operator flushes a subnormal square to zero, as `POWER` does.
+- `ROUNDUP` rounds on the 15-digit view, so binary noise no longer adds a
+  unit (`ROUNDUP(0.1+0.2,1)` is 0.3).
+- `IMSUM` and `IMPRODUCT` fold ranges and arrays, a blank cell as 0.
+- `FORECAST.ETS` targets more than 2^31-1 steps past the timeline are
+  `#NUM!`, and calendar targets are placed by month difference; `FORECAST`
+  and the regression family lift array-valued targets.
+- `GROUPBY` / `PIVOTBY` number sort orders key columns first, then value
+  columns, and call a two-argument aggregator (`PERCENTOF`, a two-parameter
+  `LAMBDA`) with the group slice and the whole filtered column.
+- `LOOKUP`, `MATCH` and `INDEX` read whole-axis references by their declared
+  shape: an empty whole-axis vector is `#N/A`, and a result past the
+  populated extent is blank.
+- `REGEXREPLACE` bounds an unterminated `\U` / `\L` run by the text cap, and
+  `XMATCH` / `XLOOKUP` in regex mode return `#VALUE!` when the match limit is
+  exhausted, as `REGEXTEST` does.
+- Scalar errors broadcast against arrays.
+- Conditional formatting: Cell Value rules compare with worksheet
+  semantics (blank is 0 against a number and `""` against text; numbers <
+  text < booleans), and error cells match "does not contain" text rules.
+- PivotTables: Percent of Grand Total and Index divide by the whole-table
+  aggregate when the grand totals are hidden.
+- Structural edits: `:` chain operands shift on their qualified sheet,
+  whole-axis references stay anchored, structured references to a removed
+  table or column become `#REF!`, and internal hyperlink locations are left
+  as written.
+- Pivot field-order updates accept getter-owned storage and keep the values
+  marker in place when fields move between axes.
+- `.xlsx`: unmodelled attributes and children of comments, conditional
+  formats, styles, pivot caches and tables are kept across a resave, and
+  sizes read from a file are bounded on load, recalc and save.
+- `.xlsx` and `.xlsb` keep the source sheet ids instead of renumbering them
+  by position.
+- Python: the type stub declares the runtime dataclass constructors and enum
+  members.
 - Workbook-level extension entries that name a relationship by `r:id` (slicer
   caches, timeline caches) follow the relationship ids the writer assigns
   instead of pointing at a stale id after a resave.
@@ -215,14 +314,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name and id: creating or renaming a table onto either is refused, and
   structured references to them are written back instead of failing the save
   (a defined name) or losing the formula (a cell).
-- JS packages: both packages check every positional argument the same way
-  before any engine call, as the documented `Status` contract states. A
-  missing required argument, a value of the wrong type, or a primitive or
-  `null` where an object is declared throws `TypeError`; the native package
-  no longer substitutes `0`, `""`, `false` or an empty object (for example
-  `setNumber(0, 0, 0)`, `setIterative(true)` and `addFont(null)`). Malformed
-  arguments a method reports as a status return 2 (`kInvalidArgument`) on
-  both packages; the native package returned 7001.
 - JS packages: any `Workbook` method called from that workbook's iterative
   progress callback throws `TypeError` naming `kGraphRecalcReentrant` (4005)
   and changes nothing, instead of blocking forever (native and threads
@@ -3250,7 +3341,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/libraz/formulon/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/libraz/formulon/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/libraz/formulon/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/libraz/formulon/compare/v0.15.2...v0.16.0

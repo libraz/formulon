@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(formulon VERSION 0.17.0 LANGUAGES CXX)
+project(formulon VERSION 0.18.0 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Language standard and global settings
