@@ -10,9 +10,11 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "cf/cf_types.h"
 #include "io/xlsb/brt_color.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "utils/number_text.h"
 
@@ -20,13 +22,17 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 
-inline constexpr std::uint16_t kFrtBegin = 35;
-inline constexpr std::uint16_t kFrtEnd = 36;
-
 // BrtFRTBegin payload Excel writes around the x14 link, and the
 // BrtCFRuleExt layout: a zero u32, then the GUID in Windows byte order.
 inline constexpr std::array<std::uint8_t, 4> kFrtVersion = {0x02, 0x0E, 0x00, 0x00};
 inline constexpr std::size_t kGuidBytes = 16;
+
+/// A future-record container `open` .. `close` around `body`, wrapped in
+/// BrtFRTBegin / BrtFRTEnd. Excel refuses an x14 container that directly
+/// follows the last legacy block, so a sheet whose `recs` carry no print
+/// records gets Excel's default BrtPrintOptions ahead of it.
+std::vector<std::uint8_t> frt_container_block(const std::vector<FramedRecord>& recs, std::uint16_t open,
+                                              std::uint16_t close, const std::vector<std::uint8_t>& body);
 
 // BrtColor: [flags (fValidRGB bit 0, XColorType bits 1..7), index, tint:i16,
 // r, g, b, a]. XColorType 0 is automatic, 1 a palette index, 2 literal RGB,

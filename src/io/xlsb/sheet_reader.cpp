@@ -245,58 +245,6 @@ bool IsAfterMergesBeforeHyperlinks(XlsbRecordType type) {
   }
 }
 
-/// Tail records in this slot are emitted after the model-owned hyperlink
-/// block.  This explicit grammar classification is needed when the source
-/// has no BrtHLink at all but the in-memory caller adds one before writing.
-bool IsAfterHyperlinks(XlsbRecordType type) {
-  switch (static_cast<std::uint16_t>(type)) {
-    case 477:  // BrtPrintOptions
-    case 476:  // BrtMargins
-    case 479:  // BrtBeginHeaderFooter
-    case 480:  // BrtEndHeaderFooter
-    case 478:  // BrtPageSetup
-    case 392:  // BrtBeginRwBrk
-    case 396:  // BrtBrk
-    case 393:  // BrtEndRwBrk
-    case 394:  // BrtBeginColBrk
-    case 395:  // BrtEndColBrk
-    case 625:  // BrtBigName
-    case 605:  // BrtBeginCellWatches
-    case 607:  // BrtCellWatch
-    case 606:  // BrtEndCellWatches
-    case 648:  // BrtBeginCellIgnoreECs
-    case 649:  // BrtCellIgnoreEC
-    case 650:  // BrtEndCellIgnoreECs
-    case 594:  // BrtBeginSmartTags
-    case 592:  // BrtBeginCellSmartTags
-    case 590:  // BrtBeginCellSmartTag
-    case 589:  // BrtCellSmartTagProperty
-    case 591:  // BrtEndCellSmartTag
-    case 593:  // BrtEndCellSmartTags
-    case 595:  // BrtEndSmartTags
-    case 550:  // BrtDrawing
-    case 551:  // BrtLegacyDrawing
-    case 552:  // BrtLegacyDrawingHF
-    case 562:  // BrtBkhim
-    case 638:  // BrtBeginOleObjects
-    case 639:  // BrtOleObject
-    case 640:  // BrtEndOleObjects
-    case 643:  // BrtBeginActiveXControls
-    case 644:  // BrtActiveX
-    case 645:  // BrtEndActiveXControls
-    case 554:  // BrtBeginWebPubItems
-    case 556:  // BrtBeginWebPubItem
-    case 557:  // BrtEndWebPubItem
-    case 555:  // BrtEndWebPubItems
-    case 660:  // BrtBeginTableParts
-    case 661:  // BrtTablePart
-    case 662:  // BrtEndTableParts
-      return true;
-    default:
-      return false;
-  }
-}
-
 /// Appends the framed bytes of one worksheet-tail record to the grammar slot
 /// represented by `XlsbSheetTail`. `framed` spans the record header *and*
 /// payload, so re-emission is a plain byte copy rather than a re-encode.
@@ -305,7 +253,7 @@ bool IsAfterHyperlinks(XlsbRecordType type) {
 /// BrtMargins on a sheet with no merges or hyperlinks) is not hoisted ahead.
 void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed, std::size_t size) {
   std::vector<std::uint8_t>* dst = &state.tail.before_merges;
-  if (state.hyperlinks_seen || IsAfterHyperlinks(type)) {
+  if (state.hyperlinks_seen || is_after_hyperlinks(static_cast<std::uint16_t>(type))) {
     dst = &state.tail.after_hyperlinks;
     state.hyperlinks_seen = true;
   } else if (state.merges_seen || IsAfterMergesBeforeHyperlinks(type)) {
@@ -553,6 +501,91 @@ void ApplyDecodedRowHeaders(Sheet& sheet, const std::vector<SheetDecodeState::De
   }
 }
 
+/// Decodes one literal cell record (blank, RK, real, bool, error, inline or
+/// shared string): the cell header, the value, then the style commit. A
+/// blank stores its xf explicitly; the value records skip the default one.
+Expected<RecordDisposition, Error> DecodeLiteralCell(const XlsbRecord& rec, XlsbRecordType type,
+                                                     SheetDecodeState& state, std::size_t sheet_index, Workbook& wb,
+                                                     const std::vector<std::string_view>& sst_entries,
+                                                     const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
+                                                     const std::vector<PhoneticProperties>& sst_phonetic_props,
+                                                     std::deque<std::string>& text_storage) {
+  if (!state.row_seen) {
+    return RecordDisposition::kAccounted;
+  }
+  ByteSpan p = rec.payload;
+  ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
+  Value value = Value::blank();
+  std::uint32_t sst_index = 0;
+  switch (type) {
+    case XlsbRecordType::BrtCellRk: {
+      ASSIGN_OR_RETURN(auto rk, read_u32(p));
+      value = Value::number(decode_rk_number(rk));
+      break;
+    }
+    case XlsbRecordType::BrtCellReal: {
+      if (p.size < 8) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtCellReal payload truncated",
+                          "context=xlsb_reader");
+      }
+      double v;
+      std::memcpy(&v, p.data, sizeof(v));
+      value = Value::number(v);
+      break;
+    }
+    case XlsbRecordType::BrtCellBool: {
+      ASSIGN_OR_RETURN(auto b, read_u8(p));
+      value = Value::boolean(b != 0);
+      break;
+    }
+    case XlsbRecordType::BrtCellError: {
+      ASSIGN_OR_RETURN(auto code, read_u8(p));
+      // Map the OOXML wire code to `ErrorCode` via the single
+      // `kErrorTable`-backed lookup shared with the writer, so this
+      // path stays symmetric with `ooxml_code()` (see
+      // `error_from_ooxml_code` in `value.h`).
+      value = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(code)));
+      break;
+    }
+    case XlsbRecordType::BrtCellSt: {
+      ASSIGN_OR_RETURN(auto str, read_xlwidestring(p));
+      text_storage.push_back(std::move(str));
+      value = Value::text(text_storage.back());
+      break;
+    }
+    case XlsbRecordType::BrtCellIsst: {
+      ASSIGN_OR_RETURN(sst_index, read_u32(p));
+      if (sst_index >= sst_entries.size()) {
+        std::string ctx("context=xlsb_reader sheet_index=");
+        ctx.append(std::to_string(sheet_index));
+        ctx.append(" row=").append(std::to_string(state.current_row));
+        ctx.append(" col=").append(std::to_string(col.col));
+        ctx.append(" sst_index=").append(std::to_string(sst_index));
+        ctx.append(" sst_size=").append(std::to_string(sst_entries.size()));
+        return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb sst index out of range", std::move(ctx));
+      }
+      value = Value::text(sst_entries[sst_index]);
+      break;
+    }
+    default:
+      break;
+  }
+  Sheet& sheet = wb.sheet(sheet_index);
+  sheet.set_cell_cached_value_borrowed(state.current_row, col.col, std::move(value));
+  // Attached after the value, mirroring the OOXML reader: every
+  // value-mutating setter clears the annotation, so the order is
+  // load-bearing. Skipped when the entry carries no guide so an
+  // unannotated cell keeps its default-constructed run vector.
+  if (type == XlsbRecordType::BrtCellIsst && sst_index < sst_phonetic.size() && !sst_phonetic[sst_index].empty()) {
+    sheet.set_cell_phonetic_runs(state.current_row, col.col, sst_phonetic[sst_index]);
+    if (sst_index < sst_phonetic_props.size()) {
+      sheet.set_cell_phonetic_props(state.current_row, col.col, sst_phonetic_props[sst_index]);
+    }
+  }
+  RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/type == XlsbRecordType::BrtCellBlank));
+  return RecordDisposition::kModelled;
+}
+
 /// Classifies and decodes one worksheet record.
 ///
 /// The switch below has no fall-through exit: every arm ends in a
@@ -748,117 +781,15 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       }
       return RecordDisposition::kModelled;
     }
-    case XlsbRecordType::BrtCellBlank: {
-      if (!state.row_seen) {
-        return RecordDisposition::kAccounted;
-      }
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col.col, Value::blank());
-      RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/true));
-      return RecordDisposition::kModelled;
-    }
-    case XlsbRecordType::BrtCellRk: {
-      if (!state.row_seen) {
-        return RecordDisposition::kAccounted;
-      }
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-      ASSIGN_OR_RETURN(auto rk, read_u32(p));
-      const double v = decode_rk_number(rk);
-      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col.col, Value::number(v));
-      RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/false));
-      return RecordDisposition::kModelled;
-    }
-    case XlsbRecordType::BrtCellReal: {
-      if (!state.row_seen) {
-        return RecordDisposition::kAccounted;
-      }
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-      if (p.size < 8) {
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtCellReal payload truncated",
-                          "context=xlsb_reader");
-      }
-      double v;
-      std::memcpy(&v, p.data, sizeof(v));
-      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col.col, Value::number(v));
-      RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/false));
-      return RecordDisposition::kModelled;
-    }
-    case XlsbRecordType::BrtCellBool: {
-      if (!state.row_seen) {
-        return RecordDisposition::kAccounted;
-      }
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-      ASSIGN_OR_RETURN(auto b, read_u8(p));
-      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col.col, Value::boolean(b != 0));
-      RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/false));
-      return RecordDisposition::kModelled;
-    }
-    case XlsbRecordType::BrtCellError: {
-      if (!state.row_seen) {
-        return RecordDisposition::kAccounted;
-      }
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-      auto code_or = read_u8(p);
-      if (!code_or) {
-        return std::move(code_or.error());
-      }
-      // Map the OOXML wire code to `ErrorCode` via the single
-      // `kErrorTable`-backed lookup shared with the writer, so this
-      // path stays symmetric with `ooxml_code()` (see
-      // `error_from_ooxml_code` in `value.h`).
-      const ErrorCode ec = error_from_ooxml_code(static_cast<std::int32_t>(code_or.value()));
-      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col.col, Value::error(ec));
-      RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/false));
-      return RecordDisposition::kModelled;
-    }
-    case XlsbRecordType::BrtCellSt: {
-      if (!state.row_seen) {
-        return RecordDisposition::kAccounted;
-      }
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-      ASSIGN_OR_RETURN(auto str, read_xlwidestring(p));
-      text_storage.push_back(std::move(str));
-      wb.sheet(sheet_index)
-          .set_cell_cached_value_borrowed(state.current_row, col.col, Value::text(text_storage.back()));
-      RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/false));
-      return RecordDisposition::kModelled;
-    }
-    case XlsbRecordType::BrtCellIsst: {
-      if (!state.row_seen) {
-        return RecordDisposition::kAccounted;
-      }
-      ByteSpan p = rec.payload;
-      ASSIGN_OR_RETURN(auto col, ReadCellHeader(p));
-      ASSIGN_OR_RETURN(auto idx, read_u32(p));
-      if (idx >= sst_entries.size()) {
-        std::string ctx("context=xlsb_reader sheet_index=");
-        ctx.append(std::to_string(sheet_index));
-        ctx.append(" row=").append(std::to_string(state.current_row));
-        ctx.append(" col=").append(std::to_string(col.col));
-        ctx.append(" sst_index=").append(std::to_string(idx));
-        ctx.append(" sst_size=").append(std::to_string(sst_entries.size()));
-        return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb sst index out of range", std::move(ctx));
-      }
-      wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col.col, Value::text(sst_entries[idx]));
-      // Attached after the value, mirroring the OOXML reader: every
-      // value-mutating setter clears the annotation, so the order is
-      // load-bearing. Skipped when the entry carries no guide so an
-      // unannotated cell keeps its default-constructed run vector.
-      if (idx < sst_phonetic.size() && !sst_phonetic[idx].empty()) {
-        wb.sheet(sheet_index).set_cell_phonetic_runs(state.current_row, col.col, sst_phonetic[idx]);
-        if (idx < sst_phonetic_props.size()) {
-          wb.sheet(sheet_index).set_cell_phonetic_props(state.current_row, col.col, sst_phonetic_props[idx]);
-        }
-      }
-      RETURN_IF_ERROR(CommitCell(wb, sheet_index, state, col, /*explicit_xf=*/false));
-      return RecordDisposition::kModelled;
-    }
+    case XlsbRecordType::BrtCellBlank:
+    case XlsbRecordType::BrtCellRk:
+    case XlsbRecordType::BrtCellReal:
+    case XlsbRecordType::BrtCellBool:
+    case XlsbRecordType::BrtCellError:
+    case XlsbRecordType::BrtCellSt:
+    case XlsbRecordType::BrtCellIsst:
+      return DecodeLiteralCell(rec, type, state, sheet_index, wb, sst_entries, sst_phonetic, sst_phonetic_props,
+                               text_storage);
     case XlsbRecordType::BrtFmlaNum:
     case XlsbRecordType::BrtFmlaString:
     case XlsbRecordType::BrtFmlaBool:
@@ -1062,6 +993,58 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
 }
 }  // namespace
 
+/// Tail records in this slot are emitted after the model-owned hyperlink
+/// block.  This explicit grammar classification is needed when the source
+/// has no BrtHLink at all but the in-memory caller adds one before writing.
+bool is_after_hyperlinks(std::uint16_t type) {
+  switch (type) {
+    case 477:  // BrtPrintOptions
+    case 476:  // BrtMargins
+    case 479:  // BrtBeginHeaderFooter
+    case 480:  // BrtEndHeaderFooter
+    case 478:  // BrtPageSetup
+    case 392:  // BrtBeginRwBrk
+    case 396:  // BrtBrk
+    case 393:  // BrtEndRwBrk
+    case 394:  // BrtBeginColBrk
+    case 395:  // BrtEndColBrk
+    case 625:  // BrtBigName
+    case 605:  // BrtBeginCellWatches
+    case 607:  // BrtCellWatch
+    case 606:  // BrtEndCellWatches
+    case 648:  // BrtBeginCellIgnoreECs
+    case 649:  // BrtCellIgnoreEC
+    case 650:  // BrtEndCellIgnoreECs
+    case 594:  // BrtBeginSmartTags
+    case 592:  // BrtBeginCellSmartTags
+    case 590:  // BrtBeginCellSmartTag
+    case 589:  // BrtCellSmartTagProperty
+    case 591:  // BrtEndCellSmartTag
+    case 593:  // BrtEndCellSmartTags
+    case 595:  // BrtEndSmartTags
+    case 550:  // BrtDrawing
+    case 551:  // BrtLegacyDrawing
+    case 552:  // BrtLegacyDrawingHF
+    case 562:  // BrtBkhim
+    case 638:  // BrtBeginOleObjects
+    case 639:  // BrtOleObject
+    case 640:  // BrtEndOleObjects
+    case 643:  // BrtBeginActiveXControls
+    case 644:  // BrtActiveX
+    case 645:  // BrtEndActiveXControls
+    case 554:  // BrtBeginWebPubItems
+    case 556:  // BrtBeginWebPubItem
+    case 557:  // BrtEndWebPubItem
+    case 555:  // BrtEndWebPubItems
+    case 660:  // BrtBeginTableParts
+    case 661:  // BrtTablePart
+    case 662:  // BrtEndTableParts
+      return true;
+    default:
+      return false;
+  }
+}
+
 Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::uint8_t>& body, std::size_t sheet_index, Workbook& wb,
     const std::vector<std::string_view>& sst_entries, const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
@@ -1165,7 +1148,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
       }
       state.tail.extern_sheets.push_back(std::move(entry));
     }
-    wb.sheet(sheet_index).set_xlsb_tail(state.tail);
+    wb.sheet(sheet_index).set_xlsb_tail(std::move(state.tail));
   }
   return state;
 }

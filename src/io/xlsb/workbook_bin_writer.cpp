@@ -23,6 +23,7 @@
 #include "io/sheet_ids.h"
 #include "io/sparkline_groups.h"
 #include "io/xlsb/external_link_writer.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_writer.h"
@@ -49,8 +50,6 @@ namespace {
 // from `XlsbRecordType`) but the writer must emit for a well-formed stream.
 // Workbook-globals structural records Excel expects before the sheet bundle.
 constexpr std::uint16_t kBrtFileVersion = 128;
-// Opens a future-record block in a sheet tail (x14 extensions).
-constexpr std::uint16_t kBrtFrtBegin = 35;
 
 }  // namespace
 
@@ -73,9 +72,11 @@ namespace {
 /// workbook-scope record of its own rather than an ordinal borrowed from
 /// another sheet's definition, which would read back as that sheet's
 /// qualified name. Every sheet-qualified reference is appended to
-/// `qualified` as `(sheet, name)`.
+/// `qualified` as `(sheet, name)`. `folded_scopes` is `defined_scopes` keyed
+/// by ASCII-lowered name, the fold `case_insensitive_eq` applies.
 void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_id,
                              const std::unordered_map<std::string, std::vector<std::int32_t>>& defined_scopes,
+                             const std::unordered_map<std::string, std::vector<std::int32_t>>& folded_scopes,
                              std::vector<std::string>& names, std::unordered_set<std::string>& seen,
                              std::vector<std::string>& invisible, std::unordered_set<std::string>& invisible_seen,
                              std::vector<std::pair<std::string, std::string>>& qualified) {
@@ -94,12 +95,11 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
     if (node.kind() != parser::NodeKind::NameRef) {
       return shape;
     }
-    for (const auto& [text, scopes] : defined_scopes) {
-      if (strings::case_insensitive_eq(text, node.as_name()) &&
-          std::any_of(scopes.begin(), scopes.end(),
-                      [scope_sheet_id](std::int32_t s) { return s < 0 || s == scope_sheet_id; })) {
-        shape.defined = true;
-      }
+    const auto it = folded_scopes.find(strings::to_ascii_lower(node.as_name()));
+    if (it != folded_scopes.end() &&
+        std::any_of(it->second.begin(), it->second.end(),
+                    [scope_sheet_id](std::int32_t s) { return s < 0 || s == scope_sheet_id; })) {
+      shape.defined = true;
     }
     return shape;
   };
@@ -228,26 +228,28 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
   std::unordered_set<std::string> invisible_seen;
   std::vector<std::pair<std::string, std::string>> qualified;
   std::unordered_map<std::string, std::vector<std::int32_t>> defined_scopes;
+  std::unordered_map<std::string, std::vector<std::int32_t>> folded_scopes;
   std::unordered_set<std::string> scoped_keys;
   for (const DefinedName& dn : wb.defined_names()) {
     names.push_back(dn.name);
     seen.insert(dn.name);
     defined_scopes[dn.name].push_back(dn.local_sheet_id);
+    folded_scopes[strings::to_ascii_lower(dn.name)].push_back(dn.local_sheet_id);
     scoped_keys.insert(sheet_scoped_name_key(dn.local_sheet_id, dn.name));
   }
   for (const DefinedName& dn : wb.defined_names()) {
-    CollectNamesFromFormula(dn.formula, dn.local_sheet_id, defined_scopes, names, seen, invisible, invisible_seen,
-                            qualified);
+    CollectNamesFromFormula(dn.formula, dn.local_sheet_id, defined_scopes, folded_scopes, names, seen, invisible,
+                            invisible_seen, qualified);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
-      CollectNamesFromFormula(formula, static_cast<std::int32_t>(i), defined_scopes, names, seen, invisible,
-                              invisible_seen, qualified);
+      CollectNamesFromFormula(formula, static_cast<std::int32_t>(i), defined_scopes, folded_scopes, names, seen,
+                              invisible, invisible_seen, qualified);
     });
   }
   ForEachTableFormula(wb, [&](std::string_view formula, std::size_t sheet_index) {
-    CollectNamesFromFormula(formula, static_cast<std::int32_t>(sheet_index), defined_scopes, names, seen, invisible,
-                            invisible_seen, qualified);
+    CollectNamesFromFormula(formula, static_cast<std::int32_t>(sheet_index), defined_scopes, folded_scopes, names, seen,
+                            invisible, invisible_seen, qualified);
   });
   for (std::string& text : names) {
     ordered_names.push_back(OrderedName{std::move(text), -1});
@@ -358,23 +360,6 @@ void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<s
   collect_ptg_sheet_ranges(*root, sheet_names, ranges, seen);
 }
 
-/// True when `records` holds a future-record block (BrtFRTBegin). Such
-/// blocks -- x14 conditional formats and validations -- are the retained
-/// content that carries sheet-qualified formulas.
-bool HoldsFrtBlock(const std::vector<std::uint8_t>& records) {
-  ByteSpan cursor{records.data(), records.size()};
-  while (cursor.size != 0U) {
-    auto rec = read_record(cursor);
-    if (!rec) {
-      return false;
-    }
-    if (rec.value().type == kBrtFrtBegin) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /// The XTI that names, among the saved `links`, what a retained entry of
 /// another workbook named in the source; none when no link carries it.
 std::optional<XtiEntry> ExternalSeedEntry(const XlsbExternSheetEntry& entry, const std::vector<XlsbLinkTables>& links) {
@@ -407,9 +392,9 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
   SheetRangeTable seed;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const XlsbSheetTail& tail = wb.sheet(i).xlsb_tail();
-    if (tail.extern_sheets.empty() ||
-        !(HoldsFrtBlock(tail.before_merges) || HoldsFrtBlock(tail.after_merges_before_hyperlinks) ||
-          HoldsFrtBlock(tail.after_hyperlinks))) {
+    if (tail.extern_sheets.empty() || !(contains_record_type(tail.before_merges, kFrtBegin) ||
+                                        contains_record_type(tail.after_merges_before_hyperlinks, kFrtBegin) ||
+                                        contains_record_type(tail.after_hyperlinks, kFrtBegin))) {
       continue;
     }
     for (const XlsbExternSheetEntry& entry : tail.extern_sheets) {
@@ -550,12 +535,12 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
   // flags and the placeholder body must match Excel byte-for-byte or the
   // callee shows up as #NAME? on load. A prefixed name Excel does not know
   // (`_xlfn.FOOBAR`) is an ordinary undefined-name stub instead.
-  const bool is_param = name.rfind("_xlpm.", 0) == 0;
-  const bool is_function_value = name.rfind("_xleta.", 0) == 0;
+  const bool is_param = strings::starts_with(name, "_xlpm.");
+  const bool is_function_value = strings::starts_with(name, "_xleta.");
   std::string_view callee(name);
-  const bool xlfn = callee.rfind("_xlfn.", 0) == 0;
+  const bool xlfn = strings::starts_with(callee, "_xlfn.");
   callee.remove_prefix(xlfn ? 6U : 0U);
-  if (callee.rfind("_xlws.", 0) == 0) {
+  if (strings::starts_with(callee, "_xlws.")) {
     callee.remove_prefix(6U);
   }
   const bool is_future_fn = xlfn && has_storage_prefix(callee);

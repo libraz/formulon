@@ -69,7 +69,7 @@ std::size_t CountOf(const std::vector<std::uint16_t>& types, std::uint16_t type)
 
 std::vector<std::uint8_t> EmitSheetBody(const Sheet& sheet) {
   SstBuilder sst;
-  auto body = emit_sheet(sheet, sst, {sheet.name()}, SheetRangeTable{}, NameTable{});
+  auto body = emit_sheet(sheet, sst, {sheet.name()}, SheetRangeTable{}, NameTable{}, hyperlink_relationship_ids(sheet));
   EXPECT_TRUE(static_cast<bool>(body)) << body.error().message;
   return body.value();
 }

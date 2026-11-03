@@ -10,11 +10,6 @@ namespace io {
 namespace xlsb {
 namespace {
 
-std::uint32_t LoadU32(const std::uint8_t* p) {
-  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
-         (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
-}
-
 Error Truncated() {
   return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "future-record formula truncated",
                     "context=xlsb_frt_formula");
@@ -24,11 +19,11 @@ Error Truncated() {
 
 Expected<std::string, Error> read_frt_formula(ByteSpan& cursor, std::uint32_t base_row, std::uint32_t base_col,
                                               const FeatureFormulaReadContext& ctx) {
-  if (cursor.size < 12U || LoadU32(cursor.data) != kFrtItemFlags) {
+  if (cursor.size < 12U || load_u32(cursor.data) != kFrtItemFlags) {
     return Truncated();
   }
-  const std::size_t cce = LoadU32(cursor.data + 4);
-  const std::size_t cb = LoadU32(cursor.data + 8);
+  const std::size_t cce = load_u32(cursor.data + 4);
+  const std::size_t cb = load_u32(cursor.data + 8);
   if (cursor.size - 12U < cce || cursor.size - 12U - cce < cb) {
     return Truncated();
   }
@@ -46,8 +41,8 @@ Expected<std::string, Error> read_frt_formula(ByteSpan& cursor, std::uint32_t ba
 
 void emit_frt_formula(std::vector<std::uint8_t>& dst, const EncodedFeatureFormula& formula) {
   const std::vector<std::uint8_t>& b = formula.bytes;
-  const std::size_t cce = b.size() >= 4U ? LoadU32(b.data()) : 0U;
-  const std::size_t cb = b.size() >= 8U + cce ? LoadU32(b.data() + 4 + cce) : 0U;
+  const std::size_t cce = b.size() >= 4U ? load_u32(b.data()) : 0U;
+  const std::size_t cb = b.size() >= 8U + cce ? load_u32(b.data() + 4 + cce) : 0U;
   emit_u32(dst, kFrtItemFlags);
   emit_u32(dst, static_cast<std::uint32_t>(cce));
   emit_u32(dst, static_cast<std::uint32_t>(cb));

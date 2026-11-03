@@ -14,6 +14,7 @@
 #include "io/xlsb/ptg_list.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/sheet_reader.h"
 #include "io/xml_utils.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
@@ -629,51 +630,9 @@ std::optional<ListPartsBlock> FindListParts(const std::vector<FramedRecord>& rec
 }
 
 /// Records the worksheet grammar places after the hyperlinks and before
-/// LISTPARTS (print setup through web publishing items).
+/// LISTPARTS.
 bool PrecedesListParts(std::uint16_t type) {
-  switch (type) {
-    case 477:  // BrtPrintOptions
-    case 476:  // BrtMargins
-    case 478:  // BrtPageSetup
-    case 479:  // BrtBeginHeaderFooter
-    case 480:  // BrtEndHeaderFooter
-    case 392:  // BrtBeginRwBrk
-    case 393:  // BrtEndRwBrk
-    case 394:  // BrtBeginColBrk
-    case 395:  // BrtEndColBrk
-    case 396:  // BrtBrk
-    case 625:  // BrtBigName
-    case 605:  // BrtBeginCellWatches
-    case 606:  // BrtEndCellWatches
-    case 607:  // BrtCellWatch
-    case 648:  // BrtBeginCellIgnoreECs
-    case 649:  // BrtCellIgnoreEC
-    case 650:  // BrtEndCellIgnoreECs
-    case 589:  // BrtCellSmartTagProperty
-    case 590:  // BrtBeginCellSmartTag
-    case 591:  // BrtEndCellSmartTag
-    case 592:  // BrtBeginCellSmartTags
-    case 593:  // BrtEndCellSmartTags
-    case 594:  // BrtBeginSmartTags
-    case 595:  // BrtEndSmartTags
-    case 550:  // BrtDrawing
-    case 551:  // BrtLegacyDrawing
-    case 552:  // BrtLegacyDrawingHF
-    case 562:  // BrtBkHim
-    case 638:  // BrtBeginOleObjects
-    case 639:  // BrtOleObject
-    case 640:  // BrtEndOleObjects
-    case 643:  // BrtBeginActiveXControls
-    case 644:  // BrtActiveX
-    case 645:  // BrtEndActiveXControls
-    case 554:  // BrtBeginWebPubItems
-    case 555:  // BrtEndWebPubItems
-    case 556:  // BrtBeginWebPubItem
-    case 557:  // BrtEndWebPubItem
-      return true;
-    default:
-      return false;
-  }
+  return is_after_hyperlinks(type) && type != kBrtBeginListParts && type != kBrtListPart && type != kBrtEndListParts;
 }
 
 std::vector<std::uint8_t> ListPartRecord(const std::string& rel_id) {

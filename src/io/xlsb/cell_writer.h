@@ -60,14 +60,17 @@ namespace xlsb {
 /// increments `downgraded_formula_count` (when non-null) instead of
 /// aborting the whole package.
 ///
+/// `scratch` is a caller-owned buffer the record payloads are built in; it is
+/// cleared per record and shared by the `emit_*` functions below.
+///
 /// `row` is used only for diagnostic logs; it does not appear in the
 /// cell payload (the enclosing `BrtRowHdr` carries the row index).
 /// `always_calculates` sets a formula record's fAlwaysCalc
 /// (`io::formula_cell_always_calculates`).
-Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
-                                bool always_calculates, SstBuilder& sst, const std::vector<std::string>& sheet_names,
-                                const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                std::uint32_t* downgraded_formula_count = nullptr,
+Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
+                                std::uint32_t row, std::uint32_t col, bool always_calculates, SstBuilder& sst,
+                                const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
+                                const NameTable& name_table, std::uint32_t* downgraded_formula_count = nullptr,
                                 const NameShapes& name_shapes = NameShapes());
 
 /// Emits the anchor cell of a spilled dynamic-array formula, matching how
@@ -80,10 +83,10 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
 /// real tokens appear exactly once, here. `always_calculates` sets
 /// fAlwaysCalc on both records. Returns the encode error when
 /// `cell.formula_text` cannot be lowered to the supported Ptg set.
-Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, const Value& anchor_value,
-                                        bool always_calculates, std::uint32_t col, std::uint32_t anchor_row,
-                                        std::uint32_t last_row, std::uint32_t last_col,
-                                        const std::vector<std::string>& sheet_names,
+Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch,
+                                        const Cell& cell, const Value& anchor_value, bool always_calculates,
+                                        std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
+                                        std::uint32_t last_col, const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
                                         bool* downgraded_to_literal = nullptr,
@@ -93,8 +96,8 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
 /// (result range, input cells, flags) followed by the anchor's plain value
 /// record, as [MS-XLSB] TABLECELL orders them. The result cells carry no
 /// formula in XLSB.
-void emit_data_table_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t col, const DataTable& table,
-                            SstBuilder& sst);
+void emit_data_table_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
+                            std::uint32_t col, const DataTable& table, SstBuilder& sst);
 
 /// Emits a phantom cell of a spilled dynamic-array formula: a `BrtFmla*`
 /// "shell" record (typed by `cached`, the spilled value at this position)
@@ -102,8 +105,9 @@ void emit_data_table_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, st
 /// region's anchor (`anchor_row`, `anchor_col`). The phantom has no
 /// formula of its own; the real tokens live in the anchor's `BrtArrFmla`.
 /// `always_calculates`, the anchor's, sets its fAlwaysCalc as Excel does.
-void emit_array_phantom(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index, const Value& cached,
-                        std::uint32_t anchor_row, std::uint32_t anchor_col, bool always_calculates);
+void emit_array_phantom(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t col,
+                        std::uint32_t xf_index, const Value& cached, std::uint32_t anchor_row, std::uint32_t anchor_col,
+                        bool always_calculates);
 
 }  // namespace xlsb
 }  // namespace io

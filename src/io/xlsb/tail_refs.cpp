@@ -10,6 +10,7 @@
 
 #include "auto_filter.h"
 #include "io/xlsb/feature_formula.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/ptg.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -19,55 +20,17 @@
 namespace formulon::io::xlsb {
 namespace {
 
-constexpr std::uint16_t kFrtBegin = 35;
-constexpr std::uint16_t kFrtEnd = 36;
-constexpr std::uint16_t kAcBegin = 37;
-constexpr std::uint16_t kAcEnd = 38;
-constexpr std::uint16_t kBeginSparklineGroup = 1041;
-constexpr std::uint16_t kEndSparklineGroup = 1042;
-constexpr std::uint16_t kSparkline = 1043;
-constexpr std::uint16_t kBeginCondFmt14 = 1046;
-constexpr std::uint16_t kEndCondFmt14 = 1047;
-constexpr std::uint16_t kBeginCfRule14 = 1048;
-constexpr std::uint16_t kCfvo14 = 1050;
-constexpr std::uint16_t kBeginSparklines = 1056;
-constexpr std::uint16_t kEndSparklines = 1057;
-constexpr std::uint16_t kBeginSparklineGroups = 1058;
-constexpr std::uint16_t kEndSparklineGroups = 1059;
-constexpr std::uint16_t kBeginCfs14 = 1135;
-constexpr std::uint16_t kEndCfs14 = 1136;
-
 // Future-record header flags: a range list, plus a formula list.
 constexpr std::uint32_t kFrtRanges = 0x02U;
 constexpr std::uint32_t kFrtRangesAndFormulas = 0x06U;
 constexpr std::size_t kSqrefOffset = 12U;
-
-std::uint32_t LoadU32(const std::uint8_t* p) {
-  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
-         (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
-}
-
-std::uint16_t LoadU16(const std::uint8_t* p) {
-  return static_cast<std::uint16_t>(p[0] | (p[1] << 8));
-}
-
-void StoreU32(std::uint8_t* p, std::uint32_t v) {
-  for (int i = 0; i < 4; ++i) {
-    p[i] = static_cast<std::uint8_t>(v >> (8 * i));
-  }
-}
-
-void StoreU16(std::uint8_t* p, std::uint16_t v) {
-  p[0] = static_cast<std::uint8_t>(v);
-  p[1] = static_cast<std::uint8_t>(v >> 8);
-}
 
 /// The range list of a 1046 / 1043 record in the supported shape; `rest` is
 /// the offset of whatever follows the Sqrfx.
 bool ParseRanges(const FramedRecord& rec, std::vector<MergeRange>& ranges, std::size_t& rest) {
   const std::uint32_t want = rec.type == kBeginCondFmt14 ? kFrtRanges : kFrtRangesAndFormulas;
   if ((rec.type != kBeginCondFmt14 && rec.type != kSparkline) || rec.payload.size < kSqrefOffset ||
-      LoadU32(rec.payload.data) != want || LoadU32(rec.payload.data + 4) != 1U) {
+      load_u32(rec.payload.data) != want || load_u32(rec.payload.data + 4) != 1U) {
     return false;
   }
   ByteSpan cursor{rec.payload.data + kSqrefOffset, rec.payload.size - kSqrefOffset};
@@ -219,7 +182,7 @@ bool FormulaSpans(ByteSpan p, std::vector<std::pair<std::size_t, std::size_t>>& 
   if (p.size < 4U) {
     return false;
   }
-  const std::uint32_t flags = LoadU32(p.data);
+  const std::uint32_t flags = load_u32(p.data);
   if ((flags & 0x04U) == 0U) {
     return true;
   }
@@ -247,8 +210,8 @@ bool FormulaSpans(ByteSpan p, std::vector<std::pair<std::size_t, std::size_t>>& 
     if (cursor.size < 12U) {
       return false;
     }
-    const std::size_t cce = LoadU32(cursor.data + 4);
-    const std::size_t cb = LoadU32(cursor.data + 8);
+    const std::size_t cce = load_u32(cursor.data + 4);
+    const std::size_t cb = load_u32(cursor.data + 8);
     if (cursor.size - 12U < cce || cursor.size - 12U - cce < cb) {
       return false;
     }
@@ -281,12 +244,12 @@ std::optional<std::size_t> TokenSize(const std::uint8_t* p, std::size_t left) {
     }
     switch (tag) {
       case 0x17U:
-        return left >= 3U ? std::optional<std::size_t>(2U + 2U * LoadU16(p + 1)) : std::nullopt;
+        return left >= 3U ? std::optional<std::size_t>(2U + 2U * load_u16(p + 1)) : std::nullopt;
       case 0x19U:
         if (left < 4U) {
           return std::nullopt;
         }
-        return (p[1] & 0x04U) != 0U ? 3U + 2U * (LoadU16(p + 2) + 1U) : 3U;
+        return (p[1] & 0x04U) != 0U ? 3U + 2U * (load_u16(p + 2) + 1U) : 3U;
       case 0x1CU:
       case 0x1DU:
         return 1U;
@@ -338,7 +301,7 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
   std::uint8_t* at = tag + 1 + (three_d ? 2 : 0);
   std::string_view sheet;
   if (three_d) {
-    const std::uint16_t ixti = LoadU16(tag + 1);
+    const std::uint16_t ixti = load_u16(tag + 1);
     // A multi-sheet span keeps its coordinates under a row/column edit.
     if (ixti >= ctx.sheets.size() || ctx.sheets[ixti].unresolved || ctx.sheets[ixti].first.empty() ||
         ctx.sheets[ixti].first != ctx.sheets[ixti].last) {
@@ -370,9 +333,9 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
       row = r.row_abs ? row : (row - ctx.new_base->row) & kRowMask;
       col = r.col_abs ? col : (col - ctx.new_base->col) & kPtgColumnMask;
     }
-    StoreU32(row_at, row);
-    StoreU16(col_at, static_cast<std::uint16_t>(col | (r.col_abs ? 0U : kPtgColumnRelativeBit) |
-                                                (r.row_abs ? 0U : kPtgRowRelativeBit)));
+    store_u32(row_at, row);
+    store_u16(col_at, static_cast<std::uint16_t>(col | (r.col_abs ? 0U : kPtgColumnRelativeBit) |
+                                                 (r.row_abs ? 0U : kPtgRowRelativeBit)));
   };
   const auto to_error = [&]() {
     const std::uint8_t error_kind = three_d ? kind + 2U : (area ? 0x0BU : 0x0AU);
@@ -380,7 +343,7 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
     std::fill(at, at + (area ? 12 : 6), std::uint8_t{0});
   };
   if (!area) {
-    const std::optional<parser::Reference> out = ctx.transform.apply(load(LoadU32(at), LoadU16(at + 4)));
+    const std::optional<parser::Reference> out = ctx.transform.apply(load(load_u32(at), load_u16(at + 4)));
     if (!out) {
       to_error();
     } else {
@@ -388,8 +351,8 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
     }
     return true;
   }
-  parser::Reference first = load(LoadU32(at), LoadU16(at + 8));
-  parser::Reference last = load(LoadU32(at + 4), LoadU16(at + 10));
+  parser::Reference first = load(load_u32(at), load_u16(at + 8));
+  parser::Reference last = load(load_u32(at + 4), load_u16(at + 10));
   const bool cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
   const bool rows = !cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
   first.is_full_col = last.is_full_col = cols;
@@ -600,7 +563,7 @@ Outcome RemapRectAt(Edit& edit, std::size_t i, std::size_t offset, bool cell, co
   const std::uint8_t* at = p.data + offset;
   MergeRange rect;
   if (cell) {
-    rect = MergeRange{LoadU32(at), LoadU32(at + 4), LoadU32(at), LoadU32(at + 4)};
+    rect = MergeRange{load_u32(at), load_u32(at + 4), load_u32(at), load_u32(at + 4)};
   } else {
     ByteSpan cursor{at, 16U};
     rect = read_rfx(cursor).value();
@@ -619,8 +582,8 @@ Outcome RemapRectAt(Edit& edit, std::size_t i, std::size_t offset, bool cell, co
   }
   std::vector<std::uint8_t> out = CurrentPayload(edit, i);
   if (cell) {
-    StoreU32(out.data() + offset, ranges.front().first_row);
-    StoreU32(out.data() + offset + 4, ranges.front().first_col);
+    store_u32(out.data() + offset, ranges.front().first_row);
+    store_u32(out.data() + offset + 4, ranges.front().first_col);
   } else {
     std::vector<std::uint8_t> rfx;
     emit_rfx(rfx, ranges.front());
@@ -669,7 +632,7 @@ void SettleScenarios(Edit& edit) {
       ++remaining;
       if (sct_end < man_end && kept != CountAll(edit, sct, sct_end, kSlc) && edit.recs[sct].payload.size >= 2U) {
         std::vector<std::uint8_t> out = CurrentPayload(edit, sct);
-        StoreU16(out.data(), static_cast<std::uint16_t>(kept));
+        store_u16(out.data(), static_cast<std::uint16_t>(kept));
         edit.payload[sct] = std::move(out);
       }
     }
@@ -685,8 +648,8 @@ void SettleScenarios(Edit& edit) {
     }
     std::vector<std::uint8_t> out = CurrentPayload(edit, man);
     for (std::size_t field = 0; field < 4U; field += 2U) {
-      if (LoadU16(out.data() + field) >= remaining) {
-        StoreU16(out.data() + field, static_cast<std::uint16_t>(remaining - 1U));
+      if (load_u16(out.data() + field) >= remaining) {
+        store_u16(out.data() + field, static_cast<std::uint16_t>(remaining - 1U));
       }
     }
     edit.payload[man] = std::move(out);
@@ -736,14 +699,14 @@ bool RemapAutoFilter(Edit& edit, std::size_t begin, const StructuralEdit& e) {
     const FramedRecord& rec = edit.recs[i];
     if (rec.type == kBeginFilterColumn && rec.payload.size >= 4U) {
       AutoFilter one = whole;
-      one.columns.emplace_back().col_id = LoadU32(rec.payload.data);
+      one.columns.emplace_back().col_id = load_u32(rec.payload.data);
       const std::optional<AutoFilter> after = moved(one);
       if (after->columns.empty()) {
         edit.Drop(i, edit.Find(i, kEndFilterColumn));
         changed = true;
       } else if (after->columns.front().col_id != one.columns.front().col_id) {
         std::vector<std::uint8_t> out = CurrentPayload(edit, i);
-        StoreU32(out.data(), after->columns.front().col_id);
+        store_u32(out.data(), after->columns.front().col_id);
         edit.payload[i] = std::move(out);
         changed = true;
       }
@@ -796,7 +759,7 @@ bool RemapBreaks(Edit& edit, std::size_t begin, std::uint16_t end_type, const St
     if (rec.type != kBrk || rec.payload.size < 16U) {
       continue;
     }
-    const std::uint32_t id = LoadU32(rec.payload.data);
+    const std::uint32_t id = load_u32(rec.payload.data);
     std::vector<MergeRange> at{MergeRange{id, id, id, id}};
     shift_sqref_ranges(at, e.index, e.count, e.is_delete, e.row_axis);
     if (at.empty()) {
@@ -805,11 +768,11 @@ bool RemapBreaks(Edit& edit, std::size_t begin, std::uint16_t end_type, const St
       continue;
     }
     ++kept;
-    manual += LoadU32(rec.payload.data + 12) != 0U ? 1U : 0U;
+    manual += load_u32(rec.payload.data + 12) != 0U ? 1U : 0U;
     const std::uint32_t moved = e.row_axis ? at.front().first_row : at.front().first_col;
     if (moved != id) {
       std::vector<std::uint8_t> out = CurrentPayload(edit, i);
-      StoreU32(out.data(), moved);
+      store_u32(out.data(), moved);
       edit.payload[i] = std::move(out);
       changed = true;
     }
@@ -822,8 +785,8 @@ bool RemapBreaks(Edit& edit, std::size_t begin, std::uint16_t end_type, const St
     return true;
   }
   std::vector<std::uint8_t> out = CurrentPayload(edit, begin);
-  StoreU32(out.data(), kept);
-  StoreU32(out.data() + 4, manual);
+  store_u32(out.data(), kept);
+  store_u32(out.data() + 4, manual);
   edit.payload[begin] = std::move(out);
   return true;
 }
@@ -894,7 +857,7 @@ void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e)
         }
         break;
       case kBeginWebPubItem:
-        if (edit.recs[i].payload.size >= 4U && LoadU32(edit.recs[i].payload.data) == kWebSourceRange &&
+        if (edit.recs[i].payload.size >= 4U && load_u32(edit.recs[i].payload.data) == kWebSourceRange &&
             note(RemapRectAt(edit, i, 9U, false, move))) {
           edit.Drop(i, edit.Find(i, kEndWebPubItem));
         }
@@ -916,9 +879,9 @@ void RemapSlotChildRefs(std::vector<std::uint8_t>& buf, const StructuralEdit& e)
        i = edit.Find(i + 1U, kBeginWebPubItems)) {
     const std::size_t close = edit.Find(i, kEndWebPubItems);
     const auto kept = static_cast<std::uint32_t>(CountKept(edit, i, close, kBeginWebPubItem));
-    if (edit.keep[i] && edit.recs[i].payload.size >= 4U && LoadU32(edit.recs[i].payload.data) != kept) {
+    if (edit.keep[i] && edit.recs[i].payload.size >= 4U && load_u32(edit.recs[i].payload.data) != kept) {
       std::vector<std::uint8_t> out = CurrentPayload(edit, i);
-      StoreU32(out.data(), kept);
+      store_u32(out.data(), kept);
       edit.payload[i] = std::move(out);
     }
   }

@@ -48,6 +48,10 @@ void emit_rfx(std::vector<std::uint8_t>& dst, const MergeRange& rect);
 /// Appends a little-endian IEEE 754 64-bit double to `dst`.
 void emit_double(std::vector<std::uint8_t>& dst, double value);
 
+/// Appends a `CellParsedFormula`: `cce` + `rgce` + `cb` + `rgcb`.
+void emit_cell_parsed_formula(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& rgce,
+                              const std::vector<std::uint8_t>& rgcb);
+
 /// Appends an `XLWideString` ([MS-XLSB] §2.5.166) to `dst`:
 ///   * `u32` count of UTF-16 code units (cch);
 ///   * `cch` UTF-16LE code units of the input UTF-8 `text`.

@@ -106,6 +106,10 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
     std::uint32_t* undecoded_formula_count);
 
+/// True for a worksheet-tail record the grammar places after the hyperlinks
+/// (print setup through the LISTPARTS block).
+bool is_after_hyperlinks(std::uint16_t type);
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

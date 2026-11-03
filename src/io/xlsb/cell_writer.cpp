@@ -51,11 +51,8 @@ void EmitCellHeader(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint
   emit_u32(dst, col);
   // iStyleRef: 24-bit little-endian style index. Excel xf indices always
   // fit in 24 bits; mask defensively so a corrupt oversized index cannot
-  // bleed into the phonetic flag.
-  emit_u8(dst, static_cast<std::uint8_t>(xf_index & 0xFFU));
-  emit_u8(dst, static_cast<std::uint8_t>((xf_index >> 8) & 0xFFU));
-  emit_u8(dst, static_cast<std::uint8_t>((xf_index >> 16) & 0xFFU));
-  emit_u8(dst, static_cast<std::uint8_t>((xf_index >> kShowPhoneticShift) & 0x01U));  // fPhShow
+  // bleed into the phonetic flag, which is the fourth byte (fPhShow).
+  emit_u32(dst, xf_index & ((1U << (kShowPhoneticShift + 1U)) - 1U));
 }
 
 /// Returns the `BErr` byte a cell value of `e` is stored as (see
@@ -106,9 +103,11 @@ Expected<EncodedFormula, Error> EncodeCellFormula(const Cell& cell, const std::v
 ///   rgce        (cce bytes)         — the Ptg stream
 ///   cb          (u32 byte length of rgcb)
 ///   rgcb        (cb bytes)          — array-constant extra data
-void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index,
-                           const Value& cached, const EncodedFormula& formula, bool always_calculates) {
-  std::vector<std::uint8_t> p;
+void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t col,
+                           std::uint32_t xf_index, const Value& cached, const EncodedFormula& formula,
+                           bool always_calculates) {
+  scratch.clear();
+  std::vector<std::uint8_t>& p = scratch;
   EmitCellHeader(p, col, xf_index);
 
   XlsbRecordType type = XlsbRecordType::BrtFmlaNum;
@@ -148,11 +147,7 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
   }
   emit_u16(p, always_calculates ? 0x0002U : 0U);  // grbitFlags: fAlwaysCalc
 
-  // CellParsedFormula: cce + rgce + cb + rgcb.
-  emit_u32(p, static_cast<std::uint32_t>(formula.rgce.size()));
-  p.insert(p.end(), formula.rgce.begin(), formula.rgce.end());
-  emit_u32(p, static_cast<std::uint32_t>(formula.rgcb.size()));
-  p.insert(p.end(), formula.rgcb.begin(), formula.rgcb.end());
+  emit_cell_parsed_formula(p, formula.rgce, formula.rgcb);
 
   emit_record(dst, static_cast<std::uint16_t>(type), p);
 }
@@ -165,34 +160,23 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
 /// tokens live once in the anchor's `BrtArrFmla`.
 EncodedFormula MakePtgExpShell(std::uint32_t anchor_row, std::uint32_t anchor_col) {
   EncodedFormula shell;
-  shell.rgce.push_back(0x01U);  // PtgExp
-  shell.rgce.push_back(static_cast<std::uint8_t>(anchor_row & 0xFFU));
-  shell.rgce.push_back(static_cast<std::uint8_t>((anchor_row >> 8) & 0xFFU));
-  shell.rgce.push_back(static_cast<std::uint8_t>((anchor_row >> 16) & 0xFFU));
-  shell.rgce.push_back(static_cast<std::uint8_t>((anchor_row >> 24) & 0xFFU));
-  shell.rgcb.push_back(static_cast<std::uint8_t>(anchor_col & 0xFFU));
-  shell.rgcb.push_back(static_cast<std::uint8_t>((anchor_col >> 8) & 0xFFU));
-  shell.rgcb.push_back(static_cast<std::uint8_t>((anchor_col >> 16) & 0xFFU));
-  shell.rgcb.push_back(static_cast<std::uint8_t>((anchor_col >> 24) & 0xFFU));
+  emit_u8(shell.rgce, 0x01U);  // PtgExp
+  emit_u32(shell.rgce, anchor_row);
+  emit_u32(shell.rgcb, anchor_col);
   return shell;
 }
 
 /// Emits a `BrtArrFmla` record. Layout ([MS-XLSB], matching the reader's
 /// decode): RfX (rwFirst, rwLast, colFirst, colLast as u32) + 1 flag byte
 /// + `CellParsedFormula` (cce + rgce + cb + rgcb).
-void EmitArrayFormulaRecord(std::vector<std::uint8_t>& dst, std::uint32_t rw_first, std::uint32_t rw_last,
-                            std::uint32_t col_first, std::uint32_t col_last, const EncodedFormula& formula,
-                            bool always_calculates) {
-  std::vector<std::uint8_t> p;
-  emit_u32(p, rw_first);
-  emit_u32(p, rw_last);
-  emit_u32(p, col_first);
-  emit_u32(p, col_last);
+void EmitArrayFormulaRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t rw_first,
+                            std::uint32_t rw_last, std::uint32_t col_first, std::uint32_t col_last,
+                            const EncodedFormula& formula, bool always_calculates) {
+  scratch.clear();
+  std::vector<std::uint8_t>& p = scratch;
+  emit_rfx(p, MergeRange{rw_first, col_first, rw_last, col_last});
   emit_u8(p, always_calculates ? 0x01U : 0U);  // flags: fAlwaysCalc, the `aca="1"` of .xlsx
-  emit_u32(p, static_cast<std::uint32_t>(formula.rgce.size()));
-  p.insert(p.end(), formula.rgce.begin(), formula.rgce.end());
-  emit_u32(p, static_cast<std::uint32_t>(formula.rgcb.size()));
-  p.insert(p.end(), formula.rgcb.begin(), formula.rgcb.end());
+  emit_cell_parsed_formula(p, formula.rgce, formula.rgcb);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtArrFmla), p);
 }
 
@@ -201,59 +185,45 @@ void EmitArrayFormulaRecord(std::vector<std::uint8_t>& dst, std::uint32_t rw_fir
 /// `phonetic` travels with a Text payload into the shared-string table:
 /// the guide belongs to the string entry rather than the cell record, so
 /// two cells reading the same kanji differently need distinct entries.
-void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index,
-                           const Value& cached, const std::vector<PhoneticRun>& phonetic,
+void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t col,
+                           std::uint32_t xf_index, const Value& cached, const std::vector<PhoneticRun>& phonetic,
                            PhoneticProperties phonetic_props, SstBuilder& sst) {
+  scratch.clear();
+  std::vector<std::uint8_t>& p = scratch;
+  EmitCellHeader(p, col, xf_index);
+  XlsbRecordType type = XlsbRecordType::BrtCellBlank;
   switch (cached.kind()) {
-    case ValueKind::Blank: {
-      std::vector<std::uint8_t> p;
-      EmitCellHeader(p, col, xf_index);
-      emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellBlank), p);
-      return;
-    }
+    case ValueKind::Blank:
+      break;
     case ValueKind::Number: {
       const double v = cached.as_number();
-      std::vector<std::uint8_t> p;
-      EmitCellHeader(p, col, xf_index);
       if (!std::isfinite(v)) {
+        type = XlsbRecordType::BrtCellError;
         emit_u8(p, ErrorWireCode(ErrorCode::Num));
-        emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellError), p);
-        return;
-      }
-      if (rk_round_trips_value(v)) {
+      } else if (rk_round_trips_value(v)) {
+        type = XlsbRecordType::BrtCellRk;
         emit_rk_number(p, v);
-        emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellRk), p);
       } else {
+        type = XlsbRecordType::BrtCellReal;
         emit_double(p, v);
-        emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellReal), p);
       }
-      return;
+      break;
     }
-    case ValueKind::Bool: {
-      std::vector<std::uint8_t> p;
-      EmitCellHeader(p, col, xf_index);
+    case ValueKind::Bool:
+      type = XlsbRecordType::BrtCellBool;
       emit_u8(p, cached.as_boolean() ? 1U : 0U);
-      emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellBool), p);
-      return;
-    }
-    case ValueKind::Error: {
-      std::vector<std::uint8_t> p;
-      EmitCellHeader(p, col, xf_index);
+      break;
+    case ValueKind::Error:
+      type = XlsbRecordType::BrtCellError;
       emit_u8(p, ErrorWireCode(cached.as_error()));
-      emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellError), p);
-      return;
-    }
-    case ValueKind::Text: {
-      const std::uint32_t idx = sst.intern(cached.as_text(), phonetic, phonetic_props);
-      std::vector<std::uint8_t> p;
-      EmitCellHeader(p, col, xf_index);
-      emit_u32(p, idx);
-      emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellIsst), p);
-      return;
-    }
+      break;
+    case ValueKind::Text:
+      type = XlsbRecordType::BrtCellIsst;
+      emit_u32(p, sst.intern(cached.as_text(), phonetic, phonetic_props));
+      break;
     case ValueKind::Array:
     case ValueKind::Lambda:
-    case ValueKind::Ref: {
+    case ValueKind::Ref:
       // These kinds never appear as a plain cell `cached_value` after
       // recalc — the recalc engine spills `Array` results into
       // SpillRegions, and `Lambda` / `Ref` are not legal cell payload.
@@ -262,20 +232,18 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
           .field("col", static_cast<std::int64_t>(col))
           .field("kind", static_cast<std::int64_t>(cached.kind()))
           .warn();
-      std::vector<std::uint8_t> p;
-      EmitCellHeader(p, col, xf_index);
-      emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellBlank), p);
-      return;
-    }
+      break;
   }
+  emit_record(dst, static_cast<std::uint16_t>(type), p);
 }
 
 }  // namespace
 
-Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
-                                bool always_calculates, SstBuilder& sst, const std::vector<std::string>& sheet_names,
-                                const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                std::uint32_t* downgraded_formula_count, const NameShapes& name_shapes) {
+Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
+                                std::uint32_t row, std::uint32_t col, bool always_calculates, SstBuilder& sst,
+                                const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
+                                const NameTable& name_table, std::uint32_t* downgraded_formula_count,
+                                const NameShapes& name_shapes) {
   // Formula cells take precedence: even if the cached_value is blank, we
   // still emit a BrtFmla* record so the formula round-trips.
   if (!cell.formula_text.empty()) {
@@ -289,21 +257,23 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
       if (downgraded_formula_count != nullptr) {
         ++*downgraded_formula_count;
       }
-      EmitLiteralCellRecord(dst, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
+      EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs,
+                            cell.phonetic_props, sst);
       return Expected<void, Error>::Ok();
     }
-    EmitFormulaCellRecord(dst, col, StyleWord(cell), cell.cached_value, formula_or.value(), always_calculates);
+    EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell), cell.cached_value, formula_or.value(), always_calculates);
     return Expected<void, Error>::Ok();
   }
 
-  EmitLiteralCellRecord(dst, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs, cell.phonetic_props, sst);
+  EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs, cell.phonetic_props,
+                        sst);
   return Expected<void, Error>::Ok();
 }
 
-Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, const Value& anchor_value,
-                                        bool always_calculates, std::uint32_t col, std::uint32_t anchor_row,
-                                        std::uint32_t last_row, std::uint32_t last_col,
-                                        const std::vector<std::string>& sheet_names,
+Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch,
+                                        const Cell& cell, const Value& anchor_value, bool always_calculates,
+                                        std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
+                                        std::uint32_t last_col, const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count,
                                         bool* downgraded_to_literal, const NameShapes& name_shapes) {
@@ -320,21 +290,23 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Ce
     if (downgraded_to_literal != nullptr) {
       *downgraded_to_literal = true;
     }
-    EmitLiteralCellRecord(dst, col, StyleWord(cell), anchor_value, cell.phonetic_runs, cell.phonetic_props, sst);
+    EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), anchor_value, cell.phonetic_runs, cell.phonetic_props,
+                          sst);
     return Expected<void, Error>::Ok();
   }
   // The anchor's own cell record is a PtgExp shell typed by the spilled
   // value at the anchor; the real tokens go into the following BrtArrFmla.
   const EncodedFormula shell = MakePtgExpShell(anchor_row, col);
-  EmitFormulaCellRecord(dst, col, StyleWord(cell), anchor_value, shell, always_calculates);
-  EmitArrayFormulaRecord(dst, anchor_row, last_row, col, last_col, formula_or.value(), always_calculates);
+  EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell), anchor_value, shell, always_calculates);
+  EmitArrayFormulaRecord(dst, scratch, anchor_row, last_row, col, last_col, formula_or.value(), always_calculates);
   return Expected<void, Error>::Ok();
 }
 
-void emit_data_table_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t col, const DataTable& table,
-                            SstBuilder& sst) {
+void emit_data_table_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
+                            std::uint32_t col, const DataTable& table, SstBuilder& sst) {
   // TABLECELL = BrtTable CELLMETA (BrtCellRk / BrtCellError / BrtCellBool / BrtCellReal / BrtCellSt).
-  std::vector<std::uint8_t> p;
+  scratch.clear();
+  std::vector<std::uint8_t>& p = scratch;
   emit_rfx(p, table.ref);
   for (const DataTableInput* input : {&table.r1, &table.r2}) {
     const bool usable = input->present && !input->deleted;
@@ -347,21 +319,22 @@ void emit_data_table_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, st
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtTable), p);
   const Value& v = cell.cached_value;
   if (v.is_text()) {
-    std::vector<std::uint8_t> st;
-    EmitCellHeader(st, col, StyleWord(cell));
-    emit_xlwidestring(st, v.as_text());
-    emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellSt), st);
+    p.clear();
+    EmitCellHeader(p, col, StyleWord(cell));
+    emit_xlwidestring(p, v.as_text());
+    emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellSt), p);
     return;
   }
   // A blank result reads as 0 in a data table, and the grammar has no blank anchor.
   const Value scalar = v.is_number() || v.is_boolean() || v.is_error() ? v : Value::number(0.0);
-  EmitLiteralCellRecord(dst, col, StyleWord(cell), scalar, cell.phonetic_runs, cell.phonetic_props, sst);
+  EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), scalar, cell.phonetic_runs, cell.phonetic_props, sst);
 }
 
-void emit_array_phantom(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index, const Value& cached,
-                        std::uint32_t anchor_row, std::uint32_t anchor_col, bool always_calculates) {
+void emit_array_phantom(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t col,
+                        std::uint32_t xf_index, const Value& cached, std::uint32_t anchor_row, std::uint32_t anchor_col,
+                        bool always_calculates) {
   const EncodedFormula shell = MakePtgExpShell(anchor_row, anchor_col);
-  EmitFormulaCellRecord(dst, col, xf_index, cached, shell, always_calculates);
+  EmitFormulaCellRecord(dst, scratch, col, xf_index, cached, shell, always_calculates);
 }
 
 }  // namespace xlsb

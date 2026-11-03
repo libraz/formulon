@@ -213,11 +213,10 @@ void AppendProp(std::vector<std::uint8_t>& props, std::uint16_t& count, std::uin
 
 /// A wide string with a u16 length rather than XLWideString's u32 one.
 std::vector<std::uint8_t> ShortWideString(std::string_view text) {
-  std::vector<std::uint8_t> wide;
-  emit_xlwidestring(wide, text);
   std::vector<std::uint8_t> out;
-  emit_u16(out, static_cast<std::uint16_t>((wide.size() - 4U) / 2U));
-  out.insert(out.end(), wide.begin() + 4, wide.end());
+  emit_xlwidestring(out, text);
+  // Drop the high half of the u32 prefix.
+  out.erase(out.begin() + 2, out.begin() + 4);
   return out;
 }
 

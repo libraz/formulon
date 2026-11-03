@@ -75,9 +75,7 @@ Expected<std::uint32_t, Error> read_u32(ByteSpan& cursor) {
   if (cursor.size < 4) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb u32 read out of range", "context=xlsb.record");
   }
-  const std::uint32_t v =
-      static_cast<std::uint32_t>(cursor.data[0]) | (static_cast<std::uint32_t>(cursor.data[1]) << 8) |
-      (static_cast<std::uint32_t>(cursor.data[2]) << 16) | (static_cast<std::uint32_t>(cursor.data[3]) << 24);
+  const std::uint32_t v = load_u32(cursor.data);
   cursor.data += 4;
   cursor.size -= 4;
   return v;
@@ -173,9 +171,7 @@ Expected<std::string, Error> read_xlnullablewidestring(ByteSpan& cursor) {
   // Peek at the length prefix without consuming, so the null sentinel
   // (`0xFFFFFFFF`) advances exactly four bytes and produces an empty
   // string without invoking the wide-string body decoder.
-  const std::uint32_t len =
-      static_cast<std::uint32_t>(cursor.data[0]) | (static_cast<std::uint32_t>(cursor.data[1]) << 8) |
-      (static_cast<std::uint32_t>(cursor.data[2]) << 16) | (static_cast<std::uint32_t>(cursor.data[3]) << 24);
+  const std::uint32_t len = load_u32(cursor.data);
   if (len == 0xFFFFFFFFU) {
     cursor.data += 4;
     cursor.size -= 4;
@@ -244,6 +240,20 @@ std::vector<FramedRecord> split_records(const std::vector<std::uint8_t>& buf) {
         FramedRecord{rec.value().type, rec.value().payload, begin, static_cast<std::size_t>(cursor.data - buf.data())});
   }
   return out;
+}
+
+bool contains_record_type(const std::vector<std::uint8_t>& buf, std::uint16_t type) {
+  ByteSpan cursor{buf.data(), buf.size()};
+  while (cursor.size != 0U) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      return false;
+    }
+    if (rec.value().type == type) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void append_record(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& src, const FramedRecord& rec) {

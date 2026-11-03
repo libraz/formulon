@@ -73,12 +73,14 @@ std::size_t unwritten_protected_range_count(const Sheet& sheet);
 /// `workbook_views` is the BrtBookView count of the workbook part; a sheet
 /// view naming a later window is not written. Sparkline groups that cannot be
 /// encoded are left out and added to `*deferred_sparkline_groups`.
+/// `hyperlink_ids` is `hyperlink_relationship_ids(sheet)`, which the caller
+/// also needs for the sheet's relationships part.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
-    const SheetRangeTable& sheet_ranges, const NameTable& name_table, std::uint32_t* downgraded_formula_count = nullptr,
-    std::uint32_t dynamic_array_ifmd = 0, const NameShapes& name_shapes = NameShapes(),
-    const std::vector<std::string>& table_part_rel_ids = {}, std::uint32_t workbook_views = 1U,
-    std::uint32_t* deferred_sparkline_groups = nullptr);
+    const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
+    std::uint32_t* downgraded_formula_count = nullptr, std::uint32_t dynamic_array_ifmd = 0,
+    const NameShapes& name_shapes = NameShapes(), const std::vector<std::string>& table_part_rel_ids = {},
+    std::uint32_t workbook_views = 1U, std::uint32_t* deferred_sparkline_groups = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

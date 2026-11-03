@@ -14,6 +14,7 @@
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/cf_x14_link.h"
 #include "io/xlsb/frt_formula.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 
@@ -22,21 +23,7 @@ namespace io {
 namespace xlsb {
 namespace {
 
-constexpr std::uint16_t kAcBegin = 37;
-constexpr std::uint16_t kAcEnd = 38;
-constexpr std::uint16_t kBeginSparklineGroup = 1041;
-constexpr std::uint16_t kEndSparklineGroup = 1042;
-constexpr std::uint16_t kSparkline = 1043;
-constexpr std::uint16_t kBeginSparklines = 1056;
-constexpr std::uint16_t kEndSparklines = 1057;
-constexpr std::uint16_t kBeginSparklineGroups = 1058;
-constexpr std::uint16_t kEndSparklineGroups = 1059;
-constexpr std::uint16_t kBeginCfs14 = 1135;
 constexpr std::uint16_t kBeginDVals14 = 1054;
-constexpr std::uint16_t kUid = 3072;
-constexpr std::uint16_t kMargins = 476;
-constexpr std::uint16_t kPrintOptions = 477;
-constexpr std::uint16_t kPageSetup = 478;
 // The BrtACBegin Excel writes around a sparkline group's BrtUid: one
 // ACProductVersion, version 0x1002, fileExtension set.
 constexpr std::array<std::uint8_t, 6> kGroupUidVersion = {0x01, 0x00, 0x02, 0x10, 0x00, 0x80};
@@ -59,11 +46,6 @@ constexpr std::uint16_t kGroupAutoMin = 0x4000;
 constexpr std::uint16_t kRightToLeft = 0x8000;
 constexpr std::size_t kGroupFixedBytes = 2U + 8U * 8U + 3U * 8U + 4U;
 constexpr double kMaxLineWeight = 1584.0;
-
-std::uint32_t LoadU32(const std::uint8_t* p) {
-  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
-         (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
-}
 
 double LoadF64(const std::uint8_t* p) {
   double v = 0;
@@ -156,7 +138,7 @@ bool DecodeGroupHead(ByteSpan p, const FeatureFormulaReadContext& ctx, Sparkline
   const double manual_max = LoadF64(nums);
   const double manual_min = LoadF64(nums + 8);
   g.line_weight = LoadF64(nums + 16);
-  const std::uint32_t type = LoadU32(nums + 24);
+  const std::uint32_t type = load_u32(nums + 24);
   if (!std::isfinite(manual_max) || !std::isfinite(manual_min) || !std::isfinite(g.line_weight) ||
       g.line_weight < 0.0 || g.line_weight > kMaxLineWeight || type > 2U) {
     return false;
@@ -295,7 +277,7 @@ Error Refuse(const std::string& what) {
 }
 
 std::uint32_t f_cce(const std::vector<std::uint8_t>& bytes) {
-  return bytes.size() >= 4U ? LoadU32(bytes.data()) : 0U;
+  return bytes.size() >= 4U ? load_u32(bytes.data()) : 0U;
 }
 
 /// Quotes `name` for a sheet-qualified reference.
@@ -450,10 +432,8 @@ void take_sparkline_groups(XlsbSheetTail& tail, const FeatureFormulaReadContext&
 bool has_retained_sparkline_groups(const XlsbSheetTail& tail) {
   for (const std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    for (const FramedRecord& rec : split_records(*slot)) {
-      if (rec.type == kBeginSparklineGroups) {
-        return true;
-      }
+    if (contains_record_type(*slot, kBeginSparklineGroups)) {
+      return true;
     }
   }
   return false;
@@ -483,21 +463,7 @@ Expected<void, Error> add_sparkline_groups(std::vector<std::uint8_t>& records, s
       return Expected<void, Error>::Ok();
     }
   }
-  std::vector<std::uint8_t> block;
-  // As for the x14 CF container: a sheet without print records gets Excel's
-  // default BrtPrintOptions ahead of its first future record.
-  const bool has_print = std::any_of(recs.begin(), recs.end(), [](const FramedRecord& r) {
-    return r.type == kPrintOptions || r.type == kMargins || r.type == kPageSetup;
-  });
-  if (!has_print) {
-    const std::array<std::uint8_t, 2> default_print_options = {0x10, 0x00};
-    emit_record(block, kPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
-  }
-  emit_record(block, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
-  emit_record(block, kBeginSparklineGroups, ByteSpan{});
-  block.insert(block.end(), body.begin(), body.end());
-  emit_record(block, kEndSparklineGroups, ByteSpan{});
-  emit_record(block, kFrtEnd, ByteSpan{});
+  const std::vector<std::uint8_t> block = frt_container_block(recs, kBeginSparklineGroups, kEndSparklineGroups, body);
   const std::size_t at = InsertionPoint(recs, records.size());
   records.insert(records.begin() + static_cast<std::ptrdiff_t>(at), block.begin(), block.end());
   return Expected<void, Error>::Ok();

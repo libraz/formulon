@@ -190,6 +190,28 @@ enum class XlsbRecordType : std::uint16_t {
 ///                                 overrun the underlying buffer.
 Expected<XlsbRecord, Error> read_record(ByteSpan& cursor);
 
+/// Little-endian loads from, and stores to, a raw buffer; the caller
+/// guarantees the bytes exist.
+inline std::uint32_t load_u32(const std::uint8_t* p) {
+  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
+         (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
+}
+
+inline std::uint16_t load_u16(const std::uint8_t* p) {
+  return static_cast<std::uint16_t>(p[0] | (p[1] << 8));
+}
+
+inline void store_u32(std::uint8_t* p, std::uint32_t v) {
+  for (int i = 0; i < 4; ++i) {
+    p[i] = static_cast<std::uint8_t>(v >> (8 * i));
+  }
+}
+
+inline void store_u16(std::uint8_t* p, std::uint16_t v) {
+  p[0] = static_cast<std::uint8_t>(v);
+  p[1] = static_cast<std::uint8_t>(v >> 8);
+}
+
 /// Reads a raw 8-bit unsigned integer; advances `cursor`. Returns
 /// `kIoXlsbRecordTruncated` when the buffer is empty.
 Expected<std::uint8_t, Error> read_u8(ByteSpan& cursor);
@@ -247,6 +269,9 @@ struct FramedRecord {
 
 /// Splits `buf` into framed records; empty when it does not parse whole.
 std::vector<FramedRecord> split_records(const std::vector<std::uint8_t>& buf);
+
+/// True when `buf` holds a record of `type` before any framing error.
+bool contains_record_type(const std::vector<std::uint8_t>& buf, std::uint16_t type);
 
 /// Appends `rec`'s framed bytes from `src` to `dst`.
 void append_record(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& src, const FramedRecord& rec);

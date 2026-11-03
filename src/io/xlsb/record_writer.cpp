@@ -116,19 +116,6 @@ std::uint32_t DecodeUtf8(std::string_view text, std::size_t& i) {
   return decoded.codepoint;
 }
 
-/// Returns the count of UTF-16 code units a UTF-8 string would expand
-/// to. Used to size the cch length prefix without buffering the
-/// encoded body in a separate vector first.
-std::uint32_t Utf16Length(std::string_view text) {
-  std::uint32_t cch = 0;
-  std::size_t i = 0;
-  while (i < text.size()) {
-    const std::uint32_t cp = DecodeUtf8(text, i);
-    cch += (cp >= 0x10000U) ? 2U : 1U;
-  }
-  return cch;
-}
-
 }  // namespace
 
 void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t value) {
@@ -161,9 +148,18 @@ void emit_double(std::vector<std::uint8_t>& dst, double value) {
   emit_u32(dst, static_cast<std::uint32_t>((bits >> 32) & 0xFFFFFFFFU));
 }
 
+void emit_cell_parsed_formula(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& rgce,
+                              const std::vector<std::uint8_t>& rgcb) {
+  emit_u32(dst, static_cast<std::uint32_t>(rgce.size()));
+  dst.insert(dst.end(), rgce.begin(), rgce.end());
+  emit_u32(dst, static_cast<std::uint32_t>(rgcb.size()));
+  dst.insert(dst.end(), rgcb.begin(), rgcb.end());
+}
+
 void emit_xlwidestring(std::vector<std::uint8_t>& dst, std::string_view text) {
-  const std::uint32_t cch = Utf16Length(text);
-  emit_u32(dst, cch);
+  // The code-unit count is patched into the prefix once the body is written.
+  const std::size_t prefix_at = dst.size();
+  emit_u32(dst, 0U);
   std::size_t i = 0;
   while (i < text.size()) {
     const std::uint32_t cp = DecodeUtf8(text, i);
@@ -178,6 +174,7 @@ void emit_xlwidestring(std::vector<std::uint8_t>& dst, std::string_view text) {
       AppendCodeUnit(dst, low);
     }
   }
+  store_u32(dst.data() + prefix_at, static_cast<std::uint32_t>((dst.size() - prefix_at - 4U) / 2U));
 }
 
 void emit_xlnullablewidestring(std::vector<std::uint8_t>& dst, std::optional<std::string_view> text) {

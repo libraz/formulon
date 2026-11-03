@@ -54,6 +54,13 @@ bool IsEmptySlot(const Cell& cell) {
          !cell.show_phonetic;
 }
 
+/// First and last emitted column within one 1,024-column segment of a row.
+struct ColSpan {
+  std::uint32_t segment;
+  std::uint32_t first;
+  std::uint32_t last;
+};
+
 /// Emits a `BrtRowHdr` for `row`. [MS-XLSB] §2.4.770 layout:
 ///   * rw         : u32 (0-based row index)
 ///   * iStyleRef  : u32 (row style xf index, or 0)
@@ -69,7 +76,7 @@ bool IsEmptySlot(const Cell& cell) {
 /// following it with cells, even though our own permissive reader can decode
 /// it.  An empty layout-only row legitimately has no spans.
 void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowLayout* layout, bool default_hidden,
-                   const std::map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>>& spans) {
+                   const std::vector<ColSpan>& spans) {
   std::vector<std::uint8_t> p;
   emit_u32(p, row);
   emit_u32(p, layout != nullptr && layout->has_style ? layout->style_xf : 0U);  // iStyleRef
@@ -96,10 +103,9 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   // when the phonetic guide is disabled; otherwise ccolspan is misaligned.
   emit_u8(p, 0U);
   emit_u32(p, static_cast<std::uint32_t>(spans.size()));  // ccolspan
-  for (const auto& [segment, span] : spans) {
-    (void)segment;
-    emit_u32(p, span.first);   // colMic
-    emit_u32(p, span.second);  // colLast
+  for (const ColSpan& span : spans) {
+    emit_u32(p, span.first);  // colMic
+    emit_u32(p, span.last);   // colLast
   }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtRowHdr), p);
 }
@@ -184,14 +190,18 @@ void EmitWorksheetDimensions(std::vector<std::uint8_t>& dst, const Sheet& sheet)
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsDim), payload);
 }
 
+bool IsEmittableMerge(const MergeRange& merge) {
+  return merge.first_row <= merge.last_row && merge.first_col <= merge.last_col && merge.last_row < Sheet::kMaxRows &&
+         merge.last_col < Sheet::kMaxCols;
+}
+
 void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   if (sheet.merges().empty()) {
     return;
   }
   std::size_t valid_count = 0;
   for (const MergeRange& merge : sheet.merges()) {
-    if (merge.first_row <= merge.last_row && merge.first_col <= merge.last_col && merge.last_row < Sheet::kMaxRows &&
-        merge.last_col < Sheet::kMaxCols) {
+    if (IsEmittableMerge(merge)) {
       ++valid_count;
     }
   }
@@ -202,8 +212,7 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   emit_u32(count, static_cast<std::uint32_t>(valid_count));
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginMergeCells), count);
   for (const MergeRange& merge : sheet.merges()) {
-    if (merge.first_row > merge.last_row || merge.first_col > merge.last_col || merge.last_row >= Sheet::kMaxRows ||
-        merge.last_col >= Sheet::kMaxCols) {
+    if (!IsEmittableMerge(merge)) {
       continue;
     }
     std::vector<std::uint8_t> payload;
@@ -327,9 +336,10 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
 
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
-    const SheetRangeTable& sheet_ranges, const NameTable& name_table, std::uint32_t* downgraded_formula_count,
-    std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes, const std::vector<std::string>& table_part_rel_ids,
-    std::uint32_t workbook_views, std::uint32_t* deferred_sparkline_groups) {
+    const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
+    std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
+    const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
+    std::uint32_t* deferred_sparkline_groups) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -409,6 +419,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   std::unordered_set<std::uint64_t> downgraded_array_anchors;
   auto anchor_key = [](std::uint32_t row, std::uint32_t col) { return (static_cast<std::uint64_t>(row) << 32U) | col; };
 
+  std::vector<ColSpan> spans;
+  std::vector<std::uint8_t> cell_payload;
   for (const std::uint32_t row : row_indices) {
     const RowLayout* row_layout = find_row_override(sheet.layout(), row);
     const auto stored_it = sheet.rows().find(row);
@@ -439,14 +451,17 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     // BrtRowHdr represents cells in 1,024-column segments.  Include only
     // cells actually emitted below; leading default-constructed slots must
     // not enlarge a span.
-    std::map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>> spans;
+    spans.clear();
     auto add_to_span = [&spans](std::uint32_t col) {
       const std::uint32_t segment = col / 1024U;
-      const auto [it, inserted] = spans.emplace(segment, std::make_pair(col, col));
-      if (!inserted) {
-        it->second.first = std::min(it->second.first, col);
-        it->second.second = std::max(it->second.second, col);
+      for (ColSpan& span : spans) {
+        if (span.segment == segment) {
+          span.first = std::min(span.first, col);
+          span.last = std::max(span.last, col);
+          return;
+        }
       }
+      spans.push_back(ColSpan{segment, col, col});
     };
     if (row_cells != nullptr) {
       for (const auto& [col, cell] : *row_cells) {
@@ -462,6 +477,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       }
     }
 
+    std::sort(spans.begin(), spans.end(), [](const ColSpan& a, const ColSpan& b) { return a.segment < b.segment; });
     EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, spans);
     // Ascending merge of stored entries and phantoms; a column in both takes the entry path unless it is style-only.
     RowCells::const_iterator entry_it = row_cells != nullptr ? row_cells->begin() : RowCells::const_iterator();
@@ -505,8 +521,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
             emit_u32(metadata_index, dynamic_array_ifmd);  // XLDAPR dynamic-array metadata entry
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), metadata_index);
           }
-          if (auto r = emit_array_anchor(body, *cell, anchor_value, always, col, row, last_row, last_col, sheet_names,
-                                         sheet_ranges, name_table, sst, downgraded_formula_count,
+          if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, col, row, last_row, last_col,
+                                         sheet_names, sheet_ranges, name_table, sst, downgraded_formula_count,
                                          &downgraded_to_literal, name_shapes);
               !r) {
             return std::move(r.error());
@@ -516,9 +532,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           }
         } else if (const DataTable* table = sheet.data_table_anchored_at(row, col);
                    table != nullptr && cell->formula_text.empty()) {
-          emit_data_table_anchor(body, *cell, col, *table, sst);
-        } else if (auto r = emit_cell(body, *cell, row, col, always, sst, sheet_names, sheet_ranges, name_table,
-                                      downgraded_formula_count, name_shapes);
+          emit_data_table_anchor(body, cell_payload, *cell, col, *table, sst);
+        } else if (auto r = emit_cell(body, cell_payload, *cell, row, col, always, sst, sheet_names, sheet_ranges,
+                                      name_table, downgraded_formula_count, name_shapes);
                    !r) {
           return std::move(r.error());
         }
@@ -529,7 +545,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           continue;
         }
         const std::uint32_t xf_index = select_effective_xf(sheet, row, col).xf_index;
-        emit_array_phantom(body, col, xf_index, cur_ph->second.value, cur_ph->second.anchor_row,
+        emit_array_phantom(body, cell_payload, col, xf_index, cur_ph->second.value, cur_ph->second.anchor_row,
                            cur_ph->second.anchor_col, cur_ph->second.always_calculates);
       }
     }
@@ -563,7 +579,6 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   }
   // Table parts are model-owned; their BrtListPart records join the tail.
   splice_list_parts(tail.after_hyperlinks, table_part_rel_ids);
-  const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
   // Sheet and range protection, conditional formatting and data validation
   // are emitted from the model. Protection leads the tail: the one record the grammar
   // puts ahead of it (BrtSheetCalcProp) is one Excel does not persist.
@@ -576,12 +591,11 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
   if (auto features =
-          EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks,
-                                      FeatureFormulaWriteContext{sheet_names, sheet_ranges, name_table}, x14_linked);
+          EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks, frt_ctx, x14_linked);
       !features) {
     return std::move(features.error());
   }
-  if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_rids); !hyperlinks) {
+  if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_ids); !hyperlinks) {
     return std::move(hyperlinks.error());
   }
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());

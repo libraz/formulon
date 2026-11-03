@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <optional>
 
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 
@@ -15,8 +16,6 @@ namespace io {
 namespace xlsb {
 namespace {
 
-constexpr std::uint16_t kFrtBegin = 35;
-constexpr std::uint16_t kFrtEnd = 36;
 constexpr std::uint16_t kEndBook = 132;
 constexpr std::uint16_t kBeginSlicerCacheIds = 1070;
 constexpr std::uint16_t kBeginSlicerCacheId = 1072;
@@ -33,15 +32,10 @@ std::size_t Rank(std::uint16_t first) {
   return static_cast<std::size_t>(std::find(kBookFrtOrder.begin(), kBookFrtOrder.end(), first) - kBookFrtOrder.begin());
 }
 
-std::uint32_t LoadU32(const std::uint8_t* p) {
-  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
-         (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
-}
-
 /// The relationship id of an FRTHeader carrying only fRelID, and the offset
 /// past it.
 std::optional<std::string> RelId(ByteSpan p, std::size_t& rest) {
-  if (p.size < 6U || LoadU32(p.data) != kFrtRelId) {
+  if (p.size < 6U || load_u32(p.data) != kFrtRelId) {
     return std::nullopt;
   }
   const std::size_t cch = static_cast<std::size_t>(p.data[4] | (p.data[5] << 8U));

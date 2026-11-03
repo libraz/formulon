@@ -16,6 +16,7 @@
 #include "io/xlsb/cf_x14_link.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/frt_formula.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
@@ -33,7 +34,6 @@ namespace {
 // position (0 automatic, 1 middle, 2 none) and a u16
 // flag word; each BrtColor14 is a zero u32 and a BrtColor, positional in
 // the order border, negative fill, negative border, axis.
-constexpr std::uint16_t kBeginCfRule14 = 1048;
 constexpr std::uint16_t kEndCfRule14 = 1049;
 constexpr std::uint16_t kBeginDataBar14 = 1051;
 constexpr std::uint16_t kColor14 = 1055;
@@ -44,16 +44,7 @@ constexpr std::uint16_t kBar14Border = 0x01;
 constexpr std::uint16_t kBar14Gradient = 0x02;
 constexpr std::uint16_t kBar14NegativeFill = 0x04;
 constexpr std::uint16_t kBar14NegativeBorder = 0x08;
-constexpr std::uint16_t kBeginCfs14 = 1135;
-constexpr std::uint16_t kEndCfs14 = 1136;
-constexpr std::uint16_t kBeginCondFmt14 = 1046;
-constexpr std::uint16_t kEndCondFmt14 = 1047;
-constexpr std::uint16_t kCfvo14 = 1050;
 constexpr std::uint16_t kEndDataBar14 = 1156;
-constexpr std::uint16_t kAcBegin = 37;
-constexpr std::uint16_t kPrintOptions = 477;
-constexpr std::uint16_t kMargins = 476;
-constexpr std::uint16_t kPageSetup = 478;
 // BrtCFVO14 type, indexed by `cf::CfvoType`; 7 (formula) is not written.
 constexpr std::array<std::uint32_t, 8> kCfvo14Types = {1, 4, 5, 2, 3, 7, 8, 9};
 // Custom icon set ([MS-XLSB] 2.4.24 / 2.4.92 / 2.4.332 / 2.4.446): a
@@ -247,20 +238,15 @@ std::size_t FindType(const std::vector<FramedRecord>& recs, std::size_t from, st
   return until;
 }
 
-std::uint32_t LoadU32(const std::uint8_t* p) {
-  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
-         (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
-}
-
 /// The sqref of a BrtBeginConditionalFormatting14: FRTHeader flags 0x02, one
 /// FRTSqref (flags, Sqrfx), then ccf and fPivot. False for any other shape.
 bool ParseBlockHead(const FramedRecord& rec, std::vector<MergeRange>& ranges) {
   const ByteSpan p = rec.payload;
-  if (p.size < 12U || LoadU32(p.data) != 2U || LoadU32(p.data + 4) != 1U) {
+  if (p.size < 12U || load_u32(p.data) != 2U || load_u32(p.data + 4) != 1U) {
     return false;
   }
   ByteSpan cursor{p.data + 12, p.size - 12U};
-  return read_sqref(cursor, ranges) && cursor.size == 8U && LoadU32(cursor.data + 4) == 0U;
+  return read_sqref(cursor, ranges) && cursor.size == 8U && load_u32(cursor.data + 4) == 0U;
 }
 
 /// What a rule callback decides for one x14 rule.
@@ -364,22 +350,7 @@ void InsertX14Blocks(std::vector<std::uint8_t>& records, const std::vector<std::
       }
     }
   }
-  std::vector<std::uint8_t> block;
-  // Excel refuses an x14 container that directly follows the last legacy
-  // block; every sheet it writes has BrtPrintOptions there, so
-  // a sheet without print records gets Excel's default one.
-  const bool has_print = std::any_of(recs.begin(), recs.end(), [](const FramedRecord& r) {
-    return r.type == kPrintOptions || r.type == kMargins || r.type == kPageSetup;
-  });
-  if (!has_print) {
-    const std::array<std::uint8_t, 2> default_print_options = {0x10, 0x00};
-    emit_record(block, kPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
-  }
-  emit_record(block, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
-  emit_record(block, kBeginCfs14, ByteSpan{});
-  block.insert(block.end(), groups.begin(), groups.end());
-  emit_record(block, kEndCfs14, ByteSpan{});
-  emit_record(block, kFrtEnd, ByteSpan{});
+  const std::vector<std::uint8_t> block = frt_container_block(recs, kBeginCfs14, kEndCfs14, groups);
   // The x14 container leads the worksheet future records; Excel keeps the
   // sheet's revision-uid wrapper last.
   std::size_t at = records.size();
@@ -409,6 +380,24 @@ void EmitBlockHead(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& 
 }
 
 }  // namespace
+
+std::vector<std::uint8_t> frt_container_block(const std::vector<FramedRecord>& recs, std::uint16_t open,
+                                              std::uint16_t close, const std::vector<std::uint8_t>& body) {
+  std::vector<std::uint8_t> block;
+  const bool has_print = std::any_of(recs.begin(), recs.end(), [](const FramedRecord& r) {
+    return r.type == kPrintOptions || r.type == kMargins || r.type == kPageSetup;
+  });
+  if (!has_print) {
+    const std::array<std::uint8_t, 2> default_print_options = {0x10, 0x00};
+    emit_record(block, kPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
+  }
+  emit_record(block, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
+  emit_record(block, open, ByteSpan{});
+  block.insert(block.end(), body.begin(), body.end());
+  emit_record(block, close, ByteSpan{});
+  emit_record(block, kFrtEnd, ByteSpan{});
+  return block;
+}
 
 void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vector<cf::ConditionalFormat>& formats,
                              std::unordered_set<std::string>& linked) {
@@ -603,20 +592,21 @@ std::optional<cf::CfValueObject> DecodeIconCfvo14(ByteSpan p, const MergeRange& 
 std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs, std::size_t first, std::size_t last,
                                            const MergeRange& base, const FeatureFormulaReadContext& ctx) {
   const ByteSpan head = recs[first].payload;
-  if (head.size != kRule14Bytes || LoadU32(head.data) != 0U || LoadU32(head.data + 4) != kTypeMultistate ||
-      LoadU32(head.data + 8) != kTemplateMultistate || LoadU32(head.data + 34) != 0U || LoadU32(head.data + 38) != 0U ||
-      LoadU32(head.data + 42) != 0U || LoadU32(head.data + kRule14FGuidOffset) > 1U) {
+  if (head.size != kRule14Bytes || load_u32(head.data) != 0U || load_u32(head.data + 4) != kTypeMultistate ||
+      load_u32(head.data + 8) != kTemplateMultistate || load_u32(head.data + 34) != 0U ||
+      load_u32(head.data + 38) != 0U || load_u32(head.data + 42) != 0U ||
+      load_u32(head.data + kRule14FGuidOffset) > 1U) {
     return std::nullopt;
   }
-  const auto priority = static_cast<std::int32_t>(LoadU32(head.data + kRule14PriorityOffset));
+  const auto priority = static_cast<std::int32_t>(load_u32(head.data + kRule14PriorityOffset));
   if (priority <= 0 || first + 2U > last || recs[first + 1U].type != kBeginIconSet14) {
     return std::nullopt;
   }
   const ByteSpan set = recs[first + 1U].payload;
-  if (set.size != 10U || LoadU32(set.data) != 0U) {
+  if (set.size != 10U || load_u32(set.data) != 0U) {
     return std::nullopt;
   }
-  const std::uint32_t name = LoadU32(set.data + 4);
+  const std::uint32_t name = load_u32(set.data + 4);
   const auto flags = static_cast<std::uint16_t>(set.data[8] | (set.data[9] << 8U));
   if (name > static_cast<std::uint32_t>(cf::IconSetName::Five_Quarters) || (flags & kIconCustom) == 0U ||
       (flags & ~0x7FU) != 0U) {
@@ -640,11 +630,11 @@ std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs
   }
   for (std::size_t i = 0; i < icons; ++i) {
     const FramedRecord& rec = recs[first + 2U + icons + i];
-    if (rec.type != kCfIcon || rec.payload.size != 12U || LoadU32(rec.payload.data) != 0U) {
+    if (rec.type != kCfIcon || rec.payload.size != 12U || load_u32(rec.payload.data) != 0U) {
       return std::nullopt;
     }
-    const auto kpi = static_cast<std::int32_t>(LoadU32(rec.payload.data + 4));
-    const auto index = static_cast<std::int32_t>(LoadU32(rec.payload.data + 8));
+    const auto kpi = static_cast<std::int32_t>(load_u32(rec.payload.data + 4));
+    const auto index = static_cast<std::int32_t>(load_u32(rec.payload.data + 8));
     std::optional<std::string> icon_set = Kpi14Name(kpi);
     if (!icon_set ||
         (kpi == -1 ? index != -1
@@ -659,7 +649,7 @@ std::optional<cf::CFRule> DecodeIconRule14(const std::vector<FramedRecord>& recs
   cf::CFRule rule;
   rule.type = cf::RuleType::IconSet;
   rule.priority = priority;
-  if (LoadU32(head.data + kRule14FGuidOffset) == 1U) {
+  if (load_u32(head.data + kRule14FGuidOffset) == 1U) {
     rule.id = FormatGuid(head.data + kRule14GuidOffset);
   }
   rule.icon_set = std::move(spec);

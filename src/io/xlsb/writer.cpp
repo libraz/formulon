@@ -61,6 +61,7 @@
 #include "utils/expected.h"
 #include "utils/index_sort.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "workbook.h"
 
@@ -198,6 +199,7 @@ bool HasPivotPassthroughPart(const Workbook& workbook) {
 std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   std::uint32_t count = 0U;
   const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
+  const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", sheet.has_auto_filter() ? 1U : 0U, i);
@@ -225,8 +227,7 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
       ++invalid_defaults;
     }
     ReportDeferred(&count, "sheet_format_defaults", invalid_defaults, i);
-    ReportDeferred(&count, "sheet_views",
-                   unwritten_view_part_count(sheet.view(), workbook_view_count(workbook.book_views_xml())), i);
+    ReportDeferred(&count, "sheet_views", unwritten_view_part_count(sheet.view(), views), i);
     ReportDeferred(&count, "protected_ranges", unwritten_protected_range_count(sheet), i);
   }
   // Workbook globals the BrtBookProtection / BrtWbProp / BrtBookView records
@@ -242,7 +243,7 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   // An .xlsx slicer part has no binary form here and is left out.
   std::size_t xml_slicers = 0U;
   for (const PassthroughPart& part : workbook.passthrough_parts()) {
-    xml_slicers += is_xml_slicer_part(part.path) && part.path.compare(0, 11, "xl/slicers/") == 0 ? 1U : 0U;
+    xml_slicers += is_xml_slicer_part(part.path) && strings::starts_with(part.path, "xl/slicers/") ? 1U : 0U;
   }
   ReportDeferred(&count, "slicers", xml_slicers, 0U);
   // No binary form is written for custom table / PivotTable styles or for
@@ -276,7 +277,16 @@ bool IsXlsxOnlyMetadataPart(const std::string& path) {
 // model, so a source package's own parts are stale.
 bool IsExternalLinkPart(const std::string& path) {
   constexpr std::string_view kPrefix = "xl/externalLinks/";
-  return path.compare(0, kPrefix.size(), kPrefix) == 0;
+  return strings::starts_with(path, kPrefix);
+}
+
+/// Package paths of the 1-based `position`-th worksheet part and its rels.
+std::string sheet_part_path(std::size_t position) {
+  return "xl/worksheets/sheet" + std::to_string(position) + ".bin";
+}
+
+std::string sheet_rels_part_path(std::size_t position) {
+  return "xl/worksheets/_rels/sheet" + std::to_string(position) + ".bin.rels";
 }
 
 std::string ExternalLinkRelsPath(std::size_t position) {
@@ -356,8 +366,8 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   paths.insert("xl/workbook.bin");
   paths.insert("xl/_rels/workbook.bin.rels");
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".bin");
-    paths.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".bin.rels");
+    paths.insert(sheet_part_path(i + 1U));
+    paths.insert(sheet_rels_part_path(i + 1U));
   }
   if (emit_sst_part) {
     paths.insert("xl/sharedStrings.bin");
@@ -404,7 +414,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     if (source.extension.empty() || source.content_type.empty()) {
       continue;
     }
-    const std::string extension = ooxml::lowercase_extension(source.extension);
+    const std::string extension = strings::to_ascii_lower(source.extension);
     auto [it, inserted] = source_defaults.emplace(extension, source.content_type);
     if (!inserted && it->second != source.content_type) {
       return make_error(FormulonErrorCode::kIoContentTypeInvalid,
@@ -554,12 +564,12 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
         }
       }
       if (has_emitted_sheet_rels) {
-        AppendOverride(out, "xl/worksheets/_rels/sheet" + std::to_string(i + 1U) + ".bin.rels", kCtPackageRels);
+        AppendOverride(out, sheet_rels_part_path(i + 1U), kCtPackageRels);
       }
     }
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    AppendOverride(out, "xl/worksheets/sheet" + std::to_string(i + 1U) + ".bin", kCtWorksheetXlsb);
+    AppendOverride(out, sheet_part_path(i + 1U), kCtWorksheetXlsb);
   }
   if (plan.has_text_cells) {
     AppendOverride(out, "xl/sharedStrings.bin", kCtSharedStringsXlsb);
@@ -601,7 +611,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
 // set; a relationship whose target part is not in the package is dropped so
 // the emitted rels never dangle.
 std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const std::vector<XlsbTablePart>& tables,
-                           WriteDiagnostics* diagnostics) {
+                           const std::vector<std::string>& hyperlink_rids, WriteDiagnostics* diagnostics) {
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
     if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
@@ -621,7 +631,6 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
     const std::string target = rel.target_external ? rel.target : TargetRelativeToWorksheet(rel.target);
     AppendRelationship(entries, rel.id, rel.type, target, rel.target_external, /*escape_target=*/true);
   }
-  const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
   std::unordered_set<std::string> emitted_hyperlink_rids;
   emitted_hyperlink_rids.reserve(hyperlink_rids.size());
   for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
@@ -791,14 +800,18 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   XlsbTableAllocator table_allocator(std::move(taken_paths));
   std::vector<std::vector<XlsbTablePart>> sheet_tables(sheet_count);
+  std::vector<std::vector<std::string>> sheet_hyperlink_rids;
+  sheet_hyperlink_rids.reserve(sheet_count);
+  const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     std::unordered_set<std::string> taken_rel_ids;
     for (const UnknownRelationship& rel : workbook.sheet(i).unknown_relationships()) {
       taken_rel_ids.insert(rel.id);
     }
-    for (std::string& rel_id : hyperlink_relationship_ids(workbook.sheet(i))) {
-      taken_rel_ids.insert(std::move(rel_id));
+    sheet_hyperlink_rids.push_back(hyperlink_relationship_ids(workbook.sheet(i)));
+    for (const std::string& rel_id : sheet_hyperlink_rids.back()) {
+      taken_rel_ids.insert(rel_id);
     }
     std::uint32_t tables_lost = 0;
     sheet_tables[i] =
@@ -811,8 +824,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
     std::uint32_t sparklines_lost = 0;
     auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table,
-                                    &downgraded_formula_count, dynamic_array.ifmd, name_shapes(workbook, i),
-                                    table_rel_ids, workbook_view_count(workbook.book_views_xml()), &sparklines_lost);
+                                    sheet_hyperlink_rids[i], &downgraded_formula_count, dynamic_array.ifmd,
+                                    name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost);
     ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
@@ -890,10 +903,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // 5. xl/worksheets/sheet<N>.bin, plus its rels when the sheet's retained
   // records reference other parts (hyperlinks, drawings, table definitions).
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    std::string path("xl/worksheets/sheet");
-    path.append(std::to_string(i + 1));
-    path.append(".bin");
-    if (auto r = AddPartBytes(writer.get(), path, sheet_bodies[i]); !r) {
+    if (auto r = AddPartBytes(writer.get(), sheet_part_path(i + 1U), sheet_bodies[i]); !r) {
       return std::move(r.error());
     }
     for (const XlsbTablePart& table : plan.sheet_tables[i]) {
@@ -901,12 +911,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         return std::move(r.error());
       }
     }
-    const std::string sheet_rels = BuildSheetRels(workbook.sheet(i), plan, plan.sheet_tables[i], &diagnostics);
+    const std::string sheet_rels =
+        BuildSheetRels(workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i], &diagnostics);
     if (!sheet_rels.empty()) {
-      std::string rels_path("xl/worksheets/_rels/sheet");
-      rels_path.append(std::to_string(i + 1));
-      rels_path.append(".bin.rels");
-      if (auto r = AddPart(writer.get(), rels_path, sheet_rels); !r) {
+      if (auto r = AddPart(writer.get(), sheet_rels_part_path(i + 1U), sheet_rels); !r) {
         return std::move(r.error());
       }
     }

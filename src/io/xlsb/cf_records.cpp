@@ -15,6 +15,7 @@
 #include "io/cf_writer.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/cf_x14_link.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"

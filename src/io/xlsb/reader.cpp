@@ -152,7 +152,7 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
       if (ext.empty()) {
         continue;
       }
-      const std::string normalized_ext = ooxml::lowercase_extension(ext);
+      const std::string normalized_ext = strings::to_ascii_lower(ext);
       const auto [index_it, inserted] = default_indices.try_emplace(normalized_ext, view.defaults.size());
       if (!inserted) {
         if (view.defaults[index_it->second].content_type != ct) {

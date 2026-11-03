@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "utils/structured_log.h"
@@ -17,9 +18,6 @@ namespace xlsb {
 namespace {
 
 constexpr std::uint16_t kDVal = 64;
-constexpr std::uint16_t kAcBegin = 37;
-constexpr std::uint16_t kAcEnd = 38;
-constexpr std::uint16_t kUid = 3072;
 constexpr std::array<std::uint8_t, 6> kAcBeginPayload = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
 constexpr std::size_t kUidBytes = 16;
 constexpr std::size_t kHeaderZeroBytes = 14;
