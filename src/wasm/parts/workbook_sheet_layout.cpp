@@ -581,6 +581,13 @@ JsStatus JsWorkbook::setRowHeight(uint32_t sheet, uint32_t row, double height) {
   return status_from_rc(fm_sheet_set_row_height(handle_, sheet, row, height));
 }
 
+JsStatus JsWorkbook::setRowAutoHeight(uint32_t sheet, uint32_t row, double height) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_sheet_set_row_auto_height(handle_, sheet, row, height));
+}
+
 JsStatus JsWorkbook::setRowHidden(uint32_t sheet, uint32_t row, bool hidden) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
@@ -616,19 +623,20 @@ JsStatus JsWorkbook::clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last
   return status_from_rc(fm_sheet_clear_row_style(handle_, sheet, first, last));
 }
 
-emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
-                                            uint32_t lastCol) const {
+namespace {
+
+emscripten::val range_style_bases_result(fm_workbook_t* handle, uint32_t sheet, uint32_t firstRow, uint32_t firstCol,
+                                         uint32_t lastRow, uint32_t lastCol, const std::vector<uint32_t>& rows,
+                                         const std::vector<uint32_t>& cols) {
   emscripten::val o = emscripten::val::object();
   o.set("xfIndices", emscripten::val::array());
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
-  }
   size_t len = 0;
-  fm_status_t rc = fm_sheet_range_style_bases(handle_, sheet, firstRow, firstCol, lastRow, lastCol, nullptr, 0, &len);
+  fm_status_t rc = fm_sheet_range_style_bases_excluding(handle, sheet, firstRow, firstCol, lastRow, lastCol,
+                                                        rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
-    rc = fm_sheet_range_style_bases(handle_, sheet, firstRow, firstCol, lastRow, lastCol, xfs.data(), xfs.size(), &len);
+    rc = fm_sheet_range_style_bases_excluding(handle, sheet, firstRow, firstCol, lastRow, lastCol, rows.data(),
+                                              cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
   }
   if (rc != 0) {
     o.set("status", status_from_rc(rc));
@@ -641,6 +649,55 @@ emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, uint32_t firstRow, u
   o.set("status", ok_status());
   o.set("xfIndices", list);
   return o;
+}
+
+}  // namespace
+
+emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+                                            uint32_t lastCol) const {
+  if (handle_ == nullptr) {
+    emscripten::val o = emscripten::val::object();
+    o.set("xfIndices", emscripten::val::array());
+    o.set("status", invalid_handle_status());
+    return o;
+  }
+  return range_style_bases_result(handle_, sheet, firstRow, firstCol, lastRow, lastCol, {}, {});
+}
+
+emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, uint32_t firstRow, uint32_t firstCol,
+                                                     uint32_t lastRow, uint32_t lastCol, emscripten::val excludedRows,
+                                                     emscripten::val excludedCols) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("xfIndices", emscripten::val::array());
+  if (handle_ == nullptr) {
+    o.set("status", invalid_handle_status());
+    return o;
+  }
+  JsNarrowNumericReader reader("rangeStyleBasesExcluding");
+  if (!reader.is_array(excludedRows, "excludedRows") || !reader.is_array(excludedCols, "excludedCols")) {
+    o.set("status", binding_error_status(kInvalidArgument,
+                                         "rangeStyleBasesExcluding: `excludedRows` and `excludedCols` must be arrays "
+                                         "of numbers"));
+    return o;
+  }
+  const uint32_t count = reader.length(excludedRows, "excludedRows");
+  if (reader.ok() && count != reader.length(excludedCols, "excludedCols")) {
+    o.set("status", binding_error_status(
+                        kInvalidArgument,
+                        "rangeStyleBasesExcluding: `excludedRows` and `excludedCols` must have the same length"));
+    return o;
+  }
+  std::vector<uint32_t> rows(count);
+  std::vector<uint32_t> cols(count);
+  for (uint32_t i = 0; reader.ok() && i < count; ++i) {
+    rows[i] = reader.u32_value(reader.array_element(excludedRows, i, "excludedRows[]"), 0U, "excludedRows[]");
+    cols[i] = reader.u32_value(reader.array_element(excludedCols, i, "excludedCols[]"), 0U, "excludedCols[]");
+  }
+  if (!reader.ok()) {
+    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    return o;
+  }
+  return range_style_bases_result(handle_, sheet, firstRow, firstCol, lastRow, lastCol, rows, cols);
 }
 
 JsStatus JsWorkbook::remapRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,

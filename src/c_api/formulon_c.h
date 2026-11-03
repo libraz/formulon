@@ -6182,8 +6182,9 @@ FM_API fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_i
 /**
  * @brief Sets or replaces the row height override for `row`.
  *
- * `height` is in points. A rejected call leaves the layout exactly as it
- * was.
+ * `height` is in points and is stored as a manual height
+ * (`customHeight="1"`), which Excel keeps when the row's content or font
+ * changes. A rejected call leaves the layout exactly as it was.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -6192,6 +6193,19 @@ FM_API fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t sheet_i
  *         or infinite.
  */
 FM_API fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height);
+
+/**
+ * @brief Stores `height` as the cached value of `row`'s automatic height.
+ *
+ * Same contract as `fm_sheet_set_row_height`, except the row stays
+ * automatic (`custom_height == 0`): the height is saved as `ht` without
+ * `customHeight`, so the row still follows its content and font. Row
+ * style, hidden state, outline level and collapsed flag are kept. Use it
+ * to refresh a derived height; `fm_sheet_clear_row_height` drops it.
+ *
+ * @return As `fm_sheet_set_row_height`.
+ */
+FM_API fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height);
 
 /**
  * @brief Sets or replaces the row hidden flag for `row`.
@@ -6286,6 +6300,25 @@ FM_API fm_status_t fm_sheet_clear_row_style(fm_workbook_t* wb, size_t sheet_inde
 FM_API fm_status_t fm_sheet_range_style_bases(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
                                               uint32_t first_col, uint32_t last_row, uint32_t last_col,
                                               uint32_t* out_xfs, size_t cap, size_t* out_len);
+
+/**
+ * @brief `fm_sheet_range_style_bases` over the selection less the cells
+ *        `(excluded_rows[i], excluded_cols[i])`.
+ *
+ * An excluded cell contributes no XF: neither its own nor the row, column or
+ * default style beneath it. Use it when the host resolves those cells itself
+ * (say, a pending edit overrides their style). Excluded cells outside the
+ * selection and repeats are ignored; excluding every cell yields no indices.
+ * Values, styles and history are not touched.
+ *
+ * @return As `fm_sheet_range_style_bases`; also `kBindingNullPointer` when
+ *         either excluded array is `NULL` while `excluded_count > 0`.
+ */
+FM_API fm_status_t fm_sheet_range_style_bases_excluding(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                        uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                        const uint32_t* excluded_rows, const uint32_t* excluded_cols,
+                                                        size_t excluded_count, uint32_t* out_xfs, size_t cap,
+                                                        size_t* out_len);
 
 /**
  * @brief Remaps the XFs of a selection: each cell ends at `to_xfs[i]` where

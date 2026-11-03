@@ -320,6 +320,7 @@ class JsWorkbook {
 
   emscripten::val getSheetRowOverrides(uint32_t sheet) const;
   JsStatus setRowHeight(uint32_t sheet, uint32_t row, double height);
+  JsStatus setRowAutoHeight(uint32_t sheet, uint32_t row, double height);
   JsStatus setRowHidden(uint32_t sheet, uint32_t row, bool hidden);
   JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level);
   JsStatus setRowCollapsed(uint32_t sheet, uint32_t row, bool collapsed);
@@ -327,6 +328,9 @@ class JsWorkbook {
   JsStatus clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last);
   emscripten::val rangeStyleBases(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
                                   uint32_t lastCol) const;
+  emscripten::val rangeStyleBasesExcluding(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+                                           uint32_t lastCol, emscripten::val excludedRows,
+                                           emscripten::val excludedCols) const;
   JsStatus remapRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow, uint32_t lastCol,
                            emscripten::val fromXfs, emscripten::val toXfs);
   emscripten::val snapshotRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,

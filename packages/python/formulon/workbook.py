@@ -9005,11 +9005,23 @@ class Workbook:
         return out
 
     def set_row_height(self, sheet: int, row: int, height: float) -> None:
-        """Set the row height override at ``row``."""
+        """Set the row height at ``row`` as a manual height (``customHeight``)."""
         h = self._require()
         _check(
             LIB.fm_sheet_set_row_height(h, _uint(sheet, "sheet_index"), _uint(row, "row"), float(height)),
             "fm_sheet_set_row_height",
+        )
+
+    def set_row_auto_height(self, sheet: int, row: int, height: float) -> None:
+        """Store ``height`` as the cached value of ``row``'s automatic height.
+
+        Saved as ``ht`` without ``customHeight``, so the row keeps following its
+        content and font; the row's other attributes are kept.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_row_auto_height(h, _uint(sheet, "sheet_index"), _uint(row, "row"), float(height)),
+            "fm_sheet_set_row_auto_height",
         )
 
     def set_row_hidden(self, sheet: int, row: int, hidden: bool) -> None:
@@ -9071,42 +9083,70 @@ class Workbook:
         bases, build a patched XF for each with :meth:`add_font` /
         :meth:`add_cell_xf`, then apply them with :meth:`remap_range_style`.
         """
+        return self.range_style_bases_excluding(sheet, first_row, first_col, last_row, last_col, ())
+
+    def range_style_bases_excluding(
+        self,
+        sheet: int,
+        first_row: int,
+        first_col: int,
+        last_row: int,
+        last_col: int,
+        excluded: Sequence[Tuple[int, int]],
+    ) -> List[int]:
+        """:meth:`range_style_bases` over the selection less the ``(row, col)`` cells in ``excluded``.
+
+        An excluded cell contributes no XF, neither its own nor the row, column
+        or default style beneath it. Cells outside the selection and repeats are
+        ignored; excluding every cell yields an empty list.
+        """
         h = self._require()
+        cells = list(excluded)
+        count = len(cells)
         with _ArgScope() as scope:
+            rows_buf = cols_buf = 0
+            if count:
+                rows_buf = scope.buffer(b"".join(struct.pack("<I", _uint(r, "excluded_row")) for r, _ in cells))
+                cols_buf = scope.buffer(b"".join(struct.pack("<I", _uint(c, "excluded_col")) for _, c in cells))
             len_ptr = scope.out_ptr()
-            buf = 0
             # Size the buffer first, then fetch.
             _check(
-                LIB.fm_sheet_range_style_bases(
+                LIB.fm_sheet_range_style_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(first_row, "first_row"),
                     _uint(first_col, "first_col"),
                     _uint(last_row, "last_row"),
                     _uint(last_col, "last_col"),
+                    rows_buf,
+                    cols_buf,
+                    _uint(count, "excluded_count"),
                     0,
                     0,
                     len_ptr,
                 ),
-                "fm_sheet_range_style_bases",
+                "fm_sheet_range_style_bases_excluding",
             )
             total = LIB.read_u32(len_ptr)
             if total == 0:
                 return []
             buf = scope.alloc(4 * total)
             _check(
-                LIB.fm_sheet_range_style_bases(
+                LIB.fm_sheet_range_style_bases_excluding(
                     h,
                     _uint(sheet, "sheet_index"),
                     _uint(first_row, "first_row"),
                     _uint(first_col, "first_col"),
                     _uint(last_row, "last_row"),
                     _uint(last_col, "last_col"),
+                    rows_buf,
+                    cols_buf,
+                    _uint(count, "excluded_count"),
                     buf,
                     _uint(total, "cap"),
                     len_ptr,
                 ),
-                "fm_sheet_range_style_bases",
+                "fm_sheet_range_style_bases_excluding",
             )
             n = min(total, LIB.read_u32(len_ptr))
             return list(struct.unpack("<%dI" % n, LIB.read_bytes(buf, 4 * n)))

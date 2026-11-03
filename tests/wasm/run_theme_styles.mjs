@@ -229,6 +229,11 @@ export function registerThemeStyles(Module, test) {
       const bases = wb.rangeStyleBases(0, 0, 1, 1048575, 1);
       assert.ok(bases.status.ok, JSON.stringify(bases.status));
       assert.ok(bases.xfIndices.includes(0) && bases.xfIndices.includes(rowXf.index));
+      // Row 2 of a one-column selection is a single cell; excluding it hides the row style.
+      const excluded = wb.rangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2, 2, 9], [1, 1, 9]);
+      assert.ok(excluded.status.ok, JSON.stringify(excluded.status));
+      assert.deepEqual(excluded.xfIndices, [0]);
+      assert.equal(wb.rangeStyleBasesExcluding(0, 0, 1, 1048575, 1, [2], []).status.ok, false);
 
       const snap = wb.snapshotRangeStyle(0, 0, 1, 1048575, 1);
       assert.ok(snap.status.ok && snap.bytes.length > 0);

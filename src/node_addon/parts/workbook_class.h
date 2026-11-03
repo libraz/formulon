@@ -355,6 +355,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetColumnStyle(const Napi::CallbackInfo& info);
   Napi::Value GetSheetRowOverrides(const Napi::CallbackInfo& info);
   Napi::Value SetRowHeight(const Napi::CallbackInfo& info);
+  Napi::Value SetRowAutoHeight(const Napi::CallbackInfo& info);
   Napi::Value ClearRowHeight(const Napi::CallbackInfo& info);
   Napi::Value ClearColumnWidth(const Napi::CallbackInfo& info);
   Napi::Value ClearColumnStyle(const Napi::CallbackInfo& info);
@@ -372,6 +373,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetRowStyle(const Napi::CallbackInfo& info);
   Napi::Value ClearRowStyle(const Napi::CallbackInfo& info);
   Napi::Value RangeStyleBases(const Napi::CallbackInfo& info);
+  Napi::Value RangeStyleBasesExcluding(const Napi::CallbackInfo& info);
   Napi::Value RemapRangeStyle(const Napi::CallbackInfo& info);
   Napi::Value SnapshotRangeStyle(const Napi::CallbackInfo& info);
   Napi::Value RestoreRangeStyle(const Napi::CallbackInfo& info);

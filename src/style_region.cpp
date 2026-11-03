@@ -263,27 +263,62 @@ void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_
       layout, first, last, default_hidden, [](void*, std::uint32_t, RowDecision) { return RowDecision{}; }, nullptr);
 }
 
-std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect) {
+std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect,
+                                             std::vector<StyleCell> excluded) {
+  const auto cell_less = [](const StyleCell& a, const StyleCell& b) {
+    return a.row != b.row ? a.row < b.row : a.col < b.col;
+  };
+  const auto cell_equal = [](const StyleCell& a, const StyleCell& b) { return a.row == b.row && a.col == b.col; };
+  excluded.erase(std::remove_if(excluded.begin(), excluded.end(),
+                                [&rect](const StyleCell& c) {
+                                  return c.row < rect.first_row || c.row > rect.last_row || c.col < rect.first_col ||
+                                         c.col > rect.last_col;
+                                }),
+                 excluded.end());
+  std::sort(excluded.begin(), excluded.end(), cell_less);
+  excluded.erase(std::unique(excluded.begin(), excluded.end(), cell_equal), excluded.end());
+
   const std::vector<RowStyle> rows = styled_rows(sheet.layout(), rect.first_row, rect.last_row);
   const std::vector<ColumnSegment> cols = column_segments(sheet.layout(), rect.first_col, rect.last_col);
-  // Owning cells per styled row, and per column segment across the unstyled rows.
+  // Cells that hide the axis style beneath them, per styled row and per column
+  // segment across the unstyled rows: owning cells and excluded cells.
   std::vector<std::uint64_t> owned_in_row(rows.size(), 0U);
   std::vector<std::uint64_t> owned_in_col(cols.size(), 0U);
-  std::vector<std::uint32_t> out;
-  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
-    if (!cell.explicit_xf) {
-      continue;
-    }
-    out.push_back(cell.xf);
+  const auto count_covered = [&](const StyleCell& cell) {
     const auto row_it = std::lower_bound(rows.begin(), rows.end(), cell.row,
                                          [](const RowStyle& row, std::uint32_t key) { return row.row < key; });
     if (row_it != rows.end() && row_it->row == cell.row) {
       ++owned_in_row[static_cast<std::size_t>(row_it - rows.begin())];
-      continue;
+      return;
     }
     const auto col_it = std::upper_bound(cols.begin(), cols.end(), cell.col,
                                          [](std::uint32_t key, const ColumnSegment& seg) { return key < seg.first; });
     ++owned_in_col[static_cast<std::size_t>(col_it - cols.begin()) - 1U];
+  };
+  std::vector<std::uint32_t> out;
+  std::vector<StyleCell> owners;
+  for (const CapturedCell& cell : stored_cells(sheet, rect)) {
+    if (!cell.explicit_xf) {
+      continue;
+    }
+    const StyleCell at{cell.row, cell.col};
+    if (excluded.empty()) {
+      out.push_back(cell.xf);
+    } else {
+      if (!std::binary_search(excluded.begin(), excluded.end(), at, cell_less)) {
+        out.push_back(cell.xf);
+      }
+      owners.push_back(at);
+    }
+    count_covered(at);
+  }
+  if (!excluded.empty()) {
+    std::sort(owners.begin(), owners.end(), cell_less);
+    for (const StyleCell& cell : excluded) {
+      if (!std::binary_search(owners.begin(), owners.end(), cell, cell_less)) {
+        count_covered(cell);
+      }
+    }
   }
   const std::uint64_t width = static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U;
   for (std::size_t i = 0; i < rows.size(); ++i) {

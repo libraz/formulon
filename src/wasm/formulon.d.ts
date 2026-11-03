@@ -4519,8 +4519,10 @@ export interface Workbook {
 
   /** Returns the row-layout overrides on `sheet`. */
   getSheetRowOverrides(sheet: number): RowsResult;
-  /** Sets / replaces the row height override at `row`. */
+  /** Sets / replaces the row height at `row` as a manual height (`customHeight`), which stays put when the row's content or font changes. */
   setRowHeight(sheet: number, row: number, height: number): Status;
+  /** Stores `height` as the cached value of `row`'s automatic height: saved as `ht` without `customHeight`, so the row keeps following its content and font. Row style, hidden, outline and collapsed state are kept; `clearRowHeight` drops it. */
+  setRowAutoHeight(sheet: number, row: number, height: number): Status;
   /** Sets / replaces the row hidden flag at `row`. */
   setRowHidden(sheet: number, row: number, hidden: boolean): Status;
   /** Sets / replaces the row outline level at `row`. A level above 7, the
@@ -4549,6 +4551,22 @@ export interface Workbook {
     firstCol: number,
     lastRow: number,
     lastCol: number,
+  ): RangeStyleBasesResult;
+  /**
+   * `rangeStyleBases` over the selection less the cells `(excludedRows[i], excludedCols[i])`:
+   * an excluded cell contributes no XF, neither its own nor the row, column or default style
+   * beneath it. Use it when the host resolves those cells itself (say, a pending edit overrides
+   * their style). Excluded cells outside the selection and repeats are ignored; excluding every
+   * cell yields an empty list. Fails when the arrays differ in length.
+   */
+  rangeStyleBasesExcluding(
+    sheet: number,
+    firstRow: number,
+    firstCol: number,
+    lastRow: number,
+    lastCol: number,
+    excludedRows: number[],
+    excludedCols: number[],
   ): RangeStyleBasesResult;
   /**
    * Second step of the attribute patch: every cell of the selection ends at `toXfs[i]` where

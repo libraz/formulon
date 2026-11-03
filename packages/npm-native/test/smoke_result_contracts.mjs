@@ -157,6 +157,7 @@ function envelopeProbes(wb) {
     ['InsertChartResult', true, () => wb.insertChart(99, { kind: 0, source: 'A1:B2' })],
     ['AddChartSeriesResult', true, () => wb.addChartSeries(99, 1, 0, { values: 'A1:A2' })],
     ['RangeStyleBasesResult', true, () => wb.rangeStyleBases(99, 0, 0, 0, 0)],
+    ['RangeStyleBasesResult', true, () => wb.rangeStyleBasesExcluding(99, 0, 0, 0, 0, [], [])],
     ['RangeStyleSnapshotResult', true, () => wb.snapshotRangeStyle(99, 0, 0, 0, 0)],
     ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
   ];

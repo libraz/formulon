@@ -2009,10 +2009,10 @@ Expected<void, Error> check_style_rect(const char* op, std::size_t sheet_index, 
 
 }  // namespace
 
-Expected<std::vector<std::uint32_t>, Error> Workbook::range_style_bases(std::size_t sheet_index,
-                                                                        const StyleRect& rect) const {
+Expected<std::vector<std::uint32_t>, Error> Workbook::range_style_bases(std::size_t sheet_index, const StyleRect& rect,
+                                                                        std::vector<StyleCell> excluded) const {
   RETURN_IF_ERROR(check_style_rect("range_style_bases", sheet_index, sheets_.size(), rect));
-  return formulon::range_style_bases(sheets_[sheet_index], rect);
+  return formulon::range_style_bases(sheets_[sheet_index], rect, std::move(excluded));
 }
 
 Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const StyleRect& rect,

@@ -260,6 +260,65 @@ TEST(FormulonCApiRangeStyle, BasesOmitStylesNoCellResolvesTo) {
   EXPECT_EQ(Bases(wb, 5U, 4U, 6U, 4U), (std::vector<std::uint32_t>{4U}));
 }
 
+std::vector<std::uint32_t> BasesExcluding(const WorkbookGuard& wb, std::uint32_t first_row, std::uint32_t first_col,
+                                          std::uint32_t last_row, std::uint32_t last_col,
+                                          const std::vector<std::pair<std::uint32_t, std::uint32_t>>& excluded) {
+  std::vector<std::uint32_t> rows;
+  std::vector<std::uint32_t> cols;
+  for (const auto& [row, col] : excluded) {
+    rows.push_back(row);
+    cols.push_back(col);
+  }
+  std::vector<std::uint32_t> xfs(16U);
+  size_t len = 0;
+  EXPECT_EQ(fm_sheet_range_style_bases_excluding(wb.handle, 0, first_row, first_col, last_row, last_col, rows.data(),
+                                                 cols.data(), rows.size(), xfs.data(), xfs.size(), &len),
+            0);
+  xfs.resize(len);
+  return xfs;
+}
+
+TEST(FormulonCApiRangeStyle, ExcludedCellsContributeNoXf) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  // Whole sheet: A1 carries its own XF, which the host overrides and excludes.
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
+  EXPECT_EQ(BasesExcluding(wb, 0U, 0U, kLastRow, kLastCol, {{0U, 0U}}), (std::vector<std::uint32_t>{0U}));
+  // A far cell's own XF is still reported.
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 99999U, 25U, 2U), 0);
+  EXPECT_EQ(BasesExcluding(wb, 0U, 0U, kLastRow, kLastCol, {{0U, 0U}}), (std::vector<std::uint32_t>{0U, 2U}));
+  // No exclusions is the plain listing.
+  EXPECT_EQ(BasesExcluding(wb, 0U, 0U, kLastRow, kLastCol, {}), Bases(wb, 0U, 0U, kLastRow, kLastCol));
+}
+
+TEST(FormulonCApiRangeStyle, ExcludedCellsHideTheAxisStyleBeneathThem) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 5U, 5U, 3U), 0);
+  ASSERT_EQ(fm_sheet_set_column_style(wb.handle, 0, 4U, 4U, 2U), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 5U, 3U, 4U), 0);
+
+  // Row 5 over C..D: D5 owns its XF, C5 is excluded, so the row style is unused.
+  EXPECT_EQ(BasesExcluding(wb, 5U, 2U, 5U, 3U, {{5U, 2U}}), (std::vector<std::uint32_t>{4U}));
+  // Excluding the owner as well leaves nothing; repeats and outside cells are ignored.
+  EXPECT_EQ(BasesExcluding(wb, 5U, 2U, 5U, 3U, {{5U, 2U}, {5U, 3U}, {5U, 2U}, {0U, 0U}}),
+            (std::vector<std::uint32_t>{}));
+  // Column E over rows 6..7 (no row style): one excluded cell leaves the column style visible.
+  EXPECT_EQ(BasesExcluding(wb, 6U, 4U, 7U, 4U, {{6U, 4U}}), (std::vector<std::uint32_t>{2U}));
+  EXPECT_EQ(BasesExcluding(wb, 6U, 4U, 7U, 4U, {{6U, 4U}, {7U, 4U}}), (std::vector<std::uint32_t>{}));
+}
+
+TEST(FormulonCApiRangeStyle, ExcludingRejectsNullArraysAndBadRects) {
+  WorkbookGuard wb;
+  MakeWorkbook(wb);
+  size_t len = 0;
+  EXPECT_EQ(fm_sheet_range_style_bases_excluding(wb.handle, 0, 0U, 0U, 1U, 1U, nullptr, nullptr, 1U, nullptr, 0U, &len),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  const std::uint32_t one = 0U;
+  EXPECT_EQ(fm_sheet_range_style_bases_excluding(wb.handle, 9, 0U, 0U, 1U, 1U, &one, &one, 1U, nullptr, 0U, &len),
+            kInvalidArgument);
+}
+
 TEST(FormulonCApiRangeStyle, SnapshotRestoresPriorInheritance) {
   WorkbookGuard wb;
   MakeWorkbook(wb);

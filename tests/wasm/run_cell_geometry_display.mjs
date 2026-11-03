@@ -235,6 +235,20 @@ export function registerCellGeometryDisplay(Module, test) {
     });
   });
 
+  test('row heights: setRowAutoHeight caches the height and keeps the row automatic', () => {
+    withWorkbook(Module, (wb) => {
+      assert.ok(wb.setRowHidden(0, 4, true).ok);
+      assert.ok(wb.setRowAutoHeight(0, 4, 31.5).ok);
+      const rows = wb.getSheetRowOverrides(0).rows;
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].height, 31.5);
+      assert.equal(rows[0].hasHeight, 1);
+      assert.equal(rows[0].customHeight, 0);
+      assert.equal(rows[0].hidden, 1);
+      assert.equal(wb.setRowAutoHeight(0, 4, -1).ok, false);
+    });
+  });
+
   test('sheet format defaults round-trip with presence flags', () => {
     withWorkbook(Module, (wb) => {
       const initial = wb.getSheetFormatDefaults(0);

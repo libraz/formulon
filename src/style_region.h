@@ -35,6 +35,12 @@ struct StyleRect {
   std::uint32_t last_col = 0;
 };
 
+/// One cell of a sheet.
+struct StyleCell {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+};
+
 /// One `from -> to` pair of a remap; a remap's pairs are sorted by `from`
 /// with no repeats.
 struct XfRemap {
@@ -58,9 +64,11 @@ void set_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t 
 /// `zeroHeight`, whose presence itself is a visibility override.
 void clear_row_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden);
 
-/// Every xf some cell of `rect` resolves to, ascending: the xfs of its owning
-/// cells, then the row, column or default (0) style of any cell left over.
-std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect);
+/// Every xf some cell of `rect` outside `excluded` resolves to, ascending: the
+/// xfs of its owning cells, then the row, column or default (0) style of any
+/// cell left over. Excluded cells outside `rect` and repeats are ignored.
+std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect& rect,
+                                             std::vector<StyleCell> excluded);
 
 /// Rewrites the selection so each cell resolves to `map(its xf before)`;
 /// an xf not in `map` maps to itself. Fails with `kPreconditionFailed`, and

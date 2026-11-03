@@ -816,6 +816,71 @@ TEST(FormulonCApiSheetLayout, RowOverrideReportsHeightPresenceAndCustomFlag) {
   }
 }
 
+namespace {
+
+fm_row_layout_t ReloadedRowOverride(const WorkbookGuard& wb, std::uint32_t row) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard reloaded;
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  return RowOverride(reloaded, row);
+}
+
+}  // namespace
+
+TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
+  formulon::Workbook source = formulon::Workbook::create();
+  formulon::RowLayout auto_row;
+  auto_row.row = 2U;
+  auto_row.height = 18.0;
+  auto_row.has_height = true;
+  source.sheet(0).mutable_layout().row_overrides = {auto_row};
+  auto source_bytes = source.save();
+  ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
+
+  ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 2U, 31.5), 0);
+  ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 25.0), 0);
+  // An auto height on a styled, hidden, outlined row keeps all of it.
+  ASSERT_EQ(fm_sheet_set_row_style(wb.handle, 0, 6U, 6U, 1U), 0);
+  ASSERT_EQ(fm_sheet_set_row_hidden(wb.handle, 0, 6U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 6U, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_row_collapsed(wb.handle, 0, 6U, 1), 0);
+  ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 6U, 40.0), 0);
+
+  for (const fm_row_layout_t& r : {RowOverride(wb, 2U), ReloadedRowOverride(wb, 2U)}) {
+    EXPECT_EQ(r.has_height, 1);
+    EXPECT_EQ(r.custom_height, 0);
+    EXPECT_DOUBLE_EQ(r.height, 31.5);
+  }
+  for (const fm_row_layout_t& r : {RowOverride(wb, 4U), ReloadedRowOverride(wb, 4U)}) {
+    EXPECT_EQ(r.has_height, 1);
+    EXPECT_EQ(r.custom_height, 1);
+  }
+  for (const fm_row_layout_t& r : {RowOverride(wb, 6U), ReloadedRowOverride(wb, 6U)}) {
+    EXPECT_EQ(r.custom_height, 0);
+    EXPECT_DOUBLE_EQ(r.height, 40.0);
+    EXPECT_EQ(r.has_style, 1);
+    EXPECT_EQ(r.style_xf, 1U);
+    EXPECT_EQ(r.hidden, 1);
+    EXPECT_EQ(r.outline_level, 2U);
+    EXPECT_EQ(r.collapsed, 1);
+  }
+
+  // Dropping the height keeps the row's other attributes.
+  ASSERT_EQ(fm_sheet_clear_row_height(wb.handle, 0, 6U), 0);
+  const fm_row_layout_t cleared = RowOverride(wb, 6U);
+  EXPECT_EQ(cleared.has_height, 0);
+  EXPECT_EQ(cleared.has_style, 1);
+  EXPECT_EQ(cleared.hidden, 1);
+
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, kLastRow + 1U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 7, 0U, 10.0), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 0U, -1.0), kInvalidArgument);
+}
+
 TEST(FormulonCApiSheetLayout, ClearRowHeightDropsBareOverride) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

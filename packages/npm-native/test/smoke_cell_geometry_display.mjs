@@ -66,6 +66,17 @@ test('row overrides report hasHeight / customHeight and clearRowHeight drops the
   assert.equal(wb.clearRowHeight(0, 2000000).ok, false);
 });
 
+test('setRowAutoHeight caches the height and keeps the row automatic', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setRowAutoHeight(0, 4, 31.5).ok);
+  const row = wb.getSheetRowOverrides(0).rows.find((r) => r.row === 4);
+  assert.ok(row);
+  assert.equal(row.height, 31.5);
+  assert.equal(row.hasHeight, 1);
+  assert.equal(row.customHeight, 0);
+});
+
 test('clearColumnWidth follows later default changes and keeps hidden / outline state', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

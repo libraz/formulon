@@ -247,15 +247,20 @@ extern "C" fm_status_t fm_sheet_clear_column_style(fm_workbook_t* wb, size_t she
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height) {
+namespace {
+
+// Stores `height` on `row`, as a manual override when `custom` and as an
+// automatic height's cached value otherwise; every other row attribute is kept.
+fm_status_t store_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height, bool custom,
+                             const char* fn) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_height"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
     return rc;
   }
-  if (auto rc = check_row_index(row, "fm_sheet_set_row_height"); rc != 0) {
+  if (auto rc = check_row_index(row, fn); rc != 0) {
     return rc;
   }
-  if (auto rc = check_finite_non_negative(height, "fm_sheet_set_row_height", "height"); rc != 0) {
+  if (auto rc = check_finite_non_negative(height, fn, "height"); rc != 0) {
     return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
@@ -263,8 +268,19 @@ extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_i
       &formulon::upsert_row_override(sheet.mutable_layout(), row, sheet.format_defaults().zero_height);
   entry->height = height;
   entry->has_height = true;
-  entry->custom_height = true;
+  entry->custom_height = custom;
   return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height) {
+  return store_row_height(wb, sheet_index, row, height, true, "fm_sheet_set_row_height");
+}
+
+extern "C" fm_status_t fm_sheet_set_row_auto_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                    double height) {
+  return store_row_height(wb, sheet_index, row, height, false, "fm_sheet_set_row_auto_height");
 }
 
 extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t hidden) {
@@ -379,26 +395,51 @@ fm_status_t resolve_style_rect(const fm_workbook_t* wb, size_t sheet_index, uint
 
 }  // namespace
 
-extern "C" fm_status_t fm_sheet_range_style_bases(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
-                                                  uint32_t first_col, uint32_t last_row, uint32_t last_col,
-                                                  uint32_t* out_xfs, size_t cap, size_t* out_len) {
-  static constexpr const char* kFn = "fm_sheet_range_style_bases";
+namespace {
+
+fm_status_t range_style_bases_into(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row, uint32_t first_col,
+                                   uint32_t last_row, uint32_t last_col, const uint32_t* excluded_rows,
+                                   const uint32_t* excluded_cols, size_t excluded_count, uint32_t* out_xfs, size_t cap,
+                                   size_t* out_len, const char* fn) {
   clear_last_error();
-  if (out_len == nullptr || (out_xfs == nullptr && cap > 0U)) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, kFn);
+  if (out_len == nullptr || (out_xfs == nullptr && cap > 0U) ||
+      (excluded_count > 0U && (excluded_rows == nullptr || excluded_cols == nullptr))) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
   }
   *out_len = 0U;
   formulon::StyleRect rect;
-  if (auto rc = resolve_style_rect(wb, sheet_index, first_row, first_col, last_row, last_col, &rect, kFn); rc != 0) {
+  if (auto rc = resolve_style_rect(wb, sheet_index, first_row, first_col, last_row, last_col, &rect, fn); rc != 0) {
     return rc;
   }
-  auto bases = wb->workbook().range_style_bases(sheet_index, rect);
+  std::vector<formulon::StyleCell> excluded(excluded_count);
+  for (size_t i = 0; i < excluded_count; ++i) {
+    excluded[i] = {excluded_rows[i], excluded_cols[i]};
+  }
+  auto bases = wb->workbook().range_style_bases(sheet_index, rect, std::move(excluded));
   if (!bases) {
     return set_last_error(bases.error());
   }
   *out_len = bases.value().size();
   std::copy_n(bases.value().begin(), std::min(cap, bases.value().size()), out_xfs);
   return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_range_style_bases(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                                  uint32_t first_col, uint32_t last_row, uint32_t last_col,
+                                                  uint32_t* out_xfs, size_t cap, size_t* out_len) {
+  return range_style_bases_into(wb, sheet_index, first_row, first_col, last_row, last_col, nullptr, nullptr, 0U,
+                                out_xfs, cap, out_len, "fm_sheet_range_style_bases");
+}
+
+extern "C" fm_status_t fm_sheet_range_style_bases_excluding(const fm_workbook_t* wb, size_t sheet_index,
+                                                            uint32_t first_row, uint32_t first_col, uint32_t last_row,
+                                                            uint32_t last_col, const uint32_t* excluded_rows,
+                                                            const uint32_t* excluded_cols, size_t excluded_count,
+                                                            uint32_t* out_xfs, size_t cap, size_t* out_len) {
+  return range_style_bases_into(wb, sheet_index, first_row, first_col, last_row, last_col, excluded_rows, excluded_cols,
+                                excluded_count, out_xfs, cap, out_len, "fm_sheet_range_style_bases_excluding");
 }
 
 extern "C" fm_status_t fm_sheet_remap_range_style(fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,

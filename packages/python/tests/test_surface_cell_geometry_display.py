@@ -105,6 +105,8 @@ class GeometryTests(unittest.TestCase):
             b = wb.add_cell_xf(replace(wb.get_cell_xf(0), num_fmt_id=3))
             wb.set_row_style(0, 2, 2, r)
             self.assertEqual(wb.range_style_bases(0, 0, 1, last_row, 1), [0, r])
+            # Row 2 of a one-column selection is a single cell; excluding it hides the row style.
+            self.assertEqual(wb.range_style_bases_excluding(0, 0, 1, last_row, 1, [(2, 1), (2, 1), (9, 9)]), [0])
 
             snap = wb.snapshot_range_style(0, 0, 1, last_row, 1)
             wb.remap_range_style(0, 0, 1, last_row, 1, {0: a, r: b})
@@ -154,6 +156,17 @@ class GeometryTests(unittest.TestCase):
             wb.clear_row_height(0, 2)
             self.assertEqual(wb.get_sheet_row_overrides(0), [])
             wb.clear_row_height(0, 2)
+
+    def test_row_auto_height_stays_automatic(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_row_hidden(0, 4, True)
+            wb.set_row_auto_height(0, 4, 31.5)
+            rows = wb.get_sheet_row_overrides(0)
+            self.assertEqual(len(rows), 1)
+            self.assertTrue(rows[0].has_height)
+            self.assertFalse(rows[0].custom_height)
+            self.assertTrue(rows[0].hidden)
+            self.assertEqual(rows[0].height, 31.5)
 
     def test_cell_rect_and_widths(self) -> None:
         with Workbook.create_default() as wb:

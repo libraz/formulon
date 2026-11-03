@@ -417,6 +417,10 @@ Napi::Value Workbook::SetRowHeight(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_row_height);
 }
 
+Napi::Value Workbook::SetRowAutoHeight(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_sheet_set_row_auto_height);
+}
+
 Napi::Value Workbook::ClearRowHeight(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_clear_row_height);
 }
@@ -587,22 +591,20 @@ Napi::Value Workbook::ClearRowStyle(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_clear_row_style);
 }
 
-Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
+namespace {
+
+// `rect` is (sheet, firstRow, firstCol, lastRow, lastCol).
+Napi::Object RangeStyleBasesResult(Napi::Env env, fm_workbook_t* handle, const uint32_t (&rect)[5],
+                                   const std::vector<uint32_t>& rows, const std::vector<uint32_t>& cols) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("xfIndices", Napi::Array::New(env));
-  if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    return out;
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   size_t len = 0;
-  fm_status_t rc = fm_sheet_range_style_bases(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3),
-                                              ArgU32(info, 4), nullptr, 0, &len);
+  fm_status_t rc = fm_sheet_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4],
+                                                        rows.data(), cols.data(), rows.size(), nullptr, 0, &len);
   std::vector<uint32_t> xfs(len);
   if (rc == 0 && len > 0) {
-    rc = fm_sheet_range_style_bases(handle_, sheet, ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4),
-                                    xfs.data(), xfs.size(), &len);
+    rc = fm_sheet_range_style_bases_excluding(handle, rect[0], rect[1], rect[2], rect[3], rect[4], rows.data(),
+                                              cols.data(), rows.size(), xfs.data(), xfs.size(), &len);
   }
   if (rc != 0) {
     out.Set("status", MakeStatus(env, rc));
@@ -615,6 +617,60 @@ Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {
   out.Set("xfIndices", list);
   out.Set("status", MakeOkStatus(env));
   return out;
+}
+
+}  // namespace
+
+Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    Napi::Object out = Napi::Object::New(env);
+    out.Set("xfIndices", Napi::Array::New(env));
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t rect[5] = {ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4)};
+  return RangeStyleBasesResult(env, handle_, rect, {}, {});
+}
+
+Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    Napi::Object out = Napi::Object::New(env);
+    out.Set("xfIndices", Napi::Array::New(env));
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const auto refused = [&env](const char* message) {
+    Napi::Object out = Napi::Object::New(env);
+    out.Set("xfIndices", Napi::Array::New(env));
+    out.Set("status", MakeBindingArgumentError(env, message));
+    return out;
+  };
+  Napi::Array rows_arr;
+  Napi::Array cols_arr;
+  if (!ArrayArg(info, 5, &rows_arr) || !ArrayArg(info, 6, &cols_arr)) {
+    return refused(
+        "rangeStyleBasesExcluding expects (sheet, firstRow, firstCol, lastRow, lastCol, excludedRows:number[], "
+        "excludedCols:number[])");
+  }
+  if (rows_arr.Length() != cols_arr.Length()) {
+    return refused("rangeStyleBasesExcluding: excludedRows and excludedCols must have the same length");
+  }
+  const uint32_t count = rows_arr.Length();
+  CheckedSpecReader reader(env);
+  std::vector<uint32_t> rows(count);
+  std::vector<uint32_t> cols(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    const std::string key = std::to_string(i);
+    rows[i] = reader.U32(rows_arr, key.c_str(), 0U);
+    cols[i] = reader.U32(cols_arr, key.c_str(), 0U);
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  const uint32_t rect[5] = {ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4)};
+  return RangeStyleBasesResult(env, handle_, rect, rows, cols);
 }
 
 Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
