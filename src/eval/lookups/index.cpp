@@ -130,10 +130,6 @@ std::uint32_t selector_cols(const SelectorView& row, const SelectorView& col) {
   return std::max(row.cols, col.cols);
 }
 
-ArrayValue* allocate_lookup_array(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& buffer) {
-  return dynamic_array::allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
-}
-
 enum class IndexAxisState : std::uint8_t { kValid, kError };
 
 struct DecodedIndex {
@@ -405,134 +401,6 @@ class IndexSource {
   bool loaded_ = false;
 };
 
-bool index_domain_valid(std::uint32_t rows, std::uint32_t cols, std::uint32_t row_idx, std::uint32_t col_idx,
-                        bool col_explicit) {
-  if (!col_explicit) {
-    if (rows == 1U && cols == 1U) {
-      return row_idx == 0U || row_idx == 1U;
-    }
-    if (rows == 1U) {
-      return row_idx <= cols;
-    }
-    if (cols == 1U) {
-      return row_idx <= rows;
-    }
-    return row_idx <= rows;
-  }
-  if (rows == 1U && cols == 1U) {
-    return (row_idx == 0U || row_idx == 1U) && (col_idx == 0U || col_idx == 1U);
-  }
-  if (rows == 1U) {
-    return (row_idx == 0U || row_idx == 1U) && col_idx <= cols;
-  }
-  if (cols == 1U) {
-    return row_idx <= rows && (col_idx == 0U || col_idx == 1U);
-  }
-  return row_idx <= rows && col_idx <= cols;
-}
-
-Value eval_index_array_selector(const IndexSource& source, bool source_ok, ErrorCode source_error,
-                                const Value& row_value, const Value* col_value, bool col_explicit, Arena& arena) {
-  const std::uint32_t source_rows = source.rows();
-  const std::uint32_t source_cols = source.cols();
-  const SelectorView row_selector = make_selector_view(row_value);
-  const Value implicit_col = Value::number(0.0);
-  const SelectorView col_selector = col_explicit ? make_selector_view(*col_value) : make_selector_view(implicit_col);
-  const std::vector<DecodedIndex> row_decoded = decode_selector(row_selector);
-  const std::vector<DecodedIndex> col_decoded = decode_selector(col_selector);
-
-  const std::uint32_t selector_out_rows = selector_rows(row_selector, col_selector);
-  const std::uint32_t selector_out_cols = selector_cols(row_selector, col_selector);
-  std::uint32_t out_rows = selector_out_rows;
-  std::uint32_t out_cols = selector_out_cols;
-
-  // A zero selector is a tile in scalar INDEX. In array-selector mode the
-  // tile is composed directly into the one flat output rectangle; no nested
-  // ArrayValue is allocated per lane. Scan the selector rectangle once to
-  // discover the largest tile shape that contributes to that rectangle.
-  if (source_ok) {
-    for (std::uint32_t r = 0; r < selector_out_rows; ++r) {
-      for (std::uint32_t c = 0; c < selector_out_cols; ++c) {
-        bool row_missing = false;
-        const DecodedIndex& row = decoded_selector_at(row_selector, row_decoded, r, c, &row_missing);
-        if (row_missing || row.state == IndexAxisState::kError) {
-          continue;
-        }
-        DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
-        bool col_missing = false;
-        if (col_explicit) {
-          col = decoded_selector_at(col_selector, col_decoded, r, c, &col_missing);
-          if (col_missing || col.state == IndexAxisState::kError) {
-            continue;
-          }
-        }
-        if (!index_domain_valid(source_rows, source_cols, row.index, col.index, col_explicit)) {
-          continue;
-        }
-        const IndexTile tile = index_tile_for(source_rows, source_cols, source.span_rows(), source.span_cols(),
-                                              row.index, col.index, col_explicit);
-        out_rows = std::max(out_rows, tile.rows);
-        out_cols = std::max(out_cols, tile.cols);
-      }
-    }
-  }
-
-  Value* output_cells = nullptr;
-  ArrayValue* output = allocate_lookup_array(out_rows, out_cols, arena, output_cells);
-  if (output == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  for (std::uint32_t r = 0; r < out_rows; ++r) {
-    for (std::uint32_t c = 0; c < out_cols; ++c) {
-      Value result = Value::error(ErrorCode::NA);
-      bool row_missing = false;
-      const DecodedIndex& row = decoded_selector_at(row_selector, row_decoded, r, c, &row_missing);
-      if (row_missing) {
-        output_cells[static_cast<std::size_t>(r) * out_cols + c] = result;
-        continue;
-      }
-      if (row.state == IndexAxisState::kError) {
-        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(row.error);
-        continue;
-      }
-
-      DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
-      bool col_missing = false;
-      if (col_explicit) {
-        col = decoded_selector_at(col_selector, col_decoded, r, c, &col_missing);
-        if (col_missing) {
-          output_cells[static_cast<std::size_t>(r) * out_cols + c] = result;
-          continue;
-        }
-        if (col.state == IndexAxisState::kError) {
-          output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(col.error);
-          continue;
-        }
-      }
-
-      // Source errors are global to INDEX, but an array selector still
-      // determines the output rectangle. Selector errors above retain their
-      // lane-local precedence over that source error.
-      if (!source_ok) {
-        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(source_error);
-        continue;
-      }
-      if (!index_domain_valid(source_rows, source_cols, row.index, col.index, col_explicit)) {
-        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(ErrorCode::Ref);
-        continue;
-      }
-      const IndexTile tile = index_tile_for(source_rows, source_cols, source.span_rows(), source.span_cols(), row.index,
-                                            col.index, col_explicit);
-      result = index_tile_cell(
-          [&source](std::uint32_t row_at, std::uint32_t col_at) { return source.at(row_at, col_at); }, source_rows,
-          source.span_rows(), source.span_cols(), row.index, col.index, col_explicit, tile, r, c);
-      output_cells[static_cast<std::size_t>(r) * out_cols + c] = promote_array_result_cell(result);
-    }
-  }
-  return Value::array(output);
-}
-
 // What a scalar (row, col) selection names inside an INDEX source: one cell,
 // one whole row, one whole column, or the whole source.
 enum class IndexPickKind : std::uint8_t { kCell, kRow, kColumn, kWhole };
@@ -651,6 +519,110 @@ Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols
   return IndexPick{IndexPickKind::kCell, row_idx - 1U, col_idx - 1U};
 }
 
+Value eval_index_array_selector(const IndexSource& source, bool source_ok, ErrorCode source_error,
+                                const Value& row_value, const Value* col_value, bool col_explicit, Arena& arena) {
+  const std::uint32_t source_rows = source.rows();
+  const std::uint32_t source_cols = source.cols();
+  const SelectorView row_selector = make_selector_view(row_value);
+  const Value implicit_col = Value::number(0.0);
+  const SelectorView col_selector = col_explicit ? make_selector_view(*col_value) : make_selector_view(implicit_col);
+  const std::vector<DecodedIndex> row_decoded = decode_selector(row_selector);
+  const std::vector<DecodedIndex> col_decoded = decode_selector(col_selector);
+
+  const std::uint32_t selector_out_rows = selector_rows(row_selector, col_selector);
+  const std::uint32_t selector_out_cols = selector_cols(row_selector, col_selector);
+  std::uint32_t out_rows = selector_out_rows;
+  std::uint32_t out_cols = selector_out_cols;
+
+  // A zero selector is a tile in scalar INDEX. In array-selector mode the
+  // tile is composed directly into the one flat output rectangle; no nested
+  // ArrayValue is allocated per lane. Scan the selector rectangle once to
+  // discover the largest tile shape that contributes to that rectangle.
+  if (source_ok) {
+    for (std::uint32_t r = 0; r < selector_out_rows; ++r) {
+      for (std::uint32_t c = 0; c < selector_out_cols; ++c) {
+        bool row_missing = false;
+        const DecodedIndex& row = decoded_selector_at(row_selector, row_decoded, r, c, &row_missing);
+        if (row_missing || row.state == IndexAxisState::kError) {
+          continue;
+        }
+        DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
+        bool col_missing = false;
+        if (col_explicit) {
+          col = decoded_selector_at(col_selector, col_decoded, r, c, &col_missing);
+          if (col_missing || col.state == IndexAxisState::kError) {
+            continue;
+          }
+        }
+        if (!index_pick(source_rows, source_cols, row.index, col.index, col_explicit, /*reference=*/false)
+                 .has_value()) {
+          continue;
+        }
+        const IndexTile tile = index_tile_for(source_rows, source_cols, source.span_rows(), source.span_cols(),
+                                              row.index, col.index, col_explicit);
+        out_rows = std::max(out_rows, tile.rows);
+        out_cols = std::max(out_cols, tile.cols);
+      }
+    }
+  }
+
+  Value* output_cells = nullptr;
+  ArrayValue* output =
+      dynamic_array::allocate_array_value(out_rows, out_cols, arena, output_cells, kMaxDerivedArrayCells);
+  if (output == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      Value result = Value::error(ErrorCode::NA);
+      bool row_missing = false;
+      const DecodedIndex& row = decoded_selector_at(row_selector, row_decoded, r, c, &row_missing);
+      if (row_missing) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = result;
+        continue;
+      }
+      if (row.state == IndexAxisState::kError) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(row.error);
+        continue;
+      }
+
+      DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
+      bool col_missing = false;
+      if (col_explicit) {
+        col = decoded_selector_at(col_selector, col_decoded, r, c, &col_missing);
+        if (col_missing) {
+          output_cells[static_cast<std::size_t>(r) * out_cols + c] = result;
+          continue;
+        }
+        if (col.state == IndexAxisState::kError) {
+          output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(col.error);
+          continue;
+        }
+      }
+
+      // Source errors are global to INDEX, but an array selector still
+      // determines the output rectangle. Selector errors above retain their
+      // lane-local precedence over that source error.
+      if (!source_ok) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(source_error);
+        continue;
+      }
+      if (!index_pick(source_rows, source_cols, row.index, col.index, col_explicit, /*reference=*/false).has_value()) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(ErrorCode::Ref);
+        continue;
+      }
+      const IndexTile tile = index_tile_for(source_rows, source_cols, source.span_rows(), source.span_cols(), row.index,
+                                            col.index, col_explicit);
+      result = index_tile_cell(
+          [&source](std::uint32_t row_at, std::uint32_t col_at) { return source.at(row_at, col_at); }, source_rows,
+          source.span_rows(), source.span_cols(), row.index, col.index, col_explicit, tile, r, c);
+      output_cells[static_cast<std::size_t>(r) * out_cols + c] = promote_array_result_cell(result);
+    }
+  }
+  return Value::array(output);
+}
+
 // Appends the areas of a (possibly nested) parenthesised union to `out`, in
 // source order.
 void collect_union_areas(const parser::AstNode& node, const EvalContext& ctx,
@@ -731,7 +703,8 @@ Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& ind
   }
 
   Value* output_cells = nullptr;
-  ArrayValue* output = allocate_lookup_array(out_rows, out_cols, arena, output_cells);
+  ArrayValue* output =
+      dynamic_array::allocate_array_value(out_rows, out_cols, arena, output_cells, kMaxDerivedArrayCells);
   if (output == nullptr) {
     return Value::error(ErrorCode::Num);
   }

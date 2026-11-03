@@ -68,6 +68,29 @@ double shift_decimal_exponent(double v, int exponent) {
   return parse_double_exact(shifted, &out) ? out : v;
 }
 
+// Right-aligns `digits` across `n_slots` placeholder slots: the first slot
+// absorbs any overflow prefix and each later slot takes one digit. With fewer
+// digits than slots the leading slots stay empty.
+std::vector<std::string> distribute_digits(std::string_view digits, std::size_t n_slots) {
+  std::vector<std::string> slots(n_slots);
+  if (n_slots == 0 || digits.empty()) {
+    return slots;
+  }
+  if (digits.size() >= n_slots) {
+    const std::size_t prefix_len = digits.size() - n_slots + 1;
+    slots[0].assign(digits.substr(0, prefix_len));
+    for (std::size_t i = 1; i < n_slots; ++i) {
+      slots[i].assign(1, digits[prefix_len + i - 1]);
+    }
+  } else {
+    const std::size_t fallback_count = n_slots - digits.size();
+    for (std::size_t i = 0; i < digits.size(); ++i) {
+      slots[fallback_count + i].assign(1, digits[i]);
+    }
+  }
+  return slots;
+}
+
 void format_fixed_digits(double v, int decimals, bool* negative, std::string* int_digits, std::string* frac_digits) {
   // Use strict `< 0.0` rather than `signbit` so that `-0.0` rounds to "0" with
   // no sign byte. Mac Excel's two-section formats (`#,##0_);(#,##0)`) expect
@@ -94,29 +117,19 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
   }
   char buf[64];
   const int n = format_fixed(buf, sizeof(buf), abs_v, rendered_decimals);
+  std::string heap;
+  std::string_view s(buf, static_cast<std::size_t>(n));
   if (n < 0 || static_cast<std::size_t>(n) >= sizeof(buf)) {
     // Fallback: a heap buffer for the oversized text (extremely rare).
-    std::string out;
-    out.resize(static_cast<std::size_t>(rendered_decimals) + 32u);
-    const int m = format_fixed(&out[0], out.size(), abs_v, rendered_decimals);
+    heap.resize(static_cast<std::size_t>(rendered_decimals) + 32u);
+    const int m = format_fixed(&heap[0], heap.size(), abs_v, rendered_decimals);
     if (m > 0) {
-      out.resize(static_cast<std::size_t>(m));
+      heap.resize(static_cast<std::size_t>(m));
     } else {
-      out = "0";
+      heap = "0";
     }
-    const std::size_t dot = out.find('.');
-    if (dot == std::string::npos) {
-      *int_digits = out;
-      frac_digits->clear();
-    } else {
-      *int_digits = out.substr(0, dot);
-      *frac_digits = out.substr(dot + 1);
-    }
-    frac_digits->append(static_cast<std::size_t>(requested_decimals) - frac_digits->size(), '0');
-    cap_integer_significant_digits(int_digits);
-    return;
+    s = heap;
   }
-  std::string_view s(buf, static_cast<std::size_t>(n));
   const std::size_t dot = s.find('.');
   if (dot == std::string_view::npos) {
     int_digits->assign(s);
@@ -444,8 +457,6 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
       scientific_index = static_cast<int>(i);
     }
   }
-  auto is_digit_tok = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
-
   // Gather integer digit token positions (in token order). We distribute the
   // pure `int_digits` characters across these positions right-to-left, so
   // format strings like `"00-00-00-00"` place literals between digit groups.
@@ -458,7 +469,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
     if (scientific_index >= 0 && static_cast<int>(i) >= scientific_index) {
       break;
     }
-    if (is_digit_tok(section.tokens[i].kind)) {
+    if (is_digit_placeholder(section.tokens[i].kind)) {
       int_digit_positions.push_back(i);
     }
   }
@@ -480,52 +491,18 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         after_marker = true;
         continue;
       }
-      if (after_marker && is_digit_tok(kind)) {
+      if (after_marker && is_digit_placeholder(kind)) {
         exponent_digit_positions.push_back(i);
       }
     }
-    exponent_slot_text.resize(exponent_digit_positions.size());
-    const std::size_t n_exponent_tokens = exponent_digit_positions.size();
-    const std::size_t n_exponent_digits = exponent_digits.size();
-    if (n_exponent_tokens > 0 && n_exponent_digits > 0) {
-      if (n_exponent_digits >= n_exponent_tokens) {
-        const std::size_t prefix_len = n_exponent_digits - n_exponent_tokens + 1;
-        exponent_slot_text[0].assign(exponent_digits, 0, prefix_len);
-        for (std::size_t i = 1; i < n_exponent_tokens; ++i) {
-          exponent_slot_text[i].assign(1, exponent_digits[prefix_len + i - 1]);
-        }
-      } else {
-        const std::size_t fallback_count = n_exponent_tokens - n_exponent_digits;
-        for (std::size_t i = 0; i < n_exponent_digits; ++i) {
-          exponent_slot_text[fallback_count + i].assign(1, exponent_digits[i]);
-        }
-      }
-    }
+    exponent_slot_text = distribute_digits(exponent_digits, exponent_digit_positions.size());
   }
   const std::size_t n_int_tokens = int_digit_positions.size();
   const std::size_t n_int_digits = int_digits.size();
 
   // `int_slot_text[i]` is the plain-digit substring (no thousands commas)
   // that the i-th integer-digit token should emit. Empty slot = fallback.
-  std::vector<std::string> int_slot_text(n_int_tokens);
-  if (n_int_tokens > 0 && n_int_digits > 0) {
-    if (n_int_digits >= n_int_tokens) {
-      // First token absorbs the overflow prefix; each later token takes one
-      // digit. Total characters placed = n_int_digits.
-      const std::size_t prefix_len = n_int_digits - n_int_tokens + 1;
-      int_slot_text[0].assign(int_digits, 0, prefix_len);
-      for (std::size_t i = 1; i < n_int_tokens; ++i) {
-        int_slot_text[i].assign(1, int_digits[prefix_len + i - 1]);
-      }
-    } else {
-      // Fewer digits than tokens: leading tokens fall back, trailing tokens
-      // each get one digit.
-      const std::size_t fallback_count = n_int_tokens - n_int_digits;
-      for (std::size_t i = 0; i < n_int_digits; ++i) {
-        int_slot_text[fallback_count + i].assign(1, int_digits[i]);
-      }
-    }
-  }
+  const std::vector<std::string> int_slot_text = distribute_digits(int_digits, n_int_tokens);
 
   // Suppress the sign prefix when the rounded representation is numerically
   // zero. Mac Excel's single-section formats (`"0"`, `"00-00-00-00"`, etc.)

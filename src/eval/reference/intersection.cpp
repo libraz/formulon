@@ -341,15 +341,6 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
 
 namespace {
 
-// Unions the two endpoint rectangles of a `RangeOp` node, which is what
-// `a:b` denotes for endpoint composition and for an intersect operand
-// alike. Defined below because it recurses through
-// `resolve_range_endpoint`.
-bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                           std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                           ErrorCode* out_err);
-
 // A name standing as an endpoint (`A1:MyName`, `A1:[0]!MyName`) denotes the reference its
 // value is. On Excel 365 an undefined name is #NAME?, an
 // error-valued name surfaces its error, and any other non-reference value
@@ -469,8 +460,8 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
     // range, matching Excel's `ROWS(IF(...))` / `COLUMNS(CHOOSE(...))`
     // semantics. Plain intersect-operand callers don't reach this branch
     // because they split RangeOp themselves before recursing.
-    return union_range_endpoints(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                                 out_right_col, out_err);
+    return resolve_range_endpoints(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                   out_right_col, out_err);
   }
   if (node.kind() == parser::NodeKind::Call) {
     bool is_range_unused = false;
@@ -531,14 +522,6 @@ bool resolve_range_endpoints(const parser::AstNode& range, Arena& arena, const F
 
 namespace {
 
-bool union_range_endpoints(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                           std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                           ErrorCode* out_err) {
-  return resolve_range_endpoints(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                                 out_right_col, out_err);
-}
-
 // Resolves an `IntersectOp` operand AST into a rectangle. Accepts the
 // same shapes the `:` operator produces: a `RangeOp` over two
 // `resolve_range_endpoint`-compatible endpoints, a single `Ref`, or a
@@ -588,8 +571,8 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
     }
   }
   if (node.kind() == parser::NodeKind::RangeOp) {
-    return union_range_endpoints(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                                 out_right_col, out_err);
+    return resolve_range_endpoints(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
+                                   out_right_col, out_err);
   }
   // Single `Ref` or reference-returning `Call` -> 1x1 rectangle (or the
   // synthesized rectangle from OFFSET / INDIRECT).

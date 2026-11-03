@@ -77,9 +77,6 @@ void disambiguate_minutes(std::vector<Token>& toks) noexcept {
         continue;
       }
       if (nxt.kind == Tok::DateS || nxt.kind == Tok::DateSS || nxt.kind == Tok::DateElapsedS) {
-        toks[i].kind = (toks[i].width >= 2) ? Tok::DateMMMin : Tok::DateMM;
-        // Note: when only the following token is a second, the `m` is a
-        // minute too. Use DateMin rather than DateMM if width == 1.
         if (toks[i].width < 2) {
           toks[i].kind = Tok::DateMin;
         } else {
@@ -195,8 +192,6 @@ void classify(Section& section, std::string_view fmt) noexcept {
   int last_digit_index = -1;
   int last_integer_digit_index = -1;
 
-  auto is_digit_tok = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
-
   bool has_general = false;
   for (const Token& tk : section.tokens) {
     if (tk.kind == Tok::GeneralNumber) {
@@ -233,7 +228,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
       saw_sci = true;
       sci_plus = tk.kind == Tok::SciPlus;
     }
-    if (is_digit_tok(tk.kind)) {
+    if (is_digit_placeholder(tk.kind)) {
       last_digit_index = static_cast<int>(i);
       const bool in_integer = !saw_sci && ((point_index < 0) || (static_cast<int>(i) < point_index));
       if (in_integer) {
@@ -301,12 +296,12 @@ void classify(Section& section, std::string_view fmt) noexcept {
     bool seen_digit = false;
     for (std::size_t i = 0; i <= static_cast<std::size_t>(last_integer_digit_index); ++i) {
       const Token& tk = section.tokens[i];
-      if (is_digit_tok(tk.kind)) {
+      if (is_digit_placeholder(tk.kind)) {
         seen_digit = true;
       } else if (tk.kind == Tok::Comma && seen_digit) {
         // Peek forward to confirm another digit follows.
         for (std::size_t j = i + 1; j <= static_cast<std::size_t>(last_integer_digit_index); ++j) {
-          if (is_digit_tok(section.tokens[j].kind)) {
+          if (is_digit_placeholder(section.tokens[j].kind)) {
             has_digit_after_comma = true;
             break;
           }
@@ -330,7 +325,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
           section.tokens[i + 1].kind == Tok::Point) {
         int digits = 0;
         std::size_t j = i + 2;
-        while (j < section.tokens.size() && is_digit_tok(section.tokens[j].kind)) {
+        while (j < section.tokens.size() && is_digit_placeholder(section.tokens[j].kind)) {
           ++digits;
           ++j;
         }
@@ -402,7 +397,6 @@ void classify(Section& section, std::string_view fmt) noexcept {
   // literal, even when it sits between digit placeholders. A raw denominator
   // containing a non-zero digit is fixed; all-zero and placeholder runs
   // remain variable bounded searches.
-  auto is_digit_tok2 = [](Tok k) { return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad; };
   auto is_single_byte_literal = [&fmt](const Token& tk, char want) {
     if (tk.kind != Tok::Literal) {
       return false;
@@ -437,7 +431,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
       const bool literal_numerator = is_literal_digit(section.tokens[static_cast<std::size_t>(num_end)]);
       while (num_begin > 0 &&
              (literal_numerator ? is_literal_digit(section.tokens[static_cast<std::size_t>(num_begin) - 1])
-                                : is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind))) {
+                                : is_digit_placeholder(section.tokens[static_cast<std::size_t>(num_begin) - 1].kind))) {
         --num_begin;
       }
       // A raw run starting with 0 is variable only when all zeros (`/000`); `/08` is fixed.
@@ -486,7 +480,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
       } else {
         // An all-zero run is a zero-placeholder denominator, as are mixed `0?` and `?0`.
         while (static_cast<std::size_t>(den_end) < section.tokens.size() &&
-               is_digit_tok2(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
+               is_digit_placeholder(section.tokens[static_cast<std::size_t>(den_end)].kind)) {
           ++den_end;
         }
         if (den_end == den_begin && den_begin < static_cast<int>(section.tokens.size())) {
@@ -506,7 +500,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
       // Numerator and denominator both need to be at least one digit.
       const bool has_num =
           num_end >= num_begin &&
-          (literal_numerator || is_digit_tok2(section.tokens[static_cast<std::size_t>(num_begin)].kind));
+          (literal_numerator || is_digit_placeholder(section.tokens[static_cast<std::size_t>(num_begin)].kind));
       const bool has_den = fixed_denominator ? fixed_den_end > den_begin : den_end > den_begin;
       if (has_num && has_den) {
         // A group separator before the numerator is invalid (fr-FR `# ?/?`, text_format.text_fraction_with_integer).
@@ -523,10 +517,10 @@ void classify(Section& section, std::string_view fmt) noexcept {
           --separator_begin;
         }
         if (separator_begin < num_begin && separator_begin >= 1 &&
-            is_digit_tok2(section.tokens[static_cast<std::size_t>(separator_begin) - 1].kind)) {
+            is_digit_placeholder(section.tokens[static_cast<std::size_t>(separator_begin) - 1].kind)) {
           int_end = separator_begin;  // exclusive: stops before the spaces.
           int_begin = int_end;
-          while (int_begin > 0 && is_digit_tok2(section.tokens[static_cast<std::size_t>(int_begin) - 1].kind)) {
+          while (int_begin > 0 && is_digit_placeholder(section.tokens[static_cast<std::size_t>(int_begin) - 1].kind)) {
             --int_begin;
           }
         }
@@ -569,7 +563,7 @@ void classify(Section& section, std::string_view fmt) noexcept {
     }
     // A fraction cannot follow a decimal point (`0.0 ?/?`).
     const auto digit_like = [&](const Token& tk) {
-      return is_digit_tok2(tk.kind) ||
+      return is_digit_placeholder(tk.kind) ||
              (tk.kind == Tok::Literal && !tk.protected_literal && tk.lit_end == tk.lit_begin + 1 &&
               tk.lit_begin < fmt.size() && fmt[tk.lit_begin] >= '0' && fmt[tk.lit_begin] <= '9');
     };

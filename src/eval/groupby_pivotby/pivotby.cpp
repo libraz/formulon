@@ -264,19 +264,15 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // body is still computed.
   std::vector<std::vector<std::vector<Value>>> body(
       n_rows, std::vector<std::vector<Value>>(n_cols, std::vector<Value>(val_cols, placeholder_cell())));
+  std::vector<std::vector<std::uint32_t>> buckets(n_rows * n_cols);
+  for (std::uint32_t i = 0; i < data_row_count; ++i) {
+    if (include_row[i]) {
+      buckets[row_tag[i] * n_cols + col_tag[i]].push_back(data_start_row + i);
+    }
+  }
   for (std::size_t rg = 0; rg < n_rows; ++rg) {
     for (std::size_t cg = 0; cg < n_cols; ++cg) {
-      std::vector<std::uint32_t> intersection;
-      // Linear walk; the intersection is small for typical workbooks. (For
-      // large pivots this hot loop should be revisited with a hash bucket.)
-      for (std::uint32_t i = 0; i < data_row_count; ++i) {
-        if (!include_row[i]) {
-          continue;
-        }
-        if (row_tag[i] == rg && col_tag[i] == cg) {
-          intersection.push_back(data_start_row + i);
-        }
-      }
+      const std::vector<std::uint32_t>& intersection = buckets[rg * n_cols + cg];
       if (intersection.empty()) {
         // No data points at this intersection. Mac Excel surfaces an empty
         // (Blank) cell here — the aggregator is not called for empty
@@ -354,28 +350,20 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // every outer key. Build the physical block plan once and let all of the
   // renderers below consume it; keeping the plan explicit avoids the fixed
   // `ci * val_cols` assumption that the ordinary leaf-only layout uses.
-  const bool emit_col_subtotals = (col_total_depth == 2 || col_total_depth == -2) && col_levels >= 2U;
+  const bool emit_col_subtotals = has_outer_subtotals(col_total_depth, col_levels);
   OuterGrouping col_hierarchy;
   std::vector<std::size_t> outer_col_order;
   std::vector<ColSlot> col_slots;
   if (emit_col_subtotals) {
     col_hierarchy = build_outer_grouping(*col_fields, col_repr, col_members);
-    std::vector<bool> outer_seen(col_hierarchy.repr_of_outer.size(), false);
-    for (const std::size_t cg : col_order) {
-      const std::size_t outer = col_hierarchy.outer_of_group[cg];
-      if (!outer_seen[outer]) {
-        outer_seen[outer] = true;
-        outer_col_order.push_back(outer);
-      }
-    }
+    std::vector<std::vector<std::size_t>> col_groups_of_outer;
+    order_outer_groups(col_hierarchy, col_order, &outer_col_order, &col_groups_of_outer);
     for (const std::size_t outer : outer_col_order) {
       if (col_total_depth < 0) {
         col_slots.push_back({ColSlotKind::OuterSubtotal, 0U, outer});
       }
-      for (const std::size_t cg : col_order) {
-        if (col_hierarchy.outer_of_group[cg] == outer) {
-          col_slots.push_back({ColSlotKind::Leaf, cg, outer});
-        }
+      for (const std::size_t cg : col_groups_of_outer[outer]) {
+        col_slots.push_back({ColSlotKind::Leaf, cg, outer});
       }
       if (col_total_depth > 0) {
         col_slots.push_back({ColSlotKind::OuterSubtotal, 0U, outer});
@@ -495,8 +483,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       // With nested subtotals Excel promotes this label to the hierarchy
       // form (総計 in ja-JP); inner levels remain blank.
       if (level == 0U) {
-        const Value gt =
-            Value::text(arena.intern(emit_col_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
+        const Value gt = Value::text(arena.intern(total_label(ctx, emit_col_subtotals)));
         for (std::uint32_t v = 0; v < val_cols; ++v) {
           row[grand_total_block_start + v] = gt;
         }
@@ -590,12 +577,12 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // row-key column alone. With a single row-key column the outer level
   // coincides with the row groups themselves, so that shape stays on the ±1
   // layout.
-  const bool emit_row_subtotals = (row_total_depth == 2 || row_total_depth == -2) && key_cols >= 2U;
+  const bool emit_row_subtotals = has_outer_subtotals(row_total_depth, key_cols);
 
   // Helper: render a TOP/BOTTOM grand-total row (column totals).
   auto render_totals_row = [&]() {
     std::vector<Value> row(out_cols, placeholder_cell());
-    row[0] = Value::text(arena.intern(emit_row_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
+    row[0] = Value::text(arena.intern(total_label(ctx, emit_row_subtotals)));
     // Cells [1..K-1] stay blank (the rest of the row-keys columns).
     fill_slot_cells(row, col_totals, col_subtotal_totals);
     // Grand-total block: the bottom-right grand total, populated only for
@@ -642,17 +629,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     row_hierarchy = build_outer_grouping(*row_fields, row_repr, row_members);
     const std::size_t outer_count = row_hierarchy.repr_of_outer.size();
     // The hierarchy is primary and the row sort applies within it.
-    row_groups_of_outer.resize(outer_count);
-    std::vector<bool> outer_seen(outer_count, false);
-    for (std::size_t ri = 0; ri < n_rows; ++ri) {
-      const std::size_t rg = row_order[ri];
-      const std::size_t outer = row_hierarchy.outer_of_group[rg];
-      if (!outer_seen[outer]) {
-        outer_seen[outer] = true;
-        outer_row_order.push_back(outer);
-      }
-      row_groups_of_outer[outer].push_back(rg);
-    }
+    order_outer_groups(row_hierarchy, row_order, &outer_row_order, &row_groups_of_outer);
     row_subtotal_rows.reserve(outer_count);
     for (std::size_t o = 0; o < outer_count; ++o) {
       // Split the outer group's rows by column group once, then aggregate

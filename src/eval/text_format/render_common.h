@@ -52,10 +52,6 @@ bool dbnum_writes_numerals(const DbnumStyle* style) noexcept;
 // units where `style` writes date fields that way.
 void append_dbnum_date_field(std::string& out, const DbnumStyle* style, unsigned value, std::size_t width);
 
-// Append `n` zero-padded to two characters without any DBNum substitution
-// (ASCII output).
-void append_pad2(std::string& out, unsigned n);
-
 // Appends `value` zero-padded to 2 digits, with DBNum substitution applied.
 void append_pad2_dbnum(std::string& out, unsigned value, const DbnumStyle* style);
 

@@ -662,6 +662,15 @@ TEST(BuiltinsSortCollation, FirstOfPairFollowsExcelOrder) {
   }
 }
 
+// Lane order with the text collated directly rather than from a precomputed key.
+bool sort_lane_less(const Value& a, const Value& b, bool descending) {
+  return dynamic_array::sort_lane_less_keyed(a, nullptr, b, nullptr, descending);
+}
+
+bool sort_cell_less_asc(const Value& a, const Value& b) {
+  return sort_lane_less(a, b, /*descending=*/false);
+}
+
 TEST(BuiltinsSortCollation, KeyedAndDirectComparatorsAgree) {
   for (const CollationCase& c : kCollationCases) {
     ScopedEvalProfile scope(c.profile);
@@ -673,10 +682,10 @@ TEST(BuiltinsSortCollation, KeyedAndDirectComparatorsAgree) {
       const std::string ka = dynamic_array::sort_text_key(a);
       const std::string kb = dynamic_array::sort_text_key(b);
       for (const bool desc : {false, true}) {
-        EXPECT_EQ(dynamic_array::sort_lane_less(a, b, desc), dynamic_array::sort_lane_less_keyed(a, &ka, b, &kb, desc));
-        EXPECT_EQ(dynamic_array::sort_lane_less(b, a, desc), dynamic_array::sort_lane_less_keyed(b, &kb, a, &ka, desc));
+        EXPECT_EQ(sort_lane_less(a, b, desc), dynamic_array::sort_lane_less_keyed(a, &ka, b, &kb, desc));
+        EXPECT_EQ(sort_lane_less(b, a, desc), dynamic_array::sort_lane_less_keyed(b, &kb, a, &ka, desc));
       }
-      EXPECT_EQ(dynamic_array::sort_cell_less_asc(b, a), p.sort_first_is_b);
+      EXPECT_EQ(sort_cell_less_asc(b, a), p.sort_first_is_b);
       EXPECT_EQ(dynamic_array::ascii_ci_less(p.b, p.a), p.sort_first_is_b);
     }
   }

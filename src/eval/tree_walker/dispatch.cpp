@@ -79,6 +79,31 @@ namespace {
 using RangeCallExpander = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
                                    std::vector<Value>*, ErrorCode*, std::uint32_t*, std::uint32_t*);
 
+struct RangeCallExpansion {
+  std::string_view name;
+  RangeCallExpander expand;
+};
+
+// Calls a range-aware function sees as the cells they produce rather than
+// the scalar they return: OFFSET, INDIRECT (a reference, so one cell still
+// takes the range filters), CHOOSE (its picked child, recursively), and
+// ROW / COLUMN over a range (Excel spills them to index vectors).
+const RangeCallExpansion kRangeCallExpansions[] = {
+    {"OFFSET", expand_offset_call}, {"INDIRECT", expand_indirect_call}, {"CHOOSE", expand_choose_call},
+    {"ROW", expand_row_call},       {"COLUMN", expand_column_call},
+};
+
+// A failed argument either aborts the call or, for a function that inspects
+// its error arguments, lands in `values` like any other value. Returns false
+// when the call must abort with `err`.
+bool absorb_arg_error(const FunctionDef& def, const Value& err, std::vector<Value>* values) {
+  if (def.propagate_errors) {
+    return false;
+  }
+  values->push_back(err);
+  return true;
+}
+
 bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode& arg_node, std::string_view call_name,
                                    RangeCallExpander expand, Arena& arena, const FunctionRegistry& registry,
                                    const EvalContext& ctx, std::vector<Value>* values, bool* handled,
@@ -93,11 +118,10 @@ bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode
   ErrorCode err_code = ErrorCode::Value;
   if (!expand(arg_node, arena, registry, ctx, &cells, &err_code, nullptr, nullptr)) {
     const Value err = Value::error(err_code);
-    if (def.propagate_errors) {
+    if (!absorb_arg_error(def, err, values)) {
       *immediate_return = err;
       return false;
     }
-    values->push_back(err);
     return true;
   }
   Value range_err = Value::blank();
@@ -502,6 +526,448 @@ Value fold_with_tails(const FunctionDef& def, const std::vector<Value>& values,
   return def.fold->finish(state);
 }
 
+enum class RangeArgOutcome {
+  kNotRange,   // not a range-producing argument; the caller handles it as a scalar
+  kCollected,  // consumed into `values`
+  kReturn      // the call ends with `result`
+};
+
+// Collects the cells of an argument that denotes a range into `values`: for
+// a range-aware function every range-shaped spelling, for a scalar function
+// a bounded rectangle (which the caller then lifts element-wise). A failed
+// argument aborts the call or lands in `values` per `propagate_errors`.
+RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode& arg_node, Arena& arena,
+                                  const FunctionRegistry& registry, const EvalContext& ctx, std::vector<Value>& values,
+                                  bool& had_range_shaped_arg, Value& result) {
+  // Minimal array-literal support: when a range-aware function receives
+  // a `{a;b;c}` style literal, flatten it in row-major order exactly like
+  // a RangeOp argument. This is just enough to let LARGE / SMALL /
+  // PERCENTILE.INC / QUARTILE.INC accept brace literals as their "array"
+  // input. The same literals are also first-class dynamic arrays when
+  // evaluated directly; flattening here preserves this range-aware
+  // function dispatch path.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::ArrayLiteral) {
+    had_range_shaped_arg = true;
+    auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+    if (!resolved) {
+      result = Value::error(resolved.error());
+      return RangeArgOutcome::kReturn;
+    }
+    bool short_circuit = false;
+    Value propagated_err = Value::blank();
+    for (const Value& value : resolved.value().cells) {
+      // A boolean inside an array literal is #VALUE! under the
+      // Analysis-ToolPak rule (`GCD({TRUE,2})`).
+      if (def.analysis_toolpak_args && value.is_boolean()) {
+        result = Value::error(ErrorCode::Value);
+        return RangeArgOutcome::kReturn;
+      }
+      if (!append_array_sourced_value(def, value, &values, &propagated_err)) {
+        short_circuit = true;
+        break;
+      }
+    }
+    if (short_circuit) {
+      result = propagated_err;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  // Spilled-range `A1#` argument: resolve the spill region anchored at
+  // the reference and flatten its row-major cells into the values
+  // vector. Mirrors the RangeOp branch below; the same provenance-aware
+  // filters apply because cells inside a spill region behave the same
+  // way as cells inside an ordinary range when consumed by SUM /
+  // AVERAGE / MIN / MAX / etc. A missing spill yields `#REF!`; an
+  // unbound context yields `#NAME?`. Errors short-circuit per
+  // `propagate_errors`.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::SpillRef) {
+    had_range_shaped_arg = true;
+    std::string_view anchor_sheet;
+    std::uint32_t anchor_row = 0;
+    std::uint32_t anchor_col = 0;
+    ErrorCode spill_err = ErrorCode::Ref;
+    if (!resolve_spill_anchor_node(arg_node, arena, registry, ctx, &anchor_sheet, &anchor_row, &anchor_col,
+                                   &spill_err)) {
+      const Value err = Value::error(spill_err);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    const Sheet* current = ctx.current_sheet();
+    const Sheet* target = current;
+    if (current == nullptr) {
+      spill_err = ErrorCode::Name;
+    } else if (!anchor_sheet.empty()) {
+      const Workbook* wb = ctx.workbook();
+      if (wb == nullptr) {
+        target = nullptr;
+      } else {
+        target = wb->sheet_by_name(anchor_sheet);
+      }
+    }
+    if (target == nullptr || anchor_row >= Sheet::kMaxRows || anchor_col >= Sheet::kMaxCols) {
+      const Value err = Value::error(spill_err);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    // Copied out under the sheet lock, with Text payloads re-homed into
+    // `arena`: the flattened values feed the whole call and outlive the
+    // region they came from.
+    std::vector<Value> region_cells;
+    if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
+      const Value err = Value::error(ErrorCode::Ref);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    Value range_err = Value::blank();
+    if (!append_range_sourced_values(def, region_cells.data(), region_cells.size(), &values, &range_err)) {
+      result = range_err;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  // 3-D reference argument (`SUM(Sheet2:Sheet3!A1)`): resolve the inclusive
+  // sheet span by workbook order, read the referenced cell from each sheet,
+  // and flatten the resulting cells into the values vector. Mirrors the
+  // RangeOp / SpillRef branches; the same provenance filters apply because
+  // a 3-D ref is a range shape. A span endpoint that names a missing sheet
+  // surfaces the error `expand_ref3d_cells` reports. Errors short-circuit
+  // per `propagate_errors`.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D) {
+    std::vector<Value> ref3d_cells;
+    ErrorCode ref3d_err = ErrorCode::Ref;
+    if (!expand_ref3d_cells(arg_node, arena, registry, ctx, &ref3d_cells, &ref3d_err)) {
+      const Value err = Value::error(ref3d_err);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    had_range_shaped_arg = true;
+    Value range_err = Value::blank();
+    if (!append_range_sourced_values(def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
+      result = range_err;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  // Cross-workbook 3-D reference (`SUM([Book.xlsx]S1:S2!A1)`): the same
+  // flattening over the link's sheet order, read from its cache.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::ExternalRef &&
+      !arg_node.as_external_ref_sheet_end().empty()) {
+    std::vector<Value> ref3d_cells;
+    if (!collect_external_ref3d_cells(arg_node, arena, ctx, &ref3d_cells)) {
+      const Value err = Value::error(ErrorCode::Ref);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    had_range_shaped_arg = true;
+    Value range_err = Value::blank();
+    if (!append_range_sourced_values(def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
+      result = range_err;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
+    had_range_shaped_arg = true;
+    const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
+    const parser::AstNode& rhs_ast = arg_node.as_range_operand(1);
+    // Multi-column (`A:C`) / multi-row (`1:3`) whole references parse as a
+    // RangeOp over two whole-column / whole-row Refs. `resolve_range_endpoint`
+    // rejects whole references (no bounded rectangle on their own), so route
+    // the pair straight to `expand_range`, which clamps the unbounded axis to
+    // the sheet's used range.
+    //
+    // A `:` chain of three or more endpoints is no bare pair;
+    // `declared_rect_endpoint_pair` reduces the whole chain to the endpoint
+    // pair that bounds it. Without it a chain falls into the endpoint union
+    // below, which rejects whole references and turns `=SUM(A:C:E:G)` into
+    // `#VALUE!` where Excel answers.
+    parser::Reference chain_lhs{};
+    parser::Reference chain_rhs{};
+    const bool is_bare_pair = arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
+                              rhs_ast.kind() == parser::NodeKind::Ref;
+    const bool whole_axis_pair = is_bare_pair && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row ||
+                                                  rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row);
+    if (whole_axis_pair) {
+      chain_lhs = lhs_ast.as_ref();
+      chain_rhs = rhs_ast.as_ref();
+    } else if (is_bare_pair || !declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs)) {
+      // Union the two endpoints into one rectangle and let `expand_range`
+      // validate sheet equality (mismatched qualifiers surface as #REF!).
+      ErrorCode endpoint_err = ErrorCode::Ref;
+      if (!union_endpoint_refs(arg_node, arena, registry, ctx, &chain_lhs, &chain_rhs, &endpoint_err)) {
+        const Value err = Value::error(endpoint_err);
+        if (!absorb_arg_error(def, err, &values)) {
+          result = err;
+          return RangeArgOutcome::kReturn;
+        }
+        return RangeArgOutcome::kCollected;
+      }
+    }
+    Value range_return = Value::blank();
+    if (!append_expanded_range(def, chain_lhs, chain_rhs, arena, registry, ctx, &values, &range_return)) {
+      result = range_return;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  // Scalar (non-range-aware) function receiving a bounded `A1:B2`
+  // RangeOp: Excel 365 evaluates the function element-wise over the
+  // rectangle and spills the result rather than collapsing the range
+  // to its implicit-intersection anchor. Materialise the rectangle as a
+  // `Value::Array` here; the post-loop broadcast step then lifts the
+  // scalar impl over it. Whole-column / whole-row endpoints (`A:A`,
+  // `1:1`) keep the legacy anchor projection (they fall through to the
+  // scalar `eval_node` path below) to avoid spilling an unbounded
+  // rectangle through a scalar function. `@` / SINGLE-wrapped args are
+  // Call nodes, not RangeOp, so they never reach this branch and retain
+  // implicit-intersection semantics. A rectangle spanning a whole grid axis
+  // (`A:C`, `1:3`, `A1:A1048576`) is not expanded here: it falls through to
+  // `eval_node_shaped`, which reads it at its declared size without
+  // materialising the unused part.
+  if (!def.accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
+    const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
+    const parser::AstNode& rhs_ast = arg_node.as_range_operand(1);
+    const bool whole =
+        parser::any_child_node(arg_node,
+                               [](const parser::AstNode& operand) {
+                                 return operand.kind() == parser::NodeKind::Ref &&
+                                        (operand.as_ref().is_full_col || operand.as_ref().is_full_row);
+                               }) ||
+        (arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
+         rhs_ast.kind() == parser::NodeKind::Ref && is_full_axis_range(lhs_ast.as_ref(), rhs_ast.as_ref()));
+    if (!whole) {
+      parser::Reference union_lhs{};
+      parser::Reference union_rhs{};
+      ErrorCode endpoint_err = ErrorCode::Ref;
+      if (!union_endpoint_refs(arg_node, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
+        const Value err = Value::error(endpoint_err);
+        if (!absorb_arg_error(def, err, &values)) {
+          result = err;
+          return RangeArgOutcome::kReturn;
+        }
+        return RangeArgOutcome::kCollected;
+      }
+      auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
+      if (!expanded) {
+        const Value err = Value::error(expanded.error());
+        if (!absorb_arg_error(def, err, &values)) {
+          result = err;
+          return RangeArgOutcome::kReturn;
+        }
+        return RangeArgOutcome::kCollected;
+      }
+      const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
+      const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
+      const std::vector<Value>& ev = expanded.value();
+      ArrayValue* arr = array_from_values(rrows, rcols, ev.data(), ev.size(), arena);
+      if (arr == nullptr) {
+        result = Value::error(ErrorCode::Num);
+        return RangeArgOutcome::kReturn;
+      }
+      values.push_back(Value::array(arr));
+      return RangeArgOutcome::kCollected;
+    }
+  }
+  // Intersection operator as a range-aware function argument: Excel's
+  // space operator (`A1:C3 B1:B5`) yields the overlapping rectangle,
+  // and an aggregator must see every cell of that rectangle rather
+  // than the single anchor `eval_node` would collapse it to. Compute
+  // the clipped intersection rectangle and flatten it row-major,
+  // mirroring the RangeOp branch above. Disjoint operands -> #NULL!.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::IntersectOp) {
+    std::string_view isect_sheet;
+    std::uint32_t isect_r1 = 0;
+    std::uint32_t isect_c1 = 0;
+    std::uint32_t isect_r2 = 0;
+    std::uint32_t isect_c2 = 0;
+    bool isect_disjoint = false;
+    ErrorCode isect_err = ErrorCode::Value;
+    if (!compute_intersect_rect(arg_node.as_intersect_lhs(), arg_node.as_intersect_rhs(), arena, registry, ctx,
+                                &isect_sheet, &isect_r1, &isect_c1, &isect_r2, &isect_c2, &isect_disjoint,
+                                &isect_err)) {
+      const Value err = Value::error(isect_err);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    if (isect_disjoint) {
+      const Value err = Value::error(ErrorCode::Null);
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    had_range_shaped_arg = true;
+    parser::Reference isect_lhs{};
+    parser::Reference isect_rhs{};
+    isect_lhs.sheet = isect_sheet;
+    isect_lhs.row = isect_r1;
+    isect_lhs.col = isect_c1;
+    isect_rhs.sheet = isect_sheet;
+    isect_rhs.row = isect_r2;
+    isect_rhs.col = isect_c2;
+    Value range_return = Value::blank();
+    if (!append_expanded_range(def, isect_lhs, isect_rhs, arena, registry, ctx, &values, &range_return)) {
+      result = range_return;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  // Union operator (`(A1:A2,B1:B2)`) as a range-aware function argument:
+  // Excel's comma operator concatenates the areas, and an aggregator must
+  // see every cell of every area. Resolve each area through
+  // `resolve_range_arg` (which handles Ref / RangeOp / range-shaped calls)
+  // and flatten them in order. Overlapping areas are intentionally counted
+  // more than once — Excel's union does NOT de-duplicate, so
+  // `SUM((A1:A2,A1:A2))` doubles the A1:A2 total.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::UnionOp) {
+    had_range_shaped_arg = true;
+    const std::uint32_t area_count = arg_node.as_union_arity();
+    Value range_err = Value::blank();
+    bool short_circuit = false;
+    for (std::uint32_t area = 0; area < area_count; ++area) {
+      auto resolved = resolve_range_arg(arg_node.as_union_child(area), arena, registry, ctx);
+      if (!resolved) {
+        const Value err = Value::error(resolved.error());
+        if (!absorb_arg_error(def, err, &values)) {
+          result = err;
+          return RangeArgOutcome::kReturn;
+        }
+        continue;
+      }
+      const RangeResult& rr = resolved.value();
+      if (!append_range_sourced_values(def, rr.cells.data(), rr.cells.size(), &values, &range_err)) {
+        short_circuit = true;
+        break;
+      }
+    }
+    if (short_circuit) {
+      result = range_err;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  // Calls whose result is a range feed their cells through the range filters.
+  {
+    bool expanded_call_handled = false;
+    Value expanded_call_return = Value::blank();
+    for (const RangeCallExpansion& expansion : kRangeCallExpansions) {
+      if (!append_expanded_call_argument(def, arg_node, expansion.name, expansion.expand, arena, registry, ctx, &values,
+                                         &expanded_call_handled, &expanded_call_return)) {
+        result = expanded_call_return;
+        return RangeArgOutcome::kReturn;
+      }
+      if (expanded_call_handled) {
+        had_range_shaped_arg = true;
+        return RangeArgOutcome::kCollected;
+      }
+    }
+  }
+  // IF as a range producer: a picked range branch is flattened through the
+  // range filters, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` aggregates
+  // three cells. A picked plain value (`IF(TRUE, "", 1)`) is a direct
+  // argument, not a range cell, so the provenance filter must not drop it.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
+      strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
+    auto picked = resolve_range_arg(arg_node, arena, registry, ctx);
+    if (!picked) {
+      const Value err = Value::error(picked.error());
+      if (!absorb_arg_error(def, err, &values)) {
+        result = err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    if (picked.value().from_scalar && picked.value().cells.size() == 1U) {
+      const Value& direct = picked.value().cells[0];
+      if (def.propagate_errors && direct.is_error()) {
+        result = direct;
+        return RangeArgOutcome::kReturn;
+      }
+      values.push_back(direct);
+      return RangeArgOutcome::kCollected;
+    }
+    had_range_shaped_arg = true;
+    Value range_err = Value::blank();
+    if (!append_range_sourced_values(def, picked.value().cells.data(), picked.value().cells.size(), &values,
+                                     &range_err)) {
+      result = range_err;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::StructuredRef) {
+    // Structured (table) reference argument: evaluate it and unpack the
+    // resulting Array row-major into the values vector. Mirrors the
+    // SpillRef / RangeOp branches so SUM / AVERAGE / COUNTIF / ... see
+    // the rectangle's cells exactly as if `Table[Col]` had been written
+    // as a literal `A2:A10`. Errors short-circuit per `propagate_errors`.
+    // Scalar (single-cell) results fall through to the generic argument
+    // path; the only effect is that the per-cell `range_filter_*` rules
+    // are not applied, which matches Mac for a single-cell `Sales[@Col]`
+    // (Excel never broadcasts a single-cell structured ref through the
+    // range-filter pipeline). The array-shaped path applies the filters
+    // exactly like the RangeOp / SpillRef branches.
+    Value sr_val = eval_node(arg_node, arena, registry, ctx);
+    if (def.propagate_errors && sr_val.is_error()) {
+      result = sr_val;
+      return RangeArgOutcome::kReturn;
+    }
+    if (sr_val.is_array()) {
+      had_range_shaped_arg = true;
+      const ArrayValue* a = sr_val.as_array();
+      const std::size_t sr_total = static_cast<std::size_t>(a->rows) * static_cast<std::size_t>(a->cols);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(def, a->cells, sr_total, &values, &range_err)) {
+        result = range_err;
+        return RangeArgOutcome::kReturn;
+      }
+      return RangeArgOutcome::kCollected;
+    }
+    // Scalar single-cell result: push without range-filtering. Falling
+    // through to the bottom-of-loop scalar handling would re-eval the
+    // node; the value we already have is correct.
+    values.push_back(sr_val);
+    return RangeArgOutcome::kCollected;
+  }
+  // Whole-column (`A:A`) / whole-row (`1:1`) single reference: expand
+  // against the sheet's used range so range-aware aggregators see the
+  // populated cells instead of the `#VALUE!` a scalar `resolve_ref`
+  // returns for an unbounded reference. Multi-span (`A:C` / `1:3`) is
+  // handled by the RangeOp branch above.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::Ref &&
+      (arg_node.as_ref().is_full_col || arg_node.as_ref().is_full_row)) {
+    had_range_shaped_arg = true;
+    const parser::Reference& ref = arg_node.as_ref();
+    Value range_return = Value::blank();
+    if (!append_expanded_range(def, ref, ref, arena, registry, ctx, &values, &range_return)) {
+      result = range_return;
+      return RangeArgOutcome::kReturn;
+    }
+    return RangeArgOutcome::kCollected;
+  }
+  return RangeArgOutcome::kNotRange;
+}
+
 // The body of `dispatch_call`. A scalar function applied over a whole column /
 // row returns through `*tail_out` (the returned value is then unused).
 Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -632,463 +1098,14 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       continue;
     }
     const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
-    // Minimal array-literal support: when a range-aware function receives
-    // a `{a;b;c}` style literal, flatten it in row-major order exactly like
-    // a RangeOp argument. This is just enough to let LARGE / SMALL /
-    // PERCENTILE.INC / QUARTILE.INC accept brace literals as their "array"
-    // input. The same literals are also first-class dynamic arrays when
-    // evaluated directly; flattening here preserves this range-aware
-    // function dispatch path.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::ArrayLiteral) {
-      had_range_shaped_arg = true;
-      auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
-      if (!resolved) {
-        return Value::error(resolved.error());
-      }
-      bool short_circuit = false;
-      Value propagated_err = Value::blank();
-      for (const Value& value : resolved.value().cells) {
-        // A boolean inside an array literal is #VALUE! under the
-        // Analysis-ToolPak rule (`GCD({TRUE,2})`).
-        if (def->analysis_toolpak_args && value.is_boolean()) {
-          return Value::error(ErrorCode::Value);
-        }
-        if (!append_array_sourced_value(*def, value, &values, &propagated_err)) {
-          short_circuit = true;
-          break;
-        }
-      }
-      if (short_circuit) {
-        return propagated_err;
-      }
-      continue;
-    }
-    // Spilled-range `A1#` argument: resolve the spill region anchored at
-    // the reference and flatten its row-major cells into the values
-    // vector. Mirrors the RangeOp branch below; the same provenance-aware
-    // filters apply because cells inside a spill region behave the same
-    // way as cells inside an ordinary range when consumed by SUM /
-    // AVERAGE / MIN / MAX / etc. A missing spill yields `#REF!`; an
-    // unbound context yields `#NAME?`. Errors short-circuit per
-    // `propagate_errors`.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::SpillRef) {
-      had_range_shaped_arg = true;
-      std::string_view anchor_sheet;
-      std::uint32_t anchor_row = 0;
-      std::uint32_t anchor_col = 0;
-      ErrorCode spill_err = ErrorCode::Ref;
-      if (!resolve_spill_anchor_node(arg_node, arena, registry, ctx, &anchor_sheet, &anchor_row, &anchor_col,
-                                     &spill_err)) {
-        const Value err = Value::error(spill_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
+    Value range_arg_result = Value::blank();
+    switch (collect_range_arg(*def, arg_node, arena, registry, ctx, values, had_range_shaped_arg, range_arg_result)) {
+      case RangeArgOutcome::kCollected:
         continue;
-      }
-      const Sheet* current = ctx.current_sheet();
-      const Sheet* target = current;
-      if (current == nullptr) {
-        spill_err = ErrorCode::Name;
-      } else if (!anchor_sheet.empty()) {
-        const Workbook* wb = ctx.workbook();
-        if (wb == nullptr) {
-          target = nullptr;
-        } else {
-          target = wb->sheet_by_name(anchor_sheet);
-        }
-      }
-      if (target == nullptr || anchor_row >= Sheet::kMaxRows || anchor_col >= Sheet::kMaxCols) {
-        const Value err = Value::error(spill_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      // Copied out under the sheet lock, with Text payloads re-homed into
-      // `arena`: the flattened values feed the whole call and outlive the
-      // region they came from.
-      std::vector<Value> region_cells;
-      if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, region_cells, nullptr, nullptr)) {
-        const Value err = Value::error(ErrorCode::Ref);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, region_cells.data(), region_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
-      continue;
-    }
-    // 3-D reference argument (`SUM(Sheet2:Sheet3!A1)`): resolve the inclusive
-    // sheet span by workbook order, read the referenced cell from each sheet,
-    // and flatten the resulting cells into the values vector. Mirrors the
-    // RangeOp / SpillRef branches; the same provenance filters apply because
-    // a 3-D ref is a range shape. A span endpoint that names a missing sheet
-    // surfaces the error `expand_ref3d_cells` reports. Errors short-circuit
-    // per `propagate_errors`.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D) {
-      std::vector<Value> ref3d_cells;
-      ErrorCode ref3d_err = ErrorCode::Ref;
-      if (!expand_ref3d_cells(arg_node, arena, registry, ctx, &ref3d_cells, &ref3d_err)) {
-        const Value err = Value::error(ref3d_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      had_range_shaped_arg = true;
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
-      continue;
-    }
-    // Cross-workbook 3-D reference (`SUM([Book.xlsx]S1:S2!A1)`): the same
-    // flattening over the link's sheet order, read from its cache.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::ExternalRef &&
-        !arg_node.as_external_ref_sheet_end().empty()) {
-      std::vector<Value> ref3d_cells;
-      if (!collect_external_ref3d_cells(arg_node, arena, ctx, &ref3d_cells)) {
-        const Value err = Value::error(ErrorCode::Ref);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      had_range_shaped_arg = true;
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
-        return range_err;
-      }
-      continue;
-    }
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
-      had_range_shaped_arg = true;
-      const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
-      const parser::AstNode& rhs_ast = arg_node.as_range_operand(1);
-      // Multi-column (`A:C`) / multi-row (`1:3`) whole references parse as a
-      // RangeOp over two whole-column / whole-row Refs. `resolve_range_endpoint`
-      // rejects whole references (no bounded rectangle on their own), so route
-      // the pair straight to `expand_range`, which clamps the unbounded axis to
-      // the sheet's used range.
-      //
-      // A `:` chain of three or more endpoints is no bare pair;
-      // `declared_rect_endpoint_pair` reduces the whole chain to the endpoint
-      // pair that bounds it. Without it a chain falls into the endpoint union
-      // below, which rejects whole references and turns `=SUM(A:C:E:G)` into
-      // `#VALUE!` where Excel answers.
-      parser::Reference chain_lhs{};
-      parser::Reference chain_rhs{};
-      const bool is_bare_pair = arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
-                                rhs_ast.kind() == parser::NodeKind::Ref;
-      const bool whole_axis_pair = is_bare_pair && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row ||
-                                                    rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row);
-      if (whole_axis_pair) {
-        chain_lhs = lhs_ast.as_ref();
-        chain_rhs = rhs_ast.as_ref();
-      } else if (is_bare_pair || !declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs)) {
-        // Union the two endpoints into one rectangle and let `expand_range`
-        // validate sheet equality (mismatched qualifiers surface as #REF!).
-        ErrorCode endpoint_err = ErrorCode::Ref;
-        if (!union_endpoint_refs(arg_node, arena, registry, ctx, &chain_lhs, &chain_rhs, &endpoint_err)) {
-          const Value err = Value::error(endpoint_err);
-          if (def->propagate_errors) {
-            return err;
-          }
-          values.push_back(err);
-          continue;
-        }
-      }
-      Value range_return = Value::blank();
-      if (!append_expanded_range(*def, chain_lhs, chain_rhs, arena, registry, ctx, &values, &range_return)) {
-        return range_return;
-      }
-      continue;
-    }
-    // Scalar (non-range-aware) function receiving a bounded `A1:B2`
-    // RangeOp: Excel 365 evaluates the function element-wise over the
-    // rectangle and spills the result rather than collapsing the range
-    // to its implicit-intersection anchor. Materialise the rectangle as a
-    // `Value::Array` here; the post-loop broadcast step then lifts the
-    // scalar impl over it. Whole-column / whole-row endpoints (`A:A`,
-    // `1:1`) keep the legacy anchor projection (they fall through to the
-    // scalar `eval_node` path below) to avoid spilling an unbounded
-    // rectangle through a scalar function. `@` / SINGLE-wrapped args are
-    // Call nodes, not RangeOp, so they never reach this branch and retain
-    // implicit-intersection semantics. A rectangle spanning a whole grid axis
-    // (`A:C`, `1:3`, `A1:A1048576`) is not expanded here: it falls through to
-    // `eval_node_shaped`, which reads it at its declared size without
-    // materialising the unused part.
-    if (!def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
-      const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
-      const parser::AstNode& rhs_ast = arg_node.as_range_operand(1);
-      const bool whole =
-          parser::any_child_node(arg_node,
-                                 [](const parser::AstNode& operand) {
-                                   return operand.kind() == parser::NodeKind::Ref &&
-                                          (operand.as_ref().is_full_col || operand.as_ref().is_full_row);
-                                 }) ||
-          (arg_node.as_range_arity() == 2U && lhs_ast.kind() == parser::NodeKind::Ref &&
-           rhs_ast.kind() == parser::NodeKind::Ref && is_full_axis_range(lhs_ast.as_ref(), rhs_ast.as_ref()));
-      if (!whole) {
-        parser::Reference union_lhs{};
-        parser::Reference union_rhs{};
-        ErrorCode endpoint_err = ErrorCode::Ref;
-        if (!union_endpoint_refs(arg_node, arena, registry, ctx, &union_lhs, &union_rhs, &endpoint_err)) {
-          const Value err = Value::error(endpoint_err);
-          if (def->propagate_errors) {
-            return err;
-          }
-          values.push_back(err);
-          continue;
-        }
-        auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
-        if (!expanded) {
-          const Value err = Value::error(expanded.error());
-          if (def->propagate_errors) {
-            return err;
-          }
-          values.push_back(err);
-          continue;
-        }
-        const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
-        const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
-        const std::vector<Value>& ev = expanded.value();
-        ArrayValue* arr = array_from_values(rrows, rcols, ev.data(), ev.size(), arena);
-        if (arr == nullptr) {
-          return Value::error(ErrorCode::Num);
-        }
-        values.push_back(Value::array(arr));
-        continue;
-      }
-    }
-    // Intersection operator as a range-aware function argument: Excel's
-    // space operator (`A1:C3 B1:B5`) yields the overlapping rectangle,
-    // and an aggregator must see every cell of that rectangle rather
-    // than the single anchor `eval_node` would collapse it to. Compute
-    // the clipped intersection rectangle and flatten it row-major,
-    // mirroring the RangeOp branch above. Disjoint operands -> #NULL!.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::IntersectOp) {
-      std::string_view isect_sheet;
-      std::uint32_t isect_r1 = 0;
-      std::uint32_t isect_c1 = 0;
-      std::uint32_t isect_r2 = 0;
-      std::uint32_t isect_c2 = 0;
-      bool isect_disjoint = false;
-      ErrorCode isect_err = ErrorCode::Value;
-      if (!compute_intersect_rect(arg_node.as_intersect_lhs(), arg_node.as_intersect_rhs(), arena, registry, ctx,
-                                  &isect_sheet, &isect_r1, &isect_c1, &isect_r2, &isect_c2, &isect_disjoint,
-                                  &isect_err)) {
-        const Value err = Value::error(isect_err);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      if (isect_disjoint) {
-        const Value err = Value::error(ErrorCode::Null);
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      had_range_shaped_arg = true;
-      parser::Reference isect_lhs{};
-      parser::Reference isect_rhs{};
-      isect_lhs.sheet = isect_sheet;
-      isect_lhs.row = isect_r1;
-      isect_lhs.col = isect_c1;
-      isect_rhs.sheet = isect_sheet;
-      isect_rhs.row = isect_r2;
-      isect_rhs.col = isect_c2;
-      Value range_return = Value::blank();
-      if (!append_expanded_range(*def, isect_lhs, isect_rhs, arena, registry, ctx, &values, &range_return)) {
-        return range_return;
-      }
-      continue;
-    }
-    // Union operator (`(A1:A2,B1:B2)`) as a range-aware function argument:
-    // Excel's comma operator concatenates the areas, and an aggregator must
-    // see every cell of every area. Resolve each area through
-    // `resolve_range_arg` (which handles Ref / RangeOp / range-shaped calls)
-    // and flatten them in order. Overlapping areas are intentionally counted
-    // more than once — Excel's union does NOT de-duplicate, so
-    // `SUM((A1:A2,A1:A2))` doubles the A1:A2 total.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::UnionOp) {
-      had_range_shaped_arg = true;
-      const std::uint32_t area_count = arg_node.as_union_arity();
-      Value range_err = Value::blank();
-      bool short_circuit = false;
-      for (std::uint32_t area = 0; area < area_count; ++area) {
-        auto resolved = resolve_range_arg(arg_node.as_union_child(area), arena, registry, ctx);
-        if (!resolved) {
-          const Value err = Value::error(resolved.error());
-          if (def->propagate_errors) {
-            return err;
-          }
-          values.push_back(err);
-          continue;
-        }
-        const RangeResult& rr = resolved.value();
-        if (!append_range_sourced_values(*def, rr.cells.data(), rr.cells.size(), &values, &range_err)) {
-          short_circuit = true;
-          break;
-        }
-      }
-      if (short_circuit) {
-        return range_err;
-      }
-      continue;
-    }
-    // Range-aware functions that receive `OFFSET(...)` as an argument see
-    // the rectangle OFFSET would synthesize, not the `#VALUE!` OFFSET
-    // itself returns in scalar context. We share the expansion helper
-    // with `resolve_range_arg` (lazy family) so the two paths cannot
-    // drift on cross-sheet / cycle / bounds semantics.
-    bool expanded_call_handled = false;
-    Value expanded_call_return = Value::blank();
-    if (!append_expanded_call_argument(*def, arg_node, "OFFSET", expand_offset_call, arena, registry, ctx, &values,
-                                       &expanded_call_handled, &expanded_call_return)) {
-      return expanded_call_return;
-    }
-    if (expanded_call_handled) {
-      had_range_shaped_arg = true;
-      continue;
-    }
-    // INDIRECT names a reference, so its cells take the range filters even
-    // when it resolves to one cell: SUM(INDIRECT("A2")) skips text as SUM(A2) does.
-    if (!append_expanded_call_argument(*def, arg_node, "INDIRECT", expand_indirect_call, arena, registry, ctx, &values,
-                                       &expanded_call_handled, &expanded_call_return)) {
-      return expanded_call_return;
-    }
-    if (expanded_call_handled) {
-      had_range_shaped_arg = true;
-      continue;
-    }
-    // IF as a range producer: a picked range branch is flattened through the
-    // range filters, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` aggregates
-    // three cells. A picked plain value (`IF(TRUE, "", 1)`) is a direct
-    // argument, not a range cell, so the provenance filter must not drop it.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
-        strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
-      auto picked = resolve_range_arg(arg_node, arena, registry, ctx);
-      if (!picked) {
-        const Value err = Value::error(picked.error());
-        if (def->propagate_errors) {
-          return err;
-        }
-        values.push_back(err);
-        continue;
-      }
-      if (picked.value().from_scalar && picked.value().cells.size() == 1U) {
-        const Value& direct = picked.value().cells[0];
-        if (def->propagate_errors && direct.is_error()) {
-          return direct;
-        }
-        values.push_back(direct);
-        continue;
-      }
-      had_range_shaped_arg = true;
-      Value range_err = Value::blank();
-      if (!append_range_sourced_values(*def, picked.value().cells.data(), picked.value().cells.size(), &values,
-                                       &range_err)) {
-        return range_err;
-      }
-      continue;
-    }
-    // CHOOSE-as-range-producer mirrors the OFFSET branch above: when an
-    // aggregator receives `CHOOSE(idx, range1, range2, ...)`, the chosen
-    // child must be flattened to a vector of cells (recursively, if it is
-    // itself an OFFSET / CHOOSE call). `expand_choose_call` shares the
-    // same evaluation, range-resolution, and filter contracts so SUM /
-    // AVERAGE / MIN / MAX / AVERAGEA all behave consistently.
-    if (!append_expanded_call_argument(*def, arg_node, "CHOOSE", expand_choose_call, arena, registry, ctx, &values,
-                                       &expanded_call_handled, &expanded_call_return)) {
-      return expanded_call_return;
-    }
-    if (expanded_call_handled) {
-      had_range_shaped_arg = true;
-      continue;
-    }
-    // ROW(range) / COLUMN(range) as an aggregator argument: Excel 365 spills
-    // them to `{1;2;3;...}` / `{1,2,3,...}` and the surrounding aggregator
-    // iterates the spill. Without a `Value::Array` runtime the scalar path
-    // collapses to the rectangle's first row / column; this branch unpacks
-    // the indices directly so `=SUM(ROW(A1:A5))` aggregates 15 rather than
-    // the scalar 1. Mirrors the OFFSET / CHOOSE / IF branches above; the
-    // emitted cells are always `Number`, so `range_filter_*` rules pass
-    // them through unchanged.
-    if (!append_expanded_call_argument(*def, arg_node, "ROW", expand_row_call, arena, registry, ctx, &values,
-                                       &expanded_call_handled, &expanded_call_return)) {
-      return expanded_call_return;
-    }
-    if (expanded_call_handled) {
-      had_range_shaped_arg = true;
-      continue;
-    }
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::StructuredRef) {
-      // Structured (table) reference argument: evaluate it and unpack the
-      // resulting Array row-major into the values vector. Mirrors the
-      // SpillRef / RangeOp branches so SUM / AVERAGE / COUNTIF / ... see
-      // the rectangle's cells exactly as if `Table[Col]` had been written
-      // as a literal `A2:A10`. Errors short-circuit per `propagate_errors`.
-      // Scalar (single-cell) results fall through to the generic argument
-      // path; the only effect is that the per-cell `range_filter_*` rules
-      // are not applied, which matches Mac for a single-cell `Sales[@Col]`
-      // (Excel never broadcasts a single-cell structured ref through the
-      // range-filter pipeline). The array-shaped path applies the filters
-      // exactly like the RangeOp / SpillRef branches.
-      Value sr_val = eval_node(arg_node, arena, registry, ctx);
-      if (def->propagate_errors && sr_val.is_error()) {
-        return sr_val;
-      }
-      if (sr_val.is_array()) {
-        had_range_shaped_arg = true;
-        const ArrayValue* a = sr_val.as_array();
-        const std::size_t sr_total = static_cast<std::size_t>(a->rows) * static_cast<std::size_t>(a->cols);
-        Value range_err = Value::blank();
-        if (!append_range_sourced_values(*def, a->cells, sr_total, &values, &range_err)) {
-          return range_err;
-        }
-        continue;
-      }
-      // Scalar single-cell result: push without range-filtering. Falling
-      // through to the bottom-of-loop scalar handling would re-eval the
-      // node; the value we already have is correct.
-      values.push_back(sr_val);
-      continue;
-    }
-    if (!append_expanded_call_argument(*def, arg_node, "COLUMN", expand_column_call, arena, registry, ctx, &values,
-                                       &expanded_call_handled, &expanded_call_return)) {
-      return expanded_call_return;
-    }
-    if (expanded_call_handled) {
-      had_range_shaped_arg = true;
-      continue;
-    }
-    // Whole-column (`A:A`) / whole-row (`1:1`) single reference: expand
-    // against the sheet's used range so range-aware aggregators see the
-    // populated cells instead of the `#VALUE!` a scalar `resolve_ref`
-    // returns for an unbounded reference. Multi-span (`A:C` / `1:3`) is
-    // handled by the RangeOp branch above.
-    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref &&
-        (arg_node.as_ref().is_full_col || arg_node.as_ref().is_full_row)) {
-      had_range_shaped_arg = true;
-      const parser::Reference& ref = arg_node.as_ref();
-      Value range_return = Value::blank();
-      if (!append_expanded_range(*def, ref, ref, arena, registry, ctx, &values, &range_return)) {
-        return range_return;
-      }
-      continue;
+      case RangeArgOutcome::kReturn:
+        return range_arg_result;
+      case RangeArgOutcome::kNotRange:
+        break;
     }
     // A scalar function keeps a whole column / row at its declared size for
     // the element-wise broadcast below; a range-aware one takes it expanded.
@@ -1164,10 +1181,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       const bool required = def->atp_omitted_optional_is_na || atp_slot_required(i, def->min_arity, def->max_arity);
       const Value err = atp_arg_error(arg_node, v, required);
       if (err.is_error()) {
-        if (def->propagate_errors) {
+        if (!absorb_arg_error(*def, err, &values)) {
           return err;
         }
-        values.push_back(err);
         continue;
       }
     }

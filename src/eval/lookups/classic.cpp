@@ -17,7 +17,6 @@
 #include "eval/coerce.h"
 #include "eval/collation.h"
 #include "eval/declared_rect.h"
-#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
@@ -252,34 +251,11 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
   return approximate_search(n, [&](std::size_t i) { return order(cell_at(i)); });
 }
 
-// Maps a scalar lookup result over the query array without routing through the
-// eager broadcaster. The lookup family has to resolve its table / index / mode
-// arguments exactly once, and an error in one query cell must remain local to
-// that lane even when the shared validation has already produced an error for
-// every ordinary lane.
-template <typename Mapper>
-Value map_lookup_query_array(const Value& lookup, Arena& arena, const Mapper& mapper) {
-  const std::uint32_t query_rows = lookup.as_array_rows();
-  const std::uint32_t query_cols = lookup.as_array_cols();
-  Value* output_cells = nullptr;
-  ArrayValue* output =
-      dynamic_array::allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
-  if (output == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const Value* query_cells = lookup.as_array_cells();
-  const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
-  for (std::size_t i = 0; i < query_count; ++i) {
-    output_cells[i] = promote_array_result_cell(mapper(query_cells[i]));
-  }
-  return Value::array(output);
-}
-
 // Fails the whole call with `err`. An array lookup fails lane by lane, so a
 // query cell holding its own error keeps it.
 Value fail_lookup(const Value& lookup, Arena& arena, const Value& err) {
   if (lookup.is_array()) {
-    return map_lookup_query_array(lookup, arena, [&err](const Value& query) { return query.is_error() ? query : err; });
+    return map_query_lanes(lookup, arena, [&err](const Value& query) { return query.is_error() ? query : err; });
   }
   return err;
 }
@@ -392,7 +368,7 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   };
 
   if (array_lookup) {
-    return map_lookup_query_array(lookup, arena, [&](const Value& query) {
+    return map_query_lanes(lookup, arena, [&](const Value& query) {
       if (query.is_error()) {
         return query;
       }
@@ -555,7 +531,7 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
 
   if (array_lookup) {
-    return map_lookup_query_array(lookup, arena, [&](const Value& query) {
+    return map_query_lanes(lookup, arena, [&](const Value& query) {
       return match_lookup_one(cells, query, match_type, ctx.excel_profile());
     });
   }

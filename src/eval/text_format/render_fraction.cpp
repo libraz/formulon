@@ -131,10 +131,6 @@ std::string add_decimal(std::string_view digits, std::uint64_t addend) {
   return reversed;
 }
 
-bool is_digit_placeholder_tok(Tok k) {
-  return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad;
-}
-
 // Emit the non-negative integer `digits` right-aligned to the placeholders
 // in `[begin, end)`. Each placeholder kind determines how unused leading
 // positions render: `0` -> '0' pad, `?` -> space pad, `#` -> nothing
@@ -151,7 +147,7 @@ void emit_fraction_digits(const Section& section, std::string_view fmt, std::str
     const Tok kind = section.tokens[static_cast<std::size_t>(k)].kind;
     if (kind == Tok::Comma) {
       grouped = true;
-    } else if (is_digit_placeholder_tok(kind)) {
+    } else if (is_digit_placeholder(kind)) {
       kinds.push_back(kind);
       literals_after.emplace_back();
     } else if (!literals_after.empty()) {
@@ -288,9 +284,9 @@ FormatStatus render_fraction(const Section& section, std::string_view fmt, doubl
   int int_begin = section.fraction_int_begin;
   const auto joins_integer = [&](Tok kind) { return kind == Tok::Comma || kind == Tok::Literal || kind == Tok::Space; };
   while (has_int_group && int_begin >= 2 && joins_integer(kind_at(int_begin - 1)) &&
-         is_digit_placeholder_tok(kind_at(int_begin - 2))) {
+         is_digit_placeholder(kind_at(int_begin - 2))) {
     int_begin -= 2;
-    while (int_begin > 0 && is_digit_placeholder_tok(kind_at(int_begin - 1))) {
+    while (int_begin > 0 && is_digit_placeholder(kind_at(int_begin - 1))) {
       --int_begin;
     }
   }

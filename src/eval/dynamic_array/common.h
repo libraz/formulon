@@ -7,8 +7,8 @@
 // argument-resolution and array-materialisation primitives they share so
 // no single helper is duplicated across the split.
 //
-// The cell-comparison helpers below (`unique_lane_key`, `sort_cell_less_asc`,
-// `sort_lane_less*`, `collation_classes`) own Excel's cross-kind order for
+// The cell-comparison helpers below (`unique_lane_key`,
+// `sort_lane_less_keyed`, `collation_classes`) own Excel's cross-kind order for
 // this surface: kinds never merge, and Text goes through the profile's
 // dynamic-array collation (`eval/collation.h`).
 
@@ -71,6 +71,12 @@ bool eval_bool_arg(const parser::AstNode& node, Arena& arena, const FunctionRegi
 bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, double& out, Value& error_out);
 
+/// Resolves an optional `pad_with` argument into `pad`. A null `node` (argument
+/// absent) pads with #N/A; an array pad contributes its first cell; an empty
+/// array is #VALUE!. Returns `false` with the argument's error in `error_out`.
+bool resolve_pad_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, Value& pad, Value& error_out);
+
 /// Gather rows (`by_col == false`) or columns (`by_col == true`) of
 /// `src` named by the 0-based indices in `indices`, preserving the index
 /// order. Returns nullptr on arena OOM.
@@ -97,24 +103,17 @@ ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena
 /// when the lane holds an Array / Ref / Lambda cell, which equals no lane.
 bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std::string* out);
 
-/// Strict weak ordering for SORT keys, ascending. Cross-kind ordering
-/// follows Excel: `Number < Text < Bool < Error < Blank`. Text uses
-/// the current profile's dynamic-array collation; Bool uses `FALSE < TRUE`; Error uses
-/// error-code value compare.
-bool sort_cell_less_asc(const Value& a, const Value& b);
-
-/// Lane-level less for SORT / SORTBY. Always sinks blank keys to the end
-/// regardless of `descending`; otherwise applies `sort_cell_less_asc` (or
-/// its mirror for descending). The caller's `std::stable_sort` relies on
-/// this being a strict weak ordering.
-bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending);
-
 /// Collation key of a text cell (empty for any other kind); compute once per
 /// cell and pass to `sort_lane_less_keyed`.
 std::string sort_text_key(const Value& v);
 
-/// `sort_lane_less` with precomputed `sort_text_key` results; a null key
-/// falls back to collating the text directly.
+/// Lane-level less for SORT / SORTBY with precomputed `sort_text_key`
+/// results; a null key falls back to collating the text directly. Blank keys
+/// sink to the end regardless of `descending`; otherwise cells order
+/// ascending (or mirrored) as `Number < Text < Bool < Error < Blank`, text by
+/// the current profile's dynamic-array collation, `FALSE < TRUE`, errors by
+/// code. The caller's `std::stable_sort` relies on this being a strict weak
+/// ordering.
 bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
                           const std::string* text_key_b, bool descending);
 

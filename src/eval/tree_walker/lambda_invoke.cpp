@@ -71,6 +71,59 @@ const LambdaValue* at_arity(const LambdaValue* lv, std::uint32_t arity, Arena& a
   return lv->builtin.empty() ? lv : eta_expand(lv->builtin, arity, arena);
 }
 
+// True when a call with `arity` arguments fits `lv`: trailing `[optional]`
+// parameters may stay unbound.
+bool lambda_accepts_arity(const LambdaValue* lv, std::uint32_t arity) {
+  const std::uint32_t required = lv->param_count - lv->optional_count;
+  return arity >= required && arity <= lv->param_count;
+}
+
+// Entry to a lambda call: holds a lambda-depth slot for its lifetime and
+// resolves the lambda to run. The depth cap fires before any arity check so a
+// runaway self-recursion (e.g. `LAMBDA(n, f(n+1))`) cannot keep extending the
+// call stack on its own dime. See `kMaxLambdaDepth` for rationale.
+class LambdaCall {
+ public:
+  LambdaCall(const LambdaValue* lv, std::uint32_t arity, bool args_missing, Arena& arena, const EvalContext& ctx)
+      : guard_(ctx.lambda_depth_counter(), kMaxLambdaDepth) {
+    if (lv == nullptr || args_missing) {
+      error_ = ErrorCode::Value;
+      return;
+    }
+    if (guard_.exceeded()) {
+      error_ = ErrorCode::Calc;
+      return;
+    }
+    lv_ = at_arity(lv, arity, arena);
+    if (lv_ == nullptr) {
+      error_ = ErrorCode::Num;
+    }
+  }
+
+  // The error the call surfaces instead of running, if any.
+  std::optional<ErrorCode> error() const { return error_; }
+  const LambdaValue* lambda() const { return lv_; }
+
+ private:
+  EvalDepthGuard guard_;
+  const LambdaValue* lv_ = nullptr;
+  std::optional<ErrorCode> error_;
+};
+
+// Evaluates each call-site argument into `*args`, recording in `*bound_asts`
+// the AST `eval_binding_source` chose to bind alongside it.
+void evaluate_call_args(const parser::AstNode* const* call_args, std::uint32_t arity, Arena& arena,
+                        const FunctionRegistry& registry, const EvalContext& ctx, std::vector<Value>* args,
+                        std::vector<const parser::AstNode*>* bound_asts) {
+  args->reserve(arity);
+  bound_asts->reserve(arity);
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const parser::AstNode* bound = nullptr;
+    args->push_back(eval_binding_source(*call_args[i], arena, registry, ctx, &bound));
+    bound_asts->push_back(bound);
+  }
+}
+
 // `syntax_args` is the call site's argument AST, consulted for one thing
 // only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
 // one. It is deliberately separate from `ast_args`, the per-argument AST
@@ -80,8 +133,7 @@ const LambdaValue* at_arity(const LambdaValue* lv, std::uint32_t arity, Arena& a
 std::optional<ErrorCode> bind_lambda_params(const LambdaValue* lv, std::uint32_t arity, const Value* args,
                                             const parser::AstNode* const* ast_args,
                                             const parser::AstNode* const* syntax_args, Arena& arena, NameEnv* out) {
-  const std::uint32_t required = lv->param_count - lv->optional_count;
-  if (arity < required || arity > lv->param_count) {
+  if (!lambda_accepts_arity(lv, arity)) {
     return ErrorCode::Value;
   }
   if (lv->body == nullptr) {
@@ -142,21 +194,11 @@ Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Val
 Value invoke_lambda_values_with_ast(const LambdaValue* lv, std::uint32_t arity, const Value* args,
                                     const parser::AstNode* const* ast_args, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (lv == nullptr || (arity != 0U && args == nullptr)) {
-    return Value::error(ErrorCode::Value);
+  const LambdaCall call(lv, arity, arity != 0U && args == nullptr, arena, ctx);
+  if (call.error()) {
+    return Value::error(*call.error());
   }
-  // Lambda-depth cap fires before the arity check so a runaway
-  // self-recursion (e.g. `LAMBDA(n, f(n+1))`) cannot keep extending the
-  // call stack on its own dime. See `kMaxLambdaDepth` for rationale.
-  EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
-  if (lambda_guard.exceeded()) {
-    return Value::error(ErrorCode::Calc);
-  }
-  lv = at_arity(lv, arity, arena);
-  if (lv == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return invoke_lambda_values_impl(lv, arity, args, ast_args, /*syntax_args=*/nullptr, arena, registry, ctx);
+  return invoke_lambda_values_impl(call.lambda(), arity, args, ast_args, /*syntax_args=*/nullptr, arena, registry, ctx);
 }
 
 const parser::AstNode* array_literal_ast(const ArrayValue* arr, Arena& arena) {
@@ -192,8 +234,7 @@ const LambdaValue* check_callable(const LambdaValue* lv, std::uint32_t call_arit
     }
     return expanded;
   }
-  const std::uint32_t required = lv->param_count - lv->optional_count;
-  if (call_arity < required || call_arity > lv->param_count) {
+  if (!lambda_accepts_arity(lv, call_arity)) {
     *out_err = Value::error(ErrorCode::Value);
     return nullptr;
   }
@@ -223,34 +264,17 @@ const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t ca
 
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (lv == nullptr || (arity != 0U && call_args == nullptr)) {
-    return Value::error(ErrorCode::Value);
+  const LambdaCall call(lv, arity, arity != 0U && call_args == nullptr, arena, ctx);
+  if (call.error()) {
+    return Value::error(*call.error());
   }
-  // Lambda-depth cap fires before the arity check so a runaway
-  // self-recursion (e.g. `LAMBDA(n, f(n+1))`) cannot keep extending the
-  // call stack on its own dime. See `kMaxLambdaDepth` for rationale.
-  EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
-  if (lambda_guard.exceeded()) {
-    return Value::error(ErrorCode::Calc);
-  }
-  lv = at_arity(lv, arity, arena);
-  if (lv == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::uint32_t required = lv->param_count - lv->optional_count;
-  if (arity < required || arity > lv->param_count) {
+  if (!lambda_accepts_arity(call.lambda(), arity)) {
     return Value::error(ErrorCode::Value);
   }
   std::vector<Value> args;
   std::vector<const parser::AstNode*> bound_asts;
-  args.reserve(arity);
-  bound_asts.reserve(arity);
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode* bound = nullptr;
-    args.push_back(eval_binding_source(*call_args[i], arena, registry, ctx, &bound));
-    bound_asts.push_back(bound);
-  }
-  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(),
+  evaluate_call_args(call_args, arity, arena, registry, ctx, &args, &bound_asts);
+  return invoke_lambda_values_impl(call.lambda(), arity, args.empty() ? nullptr : args.data(),
                                    bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, registry, ctx);
 }
 
@@ -258,27 +282,15 @@ bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const 
                               Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                               std::string_view* out_sheet, std::uint32_t* out_top_row, std::uint32_t* out_left_col,
                               std::uint32_t* out_bottom_row, std::uint32_t* out_right_col, ErrorCode* out_err) {
-  if (lv == nullptr || (arity != 0U && call_args == nullptr)) {
-    *out_err = ErrorCode::Value;
+  const LambdaCall call(lv, arity, arity != 0U && call_args == nullptr, arena, ctx);
+  if (call.error()) {
+    *out_err = *call.error();
     return false;
   }
-  EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
-  if (lambda_guard.exceeded()) {
-    *out_err = ErrorCode::Calc;
-    return false;
-  }
-  lv = at_arity(lv, arity, arena);
-  if (lv == nullptr) {
-    *out_err = ErrorCode::Num;
-    return false;
-  }
+  lv = call.lambda();
   std::vector<Value> args;
   std::vector<const parser::AstNode*> bound_asts;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode* bound = nullptr;
-    args.push_back(eval_binding_source(*call_args[i], arena, registry, ctx, &bound));
-    bound_asts.push_back(bound);
-  }
+  evaluate_call_args(call_args, arity, arena, registry, ctx, &args, &bound_asts);
   NameEnv env;
   if (const std::optional<ErrorCode> err =
           bind_lambda_params(lv, arity, args.empty() ? nullptr : args.data(),

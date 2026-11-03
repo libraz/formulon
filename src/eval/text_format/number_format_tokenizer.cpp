@@ -92,6 +92,13 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     toks.push_back(t);
   };
 
+  auto push_token = [&](Tok kind, std::size_t width = 0) {
+    Token t;
+    t.kind = kind;
+    t.width = width;
+    toks.push_back(t);
+  };
+
   bool saw_color = false;
   bool saw_tag = false;
   FormatTag own_tag;
@@ -170,15 +177,9 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         }
       }
       if (all_h) {
-        Token t;
-        t.kind = Tok::DateElapsedH;
-        t.width = body.size();
-        toks.push_back(t);
+        push_token(Tok::DateElapsedH, body.size());
       } else if (all_m) {
-        Token t;
-        t.kind = Tok::DateElapsedM;
-        t.width = body.size();
-        toks.push_back(t);
+        push_token(Tok::DateElapsedM, body.size());
       } else if (!body.empty() && body.front() == '$') {
         // Locale-currency marker. Form: `[$<symbol>-<lcid>]` or `[$<symbol>]`
         // or `[$-<lcid>]`. The `<symbol>` portion (everything after `$` up
@@ -210,10 +211,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
           }
         }
       } else if (all_s) {
-        Token t;
-        t.kind = Tok::DateElapsedS;
-        t.width = body.size();
-        toks.push_back(t);
+        push_token(Tok::DateElapsedS, body.size());
       } else if (is_color_specifier(body)) {
         // Named colour (`[Red]`) or indexed colour (`[Color12]`). Excel discards
         // the colour inside TEXT, so the rest of the section still formats
@@ -252,9 +250,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // emits a matching amount of whitespace. TEXT's output uses a single
     // space regardless of `X`.
     if (c == '_' && i + 1 < fmt.size()) {
-      Token t;
-      t.kind = Tok::Space;
-      toks.push_back(t);
+      push_token(Tok::Space);
       i += 1 + utf8_scalar_width(fmt, i + 1);
       continue;
     }
@@ -287,9 +283,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         return true;
       };
       if (match_general(i)) {
-        Token t;
-        t.kind = Tok::GeneralNumber;
-        toks.push_back(t);
+        push_token(Tok::GeneralNumber);
         i += 7;
         continue;
       }
@@ -308,25 +302,19 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
         return strings::case_insensitive_starts_with(fmt.substr(start), std::string_view(a, n));
       };
       if (match_ci(i, "AM/PM")) {
-        Token t;
-        t.kind = Tok::AmPm;
-        toks.push_back(t);
+        push_token(Tok::AmPm);
         i += 5;
         continue;
       }
       if ((invariant_letters || facts.short_meridiem) && match_ci(i, "A/P")) {
-        Token t;
-        t.kind = Tok::AP;
-        toks.push_back(t);
+        push_token(Tok::AP);
         i += 3;
         continue;
       }
     }
     // The Chinese designator pair is an AM/PM marker in every locale.
     if (fmt.compare(i, kChineseAmPm.size(), kChineseAmPm) == 0) {
-      Token t;
-      t.kind = Tok::AmPmChinese;
-      toks.push_back(t);
+      push_token(Tok::AmPmChinese);
       i += kChineseAmPm.size();
       continue;
     }
@@ -337,10 +325,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     if (letters.weekday != '\0' && strings::ascii_to_lower(c) == letters.weekday) {
       const std::size_t run = scan_run(fmt, i, letters.weekday);
       if (run >= 3) {
-        Token t;
-        t.kind = (run >= 4) ? Tok::DateAaaa : Tok::DateAaa;
-        t.width = static_cast<std::uint8_t>(run);
-        toks.push_back(t);
+        push_token((run >= 4) ? Tok::DateAaaa : Tok::DateAaa, static_cast<std::uint8_t>(run));
         continue;
       }
       // Run of 1 or 2 weekday letters: emit as literal.
@@ -368,10 +353,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // Buddhist-era year `bb` / `bbbb`, the same letter in every locale.
     if (c == 'b') {
       const std::size_t run = scan_run_exact(fmt, i, 'b');
-      Token t;
-      t.width = run;
-      t.kind = run <= 2 ? Tok::DateB2 : Tok::DateB4;
-      toks.push_back(t);
+      push_token(run <= 2 ? Tok::DateB2 : Tok::DateB4, run);
       continue;
     }
     // Date letters, read through the locale's letter table.
@@ -438,17 +420,13 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // follow a digit token; we still emit the token and let the classifier
     // require the sign.
     if ((c == 'E' || c == 'e') && i + 1 < fmt.size() && (fmt[i + 1] == '+' || fmt[i + 1] == '-')) {
-      Token t;
-      t.kind = fmt[i + 1] == '+' ? Tok::SciPlus : Tok::SciMinus;
-      toks.push_back(t);
+      push_token(fmt[i + 1] == '+' ? Tok::SciPlus : Tok::SciMinus);
       i += 2;
       continue;
     }
     if (facts.blank_date_letter != '\0' && strings::ascii_to_lower(c) == facts.blank_date_letter) {
       scan_run(fmt, i, facts.blank_date_letter);
-      Token t;
-      t.kind = Tok::DateBlank;
-      toks.push_back(t);
+      push_token(Tok::DateBlank);
       continue;
     }
     if (c == 't' && facts.thai_digit_letter) {
@@ -483,10 +461,7 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // section turns out to be numeric.
     if (c == 'e' || c == 'E') {
       const std::size_t run = scan_run(fmt, i, 'e');
-      Token t;
-      t.width = static_cast<std::uint8_t>(run);
-      t.kind = (run >= 2) ? Tok::EraEE : Tok::EraE;
-      toks.push_back(t);
+      push_token((run >= 2) ? Tok::EraEE : Tok::EraE, static_cast<std::uint8_t>(run));
       continue;
     }
     // A kept full-width percent sign scales and writes itself (locale_tokens.text_fullwidth_percent_syntax).
@@ -503,51 +478,37 @@ void tokenize_section(std::string_view fmt, Section& out, const FormatLetters& l
     // Numeric specifiers.
     switch (c) {
       case '0': {
-        Token t;
-        t.kind = Tok::DigitZero;
-        toks.push_back(t);
+        push_token(Tok::DigitZero);
         ++i;
         continue;
       }
       case '#': {
-        Token t;
-        t.kind = Tok::DigitOpt;
-        toks.push_back(t);
+        push_token(Tok::DigitOpt);
         ++i;
         continue;
       }
       case '?': {
-        Token t;
-        t.kind = Tok::DigitPad;
-        toks.push_back(t);
+        push_token(Tok::DigitPad);
         ++i;
         continue;
       }
       case '.': {
-        Token t;
-        t.kind = Tok::Point;
-        toks.push_back(t);
+        push_token(Tok::Point);
         ++i;
         continue;
       }
       case ',': {
-        Token t;
-        t.kind = Tok::Comma;
-        toks.push_back(t);
+        push_token(Tok::Comma);
         ++i;
         continue;
       }
       case '%': {
-        Token t;
-        t.kind = Tok::Percent;
-        toks.push_back(t);
+        push_token(Tok::Percent);
         ++i;
         continue;
       }
       case '@': {
-        Token t;
-        t.kind = Tok::At;
-        toks.push_back(t);
+        push_token(Tok::At);
         ++i;
         continue;
       }

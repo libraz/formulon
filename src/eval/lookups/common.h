@@ -8,9 +8,11 @@
 #ifndef FORMULON_EVAL_LOOKUPS_COMMON_H_
 #define FORMULON_EVAL_LOOKUPS_COMMON_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/declared_rect.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -35,6 +37,27 @@ class FunctionRegistry;
 // that downstream COUNTA sees the occupied cells, while scalar INDEX / CHOOSE
 // paths continue to return the original reference blank unchanged.
 Value promote_array_result_cell(const Value& value);
+
+// Spills `per_lane(query)` for every cell of an array-valued lookup_value, in
+// the query array's shape, lanes in row-major order. The lookup family
+// resolves its table / index / mode arguments once, and a query cell's own
+// error stays local to its lane, so this stands in for the eager broadcaster.
+template <typename PerLane>
+Value map_query_lanes(const Value& lookup, Arena& arena, const PerLane& per_lane) {
+  const std::uint32_t query_rows = lookup.as_array_rows();
+  const std::uint32_t query_cols = lookup.as_array_cols();
+  const Value* query_cells = lookup.as_array_cells();
+  Value* output_cells = nullptr;
+  ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
+  if (output == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
+  for (std::size_t i = 0; i < query_count; ++i) {
+    output_cells[i] = promote_array_result_cell(per_lane(query_cells[i]));
+  }
+  return Value::array(output);
+}
 
 // A table argument spelled as a static reference. The lookup family reads it
 // by coordinate instead of materialising it whole: the declared rectangle is

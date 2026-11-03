@@ -56,6 +56,54 @@ std::uint32_t aggregator_arity(const LambdaValue& lv, const FunctionRegistry& re
   return required == 2U ? 2U : 1U;
 }
 
+// Appends the canonical key of one key cell; two cells get equal keys exactly
+// when `group_cell_equal` holds. `row` makes the key unique for cells that
+// never compare equal (NaN, Array / Ref / Lambda).
+void append_cell_group_key(std::string* out, const Value& v, std::uint32_t row) {
+  out->push_back(static_cast<char>(v.kind()));
+  switch (v.kind()) {
+    case ValueKind::Blank:
+      break;
+    case ValueKind::Number: {
+      double number = v.as_number();
+      if (std::isnan(number)) {
+        // NaN never compares equal, including to itself.
+        out->append("row");
+        out->append(std::to_string(row));
+        break;
+      }
+      number = number == 0.0 ? 0.0 : number;
+      std::uint64_t bits = 0;
+      static_assert(sizeof(bits) == sizeof(number));
+      std::memcpy(&bits, &number, sizeof(bits));
+      out->append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+      break;
+    }
+    case ValueKind::Bool:
+      out->push_back(v.as_boolean() ? '\x01' : '\x00');
+      break;
+    case ValueKind::Error:
+      out->append(std::to_string(static_cast<std::uint16_t>(v.as_error())));
+      out->push_back('\0');
+      break;
+    case ValueKind::Text: {
+      assert(eval_profile_scope_active());
+      const std::string key = collation_key(v.as_text(), current_eval_profile(), CollationStrength::kDynamic);
+      out->append(std::to_string(key.size()));
+      out->push_back(':');
+      out->append(key);
+      break;
+    }
+    default:
+      // Array / Ref / Lambda are intentionally never equal in
+      // group_cell_equal, so each row must form its own group.
+      out->append("row");
+      out->append(std::to_string(row));
+      break;
+  }
+  out->push_back('\xff');
+}
+
 }  // namespace
 
 std::string_view grand_total_label(const EvalContext& ctx) {
@@ -85,21 +133,16 @@ OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std
                                    const std::vector<std::vector<std::uint32_t>>& group_rows) {
   OuterGrouping out;
   out.outer_of_group.resize(group_repr.size(), 0U);
-  // The outer level is the first key column alone. Outer groups are few
-  // relative to the data rows, so a linear scan over the representatives
-  // beats standing up a second hash index.
+  // The outer level is the first key column alone.
   const std::uint32_t key_cols = keys.cols;
+  std::unordered_map<std::string, std::size_t> outer_index;
+  std::string key;
   for (std::size_t g = 0; g < group_repr.size(); ++g) {
-    const Value& key = keys.cells[static_cast<std::size_t>(group_repr[g]) * key_cols];
-    std::size_t outer = out.repr_of_outer.size();
-    for (std::size_t o = 0; o < out.repr_of_outer.size(); ++o) {
-      const Value& existing = keys.cells[static_cast<std::size_t>(out.repr_of_outer[o]) * key_cols];
-      if (group_cell_equal(existing, key)) {
-        outer = o;
-        break;
-      }
-    }
-    if (outer == out.repr_of_outer.size()) {
+    key.clear();
+    append_cell_group_key(&key, keys.cells[static_cast<std::size_t>(group_repr[g]) * key_cols], group_repr[g]);
+    const auto [it, inserted] = outer_index.try_emplace(key, out.repr_of_outer.size());
+    const std::size_t outer = it->second;
+    if (inserted) {
       out.repr_of_outer.push_back(group_repr[g]);
       out.rows_of_outer.emplace_back();
     }
@@ -107,6 +150,29 @@ OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std
     out.rows_of_outer[outer].insert(out.rows_of_outer[outer].end(), group_rows[g].begin(), group_rows[g].end());
   }
   return out;
+}
+
+void order_outer_groups(const OuterGrouping& hierarchy, const std::vector<std::size_t>& order,
+                        std::vector<std::size_t>* outer_order, std::vector<std::vector<std::size_t>>* groups_of_outer) {
+  const std::size_t outer_count = hierarchy.repr_of_outer.size();
+  groups_of_outer->assign(outer_count, {});
+  std::vector<bool> outer_seen(outer_count, false);
+  for (const std::size_t g : order) {
+    const std::size_t outer = hierarchy.outer_of_group[g];
+    if (!outer_seen[outer]) {
+      outer_seen[outer] = true;
+      outer_order->push_back(outer);
+    }
+    (*groups_of_outer)[outer].push_back(g);
+  }
+}
+
+bool has_outer_subtotals(int depth, std::uint32_t levels) {
+  return (depth == 2 || depth == -2) && levels >= 2U;
+}
+
+std::string_view total_label(const EvalContext& ctx, bool with_subtotals) {
+  return with_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx);
 }
 
 bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
@@ -118,6 +184,7 @@ bool resolve_aggregator(const parser::AstNode& arg, Arena& arena, const Function
   out->fn = resolve_callable(arg, arity, arena, registry, ctx, out_err);
   out->arity = arity;
   out->all_by_column.clear();
+  out->all_ast_by_column.clear();
   return out->fn != nullptr;
 }
 
@@ -128,11 +195,13 @@ bool bind_aggregator_totals(const ArrayValue& values, const std::vector<std::uin
     return true;
   }
   out->all_by_column.assign(values.cols, nullptr);
+  out->all_ast_by_column.assign(values.cols, nullptr);
   for (std::uint32_t c = 0; c < values.cols; ++c) {
     out->all_by_column[c] = build_group_slice(values, c, all_rows, arena);
     if (out->all_by_column[c] == nullptr) {
       return false;
     }
+    out->all_ast_by_column[c] = array_literal_ast(out->all_by_column[c], arena);
   }
   return true;
 }
@@ -417,49 +486,7 @@ std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
   std::string out;
   out.reserve(static_cast<std::size_t>(keys.cols) * 12U);
   for (std::uint32_t c = 0; c < keys.cols; ++c) {
-    const Value& v = keys.cells[static_cast<std::size_t>(row) * keys.cols + c];
-    out.push_back(static_cast<char>(v.kind()));
-    switch (v.kind()) {
-      case ValueKind::Blank:
-        break;
-      case ValueKind::Number: {
-        double number = v.as_number();
-        if (std::isnan(number)) {
-          // NaN never compares equal, including to itself.
-          out.append("row");
-          out.append(std::to_string(row));
-          break;
-        }
-        number = number == 0.0 ? 0.0 : number;
-        std::uint64_t bits = 0;
-        static_assert(sizeof(bits) == sizeof(number));
-        std::memcpy(&bits, &number, sizeof(bits));
-        out.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
-        break;
-      }
-      case ValueKind::Bool:
-        out.push_back(v.as_boolean() ? '\x01' : '\x00');
-        break;
-      case ValueKind::Error:
-        out.append(std::to_string(static_cast<std::uint16_t>(v.as_error())));
-        out.push_back('\0');
-        break;
-      case ValueKind::Text: {
-        assert(eval_profile_scope_active());
-        const std::string key = collation_key(v.as_text(), current_eval_profile(), CollationStrength::kDynamic);
-        out.append(std::to_string(key.size()));
-        out.push_back(':');
-        out.append(key);
-        break;
-      }
-      default:
-        // Array / Ref / Lambda are intentionally never equal in
-        // group_cell_equal, so each row must form its own group.
-        out.append("row");
-        out.append(std::to_string(row));
-        break;
-    }
-    out.push_back('\xff');
+    append_cell_group_key(&out, keys.cells[static_cast<std::size_t>(row) * keys.cols + c], row);
   }
   return out;
 }
@@ -478,14 +505,12 @@ std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
                               std::vector<std::uint32_t>* representative_rows,
                               std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group,
                               std::unordered_map<std::string, std::size_t>* index) {
-  const std::string key = normalized_group_key(keys, row);
-  const auto existing = index->find(key);
-  if (existing != index->end()) {
-    (*member_rows)[existing->second].push_back(row);
-    return existing->second;
-  }
   const std::size_t group = representative_rows->size();
-  index->emplace(key, group);
+  const auto [it, inserted] = index->try_emplace(normalized_group_key(keys, row), group);
+  if (!inserted) {
+    (*member_rows)[it->second].push_back(row);
+    return it->second;
+  }
   representative_rows->push_back(row);
   member_rows->push_back(std::vector<std::uint32_t>{row});
   is_error_group->push_back(row_key_is_error(keys, row));
@@ -513,7 +538,7 @@ Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col
                                   const FunctionRegistry& registry, const EvalContext& ctx) {
   const ArrayValue* all = agg.arity == 2U ? agg.all_by_column[value_col] : nullptr;
   const parser::AstNode* slice_ast = array_literal_ast(slice, arena);
-  const parser::AstNode* all_ast = all != nullptr ? array_literal_ast(all, arena) : nullptr;
+  const parser::AstNode* all_ast = all != nullptr ? agg.all_ast_by_column[value_col] : nullptr;
   if (slice_ast == nullptr || (agg.arity == 2U && all_ast == nullptr)) {
     return Value::error(ErrorCode::Num);
   }
@@ -556,8 +581,8 @@ std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32
   return cells;
 }
 
-void emit_row(std::vector<std::vector<Value>>* rows, const std::vector<Value>& row) {
-  rows->push_back(row);
+void emit_row(std::vector<std::vector<Value>>* rows, std::vector<Value> row) {
+  rows->push_back(std::move(row));
 }
 
 Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena) {

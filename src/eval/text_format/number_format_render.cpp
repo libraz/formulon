@@ -154,13 +154,6 @@ bool dbnum_writes_numerals(const DbnumStyle* style) noexcept {
   return style != nullptr && !style->place_units[0].empty();
 }
 
-void append_pad2(std::string& out, unsigned n) {
-  if (n < 10u) {
-    out.push_back('0');
-  }
-  out.append(std::to_string(n));
-}
-
 void append_pad2_dbnum(std::string& out, unsigned value, const DbnumStyle* style) {
   if (value < 10u) {
     append_digit_dbnum(out, style, '0');

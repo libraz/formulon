@@ -21,6 +21,7 @@
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/binary_search.h"
+#include "eval/lookups/common.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
@@ -383,6 +384,47 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
   return false;
 }
 
+// Reads the optional match_mode / search_mode arguments at `match_index` and
+// `search_index` and validates them. Wildcard (+2) and Regex (+3) matching
+// have no defined binary search, so either combined with a Binary search_mode
+// (+-2) is #VALUE!. Returns the error to surface, or nullopt on success.
+std::optional<Value> parse_xmatch_modes(const parser::AstNode& call, std::uint32_t match_index,
+                                        std::uint32_t search_index, Arena& arena, const FunctionRegistry& registry,
+                                        const EvalContext& ctx, XMatchMode* match_mode, XSearchMode* search_mode) {
+  const std::uint32_t arity = call.as_call_arity();
+  static constexpr int kMatchModes[] = {-1, 0, 1, 2, 3};
+  int match_raw = 0;
+  if (arity > match_index && !is_omitted_arg(call.as_call_arg(match_index))) {
+    const Value mm_val = eval_node(call.as_call_arg(match_index), arena, registry, ctx);
+    if (mm_val.is_error()) {
+      return mm_val;
+    }
+    if (!coerce_mode_int(mm_val, kMatchModes, sizeof(kMatchModes) / sizeof(kMatchModes[0]), &match_raw)) {
+      return Value::error(ErrorCode::Value);
+    }
+  }
+
+  static constexpr int kSearchModes[] = {-2, -1, 1, 2};
+  int search_raw = 1;
+  if (arity > search_index && !is_omitted_arg(call.as_call_arg(search_index))) {
+    const Value sm_val = eval_node(call.as_call_arg(search_index), arena, registry, ctx);
+    if (sm_val.is_error()) {
+      return sm_val;
+    }
+    if (!coerce_mode_int(sm_val, kSearchModes, sizeof(kSearchModes) / sizeof(kSearchModes[0]), &search_raw)) {
+      return Value::error(ErrorCode::Value);
+    }
+  }
+
+  *match_mode = static_cast<XMatchMode>(match_raw);
+  *search_mode = static_cast<XSearchMode>(search_raw);
+  if ((*match_mode == XMatchMode::Wildcard || *match_mode == XMatchMode::Regex) &&
+      (*search_mode == XSearchMode::BinaryAsc || *search_mode == XSearchMode::BinaryDesc)) {
+    return Value::error(ErrorCode::Value);
+  }
+  return std::nullopt;
+}
+
 // The validated operands of an XLOOKUP call: everything but the match
 // itself and the fallback, which stay lazy. Shared by the value path and the
 // reference path so both judge argument shape and modes identically.
@@ -459,42 +501,12 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
     return ErrorCode::Value;
   }
 
-  // 5) match_mode (optional, default Exact). Validate the whitelist before
-  //    casting into the enum.
-  static constexpr int kMatchModes[] = {-1, 0, 1, 2, 3};
-  int match_raw = 0;
-  if (arity >= 5U && !is_omitted_arg(call.as_call_arg(4))) {
-    const Value mm_val = eval_node(call.as_call_arg(4), arena, registry, ctx);
-    if (mm_val.is_error()) {
-      return mm_val.as_error();
-    }
-    if (!coerce_mode_int(mm_val, kMatchModes, sizeof(kMatchModes) / sizeof(kMatchModes[0]), &match_raw)) {
-      return ErrorCode::Value;
-    }
-  }
-
-  // 6) search_mode (optional, default FirstToLast).
-  static constexpr int kSearchModes[] = {-2, -1, 1, 2};
-  int search_raw = 1;
-  if (arity >= 6U && !is_omitted_arg(call.as_call_arg(5))) {
-    const Value sm_val = eval_node(call.as_call_arg(5), arena, registry, ctx);
-    if (sm_val.is_error()) {
-      return sm_val.as_error();
-    }
-    if (!coerce_mode_int(sm_val, kSearchModes, sizeof(kSearchModes) / sizeof(kSearchModes[0]), &search_raw)) {
-      return ErrorCode::Value;
-    }
-  }
-
-  const auto match_mode = static_cast<XMatchMode>(match_raw);
-  const auto search_mode = static_cast<XSearchMode>(search_raw);
-
-  // Excel 365 rejects the Wildcard (+2) match_mode combined with either
-  // Binary search_mode (±2) as #VALUE!: binary search has no defined
-  // meaning when the pattern contains `*` / `?` metacharacters.
-  if ((match_mode == XMatchMode::Wildcard || match_mode == XMatchMode::Regex) &&
-      (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
-    return ErrorCode::Value;
+  // 5) match_mode and 6) search_mode (both optional).
+  XMatchMode match_mode = XMatchMode::Exact;
+  XSearchMode search_mode = XSearchMode::FirstToLast;
+  if (const std::optional<Value> mode_err =
+          parse_xmatch_modes(call, 4U, 5U, arena, registry, ctx, &match_mode, &search_mode)) {
+    return mode_err->as_error();
   }
 
   XlookupPlan plan;
@@ -577,25 +589,6 @@ MatchOutcome match_query(const std::vector<Value>& cells, const Value& query, XM
   return {MatchOutcomeKind::Hit, offset, Value::blank()};
 }
 
-// Spills `per_lane(query)` for every cell of an array-valued lookup_value,
-// in the query array's shape. Lanes run in row-major order.
-template <typename PerLane>
-Value map_query_lanes(const Value& lookup, Arena& arena, const PerLane& per_lane) {
-  const std::uint32_t query_rows = lookup.as_array_rows();
-  const std::uint32_t query_cols = lookup.as_array_cols();
-  const Value* query_cells = lookup.as_array_cells();
-  Value* output_cells = nullptr;
-  ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
-  if (output == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
-  for (std::size_t i = 0; i < query_count; ++i) {
-    output_cells[i] = per_lane(query_cells[i]);
-  }
-  return Value::array(output);
-}
-
 }  // namespace
 
 /// XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found],
@@ -659,9 +652,6 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   };
 
   const auto first_cell_of_slice = [&](std::size_t offset) -> Value {
-    if (slice_extent == 1U) {
-      return return_cells[offset];
-    }
     // For an array-valued lookup_value, XLOOKUP returns one scalar per query
     // lane. A vertical lookup selects the first column of the matched row;
     // a horizontal lookup selects the first row of the matched column.
@@ -686,7 +676,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
           output_value = first_cell_of_slice(match.offset);
           break;
       }
-      return output_value.promote_reference_blank_to_value_array();
+      return output_value;
     });
   }
 
@@ -707,28 +697,20 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // return_array the flat index is `off` regardless of orientation.
     return return_cells[off];
   }
-  if (horizontal_lookup) {
-    // Matched column `off`: gather every row at that column into an
-    // r_rows x 1 vertical array.
-    Value* buffer = nullptr;
-    ArrayValue* out = allocate_array_value(r_rows, 1U, arena, buffer, kMaxDerivedArrayCells);
-    if (out == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    for (std::uint32_t row = 0; row < r_rows; ++row) {
-      buffer[row] = return_cells[(static_cast<std::size_t>(row) * r_cols) + off];
-    }
-    return Value::array(out);
-  }
-  // Vertical lookup, matched row `off`: gather every column at that row
-  // into a 1 x r_cols horizontal array.
+  // Gather the matched slice with one stride: column `off` is `r_rows` cells
+  // `r_cols` apart (an r_rows x 1 array); row `off` is `r_cols` adjacent cells
+  // (a 1 x r_cols array).
+  const std::uint32_t count = horizontal_lookup ? r_rows : r_cols;
+  const std::size_t start = horizontal_lookup ? off : off * r_cols;
+  const std::size_t stride = horizontal_lookup ? r_cols : 1U;
   Value* buffer = nullptr;
-  ArrayValue* out = allocate_array_value(1U, r_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = horizontal_lookup ? allocate_array_value(count, 1U, arena, buffer, kMaxDerivedArrayCells)
+                                      : allocate_array_value(1U, count, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  for (std::uint32_t col = 0; col < r_cols; ++col) {
-    buffer[col] = return_cells[(static_cast<std::size_t>(off) * r_cols) + col];
+  for (std::uint32_t i = 0; i < count; ++i) {
+    buffer[i] = return_cells[start + i * stride];
   }
   return Value::array(out);
 }
@@ -813,39 +795,11 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::NA);
   }
 
-  static constexpr int kMatchModes[] = {-1, 0, 1, 2, 3};
-  int match_raw = 0;
-  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
-    const Value mm_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (mm_val.is_error()) {
-      return mm_val;
-    }
-    if (!coerce_mode_int(mm_val, kMatchModes, sizeof(kMatchModes) / sizeof(kMatchModes[0]), &match_raw)) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
-
-  static constexpr int kSearchModes[] = {-2, -1, 1, 2};
-  int search_raw = 1;
-  if (arity >= 4U && !is_omitted_arg(call.as_call_arg(3))) {
-    const Value sm_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
-    if (sm_val.is_error()) {
-      return sm_val;
-    }
-    if (!coerce_mode_int(sm_val, kSearchModes, sizeof(kSearchModes) / sizeof(kSearchModes[0]), &search_raw)) {
-      return Value::error(ErrorCode::Value);
-    }
-  }
-
-  const auto match_mode = static_cast<XMatchMode>(match_raw);
-  const auto search_mode = static_cast<XSearchMode>(search_raw);
-
-  // Excel 365 rejects the Wildcard (+2) match_mode combined with either
-  // Binary search_mode (±2) as #VALUE!: binary search has no defined
-  // meaning when the pattern contains `*` / `?` metacharacters.
-  if ((match_mode == XMatchMode::Wildcard || match_mode == XMatchMode::Regex) &&
-      (search_mode == XSearchMode::BinaryAsc || search_mode == XSearchMode::BinaryDesc)) {
-    return Value::error(ErrorCode::Value);
+  XMatchMode match_mode = XMatchMode::Exact;
+  XSearchMode search_mode = XSearchMode::FirstToLast;
+  if (const std::optional<Value> mode_err =
+          parse_xmatch_modes(call, 2U, 3U, arena, registry, ctx, &match_mode, &search_mode)) {
+    return *mode_err;
   }
 
   const auto match_position = [&](const Value& query) -> Value {

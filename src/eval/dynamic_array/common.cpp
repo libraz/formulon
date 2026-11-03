@@ -93,6 +93,30 @@ bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const 
   return true;
 }
 
+bool resolve_pad_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, Value& pad, Value& error_out) {
+  pad = Value::error(ErrorCode::NA);
+  if (node == nullptr) {
+    return true;
+  }
+  const Value pad_v = eval_node(*node, arena, registry, ctx);
+  if (pad_v.is_error()) {
+    error_out = pad_v;
+    return false;
+  }
+  if (pad_v.is_array()) {
+    const ArrayValue* pa = pad_v.as_array();
+    if (pa->rows == 0U || pa->cols == 0U) {
+      error_out = Value::error(ErrorCode::Value);
+      return false;
+    }
+    pad = pa->cells[0];
+  } else {
+    pad = pad_v;
+  }
+  return true;
+}
+
 ArrayValue* materialise_selected_lanes(const ArrayValue& src, const std::vector<std::uint32_t>& indices, bool by_col,
                                        Arena& arena) {
   const std::uint32_t out_rows = by_col ? src.rows : static_cast<std::uint32_t>(indices.size());
@@ -238,10 +262,6 @@ bool sort_cell_less_keyed(const Value& a, const Value& b, const std::string* key
 
 }  // namespace
 
-bool sort_cell_less_asc(const Value& a, const Value& b) {
-  return sort_cell_less_keyed(a, b, nullptr, nullptr);
-}
-
 bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
                           const std::string* text_key_b, bool descending) {
   const bool a_blank = key_a.is_blank();
@@ -255,10 +275,6 @@ bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, con
   }
   return descending ? sort_cell_less_keyed(key_b, key_a, text_key_b, text_key_a)
                     : sort_cell_less_keyed(key_a, key_b, text_key_a, text_key_b);
-}
-
-bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending) {
-  return sort_lane_less_keyed(key_a, nullptr, key_b, nullptr, descending);
 }
 
 std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelProfile profile,

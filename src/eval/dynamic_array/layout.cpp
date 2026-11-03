@@ -126,25 +126,8 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
   const std::uint32_t max_wrap_count = std::max(arr->rows, arr->cols);
   wrap_count = static_cast<std::uint32_t>(std::min(wc_d, static_cast<double>(max_wrap_count)));
 
-  pad = Value::error(ErrorCode::NA);
-  if (arity == 3U) {
-    const Value p_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (p_v.is_error()) {
-      error_out = p_v;
-      return false;
-    }
-    if (p_v.is_array()) {
-      const ArrayValue* pa = p_v.as_array();
-      if (pa->rows == 0U || pa->cols == 0U) {
-        error_out = Value::error(ErrorCode::Value);
-        return false;
-      }
-      pad = pa->cells[0];
-    } else {
-      pad = p_v;
-    }
-  }
-  return true;
+  return dynamic_array::resolve_pad_arg(arity == 3U ? &call.as_call_arg(2) : nullptr, arena, registry, ctx, pad,
+                                        error_out);
 }
 
 /// TOCOL / TOROW. Identical apart from the orientation the kept cells are

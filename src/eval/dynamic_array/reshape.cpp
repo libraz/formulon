@@ -195,21 +195,11 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Explicit empty text remains text. If `pad_with` is supplied as an array
   // (range / range literal), Excel takes the scalar at cell 0 and pads with
   // that. Errors at the argument level propagate.
-  Value pad = Value::error(ErrorCode::NA);
-  if (arity == 4U) {
-    const Value pad_v = eval_node(call.as_call_arg(3), arena, registry, ctx);
-    if (pad_v.is_error()) {
-      return pad_v;
-    }
-    if (pad_v.is_array()) {
-      const ArrayValue* pa = pad_v.as_array();
-      if (pa->rows == 0U || pa->cols == 0U) {
-        return Value::error(ErrorCode::Value);
-      }
-      pad = pa->cells[0];
-    } else {
-      pad = pad_v;
-    }
+  Value pad = Value::blank();
+  Value pad_err = Value::blank();
+  if (!dynamic_array::resolve_pad_arg(arity == 4U ? &call.as_call_arg(3) : nullptr, arena, registry, ctx, pad,
+                                      pad_err)) {
+    return pad_err;
   }
 
   Value* buffer = nullptr;
@@ -217,6 +207,10 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
+  // Generated pad cells get the direct-grid zero projection, while a source
+  // Blank copied from the input array remains untouched.
+  const Value pad_cell = pad.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
+                                        : pad.promote_reference_blank_to_value_array();
   for (std::uint32_t r = 0; r < out_rows; ++r) {
     for (std::uint32_t c = 0; c < out_cols; ++c) {
       const std::size_t dst = static_cast<std::size_t>(r) * out_cols + c;
@@ -224,10 +218,7 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
         buffer[dst] =
             array->cells[static_cast<std::size_t>(r) * array->cols + c].promote_reference_blank_to_value_array();
       } else {
-        // Generated pad cells get the direct-grid zero projection, while a
-        // source Blank copied from the input array remains untouched.
-        buffer[dst] = pad.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
-                                     : pad.promote_reference_blank_to_value_array();
+        buffer[dst] = pad_cell;
       }
     }
   }

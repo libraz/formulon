@@ -89,6 +89,21 @@ struct OuterGrouping {
 OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
                                    const std::vector<std::vector<std::uint32_t>>& group_rows);
 
+/// Orders the outer groups of `hierarchy` by their first member in `order` (a
+/// sorted list of flat-group indices) and lists each outer group's members in
+/// that same order. Overwrites `*groups_of_outer`; appends to `*outer_order`.
+void order_outer_groups(const OuterGrouping& hierarchy, const std::vector<std::size_t>& order,
+                        std::vector<std::size_t>* outer_order, std::vector<std::vector<std::size_t>>* groups_of_outer);
+
+/// True when a total-depth request of magnitude 2 has an outer level to roll
+/// up: `levels` is the key-column count of the axis. A single level keeps the
+/// +-1 layout.
+bool has_outer_subtotals(int depth, std::uint32_t levels);
+
+/// Label of the grand-total row / column; the hierarchy form when the layout
+/// also emits subtotals.
+std::string_view total_label(const EvalContext& ctx, bool with_subtotals);
+
 /// A resolved aggregator. A one-parameter aggregator receives each group's
 /// value slice; a two-parameter one (PERCENTOF's `(subset, all)` shape) also
 /// receives `all_by_column[value_col]`, every filtered row of that column.
@@ -96,6 +111,9 @@ struct Aggregator {
   const LambdaValue* fn = nullptr;
   std::uint32_t arity = 1U;
   std::vector<const ArrayValue*> all_by_column;
+  /// Array-literal AST of each `all_by_column` slice, bound alongside it; an
+  /// entry is null when the AST could not be allocated.
+  std::vector<const parser::AstNode*> all_ast_by_column;
 };
 
 /// Resolves the aggregator argument (3rd for GROUPBY, 4th for PIVOTBY)
@@ -218,7 +236,7 @@ bool group_cell_equal(const Value& a, const Value& b);
 /// equal under `group_cell_equal` receive a row-unique key.
 std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row);
 
-/// True iff every column of the row's key is an Error value. Error-keyed
+/// True iff any column of the row's key is an Error value. Error-keyed
 /// groups sort to the bottom (after all valid groups).
 bool row_key_is_error(const ArrayValue& keys, std::uint32_t row);
 
@@ -250,7 +268,7 @@ std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32
                                            ErrorCode empty_error);
 
 /// Renders one row of cells into the buffer.
-void emit_row(std::vector<std::vector<Value>>* rows, const std::vector<Value>& row);
+void emit_row(std::vector<std::vector<Value>>* rows, std::vector<Value> row);
 
 /// Materialises a rectangular output buffer into a spilled `Value::array`.
 Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena);

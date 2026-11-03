@@ -78,6 +78,11 @@ enum class Tok : std::uint8_t {
   DateMMMin,      // After disambiguation: 2-digit minute.
 };
 
+/// True for the digit placeholders `0`, `#` and `?`.
+inline bool is_digit_placeholder(Tok k) {
+  return k == Tok::DigitZero || k == Tok::DigitOpt || k == Tok::DigitPad;
+}
+
 struct Token {
   Tok kind = Tok::Literal;
   // Length hint used for date tokens to carry the run length encoded in the

@@ -175,14 +175,13 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // column alone — on top of the grand total. With a single key column the
   // outer level coincides with the groups themselves and every subtotal row
   // would just restate its group, so that shape stays on the ±1 layout.
-  const bool emit_subtotals = (total_depth == 2 || total_depth == -2) && key_cols >= 2U;
+  const bool emit_subtotals = has_outer_subtotals(total_depth, key_cols);
 
   std::vector<Value> grand_total_row;
   bool emit_grand_total = (total_depth != 0);
   if (emit_grand_total) {
     grand_total_row.assign(out_cols, placeholder_cell());
-    grand_total_row[0] =
-        Value::text(arena.intern(emit_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
+    grand_total_row[0] = Value::text(arena.intern(total_label(ctx, emit_subtotals)));
     const std::vector<Value> totals =
         aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
     for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
@@ -200,16 +199,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // The hierarchy is primary and the sort applies within it: outer groups
     // follow the sorted order of their first member, and each outer group's
     // members keep their relative order from the same sort.
-    groups_of_outer.resize(outer_count);
-    std::vector<bool> outer_seen(outer_count, false);
-    for (std::size_t g : order) {
-      const std::size_t outer = hierarchy.outer_of_group[g];
-      if (!outer_seen[outer]) {
-        outer_seen[outer] = true;
-        outer_order.push_back(outer);
-      }
-      groups_of_outer[outer].push_back(g);
-    }
+    order_outer_groups(hierarchy, order, &outer_order, &groups_of_outer);
     subtotal_rows.reserve(outer_count);
     for (std::size_t o = 0; o < outer_count; ++o) {
       std::vector<Value> row(out_cols, placeholder_cell());
@@ -250,12 +240,12 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         header[key_cols + c] = Value::text(arena.intern(value_label(ctx, c + 1U)));
       }
     }
-    emit_row(&out_rows, header);
+    emit_row(&out_rows, std::move(header));
   }
 
   // Grand total at top (negative total_depth).
   if (emit_grand_total && total_depth < 0) {
-    emit_row(&out_rows, grand_total_row);
+    emit_row(&out_rows, std::move(grand_total_row));
   }
 
   // Per-group rows in sorted order. With subtotals each outer group's rows
@@ -264,24 +254,24 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_subtotals) {
     for (std::size_t o : outer_order) {
       if (total_depth < 0) {
-        emit_row(&out_rows, subtotal_rows[o]);
+        emit_row(&out_rows, std::move(subtotal_rows[o]));
       }
       for (std::size_t g : groups_of_outer[o]) {
-        emit_row(&out_rows, agg_rows[g]);
+        emit_row(&out_rows, std::move(agg_rows[g]));
       }
       if (total_depth > 0) {
-        emit_row(&out_rows, subtotal_rows[o]);
+        emit_row(&out_rows, std::move(subtotal_rows[o]));
       }
     }
   } else {
     for (std::size_t i : order) {
-      emit_row(&out_rows, agg_rows[i]);
+      emit_row(&out_rows, std::move(agg_rows[i]));
     }
   }
 
   // Grand total at bottom (positive total_depth).
   if (emit_grand_total && total_depth > 0) {
-    emit_row(&out_rows, grand_total_row);
+    emit_row(&out_rows, std::move(grand_total_row));
   }
 
   return rows_to_array_value(out_rows, out_cols, arena);
