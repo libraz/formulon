@@ -34,13 +34,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-/// Returns true if `v` is finite, false for NaN / +-inf. Used to gate
-/// final result cells; LINEST surfaces `#NUM!` for any non-finite
-/// statistic.
-bool is_finite(double v) noexcept {
-  return !std::isnan(v) && !std::isinf(v);
-}
-
 /// Evaluates an optional scalar Boolean argument. Numbers coerce
 /// to false (zero) / true (non-zero); Booleans pass through; errors
 /// propagate via `*out_err` (returning `false`); other types -> `#VALUE!`.
@@ -326,6 +319,34 @@ void fit_least_squares(const DesignMatrix& dm, bool want_se, LinFit* out) {
   }
 }
 
+/// Writes the row-major `m x k` transpose of the `k x m` matrix `src` into `dst`.
+void transpose_into(const std::vector<double>& src, std::uint32_t m, std::uint32_t k, std::vector<double>& dst) {
+  dst.resize(static_cast<std::size_t>(m) * k);
+  for (std::uint32_t i = 0; i < m; ++i) {
+    for (std::uint32_t j = 0; j < k; ++j) {
+      dst[static_cast<std::size_t>(i) * k + j] = src[static_cast<std::size_t>(j) * m + i];
+    }
+  }
+}
+
+/// Fills the first `k + 1` cells of `cells` with the coefficient row in
+/// reverse order. The intercept slot is 0 (LINEST) or 1 (LOGEST) without a
+/// constant.
+void fill_coeff_row(const std::vector<double>& coeffs, std::uint32_t k, bool with_const, bool log_form, Value* cells) {
+  for (std::uint32_t j = 0; j < k; ++j) {
+    const double raw = coeffs[j];
+    const double v = log_form ? std::exp(raw) : raw;
+    cells[k - 1U - j] = std::isfinite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
+  }
+  if (with_const) {
+    const double raw = coeffs[k];
+    const double v = log_form ? std::exp(raw) : raw;
+    cells[k] = std::isfinite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
+  } else {
+    cells[k] = Value::number(log_form ? 1.0 : 0.0);
+  }
+}
+
 /// Builds the design matrix from a known_y array and an optional
 /// known_x array. `known_y` may be 1 x m or m x 1; the orientation
 /// determines how `known_x` is read. If `x_arr` is `nullptr`, the
@@ -373,16 +394,11 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
         // Allow x as 1 x m as a fallback (single-variable, transposed).
         if (x_arr->rows == 1U && x_arr->cols == m) {
           k = 1U;
-          x_data = x_vec;  // already length m
+          x_data = std::move(x_vec);  // already length m
         } else if (x_arr->cols == m && x_arr->rows >= 1U) {
           // x is k x m: transpose to m x k.
           k = x_arr->rows;
-          x_data.resize(static_cast<std::size_t>(m) * k);
-          for (std::uint32_t i = 0; i < m; ++i) {
-            for (std::uint32_t j = 0; j < k; ++j) {
-              x_data[static_cast<std::size_t>(i) * k + j] = x_vec[static_cast<std::size_t>(j) * m + i];
-            }
-          }
+          transpose_into(x_vec, m, k, x_data);
         } else {
           *out_err = Value::error(ErrorCode::Ref);
           return false;
@@ -390,7 +406,7 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
       } else {
         // x is m x k (the canonical column-y layout).
         k = x_arr->cols;
-        x_data = x_vec;  // already row-major m x k
+        x_data = std::move(x_vec);  // already row-major m x k
       }
     } else {
       // y is 1 x m; x should be k x m (row layout, predictors stacked).
@@ -398,11 +414,11 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
         // Allow x as m x 1 as a fallback (single-variable).
         if (x_arr->cols == 1U && x_arr->rows == m) {
           k = 1U;
-          x_data = x_vec;
+          x_data = std::move(x_vec);
         } else if (x_arr->rows == m && x_arr->cols >= 1U) {
           // x is m x k: take row-major m x k as-is.
           k = x_arr->cols;
-          x_data = x_vec;
+          x_data = std::move(x_vec);
         } else {
           *out_err = Value::error(ErrorCode::Ref);
           return false;
@@ -410,12 +426,7 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
       } else {
         // x is k x m: transpose to m x k.
         k = x_arr->rows;
-        x_data.resize(static_cast<std::size_t>(m) * k);
-        for (std::uint32_t i = 0; i < m; ++i) {
-          for (std::uint32_t j = 0; j < k; ++j) {
-            x_data[static_cast<std::size_t>(i) * k + j] = x_vec[static_cast<std::size_t>(j) * m + i];
-          }
-        }
+        transpose_into(x_vec, m, k, x_data);
       }
     }
   }
@@ -460,7 +471,7 @@ ArrayValue* build_prediction_output(const std::vector<double>& coeffs, const std
       v = exp_result ? v * std::exp(t) : v + t;
     }
     v = exp_result ? v * std::exp(a) : v + a;
-    cells.push_back(is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num));
+    cells.push_back(std::isfinite(v) ? Value::number(v) : Value::error(ErrorCode::Num));
   }
 
   const std::uint32_t out_rows = y_is_col ? n_obs : 1U;
@@ -479,18 +490,7 @@ ArrayValue* build_simple_output(const std::vector<double>& coeffs, std::uint32_t
                                 bool log_form = false) {
   const std::uint32_t out_cols = k + 1U;
   std::vector<Value> cells(out_cols, Value::blank());
-  for (std::uint32_t j = 0; j < k; ++j) {
-    const double raw = coeffs[j];
-    const double v = log_form ? std::exp(raw) : raw;
-    cells[k - 1U - j] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
-  }
-  if (with_const) {
-    const double raw = coeffs[k];
-    const double v = log_form ? std::exp(raw) : raw;
-    cells[k] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
-  } else {
-    cells[k] = Value::number(log_form ? 1.0 : 0.0);
-  }
+  fill_coeff_row(coeffs, k, with_const, log_form, cells.data());
   return array_from_values(1U, out_cols, cells.data(), cells.size(), arena);
 }
 
@@ -504,22 +504,11 @@ ArrayValue* build_stats_output(const LinFit& fit, const DesignMatrix& dm, Arena&
   const std::uint32_t out_cols = k + 1U;
   const std::uint32_t out_rows = 5U;
   std::vector<Value> cells(static_cast<std::size_t>(out_rows) * out_cols, Value::error(ErrorCode::NA));
-  const auto num_or_na = [](double v) { return is_finite(v) ? Value::number(v) : Value::error(ErrorCode::NA); };
+  const auto num_or_na = [](double v) { return std::isfinite(v) ? Value::number(v) : Value::error(ErrorCode::NA); };
 
   // Row 1: coefficients in reverse order. Intercept slot is 0 (LINEST)
   // or 1 (LOGEST) when const=false.
-  for (std::uint32_t j = 0; j < k; ++j) {
-    const double raw = coeffs[j];
-    const double v = log_form ? std::exp(raw) : raw;
-    cells[k - 1U - j] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
-  }
-  if (dm.with_const) {
-    const double raw = coeffs[k];
-    const double v = log_form ? std::exp(raw) : raw;
-    cells[k] = is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
-  } else {
-    cells[k] = Value::number(log_form ? 1.0 : 0.0);
-  }
+  fill_coeff_row(coeffs, k, dm.with_const, log_form, cells.data());
 
   // Row 2: standard errors; the intercept slot is #N/A without a constant.
   for (std::uint32_t j = 0; j < k; ++j) {
@@ -711,12 +700,7 @@ bool resolve_new_x_design(const ArrayValue& new_x, const DesignMatrix& dm, bool 
     if (new_x.rows == k) {
       // k x N -> transpose to N x k.
       n = new_x.cols;
-      features.resize(static_cast<std::size_t>(n) * k);
-      for (std::uint32_t i = 0; i < n; ++i) {
-        for (std::uint32_t j = 0; j < k; ++j) {
-          features[static_cast<std::size_t>(i) * k + j] = raw[static_cast<std::size_t>(j) * n + i];
-        }
-      }
+      transpose_into(raw, n, k, features);
     } else if (k == 1U && new_x.cols == 1U && new_x.rows >= 1U) {
       // Single-variable fallback: N x 1 column works as 1 x N row.
       n = new_x.rows;
@@ -783,8 +767,7 @@ Value eval_prediction(const parser::AstNode& call, Arena& arena, const FunctionR
   std::uint32_t n_obs = 0;
   if (new_x_arr == nullptr) {
     n_obs = dm.m;
-    pred_design = dm.data;  // m x p row-major; intercept column already
-                            // present when with_const
+    pred_design = std::move(dm.data);  // m x p row-major, intercept column included when with_const
   } else {
     if (!resolve_new_x_design(*new_x_arr, dm, y_is_col, with_const, &pred_design, &n_obs, &err)) {
       return err;

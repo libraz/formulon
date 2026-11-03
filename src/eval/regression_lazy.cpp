@@ -48,19 +48,6 @@ namespace {
 
 using builtins_detail::to_finite_value;
 
-// Paired collection for the regression family. Excel accepts a row-vs-column
-// pairing here (e.g. A1:A3 against `{1,2,3}`) as long as the total cell counts
-// match, so the transpose is permitted; the hypothesis family is stricter.
-//
-// The arguments stay in source order — `pairs.first` therefore carries the
-// leading argument, which for SLOPE / INTERCEPT / RSQ / STEYX is the known-y
-// series and for the LINEST-style drivers is known-x.
-std::variant<Value, NumericPairs> collect_regression_pairs(const parser::AstNode& lead_arg,
-                                                           const parser::AstNode& trail_arg, Arena& arena,
-                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
-  return collect_numeric_pairs(lead_arg, trail_arg, arena, registry, ctx, /*allow_transpose=*/true);
-}
-
 // Mean and the three sums-of-deviations the regression functions need:
 //   sum_xx = Σ (x_i - mean_x)^2
 //   sum_yy = Σ (y_i - mean_y)^2
@@ -111,7 +98,9 @@ std::variant<Value, NumericPairs> prepare_pairs(const parser::AstNode& call, Are
   if (call.as_call_arity() != 2U) {
     return Value{Value::error(ErrorCode::Value)};
   }
-  return collect_regression_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx);
+  // Excel accepts a row-vs-column pairing here as long as the cell counts match.
+  return collect_numeric_pairs(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx,
+                               /*allow_transpose=*/true);
 }
 
 // Computes slope / intercept together since INTERCEPT is just
@@ -345,7 +334,8 @@ Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const
     }
   }
 
-  const auto prepared = collect_regression_pairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx);
+  const auto prepared = collect_numeric_pairs(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx,
+                                              /*allow_transpose=*/true);
   double slope = 0.0;
   double intercept = 0.0;
   Value err = Value::blank();
@@ -433,17 +423,10 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
       continue;
     }
     const double x = v.as_number();
-    bool placed = false;
-    for (std::size_t i = 0; i < n_bins; ++i) {
-      if (x <= bins[i]) {
-        counts[i] += 1U;
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) {
-      counts[n_bins] += 1U;
-    }
+    // First bin with x <= bin; a NaN or past-the-end value takes the trailing slot.
+    const std::size_t slot =
+        std::isnan(x) ? n_bins : static_cast<std::size_t>(std::lower_bound(bins.begin(), bins.end(), x) - bins.begin());
+    counts[slot] += 1U;
   }
 
   // Materialise as a column ArrayValue. With zero numeric bins, this is

@@ -69,10 +69,11 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_recalc_parallel: wb is NULL");
   }
-  if (thread_count > 8U) {
+  if (thread_count > formulon::eval::kMaxSchedulerThreads) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_recalc_parallel: thread_count must be 0..8",
-                             "thread_count=" + std::to_string(thread_count) + " max=8");
+                             "thread_count=" + std::to_string(thread_count) +
+                                 " max=" + std::to_string(formulon::eval::kMaxSchedulerThreads));
   }
 
   formulon::eval::SchedulerConfig config;

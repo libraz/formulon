@@ -610,41 +610,12 @@ bool is_octal_byte(char c) noexcept {
   return c >= '0' && c <= '7';
 }
 
-int hex_value(char c) noexcept {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
-  }
-  if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  }
-  if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  }
-  return -1;
-}
-
 // Appends the UTF-8 encoding of `cp`; false for a surrogate or a value past
 // U+10FFFF.
 bool append_code_point(std::string& out, std::uint32_t cp) {
-  if (cp > 0x10FFFFU || (cp >= 0xD800U && cp <= 0xDFFFU)) {
-    return false;
-  }
-  if (cp < 0x80U) {
-    out.push_back(static_cast<char>(cp));
-  } else if (cp < 0x800U) {
-    out.push_back(static_cast<char>(0xC0U | (cp >> 6)));
-    out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-  } else if (cp < 0x10000U) {
-    out.push_back(static_cast<char>(0xE0U | (cp >> 12)));
-    out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
-    out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-  } else {
-    out.push_back(static_cast<char>(0xF0U | (cp >> 18)));
-    out.push_back(static_cast<char>(0x80U | ((cp >> 12) & 0x3FU)));
-    out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
-    out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-  }
-  return true;
+  const std::string encoded = encode_utf8_codepoint(cp);
+  out += encoded;
+  return !encoded.empty();
 }
 
 // Reads `[0-9]{1,max_digits}` at `i`, advancing it.
@@ -826,8 +797,8 @@ ReplToken parse_backslash(std::string_view r, std::size_t& i) {
       if (i < r.size() && r[i] == '{') {
         std::size_t k = i + 1U;
         std::size_t digits = 0;
-        while (k < r.size() && hex_value(r[k]) >= 0 && digits < 8U) {
-          cp = cp * 16U + static_cast<std::uint32_t>(hex_value(r[k]));
+        while (k < r.size() && strings::hex_digit_value(r[k]) >= 0 && digits < 8U) {
+          cp = cp * 16U + static_cast<std::uint32_t>(strings::hex_digit_value(r[k]));
           ++k;
           ++digits;
         }
@@ -835,8 +806,8 @@ ReplToken parse_backslash(std::string_view r, std::size_t& i) {
         i = ok ? k + 1U : i;
       } else {
         std::size_t digits = 0;
-        while (digits < 2U && i < r.size() && hex_value(r[i]) >= 0) {
-          cp = cp * 16U + static_cast<std::uint32_t>(hex_value(r[i]));
+        while (digits < 2U && i < r.size() && strings::hex_digit_value(r[i]) >= 0) {
+          cp = cp * 16U + static_cast<std::uint32_t>(strings::hex_digit_value(r[i]));
           ++i;
           ++digits;
         }

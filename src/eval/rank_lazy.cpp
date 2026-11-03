@@ -36,6 +36,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
+#include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -256,15 +257,10 @@ namespace {
 // Finds the highest index k with sorted[k] <= x. Requires a non-empty
 // `sorted` with `sorted.front() <= x`.
 std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x) {
-  std::size_t k = 0U;
-  for (std::size_t i = 0; i < sorted.size(); ++i) {
-    if (sorted[i] <= x) {
-      k = i;
-    } else {
-      break;
-    }
+  if (std::isnan(x)) {
+    return 0U;
   }
-  return k;
+  return static_cast<std::size_t>(std::upper_bound(sorted.begin(), sorted.end(), x) - sorted.begin()) - 1U;
 }
 
 // PERCENTRANK.INC / .EXC of one `x` at one `significance` over the sorted
@@ -327,19 +323,10 @@ Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, cons
   return std::isfinite(result) ? Value::number(result) : Value::error(ErrorCode::Num);
 }
 
-// Element (r, c) of `v` under 1xN / Nx1 broadcasting; a scalar supplies
-// every cell and an array too small for the cell gives #N/A.
-Value broadcast_at(const Value& v, std::uint32_t r, std::uint32_t c) {
-  if (!v.is_array()) {
-    return v;
-  }
-  const ArrayValue* a = v.as_array();
-  const std::uint32_t ri = a->rows == 1U ? 0U : r;
-  const std::uint32_t ci = a->cols == 1U ? 0U : c;
-  if (ri >= a->rows || ci >= a->cols) {
-    return Value::error(ErrorCode::NA);
-  }
-  return a->cells[static_cast<std::size_t>(ri) * a->cols + ci];
+// The broadcast cell, or #N/A where the view has no cell.
+Value cell_or_na(const ArrayView& view, std::uint32_t r, std::uint32_t c) {
+  const Value* cell = broadcast_cell(view, r, c);
+  return cell == nullptr ? Value::error(ErrorCode::NA) : *cell;
 }
 
 // Shared body of PERCENTRANK.INC / .EXC: (array, x, [significance]), with
@@ -361,14 +348,12 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   if (!x_v.is_array() && !sig_v.is_array()) {
     return percentrank_cell(sorted, x_v, sig_v, exclusive);
   }
-  std::uint32_t rows = 1U;
-  std::uint32_t cols = 1U;
-  for (const Value* v : {&x_v, &sig_v}) {
-    if (v->is_array()) {
-      rows = std::max(rows, v->as_array()->rows);
-      cols = std::max(cols, v->as_array()->cols);
-    }
-  }
+  Value x_slot = Value::blank();
+  Value sig_slot = Value::blank();
+  const ArrayView xv = as_array_view(x_v, &x_slot);
+  const ArrayView sv = as_array_view(sig_v, &sig_slot);
+  const std::uint32_t rows = std::max(xv.rows, sv.rows);
+  const std::uint32_t cols = std::max(xv.cols, sv.cols);
   Value* cells = nullptr;
   ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
   if (out == nullptr) {
@@ -377,7 +362,7 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   for (std::uint32_t r = 0; r < rows; ++r) {
     for (std::uint32_t c = 0; c < cols; ++c) {
       cells[static_cast<std::size_t>(r) * cols + c] =
-          percentrank_cell(sorted, broadcast_at(x_v, r, c), broadcast_at(sig_v, r, c), exclusive);
+          percentrank_cell(sorted, cell_or_na(xv, r, c), cell_or_na(sv, r, c), exclusive);
     }
   }
   return rows == 1U && cols == 1U ? cells[0] : Value::array(out);

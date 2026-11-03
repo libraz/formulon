@@ -47,11 +47,6 @@
 namespace formulon::eval {
 namespace {
 
-// Hard cap on auto-detected worker count. Matches the `PTHREAD_POOL_SIZE`
-// the WASM build reserves so behaviour is consistent across native and
-// browser runtimes.
-constexpr std::uint32_t kMaxAutoThreads = 8U;
-
 // Per-thread re-entrancy flag and guard live in `recalc_reentry.h` so the
 // serial `RecalcEngine::recalc` and the parallel scheduler share the same
 // flag. A nested invocation on the same thread (typically a UDF or a
@@ -343,6 +338,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         std::lock_guard<std::mutex> guard(write_mutex);
         obs.log->restore_prior_values(wb, component);
       }
+      const Value unresolved = unresolved_cycle_value(component);
       for (CellNodeId c : component) {
         if (c.sheet_id >= sheet_count) {
           continue;
@@ -354,7 +350,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         Sheet& sheet = wb.sheet(c.sheet_id);
         std::lock_guard<std::mutex> guard(write_mutex);
         SpillCommitter committer(&sheet, c.row, c.col, release_callback, release_user_data);
-        sheet.set_cell_cached_value(c.row, c.col, committer.commit(unresolved_cycle_value(component)));
+        sheet.set_cell_cached_value(c.row, c.col, committer.commit(unresolved));
       }
       return out;
     }
@@ -620,9 +616,9 @@ std::uint32_t resolve_thread_count(std::uint32_t requested) {
     if (hw == 0U) {
       return 2U;  // Fallback when the runtime cannot probe the CPU.
     }
-    return std::min<std::uint32_t>(static_cast<std::uint32_t>(hw), kMaxAutoThreads);
+    return std::min<std::uint32_t>(static_cast<std::uint32_t>(hw), kMaxSchedulerThreads);
   }
-  return std::min<std::uint32_t>(requested, kMaxAutoThreads);
+  return std::min<std::uint32_t>(requested, kMaxSchedulerThreads);
 }
 
 }  // namespace
@@ -639,9 +635,10 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   if (stats != nullptr) {
     *stats = SchedulerStats{};
   }
-  if (cfg.num_threads > kMaxAutoThreads) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "recalc_parallel thread count exceeds the scheduler limit",
-                      "thread_count=" + std::to_string(cfg.num_threads) + " max=8");
+  if (cfg.num_threads > kMaxSchedulerThreads) {
+    return make_error(
+        FormulonErrorCode::kInvalidArgument, "recalc_parallel thread count exceeds the scheduler limit",
+        "thread_count=" + std::to_string(cfg.num_threads) + " max=" + std::to_string(kMaxSchedulerThreads));
   }
 
   // Re-entrancy check. If this thread is already inside a

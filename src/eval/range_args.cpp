@@ -105,6 +105,19 @@ bool lookup_range_shaped_kind(std::string_view name, RangeShapedKind* out) {
   return false;
 }
 
+// Expands `[lhs : rhs]` into `out_cells` and records the rectangle's shape.
+bool assign_expanded(const EvalContext& ctx, const parser::Reference& lhs, const parser::Reference& rhs, Arena& arena,
+                     const FunctionRegistry& registry, std::vector<Value>* out_cells, ErrorCode* out_err_code,
+                     std::uint32_t& out_rows, std::uint32_t& out_cols) {
+  auto expanded = ctx.expand_range(lhs, rhs, arena, registry, &out_rows, &out_cols);
+  if (!expanded) {
+    *out_err_code = expanded.error();
+    return false;
+  }
+  *out_cells = std::move(expanded.value());
+  return true;
+}
+
 // Internal counterpart that still uses the legacy `bool + out_param`
 // shape so it can call (and be called by) the cluster of `expand_*_call`
 // helpers — which are not yet migrated. The public `resolve_range_arg`
@@ -117,7 +130,7 @@ bool lookup_range_shaped_kind(std::string_view name, RangeShapedKind* out) {
 // or array need that distinction to keep rejecting `=IRR(5)`.
 bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                            std::uint32_t* out_rows, std::uint32_t* out_cols, bool* out_scalar = nullptr) {
+                            std::uint32_t& out_rows, std::uint32_t& out_cols, bool* out_scalar = nullptr) {
   if (out_scalar != nullptr) {
     *out_scalar = false;
   }
@@ -133,8 +146,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     if (!expand_ref3d_cells(arg_node, arena, registry, ctx, out_cells, out_err_code)) {
       return false;
     }
-    *out_rows = static_cast<std::uint32_t>(out_cells->size());
-    *out_cols = 1U;
+    out_rows = static_cast<std::uint32_t>(out_cells->size());
+    out_cols = 1U;
     return true;
   }
   // OFFSET / CHOOSE / IF / ROW / COLUMN all need range-shaped expansion
@@ -152,18 +165,18 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     if (lookup_range_shaped_kind(arg_node.as_call_name(), &kind)) {
       switch (kind) {
         case RangeShapedKind::Offset:
-          return expand_offset_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+          return expand_offset_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
         case RangeShapedKind::Choose:
-          return expand_choose_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+          return expand_choose_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
         case RangeShapedKind::Row:
           // ROW(range) / COLUMN(range) spill in Excel 365 to a vertical /
           // horizontal array of 1-based indices. Without a `Value::Array`
           // runtime the scalar path collapses to the rectangle's first
           // row / column, so the seam here unpacks the indices directly
           // into the aggregator's range buffer.
-          return expand_row_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+          return expand_row_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
         case RangeShapedKind::Column:
-          return expand_column_call(arg_node, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols);
+          return expand_column_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
         case RangeShapedKind::If: {
           // `IF(cond, then, [else])` preserves reference-shape through the
           // picked branch in Mac Excel, so `=LET(r, IF(TRUE, A1:A3, B1:B3),
@@ -196,7 +209,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
             // path and a bare `IF(cond, a, b)` cannot answer differently for
             // one formula. The dispatcher's IF argument path resolves through this branch.
             const Value result = eval_if_array_cond_lazy(arg_node, cond, arena, registry, ctx);
-            return expand_array_result(result, out_cells, out_err_code, out_rows, out_cols);
+            return expand_array_result(result, out_cells, out_err_code, &out_rows, &out_cols);
           }
           auto coerced = coerce_to_bool(cond);
           if (!coerced) {
@@ -233,7 +246,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       return false;
     }
     return expand_resolved_rect_cells(sheet, top, left, bottom, right, arena, registry, ctx, out_cells, out_err_code,
-                                      out_rows, out_cols);
+                                      &out_rows, &out_cols);
   }
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_operand(0);
@@ -251,21 +264,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       const bool lhs_full = lhs_ref.is_full_col || lhs_ref.is_full_row;
       const bool rhs_full = rhs_ref.is_full_col || rhs_ref.is_full_row;
       if (lhs_full || rhs_full) {
-        std::uint32_t rows = 0;
-        std::uint32_t cols = 0;
-        auto expanded = ctx.expand_range(lhs_ref, rhs_ref, arena, registry, &rows, &cols);
-        if (!expanded) {
-          *out_err_code = expanded.error();
-          return false;
-        }
-        *out_cells = std::move(expanded.value());
-        if (out_rows != nullptr) {
-          *out_rows = rows;
-        }
-        if (out_cols != nullptr) {
-          *out_cols = cols;
-        }
-        return true;
+        return assign_expanded(ctx, lhs_ref, rhs_ref, arena, registry, out_cells, out_err_code, out_rows, out_cols);
       }
     } else {
       // A `:` chain of three or more endpoints, or one with a non-`Ref`
@@ -278,21 +277,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       parser::Reference chain_lhs{};
       parser::Reference chain_rhs{};
       if (declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs)) {
-        std::uint32_t rows = 0;
-        std::uint32_t cols = 0;
-        auto expanded = ctx.expand_range(chain_lhs, chain_rhs, arena, registry, &rows, &cols);
-        if (!expanded) {
-          *out_err_code = expanded.error();
-          return false;
-        }
-        *out_cells = std::move(expanded.value());
-        if (out_rows != nullptr) {
-          *out_rows = rows;
-        }
-        if (out_cols != nullptr) {
-          *out_cols = cols;
-        }
-        return true;
+        return assign_expanded(ctx, chain_lhs, chain_rhs, arena, registry, out_cells, out_err_code, out_rows, out_cols);
       }
     }
     // Endpoints may be plain Refs, reference-producing calls
@@ -332,16 +317,12 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     // wrap the unsigned subtraction below into a multi-billion shape.
     // Recompute both axes through min/max so the dimension is always
     // positive regardless of which endpoint became the union top-left.
-    if (out_rows != nullptr) {
-      const std::uint32_t r_lo = std::min(union_lhs.row, union_rhs.row);
-      const std::uint32_t r_hi = std::max(union_lhs.row, union_rhs.row);
-      *out_rows = r_hi - r_lo + 1U;
-    }
-    if (out_cols != nullptr) {
-      const std::uint32_t c_lo = std::min(union_lhs.col, union_rhs.col);
-      const std::uint32_t c_hi = std::max(union_lhs.col, union_rhs.col);
-      *out_cols = c_hi - c_lo + 1U;
-    }
+    const std::uint32_t r_lo = std::min(union_lhs.row, union_rhs.row);
+    const std::uint32_t r_hi = std::max(union_lhs.row, union_rhs.row);
+    out_rows = r_hi - r_lo + 1U;
+    const std::uint32_t c_lo = std::min(union_lhs.col, union_rhs.col);
+    const std::uint32_t c_hi = std::max(union_lhs.col, union_rhs.col);
+    out_cols = c_hi - c_lo + 1U;
     return true;
   }
   if (arg_node.kind() == parser::NodeKind::Ref) {
@@ -351,21 +332,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       // the sheet's used range so range-aware consumers (SUM / COUNTIF /
       // lookup / dynamic-array) see the populated cells. `expand_range`
       // clamps the unbounded axis and reports the concrete shape.
-      std::uint32_t rows = 0;
-      std::uint32_t cols = 0;
-      auto expanded = ctx.expand_range(ref, ref, arena, registry, &rows, &cols);
-      if (!expanded) {
-        *out_err_code = expanded.error();
-        return false;
-      }
-      *out_cells = std::move(expanded.value());
-      if (out_rows != nullptr) {
-        *out_rows = rows;
-      }
-      if (out_cols != nullptr) {
-        *out_cols = cols;
-      }
-      return true;
+      return assign_expanded(ctx, ref, ref, arena, registry, out_cells, out_err_code, out_rows, out_cols);
     }
     // Single-cell Ref: treat as a 1-element range so COUNTIF(A1, ">0") is
     // well-defined. Error / blank surface via `resolve_ref` as a Value and
@@ -373,12 +340,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     out_cells->clear();
     const Value cell = ctx.resolve_ref(ref, arena, registry);
     out_cells->push_back(cell.is_blank() ? Value::blank(BlankGridProjection::kReferenceGridZero) : cell);
-    if (out_rows != nullptr) {
-      *out_rows = 1U;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = 1U;
-    }
+    out_rows = 1U;
+    out_cols = 1U;
     return true;
   }
   if (arg_node.kind() == parser::NodeKind::SpillRef) {
@@ -420,7 +383,7 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     // The copied cells outlive the region, so the read re-homes any Text
     // payload into `arena` while the sheet lock is held.
     out_cells->clear();
-    if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, *out_cells, out_rows, out_cols)) {
+    if (!ctx.read_spill_region(*target, anchor_row, anchor_col, arena, *out_cells, &out_rows, &out_cols)) {
       *out_err_code = ErrorCode::Ref;
       return false;
     }
@@ -436,12 +399,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
         out_cells->push_back(eval_node(arg_node.as_array_element(row, col), arena, registry, ctx));
       }
     }
-    if (out_rows != nullptr) {
-      *out_rows = rows;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = cols;
-    }
+    out_rows = rows;
+    out_cols = cols;
     return true;
   }
   // Generic fallback: evaluate the expression and inspect the resulting
@@ -465,17 +424,9 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     const std::uint32_t cols = result.as_array_cols();
     const Value* src = result.as_array_cells();
     const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-    out_cells->clear();
-    out_cells->reserve(total);
-    for (std::size_t i = 0; i < total; ++i) {
-      out_cells->push_back(src[i]);
-    }
-    if (out_rows != nullptr) {
-      *out_rows = rows;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = cols;
-    }
+    out_cells->assign(src, src + total);
+    out_rows = rows;
+    out_cols = cols;
     return true;
   }
   // Scalar value (Number / Bool / Text / Blank / Lambda): treat as a 1x1
@@ -486,12 +437,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   }
   out_cells->clear();
   out_cells->push_back(result);
-  if (out_rows != nullptr) {
-    *out_rows = 1U;
-  }
-  if (out_cols != nullptr) {
-    *out_cols = 1U;
-  }
+  out_rows = 1U;
+  out_cols = 1U;
   return true;
 }
 
@@ -649,7 +596,7 @@ Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_no
                                                    const FunctionRegistry& registry, const EvalContext& ctx) {
   RangeResult result;
   ErrorCode err = ErrorCode::Value;
-  if (!resolve_range_arg_into(arg_node, arena, registry, ctx, &result.cells, &err, &result.rows, &result.cols,
+  if (!resolve_range_arg_into(arg_node, arena, registry, ctx, &result.cells, &err, result.rows, result.cols,
                               &result.from_scalar)) {
     return err;
   }

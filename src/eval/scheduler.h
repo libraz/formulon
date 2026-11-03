@@ -74,6 +74,10 @@ namespace eval {
 
 class FunctionRegistry;
 
+/// Largest accepted worker count; matches the WASM `PTHREAD_POOL_SIZE` the
+/// build reserves, so behaviour is consistent across native and browser runtimes.
+inline constexpr std::uint32_t kMaxSchedulerThreads = 8U;
+
 /// Scheduler tuning knobs. Default-constructed values pick automatic
 /// thread-count detection (capped at 8) and rely on `default_registry()`
 /// for the function dispatch table.

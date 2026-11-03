@@ -766,10 +766,7 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
       }
     }
   }
-  if (std::isnan(total) || std::isinf(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
+  return finalize_arithmetic(total);
 }
 
 Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -798,36 +795,30 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
     }
     const ArrayValue* in_arr = inner.as_array();
     const std::size_t n = static_cast<std::size_t>(in_arr->rows) * static_cast<std::size_t>(in_arr->cols);
-    std::vector<Value> out;
-    out.reserve(n);
-    for (std::size_t i = 0; i < n; ++i) {
-      out.push_back(apply_unary(target.as_unary_op(), in_arr->cells[i]));
+    Value* buf = nullptr;
+    ArrayValue* out = allocate_array_value(in_arr->rows, in_arr->cols, arena, buf, kMaxDerivedArrayCells);
+    if (out == nullptr) {
+      return Value::error(ErrorCode::Num);
     }
-    return array_value_or_num_error(make_array_value(arena, in_arr->rows, in_arr->cols, out));
+    for (std::size_t i = 0; i < n; ++i) {
+      buf[i] = apply_unary(target.as_unary_op(), in_arr->cells[i]);
+    }
+    return Value::array(out);
   }
 
   // Range-shaped AST: Ref / RangeOp / one of the reference-producing Calls.
   // `resolve_range_arg` already knows how to expand each of these into a
   // flat row-major vector + shape, so reuse it to keep the expansion path
-  // identical to the conditional-aggregator and lookup families.
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || is_range_producing_call(target)) {
+  // identical to the conditional-aggregator and lookup families. An
+  // ArrayLiteral keeps its per-cell errors instead of short-circuiting.
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || is_range_producing_call(target) ||
+      k == parser::NodeKind::ArrayLiteral) {
     auto resolved = resolve_range_arg(target, arena, registry, ctx);
     if (!resolved) {
       return Value::error(resolved.error());
     }
     auto& rr = resolved.value();
     return array_value_or_num_error(make_array_value(arena, rr.rows, rr.cols, rr.cells));
-  }
-
-  // ArrayLiteral in array context preserves per-cell errors instead of
-  // short-circuiting the whole argument.
-  if (k == parser::NodeKind::ArrayLiteral) {
-    auto resolved = resolve_range_arg(target, arena, registry, ctx);
-    if (!resolved) {
-      return Value::error(resolved.error());
-    }
-    auto& values = resolved.value();
-    return array_value_or_num_error(make_array_value(arena, values.rows, values.cols, values.cells));
   }
 
   // Scalar fallback. Evaluate normally, then wrap into a 1x1 array. Errors
@@ -841,8 +832,13 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
   if (v.is_array()) {
     return v;
   }
-  const std::vector<Value> single{v};
-  return array_value_or_num_error(make_array_value(arena, 1U, 1U, single));
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(1U, 1U, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  buf[0] = v;
+  return Value::array(out);
 }
 
 Value eval_binop_array_ctx(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

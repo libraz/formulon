@@ -207,6 +207,38 @@ Value trim_array_value(const parser::AstNode& source, const parser::AstNode& cal
   return Value::array(out);
 }
 
+// Narrows the already-resolved rectangle in place to the populated extent
+// under the call's trim modes; false with the error in `*out_err`.
+bool trim_resolved_rect(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::string_view sheet, std::uint32_t* top, std::uint32_t* left,
+                        std::uint32_t* bottom, std::uint32_t* right, ErrorCode* out_err) {
+  int trim_rows = 3;
+  int trim_cols = 3;
+  Value mode_err = Value::blank();
+  if (!read_modes(call, arena, registry, ctx, &trim_rows, &trim_cols, &mode_err)) {
+    *out_err = mode_err.as_error();
+    return false;
+  }
+  const Sheet* target = ctx.sheet_for_qualifier(sheet);
+  if (target == nullptr) {
+    *out_err = ErrorCode::Ref;
+    return false;
+  }
+  // Blankness is whether a cell holds anything, a formula included, so no
+  // cell is evaluated to find the edges: a formula inside its own range
+  // (`=COLUMNS(1:.1)` in row 1) is no circular read.
+  const std::optional<Sheet::PopulatedExtent> extent = ctx.populated_extent(*target, *top, *left, *bottom, *right);
+  if (!extent) {
+    *out_err = ErrorCode::Ref;
+    return false;
+  }
+  *top = (trim_rows & 1) != 0 ? extent->first_row : *top;
+  *bottom = (trim_rows & 2) != 0 ? extent->last_row : *bottom;
+  *left = (trim_cols & 1) != 0 ? extent->first_col : *left;
+  *right = (trim_cols & 2) != 0 ? extent->last_col : *right;
+  return true;
+}
+
 // TRIMRANGE and the trim operators as a value: a reference source is read
 // over its trimmed rectangle like any range, anything else is trimmed by value.
 Value eval_trim(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
@@ -222,8 +254,7 @@ Value eval_trim(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   if (!resolve_reference_rect(call.as_call_arg(0), arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
     return trim_array_value(call.as_call_arg(0), call, arena, registry, ctx);
   }
-  bool is_range = false;
-  if (!resolve_trim_reference(call, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+  if (!trim_resolved_rect(call, arena, registry, ctx, sheet, &top, &left, &bottom, &right, &err)) {
     return Value::error(err);
   }
   parser::Reference top_left{};
@@ -262,32 +293,15 @@ bool resolve_trim_reference(const parser::AstNode& call, Arena& arena, const Fun
                               out_err)) {
     return false;
   }
-  int trim_rows = 3;
-  int trim_cols = 3;
-  Value mode_err = Value::blank();
-  if (!read_modes(call, arena, registry, ctx, &trim_rows, &trim_cols, &mode_err)) {
-    *out_err = mode_err.as_error();
-    return false;
-  }
-  const Sheet* target = ctx.sheet_for_qualifier(sheet);
-  if (target == nullptr) {
-    *out_err = ErrorCode::Ref;
-    return false;
-  }
-  // Blankness is whether a cell holds anything, a formula included, so no
-  // cell is evaluated to find the edges: a formula inside its own range
-  // (`=COLUMNS(1:.1)` in row 1) is no circular read.
-  const std::optional<Sheet::PopulatedExtent> extent = ctx.populated_extent(*target, top, left, bottom, right);
-  if (!extent) {
-    *out_err = ErrorCode::Ref;
+  if (!trim_resolved_rect(call, arena, registry, ctx, sheet, &top, &left, &bottom, &right, out_err)) {
     return false;
   }
   *out_sheet = sheet;
-  *out_top_row = (trim_rows & 1) != 0 ? extent->first_row : top;
-  *out_bottom_row = (trim_rows & 2) != 0 ? extent->last_row : bottom;
-  *out_left_col = (trim_cols & 1) != 0 ? extent->first_col : left;
-  *out_right_col = (trim_cols & 2) != 0 ? extent->last_col : right;
-  *out_is_range = *out_top_row != *out_bottom_row || *out_left_col != *out_right_col;
+  *out_top_row = top;
+  *out_bottom_row = bottom;
+  *out_left_col = left;
+  *out_right_col = right;
+  *out_is_range = top != bottom || left != right;
   return true;
 }
 

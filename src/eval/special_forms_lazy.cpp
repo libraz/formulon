@@ -35,6 +35,11 @@ namespace formulon {
 namespace eval {
 namespace {
 
+// The broadcast cell, or #N/A where the view has no cell.
+Value cell_or_na(const Value* cell) {
+  return cell == nullptr ? Value::error(ErrorCode::NA) : *cell;
+}
+
 LogicalCoerce logical_coerce_for_host(const Value& v, const EvalContext& ctx, bool* out_bool,
                                       ErrorCode* out_err) noexcept {
   if (ctx.excel_profile().host != ExcelHost::kWin365 || !v.is_text()) {
@@ -261,7 +266,7 @@ Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Ar
         continue;
       }
       const Value* pick = b.value() ? broadcast_cell(tv, r, c) : broadcast_cell(ev, r, c);
-      buf[i] = pick == nullptr ? Value::error(ErrorCode::NA) : *pick;
+      buf[i] = cell_or_na(pick);
     }
   }
   return Value::array(out);
@@ -340,7 +345,7 @@ Value replace_array_errors(const parser::AstNode& call, const Value& primary, bo
         buf[i] = *cell;
       } else {
         const Value* pick = broadcast_cell(fv, r, c);
-        buf[i] = pick == nullptr ? Value::error(ErrorCode::NA) : *pick;
+        buf[i] = cell_or_na(pick);
       }
     }
   }
@@ -537,7 +542,7 @@ Value eval_ifs_array_cond(const parser::AstNode& call, std::uint32_t first, cons
         }
         if (lc == LogicalCoerce::HasValue && truth) {
           const Value* value_cell = broadcast_cell(arms[arm + 1U], r, c);
-          picked = value_cell == nullptr ? Value::error(ErrorCode::NA) : *value_cell;
+          picked = cell_or_na(value_cell);
           decided = true;
         }
       }
@@ -706,7 +711,7 @@ Value eval_switch_array_subject(const parser::AstNode& call, const Value& subjec
         }
         if (switch_equal(*subject_cell, *case_cell)) {
           const Value* value_cell = broadcast_cell(arms[arm + 1U], r, c);
-          picked = value_cell == nullptr ? Value::error(ErrorCode::NA) : *value_cell;
+          picked = cell_or_na(value_cell);
           decided = true;
           break;
         }
@@ -716,7 +721,7 @@ Value eval_switch_array_subject(const parser::AstNode& call, const Value& subjec
       // leaves nothing, and the `#N/A` initialiser stands.
       if (!decided && arm < arm_count) {
         const Value* default_cell = broadcast_cell(arms[arm], r, c);
-        picked = default_cell == nullptr ? Value::error(ErrorCode::NA) : *default_cell;
+        picked = cell_or_na(default_cell);
       }
       buf[i] = picked;
     }

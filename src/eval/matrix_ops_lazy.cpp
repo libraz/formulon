@@ -282,7 +282,7 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // backward substitution, accumulating `acc - a * y` for k ascending and
   // dividing by the diagonal last. A zero pivot is singular (#NUM!).
   const std::size_t un = n;
-  std::vector<double> a = m;
+  std::vector<double> a = std::move(m);
   std::vector<std::uint32_t> source_row(n);
   for (std::uint32_t r = 0; r < n; ++r) {
     source_row[r] = r;
@@ -337,13 +337,12 @@ Value eval_minverse_lazy(const parser::AstNode& call, Arena& arena, const Functi
     }
   }
 
-  std::vector<double> out = std::move(inverse);
-  for (const double v : out) {
+  for (const double v : inverse) {
     if (std::isnan(v) || std::isinf(v)) {
       return Value::error(ErrorCode::Num);
     }
   }
-  ArrayValue* arr = make_double_array(out, n, n, arena);
+  ArrayValue* arr = make_double_array(inverse, n, n, arena);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

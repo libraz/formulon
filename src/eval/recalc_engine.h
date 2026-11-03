@@ -616,6 +616,8 @@ class RecalcEngine {
   // edits can wake every owner whose shared coordinates read the edited
   // sheet, including spans reached through defined-name expansion.
   std::vector<RegisteredThreeDSpan> three_d_span_dependencies_;
+  // Owners present in `three_d_span_dependencies_`, so a rewrite skips the scan.
+  std::unordered_set<CellNodeId, CellNodeIdHash> three_d_span_owners_;
   SpillProducerIndex potential_spill_producers_;
   VolatileTracker volatiles_;
   DirtySet dirty_;

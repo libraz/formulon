@@ -309,9 +309,10 @@ Value add_workdays(double start, double days, std::uint8_t mask, const std::vect
   if (remaining < 0) {
     remaining = -remaining;
   }
+  const double max_serial = max_workday_serial(date1904);
   while (remaining > 0) {
     cur += step;
-    if (cur < 0.0 || cur > max_workday_serial(date1904)) {
+    if (cur < 0.0 || cur > max_serial) {
       return Value::error(ErrorCode::Num);
     }
     if (is_weekend_masked(cur, mask, date1904)) {

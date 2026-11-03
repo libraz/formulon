@@ -56,6 +56,22 @@ Value unwrap_1x1_array(const Value& v) {
   return v;
 }
 
+// Stores a lambda result into one output slot: an error lands verbatim, a 1x1
+// Array is anchor-unwrapped. False when the result is a multi-cell Array or a
+// lambda value, which has no single-cell slot; the caller surfaces #CALC!.
+bool store_scalar_result(const Value& res, Value* slot) {
+  if (res.is_error()) {
+    *slot = res;
+    return true;
+  }
+  const Value scalar_res = unwrap_1x1_array(res);
+  if (scalar_res.is_array() || scalar_res.is_lambda()) {
+    return false;
+  }
+  *slot = scalar_res;
+  return true;
+}
+
 // Where a helper's source argument lies on the grid when it is a reference.
 // Excel binds each callback argument taken from such a source as the cell
 // (MAP, REDUCE, SCAN) or the row / column (BYROW, BYCOL) it came from, so
@@ -248,23 +264,13 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     }
     const parser::AstNode* ast_args[1] = {slice_ast};
     const Value res = invoke_lambda_values_with_ast(lv, 1U, &slice, ast_args, arena, registry, ctx);
-    if (res.is_error()) {
-      // Each row / column is reduced independently, so an error lands in
-      // that slice's output cell only. Short-circuiting the whole call here
-      // would hide the other slices' results, which Excel still spills.
-      out_cells[i] = res;
-      continue;
-    }
-    // Mac Excel anchor-unwraps a 1x1 Array lambda result (e.g.
-    // `LAMBDA(row, row*10)` applied to a 1x1 row slice produces {10},
-    // which Excel projects to 10). Multi-cell Arrays and lambda values
-    // still surface #CALC! because BYROW / BYCOL have no slot to spill
-    // a sub-array or closure into.
-    const Value scalar_res = unwrap_1x1_array(res);
-    if (scalar_res.is_array() || scalar_res.is_lambda()) {
+    // Each row / column is reduced independently, so an error lands in that
+    // slice's output cell only. Short-circuiting the whole call would hide
+    // the other slices' results, which Excel still spills. A 1x1 Array is
+    // anchor-unwrapped; a multi-cell Array or lambda has no slot (#CALC!).
+    if (!store_scalar_result(res, &out_cells[i])) {
       return Value::error(ErrorCode::Calc);
     }
-    out_cells[i] = scalar_res;
   }
 
   return Value::array(out_arr);
@@ -399,17 +405,9 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
       }
     }
     const Value res = invoke_lambda_values_with_ast(lv, array_count, args, arg_asts, arena, registry, ctx);
-    if (res.is_error()) {
-      out_cells[idx] = res;
-      continue;
-    }
-    // Anchor-unwrap a 1x1 Array result; multi-cell Arrays / lambda values
-    // still surface #CALC!.
-    const Value scalar_res = unwrap_1x1_array(res);
-    if (scalar_res.is_array() || scalar_res.is_lambda()) {
+    if (!store_scalar_result(res, &out_cells[idx])) {
       return Value::error(ErrorCode::Calc);
     }
-    out_cells[idx] = scalar_res;
   }
 
   return Value::array(out_arr);
@@ -423,14 +421,10 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
     return err;
   }
   Value acc = fi.acc;
-  const parser::AstNode* acc_ast = fi.acc_ast;
-  const ArrayValue* in = fi.in;
-  const LambdaValue* lv = fi.lv;
-  const SourceOrigin origin = fi.origin;
 
   // An empty input is a no-op fold: REDUCE returns the seed unchanged
   // (the Mac Excel observed behaviour for `=REDUCE(0, FILTER(...empty...), ...)`).
-  const std::size_t total = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
+  const std::size_t total = static_cast<std::size_t>(fi.in->rows) * static_cast<std::size_t>(fi.in->cols);
   if (total == 0U) {
     return acc;
   }
@@ -439,14 +433,14 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   const parser::AstNode* arg_asts[2] = {nullptr, nullptr};
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
-    args[1] = in->cells[i];
+    args[1] = fi.in->cells[i];
     // Only the seed can be a reference; every later accumulator is a result.
-    arg_asts[0] = i == 0U ? acc_ast : nullptr;
-    arg_asts[1] = element_ast(origin, in, i, arena);
+    arg_asts[0] = i == 0U ? fi.acc_ast : nullptr;
+    arg_asts[1] = element_ast(fi.origin, fi.in, i, arena);
     // An errored cell reaches the lambda verbatim, matching SCAN: a body
     // that guards with IFERROR keeps folding, and one that does not leaves
     // the error in the accumulator, which is what the fold returns.
-    acc = invoke_lambda_values_with_ast(lv, 2U, args, arg_asts, arena, registry, ctx);
+    acc = invoke_lambda_values_with_ast(fi.lv, 2U, args, arg_asts, arena, registry, ctx);
   }
   return acc;
 }
@@ -459,13 +453,9 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
   Value acc = fi.acc;
-  const parser::AstNode* acc_ast = fi.acc_ast;
-  const ArrayValue* in = fi.in;
-  const LambdaValue* lv = fi.lv;
-  const SourceOrigin origin = fi.origin;
 
-  const std::uint32_t rows = in->rows;
-  const std::uint32_t cols = in->cols;
+  const std::uint32_t rows = fi.in->rows;
+  const std::uint32_t cols = fi.in->cols;
   if (rows == 0U || cols == 0U) {
     // SCAN must emit a shape-preserving result; an empty input has no
     // shape to spill into, so #CALC! mirrors BYROW / BYCOL.
@@ -483,28 +473,19 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
-    args[1] = in->cells[i];
-    arg_asts[0] = i == 0U ? acc_ast : nullptr;
-    arg_asts[1] = element_ast(origin, in, i, arena);
+    args[1] = fi.in->cells[i];
+    arg_asts[0] = i == 0U ? fi.acc_ast : nullptr;
+    arg_asts[1] = element_ast(fi.origin, fi.in, i, arena);
     // An errored cell is handed to the lambda verbatim rather than
     // short-circuited: a body that guards with IFERROR recovers, and one
     // that does not returns the error, which then rides the accumulator
     // into every later cell. Both outcomes are per-cell, not whole-call.
-    const Value res = invoke_lambda_values_with_ast(lv, 2U, args, arg_asts, arena, registry, ctx);
-    if (res.is_error()) {
-      acc = res;
-      out_cells[i] = res;
-      continue;
-    }
-    // SCAN, like BYROW / BYCOL / MAP, has a single output slot per cell;
-    // a multi-cell lambda return would require nested spilling. A 1x1
-    // Array result is anchor-unwrapped to its single cell.
-    const Value scalar_res = unwrap_1x1_array(res);
-    if (scalar_res.is_array() || scalar_res.is_lambda()) {
+    const Value res = invoke_lambda_values_with_ast(fi.lv, 2U, args, arg_asts, arena, registry, ctx);
+    // A single output slot per cell: a multi-cell lambda return would need nested spilling.
+    if (!store_scalar_result(res, &out_cells[i])) {
       return Value::error(ErrorCode::Calc);
     }
-    acc = scalar_res;
-    out_cells[i] = acc;
+    acc = out_cells[i];
   }
 
   return Value::array(out_arr);
@@ -553,17 +534,9 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
       // MAKEARRAY feeds scalar (row_index, col_index) numbers; no AST
       // hint is needed because no consumer would ever see them as a range.
       const Value res = invoke_lambda_values(lv, 2U, args, arena, registry, ctx);
-      if (res.is_error()) {
-        out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c] = res;
-        continue;
-      }
-      // Anchor-unwrap a 1x1 Array result; multi-cell Arrays / lambda
-      // values still surface #CALC!.
-      const Value scalar_res = unwrap_1x1_array(res);
-      if (scalar_res.is_array() || scalar_res.is_lambda()) {
+      if (!store_scalar_result(res, &out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c])) {
         return Value::error(ErrorCode::Calc);
       }
-      out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c] = scalar_res;
     }
   }
 

@@ -72,6 +72,14 @@ struct TextPiece {
   std::uint64_t repeat;
 };
 
+// One text cell repeated `repeat` times; the string is moved in, not copied
+// through an initializer list.
+TextPiece single_text_piece(std::string text, std::uint64_t repeat) {
+  TextPiece piece{{}, repeat};
+  piece.texts.push_back(std::move(text));
+  return piece;
+}
+
 // Appends `v`'s text projection as a single cell.
 bool push_cell(const Value& v, std::vector<TextPiece>* out, Value* out_err) {
   auto t = coerce_to_text(v);
@@ -79,7 +87,7 @@ bool push_cell(const Value& v, std::vector<TextPiece>* out, Value* out_err) {
     *out_err = Value::error(t.error());
     return false;
   }
-  out->push_back(TextPiece{{std::move(t.value())}, 1U});
+  out->push_back(single_text_piece(std::move(t.value()), 1U));
   return true;
 }
 
@@ -120,7 +128,7 @@ bool flatten_tail_array(const TailArray& ta, std::vector<TextPiece>* out, Value*
         *out_err = Value::error(t.error());
         return false;
       }
-      out->push_back(TextPiece{{std::move(t.value())}, ta.cols - ta.head});
+      out->push_back(single_text_piece(std::move(t.value()), ta.cols - ta.head));
     }
   }
   return true;
@@ -181,7 +189,7 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
   if (static_reference_shape(node, ctx, &rows, &cols)) {
     const std::uint64_t declared = static_cast<std::uint64_t>(rows) * cols;
     if (declared > n) {
-      out->push_back(TextPiece{{std::string()}, declared - n});
+      out->push_back(single_text_piece(std::string(), declared - n));
     }
   }
   return true;

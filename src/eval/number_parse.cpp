@@ -14,25 +14,12 @@
 #include "excel_locale.h"
 #include "utils/double_parse.h"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 #include "utils/utf8_length.h"
 
 namespace formulon {
 namespace eval {
 namespace {
-
-bool is_ascii_ws(unsigned char c) noexcept {
-  return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
-}
-
-std::string_view trim_ascii(std::string_view s) noexcept {
-  while (!s.empty() && is_ascii_ws(static_cast<unsigned char>(s.front()))) {
-    s.remove_prefix(1);
-  }
-  while (!s.empty() && is_ascii_ws(static_cast<unsigned char>(s.back()))) {
-    s.remove_suffix(1);
-  }
-  return s;
-}
 
 // Decodes the UTF-8 sequence at `s[i]`; a malformed byte decodes as itself.
 std::uint32_t decode_utf8(std::string_view s, std::size_t i, std::size_t* len) noexcept {
@@ -96,7 +83,7 @@ std::string_view strip_trailing_currency(std::string_view s) noexcept {
   for (const std::string_view symbol : locale_facts(current_eval_profile()).accepted_currency_suffix) {
     if (!symbol.empty() && s.size() >= symbol.size() && s.substr(s.size() - symbol.size()) == symbol) {
       s.remove_suffix(symbol.size());
-      return trim_ascii(s);
+      return strings::trim(s);
     }
   }
   return s;
@@ -191,7 +178,7 @@ bool parse_fraction(std::string_view s, int* numerator, int* denominator) noexce
 }  // namespace
 
 bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int percent_count, double* out) noexcept {
-  s = trim_ascii(s);
+  s = strings::trim(s);
   const auto skip_blanks = [&s]() {
     while (!s.empty() && s.front() == ' ') {
       s.remove_prefix(1);
@@ -230,9 +217,7 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int per
     if (after.size() != s.size()) {
       s = after;
       currency = true;
-      while (!s.empty() && is_ascii_ws(static_cast<unsigned char>(s.front()))) {
-        s.remove_prefix(1);
-      }
+      s = strings::ltrim(s);
       if (!paren && !signed_front && !take_sign() && !s.empty() && s.front() == '(') {
         paren = true;
         s.remove_prefix(1);

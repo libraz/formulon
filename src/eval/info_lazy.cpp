@@ -8,7 +8,7 @@
 //     referenced cell — an evaluated reference is just a `Value`.
 //   * ISREF branches on the AST node kind (and, for calls, on whether
 //     the call is in the reference-returning set).
-//   * SHEET / SHEETS consult `Workbook::sheet_by_name` and the bound
+//   * SHEET / SHEETS consult `Workbook::sheet_index_by_name` and the bound
 //     current-sheet pointer held on `EvalContext`.
 
 #include "eval/info_lazy.h"
@@ -421,8 +421,7 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const Sheet* current = ctx.current_sheet();
   const Workbook* wb = ctx.workbook();
 
-  // 0-arity: number of the currently-bound sheet.
-  if (arity == 0U) {
+  const auto current_sheet_number = [&]() -> Value {
     if (current == nullptr) {
       return Value::error(ErrorCode::Value);
     }
@@ -431,10 +430,20 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       return Value::number(1.0);
     }
     const std::size_t idx = find_sheet_index(*wb, *current);
-    if (idx == 0) {
-      return Value::error(ErrorCode::Value);
+    return idx == 0 ? Value::error(ErrorCode::Value) : Value::number(static_cast<double>(idx));
+  };
+  const auto named_sheet_number = [&](std::string_view name) -> Value {
+    if (wb == nullptr) {
+      return Value::error(ErrorCode::NA);
     }
-    return Value::number(static_cast<double>(idx));
+    const std::size_t idx = wb->sheet_index_by_name(name);
+    return idx == static_cast<std::size_t>(-1) ? Value::error(ErrorCode::NA)
+                                               : Value::number(static_cast<double>(idx + 1));
+  };
+
+  // 0-arity: number of the currently-bound sheet.
+  if (arity == 0U) {
+    return current_sheet_number();
   }
 
   const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
@@ -456,25 +465,10 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (have_ref_shape) {
     if (sheet_qualifier.empty()) {
       // Unqualified ref — same sheet as the host context.
-      if (current == nullptr) {
-        return Value::error(ErrorCode::Value);
-      }
-      if (wb == nullptr) {
-        return Value::number(1.0);
-      }
-      const std::size_t idx = find_sheet_index(*wb, *current);
-      return idx == 0 ? Value::error(ErrorCode::Value) : Value::number(static_cast<double>(idx));
+      return current_sheet_number();
     }
     // Qualified ref — must have a workbook to look up the qualifier.
-    if (wb == nullptr) {
-      return Value::error(ErrorCode::NA);
-    }
-    const Sheet* target = wb->sheet_by_name(sheet_qualifier);
-    if (target == nullptr) {
-      return Value::error(ErrorCode::NA);
-    }
-    const std::size_t idx = find_sheet_index(*wb, *target);
-    return idx == 0 ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(idx));
+    return named_sheet_number(sheet_qualifier);
   }
 
   // Non-reference AST: evaluate the argument. If it coerces to text,
@@ -488,15 +482,7 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (!text_e) {
     return Value::error(ErrorCode::Value);
   }
-  if (wb == nullptr) {
-    return Value::error(ErrorCode::NA);
-  }
-  const Sheet* target = wb->sheet_by_name(text_e.value());
-  if (target == nullptr) {
-    return Value::error(ErrorCode::NA);
-  }
-  const std::size_t idx = find_sheet_index(*wb, *target);
-  return idx == 0 ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(idx));
+  return named_sheet_number(text_e.value());
 }
 
 Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

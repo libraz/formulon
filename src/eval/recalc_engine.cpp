@@ -586,22 +586,12 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   // appended or renamed into existence.
   has_ever_registered_formula_ = true;
 
-  // A rewrite can change a producer's result shape. Remove its previous
-  // candidate-index membership before replacing graph/volatile metadata.
-  potential_spill_producers_.update(cell, SpillPotential::kNever);
-
-  // Drop the cell's previous outgoing edges so re-registration is a clean
-  // rewrite (the new dependency set may differ from the old one).
+  // Drop the cell's previous outgoing edges and registrations (including its
+  // spill-candidate membership, since a rewrite can change the result shape)
+  // so re-registration is a clean rewrite.
   forget_referenced_cells_locked(cell);
   graph_.clear_dependencies_of(cell);
-  remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
-  three_d_span_dependencies_.erase(
-      std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
-                     [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
-      three_d_span_dependencies_.end());
-  // Same for the volatile flag — only re-register if the new AST is still
-  // volatile.
-  volatiles_.unregister_cell(cell);
+  drop_cell_registrations_locked(cell);
 
   const ExtractedDeps deps = extract_deps(ast, cell.sheet_id, workbook);
   for (CellNodeId dep : deps.cell_deps) {
@@ -610,6 +600,7 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   }
   for (const ThreeDSheetSpanDependency span : deps.three_d_spans) {
     three_d_span_dependencies_.push_back(RegisteredThreeDSpan{cell, span});
+    three_d_span_owners_.insert(cell);
   }
   for (const CellRangeDependency& range : deps.range_deps) {
     // The watcher reads the rectangle's virtual node, which every watcher of
@@ -681,10 +672,12 @@ void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
 
 void RecalcEngine::drop_cell_registrations_locked(CellNodeId cell) {
   remove_range_nodes(graph_, range_dependencies_.erase_owner(cell));
-  three_d_span_dependencies_.erase(
-      std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
-                     [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
-      three_d_span_dependencies_.end());
+  if (three_d_span_owners_.erase(cell) != 0U) {
+    three_d_span_dependencies_.erase(
+        std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
+                       [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
+        three_d_span_dependencies_.end());
+  }
   volatiles_.unregister_cell(cell);
   potential_spill_producers_.update(cell, SpillPotential::kNever);
 }
@@ -708,6 +701,7 @@ void RecalcEngine::reset_graph_locked() {
   range_dependencies_.clear();
   referenced_cells_.clear();
   three_d_span_dependencies_.clear();
+  three_d_span_owners_.clear();
   potential_spill_producers_.clear();
   volatiles_.clear();
   dirty_.clear();
