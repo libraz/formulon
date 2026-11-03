@@ -23,22 +23,9 @@
 namespace formulon::pivot {
 namespace {
 
-// Drops the entries of `leaves` whose index is marked false in `keep`,
-// preserving survivor order. Mirrors `filter_engine.cpp`'s `keep_marked`
-// for the one `std::vector<std::size_t>` case this file needs (see
-// `surviving_row_leaves` / `surviving_col_leaves` below); kept local
-// rather than exposed from `filter_engine.h` since nothing else needs
-// the general template.
-void CompactSurvivingLeaves(std::vector<std::size_t>& leaves, const std::vector<bool>& keep) {
-  std::vector<std::size_t> kept;
-  kept.reserve(leaves.size());
-  for (std::size_t i = 0; i < leaves.size(); ++i) {
-    if (i < keep.size() && !keep[i]) {
-      continue;
-    }
-    kept.push_back(leaves[i]);
-  }
-  leaves = std::move(kept);
+// A custom subtotal's aggregation, else the data field's own.
+Aggregation AggregationFor(const std::optional<Aggregation>& subtotal, const PivotDataField& df) {
+  return subtotal.value_or(df.aggregation);
 }
 
 // Maps a subtotal's leaf set (in current, post-filter leaf-position
@@ -140,7 +127,7 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     }
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      const Aggregation aggregation = subtotal.aggregation.value_or(df.aggregation);
+      const Aggregation aggregation = AggregationFor(subtotal.aggregation, df);
       const MissingStats missing =
           subtotal.aggregation.has_value()
               ? missing_custom_subtotal_stats(table, subtotal.depth, aggregation, df.aggregation)
@@ -153,8 +140,8 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     for (std::size_t c = 0; c < subtotal.col_values.size() && c < surviving_col_leaves.size(); ++c) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_values[c].size(); ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
-        subtotal.col_values[c][df_idx] = aggregate_records_or_blank(subtotal.aggregation.value_or(df.aggregation),
-                                                                    cache, col_records[c], df.field_index, result);
+        subtotal.col_values[c][df_idx] = aggregate_records_or_blank(AggregationFor(subtotal.aggregation, df), cache,
+                                                                    col_records[c], df.field_index, result);
       }
     }
     for (std::size_t cs = 0; cs < subtotal.col_subtotal_values.size() && cs < col_subtotal_leaf_sets.size(); ++cs) {
@@ -163,8 +150,7 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.col_subtotal_values[cs].size();
            ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
-        const Aggregation aggregation =
-            col_subtotal.aggregation.has_value() ? *col_subtotal.aggregation : df.aggregation;
+        const Aggregation aggregation = AggregationFor(col_subtotal.aggregation, df);
         subtotal.col_subtotal_values[cs][df_idx] =
             aggregate_row_partials_or_blank(aggregation, cache, buckets, rows, cols, df.field_index, result);
       }
@@ -185,14 +171,14 @@ void ReaggregateTotalsAfterValueFilter(const PivotTable& table, const PivotCache
     for (std::size_t r = 0; r < subtotal.values.size() && r < surviving_row_leaves.size(); ++r) {
       for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.values[r].size(); ++df_idx) {
         const PivotDataField& df = table.data_fields()[df_idx];
-        const Aggregation aggregation = subtotal.aggregation.has_value() ? *subtotal.aggregation : df.aggregation;
+        const Aggregation aggregation = AggregationFor(subtotal.aggregation, df);
         subtotal.values[r][df_idx] =
             aggregate_records_or_blank(aggregation, cache, row_records[r], df.field_index, result);
       }
     }
     for (std::size_t df_idx = 0; df_idx < data_field_count && df_idx < subtotal.total.size(); ++df_idx) {
       const PivotDataField& df = table.data_fields()[df_idx];
-      const Aggregation aggregation = subtotal.aggregation.has_value() ? *subtotal.aggregation : df.aggregation;
+      const Aggregation aggregation = AggregationFor(subtotal.aggregation, df);
       subtotal.total[df_idx] =
           both_axes ? aggregate_row_partials_or_blank(aggregation, cache, buckets, surviving_row_leaves, cols,
                                                       df.field_index, result)
@@ -220,18 +206,6 @@ struct ValueFilterState {
   std::vector<std::size_t> surviving_col_leaves;
   bool any_applied = false;
 };
-
-// The running-total target rides in the same `value` slot the item count
-// uses, since the three flavours share one dialog field.
-double FilterTarget(const PivotFilter& f) {
-  if (const auto* as_double = std::get_if<double>(&f.value)) {
-    return *as_double;
-  }
-  if (const auto* as_int = std::get_if<int>(&f.value)) {
-    return static_cast<double>(*as_int);
-  }
-  return 0.0;
-}
 
 // `basis` selects how a top-N entry counts: `Items` uses the
 // item-count rule, the other two accumulate a running total. `top`
@@ -305,7 +279,8 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
       scores.all_blank[g] = false;
     }
   }
-  const auto keep_or = build_grouped_value_filter_keep(f, basis, FilterTarget(f), top, groups, scores, leaf_count);
+  const auto keep_or =
+      build_grouped_value_filter_keep(f, basis, filter_number_value(f), top, groups, scores, leaf_count);
   if (!keep_or) {
     return;
   }
@@ -317,11 +292,11 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
   if (row_axis) {
     prune_top_level(result.rows, keep);
     compact_leaf_axis(result, keep, LeafAxis::Row, state.row_subtotal_leaf_sets, state.col_subtotal_leaf_sets);
-    CompactSurvivingLeaves(state.surviving_row_leaves, keep);
+    keep_marked(state.surviving_row_leaves, keep);
   } else {
     prune_top_level(result.cols, keep);
     compact_leaf_axis(result, keep, LeafAxis::Col, state.row_subtotal_leaf_sets, state.col_subtotal_leaf_sets);
-    CompactSurvivingLeaves(state.surviving_col_leaves, keep);
+    keep_marked(state.surviving_col_leaves, keep);
   }
   state.any_applied = true;
 }

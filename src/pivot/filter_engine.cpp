@@ -45,19 +45,6 @@ std::string_view filter_string_value(const PivotFilter& f) {
   return {};
 }
 
-// Pulls the numeric payload of a filter when one is expected. The
-// variant carries either `int` or `double`; both coerce to double here.
-// Returns 0 for non-numeric variants (caller treats as no-op).
-double filter_number_value(const PivotFilter& f) {
-  if (const auto* d = std::get_if<double>(&f.value)) {
-    return *d;
-  }
-  if (const auto* i = std::get_if<int>(&f.value)) {
-    return static_cast<double>(*i);
-  }
-  return 0.0;
-}
-
 // Invokes `consume` with the display label for `v`.
 //
 // Rendering goes through the shared `display_string`, which is the single
@@ -75,20 +62,6 @@ bool with_display_string(const Value& v, Consume&& consume) {
   }
   const std::string rendered = display_string(v);
   return consume(std::string_view{rendered});
-}
-
-// Pulls the numeric upper-bound payload of a range filter. Returns
-// `nullopt` when `value_high` is `monostate` (i.e. caller didn't set
-// it), signalling the range is unbounded above; the calling filter
-// then no-ops.
-std::optional<double> filter_number_value_high(const PivotFilter& f) {
-  if (const auto* d = std::get_if<double>(&f.value_high)) {
-    return *d;
-  }
-  if (const auto* i = std::get_if<int>(&f.value_high)) {
-    return static_cast<double>(*i);
-  }
-  return std::nullopt;
 }
 
 // Date bounds are a stricter numeric domain than ordinary value filters:
@@ -220,22 +193,6 @@ bool caption_filter_passes(const AuthoredCaptionFilter& f, std::optional<eval::C
   return true;
 }
 
-// Drops the entries of `items` whose index is marked false in `keep`,
-// preserving the relative order of the survivors. An index past the end of
-// `keep` is kept: the mask only describes the leaves the filter scored.
-template <typename T>
-void keep_marked(std::vector<T>& items, const std::vector<bool>& keep) {
-  std::vector<T> kept;
-  kept.reserve(items.size());
-  for (std::size_t i = 0; i < items.size(); ++i) {
-    if (i < keep.size() && !keep[i]) {
-      continue;
-    }
-    kept.push_back(std::move(items[i]));
-  }
-  items = std::move(kept);
-}
-
 // Rewrites each leaf set in `leaf_sets` from the pre-filter leaf index space
 // into the surviving-leaf one, dropping pruned leaves. Returns a per-set mask
 // marking the sets that still cover at least one surviving leaf; a set that
@@ -266,6 +223,33 @@ std::vector<bool> remap_leaf_sets(std::vector<std::vector<std::size_t>>& leaf_se
 }
 
 }  // namespace
+
+// Pulls the numeric payload of a filter when one is expected. The
+// variant carries either `int` or `double`; both coerce to double here.
+// Returns 0 for non-numeric variants (caller treats as no-op).
+double filter_number_value(const PivotFilter& f) {
+  if (const auto* d = std::get_if<double>(&f.value)) {
+    return *d;
+  }
+  if (const auto* i = std::get_if<int>(&f.value)) {
+    return static_cast<double>(*i);
+  }
+  return 0.0;
+}
+
+// Pulls the numeric upper-bound payload of a range filter. Returns
+// `nullopt` when `value_high` is `monostate` (i.e. caller didn't set
+// it), signalling the range is unbounded above; the calling filter
+// then no-ops.
+std::optional<double> filter_number_value_high(const PivotFilter& f) {
+  if (const auto* d = std::get_if<double>(&f.value_high)) {
+    return *d;
+  }
+  if (const auto* i = std::get_if<int>(&f.value_high)) {
+    return static_cast<double>(*i);
+  }
+  return std::nullopt;
+}
 
 PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotCache& cache, const PivotFilterEnv& env)
     : cache_(&cache), table_(&table), date1904_(env.date1904) {

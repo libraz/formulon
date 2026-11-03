@@ -278,6 +278,30 @@ void compact_leaf_axis(PivotResult& result, const std::vector<bool>& keep, LeafA
                        std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                        std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
 
+/// Numeric payload of a filter's `value` (`int` or `double`); 0 for any other
+/// variant, which callers treat as a no-op.
+double filter_number_value(const PivotFilter& f);
+
+/// Numeric payload of a range filter's `value_high`; `nullopt` when unset, so
+/// the range is unbounded above and the filter no-ops.
+std::optional<double> filter_number_value_high(const PivotFilter& f);
+
+/// Drops the entries of `items` whose index is marked false in `keep`,
+/// preserving the relative order of the survivors. An index past the end of
+/// `keep` is kept: the mask only describes the leaves the filter scored.
+template <typename T>
+void keep_marked(std::vector<T>& items, const std::vector<bool>& keep) {
+  std::vector<T> kept;
+  kept.reserve(items.size());
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    if (i < keep.size() && !keep[i]) {
+      continue;
+    }
+    kept.push_back(std::move(items[i]));
+  }
+  items = std::move(kept);
+}
+
 }  // namespace formulon::pivot
 
 #endif  // FORMULON_PIVOT_FILTER_ENGINE_H_
