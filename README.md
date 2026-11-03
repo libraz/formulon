@@ -65,43 +65,14 @@ Loading, editing and saving workbooks are covered in [Recalculate a workbook](ht
 
 ## Switching locale profiles
 
-New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
+New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. `=LENB("日本")` gives `2` on `mac-365-en_US` and `4` on `mac-365-ja_JP`, and `=ISEVEN(2)` shows `WAHR` on `mac-365-de_DE`. Switch it per workbook and recalculate:
 
 ```js
-const wb = Module.Workbook.createDefault();
-try {
-  wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
-  wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2
-  wb.setFormula(0, 2, 0, '=ISEVEN(2)');     // A3
-
-  for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
-    wb.setExcelProfileId(id);
-    wb.recalc(); // a profile change marks formulas dirty
-    console.log(id, [0, 1, 2].map((row) => wb.getDisplayText(0, row, 0).text));
-  }
-} finally {
-  wb.delete();
-}
-// mac-365-en_US [ '2', '#VALUE!', 'TRUE' ]
-// mac-365-ja_JP [ '4', '#VALUE!', 'TRUE' ]
-// mac-365-de_DE [ '2', '1,5', 'WAHR' ]
+wb.setExcelProfileId('mac-365-ja_JP'); // Python: wb.set_excel_profile_id(...)
+wb.recalc(); // a profile change marks formulas dirty
 ```
 
-```python
-with formulon.Workbook.create_default() as wb:
-    wb.set_formula(0, 0, 0, '=LENB("日本")')
-    wb.set_formula(0, 1, 0, '=VALUE("1,5")')
-    wb.set_formula(0, 2, 0, "=ISEVEN(2)")
-
-    for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
-        wb.set_excel_profile_id(profile)
-        wb.recalc()
-        print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
-```
-
-The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. On a `mac-*` profile, text comparison, sorting, lookups and grouping follow that locale's measured Mac Excel collation; `win-*` profiles add the Windows word-sort rules measured on Windows Excel 365 ja-JP to that locale's collation. The profile is not saved into the file, so store the id your application targets and apply it again after loading.
-
-For a new workbook that matches what Excel creates in a locale, use `Workbook.createForProfile(id)` (`Workbook.create_for_profile` in Python) instead of `createDefault`: it selects the profile and also sets the body and phonetic fonts, the localized Normal style and first sheet names, and the page margins Excel uses there. Sheets added later take the first sheet's row metrics, page margins and phonetic settings.
+The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so apply it again after loading. `Workbook.createForProfile(id)` also gives a new workbook the fonts, style names and sheet names Excel uses in that locale. See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles) and [Text comparison and sorting](https://formulon.libraz.net/compatibility/text-collation).
 
 ## Non-goals
 

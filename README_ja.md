@@ -65,43 +65,14 @@ formulon recalc input.xlsx -o output.xlsx
 
 ## ロケールプロファイルの切り替え
 
-新しいワークブックの既定は `win-365-en_US` です。数式は常に英語の関数名と保存形式の区切り文字で書きます。プロファイルが変えるのは、文字列の解釈と結果の表示です。ワークブックごとに切り替えて再計算します。
+新しいワークブックの既定は `win-365-en_US` です。数式は常に英語の関数名と保存形式の区切り文字で書きます。プロファイルが変えるのは、文字列の解釈と結果の表示です。`=LENB("日本")` は `mac-365-en_US` では `2`、`mac-365-ja_JP` では `4` になり、`=ISEVEN(2)` は `mac-365-de_DE` では `WAHR` と表示されます。ワークブックごとに切り替えて再計算します。
 
 ```js
-const wb = Module.Workbook.createDefault();
-try {
-  wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
-  wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2
-  wb.setFormula(0, 2, 0, '=ISEVEN(2)');     // A3
-
-  for (const id of ['mac-365-en_US', 'mac-365-ja_JP', 'mac-365-de_DE']) {
-    wb.setExcelProfileId(id);
-    wb.recalc(); // a profile change marks formulas dirty
-    console.log(id, [0, 1, 2].map((row) => wb.getDisplayText(0, row, 0).text));
-  }
-} finally {
-  wb.delete();
-}
-// mac-365-en_US [ '2', '#VALUE!', 'TRUE' ]
-// mac-365-ja_JP [ '4', '#VALUE!', 'TRUE' ]
-// mac-365-de_DE [ '2', '1,5', 'WAHR' ]
+wb.setExcelProfileId('mac-365-ja_JP'); // Python: wb.set_excel_profile_id(...)
+wb.recalc(); // a profile change marks formulas dirty
 ```
 
-```python
-with formulon.Workbook.create_default() as wb:
-    wb.set_formula(0, 0, 0, '=LENB("日本")')
-    wb.set_formula(0, 1, 0, '=VALUE("1,5")')
-    wb.set_formula(0, 2, 0, "=ISEVEN(2)")
-
-    for profile in ("mac-365-en_US", "mac-365-ja_JP", "mac-365-de_DE"):
-        wb.set_excel_profile_id(profile)
-        wb.recalc()
-        print(profile, [wb.get_display_text(0, row, 0)[0] for row in range(3)])
-```
-
-プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。`mac-*` では、テキストの比較、並べ替え、検索、グループ化が、そのロケールの Mac Excel で測定した照合順序に従います。`win-*` では、そのロケールの照合順序に、Windows Excel 365 ja-JP で測定した Windows の単語並べ替え規則が加わります。プロファイルはファイルに保存されないため、アプリケーション側で対象の ID を保持し、読み込み後に設定し直してください。
-
-Excel がそのロケールで新規作成するのと同じブックが必要なら、`createDefault` の代わりに `Workbook.createForProfile(id)`（Python では `Workbook.create_for_profile`）を使います。プロファイルを選ぶのに加えて、本文とふりがなのフォント、ローカライズされた標準スタイル名と最初のシート名、ページ余白を、Excel がそのロケールで使う値に合わせます。後から追加したシートは、最初のシートの行の高さ、ページ余白、ふりがな設定を引き継ぎます。
+プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、読み込み後に設定し直してください。`Workbook.createForProfile(id)` を使うと、新しいブックのフォント、スタイル名、シート名も Excel がそのロケールで使うものになります。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) と [テキストの比較と並べ替え](https://formulon.libraz.net/ja/compatibility/text-collation) を参照してください。
 
 ## 対象外
 
