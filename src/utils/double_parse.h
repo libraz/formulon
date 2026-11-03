@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace formulon {
@@ -71,6 +72,11 @@ bool parse_excel_literal(std::string_view text, double* out) noexcept;
 /// for empty text or trailing bytes; the value is written even when it is
 /// out of range, so callers that need a finite result check it themselves.
 bool parse_double_exact(std::string_view text, double* out) noexcept;
+
+/// Parses `text` with `strtod`'s grammar (hexadecimal floats and leading white
+/// space included) and returns the value only when the whole text is consumed
+/// and the result is finite; empty text has no value.
+std::optional<double> parse_full_double(std::string_view text);
 
 }  // namespace formulon
 

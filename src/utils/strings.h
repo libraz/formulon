@@ -60,6 +60,11 @@ inline std::string_view rtrim_spaces(std::string_view input) noexcept {
   return last == std::string_view::npos ? std::string_view() : input.substr(0, last + 1);
 }
 
+/// Uppercase ASCII hexadecimal digit for the low nibble of `n`.
+constexpr char hex_digit_upper(unsigned n) noexcept {
+  return "0123456789ABCDEF"[n & 0x0FU];
+}
+
 /// Value of an ASCII hexadecimal digit (either case), or -1 for any other byte.
 constexpr int hex_digit_value(char c) noexcept {
   if (c >= '0' && c <= '9') {
@@ -196,8 +201,13 @@ inline bool case_insensitive_contains(std::string_view haystack, std::string_vie
     return false;
   }
   const std::size_t last_start = haystack.size() - needle.size();
+  const char first = ascii_to_lower(needle.front());
+  const std::string_view rest = needle.substr(1);
   for (std::size_t start = 0; start <= last_start; ++start) {
-    if (case_insensitive_eq(haystack.substr(start, needle.size()), needle)) {
+    if (ascii_to_lower(haystack[start]) != first) {
+      continue;
+    }
+    if (case_insensitive_eq(haystack.substr(start + 1, rest.size()), rest)) {
       return true;
     }
   }

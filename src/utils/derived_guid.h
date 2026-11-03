@@ -18,6 +18,10 @@ namespace formulon {
 /// input yields a value `is_threaded_comment_guid` accepts.
 std::string derived_guid(std::string_view source_guid, std::string_view salt);
 
+/// Replaces the value of the ` <key>="..."` pair in an escaped attribute list
+/// with `derived_guid(value, salt)`; a list without the pair is left as is.
+void rederive_attr_guid(std::string& attrs, std::string_view key, std::string_view salt);
+
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_DERIVED_GUID_H_

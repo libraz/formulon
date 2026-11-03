@@ -6,6 +6,8 @@
 #include <string>
 #include <string_view>
 
+#include "utils/strings.h"
+
 namespace formulon {
 
 namespace {
@@ -52,7 +54,6 @@ std::string derived_guid(std::string_view source_guid, std::string_view salt) {
   bytes[8] = static_cast<unsigned char>((bytes[8] & 0x3FU) | 0x80U);
 
   const bool braced = source_guid.size() >= 2U && source_guid.front() == '{' && source_guid.back() == '}';
-  constexpr char kHex[] = "0123456789ABCDEF";
   std::string out;
   out.reserve(38U);
   if (braced) {
@@ -62,13 +63,27 @@ std::string derived_guid(std::string_view source_guid, std::string_view salt) {
     if (i == 4U || i == 6U || i == 8U || i == 10U) {
       out.push_back('-');
     }
-    out.push_back(kHex[bytes[i] >> 4U]);
-    out.push_back(kHex[bytes[i] & 0x0FU]);
+    out.push_back(strings::hex_digit_upper(bytes[i] >> 4U));
+    out.push_back(strings::hex_digit_upper(bytes[i] & 0x0FU));
   }
   if (braced) {
     out.push_back('}');
   }
   return out;
+}
+
+void rederive_attr_guid(std::string& attrs, std::string_view key, std::string_view salt) {
+  const std::string needle = " " + std::string(key) + "=\"";
+  const std::size_t at = attrs.find(needle);
+  if (at == std::string::npos) {
+    return;
+  }
+  const std::size_t begin = at + needle.size();
+  const std::size_t end = attrs.find('"', begin);
+  if (end == std::string::npos) {
+    return;
+  }
+  attrs.replace(begin, end - begin, derived_guid(std::string_view(attrs).substr(begin, end - begin), salt));
 }
 
 }  // namespace formulon

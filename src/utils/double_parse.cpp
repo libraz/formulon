@@ -13,7 +13,9 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 
 #include "double-conversion/strtod.h"
 
@@ -326,6 +328,19 @@ bool parse_double_exact(std::string_view text, double* out) noexcept {
   }
   *out = parsed.value;
   return true;
+}
+
+std::optional<double> parse_full_double(std::string_view text) {
+  if (text.empty()) {
+    return std::nullopt;
+  }
+  const std::string owned(text);
+  char* end = nullptr;
+  const double value = std::strtod(owned.c_str(), &end);
+  if (end != owned.c_str() + owned.size() || !std::isfinite(value)) {
+    return std::nullopt;
+  }
+  return value;
 }
 
 }  // namespace formulon
