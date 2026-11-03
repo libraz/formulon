@@ -159,6 +159,10 @@ double sample_stddev(const std::vector<double>& values, double mean);
 /// Gathers the numeric population for `sqref` and sorts it ascending.
 ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet);
 
+/// True for a number (NaN excluded), boolean or text: the kinds DuplicateValues /
+/// UniqueValues count.
+bool duplicate_eligible(const Value& value);
+
 /// Builds a per-block count cache using the same type separation and text
 /// collation as `cf_values_equal`. Every occurrence in every sqref rectangle
 /// is counted, including overlaps.
@@ -205,22 +209,8 @@ double interpolate_interval(double low, double high, double fraction);
 std::optional<double> parse_double(std::string_view source);
 
 // ---------------------------------------------------------------------------
-// Date helpers used by `TimePeriod`.
-//
-// These mirror Excel's `WEEKDAY(_, 1)` (Sunday = 1) semantics and the
-// month-arithmetic used by the `LastMonth` / `NextMonth` buckets. They
-// live here for now; a later wave consolidates them into
-// `utils/date_time.h` (D-08).
+// Month arithmetic used by the `TimePeriod` `LastMonth` / `NextMonth` buckets.
 // ---------------------------------------------------------------------------
-
-/// Excel weekday with `WEEKDAY(date, 1)` semantics: Sunday = 1,
-/// Saturday = 7. `date1904` selects the epoch `serial_floor` is read
-/// against, matching `date_time::ymd_from_serial`; defaults to the
-/// 1900 system for callers with no workbook to consult.
-int weekday_sunday_one(double serial_floor, bool date1904 = false);
-
-/// Serial of the Sunday opening the week that contains `serial_floor`.
-double sunday_of_week(double serial_floor, bool date1904 = false);
 
 struct YearMonth {
   int year;

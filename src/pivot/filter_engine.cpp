@@ -496,14 +496,8 @@ DateWindow resolve_relative_period(RelativePeriod period, const date_time::Civil
   // out-of-range *day*, but a month of 0 would fall outside the era math it
   // is built on, so the rollover is done here instead.
   const auto add_months = [](int year, unsigned month, int delta) {
-    long long total = static_cast<long long>(year) * 12 + static_cast<long long>(month) - 1 + delta;
-    long long out_year = total / 12;
-    long long out_month = total % 12;
-    if (out_month < 0) {
-      out_month += 12;
-      --out_year;
-    }
-    return std::pair<int, unsigned>{static_cast<int>(out_year), static_cast<unsigned>(out_month) + 1U};
+    date_time::shift_year_month(year, month, delta);
+    return std::pair<int, unsigned>{year, month};
   };
   // A whole-month window, given the month it starts in and its length.
   const auto span = [&](int year, unsigned month, int months) {
@@ -521,8 +515,7 @@ DateWindow resolve_relative_period(RelativePeriod period, const date_time::Civil
   // not on a rolling seven days, so `ThisWeek` read on a Friday still
   // starts the preceding Sunday and the three windows tile exactly.
   const auto week_span = [&](int weeks) {
-    const int weekday = date_time::weekday_sun0(today, date1904);
-    const double start = today - static_cast<double>(weekday) + static_cast<double>(weeks) * 7.0;
+    const double start = date_time::sunday_of_week(today, date1904) + static_cast<double>(weeks) * 7.0;
     return DateWindow{start, start + 6.0};
   };
 

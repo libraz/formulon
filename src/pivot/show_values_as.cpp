@@ -2,8 +2,10 @@
 #include "pivot/show_values_as.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -113,35 +115,54 @@ void collect_leaf_paths(const std::vector<AxisHierarchyNode>& nodes, Path& prefi
 struct Axis {
   std::vector<Line> lines;
   std::size_t grand = 0;
+  // First non-custom line of each path; filled by `index_paths` once `lines` is complete.
+  std::map<Path, std::size_t> by_path;
+
+  void index_paths() {
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+      if (!lines[i].custom) {
+        by_path.emplace(lines[i].path, i);
+      }
+    }
+  }
 
   std::optional<std::size_t> find(const Path& path) const {
-    for (std::size_t i = 0; i < lines.size(); ++i) {
-      if (!lines[i].custom && lines[i].path == path) {
-        return i;
-      }
-    }
-    return std::nullopt;
-  }
-
-  // Lines whose path equals `p` except at depth `d`, in display order.
-  std::vector<std::size_t> siblings(const Path& p, std::size_t d) const {
-    std::vector<std::size_t> out;
-    for (std::size_t i = 0; i < lines.size(); ++i) {
-      const Line& l = lines[i];
-      if (l.custom || l.kind == Line::Kind::Grand || l.path.size() != p.size()) {
-        continue;
-      }
-      bool same = true;
-      for (std::size_t k = 0; k < p.size(); ++k) {
-        same = same && (k == d || l.path[k] == p[k]);
-      }
-      if (same) {
-        out.push_back(i);
-      }
-    }
-    return out;
+    const auto it = by_path.find(path);
+    return it == by_path.end() ? std::nullopt : std::optional<std::size_t>(it->second);
   }
 };
+
+// Groups of lines whose paths agree everywhere except at one depth, in display order.
+struct SiblingIndex {
+  static constexpr std::size_t kNone = static_cast<std::size_t>(-1);
+  std::vector<std::vector<std::size_t>> groups;
+  std::vector<std::size_t> group_of;  // per line; kNone for custom, grand and too-shallow lines
+  std::vector<std::size_t> pos_of;    // per line: position within its group
+};
+
+SiblingIndex build_sibling_index(const Axis& axis, std::size_t depth) {
+  SiblingIndex idx;
+  idx.group_of.assign(axis.lines.size(), SiblingIndex::kNone);
+  idx.pos_of.assign(axis.lines.size(), 0);
+  std::map<Path, std::size_t> group_by_key;
+  for (std::size_t i = 0; i < axis.lines.size(); ++i) {
+    const Line& l = axis.lines[i];
+    if (l.custom || l.kind == Line::Kind::Grand || l.path.size() <= depth) {
+      continue;
+    }
+    Path key = l.path;
+    key[depth].clear();
+    const auto [it, inserted] = group_by_key.emplace(std::move(key), idx.groups.size());
+    if (inserted) {
+      idx.groups.emplace_back();
+    }
+    std::vector<std::size_t>& group = idx.groups[it->second];
+    idx.group_of[i] = it->second;
+    idx.pos_of[i] = group.size();
+    group.push_back(i);
+  }
+  return idx;
+}
 
 template <typename Labels, typename Custom>
 bool build_axis(const std::vector<AxisHierarchyNode>& tree, std::size_t leaf_count, std::size_t sub_count,
@@ -163,6 +184,7 @@ bool build_axis(const std::vector<AxisHierarchyNode>& tree, std::size_t leaf_cou
   }
   axis.grand = axis.lines.size();
   axis.lines.push_back({Line::Kind::Grand, 0, Path{}, false});
+  axis.index_paths();
   return true;
 }
 
@@ -269,6 +291,7 @@ struct BaseSpec {
   BaseRef base;
   std::optional<std::uint32_t> item;
   std::optional<std::string> item_label;  // resolved label of a specific baseItem
+  SiblingIndex siblings;                  // sibling groups of the base axis at the base depth
 };
 
 // Cell on the base axis at line `li`, other axis fixed at the current cell.
@@ -304,12 +327,11 @@ Cell base_mode_cell(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_
     }
     return c.error() ? c : make_num(zero_if_blank(c).n / pv.n);
   }
-  const std::vector<std::size_t> sib = ax.siblings(p, d);
-  const auto it = std::find(sib.begin(), sib.end(), cur);
-  if (it == sib.end()) {
+  if (s.siblings.group_of[cur] == SiblingIndex::kNone) {
     return Cell{};
   }
-  const std::size_t pos = static_cast<std::size_t>(it - sib.begin());
+  const std::vector<std::size_t>& sib = s.siblings.groups[s.siblings.group_of[cur]];
+  const std::size_t pos = s.siblings.pos_of[cur];
 
   if (mode == ShowValuesAs::RunningTotalInRow || mode == ShowValuesAs::RunningTotalInCol ||
       mode == ShowValuesAs::PercentOfRunningTotal) {
@@ -363,16 +385,21 @@ Cell base_mode_cell(const Grid& g, const BaseSpec& s, std::size_t ri, std::size_
     if (!c.num()) {
       return Cell{};
     }
-    std::size_t rank = 1;
-    std::vector<double> seen;
+    // Ties share a rank: count the distinct values ahead of this one.
+    std::vector<double> distinct;
     for (const std::size_t li : sib) {
       const Cell x = base_cell(g, s, ri, ci, li);
-      if (!x.num() || std::find(seen.begin(), seen.end(), x.n) != seen.end()) {
-        continue;
+      if (x.num() && !std::isnan(x.n)) {
+        distinct.push_back(x.n);
       }
-      seen.push_back(x.n);
-      const bool before = mode == ShowValuesAs::RankAscending ? x.n < c.n : x.n > c.n;
-      rank += before ? 1U : 0U;
+    }
+    std::sort(distinct.begin(), distinct.end());
+    distinct.erase(std::unique(distinct.begin(), distinct.end()), distinct.end());
+    std::size_t rank = 1;
+    if (!std::isnan(c.n)) {
+      rank += mode == ShowValuesAs::RankAscending
+                  ? static_cast<std::size_t>(std::lower_bound(distinct.begin(), distinct.end(), c.n) - distinct.begin())
+                  : static_cast<std::size_t>(distinct.end() - std::upper_bound(distinct.begin(), distinct.end(), c.n));
     }
     return make_num(static_cast<double>(rank));
   }
@@ -555,7 +582,8 @@ static void apply_transforms(const PivotTable& table, const PivotCache& cache, P
       if (!ref.has_value()) {
         continue;
       }
-      BaseSpec spec{mode, *ref, df.show_as_base_item, std::nullopt};
+      BaseSpec spec{mode, *ref, df.show_as_base_item, std::nullopt,
+                    build_sibling_index(ref->on_row ? rows : cols, ref->depth)};
       if (!spec.item.has_value()) {
         spec.item = kShowAsBasePrev;
       }

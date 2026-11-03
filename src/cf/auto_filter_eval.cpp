@@ -246,17 +246,17 @@ struct Period {
 
 double month_start(int y, int m, bool date1904) {
   // Normalises month offsets outside 1..12 into the neighbouring years.
-  const int zero_based = (y * 12) + (m - 1);
-  const int ny = zero_based >= 0 ? zero_based / 12 : -((-zero_based + 11) / 12);
-  const int nm = zero_based - (ny * 12) + 1;
-  return date_time::serial_from_ymd(ny, static_cast<unsigned>(nm), 1U, date1904);
+  int ny = y;
+  unsigned nm = 1U;
+  date_time::shift_year_month(ny, nm, m - 1);
+  return date_time::serial_from_ymd(ny, nm, 1U, date1904);
 }
 
 std::optional<Period> relative_period(DynamicFilterType type, double today, bool date1904) {
   const date_time::YMD t = date_time::ymd_from_serial(today, date1904);
   const int y = t.y;
   const int m = static_cast<int>(t.m);
-  const double week = today - static_cast<double>(date_time::weekday_sun0(today, date1904));
+  const double week = date_time::sunday_of_week(today, date1904);
   const int quarter_month = (((m - 1) / 3) * 3) + 1;
   switch (type) {
     case DynamicFilterType::kYesterday:

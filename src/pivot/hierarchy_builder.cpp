@@ -88,7 +88,8 @@ void append_days_group_date(std::string& out, double serial, bool date1904) {
   out.append(std::to_string(ymd.d));
 }
 
-DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
+// The label is built only when `with_label`; the key and band do not depend on it.
+DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904, bool with_label) {
   using formulon::date_time::HMS;
   using formulon::date_time::hms_from_fraction;
   using formulon::date_time::YMD;
@@ -100,7 +101,8 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
   // so it cannot merge with a synthetic bucket key.
   if (!is_valid_date_serial(serial, date1904)) {
     Value raw = Value::number(serial);
-    return {raw, display_string(raw), HierarchyBand::Raw};
+    std::string label = with_label ? display_string(raw) : std::string();
+    return {raw, std::move(label), HierarchyBand::Raw};
   }
   const double serial_floor = std::floor(serial);
   const YMD ymd = ymd_from_serial(serial_floor, date1904);
@@ -111,6 +113,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
         const int era_year = ymd.y - era.year_anchor + 1;
         const double key = static_cast<double>(era.year_anchor) * 10000.0 + static_cast<double>(era_year);
+        if (!with_label) {
+          return {Value::number(key), {}};
+        }
         std::string label = era.kanji2;
         label.append(std::to_string(era_year));
         // 年
@@ -118,6 +123,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
         return {Value::number(key), std::move(label)};
       }
       const double key = static_cast<double>(ymd.y);
+      if (!with_label) {
+        return {Value::number(key), {}};
+      }
       std::string label;
       append_year(label, ymd.y);
       return {Value::number(key), std::move(label)};
@@ -125,6 +133,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
     case DateGrouping::Quarter: {
       const int quarter = (static_cast<int>(ymd.m) - 1) / 3 + 1;
       const double key = static_cast<double>(ymd.y) * 4.0 + static_cast<double>(quarter - 1);
+      if (!with_label) {
+        return {Value::number(key), {}};
+      }
       std::string label;
       append_year(label, ymd.y);
       label.append("-Q");
@@ -133,6 +144,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
     }
     case DateGrouping::Month: {
       const double key = static_cast<double>(ymd.y) * 100.0 + static_cast<double>(ymd.m);
+      if (!with_label) {
+        return {Value::number(key), {}};
+      }
       std::string label;
       if (dg.calendar == CalendarSystem::Japanese) {
         const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
@@ -155,6 +169,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
       // the calendar — Excel renders day-level buckets in the workbook
       // locale's short-date pattern, which for ja-JP and en-US alike
       // collapses to a numeric YMD.
+      if (!with_label) {
+        return {Value::number(serial_floor), {}};
+      }
       std::string label;
       append_year(label, ymd.y);
       label.push_back('-');
@@ -171,18 +188,27 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
       const double end = dg.end_serial.value_or(serial_floor);
       if (serial_floor < start) {
         // Catch-all: everything below an explicit Start narrower than the data minimum, sorted first.
+        if (!with_label) {
+          return {Value::number(-std::numeric_limits<double>::infinity()), {}, HierarchyBand::Before};
+        }
         std::string label = "<";
         append_days_group_date(label, start, date1904);
         return {Value::number(-std::numeric_limits<double>::infinity()), std::move(label), HierarchyBand::Before};
       }
       if (serial_floor > end) {
         // Mirror image: everything above an explicit End narrower than the data maximum, sorted last.
+        if (!with_label) {
+          return {Value::number(std::numeric_limits<double>::infinity()), {}, HierarchyBand::After};
+        }
         std::string label = ">";
         append_days_group_date(label, end, date1904);
         return {Value::number(std::numeric_limits<double>::infinity()), std::move(label), HierarchyBand::After};
       }
       const double bucket_index = std::floor((serial_floor - start) / interval);
       const double bucket_start = start + bucket_index * interval;
+      if (!with_label) {
+        return {Value::number(bucket_start), {}};
+      }
       const double bucket_end = std::max(bucket_start, std::min(bucket_start + interval - 1.0, end));
       std::string label;
       append_days_group_date(label, bucket_start, date1904);
@@ -192,6 +218,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
     }
     case DateGrouping::Hour: {
       const double hour_index = std::floor(serial * 24.0);
+      if (!with_label) {
+        return {Value::number(hour_index), {}};
+      }
       const HMS hms = hms_from_fraction(serial);
       std::string label;
       append_year(label, ymd.y);
@@ -205,6 +234,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
     }
     case DateGrouping::Minute: {
       const double minute_index = std::floor(serial * 1440.0);
+      if (!with_label) {
+        return {Value::number(minute_index), {}};
+      }
       const HMS hms = hms_from_fraction(serial);
       std::string label;
       append_year(label, ymd.y);
@@ -220,6 +252,9 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
     }
     case DateGrouping::Second: {
       const double second_index = std::floor(serial * static_cast<double>(date_time::kSecondsPerDay));
+      if (!with_label) {
+        return {Value::number(second_index), {}};
+      }
       const HMS hms = hms_from_fraction(serial);
       std::string label;
       append_year(label, ymd.y);
@@ -237,7 +272,8 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904) {
     }
   }
   Value raw = Value::number(serial);
-  return {raw, display_string(raw), HierarchyBand::Raw};
+  std::string label = with_label ? display_string(raw) : std::string();
+  return {raw, std::move(label), HierarchyBand::Raw};
 }
 
 /// Removes the leaves of `node`'s subtree whose position in `keep` is
@@ -294,22 +330,27 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
   for (const HierLevel& level : levels) {
     const Value raw = cell_value(cache, record, level.field_index);
     HierarchyKey key{HierarchyBand::Normal, raw};
-    std::string label_override;
-    if (level.date_group != nullptr && raw.is_number()) {
-      DateBucket bucket = bucket_date(raw.as_number(), *level.date_group, date1904);
+    const bool date_bucketed = level.date_group != nullptr && raw.is_number();
+    if (date_bucketed) {
+      DateBucket bucket = bucket_date(raw.as_number(), *level.date_group, date1904, /*with_label=*/false);
       key = {bucket.band, bucket.sort_key};
-      label_override = std::move(bucket.label);
-    } else if (raw.is_blank()) {
-      // A source cell with no value still occupies a group on the axis, so
-      // the group needs a name: the label is what the grid draws, and it is
-      // the only literal GETPIVOTDATA can address the group by, since that
-      // lookup matches labels exactly. The placeholder text itself belongs
-      // to the locale and arrives from the caller.
-      label_override.assign(blank_item_label);
     }
-    auto [it, inserted] = cursor->children.emplace(key, HierNode{});
-    if (inserted && !label_override.empty()) {
-      it->second.label_override = std::move(label_override);
+    auto [it, inserted] = cursor->children.try_emplace(key);
+    if (inserted) {
+      std::string label_override;
+      if (date_bucketed) {
+        label_override = bucket_date(raw.as_number(), *level.date_group, date1904, /*with_label=*/true).label;
+      } else if (raw.is_blank()) {
+        // A source cell with no value still occupies a group on the axis, so
+        // the group needs a name: the label is what the grid draws, and it is
+        // the only literal GETPIVOTDATA can address the group by, since that
+        // lookup matches labels exactly. The placeholder text itself belongs
+        // to the locale and arrives from the caller.
+        label_override.assign(blank_item_label);
+      }
+      if (!label_override.empty()) {
+        it->second.label_override = std::move(label_override);
+      }
     }
     cursor = &it->second;
     cursor->first_record = std::min(cursor->first_record, record_index);

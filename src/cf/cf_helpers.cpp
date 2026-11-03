@@ -383,13 +383,19 @@ ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, co
   return pop;
 }
 
+bool duplicate_eligible(const Value& value) {
+  if (value.is_number()) {
+    return !std::isnan(value.as_number());
+  }
+  return value.is_boolean() || value.is_text();
+}
+
 DuplicateValuePopulation gather_duplicate_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet,
                                                      ExcelProfile profile) {
   DuplicateValuePopulation population;
   population.profile = profile;
   for_each_sqref_value(sqref, sheet, [&](const Value& cell) {
-    if ((!cell.is_number() && !cell.is_boolean() && !cell.is_text()) ||
-        (cell.is_number() && std::isnan(cell.as_number()))) {
+    if (!duplicate_eligible(cell)) {
       return;
     }
     std::string key;
@@ -401,8 +407,7 @@ DuplicateValuePopulation gather_duplicate_population(const std::vector<CFCellRan
 }
 
 std::size_t count_matches_in_population(const Value& target, const DuplicateValuePopulation& population) {
-  if ((!target.is_number() && !target.is_boolean() && !target.is_text()) ||
-      (target.is_number() && std::isnan(target.as_number()))) {
+  if (!duplicate_eligible(target)) {
     return 0;
   }
   std::string key;
@@ -499,37 +504,14 @@ std::optional<double> parse_double(std::string_view source) {
 // Date helpers.
 // ---------------------------------------------------------------------------
 
-namespace {
-
-constexpr int kMonthsPerYear = 12;
-
-}  // namespace
-
-int weekday_sunday_one(double serial_floor, bool date1904) {
-  return date_time::weekday_sun0(serial_floor, date1904) + 1;
-}
-
-double sunday_of_week(double serial_floor, bool date1904) {
-  const int weekday = weekday_sunday_one(serial_floor, date1904);
-  return serial_floor - (weekday - 1);
-}
-
 YearMonth year_month_from_serial(double serial_floor, bool date1904) {
   const date_time::YMD ymd = date_time::ymd_from_serial(serial_floor, date1904);
   return {ymd.y, ymd.m};
 }
 
 YearMonth shift_year_month(YearMonth anchor, int delta_months) {
-  const int month_index = static_cast<int>(anchor.month) - 1 + delta_months;
-  // Floor-divide month_index by 12 so negative offsets borrow a year
-  // correctly (e.g. month_index = -1 → year - 1, month = 12).
-  int year_delta = month_index / kMonthsPerYear;
-  int normalised_index = month_index % kMonthsPerYear;
-  if (normalised_index < 0) {
-    normalised_index += kMonthsPerYear;
-    --year_delta;
-  }
-  return {anchor.year + year_delta, static_cast<unsigned>(normalised_index + 1)};
+  date_time::shift_year_month(anchor.year, anchor.month, delta_months);
+  return anchor;
 }
 
 }  // namespace formulon::cf::helpers

@@ -34,18 +34,14 @@ struct AxisLeaf {
 /// report below it is.
 constexpr std::size_t kPageHeaderCols = 2;
 
-std::string data_field_name(const PivotTable& table, std::size_t index) {
-  if (index >= table.data_fields().size()) {
-    return {};
-  }
-  return table.data_fields()[index].name;
+const std::string& data_field_name(const PivotTable& table, std::size_t index) {
+  static const std::string kNone;
+  return index < table.data_fields().size() ? table.data_fields()[index].name : kNone;
 }
 
-std::string data_field_format(const PivotTable& table, std::size_t index) {
-  if (index >= table.data_fields().size()) {
-    return {};
-  }
-  return table.data_fields()[index].number_format;
+const std::string& data_field_format(const PivotTable& table, std::size_t index) {
+  static const std::string kNone;
+  return index < table.data_fields().size() ? table.data_fields()[index].number_format : kNone;
 }
 
 // A show-as data field states its total cells itself; a blank one stays blank instead of
@@ -77,6 +73,12 @@ void append_cell(PivotCells& cells, std::uint32_t row, std::uint32_t col, Value 
   cell.field_name = std::move(field_name);
   cell.number_format = std::move(number_format);
   cells.cells.push_back(std::move(cell));
+}
+
+// A depth-0 cell of data field `df`, carrying its name and number format.
+void append_df_cell(PivotCells& cells, std::uint32_t row, std::uint32_t col, Value value, PivotCellKind kind,
+                    const PivotTable& table, std::size_t df) {
+  append_cell(cells, row, col, value, kind, 0, data_field_name(table, df), data_field_format(table, df));
 }
 
 void collect_axis_leaves_impl(const AxisHierarchyNode& node, std::vector<std::string>& path,
@@ -687,8 +689,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   // several, the Values level names them instead and the corner is blank.
   auto emit_corner = [&]() {
     if (data_field_count == 1 && row_depth > 0) {
-      append_cell(cells, top, left, text_value(cells, data_field_name(table, 0)), PivotCellKind::Header, 0,
-                  data_field_name(table, 0), data_field_format(table, 0));
+      append_df_cell(cells, top, left, text_value(cells, data_field_name(table, 0)), PivotCellKind::Header, table, 0);
     } else {
       append_cell(cells, top, left, Value::blank(), PivotCellKind::Blank, 0);
     }
@@ -885,8 +886,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         value = &result.values[entry.leaf_index][col_entry.leaf_index][df];
       }
       if (value != nullptr) {
-        append_cell(cells, row, col, reify_value(cells, *value), kind, 0, data_field_name(table, df),
-                    data_field_format(table, df));
+        append_df_cell(cells, row, col, reify_value(cells, *value), kind, table, df);
       }
     }
   }
@@ -908,8 +908,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           // column axis, which is exactly what this strip states.
           const RowSubtotal& subtotal = result.row_subtotals[entry.subtotal_index];
           const Value total = df < subtotal.values.size() ? reify_value(cells, subtotal.values[df]) : Value::blank();
-          append_cell(cells, row, col, total, PivotCellKind::RowSubtotal, 0, data_field_name(table, df),
-                      data_field_format(table, df));
+          append_df_cell(cells, row, col, total, PivotCellKind::RowSubtotal, table, df);
           continue;
         }
         // Use the evaluator's per-row-leaf re-aggregation rather than
@@ -918,13 +917,12 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         const std::size_t leaf = entry.leaf_index;
         if (leaf < result.row_leaf_totals.size() && df < result.row_leaf_totals[leaf].size() &&
             !result.row_leaf_totals[leaf][df].is_blank()) {
-          append_cell(cells, row, col, reify_value(cells, result.row_leaf_totals[leaf][df]), PivotCellKind::GrandTotal,
-                      0, data_field_name(table, df), data_field_format(table, df));
+          append_df_cell(cells, row, col, reify_value(cells, result.row_leaf_totals[leaf][df]),
+                         PivotCellKind::GrandTotal, table, df);
           continue;
         }
         if (total_is_derived(table, df)) {
-          append_cell(cells, row, col, Value::blank(), PivotCellKind::GrandTotal, 0, data_field_name(table, df),
-                      data_field_format(table, df));
+          append_df_cell(cells, row, col, Value::blank(), PivotCellKind::GrandTotal, table, df);
           continue;
         }
         // Every row of this strip states a total: a source error wins, an
@@ -953,15 +951,14 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         } else if (summable && any_number) {
           total = Value::number(sum);
         }
-        append_cell(cells, row, col, total, PivotCellKind::GrandTotal, 0, data_field_name(table, df),
-                    data_field_format(table, df));
+        append_df_cell(cells, row, col, total, PivotCellKind::GrandTotal, table, df);
       }
     }
     for (std::size_t s = 0; s < total_strip_cols; ++s) {
       const std::size_t df = values_on_cols ? s : 0;
-      append_cell(cells, total_header_row, total_left + static_cast<std::uint32_t>(s),
-                  text_value(cells, values_on_cols ? data_total_label(s) : options.grand_total_label),
-                  PivotCellKind::Header, 0, data_field_name(table, df), data_field_format(table, df));
+      append_df_cell(cells, total_header_row, total_left + static_cast<std::uint32_t>(s),
+                     text_value(cells, values_on_cols ? data_total_label(s) : options.grand_total_label),
+                     PivotCellKind::Header, table, df);
     }
   }
 
@@ -987,15 +984,15 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       // Prefer the evaluator's re-aggregated totals: summing per-row
       // aggregates is wrong for Average, Max, Min, StdDev and Var.
       if (col_depth == 0 && !col_subtotal && df < result.grand_totals.size() && !result.grand_totals[df].is_blank()) {
-        append_cell(cells, total_row, col, reify_value(cells, result.grand_totals[df]), PivotCellKind::GrandTotal, 0,
-                    data_field_name(table, df), data_field_format(table, df));
+        append_df_cell(cells, total_row, col, reify_value(cells, result.grand_totals[df]), PivotCellKind::GrandTotal,
+                       table, df);
         continue;
       }
       if (!col_subtotal && col_entry.leaf_index < result.col_leaf_totals.size() &&
           df < result.col_leaf_totals[col_entry.leaf_index].size() &&
           !result.col_leaf_totals[col_entry.leaf_index][df].is_blank()) {
-        append_cell(cells, total_row, col, reify_value(cells, result.col_leaf_totals[col_entry.leaf_index][df]),
-                    PivotCellKind::GrandTotal, 0, data_field_name(table, df), data_field_format(table, df));
+        append_df_cell(cells, total_row, col, reify_value(cells, result.col_leaf_totals[col_entry.leaf_index][df]),
+                       PivotCellKind::GrandTotal, table, df);
         continue;
       }
       const PivotCellKind kind = col_subtotal ? PivotCellKind::ColSubtotal : PivotCellKind::GrandTotal;
@@ -1003,7 +1000,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         const ColSubtotal* subtotal = col_subtotal ? &result.col_subtotals[col_entry.subtotal_index] : nullptr;
         const Value total = subtotal != nullptr && df < subtotal->total.size() ? reify_value(cells, subtotal->total[df])
                                                                                : Value::blank();
-        append_cell(cells, total_row, col, total, kind, 0, data_field_name(table, df), data_field_format(table, df));
+        append_df_cell(cells, total_row, col, total, kind, table, df);
         continue;
       }
       // Grand-total row x subtotal column: non-Sum takes the evaluator's 2-D combination.
@@ -1013,8 +1010,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
             subtotal.aggregation.has_value() ? *subtotal.aggregation : table.data_fields()[df].aggregation;
         if ((aggregation != Aggregation::Sum || result.sum_totals_as_state) && df < subtotal.total.size() &&
             !subtotal.total[df].is_blank()) {
-          append_cell(cells, total_row, col, reify_value(cells, subtotal.total[df]), kind, 0,
-                      data_field_name(table, df), data_field_format(table, df));
+          append_df_cell(cells, total_row, col, reify_value(cells, subtotal.total[df]), kind, table, df);
           continue;
         }
       }
@@ -1035,8 +1031,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           continue;
         }
         if (value->is_error()) {
-          append_cell(cells, total_row, col, reify_value(cells, *value), kind, 0, data_field_name(table, df),
-                      data_field_format(table, df));
+          append_df_cell(cells, total_row, col, reify_value(cells, *value), kind, table, df);
           numeric = false;
           break;
         }
@@ -1048,8 +1043,7 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
         }
       }
       if (numeric && any_number) {
-        append_cell(cells, total_row, col, Value::number(sum), kind, 0, data_field_name(table, df),
-                    data_field_format(table, df));
+        append_df_cell(cells, total_row, col, Value::number(sum), kind, table, df);
       }
     }
     for (std::size_t s = 0; s < total_strip_cols; ++s) {
@@ -1078,8 +1072,8 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
           v = Value::number(sum);
         }
       }
-      append_cell(cells, total_row, total_left + static_cast<std::uint32_t>(s), v, PivotCellKind::GrandTotal, 0,
-                  data_field_name(table, df), data_field_format(table, df));
+      append_df_cell(cells, total_row, total_left + static_cast<std::uint32_t>(s), v, PivotCellKind::GrandTotal, table,
+                     df);
     }
   }
 

@@ -20,6 +20,7 @@
 #include "eval/collation.h"
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
+#include "utils/date_time.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
@@ -257,15 +258,15 @@ bool match_time_period(const CFRule& rule, const Value& cell_value, const CFEval
     case TimePeriod::Last7Days:
       return cell_serial >= today - kLast7DaysSpan && cell_serial <= today;
     case TimePeriod::ThisWeek: {
-      const double sunday = helpers::sunday_of_week(today, date1904);
+      const double sunday = date_time::sunday_of_week(today, date1904);
       return cell_serial >= sunday && cell_serial <= sunday + kWeekLastDayOffset;
     }
     case TimePeriod::LastWeek: {
-      const double sunday = helpers::sunday_of_week(today, date1904);
+      const double sunday = date_time::sunday_of_week(today, date1904);
       return cell_serial >= sunday - kDaysPerWeek && cell_serial <= sunday - kPriorWeekDayOffset;
     }
     case TimePeriod::NextWeek: {
-      const double sunday = helpers::sunday_of_week(today, date1904);
+      const double sunday = date_time::sunday_of_week(today, date1904);
       return cell_serial >= sunday + kDaysPerWeek && cell_serial <= sunday + kDaysPerWeek + kWeekLastDayOffset;
     }
     case TimePeriod::ThisMonth:
@@ -288,7 +289,7 @@ bool match_duplicate_or_unique(const CFRule& rule, const Value& cell_value, cons
   if (ctx.sqref == nullptr || ctx.eval_ctx == nullptr || ctx.eval_ctx->current_sheet() == nullptr) {
     return false;
   }
-  if (!cell_value.is_number() && !cell_value.is_boolean() && !cell_value.is_text()) {
+  if (!helpers::duplicate_eligible(cell_value)) {
     return false;
   }
   const std::size_t count =
