@@ -125,18 +125,32 @@ std::vector<CommentShape> Sheet::comment_shapes() const {
   std::vector<CommentShape> shapes;
   const auto anchors = comment_anchor_set();
   shapes.reserve(anchors.size());
+  // Comments ordered by packed (row, col); equal keys keep their input order,
+  // so the lower bound of an anchor is its first comment.
+  std::vector<std::uint64_t> keys;
+  keys.reserve(comments_.size());
+  for (const CellComment& c : comments_) {
+    keys.push_back((static_cast<std::uint64_t>(c.row) << 32U) | c.col);
+  }
+  std::vector<std::uint32_t> order;
+  sorted_index_order(order, static_cast<std::uint32_t>(keys.size()),
+                     IndexLess{&keys, [](const void* context, std::uint32_t lhs, std::uint32_t rhs) {
+                                 const auto& packed = *static_cast<const std::vector<std::uint64_t>*>(context);
+                                 return packed[lhs] < packed[rhs];
+                               }});
   for (const auto& [row, col] : anchors) {
     CommentShape shape;
     shape.row = row;
     shape.col = col;
-    for (const CellComment& c : comments_) {
-      if (c.row == row && c.col == col) {
-        shape.visible = c.visible;
-        shape.has_box = c.has_box;
-        shape.box = c.box;
-        shape.xml = c.vml_shape;
-        break;
-      }
+    const std::uint64_t key = (static_cast<std::uint64_t>(row) << 32U) | col;
+    const auto at = std::lower_bound(order.begin(), order.end(), key,
+                                     [&keys](std::uint32_t index, std::uint64_t k) { return keys[index] < k; });
+    if (at != order.end() && keys[*at] == key) {
+      const CellComment& c = comments_[*at];
+      shape.visible = c.visible;
+      shape.has_box = c.has_box;
+      shape.box = c.box;
+      shape.xml = c.vml_shape;
     }
     shapes.push_back(shape);
   }

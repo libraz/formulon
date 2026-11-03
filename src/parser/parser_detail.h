@@ -71,6 +71,22 @@ inline bool IsAsciiDigit(char c) noexcept {
   return c >= '0' && c <= '9';
 }
 
+// Decodes a column-letter run (ASCII letters, either case) to a 1-based column
+// index. Returns 0 for an empty run, a non-letter, or a column past kMaxColumn.
+inline std::uint32_t DecodeColumnLetters(std::string_view letters) noexcept {
+  std::uint32_t v = 0;
+  for (const char c : letters) {
+    if (!IsAsciiLetter(c)) {
+      return 0;
+    }
+    v = v * 26U + static_cast<std::uint32_t>(strings::ascii_to_upper(c) - 'A') + 1U;
+    if (v > kMaxColumn) {
+      return 0;
+    }
+  }
+  return v;
+}
+
 // Byte length of the bare qualifier run starting at `pos` of `text`: ASCII
 // letters, digits, `.`, `_` and non-ASCII characters other than U+3000 and
 // U+FEFF. It is the shape of an unquoted local sheet qualifier and of the

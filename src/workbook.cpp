@@ -56,7 +56,7 @@
 #include "sheet_name.h"
 #include "styles.h"
 #include "table.h"
-#include "utils/a1_ref.h"
+#include "utils/a1_column.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -421,12 +421,10 @@ std::string filter_database_formula(std::string_view sheet_name, const MergeRang
   parser::append_sheet_name(sheet_name, false, out);
   out.push_back('!');
   const auto append_cell = [&out](std::uint32_t row, std::uint32_t col) {
-    const std::string a1 = a1::encode_a1(row, col);
-    const std::size_t digits = a1.find_first_of("0123456789");
     out.push_back('$');
-    out.append(a1, 0, digits);
+    a1::append_column_letters(out, col);
     out.push_back('$');
-    out.append(a1, digits, std::string::npos);
+    out.append(std::to_string(row + 1U));
   };
   append_cell(range.first_row, range.first_col);
   out.push_back(':');
@@ -434,15 +432,21 @@ std::string filter_database_formula(std::string_view sheet_name, const MergeRang
   return out;
 }
 
+/// The defined name `name' (ASCII case-insensitive) in scope `local_sheet_id`
+/// (-1 is workbook scope), or `names.end()`.
+std::vector<DefinedName>::iterator find_defined_name(std::vector<DefinedName>& names, std::string_view name,
+                                                     std::int32_t local_sheet_id) {
+  return std::find_if(names.begin(), names.end(), [name, local_sheet_id](const DefinedName& entry) {
+    return entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name);
+  });
+}
+
 }  // namespace
 
 /// Removes the `_FilterDatabase` name scoped to `sheet_index`. Returns true
 /// when one existed.
 bool erase_filter_database_name(std::vector<DefinedName>& names, std::size_t sheet_index) {
-  const auto it = std::find_if(names.begin(), names.end(), [sheet_index](const DefinedName& entry) {
-    return entry.local_sheet_id == static_cast<std::int32_t>(sheet_index) &&
-           strings::case_insensitive_eq(entry.name, kFilterDatabaseName);
-  });
+  const auto it = find_defined_name(names, kFilterDatabaseName, static_cast<std::int32_t>(sheet_index));
   if (it == names.end()) {
     return false;
   }
@@ -535,6 +539,28 @@ Expected<void, Error> validate_entered_sheet_name(std::string_view name, ExcelHo
   return Expected<void, Error>::Ok();
 }
 
+/// Position of the sheet at `i` after the sheet at `from` is lifted out and
+/// reinserted at `to`.
+template <typename T>
+T moved_index(T i, T from, T to) {
+  if (i == from) {
+    return to;
+  }
+  if (from < to && i > from && i <= to) {
+    return i - 1;
+  }
+  if (from > to && i >= to && i < from) {
+    return i + 1;
+  }
+  return i;
+}
+
+/// Position of the sheet at `i` after the sheet at `removed` is erased.
+template <typename T>
+T removed_index(T i, T removed) {
+  return i > removed ? i - 1 : i;
+}
+
 void remove_and_reindex_tables(std::vector<TableMetadata>& tables, std::size_t removed_sheet_index) {
   std::vector<TableMetadata> retained;
   retained.reserve(tables.size());
@@ -542,9 +568,7 @@ void remove_and_reindex_tables(std::vector<TableMetadata>& tables, std::size_t r
     if (table.sheet_index == removed_sheet_index) {
       continue;
     }
-    if (table.sheet_index > removed_sheet_index) {
-      --table.sheet_index;
-    }
+    table.sheet_index = removed_index(table.sheet_index, removed_sheet_index);
     retained.push_back(std::move(table));
   }
   tables = std::move(retained);
@@ -552,13 +576,7 @@ void remove_and_reindex_tables(std::vector<TableMetadata>& tables, std::size_t r
 
 void move_table_sheet_indices(std::vector<TableMetadata>& tables, std::size_t from_index, std::size_t to_index) {
   for (TableMetadata& table : tables) {
-    if (table.sheet_index == from_index) {
-      table.sheet_index = to_index;
-    } else if (from_index < to_index && table.sheet_index > from_index && table.sheet_index <= to_index) {
-      --table.sheet_index;
-    } else if (from_index > to_index && table.sheet_index >= to_index && table.sheet_index < from_index) {
-      ++table.sheet_index;
-    }
+    table.sheet_index = moved_index(table.sheet_index, from_index, to_index);
   }
 }
 
@@ -670,7 +688,7 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
 
   std::vector<std::uint32_t> old_to_new(sheets_.size());
   for (std::uint32_t old_index = 0; old_index < old_to_new.size(); ++old_index) {
-    old_to_new[old_index] = old_index > index ? old_index - 1U : old_index;
+    old_to_new[old_index] = removed_index(old_index, index);
   }
   // A view naming the removed sheet moves to the sheet Excel activates in its place.
   const std::uint32_t successor = nearest_visible_sheet(index);
@@ -708,9 +726,7 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
     if (entry.local_sheet_id == static_cast<std::int32_t>(index)) {
       continue;
     }
-    if (entry.local_sheet_id > static_cast<std::int32_t>(index)) {
-      entry.local_sheet_id -= 1;
-    }
+    entry.local_sheet_id = removed_index(entry.local_sheet_id, static_cast<std::int32_t>(index));
     retained.push_back(std::move(entry));
   }
   defined_names_ = std::move(retained);
@@ -778,15 +794,7 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
 
   std::vector<std::uint32_t> old_to_new(sheets_.size());
   for (std::uint32_t old_index = 0; old_index < old_to_new.size(); ++old_index) {
-    if (old_index == from_index) {
-      old_to_new[old_index] = to_index;
-    } else if (from_index < to_index && old_index > from_index && old_index <= to_index) {
-      old_to_new[old_index] = old_index - 1U;
-    } else if (from_index > to_index && old_index >= to_index && old_index < from_index) {
-      old_to_new[old_index] = old_index + 1U;
-    } else {
-      old_to_new[old_index] = old_index;
-    }
+    old_to_new[old_index] = moved_index(old_index, from_index, to_index);
   }
   remap_book_views_xml(book_views_xml_, old_to_new);
 
@@ -810,17 +818,8 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
   const auto from_id = static_cast<std::int32_t>(from_index);
   const auto to_id = static_cast<std::int32_t>(to_index);
   for (DefinedName& entry : defined_names_) {
-    if (entry.local_sheet_id < 0) {
-      continue;
-    }
-    if (entry.local_sheet_id == from_id) {
-      entry.local_sheet_id = to_id;
-      continue;
-    }
-    if (from_id < to_id && entry.local_sheet_id > from_id && entry.local_sheet_id <= to_id) {
-      entry.local_sheet_id -= 1;
-    } else if (from_id > to_id && entry.local_sheet_id >= to_id && entry.local_sheet_id < from_id) {
-      entry.local_sheet_id += 1;
+    if (entry.local_sheet_id >= 0) {
+      entry.local_sheet_id = moved_index(entry.local_sheet_id, from_id, to_id);
     }
   }
   move_table_sheet_indices(tables_, from_index, to_index);
@@ -899,27 +898,22 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   bind_external_books_unlocked(std::string_view(formula));
   // Case-insensitive lookup: Excel resolves defined names case-folded.
   // Restrict the search to the requested scope.
-  for (auto it = defined_names_.begin(); it != defined_names_.end(); ++it) {
-    if (it->local_sheet_id != local_sheet_id) {
-      continue;
+  if (const auto it = find_defined_name(defined_names_, name, local_sheet_id); it != defined_names_.end()) {
+    if (formula.empty()) {
+      defined_names_.erase(it);
+    } else {
+      it->formula = std::move(formula);
     }
-    if (strings::case_insensitive_eq(it->name, name)) {
-      if (formula.empty()) {
-        defined_names_.erase(it);
-      } else {
-        it->formula = std::move(formula);
-      }
-      // Retargeting or removing an existing name changes what every formula
-      // that references it (directly or through another name that expands
-      // to it) resolves to, so their dep-graph edges and cached values are
-      // now stale; a formula that never mentions this name is unaffected.
-      // Re-register and dirty just that subset, and clear spill geometry
-      // only where one of them anchors a spill, rather than the workbook-
-      // wide rebuild `reindex_all_formulas` would force.
-      const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-      reindex_formulas_referencing_name(sheets_, mutator, *this, name);
-      return Expected<void, Error>::Ok();
-    }
+    // Retargeting or removing an existing name changes what every formula
+    // that references it (directly or through another name that expands
+    // to it) resolves to, so their dep-graph edges and cached values are
+    // now stale; a formula that never mentions this name is unaffected.
+    // Re-register and dirty just that subset, and clear spill geometry
+    // only where one of them anchors a spill, rather than the workbook-
+    // wide rebuild `reindex_all_formulas` would force.
+    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    reindex_formulas_referencing_name(sheets_, mutator, *this, name);
+    return Expected<void, Error>::Ok();
   }
   // No existing entry; appending only makes sense if a formula is
   // supplied. An empty-formula "remove" against a non-existent name is
@@ -944,11 +938,9 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
 Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, std::int32_t local_sheet_id,
                                                         bool hidden) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  for (DefinedName& entry : defined_names_) {
-    if (entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name)) {
-      entry.hidden = hidden;
-      return Expected<void, Error>::Ok();
-    }
+  if (const auto it = find_defined_name(defined_names_, name, local_sheet_id); it != defined_names_.end()) {
+    it->hidden = hidden;
+    return Expected<void, Error>::Ok();
   }
   return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_hidden: no such defined name",
                     "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
@@ -957,11 +949,9 @@ Expected<void, Error> Workbook::set_defined_name_hidden(std::string_view name, s
 Expected<void, Error> Workbook::set_defined_name_comment(std::string_view name, std::int32_t local_sheet_id,
                                                          std::string comment) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  for (DefinedName& entry : defined_names_) {
-    if (entry.local_sheet_id == local_sheet_id && strings::case_insensitive_eq(entry.name, name)) {
-      entry.comment = std::move(comment);
-      return Expected<void, Error>::Ok();
-    }
+  if (const auto it = find_defined_name(defined_names_, name, local_sheet_id); it != defined_names_.end()) {
+    it->comment = std::move(comment);
+    return Expected<void, Error>::Ok();
   }
   return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_comment: no such defined name",
                     "name=" + std::string(name) + " local_sheet_id=" + std::to_string(local_sheet_id));
@@ -974,9 +964,7 @@ Expected<void, Error> Workbook::set_sheet_auto_filter(std::size_t sheet_index, A
   std::string formula = filter_database_formula(sheets_[sheet_index].name(), filter.range);
   sheets_[sheet_index].set_auto_filter(std::move(filter));
   const auto scope = static_cast<std::int32_t>(sheet_index);
-  const auto it = std::find_if(defined_names_.begin(), defined_names_.end(), [scope](const DefinedName& entry) {
-    return entry.local_sheet_id == scope && strings::case_insensitive_eq(entry.name, kFilterDatabaseName);
-  });
+  const auto it = find_defined_name(defined_names_, kFilterDatabaseName, scope);
   if (it != defined_names_.end()) {
     it->formula = std::move(formula);
     it->hidden = true;
@@ -1427,7 +1415,7 @@ namespace {
 std::string LinkFileName(std::string_view target) {
   const std::size_t sep = target.find_last_of("/\\");
   const std::string_view name = sep == std::string_view::npos ? target : target.substr(sep + 1);
-  if (target.compare(0, 5, "file:") != 0) {
+  if (!strings::starts_with(target, "file:")) {
     return std::string(name);
   }
   return parser::percent_decode(name);
@@ -1511,14 +1499,21 @@ std::size_t FindLinkPosition(const std::vector<ExternalLinkRecord>& links, std::
   if (!path.empty()) {
     std::string key(path);
     key.append(book);
+    std::vector<std::string> dirs;
+    std::vector<std::string> names;
+    dirs.reserve(links.size());
+    names.reserve(links.size());
+    for (const ExternalLinkRecord& link : links) {
+      dirs.push_back(LinkDisplayPath(link));
+      names.push_back(LinkBookName(link));
+    }
     for (std::size_t i = 0; i < links.size(); ++i) {
-      const std::string dir = LinkDisplayPath(links[i]);
-      if (!dir.empty() && SamePath(dir + LinkBookName(links[i]), key)) {
+      if (!dirs[i].empty() && SamePath(dirs[i] + names[i], key)) {
         return i;
       }
     }
     for (std::size_t i = 0; i < links.size(); ++i) {
-      if (LinkDisplayPath(links[i]).empty() && strings::case_insensitive_eq(LinkBookName(links[i]), book)) {
+      if (dirs[i].empty() && strings::case_insensitive_eq(names[i], book)) {
         take_lowest(i);
       }
     }

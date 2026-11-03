@@ -190,37 +190,6 @@ TEST(TextOpsUtf16Substring, NonEmptyTextNeverYieldsEmptySlice) {
   }
 }
 
-TEST(TextOpsCaseFold, AsciiLower) {
-  EXPECT_EQ(to_lower_ascii("Hello, WORLD!"), "hello, world!");
-  EXPECT_EQ(to_lower_ascii(""), "");
-  EXPECT_EQ(to_lower_ascii("abc"), "abc");
-}
-
-TEST(TextOpsCaseFold, AsciiUpper) {
-  EXPECT_EQ(to_upper_ascii("Hello, world!"), "HELLO, WORLD!");
-  EXPECT_EQ(to_upper_ascii(""), "");
-  EXPECT_EQ(to_upper_ascii("XYZ"), "XYZ");
-}
-
-TEST(TextOpsCaseFold, NonAsciiBytesUnchanged) {
-  // ASCII case folding leaves multi-byte UTF-8 sequences alone. "café":
-  // 'c','a','f' fold to 'C','A','F' but the 'é' (0xC3 0xA9) is preserved
-  // verbatim.
-  const std::string folded = to_upper_ascii("caf\xC3\xA9");
-  EXPECT_EQ(folded, "CAF\xC3\xA9");
-  // And the lowercase round-trip on the same input only flips ASCII.
-  const std::string lowered = to_lower_ascii("CAF\xC3\xA9");
-  EXPECT_EQ(lowered, "caf\xC3\xA9");
-}
-
-TEST(TextOpsCaseFold, BoundaryBytesAroundAlpha) {
-  // Bytes adjacent to 'A' (0x40 '@'), 'Z' (0x5B '['), 'a' (0x60 '`'),
-  // 'z' (0x7B '{') must NOT be affected.
-  const std::string s = "@A[Z`a{z";
-  EXPECT_EQ(to_upper_ascii(s), "@A[Z`A{Z");
-  EXPECT_EQ(to_lower_ascii(s), "@a[z`a{z");
-}
-
 // ---------------------------------------------------------------------------
 // encode_utf8_codepoint
 // ---------------------------------------------------------------------------

@@ -381,15 +381,7 @@ bool IsBareColumnToken(std::string_view name) noexcept {
   if (name.empty() || name.size() > 3) {
     return false;
   }
-  std::uint32_t column = 0;
-  for (char c : name) {
-    if (!detail::IsAsciiLetter(c)) {
-      return false;
-    }
-    const char upper = strings::ascii_to_upper(c);
-    column = column * 26U + static_cast<std::uint32_t>(upper - 'A') + 1U;
-  }
-  return column <= detail::kMaxColumn;
+  return detail::DecodeColumnLetters(name) != 0;
 }
 
 // The identifier a `:` endpoint opens with, when the endpoint is written as a

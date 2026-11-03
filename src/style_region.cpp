@@ -275,7 +275,7 @@ std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect
                                          c.col > rect.last_col;
                                 }),
                  excluded.end());
-  std::sort(excluded.begin(), excluded.end(), cell_less);
+  sort_by_index(excluded, cell_less);
   excluded.erase(std::unique(excluded.begin(), excluded.end(), cell_equal), excluded.end());
 
   const std::vector<RowStyle> rows = styled_rows(sheet.layout(), rect.first_row, rect.last_row);
@@ -313,7 +313,7 @@ std::vector<std::uint32_t> range_style_bases(const Sheet& sheet, const StyleRect
     count_covered(at);
   }
   if (!excluded.empty()) {
-    std::sort(owners.begin(), owners.end(), cell_less);
+    sort_by_index(owners, cell_less);
     for (const StyleCell& cell : excluded) {
       if (!std::binary_search(owners.begin(), owners.end(), cell, cell_less)) {
         count_covered(cell);

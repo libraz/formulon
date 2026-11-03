@@ -69,13 +69,6 @@ std::size_t text_index_to_byte_offset(std::string_view text, std::uint32_t index
 /// The `length` positions of `text` starting at position `start`, both clamped.
 std::string text_index_substring(std::string_view text, std::uint32_t start, std::uint32_t length, TextIndexUnit unit);
 
-/// In-place ASCII case folding. Bytes 'A'..'Z' map to 'a'..'z' (and vice versa
-/// for `to_upper_ascii`). All other bytes — including UTF-8 continuation bytes
-/// and non-ASCII leading bytes — are unchanged. This is the MVP behavior; Excel
-/// uses Unicode case folding which we will implement when the locale layer lands.
-std::string to_lower_ascii(std::string_view text);
-std::string to_upper_ascii(std::string_view text);
-
 /// Encodes a single Unicode codepoint as a UTF-8 byte sequence (1-4 bytes).
 ///
 /// The caller is responsible for validating `codepoint` (rejecting values

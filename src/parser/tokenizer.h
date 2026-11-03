@@ -191,8 +191,6 @@ class Tokenizer {
   static bool looks_like_cellref(std::string_view run, bool* letters_only) noexcept;
 
   // Internal helpers ------------------------------------------------------
-  static bool is_ascii_letter(char c) noexcept;
-  static bool is_ascii_digit(char c) noexcept;
   static bool is_ident_start_byte(unsigned char c) noexcept;
   static bool is_ident_cont_byte(unsigned char c) noexcept;
   static bool is_formula_whitespace(char c) noexcept;

@@ -12,11 +12,11 @@
 namespace formulon {
 namespace parser {
 
+using detail::DecodeColumnLetters;
 using detail::DecodeDigitRunClamped;
 using detail::HasWorkbookExtension;
 using detail::IsAsciiDigit;
 using detail::IsAsciiLetter;
-using detail::kMaxColumn;
 using detail::kMaxRow;
 using detail::SpanRange;
 
@@ -54,26 +54,13 @@ bool Parser::decode_cellref_lexeme(std::string_view lex, Reference* out) noexcep
     return false;
   }
   // Decode column letters.
-  std::uint32_t col_value = 0;
-  for (std::size_t k = 0; k < letters_len; ++k) {
-    char ch = lex[letters_begin + k];
-    if (ch >= 'a' && ch <= 'z') {
-      ch = static_cast<char>(ch - ('a' - 'A'));
-    }
-    col_value = col_value * 26u + static_cast<std::uint32_t>(ch - 'A' + 1);
-    if (col_value > kMaxColumn) {
-      return false;
-    }
+  const std::uint32_t col_value = DecodeColumnLetters(lex.substr(letters_begin, letters_len));
+  if (col_value == 0) {
+    return false;
   }
   // Decode row digits.
-  std::uint64_t row_value = 0;
-  for (std::size_t k = 0; k < digits_len; ++k) {
-    row_value = row_value * 10u + static_cast<std::uint32_t>(lex[digits_begin + k] - '0');
-    if (row_value > kMaxRow) {
-      return false;
-    }
-  }
-  if (row_value == 0) {
+  const std::uint64_t row_value = DecodeDigitRunClamped(lex.substr(digits_begin, digits_len), kMaxRow);
+  if (row_value == 0 || row_value > kMaxRow) {
     return false;
   }
   out->col = col_value - 1;
@@ -99,18 +86,7 @@ std::uint32_t Parser::decode_column_letters(std::string_view lex, bool* col_abs)
   if (i != lex.size() || (i - letters_begin) == 0 || (i - letters_begin) > 3) {
     return 0;
   }
-  std::uint32_t v = 0;
-  for (std::size_t k = letters_begin; k < i; ++k) {
-    char ch = lex[k];
-    if (ch >= 'a' && ch <= 'z') {
-      ch = static_cast<char>(ch - ('a' - 'A'));
-    }
-    v = v * 26u + static_cast<std::uint32_t>(ch - 'A' + 1);
-    if (v > kMaxColumn) {
-      return 0;
-    }
-  }
-  return v;
+  return DecodeColumnLetters(lex.substr(letters_begin, i - letters_begin));
 }
 
 bool Parser::decode_full_col_endpoint(const Token& tok, Reference* out) noexcept {

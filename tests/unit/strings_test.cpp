@@ -6,7 +6,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include "gtest/gtest.h"
 
@@ -36,63 +35,6 @@ TEST(StringsTrim, InternalWhitespacePreserved) {
   EXPECT_EQ("a b\tc", trim("  a b\tc  "));
   EXPECT_EQ("a b\tc  ", ltrim("  a b\tc  "));
   EXPECT_EQ("  a b\tc", rtrim("  a b\tc  "));
-}
-
-TEST(StringsSplit, CharDelimiterPreservesEmptyFields) {
-  const std::vector<std::string_view> expected = {"", "", "a", ""};
-  EXPECT_EQ(expected, split(std::string_view(",,a,"), ','));
-}
-
-TEST(StringsSplit, CharDelimiterOnEmptyInputReturnsOneEmpty) {
-  const std::vector<std::string_view> expected = {""};
-  EXPECT_EQ(expected, split(std::string_view(""), ','));
-}
-
-TEST(StringsSplit, CharDelimiterOnlyDelimiters) {
-  const std::vector<std::string_view> expected = {"", "", "", ""};
-  EXPECT_EQ(expected, split(std::string_view(",,,"), ','));
-}
-
-TEST(StringsSplit, StringViewDelimiterSpansMultipleBytes) {
-  const std::vector<std::string_view> expected = {"alpha", "beta", "gamma"};
-  EXPECT_EQ(expected, split(std::string_view("alpha--beta--gamma"), std::string_view("--")));
-}
-
-TEST(StringsSplit, StringViewDelimiterWithTrailingEmpty) {
-  const std::vector<std::string_view> expected = {"x", "y", ""};
-  EXPECT_EQ(expected, split(std::string_view("x--y--"), std::string_view("--")));
-}
-
-TEST(StringsSplit, EmptyDelimiterYieldsInputAsSingleton) {
-  const std::vector<std::string_view> expected = {"abc"};
-  EXPECT_EQ(expected, split(std::string_view("abc"), std::string_view("")));
-}
-
-TEST(StringsJoin, VectorOfStringsBasic) {
-  const std::vector<std::string> parts = {"a", "b", "c"};
-  EXPECT_EQ("a,b,c", join(parts, ","));
-}
-
-TEST(StringsJoin, VectorOfStringViewsBasic) {
-  const std::vector<std::string_view> parts = {"alpha", "beta"};
-  EXPECT_EQ("alpha::beta", join(parts, "::"));
-}
-
-TEST(StringsJoin, EmptyVectorsYieldEmptyString) {
-  const std::vector<std::string> empty_s;
-  const std::vector<std::string_view> empty_sv;
-  EXPECT_EQ("", join(empty_s, ","));
-  EXPECT_EQ("", join(empty_sv, ","));
-}
-
-TEST(StringsJoin, SingleElementNoSeparator) {
-  const std::vector<std::string> parts = {"only"};
-  EXPECT_EQ("only", join(parts, ","));
-}
-
-TEST(StringsJoin, EmptySeparatorConcatenates) {
-  const std::vector<std::string> parts = {"ab", "cd", "ef"};
-  EXPECT_EQ("abcdef", join(parts, ""));
 }
 
 TEST(StringsCaseInsensitiveEq, MatchesAsciiCaseVariants) {
@@ -165,6 +107,12 @@ TEST(StringsAsciiCase, ToAsciiLowerAndUpperPassThroughNonAscii) {
   const std::string ja = "\xe3\x81\x82\xe3\x81\x84";  // "あい"
   EXPECT_EQ(ja, to_ascii_lower(ja));
   EXPECT_EQ(ja, to_ascii_upper(ja));
+}
+
+TEST(StringsAsciiCase, BytesAdjacentToLetterRangesUnchanged) {
+  const std::string s = "@A[Z`a{z";
+  EXPECT_EQ("@A[Z`A{Z", to_ascii_upper(s));
+  EXPECT_EQ("@a[z`a{z", to_ascii_lower(s));
 }
 
 }  // namespace

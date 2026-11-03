@@ -11,7 +11,6 @@
 #include <string>
 #include <string_view>
 
-#include "utils/strings.h"
 #include "utils/utf8_length.h"
 
 namespace formulon {
@@ -105,14 +104,6 @@ std::string text_index_substring(std::string_view text, std::uint32_t start, std
   const std::size_t begin = text_index_to_byte_offset(text, start, unit);
   const std::size_t end = text_index_to_byte_offset(text.substr(begin), length, unit) + begin;
   return std::string(text.substr(begin, end - begin));
-}
-
-std::string to_lower_ascii(std::string_view text) {
-  return strings::to_ascii_lower(text);
-}
-
-std::string to_upper_ascii(std::string_view text) {
-  return strings::to_ascii_upper(text);
 }
 
 std::string encode_utf8_codepoint(std::uint32_t codepoint) {
