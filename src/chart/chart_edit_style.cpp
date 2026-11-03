@@ -1,35 +1,14 @@
 #include <algorithm>
-#include <cmath>
-#include <cstring>
-#include <initializer_list>
 #include <optional>
-#include <set>
 #include <string>
-#include <string_view>
-#include <unordered_set>
-#include <utility>
-#include <vector>
 
-#include "chart/chart_cache.h"
-#include "chart/chart_data.h"
 #include "chart/chart_edit_internal.h"
 #include "chart/chart_ns.h"
-#include "chart/chart_source.h"
 #include "chart/chart_template.h"
-#include "chart/chart_xml.h"
-#include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "eval/function_registry.h"
-#include "io/ooxml/package_validator.h"
-#include "io/ooxml/part_dom.h"
-#include "io/ooxml_defs.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
-#include "passthrough_part.h"
 #include "sheet.h"
-#include "unknown_relationship.h"
-#include "utils/double_format.h"
-#include "utils/number_text.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
 

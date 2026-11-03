@@ -1,13 +1,7 @@
 #include <algorithm>
-#include <cmath>
-#include <cstring>
-#include <initializer_list>
 #include <optional>
-#include <set>
 #include <string>
 #include <string_view>
-#include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include "chart/chart_cache.h"
@@ -23,13 +17,10 @@
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml_defs.h"
-#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "sheet.h"
 #include "unknown_relationship.h"
-#include "utils/double_format.h"
-#include "utils/number_text.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
 

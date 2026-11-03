@@ -1,7 +1,6 @@
 #include "drawing/drawing_edit.h"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <string_view>
 #include <utility>

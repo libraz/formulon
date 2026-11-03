@@ -1,6 +1,4 @@
 #include <algorithm>
-#include <cmath>
-#include <limits>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -14,7 +12,6 @@
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml/relationship_xml.h"
-#include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
 #include "passthrough_part.h"
