@@ -33,6 +33,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -325,10 +326,6 @@ bool plan_group_sort(const std::vector<int>& spec, std::uint32_t key_cols, std::
 void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
                   const std::vector<bool>& is_error, const std::vector<Value>& value_keys,
                   std::vector<std::size_t>* order) {
-  order->resize(repr.size());
-  for (std::size_t i = 0; i < order->size(); ++i) {
-    (*order)[i] = i;
-  }
   // Collation keys are computed once per representative cell rather than on
   // every comparison.
   const auto key_cell = [&](std::size_t g, std::uint32_t c) -> const Value& {
@@ -366,7 +363,7 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
     }
     return 0;
   };
-  sort_group_order(*order, [&](std::size_t a, std::size_t b) {
+  const auto group_less = [&](std::size_t a, std::size_t b) {
     // Error-keyed groups always go last regardless of direction, matching
     // Mac Excel's "errors trail" surface for the dynamic-array sort family.
     if (is_error[a] != is_error[b]) {
@@ -380,7 +377,10 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
       return cmp_keys_asc_of(a, b) < 0;
     }
     return cmp_keys(a, b) < 0;
-  });
+  };
+  std::vector<std::uint32_t> sorted;
+  sorted_index_order(sorted, static_cast<std::uint32_t>(repr.size()), make_index_less(group_less));
+  order->assign(sorted.begin(), sorted.end());
 }
 
 int resolve_auto_field_headers(int field_headers, const ArrayValue& values) {

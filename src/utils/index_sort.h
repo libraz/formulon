@@ -8,10 +8,8 @@
 // kilobytes of code, so a handful of unrelated call sites turn into a
 // measurable share of the WASM binary.
 //
-// The engine already applied the fix locally in `GroupIndexOrder`
-// (`eval/groupby_pivotby/common.h`): sort indices through one type-erased
-// comparator so a single sort body serves every axis order. This header
-// generalises that owner. Call sites keep their own element comparator; what
+// Indices sort through one type-erased comparator, so a single sort body
+// serves every caller. Call sites keep their own element comparator; what
 // they no longer keep is a private copy of the sort.
 //
 // The order is stable: equal elements retain their input order, because the

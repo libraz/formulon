@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "utils/index_sort.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -530,16 +531,13 @@ namespace {
 
 /// Indices into `kEntries` ordered by name (case-insensitive, then id order),
 /// built on first use.
-const std::vector<std::uint16_t>& EntriesByName() {
-  static const std::vector<std::uint16_t> index = [] {
-    std::vector<std::uint16_t> rows(kEntriesCount);
-    for (std::size_t i = 0; i < kEntriesCount; ++i) {
-      rows[i] = static_cast<std::uint16_t>(i);
-    }
-    std::sort(rows.begin(), rows.end(), [](std::uint16_t a, std::uint16_t b) {
-      const int order = strings::case_insensitive_compare(kEntries[a].name, kEntries[b].name);
-      return order != 0 ? order < 0 : a < b;
-    });
+const std::vector<std::uint32_t>& EntriesByName() {
+  static const std::vector<std::uint32_t> index = [] {
+    const auto by_name = [](std::uint32_t a, std::uint32_t b) {
+      return strings::case_insensitive_compare(kEntries[a].name, kEntries[b].name) < 0;
+    };
+    std::vector<std::uint32_t> rows;
+    sorted_index_order(rows, static_cast<std::uint32_t>(kEntriesCount), make_index_less(by_name));
     return rows;
   }();
   return index;
@@ -548,9 +546,9 @@ const std::vector<std::uint16_t>& EntriesByName() {
 }  // namespace
 
 const XlsbFuncEntry* lookup_func_by_name(std::string_view name) {
-  const std::vector<std::uint16_t>& index = EntriesByName();
+  const std::vector<std::uint32_t>& index = EntriesByName();
   // NOLINTNEXTLINE(readability-qualified-auto): iterator may be a raw pointer or a wrapper.
-  auto it = std::lower_bound(index.begin(), index.end(), name, [](std::uint16_t row, std::string_view key) {
+  auto it = std::lower_bound(index.begin(), index.end(), name, [](std::uint32_t row, std::string_view key) {
     return strings::case_insensitive_compare(kEntries[row].name, key) < 0;
   });
   if (it == index.end() || !strings::case_insensitive_eq(name, kEntries[*it].name)) {
@@ -577,7 +575,7 @@ std::vector<ClassRow> BuildClassIndex(std::string_view table) {
     rows.emplace_back(table.substr(at + 1, colon - at - 1), table.substr(colon + 1, end - colon - 1));
     at = end;
   }
-  std::sort(rows.begin(), rows.end(), [](const ClassRow& a, const ClassRow& b) {
+  sort_by_index(rows, [](const ClassRow& a, const ClassRow& b) {
     return strings::case_insensitive_compare(a.first, b.first) < 0;
   });
   return rows;

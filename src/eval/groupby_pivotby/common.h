@@ -19,7 +19,6 @@
 #ifndef FORMULON_EVAL_GROUPBY_PIVOTBY_COMMON_H_
 #define FORMULON_EVAL_GROUPBY_PIVOTBY_COMMON_H_
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -273,33 +272,6 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
 /// order (`Number < Text < Bool < Error < Blank`); text compares with the
 /// active profile's collator at dynamic strength.
 int cmp_value_asc(const Value& a, const Value& b);
-
-/// Type-erased comparator over group indices, used by every axis sort in
-/// GROUPBY and PIVOTBY.
-///
-/// The axis sorts differ only in what they read to order two groups, but
-/// each one is a distinct closure type, and `std::stable_sort` emits a full
-/// copy of its body per comparator type. Routing all of them through one
-/// comparator type keeps a single copy in the binary; the cost is one
-/// indirect call per comparison.
-///
-/// The referenced callable must outlive the sort - `sort_group_order` below
-/// is the only intended way to build one.
-struct GroupIndexOrder {
-  const void* callable;
-  bool (*invoke)(const void*, std::size_t, std::size_t);
-
-  bool operator()(std::size_t lhs, std::size_t rhs) const { return invoke(callable, lhs, rhs); }
-};
-
-/// Stable-sorts `order` with `less`, a callable taking two group indices.
-template <typename Less>
-void sort_group_order(std::vector<std::size_t>& order, const Less& less) {
-  const GroupIndexOrder erased{&less, [](const void* callable, std::size_t lhs, std::size_t rhs) {
-                                 return (*static_cast<const Less*>(callable))(lhs, rhs);
-                               }};
-  std::stable_sort(order.begin(), order.end(), erased);
-}
 
 }  // namespace eval
 }  // namespace formulon

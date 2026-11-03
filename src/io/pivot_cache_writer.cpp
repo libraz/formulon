@@ -21,6 +21,7 @@
 #include "pivot/pivot_table.h"
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
+#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon::io {
@@ -249,12 +250,10 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
     }
     fp.derived = true;
     fp.hints = DeriveHints(fp.items);
-    fp.asc_order.resize(fp.items.size());
-    for (std::size_t k = 0; k < fp.asc_order.size(); ++k) {
-      fp.asc_order[k] = static_cast<std::uint32_t>(k);
-    }
-    std::stable_sort(fp.asc_order.begin(), fp.asc_order.end(),
-                     [&fp](std::uint32_t a, std::uint32_t b) { return pivot::value_less(fp.items[a], fp.items[b]); });
+    const auto item_less = [&fp](std::uint32_t a, std::uint32_t b) {
+      return pivot::value_less(fp.items[a], fp.items[b]);
+    };
+    sorted_index_order(fp.asc_order, static_cast<std::uint32_t>(fp.items.size()), make_index_less(item_less));
   }
   return plan;
 }
