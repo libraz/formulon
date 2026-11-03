@@ -52,6 +52,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   spill_collision_test.cpp
   styles_roundtrip_test.cpp
   table_boundary_test.cpp
+  workbook_copy_sheet_test.cpp
   workbook_iterative_test.cpp
   workbook_recalc_test.cpp
   zip_load_budget_test.cpp

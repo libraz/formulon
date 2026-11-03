@@ -23,6 +23,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/value_test.cpp
   unit/value_array_test.cpp
   unit/sheet_test.cpp
+  unit/sheet_clone_test.cpp
+  unit/sheet_copy_names_test.cpp
   unit/sheet_spill_test.cpp
   unit/sheet_spill_validation_test.cpp
   unit/sheet_read_range_test.cpp
@@ -30,6 +32,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_spill_scale_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
+  unit/derived_guid_test.cpp
   unit/workbook_external_bind_test.cpp
   unit/auto_filter_eval_test.cpp
   unit/numeric_aggregate_kernels_test.cpp
@@ -191,6 +194,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/range_chain_test.cpp
   unit/parser/let_test.cpp
   unit/parser/ref_transforms_test.cpp
+  unit/parser/sheet_copy_transform_test.cpp
   unit/eval/jp_kana_table_test.cpp
   unit/eval/tree_walker_test.cpp
   unit/eval/defined_name_resolve_test.cpp
@@ -427,6 +431,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/print/sheet_geometry_test.cpp
   unit/drawing/drawing_xml_test.cpp
   unit/drawing/image_header_test.cpp
+  unit/drawing/drawing_clone_test.cpp
   unit/drawing/drawing_edit_test.cpp
   unit/drawing/drawing_snapshot_test.cpp
   unit/chart/chart_model_test.cpp

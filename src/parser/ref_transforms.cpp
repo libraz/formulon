@@ -53,6 +53,42 @@ std::optional<std::string_view> SheetRenameTransform::apply_name_sheet(std::stri
   return remap_sheet(sheet).value_or(sheet);
 }
 
+SheetCopyTransform::SheetCopyTransform(std::string_view source, std::string_view copy,
+                                       std::vector<std::pair<std::string, std::string>> table_map)
+    : rename_(source, copy), source_(source), copy_(copy), table_map_(std::move(table_map)) {}
+
+std::optional<Reference> SheetCopyTransform::apply(const Reference& ref) const {
+  return rename_.apply(ref);
+}
+
+std::optional<RefTransform::Ref3DSheetSpan> SheetCopyTransform::apply_ref3d_span(std::string_view begin,
+                                                                                 std::string_view end) const {
+  const bool begin_is_source = sheet_names::equal(begin, source_);
+  const bool end_is_source = sheet_names::equal(end, source_);
+  if (begin_is_source && end_is_source) {
+    return Ref3DSheetSpan{copy_, copy_, /*collapse=*/true};
+  }
+  if (begin_is_source || end_is_source) {
+    // A span anchored on the source at one end only has no image on the copy.
+    return std::nullopt;
+  }
+  return Ref3DSheetSpan{begin, end};
+}
+
+std::optional<std::string_view> SheetCopyTransform::apply_name_sheet(std::string_view sheet) const {
+  return rename_.apply_name_sheet(sheet);
+}
+
+std::optional<std::string_view> SheetCopyTransform::apply_structured_ref(std::string_view table,
+                                                                         std::string_view /*column*/) const {
+  for (const std::pair<std::string, std::string>& entry : table_map_) {
+    if (strings::case_insensitive_eq(table, entry.first)) {
+      return std::string_view(entry.second);
+    }
+  }
+  return table;
+}
+
 SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order,
                                              std::uint32_t removed_index)
     : pre_removal_sheet_order_(pre_removal_sheet_order), removed_index_(removed_index) {}

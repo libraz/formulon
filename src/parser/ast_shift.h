@@ -76,10 +76,13 @@ class RefTransform {
   /// `Reference` payload, so a transform that edits sheet structure needs a
   /// dedicated hook rather than trying to route the endpoint names through
   /// `apply`. The default is an identity mapping. Returning `std::nullopt`
-  /// collapses the complete `Ref3D` subtree to `#REF!`.
+  /// collapses the complete `Ref3D` subtree to `#REF!`. A span returned with
+  /// `collapse` set is spelled as the ordinary single-sheet reference
+  /// `begin!tail` instead of a `Ref3D`.
   struct Ref3DSheetSpan {
     std::string_view begin;
     std::string_view end;
+    bool collapse = false;
   };
   virtual std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const;
 

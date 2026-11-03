@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "parser/ast_shift.h"
@@ -54,6 +55,43 @@ class SheetRenameTransform final : public RefTransform {
   // Pre-computed quoting decision for the new name. Computing this once at
   // construction time keeps `apply` allocation-free.
   bool new_name_needs_quotes_;
+};
+
+/// Rewrites a copied sheet's formulas so references to the source sheet name
+/// the copy instead.
+///
+/// - An ordinary reference or a sheet-scoped name qualified by `source` is
+///   requalified by `copy`, its quoting recomputed as `SheetRenameTransform`
+///   does. Unqualified references and other sheets are left alone.
+/// - A 3-D span with exactly one endpoint on `source` collapses to `#REF!`; a
+///   span whose two endpoints are both `source` becomes the single-sheet
+///   reference `copy!tail`. Any other span is unchanged.
+/// - A structured reference whose table name matches a `table_map` key
+///   (ASCII case-insensitive) takes the mapped display name.
+///
+/// Sheet identity uses Unicode simple case folding. `source` and `copy` must
+/// outlive the transform; `table_map` is owned.
+class SheetCopyTransform final : public RefTransform {
+ public:
+  SheetCopyTransform(std::string_view source, std::string_view copy,
+                     std::vector<std::pair<std::string, std::string>> table_map);
+
+  std::optional<Reference> apply(const Reference& ref) const override;
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
+  std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
+  std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override;
+
+ private:
+  SheetRenameTransform rename_;
+  std::string_view source_;
+  std::string_view copy_;
+  std::vector<std::pair<std::string, std::string>> table_map_;
+};
+
+/// Leaves every reference unchanged; `shift_refs` returns the input tree.
+class IdentityTransform final : public RefTransform {
+ public:
+  std::optional<Reference> apply(const Reference& ref) const override { return ref; }
 };
 
 /// Rewrites workbook-local references after removing one sheet.

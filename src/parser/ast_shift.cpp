@@ -141,6 +141,26 @@ const AstNode* TransformSpillRef(const AstNode& node, Arena& arena, const RefTra
   return make_spill_ref(arena, nr);
 }
 
+// The node the parser builds for `sheet!first` or `sheet!first:last`: a
+// qualified Ref, or a `:` pair whose bare second corner shares the qualifier.
+const AstNode* MakeSingleSheetRef(Arena& arena, std::string_view sheet, const Reference& first, const Reference* last) {
+  Reference lhs = first;
+  lhs.sheet = sheet;
+  lhs.sheet_quoted = local_sheet_needs_quoting_a1(sheet);
+  AstNode* lhs_node = make_ref(arena, lhs);
+  if (lhs_node == nullptr || last == nullptr) {
+    return lhs_node;
+  }
+  Reference rhs = *last;
+  rhs.sheet = {};
+  rhs.sheet_quoted = false;
+  AstNode* rhs_node = make_ref(arena, rhs);
+  if (rhs_node == nullptr) {
+    return nullptr;
+  }
+  return make_range_op(arena, lhs_node, rhs_node, /*spliced=*/lhs.is_full_col || lhs.is_full_row);
+}
+
 const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const Reference& first = node.as_ref3d_cell();
   const bool is_range = node.as_ref3d_is_range();
@@ -183,6 +203,9 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
   }
   const std::string_view final_begin = rewritten_span->begin;
   const std::string_view final_end = rewritten_span->end;
+  if (rewritten_span->collapse) {
+    return MakeSingleSheetRef(arena, final_begin, *rewritten_first, is_range ? &*rewritten_last : nullptr);
+  }
   if (final_begin == begin && final_end == end && SameReference(first, *rewritten_first) &&
       (!is_range || SameReference(last, *rewritten_last))) {
     return &node;

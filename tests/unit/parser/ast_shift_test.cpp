@@ -43,10 +43,47 @@ const AstNode* MakeTooDeepAst(Arena& arena) {
   return node;
 }
 
-class IdentityTransform final : public RefTransform {
+// Maps every 3-D span onto its begin sheet, optionally asking the walker to
+// spell the result as a single-sheet reference.
+class SpanToBeginTransform final : public RefTransform {
  public:
+  explicit SpanToBeginTransform(bool collapse) noexcept : collapse_(collapse) {}
+
   std::optional<Reference> apply(const Reference& ref) const override { return ref; }
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view /*end*/) const override {
+    return Ref3DSheetSpan{begin, begin, collapse_};
+  }
+
+ private:
+  bool collapse_;
 };
+
+// Maps every 3-D span onto one fixed sheet and collapses it.
+class CollapseOntoTransform final : public RefTransform {
+ public:
+  explicit CollapseOntoTransform(std::string_view sheet) noexcept : sheet_(sheet) {}
+
+  std::optional<Reference> apply(const Reference& ref) const override { return ref; }
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view /*begin*/, std::string_view /*end*/) const override {
+    return Ref3DSheetSpan{sheet_, sheet_, true};
+  }
+
+ private:
+  std::string_view sheet_;
+};
+
+std::string ShiftFormula(std::string_view src, const RefTransform& transform) {
+  Arena arena;
+  const AstNode* root = ParseOrNull(src, arena);
+  if (root == nullptr) {
+    return "<parse-failed>";
+  }
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  if (shifted == nullptr) {
+    return "<arena-fail>";
+  }
+  return format_formula(*shifted);
+}
 
 class SelectiveColumnTransform final : public RefTransform {
  public:
@@ -676,6 +713,52 @@ TEST(ShiftRefs, RelativeShiftUpdates3DRangeTail) {
   const AstNode* shifted = shift_relative_refs(*root, arena, 2, 3);
   ASSERT_NE(shifted, nullptr);
   EXPECT_EQ(format_formula(*shifted), "Sheet1:Sheet2!D3:E4");
+}
+
+TEST(AstShiftRef3DCollapse, UncollapsedEqualSpanKeepsThreeDSpelling) {
+  const SpanToBeginTransform transform(/*collapse=*/false);
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!A1)", transform), "SUM(Sheet1:Sheet1!A1)");
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!A1:B2)", transform), "SUM(Sheet1:Sheet1!A1:B2)");
+}
+
+TEST(AstShiftRef3DCollapse, UncollapsedIdentitySpanPreservesPointer) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Sheet1:Sheet1!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  const SpanToBeginTransform transform(/*collapse=*/false);
+  EXPECT_EQ(shift_refs(*root, arena, transform), root);
+}
+
+TEST(AstShiftRef3DCollapse, CollapsedSpanBecomesSingleSheetReference) {
+  const SpanToBeginTransform transform(/*collapse=*/true);
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!A1)", transform), "SUM(Sheet1!A1)");
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!$A$1:B2)", transform), "SUM(Sheet1!$A$1:B2)");
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!A:C)", transform), "SUM(Sheet1!A:C)");
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!B:B)", transform), "SUM(Sheet1!B:B)");
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!2:4)", transform), "SUM(Sheet1!2:4)");
+}
+
+TEST(AstShiftRef3DCollapse, CollapsedSpanOnUnchangedEqualSpanStillCollapses) {
+  const SpanToBeginTransform transform(/*collapse=*/true);
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet1!A1)", transform), "SUM(Sheet1!A1)");
+}
+
+TEST(AstShiftRef3DCollapse, CollapsedSpanRecomputesQuoting) {
+  EXPECT_EQ(ShiftFormula("=SUM(Sheet1:Sheet3!A1)", CollapseOntoTransform("My Sheet")), "SUM('My Sheet'!A1)");
+  EXPECT_EQ(ShiftFormula("=SUM('A b:C d'!A1:B2)", CollapseOntoTransform("Plain")), "SUM(Plain!A1:B2)");
+}
+
+TEST(AstShiftRef3DCollapse, CollapsedSpanReparsesAsOrdinaryReference) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=Sheet1:Sheet3!A1:B2", arena);
+  ASSERT_NE(root, nullptr);
+  const SpanToBeginTransform transform(/*collapse=*/true);
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  const std::string text = format_formula(*shifted);
+  const AstNode* reparsed = ParseOrNull(text, arena);
+  ASSERT_NE(reparsed, nullptr);
+  EXPECT_EQ(dump_sexpr(*shifted), dump_sexpr(*reparsed));
 }
 
 // ---------------------------------------------------------------------------

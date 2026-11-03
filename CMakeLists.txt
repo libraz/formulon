@@ -110,6 +110,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/case_map.cpp
   src/utils/case_map_table.cpp
   src/utils/date_time.cpp
+  src/utils/derived_guid.cpp
   src/utils/double_format.cpp
   src/utils/double_parse.cpp
   src/utils/error.cpp
@@ -134,11 +135,13 @@ set(FORMULON_CORE_SOURCES
   src/color_resolve.cpp
   src/value.cpp
   src/sheet.cpp
+  src/sheet_copy_names.cpp
   src/sheet_name.cpp
   src/sheet_row_col_edit.cpp
   src/sheet_spill.cpp
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
+  src/workbook_copy_sheet.cpp
   src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
   src/workbook_data_table.cpp
@@ -282,6 +285,7 @@ set(FORMULON_CORE_SOURCES
   src/print/sheet_geometry.cpp
   src/drawing/drawing_xml.cpp
   src/drawing/image_header.cpp
+  src/drawing/drawing_clone.cpp
   src/drawing/drawing_edit.cpp
   src/drawing/drawing_snapshot.cpp
   src/drawing/shape_edit.cpp
