@@ -235,11 +235,12 @@ class Gatherer {
     if (!cells.consume(rect_cells(t))) {
       return false;
     }
-    const bool down = (r.bottom - r.top) >= (r.right - r.left);
-    const std::uint32_t first = down ? r.top : r.left;
-    const std::uint32_t last = down ? r.bottom : r.right;
-    const std::uint32_t lvl_first = down ? r.left : r.top;
-    const std::uint32_t lvl_last = down ? r.right : r.bottom;
+    const CategoryAxis axis = category_axis(r);
+    const bool down = axis.down;
+    const std::uint32_t first = axis.first;
+    const std::uint32_t last = axis.last;
+    const std::uint32_t lvl_first = axis.lvl_first;
+    const std::uint32_t lvl_last = axis.lvl_last;
     const bool populated = t.top <= t.bottom && t.left <= t.right;
     const std::uint32_t read_last = down ? t.bottom : t.right;
     const std::uint32_t read_lvl_first = down ? t.left : t.top;
@@ -497,10 +498,7 @@ void write_cache(pugi::xml_node ref, const std::string& prefix, RefKind kind, co
 
 bool refresh_chart_caches(const Workbook& wb, std::size_t host_sheet, pugi::xml_document& doc) {
   const pugi::xml_node root = doc.document_element();
-  const std::string_view root_name = root.name();
-  const std::size_t root_colon = root_name.find(':');
-  const std::string_view root_prefix =
-      root_colon == std::string_view::npos ? std::string_view() : root_name.substr(0, root_colon);
+  const std::string_view root_prefix = io::qname_prefix(root.name());
   if (local_name(root.name()) != "chartSpace" || io::find_namespace_binding(root, root_prefix) == chart_ns::kNsCx ||
       child_local(root, "pivotSource")) {
     return false;

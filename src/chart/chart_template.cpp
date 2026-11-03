@@ -15,6 +15,7 @@
 #include "parser/reference.h"
 #include "sheet.h"
 #include "style_resolve.h"
+#include "utils/a1_column.h"
 #include "utils/index_sort.h"
 #include "utils/number_text.h"
 #include "workbook.h"
@@ -115,10 +116,8 @@ std::string sheet_prefix(const std::string& name) {
 }
 
 void append_abs_cell(std::string& out, std::uint32_t row, std::uint32_t col) {
-  char letters[4] = {};
-  const std::size_t n = a1p::column_letters(col + 1U, letters);
   out += '$';
-  out.append(letters, n);
+  a1::append_column_letters(out, col);
   out += '$';
   out += std::to_string(row + 1U);
 }

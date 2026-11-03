@@ -26,6 +26,7 @@
 
 #include "drawing/image_header.h"
 #include "io/ooxml/part_graph.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -111,17 +112,10 @@ std::string relative_target(std::string_view from_dir, std::string_view target);
 /// are not well-formed XML or the root is not `wsDr`.
 Expected<void, Error> parse_drawing_part(const std::vector<std::uint8_t>& bytes, pugi::xml_document& doc);
 
-/// Local name of `node` (the part after any `prefix:`).
-std::string_view local_name(const pugi::xml_node& node);
-
-/// Local name of the qualified name `qname`.
-std::string_view local_name(const char* qname);
-
-/// First element child of `parent` whose local name is `name`.
-pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name);
-
-/// Every element child of `parent` whose local name is `name`, in document order.
-std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::string_view name);
+// Local-name helpers shared with the io readers.
+using io::child_local;
+using io::children_local;
+using io::local_name;
 
 /// The anchor elements of `root` in document order. `include_fallback`
 /// adds the `mc:Fallback` anchors of `mc:AlternateContent` wrappers, which a
@@ -137,6 +131,11 @@ pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor);
 
 /// Reads one anchor element.
 DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<io::ooxml::DrawingRel>& rels);
+
+/// The first listed anchor holding an object of id `object_id` whose kind
+/// `kind_ok` accepts, or a null node.
+pugi::xml_node find_drawing_object(const pugi::xml_node& root, std::uint32_t object_id,
+                                   bool (*kind_ok)(DrawingObjectKind));
 
 /// Reads every anchored object of a parsed drawing part.
 std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,

@@ -102,23 +102,6 @@ void rederive_guid(std::string& guid, std::string_view salt) {
   }
 }
 
-/// Re-derives the value of the ` xr:uid="..."` pair in an escaped attribute
-/// list, if present.
-void rederive_uid_attr(std::string& attrs, std::string_view salt) {
-  constexpr std::string_view kAttr = " xr:uid=\"";
-  const std::size_t at = attrs.find(kAttr);
-  if (at == std::string::npos) {
-    return;
-  }
-  const std::size_t begin = at + kAttr.size();
-  const std::size_t end = attrs.find('"', begin);
-  if (end == std::string::npos) {
-    return;
-  }
-  const std::string guid = derived_guid(std::string_view(attrs).substr(begin, end - begin), salt);
-  attrs.replace(begin, end - begin, guid);
-}
-
 /// Removes the `codeName` attribute from the start tag of a raw `<sheetPr>`.
 void strip_code_name(std::string& sheet_pr_xml) {
   constexpr std::string_view kAttr = "codeName=";
@@ -148,7 +131,7 @@ void strip_code_name(std::string& sheet_pr_xml) {
 // Special members (must be defined here where SpillTable is complete).
 // ---------------------------------------------------------------------------
 
-Sheet::Sheet(std::string name) : name_(std::move(name)), spill_mutex_(std::make_unique<std::mutex>()) {}
+Sheet::Sheet(std::string name) : name_(std::move(name)) {}
 
 // Defaulting these out-of-line keeps the incomplete SpillTable deleter out of
 // the header while ensuring new Sheet metadata participates in moves without
@@ -158,42 +141,51 @@ Sheet& Sheet::operator=(Sheet&&) noexcept = default;
 
 Sheet::~Sheet() = default;
 
-Sheet Sheet::clone_as(std::string name) const {
-  Sheet copy(std::move(name));
-  const std::string salt = copy.name_;
-  {
-    const std::lock_guard<std::mutex> guard(*spill_mutex_);
-    copy.rows_.reserve(rows_.size());
-    for (const auto& [row, cells] : rows_) {
-      RowCells& dst = copy.rows_[row];
-      for (const auto& [col, cell] : cells) {
-        clone_cell(cell, dst.ensure(col));
-      }
+namespace sheet_copy {
+
+SpillTablePtr::SpillTablePtr(const SpillTablePtr&) noexcept {}
+
+RowStore::RowStore(const RowStore& other) {
+  reserve(other.size());
+  for (const auto& [row, cells] : other) {
+    RowCells& dst = (*this)[row];
+    for (const auto& [col, cell] : cells) {
+      clone_cell(cell, dst.ensure(col));
     }
-    copy.formula_cells_ = formula_cells_;
   }
-  copy.opaque_ooxml_part_path_ = opaque_ooxml_part_path_;
-  copy.opaque_ooxml_relationship_type_ = opaque_ooxml_relationship_type_;
+}
 
-  copy.pivot_tables_.reserve(pivot_tables_.size());
-  for (const std::unique_ptr<pivot::PivotTable>& table : pivot_tables_) {
-    copy.pivot_tables_.push_back(table->clone());
+PivotList::PivotList(const PivotList& other) {
+  reserve(other.size());
+  for (const std::unique_ptr<pivot::PivotTable>& table : other) {
+    push_back(table->clone());
   }
-  copy.conditional_formats_ = conditional_formats_;
-  copy.merges_ = merges_;
-  copy.data_tables_ = data_tables_;
+}
 
-  copy.hyperlinks_ = hyperlinks_;
+}  // namespace sheet_copy
+
+Sheet::Sheet(const Sheet&) = default;
+
+Sheet Sheet::clone_as(std::string name) const {
+  Sheet copy = [this] {
+    const std::lock_guard<std::mutex> guard(*spill_mutex_);
+    return Sheet(*this);
+  }();
+  copy.name_ = std::move(name);
+  const std::string& salt = copy.name_;
+  // These name the source's package identity and parts.
+  copy.source_sheet_id_ = 0;
+  copy.drawing_rel_target_.clear();
+  copy.comment_vml_path_.clear();
+
   for (Hyperlink& link : copy.hyperlinks_) {
     link.rid.clear();
   }
-  copy.comments_ = comments_;
   for (CellComment& comment : copy.comments_) {
     rederive_guid(comment.uid, salt);
   }
   // `derived_guid` is a pure function, so a reply's `parent_id` lands on its
   // thread's new id without a lookup table.
-  copy.threaded_comments_ = threaded_comments_;
   for (ThreadedComment& comment : copy.threaded_comments_) {
     rederive_guid(comment.id, salt);
     rederive_guid(comment.parent_id, salt);
@@ -201,32 +193,12 @@ Sheet Sheet::clone_as(std::string name) const {
       rederive_guid(mention.mention_id, salt);
     }
   }
-  copy.validations_ = validations_;
   for (DataValidation& validation : copy.validations_) {
-    rederive_uid_attr(validation.extra_attrs, salt);
+    rederive_attr_guid(validation.extra_attrs, "xr:uid", salt);
   }
-  copy.validations_extra_attrs_ = validations_extra_attrs_;
-
-  copy.protection_ = protection_;
-  copy.view_ = view_;
   copy.view_.tab_selected = false;
-  copy.layout_ = layout_;
-  copy.format_defaults_ = format_defaults_;
-  copy.print_settings_ = print_settings_;
   copy.print_settings_.printer_settings_rid.clear();
   strip_code_name(copy.print_settings_.sheet_pr_xml);
-  copy.raw_extensions_ = raw_extensions_;
-
-  // `source_sheet_id_`, `drawing_rel_target_` and `comment_vml_path_` stay
-  // empty: they name the source's package identity and parts.
-  copy.comment_vml_shapes_ = comment_vml_shapes_;
-  copy.comment_vml_extra_xml_ = comment_vml_extra_xml_;
-  copy.comment_authors_ = comment_authors_;
-  copy.unknown_relationships_ = unknown_relationships_;
-  copy.auto_filter_ = auto_filter_;
-  copy.ext_lst_xml_ = ext_lst_xml_;
-  copy.root_extra_ns_attrs_ = root_extra_ns_attrs_;
-  copy.xlsb_tail_ = xlsb_tail_;
   return copy;
 }
 

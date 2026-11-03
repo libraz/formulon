@@ -75,6 +75,8 @@ class EnumerationRevision {
  public:
   EnumerationRevision() = default;
   EnumerationRevision(EnumerationRevision&& other) noexcept : value_(other.get()) {}
+  /// A copy starts a fresh enumeration history at zero.
+  EnumerationRevision(const EnumerationRevision&) noexcept {}
   EnumerationRevision& operator=(EnumerationRevision&& other) noexcept {
     value_.store(other.get(), std::memory_order_relaxed);
     return *this;
@@ -86,6 +88,46 @@ class EnumerationRevision {
  private:
   std::atomic<std::uint64_t> value_{0};
 };
+
+/// Sheet members whose copy is not a plain member-wise copy. Each one carries
+/// its copy rule, so `Sheet`'s defaulted copy constructor stays correct when
+/// a member is added.
+namespace sheet_copy {
+
+/// Row store; a copy re-clones every cell (see `clone_cell` in sheet.cpp).
+struct RowStore : std::unordered_map<std::uint32_t, RowCells> {
+  RowStore() = default;
+  RowStore(const RowStore& other);
+  RowStore(RowStore&&) noexcept = default;
+  RowStore& operator=(RowStore&&) noexcept = default;
+};
+
+/// The sheet lock; a copy gets its own.
+struct FreshMutex : std::unique_ptr<std::mutex> {
+  FreshMutex() : std::unique_ptr<std::mutex>(std::make_unique<std::mutex>()) {}
+  FreshMutex(const FreshMutex&) : FreshMutex() {}
+  FreshMutex(FreshMutex&&) noexcept = default;
+  FreshMutex& operator=(FreshMutex&&) noexcept = default;
+};
+
+/// Lazily built spill table; a copy starts without one (the next recalc rebuilds it).
+struct SpillTablePtr : std::unique_ptr<SpillTable> {
+  SpillTablePtr() = default;
+  SpillTablePtr(const SpillTablePtr&) noexcept;
+  SpillTablePtr(SpillTablePtr&&) noexcept = default;
+  SpillTablePtr& operator=(SpillTablePtr&&) noexcept = default;
+  using std::unique_ptr<SpillTable>::operator=;
+};
+
+/// Pivot tables; a copy clones each one without its cached result.
+struct PivotList : std::vector<std::unique_ptr<pivot::PivotTable>> {
+  PivotList() = default;
+  PivotList(const PivotList& other);
+  PivotList(PivotList&&) noexcept = default;
+  PivotList& operator=(PivotList&&) noexcept = default;
+};
+
+}  // namespace sheet_copy
 
 /// A single worksheet inside a `Workbook`.
 ///
@@ -194,7 +236,6 @@ class Sheet {
   // `spill_table_` is a `unique_ptr<SpillTable>` to a forward-declared type;
   // the special members must be defined out-of-line where `SpillTable` is
   // complete. See sheet.cpp for the defaulted implementations.
-  Sheet(const Sheet&) = delete;
   Sheet& operator=(const Sheet&) = delete;
   Sheet(Sheet&&) noexcept;
   Sheet& operator=(Sheet&&) noexcept;
@@ -1266,14 +1307,19 @@ class Sheet {
   /// cells wholesale. Caller must hold `spill_mutex_`.
   void rebuild_formula_index_locked();
 
-  // A new member must also be handled in `clone_as`.
+  /// Member-wise copy used by `clone_as`; the `sheet_copy` members apply their
+  /// own copy rule. Caller must hold `spill_mutex_` of `other`.
+  Sheet(const Sheet& other);
+
+  // Copied by `Sheet(const Sheet&)`; a member that must not carry over is
+  // reset in `clone_as`.
   std::string name_;
   // Non-empty only for chartsheets / dialog sheets / macro sheets and other
   // non-worksheet OOXML sheet types. Their XML and descendant parts are raw
   // passthrough payloads; these two fields preserve the workbook-level link.
   std::string opaque_ooxml_part_path_;
   std::string opaque_ooxml_relationship_type_;
-  std::unordered_map<std::uint32_t, RowCells> rows_;
+  sheet_copy::RowStore rows_;
   // Every coordinate of `rows_` whose cell has formula text, keyed
   // `(col << 32) | row` so a rectangle query walks one ordered row interval
   // per column. Guarded by `spill_mutex_` together with `rows_`.
@@ -1284,7 +1330,7 @@ class Sheet {
   EnumerationRevision cell_enumeration_revision_;
   // Lazily allocated: most sheets do not host any spill regions, so the
   // table is only materialised on the first `commit_spill` call.
-  std::unique_ptr<SpillTable> spill_table_;
+  sheet_copy::SpillTablePtr spill_table_;
   // Guards `spill_table_` and `rows_` against concurrent access so that parallel
   // recalc workers committing dynamic-array spills on the same sheet (each
   // running outside the scheduler's write lock) cannot tear the underlying
@@ -1303,11 +1349,11 @@ class Sheet {
   // `cell_enumeration_revision()`, whose counter carries its own atomicity.
   // Heap ownership makes the lock movable with its sheet, so Sheet's
   // out-of-line defaulted move members cannot omit future metadata fields.
-  mutable std::unique_ptr<std::mutex> spill_mutex_;
+  mutable sheet_copy::FreshMutex spill_mutex_;
   // Pivot tables anchored on this sheet. Empty by default; populated by
   // the OOXML reader at workbook-load time. Heap-owned so addresses stay
   // stable across vector reallocations.
-  std::vector<std::unique_ptr<pivot::PivotTable>> pivot_tables_;
+  sheet_copy::PivotList pivot_tables_;
   // Conditional-format blocks attached to this sheet. Empty by default;
   // populated by the OOXML reader from `<conditionalFormatting>` blocks.
   std::vector<cf::ConditionalFormat> conditional_formats_;

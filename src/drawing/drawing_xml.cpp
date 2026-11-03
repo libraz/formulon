@@ -121,34 +121,6 @@ Expected<void, Error> parse_drawing_part(const std::vector<std::uint8_t>& bytes,
   return Expected<void, Error>::Ok();
 }
 
-std::string_view local_name(const char* qname) {
-  const char* colon = std::strchr(qname, ':');
-  return colon != nullptr ? colon + 1 : qname;
-}
-
-std::string_view local_name(const pugi::xml_node& node) {
-  return local_name(node.name());
-}
-
-pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name) {
-  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
-    if (child.type() == pugi::node_element && (name.empty() || local_name(child) == name)) {
-      return child;
-    }
-  }
-  return {};
-}
-
-std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::string_view name) {
-  std::vector<pugi::xml_node> out;
-  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
-    if (child.type() == pugi::node_element && local_name(child) == name) {
-      out.push_back(child);
-    }
-  }
-  return out;
-}
-
 std::vector<pugi::xml_node> drawing_anchors(const pugi::xml_node& root, bool include_fallback) {
   std::vector<pugi::xml_node> anchors;
   for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
@@ -274,6 +246,17 @@ DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vecto
     }
   }
   return obj;
+}
+
+pugi::xml_node find_drawing_object(const pugi::xml_node& root, std::uint32_t object_id,
+                                   bool (*kind_ok)(DrawingObjectKind)) {
+  for (const pugi::xml_node& anchor : drawing_anchors(root, false)) {
+    const DrawingObject obj = read_drawing_object_fields(anchor);
+    if (kind_ok(obj.kind) && obj.object_id == object_id) {
+      return anchor;
+    }
+  }
+  return {};
 }
 
 std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,

@@ -6,7 +6,6 @@
 #define FORMULON_SHEET_COPY_NAMES_H_
 
 #include <cstddef>
-#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,10 +27,12 @@ std::string copy_sheet_default_name(std::string_view source_name, const std::vec
 /// The candidate is the source name followed by N, where N starts at
 /// `tables_in_workbook + 2`; an underscore separates them only when the
 /// candidate would read as an A1 or R1C1 cell reference. While
-/// `name_taken(candidate)` holds, N advances by one. `name_taken` owns the
-/// case-insensitive comparison against table and defined names.
+/// `name_taken(ctx, candidate)` holds, N advances by one. `name_taken` owns the
+/// case-insensitive comparison against table and defined names. A function
+/// pointer plus context rather than `std::function`, which would cost binary
+/// size for one call site.
 std::string copy_table_name(std::string_view source_table_name, std::size_t tables_in_workbook,
-                            const std::function<bool(std::string_view)>& name_taken);
+                            bool (*name_taken)(void* ctx, std::string_view candidate), void* ctx);
 
 }  // namespace formulon
 

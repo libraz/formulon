@@ -558,9 +558,7 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   } else {
     RETURN_IF_ERROR(io::ooxml::load_part_dom(wb, slicers_path, "slicer", slicers));
   }
-  const std::string_view root_name = slicers.document_element().name();
-  const std::string prefix(
-      root_name.substr(0, root_name.find(':') == std::string_view::npos ? 0 : root_name.find(':') + 1));
+  const std::string prefix(io::qname_prefix_colon(slicers.document_element().name()));
   pugi::xml_node node = slicers.document_element().append_child((prefix + "slicer").c_str());
   io::set_attr(node, "name", name);
   io::set_attr(node, "cache", cache_name);

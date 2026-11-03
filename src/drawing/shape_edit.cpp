@@ -141,13 +141,7 @@ ShapeInfo read_shape(pugi::xml_node anchor, DrawingObject object) {
 }
 
 pugi::xml_node find_shape(pugi::xml_node root, std::uint32_t object_id) {
-  for (pugi::xml_node anchor : drawing_anchors(root, false)) {
-    const DrawingObject obj = read_drawing_object(anchor, {});
-    if (is_shape_kind(obj.kind) && obj.object_id == object_id) {
-      return anchor;
-    }
-  }
-  return {};
+  return find_drawing_object(root, object_id, is_shape_kind);
 }
 
 // The `child` element of `parent`, created (first or last) when absent.

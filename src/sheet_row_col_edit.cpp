@@ -150,17 +150,15 @@ void ShiftAxisRange(MergeRange& range, std::uint32_t index, std::uint32_t count,
 
 void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::uint32_t count, bool is_delete,
                     bool row_axis) {
-  std::vector<MergeRange> retained;
-  retained.reserve(ranges.size());
+  std::size_t kept = 0;
   for (MergeRange& range : ranges) {
     bool drop = false;
     ShiftAxisRange(range, index, count, is_delete, row_axis, &drop);
-    if (drop) {
-      continue;
+    if (!drop) {
+      ranges[kept++] = range;
     }
-    retained.push_back(range);
   }
-  ranges = std::move(retained);
+  ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(kept), ranges.end());
 }
 
 // Moves a data table's input cell along one axis. An input cell that is
@@ -199,8 +197,7 @@ void ShiftDataTableInput(DataTableInput& input, std::uint32_t index, std::uint32
 void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::uint32_t count, bool is_delete,
                      bool row_axis) {
   const StructuralEdit edit{index, count, is_delete, row_axis};
-  std::vector<DataTable> retained;
-  retained.reserve(tables.size());
+  std::size_t kept = 0;
   for (DataTable& table : tables) {
     if (data_table_structure_cut(table, edit) != StructureEditCut::kMisses) {
       continue;
@@ -220,9 +217,12 @@ void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::u
     if (table.r2.deleted && !was_deleted2) {
       table.explicit_attrs |= kDataTableExplicitDel2;
     }
-    retained.push_back(std::move(table));
+    if (&tables[kept] != &table) {
+      tables[kept] = std::move(table);
+    }
+    ++kept;
   }
-  tables = std::move(retained);
+  tables.erase(tables.begin() + static_cast<std::ptrdiff_t>(kept), tables.end());
 }
 
 // Hyperlinks use the same inclusive rectangle semantics as merge ranges.
@@ -231,8 +231,7 @@ void ShiftDataTables(std::vector<DataTable>& tables, std::uint32_t index, std::u
 // drop rules to both metadata shapes.
 void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, std::uint32_t index, std::uint32_t count, bool is_delete,
                         bool row_axis) {
-  std::vector<Hyperlink> retained;
-  retained.reserve(hyperlinks.size());
+  std::size_t kept = 0;
   for (Hyperlink& hyperlink : hyperlinks) {
     MergeRange range{hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col};
     bool drop = false;
@@ -244,9 +243,12 @@ void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, std::uint32_t index,
     hyperlink.col = range.first_col;
     hyperlink.last_row = range.last_row;
     hyperlink.last_col = range.last_col;
-    retained.push_back(std::move(hyperlink));
+    if (&hyperlinks[kept] != &hyperlink) {
+      hyperlinks[kept] = std::move(hyperlink);
+    }
+    ++kept;
   }
-  hyperlinks = std::move(retained);
+  hyperlinks.erase(hyperlinks.begin() + static_cast<std::ptrdiff_t>(kept), hyperlinks.end());
 }
 
 void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, std::uint32_t index, std::uint32_t count,
@@ -318,12 +320,13 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
   pivots.erase(std::remove(pivots.begin(), pivots.end(), nullptr), pivots.end());
 }
 
-// Populated row keys of `rows`, ascending.
-std::vector<std::uint32_t> SortedRowKeys(const std::unordered_map<std::uint32_t, RowCells>& rows) {
+// Populated row keys of `rows` that are at least `first`, ascending.
+std::vector<std::uint32_t> SortedRowKeys(const std::unordered_map<std::uint32_t, RowCells>& rows, std::uint32_t first) {
   std::vector<std::uint32_t> keys;
-  keys.reserve(rows.size());
   for (const auto& kv : rows) {
-    keys.push_back(kv.first);
+    if (kv.first >= first) {
+      keys.push_back(kv.first);
+    }
   }
   sort_ascending(keys);
   return keys;
@@ -616,12 +619,9 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   // collides with an existing row that still needs to move.
   // Ascending keys, walked backwards, so the shared ascending sort serves this
   // direction too.
-  const std::vector<std::uint32_t> keys = SortedRowKeys(rows_);
+  const std::vector<std::uint32_t> keys = SortedRowKeys(rows_, row);
   for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
     const std::uint32_t key = *it;
-    if (key < row) {
-      continue;
-    }
     const std::uint64_t shifted = static_cast<std::uint64_t>(key) + count;
     auto node = rows_.extract(key);
     if (shifted >= kMaxRows) {
@@ -642,11 +642,8 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
   // Drop cells inside the deletion interval, then shift trailing rows
   // up. Walk in ascending key order — every shifted destination key is
   // strictly less than its source so no collision can occur.
-  const std::vector<std::uint32_t> keys = SortedRowKeys(rows_);
+  const std::vector<std::uint32_t> keys = SortedRowKeys(rows_, row);
   for (std::uint32_t key : keys) {
-    if (key < row) {
-      continue;
-    }
     auto node = rows_.extract(key);
     if (key < row + count) {
       continue;  // Deleted row; drop the node.

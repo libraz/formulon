@@ -81,7 +81,7 @@ std::size_t FindAreaSeparator(std::string_view body, std::size_t start) {
   return std::string_view::npos;
 }
 
-/// Trims ASCII whitespace from both ends of `text`.
+/// Trims spaces and tabs from both ends of `text`.
 std::string_view Trim(std::string_view text) {
   std::size_t begin = 0;
   std::size_t end = text.size();

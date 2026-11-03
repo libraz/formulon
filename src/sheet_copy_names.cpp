@@ -1,6 +1,7 @@
 #include "sheet_copy_names.h"
 
 #include "sheet_name.h"
+#include "utils/strings.h"
 #include "utils/utf8_length.h"
 
 namespace formulon {
@@ -14,10 +15,6 @@ bool is_ascii_digit(char c) {
 
 bool is_ascii_alpha(char c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-}
-
-char upper(char c) {
-  return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
 }
 
 /// Strips a trailing " (<digits>)" and returns the base, or the whole name
@@ -71,7 +68,7 @@ bool is_a1_ref(std::string_view s) {
   std::size_t i = 0;
   std::uint32_t col = 0;
   while (i < s.size() && is_ascii_alpha(s[i])) {
-    col = col * 26 + static_cast<std::uint32_t>(upper(s[i]) - 'A' + 1);
+    col = col * 26 + static_cast<std::uint32_t>(strings::ascii_to_upper(s[i]) - 'A' + 1);
     ++i;
     if (i > 3) {
       return false;
@@ -102,7 +99,7 @@ bool is_r1c1_ref(std::string_view s) {
     return false;
   }
   std::size_t i = 1;
-  const char first = upper(s[0]);
+  const char first = strings::ascii_to_upper(s[0]);
   if (first != 'R' && first != 'C') {
     return false;
   }
@@ -113,7 +110,7 @@ bool is_r1c1_ref(std::string_view s) {
   if (i == s.size()) {
     return i > d1;  // R\d+ or C\d+
   }
-  if (first != 'R' || upper(s[i]) != 'C') {
+  if (first != 'R' || strings::ascii_to_upper(s[i]) != 'C') {
     return false;
   }
   ++i;
@@ -158,7 +155,7 @@ std::string copy_sheet_default_name(std::string_view source_name, const std::vec
 }
 
 std::string copy_table_name(std::string_view source_table_name, std::size_t tables_in_workbook,
-                            const std::function<bool(std::string_view)>& name_taken) {
+                            bool (*name_taken)(void* ctx, std::string_view candidate), void* ctx) {
   for (std::size_t n = tables_in_workbook + 2;; ++n) {
     const std::string digits = std::to_string(n);
     std::string candidate(source_table_name);
@@ -168,7 +165,7 @@ std::string copy_table_name(std::string_view source_table_name, std::size_t tabl
       candidate += '_';
       candidate += digits;
     }
-    if (!name_taken(candidate)) {
+    if (!name_taken(ctx, candidate)) {
       return candidate;
     }
   }

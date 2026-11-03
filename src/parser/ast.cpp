@@ -30,6 +30,13 @@ bool InternChecked(Arena& arena, std::string_view source, std::string_view* dest
   return source.empty() || !destination->empty();
 }
 
+// `ref` without its sheet qualifier.
+Reference SheetlessCopy(Reference ref) {
+  ref.sheet = {};
+  ref.sheet_quoted = false;
+  return ref;
+}
+
 // Copies an array of N const AstNode pointers into arena-owned storage.
 // Returns nullptr on allocation failure or when n == 0 (callers handle the
 // empty case explicitly).
@@ -321,14 +328,10 @@ AstNode* AstNode::make_ref3d_node(Arena& arena, std::string_view sheet_begin, st
       !InternChecked(arena, sheet_end, &payload->sheet_end)) {
     return nullptr;
   }
-  payload->cell = cell;
   // The span endpoints carry the sheet identity; the inner cell refs are
   // always sheet-less.
-  payload->cell.sheet = {};
-  payload->cell.sheet_quoted = false;
-  payload->cell_end = cell_end;
-  payload->cell_end.sheet = {};
-  payload->cell_end.sheet_quoted = false;
+  payload->cell = SheetlessCopy(cell);
+  payload->cell_end = SheetlessCopy(cell_end);
   payload->is_range = is_range;
   AstNode* n = make_node(arena, NodeKind::Ref3D);
   if (n == nullptr) {
@@ -361,14 +364,10 @@ AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view
     return nullptr;
   }
   payload->name = {};
-  payload->cell = cell;
   // The payload's `sheet` carries the identity; the corner refs are
   // always sheet-less, matching `make_ref3d`.
-  payload->cell.sheet = {};
-  payload->cell.sheet_quoted = false;
-  payload->cell_end = is_range ? cell_end : payload->cell;
-  payload->cell_end.sheet = {};
-  payload->cell_end.sheet_quoted = false;
+  payload->cell = SheetlessCopy(cell);
+  payload->cell_end = SheetlessCopy(is_range ? cell_end : cell);
   payload->is_range = is_range;
   AstNode* n = AstNode::make_node(arena, NodeKind::ExternalRef);
   if (n == nullptr) {

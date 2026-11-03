@@ -211,13 +211,7 @@ pugi::xml_node top_of(const pugi::xml_node& root, pugi::xml_node node) {
 }
 
 pugi::xml_node find_object(const pugi::xml_node& root, std::uint32_t object_id) {
-  for (const pugi::xml_node& anchor : drawing_anchors(root, false)) {
-    const DrawingObject obj = read_drawing_object(anchor, {});
-    if (is_editable(obj.kind) && obj.object_id == object_id) {
-      return anchor;
-    }
-  }
-  return {};
+  return find_drawing_object(root, object_id, is_editable);
 }
 
 pugi::xml_node insertion_point(const pugi::xml_node& root, const pugi::xml_node& moving, std::size_t index) {
@@ -249,9 +243,7 @@ bool swaps_box(const pugi::xml_node& xfrm) {
 }
 
 std::string prefix_of(const pugi::xml_node& node) {
-  const std::string_view name = node.name();
-  const std::size_t colon = name.find(':');
-  return colon == std::string_view::npos ? std::string() : std::string(name.substr(0, colon + 1));
+  return std::string(io::qname_prefix_colon(node.name()));
 }
 
 // Writes marker `tag`, creating it after `after` (or first) when absent.

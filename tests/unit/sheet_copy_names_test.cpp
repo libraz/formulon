@@ -27,10 +27,16 @@ std::string Lower(std::string_view s) {
 }
 
 std::string Table(std::string_view name, std::size_t tables, const std::vector<std::string>& taken = {}) {
-  return copy_table_name(name, tables, [&](std::string_view cand) {
-    const std::string lc = Lower(cand);
-    return std::any_of(taken.begin(), taken.end(), [&](const std::string& t) { return Lower(t) == lc; });
-  });
+  std::vector<std::string> names = taken;
+  return copy_table_name(
+      name, tables,
+      [](void* context, std::string_view cand) {
+        const auto& taken_names = *static_cast<const std::vector<std::string>*>(context);
+        const std::string lc = Lower(cand);
+        return std::any_of(taken_names.begin(), taken_names.end(),
+                           [&](const std::string& t) { return Lower(t) == lc; });
+      },
+      &names);
 }
 
 TEST(SheetCopyNames, SheetMeasured) {

@@ -42,6 +42,22 @@ Expected<ResolvedSource, Error> resolve_chart_source(const Workbook& wb, std::si
 /// empty extent yields an inverted rectangle (`top > bottom`).
 SheetRect trim_to_populated(const Workbook& wb, SheetRect r);
 
+/// Axis geometry of a 2-D category rectangle: points run down the rows when
+/// it is at least as tall as wide, else across the columns; the other axis
+/// holds the levels.
+struct CategoryAxis {
+  bool down;
+  std::uint32_t first;      ///< First point index.
+  std::uint32_t last;       ///< Last point index.
+  std::uint32_t lvl_first;  ///< First level index.
+  std::uint32_t lvl_last;   ///< Last level index.
+};
+
+inline CategoryAxis category_axis(const SheetRect& r) {
+  const bool down = (r.bottom - r.top) >= (r.right - r.left);
+  return {down, down ? r.top : r.left, down ? r.bottom : r.right, down ? r.left : r.top, down ? r.right : r.bottom};
+}
+
 /// Whether `row` / `col` is hidden by the sheet's layout.
 bool row_hidden(const Sheet& sheet, std::uint32_t row);
 bool col_hidden(const Sheet& sheet, std::uint32_t col);

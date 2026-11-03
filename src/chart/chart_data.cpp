@@ -227,11 +227,12 @@ class Reader {
     if (r.top > r.bottom) {
       return;
     }
-    const bool down = (r.bottom - r.top) >= (r.right - r.left);
-    const std::uint32_t first = down ? r.top : r.left;
-    const std::uint32_t last = down ? r.bottom : r.right;
-    const std::uint32_t lvl_first = down ? r.left : r.top;
-    const std::uint32_t lvl_last = down ? r.right : r.bottom;
+    const CategoryAxis axis = category_axis(r);
+    const bool down = axis.down;
+    const std::uint32_t first = axis.first;
+    const std::uint32_t last = axis.last;
+    const std::uint32_t lvl_first = axis.lvl_first;
+    const std::uint32_t lvl_last = axis.lvl_last;
     const auto at = [&](std::uint32_t point, std::uint32_t level) {
       return down ? Pos{r.sheet, point, level} : Pos{r.sheet, level, point};
     };
@@ -239,8 +240,8 @@ class Reader {
     out.had_cells = true;
     const std::uint32_t format_point = first < last ? first + 1U : first;
     out.format_code = cell_format_code(at(format_point, lvl_last));
+    const Sheet& sheet = wb_.sheet(r.sheet);
     for (std::uint32_t i = first; i <= last; ++i) {
-      const Sheet& sheet = wb_.sheet(r.sheet);
       if (plot_vis_only_ && (down ? row_hidden(sheet, i) : col_hidden(sheet, i))) {
         continue;
       }

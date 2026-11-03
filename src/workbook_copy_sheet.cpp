@@ -41,21 +41,6 @@ Error unsupported(const char* what) {
   return make_error(FormulonErrorCode::kNotImplemented, "copy_sheet: sheet content cannot be copied", what);
 }
 
-/// Re-derives the GUID of the ` <key>="..."` pair in an escaped attribute list, if present.
-void rederive_attr_guid(std::string& attrs, std::string_view key, std::string_view salt) {
-  const std::string needle = " " + std::string(key) + "=\"";
-  const std::size_t at = attrs.find(needle);
-  if (at == std::string::npos) {
-    return;
-  }
-  const std::size_t begin = at + needle.size();
-  const std::size_t end = attrs.find('"', begin);
-  if (end == std::string::npos) {
-    return;
-  }
-  attrs.replace(begin, end - begin, derived_guid(std::string_view(attrs).substr(begin, end - begin), salt));
-}
-
 /// A worksheet's `.xlsb` binary index: optional, rebuilt by Excel, so a copy goes without it.
 bool is_binary_index(const UnknownRelationship& rel) {
   constexpr std::string_view kPrefix = "xl/worksheets/binaryIndex";
@@ -116,23 +101,30 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
   for (const TableMetadata& table : tables_) {
     next_id = std::max(next_id, table.id);
   }
-  const auto name_taken = [this, &table_copies](std::string_view candidate) {
+  struct NameScope {
+    const Workbook* workbook;
+    const std::vector<TableMetadata>* table_copies;
+  };
+  NameScope scope{this, &table_copies};
+  const auto name_taken = [](void* context, std::string_view candidate) {
+    const auto& [workbook, copies] = *static_cast<const NameScope*>(context);
     const auto table_named = [candidate](const TableMetadata& table) {
       return strings::case_insensitive_eq(table.name, candidate) ||
              strings::case_insensitive_eq(table.display_name, candidate);
     };
-    return std::any_of(tables_.begin(), tables_.end(), table_named) ||
-           std::any_of(table_copies.begin(), table_copies.end(), table_named) ||
-           std::any_of(defined_names_.begin(), defined_names_.end(), [candidate](const DefinedName& entry) {
-             return strings::case_insensitive_eq(entry.name, candidate);
-           });
+    return std::any_of(workbook->tables_.begin(), workbook->tables_.end(), table_named) ||
+           std::any_of(copies->begin(), copies->end(), table_named) ||
+           std::any_of(
+               workbook->defined_names_.begin(), workbook->defined_names_.end(),
+               [candidate](const DefinedName& entry) { return strings::case_insensitive_eq(entry.name, candidate); });
   };
   for (const TableMetadata& table : tables_) {
     if (table.sheet_index != source) {
       continue;
     }
     TableMetadata copy = table;
-    const std::string renamed = copy_table_name(table.display_name, tables_.size() + table_copies.size(), name_taken);
+    const std::string renamed =
+        copy_table_name(table.display_name, tables_.size() + table_copies.size(), name_taken, &scope);
     copy.name = renamed;
     copy.display_name = renamed;
     copy.id = ++next_id;
@@ -161,11 +153,14 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
     if (entry.local_sheet_id >= 0) {
       continue;
     }
+    FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
+    if (!result.changed) {
+      continue;
+    }
     const bool shadowed = std::any_of(defined_names_.begin(), defined_names_.end(), [&](const DefinedName& local) {
       return local.local_sheet_id == source_id && strings::case_insensitive_eq(local.name, entry.name);
     });
-    FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
-    if (shadowed || !result.changed) {
+    if (shadowed) {
       continue;
     }
     DefinedName copy = entry;

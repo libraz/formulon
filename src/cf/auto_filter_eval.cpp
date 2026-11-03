@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <functional>
 #include <optional>
 #include <string>
@@ -28,6 +27,7 @@
 #include "styles.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
+#include "utils/double_parse.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
@@ -59,20 +59,6 @@ int collate(std::string_view a, std::string_view b) {
   return eval::collate(a, b, eval::current_eval_profile(), eval::CollationStrength::kCompare);
 }
 
-/// Parses a criterion value as a number; the whole string must be numeric.
-std::optional<double> parse_number(std::string_view text) {
-  if (text.empty()) {
-    return std::nullopt;
-  }
-  const std::string owned(text);
-  char* end = nullptr;
-  const double v = std::strtod(owned.c_str(), &end);
-  if (end != owned.c_str() + owned.size() || !std::isfinite(v)) {
-    return std::nullopt;
-  }
-  return v;
-}
-
 struct PreparedCustomCondition {
   const CustomFilter* source;
   std::optional<double> numeric;
@@ -83,7 +69,7 @@ std::vector<PreparedCustomCondition> prepare_custom_conditions(const CustomFilte
   std::vector<PreparedCustomCondition> prepared;
   prepared.reserve(filters.filters.size());
   for (const CustomFilter& condition : filters.filters) {
-    prepared.push_back({&condition, parse_number(condition.val), eval::scan_has_wildcard(condition.val)});
+    prepared.push_back({&condition, parse_full_double(condition.val), eval::scan_has_wildcard(condition.val)});
   }
   return prepared;
 }

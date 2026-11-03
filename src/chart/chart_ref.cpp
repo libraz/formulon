@@ -28,13 +28,8 @@ using chart_ns::kNsC15;
 using chart_ns::kNsCx;
 using chart_ns::kUriC15;
 
-std::string_view prefix_of_qname(std::string_view name) {
-  const std::size_t colon = name.find(':');
-  return colon == std::string_view::npos ? std::string_view() : name.substr(0, colon);
-}
-
 std::string_view namespace_uri(const pugi::xml_node& node) {
-  return io::find_namespace_binding(node, prefix_of_qname(node.name()));
+  return io::find_namespace_binding(node, io::qname_prefix(node.name()));
 }
 
 bool is_element(const pugi::xml_node& node, std::string_view uri, std::string_view local) {
@@ -74,7 +69,7 @@ std::string extension_prefix(const pugi::xml_node& source_scope, const pugi::xml
     if (suffix > 1) {
       prefix += std::to_string(suffix - 1);
     }
-    if (std::string_view(prefix) == prefix_of_qname(chart_qname)) {
+    if (std::string_view(prefix) == io::qname_prefix(chart_qname)) {
       continue;
     }
     const std::string_view source_binding = io::find_namespace_binding(source_scope, prefix);

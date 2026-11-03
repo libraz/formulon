@@ -43,13 +43,12 @@ void declare_root_namespaces(const pugi::xml_node& root, pugi::xml_node element)
     }
   };
   const auto visit = [&use](const pugi::xml_node& node) {
-    const std::string_view name = node.name();
-    use(name.substr(0, name.find(':') == std::string_view::npos ? 0 : name.find(':')));
+    use(io::qname_prefix(node.name()));
     for (pugi::xml_attribute attr = node.first_attribute(); attr; attr = attr.next_attribute()) {
       const std::string_view attr_name = attr.name();
       const std::size_t colon = attr_name.find(':');
       if (colon != std::string_view::npos) {
-        use(attr_name.substr(0, colon));
+        use(io::qname_prefix(attr_name));
       }
       const std::string_view local = colon == std::string_view::npos ? attr_name : attr_name.substr(colon + 1);
       if (local == "Requires" || local == "Ignorable") {
