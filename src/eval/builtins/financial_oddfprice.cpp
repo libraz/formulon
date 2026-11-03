@@ -207,10 +207,7 @@ Expected<double, ErrorCode> oddf_price_at(const OddFirstBond& b, double yld) {
     }
     price = ((redemption_term + first_term) + regular) - cf * b.sum_a;
   }
-  if (std::isnan(price) || std::isinf(price)) {
-    return ErrorCode::Num;
-  }
-  return price;
+  return builtins_detail::finite_or_num(price);
 }
 
 Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uint32_t arity, bool date1904) {
@@ -227,11 +224,7 @@ Expected<double, ErrorCode> compute_oddf_clean_price(const Value* args, std::uin
 // Clean price per 100 face for a security whose first coupon period
 // is irregular.
 Value OddfPrice(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto p = compute_oddf_clean_price(args, arity, date1904);
-  if (!p) {
-    return Value::error(p.error());
-  }
-  return finalize(p.value());
+  return finalize_expected(compute_oddf_clean_price(args, arity, date1904));
 }
 
 }  // namespace financial_detail

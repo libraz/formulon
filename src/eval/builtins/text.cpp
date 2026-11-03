@@ -153,7 +153,7 @@ Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::ui
   if (!parsed) {
     return std::move(parsed.error());
   }
-  return TextAndCount{std::string(text.value()), parsed.value()};
+  return TextAndCount{std::move(text.value()), parsed.value()};
 }
 
 // LEFT(text, [n]) - first `n` positions (`text_index_unit`). Default n=1. n<0 -> `#VALUE!`.

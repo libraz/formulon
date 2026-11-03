@@ -45,9 +45,11 @@
 #include "eval/coerce.h"
 #include "eval/excel_math.h"
 #include "eval/function_registry.h"
+#include "eval/stats/flushed_ops.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/inverse_distributions.h"
+#include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -60,33 +62,14 @@ namespace {
 
 using builtins_detail::NumberTriple;
 
-// Shared kPi alias kept for readability at the lognormal PDF normalisation
-// site; the value lives in `numeric_helpers.h`.
-constexpr double kDistPi = builtins_detail::kPi;
+using builtins_detail::kPi;
+using builtins_detail::read_optional_number;
+using builtins_detail::read_required_number;
+using builtins_detail::to_finite_value;
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-// Finalises a scalar result: non-finite becomes #NUM!, otherwise wraps in a
-// Value::number. Thin alias kept so the impl bodies read naturally.
-inline Value finalize(double r) {
-  return builtins_detail::to_finite_value(r);
-}
-
-// Reads a required numeric argument. Non-finite coerced values surface
-// as #NUM! so the impl bodies never have to re-check for NaN / Inf.
-inline Expected<double, ErrorCode> read_number(const Value* args, std::uint32_t index) {
-  return builtins_detail::read_required_number(args, index);
-}
-
-// Reads an optional trailing numeric argument, falling back to
-// `default_value` when arity <= index. Parallels `read_number` for
-// error/non-finite handling.
-inline Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                        double default_value) {
-  return builtins_detail::read_optional_number(args, arity, index, default_value);
-}
 
 inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args) {
   return builtins_detail::read_number_triple(args, 0, 1, 2);
@@ -107,90 +90,6 @@ Expected<TripleCumulative, ErrorCode> read_scaled_cumulative_triple(const Value*
     return ErrorCode::Num;
   }
   return parsed.value();
-}
-
-// Shared bracket-then-Newton inverter for CDF surfaces on a half-open
-// interval. The caller supplies `cdf(x)` and its derivative `pdf(x)`
-// along with a bracket `[lo, hi]` known to contain the root (i.e.
-// cdf(lo) <= p <= cdf(hi)). The driver runs a bisection warm-up to
-// tighten the bracket, then switches to Newton with a bracket-escape
-// safeguard that falls back to bisection if a Newton step would land
-// outside `[lo, hi]`.
-//
-// Convergence policy: termination is decided in *x-space* using a
-// relative bound `kTol * max(kTol, |x_new|)`, not on the CDF residual
-// `|cdf(x) - p|`. For tail-tiny probabilities (e.g. p ~ 1e-24 with a
-// true root x ~ 1e-12) the residual can fall well below `kTol` while
-// `x` is still many orders of magnitude away from the root, so a
-// residual-based stop returns gibberish. The `max(kTol, |x_new|)`
-// floor keeps the relative test meaningful when the answer sits at
-// the support boundary (|x| -> 0) without demanding sub-1e-24
-// precision, which would loop forever against double-precision noise.
-//
-// Returns NaN on non-convergence so wrappers can surface #NUM!.
-template <typename CdfFn, typename PdfFn>
-double BracketThenNewton(CdfFn cdf, PdfFn pdf, double lo, double hi, double p) {
-  constexpr int kBisectIter = 40;
-  constexpr int kNewtonIter = 100;
-  constexpr double kTol = 1e-12;
-
-  // Bisection warm-up: tightens the bracket before Newton starts, which
-  // keeps tail-steep CDFs from oscillating.
-  for (int i = 0; i < kBisectIter; ++i) {
-    const double mid = 0.5 * (lo + hi);
-    const double c = cdf(mid);
-    if (std::isnan(c)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    if (c < p) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-    // Stop when the bracket is tight enough either in relative or
-    // absolute terms. The relative bound (`1e-6 * |mid|`) lets Newton
-    // take over fast for mid-range answers; the absolute bound
-    // (`kTol`) ensures we don't stop bisecting prematurely when the
-    // answer is at the support boundary (mid -> 0).
-    if ((hi - lo) < std::max(kTol, 1e-6 * std::abs(mid))) {
-      break;
-    }
-  }
-  double x = 0.5 * (lo + hi);
-  for (int i = 0; i < kNewtonIter; ++i) {
-    const double c = cdf(x);
-    if (std::isnan(c)) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    const double err = c - p;
-    if (err < 0.0) {
-      lo = std::max(lo, x);
-    } else {
-      hi = std::min(hi, x);
-    }
-    const double d = pdf(x);
-    double x_new;
-    if (d <= 0.0 || !std::isfinite(d)) {
-      x_new = 0.5 * (lo + hi);
-    } else {
-      const double step = err / d;
-      x_new = x - step;
-      if (x_new <= lo || x_new >= hi || !std::isfinite(x_new)) {
-        x_new = 0.5 * (lo + hi);
-      }
-    }
-    // Relative-x convergence: 12 sig digits, with an absolute floor of
-    // kTol to handle answers genuinely at the support boundary (where
-    // |x| -> 0). The original `kTol * std::max(1.0, |x|)` floor of 1.0
-    // turned this into an absolute kTol check for `|x| < 1`, which (for
-    // tail-tiny answers like x ~ 1e-12) made the relative test
-    // vacuously easy and let Newton terminate at the wrong scale.
-    if (std::abs(x_new - x) < kTol * std::max(kTol, std::abs(x_new))) {
-      return x_new;
-    }
-    x = x_new;
-  }
-  return std::numeric_limits<double>::quiet_NaN();
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +130,7 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (parsed.value().cumulative) {
     // CDF boundaries: the regularized incomplete beta already returns 0
     // at y == 0 and 1 at y == 1 exactly, so no special-case is needed.
-    return finalize(stats::beta_dist_cdf_excel(x, alpha, beta_shape, a, b));
+    return to_finite_value(stats::beta_dist_cdf_excel(x, alpha, beta_shape, a, b));
   }
   // PDF boundaries at y == 0 and y == 1:
   //   alpha < 1 or beta < 1: PDF diverges -> #NUM!
@@ -243,20 +142,20 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       return Value::error(ErrorCode::Num);
     }
     if (alpha == 1.0) {
-      return finalize(beta_shape / span);
+      return to_finite_value(beta_shape / span);
     }
-    return finalize(0.0);
+    return to_finite_value(0.0);
   }
   if (y == 1.0) {
     if (beta_shape < 1.0) {
       return Value::error(ErrorCode::Num);
     }
     if (beta_shape == 1.0) {
-      return finalize(alpha / span);
+      return to_finite_value(alpha / span);
     }
-    return finalize(0.0);
+    return to_finite_value(0.0);
   }
-  return finalize(stats::beta_dist_pdf_excel(x, alpha, beta_shape, a, b));
+  return to_finite_value(stats::beta_dist_pdf_excel(x, alpha, beta_shape, a, b));
 }
 
 // BETA.INV(p, alpha, beta, [A], [B]) - inverse of BETA.DIST's CDF. Solves
@@ -288,7 +187,7 @@ Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!std::isfinite(r)) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(r);
+  return to_finite_value(r);
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +272,7 @@ double gamma_kernel(double x) noexcept {
     }
     result = result * kSqrtPi;
     if (x < 0.0) {
-      result = (-kDistPi) / result;
+      result = (-kPi) / result;
       result = result / ax;
       if ((whole & 1U) != 0U) {
         result = -result;
@@ -413,9 +312,9 @@ double gamma_kernel(double x) noexcept {
   v = v * kSqrtHalfPi;
   double result = v * series;
   if (x < 0.0) {
-    result = (-kDistPi) / result;
+    result = (-kPi) / result;
     const double f = frac > 0.5 ? 1.0 - frac : frac;
-    double sine = std::sin(kDistPi * f);
+    double sine = std::sin(kPi * f);
     sine = sine * ax;
     result = result / sine;
     if ((whole & 1U) != 0U) {
@@ -427,18 +326,18 @@ double gamma_kernel(double x) noexcept {
 
 // GAMMA(x) - the gamma function; poles (non-positive integers) and overflow are #NUM!.
 Value Gamma(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_e = read_number(args, 0);
+  auto x_e = read_required_number(args, 0);
   if (!x_e) {
     return Value::error(x_e.error());
   }
-  return finalize(gamma_kernel(x_e.value()));
+  return to_finite_value(gamma_kernel(x_e.value()));
 }
 
 // GAMMALN(x) / GAMMALN.PRECISE(x) - ln Γ(x). Both share this impl; the
 // .PRECISE variant is Excel 2010+'s canonical spelling but behaves
 // identically to the legacy name.
 Value Gammaln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_e = read_number(args, 0);
+  auto x_e = read_required_number(args, 0);
   if (!x_e) {
     return Value::error(x_e.error());
   }
@@ -446,7 +345,7 @@ Value Gammaln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(stats::lgamma_excel(x));
+  return to_finite_value(stats::lgamma_excel(x));
 }
 
 // Gamma PDF at x > 0 with shape `alpha` and scale `beta`:
@@ -474,15 +373,15 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   if (parsed.value().cumulative) {
-    return finalize(stats::gamma_ratio_excel(alpha, flush_subnormal(x / beta_scale), false));
+    return to_finite_value(stats::gamma_ratio_excel(alpha, flush_subnormal(x / beta_scale), false));
   }
   if (x == 0.0) {
     if (alpha <= 1.0) {
       return Value::error(ErrorCode::Num);
     }
-    return finalize(0.0);
+    return to_finite_value(0.0);
   }
-  return finalize(GammaPdf(x, alpha, beta_scale));
+  return to_finite_value(GammaPdf(x, alpha, beta_scale));
 }
 
 // GAMMA.INV(p, alpha, beta) - inverse of GAMMA.DIST's CDF, `beta` times the
@@ -497,13 +396,13 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   if (p == 0.0) {
-    return finalize(0.0);
+    return to_finite_value(0.0);
   }
   const double x = stats::gamma_inv_excel(p, alpha, beta_scale);
   if (std::isnan(x)) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(x);
+  return to_finite_value(x);
 }
 
 // ---------------------------------------------------------------------------
@@ -529,46 +428,37 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     return Value::error(ErrorCode::Num);
   }
   if (parsed.value().cumulative) {
-    return finalize(0.0 - excel_expm1(-scaled_power));
+    return to_finite_value(0.0 - excel_expm1(-scaled_power));
   }
   // At x == 0 the x^(alpha-1) factor is 0 for every alpha, so the density there is 0.
   const double x_power = x != 0.0 ? std::exp(std::log(x) * (alpha - 1.0)) : 0.0;
   const double r =
       flush_subnormal(((alpha / std::exp(std::log(beta_scale) * alpha)) * x_power) * std::exp(-scaled_power));
-  return finalize(r);
+  return to_finite_value(r);
 }
 
 // ---------------------------------------------------------------------------
 // LOGNORM family
 // ---------------------------------------------------------------------------
 
-// Error-free sum: `sum` is a + b rounded, `error` the exact remainder.
-struct TwoSum {
-  double sum;
-  double error;
-};
-
-inline TwoSum two_sum(double a, double b) noexcept {
-  const double sum = a + b;
-  const double bb = sum - a;
-  return TwoSum{sum, (a - (sum - bb)) + (b - bb)};
-}
-
 // Log-normal density exp(-(ln sigma + z + ln sqrt(2 pi) + ln x)) with
 // z = (ln x - mu)^2 / (2 sigma^2). The exponent is summed with error terms
 // kept, and the rounding errors re-enter as a second exp factor.
 double lognormal_pdf(double x, double mean, double sd) noexcept {
-  constexpr double kLogSqrt2Pi = 0.9189385332046728;
   const double d = std::log(x) - mean;
   const double z = (d * d) / (2.0 * (sd * sd));
-  const TwoSum first = two_sum(std::log(sd), z);
-  const TwoSum second = two_sum(first.sum, kLogSqrt2Pi);
+  double first_sum;
+  double first_error;
+  stats::flushed::two_sum(std::log(sd), z, &first_sum, &first_error);
+  double second_sum;
+  double second_error;
+  stats::flushed::two_sum(first_sum, stats::kLnSqrt2Pi, &second_sum, &second_error);
   const double log_x = std::log(x);
   // The final sum swaps the roles of its operands in the error term.
-  const double total = log_x + second.sum;
-  const double bb = total - second.sum;
-  const double third_error = (second.sum - (total - bb)) + (log_x - bb);
-  const double error = (first.error + second.error) + third_error;
+  const double total = log_x + second_sum;
+  const double bb = total - second_sum;
+  const double third_error = (second_sum - (total - bb)) + (log_x - bb);
+  const double error = (first_error + second_error) + third_error;
   return std::exp(-total) * std::exp(error);
 }
 
@@ -590,9 +480,9 @@ Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   }
   const double z = (std::log(x) - mean) / sd;
   if (parsed.value().cumulative) {
-    return finalize(stats::normal_cdf(z));
+    return to_finite_value(stats::normal_cdf(z));
   }
-  return finalize(lognormal_pdf(x, mean, sd));
+  return to_finite_value(lognormal_pdf(x, mean, sd));
 }
 
 // LOGNORM.INV(p, mean, sd) - inverse log-normal CDF. Computed as
@@ -608,7 +498,7 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double z = stats_detail::InverseStandardNormal(p);
-  return finalize(std::exp(mean + sd * z));
+  return to_finite_value(std::exp(mean + sd * z));
 }
 
 // ---------------------------------------------------------------------------
@@ -634,7 +524,7 @@ constexpr double kMaxCount = 2147483647.0;
 Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   double counts[4];
   for (std::uint32_t i = 0; i < 4U; ++i) {
-    auto count_e = read_number(args, i);
+    auto count_e = read_required_number(args, i);
     if (!count_e) {
       return Value::error(count_e.error());
     }
@@ -666,18 +556,18 @@ Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (cum_e.value()) {
     // CDF is 0 below the support and 1 at / above k_max.
     if (k < k_min) {
-      return finalize(0.0);
+      return to_finite_value(0.0);
     }
     if (k >= k_max) {
-      return finalize(1.0);
+      return to_finite_value(1.0);
     }
-    return finalize(stats::hypgeom_cdf_excel(k, n, big_k, big_n));
+    return to_finite_value(stats::hypgeom_cdf_excel(k, n, big_k, big_n));
   }
   // PMF branch: 0 outside the support, otherwise the log-combination form.
   if (k < k_min || k > k_max) {
-    return finalize(0.0);
+    return to_finite_value(0.0);
   }
-  return finalize(stats::hypgeom_pmf_excel(k, n, big_k, big_n));
+  return to_finite_value(stats::hypgeom_pmf_excel(k, n, big_k, big_n));
 }
 
 // ---------------------------------------------------------------------------

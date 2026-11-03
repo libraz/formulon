@@ -26,6 +26,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -107,25 +108,6 @@ Expected<std::int64_t, ErrorCode> decode_digit_string(std::string_view s, const 
   return value;
 }
 
-// Converts a non-negative int64 to a string in `radix`, most-significant
-// first. Never produces an empty string: zero renders as "0".
-std::string to_digits(std::int64_t value, int radix) {
-  if (value == 0) {
-    return std::string("0");
-  }
-  std::string out;
-  auto u = static_cast<std::uint64_t>(value);
-  while (u > 0) {
-    const int d = static_cast<int>(u % static_cast<std::uint64_t>(radix));
-    u /= static_cast<std::uint64_t>(radix);
-    out.push_back(static_cast<char>(d < 10 ? ('0' + d) : ('A' + (d - 10))));
-  }
-  for (std::size_t i = 0, j = out.size() - 1; i < j; ++i, --j) {
-    std::swap(out[i], out[j]);
-  }
-  return out;
-}
-
 // Renders a signed value as a string in the destination base. Negative
 // values always produce a full 10-digit two's complement string; `places`
 // is ignored for negatives (Excel does not pad the negative form).
@@ -135,13 +117,13 @@ std::string to_digits(std::int64_t value, int radix) {
 Expected<std::string, ErrorCode> encode_base_string(std::int64_t value, const BaseSpec& spec, const int* places_opt) {
   if (value < 0) {
     const std::int64_t two_c_form = value + spec.two_c;
-    std::string digits = to_digits(two_c_form, spec.radix);
+    std::string digits = builtins_detail::to_radix_digits(static_cast<std::uint64_t>(two_c_form), spec.radix);
     if (digits.size() < static_cast<std::size_t>(spec.max_digits)) {
       digits.insert(digits.begin(), static_cast<std::size_t>(spec.max_digits) - digits.size(), '0');
     }
     return digits;
   }
-  std::string digits = to_digits(value, spec.radix);
+  std::string digits = builtins_detail::to_radix_digits(static_cast<std::uint64_t>(value), spec.radix);
   if (places_opt != nullptr) {
     const int places = *places_opt;
     if (static_cast<int>(digits.size()) > places) {
@@ -351,9 +333,6 @@ Expected<std::uint64_t, ErrorCode> coerce_48_bit_unsigned(const Value& v) {
     return std::move(n.error());
   }
   const double d = n.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
   if (d != std::trunc(d)) {
     return ErrorCode::Num;
   }
@@ -372,9 +351,6 @@ Expected<int, ErrorCode> coerce_shift(const Value& v) {
     return std::move(n.error());
   }
   const double d = n.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
   constexpr double kClamp = 1000.0;
   return static_cast<int>(std::trunc(std::fmax(-kClamp, std::fmin(kClamp, d))));
 }
@@ -507,9 +483,6 @@ Expected<double, ErrorCode> coerce_truncated_in_range(const Value& v, double lo,
     return std::move(n.error());
   }
   const double d = n.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
   const double t = std::trunc(d);
   if (t < lo || t > hi) {
     return ErrorCode::Num;

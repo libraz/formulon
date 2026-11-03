@@ -7,12 +7,12 @@
 
 #include <cmath>
 #include <cstdint>
-#include <limits>
 
 #include "eval/excel_math.h"
 #include "eval/stats/flushed_ops.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
+#include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 
 namespace formulon {
@@ -20,13 +20,9 @@ namespace eval {
 namespace stats {
 namespace {
 
-constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
-constexpr double kEps = 2.220446049250313e-16;
 constexpr double kHalfEps = 1.1102230246251565e-16;
-constexpr double kPi = 3.141592653589793;
 constexpr double kDblMax = 1.7976931348623157e308;
 constexpr double kDblMin = 2.2250738585072014e-308;
-constexpr double kTinyShape = 0x1p-104;
 constexpr int kGammaIterations = 106;
 
 using flushed::compensated_sum;

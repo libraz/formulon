@@ -128,7 +128,7 @@ Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     return Value::error(span.error());
   }
   const double result = -(((discount * redemption) * span.value().days) / span.value().year) + redemption;
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- PRICEMAT(settlement, maturity, issue, rate, yld, [basis=0]) -------
@@ -171,7 +171,7 @@ Value PriceMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     return Value::error(ErrorCode::Num);
   }
   const double result = (100.0 + dim * rate * 100.0) / denom - a * rate * 100.0;
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- YIELDDISC(settlement, maturity, pr, redemption, [basis=0]) --------
@@ -199,7 +199,7 @@ Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     return Value::error(ErrorCode::Num);
   }
   const double result = (span.value().year / span.value().days) * ((redemption - pr) / pr);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- YIELDMAT(settlement, maturity, issue, rate, pr, [basis=0]) --------
@@ -253,7 +253,7 @@ Value YieldMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     return Value::error(ErrorCode::Num);
   }
   const double result = ((1.0 + dim_span.value().days / dim_year * rate) - accrued) / accrued * (dsm_year / dsm_days);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- STOCKHISTORY(stock, start_date, [end_date], [interval], [headers], [properties...]) ---

@@ -157,10 +157,7 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
     return ErrorCode::Num;
   }
   const double price = (in.value().redemption + in.value().cf) / disc - in.value().ai;
-  if (std::isnan(price) || std::isinf(price)) {
-    return ErrorCode::Num;
-  }
-  return price;
+  return builtins_detail::finite_or_num(price);
 }
 
 // --- ODDLPRICE(settlement, maturity, last_interest, rate, yld,
@@ -170,11 +167,7 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
 // irregular (the bond pays periodic coupons up to `last_interest` and a
 // single irregular coupon + redemption at `maturity`).
 Value OddlPrice(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto p = compute_oddl_clean_price(args, arity, date1904);
-  if (!p) {
-    return Value::error(p.error());
-  }
-  return finalize(p.value());
+  return finalize_expected(compute_oddl_clean_price(args, arity, date1904));
 }
 
 }  // namespace financial_detail

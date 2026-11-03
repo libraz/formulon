@@ -4,7 +4,7 @@
 // (SLN / SYD / DDB / DB) lives in `financial_depreciation.cpp`; the
 // DOLLARDE / DOLLARFR / EFFECT / NOMINAL / FVSCHEDULE / PDURATION /
 // RRI / ISPMT group lives in `financial_misc.cpp`. All three
-// translation units share the `read_required_number` / `finalize` /
+// translation units share the `read_required_number` / `to_finite_value` /
 // `pmt_scalar` / ... helpers defined inline in
 // `builtins/financial_helpers.h`.
 //
@@ -47,7 +47,6 @@ namespace {
 using financial_detail::annuity_h;
 using financial_detail::annuity_k;
 using financial_detail::annuity_v;
-using financial_detail::finalize;
 using financial_detail::ipmt_scalar;
 using financial_detail::normalize_type;
 using financial_detail::payment_factor;
@@ -56,6 +55,7 @@ using financial_detail::ppmt_scalar;
 using financial_detail::read_optional_number;
 using financial_detail::read_required_number;
 using financial_detail::read_required_numbers;
+using financial_detail::to_finite_value;
 
 struct TvmArgs {
   double first;
@@ -192,7 +192,7 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   if (r == 0.0) {
-    return finalize(-(p * n + f));
+    return to_finite_value(-(p * n + f));
   }
   auto grown = apply_pow(1.0 + r, n);
   if (!grown) {
@@ -204,7 +204,7 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double result = (-f - p * (1.0 + r * t) * ((pow_term - 1.0) / r)) / pow_term;
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- FV(rate, nper, pmt, [pv=0], [type=0]) ------------------------------
@@ -224,7 +224,7 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   if (r == 0.0) {
-    return finalize(-(v + p * n));
+    return to_finite_value(-(v + p * n));
   }
   auto grown = apply_pow(1.0 + r, n);
   if (!grown) {
@@ -232,7 +232,7 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double pow_term = grown.value();
   const double result = -(v * pow_term + p * (1.0 + r * t) * ((pow_term - 1.0) / r));
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- PMT(rate, nper, pv, [fv=0], [type=0]) ------------------------------
@@ -252,7 +252,7 @@ Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     // oracle).
     return Value::error(ErrorCode::Num);
   }
-  return finalize(pmt_scalar(r, n, v, f, t));
+  return to_finite_value(pmt_scalar(r, n, v, f, t));
 }
 
 // --- NPER(rate, pmt, pv, [fv=0], [type=0]) ------------------------------
@@ -282,7 +282,7 @@ Value Nper(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     if (p == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    return finalize(-(v + f) / p);
+    return to_finite_value(-(v + f) / p);
   }
   if (r <= -1.0) {
     // log(1 + rate) is undefined when rate <= -1; Excel returns #NUM!.
@@ -299,7 +299,7 @@ Value Nper(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double result = std::log(ratio) / std::log(1.0 + r);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- NPV(rate, value1, value2, ...) -------------------------------------
@@ -369,7 +369,7 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (math.failed()) {
     return Value::error(math.fault() == CheckedArith::kFaultDivide ? ErrorCode::Div0 : ErrorCode::Num);
   }
-  return finalize(total);
+  return to_finite_value(total);
 }
 
 // --- RATE(nper, pmt, pv, [fv=0], [type=0], [guess=0.1]) -----------------
@@ -432,7 +432,7 @@ Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (residual.failed() || !found.converged || !((found.x - found.tolerance) > -1.0)) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(found.x);
+  return to_finite_value(found.x);
 }
 
 // --- IPMT(rate, per, nper, pv, [fv=0], [type=0]) ------------------------
@@ -447,7 +447,7 @@ Value Ipmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double result = ipmt_scalar(input.value().rate, input.value().per, input.value().nper, input.value().pv,
                                     input.value().fv, input.value().type);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- PPMT(rate, per, nper, pv, [fv=0], [type=0]) ------------------------
@@ -460,7 +460,7 @@ Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(input.error());
   }
   const auto& in = input.value();
-  return finalize(ppmt_scalar(in.rate, in.per, in.nper, in.pv, in.fv, in.type));
+  return to_finite_value(ppmt_scalar(in.rate, in.per, in.nper, in.pv, in.fv, in.type));
 }
 
 // Principal sum S over the periods [start, end] (`principal`) or the interest
@@ -505,8 +505,8 @@ Value cum_payment_sum(const Value* args, bool principal) {
   if (static_cast<double>(end_i - start_i) + 1.0 > financial_detail::kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(cum_payment_closed(rate, nper, pv, static_cast<double>(start_i), static_cast<double>(end_i),
-                                     input.value().type, principal));
+  return to_finite_value(cum_payment_closed(rate, nper, pv, static_cast<double>(start_i), static_cast<double>(end_i),
+                                            input.value().type, principal));
 }
 
 // --- CUMIPMT(rate, nper, pv, start, end, type) --------------------------

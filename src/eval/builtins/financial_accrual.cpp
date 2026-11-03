@@ -164,7 +164,7 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   }
   const double periods = accrint_periods(issue, first_interest, settlement, frequency.value(), basis.value(),
                                          calc_method.value(), date1904);
-  return finalize((par * (rate / static_cast<double>(frequency.value()))) * periods);
+  return to_finite_value((par * (rate / static_cast<double>(frequency.value()))) * periods);
 }
 
 // --- ACCRINTM(issue, settlement, rate, par, [basis=0]) -----------------
@@ -189,7 +189,7 @@ Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   if (!yf) {
     return Value::error(yf.error());
   }
-  return finalize(par * rate * yf.value());
+  return to_finite_value(par * rate * yf.value());
 }
 
 }  // namespace financial_detail

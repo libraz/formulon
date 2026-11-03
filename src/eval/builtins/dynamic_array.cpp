@@ -39,24 +39,15 @@ namespace formulon {
 namespace eval {
 namespace {
 
+using builtins_detail::read_optional_bool;
+using builtins_detail::read_optional_number;
+
 // Per-call ceiling on `rows * cols` to prevent SEQUENCE from issuing a
 // multi-gigabyte arena allocation when the user (or a fuzzer) asks for an
 // enormous grid. Sheet::kMaxRows * Sheet::kMaxCols ~= 1.7e10, well above any
 // reasonable spill footprint; cap at ~1M cells, the same order of magnitude
 // as Mac Excel's effective dynamic-array ceiling for a single formula. Going
 // over surfaces `#NUM!`, matching Excel's overflow code for SEQUENCE.
-inline Expected<double, ErrorCode> read_optional_number_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                            double default_value) {
-  return builtins_detail::read_optional_number(args, arity, index, default_value);
-}
-
-Expected<bool, ErrorCode> read_optional_bool_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                 bool default_value) {
-  if (arity <= index) {
-    return default_value;
-  }
-  return coerce_to_bool(args[index]);
-}
 
 struct GridShape {
   std::uint32_t rows;
@@ -237,7 +228,7 @@ bool generator_params(const Value* args, std::uint32_t arity, bool sequence, Gen
   const double defaults[4] = {1.0, 1.0, sequence ? 1.0 : 0.0, 1.0};
   double numbers[4];
   for (std::uint32_t index = 0; index < 4U; ++index) {
-    auto number = read_optional_number_arg(args, arity, index, defaults[index]);
+    auto number = read_optional_number(args, arity, index, defaults[index]);
     if (!number) {
       *out_err = number.error();
       return false;
@@ -245,7 +236,7 @@ bool generator_params(const Value* args, std::uint32_t arity, bool sequence, Gen
     numbers[index] = number.value();
   }
   if (!sequence) {
-    auto whole_number = read_optional_bool_arg(args, arity, 4U, false);
+    auto whole_number = read_optional_bool(args, arity, 4U, false);
     if (!whole_number) {
       *out_err = whole_number.error();
       return false;

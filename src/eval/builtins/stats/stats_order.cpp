@@ -290,7 +290,7 @@ Value TrimMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double remaining = static_cast<double>(count - low_copies - high_copies);
   const double r = (std::fabs(remaining) < DBL_MIN) ? 0.0 : sum / remaining;
-  return finite_number_result(r);
+  return to_finite_value(r);
 }
 
 }  // namespace stats_detail

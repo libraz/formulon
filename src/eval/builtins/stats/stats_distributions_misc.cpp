@@ -69,7 +69,7 @@ Value ConfidenceNorm(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*
     return Value::error(input.error());
   }
   const auto [alpha, sd, n] = input.value();
-  return finite_number_result(stats::confidence_norm_excel(alpha, sd, n));
+  return to_finite_value(stats::confidence_norm_excel(alpha, sd, n));
 }
 
 // CONFIDENCE.T(alpha, stdev, size) - t-based confidence half-width:
@@ -85,7 +85,7 @@ Value ConfidenceT(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (n == 1.0) {
     return Value::error(ErrorCode::Div0);
   }
-  return finite_number_result(stats::confidence_t_excel(alpha, sd, n));
+  return to_finite_value(stats::confidence_t_excel(alpha, sd, n));
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ Value BinomInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (n < 0.0 || p <= 0.0 || p >= 1.0 || alpha <= 0.0 || alpha >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(stats::binom_inv_excel(n, p, alpha));
+  return to_finite_value(stats::binom_inv_excel(n, p, alpha));
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ Value BinomInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // FISHER(x) - Fisher transformation: 0.5 * ln((1 + x) / (1 - x)).
 // Domain: |x| < 1; |x| >= 1 surfaces `#NUM!` (the transformation diverges).
 Value Fisher(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = read_number_arg(args, 0);
+  auto x_arg = read_required_number(args, 0);
   if (!x_arg) {
     return Value::error(x_arg.error());
   }
@@ -125,13 +125,13 @@ Value Fisher(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!(x > -1.0 && x < 1.0)) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(0.5 * std::log((1.0 + x) / (1.0 - x)));
+  return to_finite_value(0.5 * std::log((1.0 + x) / (1.0 - x)));
 }
 
 // FISHERINV(y) - inverse Fisher: (exp(2y) - 1) / (exp(2y) + 1). Defined for
 // all finite y; once exp(2y) overflows the result saturates to 1.
 Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto y_arg = read_number_arg(args, 0);
+  auto y_arg = read_required_number(args, 0);
   if (!y_arg) {
     return Value::error(y_arg.error());
   }
@@ -140,7 +140,7 @@ Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (std::isinf(e2y)) {
     return Value::number(1.0);
   }
-  return finite_number_result((e2y - 1.0) / (e2y + 1.0));
+  return to_finite_value((e2y - 1.0) / (e2y + 1.0));
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // `NORM.S.DIST(x, TRUE) - 0.5`, except that below 1e-15 the cancellation is
 // avoided with `erf(x * -sqrt(1/2)) * -0.5`. Defined for all finite x.
 Value Gauss(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = read_number_arg(args, 0);
+  auto x_arg = read_required_number(args, 0);
   if (!x_arg) {
     return Value::error(x_arg.error());
   }
@@ -159,18 +159,18 @@ Value Gauss(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double r = std::fabs(x) > 1e-15
                        ? stats::normal_cdf(x) - 0.5
                        : flush_subnormal(stats::erf_excel(flush_subnormal(x * -0.7071067811865476)) * -0.5);
-  return finite_number_result(r);
+  return to_finite_value(r);
 }
 
 // PHI(x) - standard-normal PDF. Defined for
 // all finite x. Extreme |x| underflows to 0 without triggering `#NUM!`.
 Value Phi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = read_number_arg(args, 0);
+  auto x_arg = read_required_number(args, 0);
   if (!x_arg) {
     return Value::error(x_arg.error());
   }
   const double x = x_arg.value();
-  return finite_number_result(normal_pdf_excel(x, 0.0, 1.0));
+  return to_finite_value(normal_pdf_excel(x, 0.0, 1.0));
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +194,7 @@ Value NegBinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
     return Value::error(ErrorCode::Num);
   }
   const double r = input.value().cumulative ? stats::negbinom_cdf_excel(f, s, p) : stats::negbinom_pmf_excel(f, s, p);
-  return finite_number_result(r);
+  return to_finite_value(r);
 }
 
 // NEGBINOMDIST(number_f, number_s, probability_s) - pre-2010 3-arg
@@ -226,7 +226,7 @@ Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double s1 = std::floor(input.value().third);
   double s2 = s1;
   if (arity >= 4) {
-    auto s2_arg = read_number_arg(args, 3);
+    auto s2_arg = read_required_number(args, 3);
     if (!s2_arg) {
       return Value::error(s2_arg.error());
     }
@@ -235,7 +235,7 @@ Value BinomDistRange(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (n < 0.0 || p < 0.0 || p > 1.0 || s1 < 0.0 || s1 > n || s2 < s1 || s2 > n) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(stats::binom_range_excel(n, p, s1, s2));
+  return to_finite_value(stats::binom_range_excel(n, p, s1, s2));
 }
 
 }  // namespace stats_detail

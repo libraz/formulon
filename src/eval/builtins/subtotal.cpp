@@ -46,6 +46,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/builtins/aggregate.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -155,7 +156,7 @@ Value run_count(const Value* args, std::uint32_t arity) {
 Value run_counta(const Value* args, std::uint32_t arity) {
   std::uint32_t n = 0;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    if (!args[i].is_blank() || args[i].blank_counts_for_counta()) {
+    if (counts_for_counta(args[i])) {
       ++n;
     }
   }

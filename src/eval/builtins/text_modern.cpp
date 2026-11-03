@@ -17,7 +17,7 @@
 #include "eval/coerce.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
-#include "utils/text_ops.h"
+#include "utils/strings.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 
@@ -76,8 +76,8 @@ TextMatchResult find_text_instance(std::string_view text, std::string_view delim
   std::string_view hay = text;
   std::string_view needle = delimiter;
   if (match_mode == 1) {
-    lowered_text = to_lower_ascii(text);
-    lowered_delim = to_lower_ascii(delimiter);
+    lowered_text = strings::to_ascii_lower(text);
+    lowered_delim = strings::to_ascii_lower(delimiter);
     hay = lowered_text;
     needle = lowered_delim;
   }

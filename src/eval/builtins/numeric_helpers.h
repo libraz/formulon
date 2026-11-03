@@ -13,12 +13,14 @@
 #ifndef FORMULON_EVAL_BUILTINS_NUMERIC_HELPERS_H_
 #define FORMULON_EVAL_BUILTINS_NUMERIC_HELPERS_H_
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <string_view>
 
 #include "eval/coerce.h"
@@ -51,6 +53,30 @@ inline Value to_finite_value(double r) noexcept {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(r);
+}
+
+/// `r` itself when finite, otherwise `#NUM!`; the `Expected` counterpart of `to_finite_value`.
+inline Expected<double, ErrorCode> finite_or_num(double r) noexcept {
+  if (std::isnan(r) || std::isinf(r)) {
+    return ErrorCode::Num;
+  }
+  return r;
+}
+
+/// Renders `value` in `radix` (2..36) with upper-case digits, most-significant
+/// first. Zero renders as "0".
+inline std::string to_radix_digits(std::uint64_t value, int radix) {
+  if (value == 0) {
+    return std::string("0");
+  }
+  std::string out;
+  while (value > 0) {
+    const int d = static_cast<int>(value % static_cast<std::uint64_t>(radix));
+    value /= static_cast<std::uint64_t>(radix);
+    out.push_back(static_cast<char>(d < 10 ? ('0' + d) : ('A' + (d - 10))));
+  }
+  std::reverse(out.begin(), out.end());
+  return out;
 }
 
 /// sin / cos / tan are taken only for |x| below 2^27; beyond it the Excel functions (and the IM*
@@ -232,6 +258,16 @@ inline Expected<double, ErrorCode> read_optional_number(const Value* args, std::
     return default_value;
   }
   return read_required_number(args, index);
+}
+
+/// Reads an optional trailing boolean argument at position `index`,
+/// returning `default_value` when `arity <= index`.
+inline Expected<bool, ErrorCode> read_optional_bool(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                    bool default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return coerce_to_bool(args[index]);
 }
 
 /// Reads two required numeric arguments and returns them as a

@@ -26,26 +26,11 @@ namespace formulon {
 namespace eval {
 namespace stats_detail {
 
-// Mathematical constant pi, used to normalise the standard-normal PDF.
-// Alias to the shared constant in `eval/builtins/numeric_helpers.h` so
-// every TU sees the same bit pattern.
-inline constexpr double kStatsPi = builtins_detail::kPi;
-
 // Extracts the numeric values from `args[0..count-1]`. Non-Number values
 // (text / bool / blank after range expansion) are silently skipped. Errors
 // never reach this helper because the dispatcher short-circuits with
 // `propagate_errors = true`.
 std::vector<double> collect_numerics(const Value* args, std::uint32_t count);
-
-// "A"-family value collector for AVERAGEA / MAXA / MINA / VARA / VARPA /
-// STDEVA / STDEVPA. The dispatcher has already transformed range-sourced
-// values (Bool -> 0/1, Text -> 0, Blank dropped) via `range_filter_a_coerce`;
-// this helper handles direct scalar arguments. Direct Bool is coerced to
-// 0/1, direct Blank to 0, and direct Text is strictly coerced via
-// `coerce_to_number` -- numeric-looking text becomes its numeric value and
-// non-numeric text surfaces as `#VALUE!`. Errors never reach this helper
-// because the dispatcher short-circuits with `propagate_errors = true`.
-Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count);
 
 // Direct-scalar-aware collector used by SMALL / LARGE. Range-sourced cells that
 // are non-Number have already been dropped by the dispatcher's
@@ -77,11 +62,10 @@ struct MeanSS {
 using NumberPair = builtins_detail::NumberPair;
 using NumberTriple = builtins_detail::NumberTriple;
 
-// Stats-namespace spellings of the shared numeric argument readers.
-inline Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
-  return builtins_detail::read_required_number(args, index);
-}
+using builtins_detail::read_required_number;
+using builtins_detail::to_finite_value;
 
+// Stats-namespace spellings of the shared numeric argument readers.
 inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::uint32_t first_index,
                                                         std::uint32_t second_index) {
   return builtins_detail::read_number_pair(args, first_index, second_index);
@@ -137,10 +121,6 @@ inline Expected<TripleCumulative, ErrorCode> read_triple_cumulative(const Value*
     return std::move(cum.error());
   }
   return TripleCumulative{input.value().first, input.value().second, input.value().third, cum.value()};
-}
-
-inline Value finite_number_result(double value) {
-  return builtins_detail::to_finite_value(value);
 }
 
 // Helper: compute `(mean, sum_of_squared_deviations)` over a numeric slice.

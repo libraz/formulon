@@ -27,6 +27,12 @@ class FunctionRegistry;
 /// `registry`. Intended to be invoked from `register_builtins`.
 void register_aggregate_builtins(FunctionRegistry& registry);
 
+/// True when COUNTA counts `v`: every value but a blank, except a blank
+/// explicitly owned by a derived value array.
+inline bool counts_for_counta(const Value& v) {
+  return !v.is_blank() || v.blank_counts_for_counta();
+}
+
 /// PERCENTOF(data_subset, data_all) lazy impl. Returns
 /// `SUM(data_subset) / SUM(data_all)` with SUM-style coercion: range/array
 /// non-numerics are silently skipped, while direct scalar arguments coerce

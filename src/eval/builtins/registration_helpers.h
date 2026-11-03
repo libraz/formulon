@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "eval/function_registry.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace eval {
@@ -81,8 +82,7 @@ inline bool registration_name_is(std::string_view name, std::string_view expecte
     return false;
   }
   for (std::size_t i = 0; i < name.size(); ++i) {
-    const char lhs = name[i] >= 'a' && name[i] <= 'z' ? static_cast<char>(name[i] - ('a' - 'A')) : name[i];
-    if (lhs != expected[i]) {
+    if (strings::ascii_to_upper(name[i]) != expected[i]) {
       return false;
     }
   }

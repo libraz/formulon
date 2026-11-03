@@ -13,24 +13,22 @@
 #include "eval/excel_math.h"
 #include "eval/stats/flushed_ops.h"
 #include "eval/stats/horner.h"
+#include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
-#include "utils/subnormal_flush.h"
 
 namespace formulon {
 namespace eval {
 namespace stats {
 namespace {
 
+using flushed::div;
+using flushed::mul;
 using flushed::two_sum;
 
-constexpr double kEps = 2.220446049250313e-16;
-constexpr double kLnSqrt2Pi = 0.9189385332046728;
-constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr int kMaxTerms = 100000;
 
 // Tables: 1/sqrt(pi), 1/sqrt(2 pi), 2 pi, -ln 2, the continued-fraction
 // tolerance; then the coefficient sets, highest degree first.
-constexpr double kInvSqrtPi = 0x1.20dd750429b6dp-1;
 constexpr double kPhi0 = 0x1.9884533d43651p-2;
 constexpr double kTwoPi = 0x1.921fb54442d18p+2;
 constexpr double kNegLn2 = -0x1.62e42fefa39efp-1;
@@ -114,14 +112,6 @@ constexpr double kTemmeSeed[] = {
     -0x1.76e06fec7273bp-13, 0x1.71de3a556c734p-12,  0x1.2f684bda12f68p-10,  -0x1.e573ac901e574p-7,
     0x1.5555555555555p-4,   -0x1.5555555555555p-2,
 };
-
-double mul(double a, double b) noexcept {
-  return flush_subnormal(a * b);
-}
-
-double div(double a, double b) noexcept {
-  return flush_subnormal(a / b);
-}
 
 // Negation that leaves zero unchanged.
 double neg_nz(double v) noexcept {

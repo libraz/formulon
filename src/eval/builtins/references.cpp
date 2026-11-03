@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "eval/a1_parse.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/eval_profile_scope.h"
@@ -55,13 +56,7 @@ Expected<int, ErrorCode> read_optional_int(const Value* args, std::uint32_t arit
   return coerce_to_truncated_int(args[index]);
 }
 
-Expected<bool, ErrorCode> read_optional_bool(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                             bool default_value) {
-  if (arity <= index) {
-    return default_value;
-  }
-  return coerce_to_bool(args[index]);
-}
+using builtins_detail::read_optional_bool;
 
 // Appends `name` and the `!` separator. An empty sheet_text stays bare
 // (`!$A$1`); any other name is quoted by the A1 sheet-qualifier rule of the

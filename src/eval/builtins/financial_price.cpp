@@ -118,10 +118,7 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
   } else {
     price = bond_price_multi(yld, tail.rate, red, freq_d, e, a, n);
   }
-  if (std::isnan(price) || std::isinf(price)) {
-    return ErrorCode::Num;
-  }
-  return price;
+  return builtins_detail::finite_or_num(price);
 }
 
 // --- PRICE(settlement, maturity, rate, yld, redemption, frequency,
@@ -129,11 +126,7 @@ Expected<double, ErrorCode> compute_clean_price(const Value* args, std::uint32_t
 //
 // Clean price per 100 face for a security paying periodic interest.
 Value Price(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto p = compute_clean_price(args, arity, date1904);
-  if (!p) {
-    return Value::error(p.error());
-  }
-  return finalize(p.value());
+  return finalize_expected(compute_clean_price(args, arity, date1904));
 }
 
 }  // namespace financial_detail

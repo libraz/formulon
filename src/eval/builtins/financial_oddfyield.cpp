@@ -50,11 +50,7 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
 // Annual yield-to-maturity (decimal) for a security whose first
 // coupon period is irregular.
 Value OddfYield(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto y = compute_oddf_yield(args, arity, date1904);
-  if (!y) {
-    return Value::error(y.error());
-  }
-  return finalize(y.value());
+  return finalize_expected(compute_oddf_yield(args, arity, date1904));
 }
 
 }  // namespace financial_detail

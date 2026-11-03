@@ -31,10 +31,7 @@ Expected<NumberPair, ErrorCode> read_non_bool_number_pair(const Value* args, std
   return builtins_detail::read_number_pair(args, first_index, second_index);
 }
 
-inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
-                                                            std::uint32_t second_index, std::uint32_t third_index) {
-  return builtins_detail::read_number_triple(args, first_index, second_index, third_index);
-}
+using builtins_detail::read_number_triple;
 
 // --- DOLLARDE / DOLLARFR shared denominator scaling --------------------
 //
@@ -85,7 +82,7 @@ Value dollar_fractional_quote(const Value* args, bool to_decimal) {
   const double fractional_part = price - integer_part;
   const double result = to_decimal ? integer_part + fractional_part * scale.value() / denom
                                    : integer_part + fractional_part * denom / scale.value();
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 Value compound_rate_conversion(const Value* args, bool nominal_to_effective) {
@@ -112,7 +109,7 @@ Value compound_rate_conversion(const Value* args, bool nominal_to_effective) {
   } else {
     result = npery * (std::pow(1.0 + rate, 1.0 / npery) - 1.0);
   }
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 }  // namespace
@@ -202,7 +199,7 @@ Value FvSchedule(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       return Value::error(ErrorCode::Num);
     }
   }
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- PDURATION(rate, pv, fv) -------------------------------------------
@@ -224,7 +221,7 @@ Value PDuration(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double result = (std::log(fv) - std::log(pv)) / std::log(rate + 1.0);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- RRI(nper, pv, fv) -------------------------------------------------
@@ -246,7 +243,7 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double result = std::exp(std::log(fv / pv) * (1.0 / nper)) - 1.0;
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- ISPMT(rate, per, nper, pv) ----------------------------------------
@@ -276,7 +273,7 @@ Value IsPmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double result = -(((nper - per) * pv) * rate) / nper;
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 }  // namespace financial_detail

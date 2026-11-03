@@ -35,6 +35,7 @@ namespace eval {
 namespace {
 
 using builtins_detail::kPi;
+using builtins_detail::read_required_number;
 using builtins_detail::to_finite_value;
 
 // Factorial table for n = 0..170 (double precision). 170! is the largest
@@ -67,10 +68,10 @@ inline double factorial_lookup(std::uint32_t n) {
 }
 
 // Returns true iff `x` is safely representable as a non-negative integer
-// after truncation (i.e. Excel-style INT(x) for non-negative inputs). NaN
-// and infinities are rejected.
+// after truncation (i.e. Excel-style INT(x) for non-negative inputs). `x` is
+// finite: every caller passes a coerced number.
 inline bool try_truncate_nonneg(double x, std::uint64_t max, std::uint64_t* out) {
-  if (std::isnan(x) || std::isinf(x) || x < 0.0) {
+  if (x < 0.0) {
     return false;
   }
   const double t = std::trunc(x);
@@ -81,12 +82,8 @@ inline bool try_truncate_nonneg(double x, std::uint64_t max, std::uint64_t* out)
   return true;
 }
 
-inline Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
-  return builtins_detail::read_required_number(args, index);
-}
-
 Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::uint32_t index, std::uint64_t max) {
-  auto x = read_number_arg(args, index);
+  auto x = read_required_number(args, index);
   if (!x) {
     return std::move(x.error());
   }
@@ -138,7 +135,7 @@ Expected<UIntPair, ErrorCode> read_selection_pair(const Value* args) {
 // to a near integer, then truncates toward zero. Negative raw n or n > 170
 // yields #NUM!.
 Value Fact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = read_number_arg(args, 0);
+  auto x = read_required_number(args, 0);
   if (!x) {
     return Value::error(x.error());
   }
@@ -153,7 +150,7 @@ Value Fact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Excel convention, `FACTDOUBLE(0) = 1` and `FACTDOUBLE(-1) = 1`; every
 // other negative value yields #NUM!. Overflow to +Inf yields #NUM!.
 Value FactDouble(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = read_number_arg(args, 0);
+  auto x = read_required_number(args, 0);
   if (!x) {
     return Value::error(x.error());
   }
@@ -573,17 +570,13 @@ Value Roman(const Value* args, std::uint32_t arity, Arena& arena) {
         return Value::error(f_v.error());
       }
       const double f = std::trunc(f_v.value());
-      if (std::isnan(f) || std::isinf(f) || f < 0.0 || f > 4.0) {
+      if (f < 0.0 || f > 4.0) {
         return Value::error(ErrorCode::Value);
       }
       form = static_cast<int>(f);
     }
   }
-  const double raw = n_v.value();
-  if (std::isnan(raw) || std::isinf(raw)) {
-    return Value::error(ErrorCode::Value);
-  }
-  const double t = std::trunc(raw);
+  const double t = std::trunc(n_v.value());
   if (t < 0.0 || t > 3999.0) {
     return Value::error(ErrorCode::Value);
   }
@@ -613,39 +606,25 @@ Value Base(const Value* args, std::uint32_t arity, Arena& arena) {
       return Value::error(len_v.error());
     }
     const double lf = std::trunc(len_v.value());
-    if (std::isnan(lf) || std::isinf(lf) || lf < 0.0 || lf > 255.0) {
+    if (lf < 0.0 || lf > 255.0) {
       return Value::error(ErrorCode::Num);
     }
     min_len = static_cast<int>(lf);
   }
   const double rf = std::trunc(pair.second);
-  if (std::isnan(rf) || std::isinf(rf) || rf < 2.0 || rf > 36.0) {
+  if (rf < 2.0 || rf > 36.0) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
   const double nf = std::trunc(pair.first);
-  if (std::isnan(nf) || std::isinf(nf) || nf < 0.0) {
+  if (nf < 0.0) {
     return Value::error(ErrorCode::Num);
   }
   const double kMax = static_cast<double>((static_cast<std::uint64_t>(1) << 53u) - 1);
   if (nf > kMax) {
     return Value::error(ErrorCode::Num);
   }
-  std::uint64_t n = static_cast<std::uint64_t>(nf);
-  std::string digits;
-  if (n == 0) {
-    digits.push_back('0');
-  } else {
-    while (n > 0) {
-      const int d = static_cast<int>(n % static_cast<std::uint64_t>(radix));
-      n /= static_cast<std::uint64_t>(radix);
-      digits.push_back(static_cast<char>(d < 10 ? ('0' + d) : ('A' + (d - 10))));
-    }
-    // Reverse to most-significant-first.
-    for (std::size_t i = 0, j = digits.size() - 1; i < j; ++i, --j) {
-      std::swap(digits[i], digits[j]);
-    }
-  }
+  std::string digits = builtins_detail::to_radix_digits(static_cast<std::uint64_t>(nf), radix);
   if (static_cast<int>(digits.size()) < min_len) {
     digits.insert(digits.begin(), static_cast<std::size_t>(min_len) - digits.size(), '0');
   }
@@ -666,7 +645,7 @@ Value Decimal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(radix_v.error());
   }
   const double rf = std::trunc(radix_v.value());
-  if (std::isnan(rf) || std::isinf(rf) || rf < 2.0 || rf > 36.0) {
+  if (rf < 2.0 || rf > 36.0) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
@@ -776,7 +755,7 @@ Value IsoCeiling(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // SQRTPI(num) - sqrt(num * PI). Negative num -> #NUM!.
 Value SqrtPi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = read_number_arg(args, 0);
+  auto x = read_required_number(args, 0);
   if (!x) {
     return Value::error(x.error());
   }

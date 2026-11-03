@@ -12,7 +12,7 @@
 //
 // Registration lives in the sibling `stats.cpp` translation unit; the
 // shared helpers (`collect_numerics`, `compute_mean_ss`, `mean_of`,
-// `centered_and_scaled`, `read_number_triple`, `finite_number_result`)
+// `centered_and_scaled`, `read_number_triple`, `to_finite_value`)
 // are declared in `stats/stats_helpers.h`.
 
 #include <cmath>
@@ -74,7 +74,7 @@ Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double scaled = std::ldexp(mantissa, static_cast<int>(rem));
   const double r =
       std::exp(flush_subnormal(std::log(scaled) * stats::flushed::guarded_div(1.0, static_cast<double>(n))));
-  return finite_number_result(std::ldexp(r, static_cast<int>(q)));
+  return to_finite_value(std::ldexp(r, static_cast<int>(q)));
 }
 
 // HARMEAN(value, ...) - harmonic mean. Every input must be strictly
@@ -95,7 +95,7 @@ Value HarMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double r =
       stats::flushed::guarded_div(1.0, stats::flushed::guarded_div(inv_sum, static_cast<double>(xs.size())));
-  return finite_number_result(r);
+  return to_finite_value(r);
 }
 
 // DEVSQ(value, ...) - sum of squared deviations from the mean,
@@ -111,7 +111,7 @@ Value DevSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const MeanSS ms = compute_mean_ss(xs);
-  return finite_number_result(ms.ss);
+  return to_finite_value(ms.ss);
 }
 
 // AVEDEV(value, ...) - mean absolute deviation from the mean,
@@ -128,7 +128,7 @@ Value AveDev(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     abs_sum += std::fabs(x - mean);
   }
   const double r = abs_sum / static_cast<double>(xs.size());
-  return finite_number_result(r);
+  return to_finite_value(r);
 }
 
 // Sum of `((x - mean) / scale)^3` over `xs`, shared by SKEW and SKEW.P.
@@ -153,7 +153,7 @@ Value Skew(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double cubed_sum = cubed_z_sum(stat.value());
   const double n = stat.value().n;
   const double coeff = n / ((n - 1.0) * (n - 2.0));
-  return finite_number_result(coeff * cubed_sum);
+  return to_finite_value(coeff * cubed_sum);
 }
 
 // SKEW.P(value, ...) - population skewness,
@@ -166,7 +166,7 @@ Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!stat) {
     return Value::error(stat.error());
   }
-  return finite_number_result(cubed_z_sum(stat.value()) / stat.value().n);
+  return to_finite_value(cubed_z_sum(stat.value()) / stat.value().n);
 }
 
 // KURT(value, ...) - excess kurtosis (Fisher's definition),
@@ -197,7 +197,7 @@ Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double coeff_a = (n * (n + 1.0)) / (((n - 1.0) * (n - 2.0)) * (n - 3.0));
   const double coeff_b = (3.0 * ((n - 1.0) * (n - 1.0))) / ((n - 2.0) * (n - 3.0));
-  return finite_number_result(coeff_a * quartic_sum - coeff_b);
+  return to_finite_value(coeff_a * quartic_sum - coeff_b);
 }
 
 // STANDARDIZE(x, mean, standard_dev) - z-score, `(x - mean) / standard_dev`.
@@ -212,7 +212,7 @@ Value Standardize(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result((input.value().first - input.value().second) / sd);
+  return to_finite_value((input.value().first - input.value().second) / sd);
 }
 
 }  // namespace stats_detail

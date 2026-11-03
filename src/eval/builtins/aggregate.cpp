@@ -267,7 +267,7 @@ Value SumSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // skipped; a blank explicitly owned by a derived value array counts as an
 // occupied array cell.
 bool counta_step(FoldState& state, const Value& value, Value* /*err*/) {
-  if (!value.is_blank() || value.blank_counts_for_counta()) {
+  if (counts_for_counta(value)) {
     state.count += 1.0;
   }
   return true;
@@ -324,6 +324,16 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
   const parser::AstNode& arg_node = *effective;
   const parser::NodeKind k = arg_node.kind();
 
+  // A non-finite total is #NUM!.
+  auto finish_total = [&](double total) {
+    if (std::isnan(total) || std::isinf(total)) {
+      *out_err = Value::error(ErrorCode::Num);
+      return false;
+    }
+    *out_total = total;
+    return true;
+  };
+
   // Range-shaped args (and the reference-producing calls that expand to
   // rectangles) go through `resolve_range_arg`; cells receive the
   // numeric-only provenance filter.
@@ -347,12 +357,7 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
       }
       total += v.as_number();
     }
-    if (std::isnan(total) || std::isinf(total)) {
-      *out_err = Value::error(ErrorCode::Num);
-      return false;
-    }
-    *out_total = total;
-    return true;
+    return finish_total(total);
   }
 
   // Inline array literal: walk in row-major order with the same range-like
@@ -374,12 +379,7 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
         total += v.as_number();
       }
     }
-    if (std::isnan(total) || std::isinf(total)) {
-      *out_err = Value::error(ErrorCode::Num);
-      return false;
-    }
-    *out_total = total;
-    return true;
+    return finish_total(total);
   }
 
   // Scalar argument: evaluate and coerce strictly (matching SUM's direct-
@@ -395,12 +395,7 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
     return false;
   }
   const double total = coerced.value();
-  if (std::isnan(total) || std::isinf(total)) {
-    *out_err = Value::error(ErrorCode::Num);
-    return false;
-  }
-  *out_total = total;
-  return true;
+  return finish_total(total);
 }
 
 }  // namespace

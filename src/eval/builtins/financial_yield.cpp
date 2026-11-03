@@ -125,10 +125,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
       return ErrorCode::Num;
     }
     const double yld = ((face - paid) / paid) * ((freq_d * period_days) / dsm);
-    if (std::isnan(yld) || std::isinf(yld)) {
-      return ErrorCode::Num;
-    }
-    return yld;
+    return builtins_detail::finite_or_num(yld);
   }
 
   // --- n > 1: Newton's method on the price kernel with its analytic derivative.
@@ -154,11 +151,7 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
 // Annual yield-to-maturity (decimal) for a security paying periodic
 // interest. The analytic inverse of PRICE.
 Value Yield(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto y = compute_yield(args, arity, date1904);
-  if (!y) {
-    return Value::error(y.error());
-  }
-  return finalize(y.value());
+  return finalize_expected(compute_yield(args, arity, date1904));
 }
 
 }  // namespace financial_detail

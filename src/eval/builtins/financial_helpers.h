@@ -27,23 +27,17 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 
-// Reads an optional trailing numeric argument at position `index`, falling
-// back to `default_value` when `arity <= index`. Non-finite coerced values
-// surface as `#NUM!` to match the rest of the math-family argument-handling
-// conventions. The default is returned by value rather than by reference so
-// callers never need to worry about lifetime of a sentinel. Thin alias to
-// the shared `builtins_detail::read_optional_number` helper.
-inline Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                        double default_value) {
-  return builtins_detail::read_optional_number(args, arity, index, default_value);
-}
+using builtins_detail::read_optional_number;
+using builtins_detail::read_required_number;
+using builtins_detail::to_finite_value;
 
-// Reads a required numeric argument at position `index`. Parallels
-// `read_optional_number` above; kept as a separate helper to keep the
-// call sites readable (no "magic default that won't be used"). Thin
-// alias to the shared `builtins_detail::read_required_number` helper.
-inline Expected<double, ErrorCode> read_required_number(const Value* args, std::uint32_t index) {
-  return builtins_detail::read_required_number(args, index);
+// Lifts a computed `Expected<double, ErrorCode>` into a result `Value`: the
+// error is propagated, a non-finite value becomes `#NUM!`.
+inline Value finalize_expected(const Expected<double, ErrorCode>& r) {
+  if (!r) {
+    return Value::error(r.error());
+  }
+  return to_finite_value(r.value());
 }
 
 // Ceiling on how many periods a depreciation schedule may be stepped
@@ -214,10 +208,7 @@ inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, 
     default:
       return ErrorCode::Num;
   }
-  if (std::isnan(yf) || std::isinf(yf)) {
-    return ErrorCode::Num;
-  }
-  return yf;
+  return builtins_detail::finite_or_num(yf);
 }
 
 // `base^exponent` as Excel's financial kernels evaluate it: the shared IEEE
@@ -289,13 +280,6 @@ inline Expected<DayCountSpan, ErrorCode> day_count_span(double start, double end
   }
 }
 
-// Finalises a scalar financial result: a non-finite value becomes `#NUM!`,
-// otherwise wraps the double in a `Value::number`. Thin alias to the
-// shared `builtins_detail::to_finite_value` helper.
-inline Value finalize(double r) {
-  return builtins_detail::to_finite_value(r);
-}
-
 // Normalises the `type` argument (end-vs-begin of period). Excel accepts
 // any numeric value; zero means end-of-period, any non-zero value means
 // begin-of-period. We mirror that here so the impl formulas can use `type`
@@ -310,7 +294,7 @@ inline double normalize_type(double t) noexcept {
 // PMT and FV at arbitrary (rate, nper[, pv, fv, type]) tuples without
 // going back through the argument-coercion machinery. These helpers
 // compute directly from doubles and return NaN on degenerate cases; the
-// callers translate NaN into `#NUM!` via `finalize`.
+// callers translate NaN into `#NUM!` via `to_finite_value`.
 
 // Annuity kernels on Excel's own log1p / expm1.
 //

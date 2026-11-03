@@ -103,10 +103,7 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
     return ErrorCode::Num;
   }
   const double duration = (num / den) / freq_d;
-  if (std::isnan(duration) || std::isinf(duration)) {
-    return ErrorCode::Num;
-  }
-  return duration;
+  return builtins_detail::finite_or_num(duration);
 }
 
 }  // namespace
@@ -115,11 +112,7 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
 //
 // Macaulay duration in years.
 Value Duration(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto d = compute_macaulay(args, arity, date1904);
-  if (!d) {
-    return Value::error(d.error());
-  }
-  return finalize(d.value());
+  return finalize_expected(compute_macaulay(args, arity, date1904));
 }
 
 // --- MDURATION(settlement, maturity, coupon, yld, frequency, [basis=0]) -
@@ -150,7 +143,7 @@ Value MDuration(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   if (modifier == 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(d.value() / modifier);
+  return to_finite_value(d.value() / modifier);
 }
 
 }  // namespace financial_detail

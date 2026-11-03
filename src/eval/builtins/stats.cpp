@@ -52,8 +52,6 @@ namespace formulon {
 namespace eval {
 namespace stats_detail {
 
-using builtins_detail::to_finite_value;
-
 // --- Shared helpers (declared in `stats/stats_helpers.h`). ---------------
 //
 // Each of these is a thin wrapper around `eval::collect_numerics(Value*,
@@ -113,11 +111,6 @@ Expected<std::vector<double>, ErrorCode> collect_direct_stats(const Value* args,
   return eval::collect_numerics(args, count, policy);
 }
 
-Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count) {
-  // The one policy the A-family and direct dispersion collectors share.
-  return collect_direct_stats(args, count);
-}
-
 MeanSS compute_mean_ss(const std::vector<double>& xs) {
   if (xs.empty()) {
     return {0.0, 0.0};
@@ -159,7 +152,7 @@ double mean_of(const std::vector<double>& xs) noexcept {
 
 // Core dispersion kernel shared by VAR.S / VAR.P / STDEV.S / STDEV.P (and
 // indirectly by VARA / VARPA / STDEVA / STDEVPA through
-// `variance_or_stdev_a`). `sample = true` selects the (n - 1) divisor;
+// `var_or_stdev_dispatch`). `sample = true` selects the (n - 1) divisor;
 // `square_root = true` selects the stdev branch. Empty / single-element
 // inputs collapse to `#DIV/0!` per the relevant Excel rule.
 static Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool square_root) {
@@ -171,17 +164,6 @@ static Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool 
   return to_finite_value(r);
 }
 
-// "A"-family dispatch onto `variance_or_stdev`: collects via `collect_a`
-// (Bool / Text / Blank coerced or dropped per the AVERAGEA rule) then
-// delegates to the shared kernel.
-static Value variance_or_stdev_a(const Value* args, std::uint32_t arity, bool sample, bool square_root) {
-  auto collected = collect_a(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
-  }
-  return variance_or_stdev(collected.value(), sample, square_root);
-}
-
 Expected<double, ErrorCode> read_kth_arg(const Value& v) {
   return coerce_to_number(v);
 }
@@ -190,14 +172,14 @@ Value percentile_inc_sorted(const std::vector<double>& xs, double k) {
   // Delegates to the shared kernel; callers (`PercentileInc`, `QuartileInc`)
   // have already guaranteed `xs` is non-empty and `k in [0, 1]`, so the
   // kernel's domain guards are no-ops on this path. The kernel returns
-  // `Expected<double, ErrorCode>` so we lift through `finite_number_result`
+  // `Expected<double, ErrorCode>` so we lift through `to_finite_value`
   // for the success path and propagate `#NUM!` verbatim on failure (which
   // can still arise on a non-finite interpolated blend).
   auto r = numeric_aggregate_kernels::percentile_sorted_inc(xs, k);
   if (!r) {
     return Value::error(r.error());
   }
-  return finite_number_result(r.value());
+  return to_finite_value(r.value());
 }
 
 Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
@@ -210,7 +192,7 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
   if (!r) {
     return Value::error(r.error());
   }
-  return finite_number_result(r.value());
+  return to_finite_value(r.value());
 }
 
 ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
@@ -281,13 +263,13 @@ static Value StdevP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // "A" family: AVERAGEA / MAXA / MINA / VARA / VARPA / STDEVA / STDEVPA.
 // Differ from the non-A counterparts by evaluating text as 0 and Bool as
 // 0 / 1 instead of skipping them. Range-sourced Blanks are still dropped;
-// direct Blank arguments are counted as 0 (see `collect_a`). Registered
+// direct Blank arguments are counted as 0 (see `collect_direct_stats`). Registered
 // with `range_filter_a_coerce = true` so the dispatcher performs the
 // provenance-aware transform on range cells before the impl runs.
 // ---------------------------------------------------------------------------
 
 static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_a(args, arity);
+  auto collected = collect_direct_stats(args, arity);
   if (!collected) {
     return Value::error(collected.error());
   }
@@ -300,11 +282,11 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
     sum.add(x);
   }
   const double r = flush_subnormal(sum.result() / static_cast<double>(xs.size()));
-  return finite_number_result(r);
+  return to_finite_value(r);
 }
 
 static Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
-  auto collected = collect_a(args, arity);
+  auto collected = collect_direct_stats(args, arity);
   if (!collected) {
     return Value::error(collected.error());
   }
@@ -318,7 +300,7 @@ static Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
       best = xs[i];
     }
   }
-  return finite_number_result(best);
+  return to_finite_value(best);
 }
 
 static Value MaxA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
@@ -330,19 +312,19 @@ static Value MinA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }
 
 static Value VarA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return variance_or_stdev_a(args, arity, true, false);
+  return var_or_stdev_dispatch(args, arity, true, false);
 }
 
 static Value VarPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return variance_or_stdev_a(args, arity, false, false);
+  return var_or_stdev_dispatch(args, arity, false, false);
 }
 
 static Value StdevA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return variance_or_stdev_a(args, arity, true, true);
+  return var_or_stdev_dispatch(args, arity, true, true);
 }
 
 static Value StdevPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return variance_or_stdev_a(args, arity, false, true);
+  return var_or_stdev_dispatch(args, arity, false, true);
 }
 
 }  // namespace stats_detail

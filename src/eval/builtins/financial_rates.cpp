@@ -114,7 +114,7 @@ Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date19
     return Value::error(ErrorCode::Num);
   }
   const double result = (1.0 - pr / redemption) * (span.value().year / span.value().days);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- INTRATE(settlement, maturity, investment, redemption, [basis=0]) --
@@ -141,7 +141,7 @@ Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
     return Value::error(ErrorCode::Num);
   }
   const double result = (span.value().year / span.value().days) * ((redemption - investment) / investment);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- RECEIVED(settlement, maturity, investment, discount, [basis=0]) ---
@@ -171,7 +171,7 @@ Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     return Value::error(ErrorCode::Num);
   }
   const double result = investment / (-x + 1.0);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- TBILLPRICE(settlement, maturity, discount) ------------------------
@@ -202,7 +202,7 @@ Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
   if (result <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- TBILLYIELD(settlement, maturity, pr) ------------------------------
@@ -227,7 +227,7 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
     return Value::error(ErrorCode::Num);
   }
   const double result = ((100.0 - pr) / pr) * (360.0 / dsm);
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- TBILLEQ(settlement, maturity, discount) ---------------------------
@@ -269,7 +269,7 @@ Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool
     if (denom == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    return finalize((365.0 * rate) / denom);
+    return to_finite_value((365.0 * rate) / denom);
   }
   // Long branch: 182 < DSM. The semi-annual-compounding quadratic, with
   // Y = 366 only when DSM is exactly 366 and Excel's operation order:
@@ -296,7 +296,7 @@ Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool
     return Value::error(ErrorCode::Num);
   }
   const double result = ((std::sqrt(disc) * 2.0) + a) / denom;
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 }  // namespace financial_detail

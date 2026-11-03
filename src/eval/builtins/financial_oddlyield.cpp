@@ -52,10 +52,7 @@ Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t 
   }
   const double yld =
       (((in.value().redemption + in.value().cf) - denom) / denom) * (in.value().freq_d / in.value().dsc_units);
-  if (std::isnan(yld) || std::isinf(yld)) {
-    return ErrorCode::Num;
-  }
-  return yld;
+  return builtins_detail::finite_or_num(yld);
 }
 
 // --- ODDLYIELD(settlement, maturity, last_interest, rate, pr,
@@ -64,11 +61,7 @@ Expected<double, ErrorCode> compute_oddl_yield(const Value* args, std::uint32_t 
 // Annual yield-to-maturity (decimal) for a security whose final coupon
 // period is irregular. The analytic closed-form inverse of ODDLPRICE.
 Value OddlYield(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto y = compute_oddl_yield(args, arity, date1904);
-  if (!y) {
-    return Value::error(y.error());
-  }
-  return finalize(y.value());
+  return finalize_expected(compute_oddl_yield(args, arity, date1904));
 }
 
 }  // namespace financial_detail

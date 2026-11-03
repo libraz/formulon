@@ -8,11 +8,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 
 #include "eval/excel_math.h"
 #include "eval/stats/flushed_ops.h"
 #include "eval/stats/incomplete_gamma.h"
+#include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/subnormal_flush.h"
 
@@ -21,17 +21,12 @@ namespace eval {
 namespace stats {
 namespace {
 
-constexpr double kEps = 2.220446049250313e-16;
 constexpr double kTol = 0x1.4p-49;
-constexpr double kLnSqrt2Pi = 0.9189385332046728;
-constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double kLog07 = -0x1.6d3c324e13f4fp-2;
 constexpr double kLog09 = -0x1.af8e8210a415dp-4;
 constexpr double kUnder = 0x1p-970;
 constexpr double kRescale = 0x1.502d2768807e1p+9;
-constexpr double kTinyShape = 0x1p-104;
 constexpr double kTwoOverSqrtPi = 0x1.20dd750429b6dp+0;
-constexpr double kInvSqrtPi = 0x1.20dd750429b6dp-1;
 constexpr double kQuarterSqrtPi = 0x1.c5bf891b4ef6bp-2;
 constexpr double kTwoPowNeg1p5 = 0x1.6a09e667f3bcdp-2;
 constexpr std::uint64_t kBfracTolBits = 0x3ce4000000000001ULL;

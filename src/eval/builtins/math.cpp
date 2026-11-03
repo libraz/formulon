@@ -79,9 +79,6 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
     return std::move(coerced.error());
   }
   const double d = coerced.value();
-  if (std::isnan(d) || std::isinf(d)) {
-    return ErrorCode::Num;
-  }
   // Converting a double outside `int`'s range is undefined, and the two
   // architectures disagree on what they produce: AArch64 saturates to INT_MAX
   // while x86-64 yields INT_MIN. A digit count like `1e50` therefore read as a

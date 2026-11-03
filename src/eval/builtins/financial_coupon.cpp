@@ -75,7 +75,7 @@ Value CoupPcd(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return finalize(ctx.value().pcd);
+  return to_finite_value(ctx.value().pcd);
 }
 
 // --- COUPNCD(settlement, maturity, frequency, [basis=0]) ---------------
@@ -86,7 +86,7 @@ Value CoupNcd(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return finalize(ctx.value().ncd);
+  return to_finite_value(ctx.value().ncd);
 }
 
 // --- COUPNUM(settlement, maturity, frequency, [basis=0]) ---------------
@@ -99,7 +99,7 @@ Value CoupNum(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return finalize(static_cast<double>(ctx.value().coupons_remaining));
+  return to_finite_value(static_cast<double>(ctx.value().coupons_remaining));
 }
 
 // --- COUPDAYBS(settlement, maturity, frequency, [basis=0]) -------------
@@ -111,7 +111,7 @@ Value CoupDayBs(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return finalize(ctx.value().days_bs);
+  return to_finite_value(ctx.value().days_bs);
 }
 
 // --- COUPDAYSNC(settlement, maturity, frequency, [basis=0]) ------------
@@ -122,7 +122,7 @@ Value CoupDaysNc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool 
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return finalize(ctx.value().days_nc);
+  return to_finite_value(ctx.value().days_nc);
 }
 
 // --- COUPDAYS(settlement, maturity, frequency, [basis=0]) --------------
@@ -136,7 +136,7 @@ Value CoupDays(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return finalize(ctx.value().period_days);
+  return to_finite_value(ctx.value().period_days);
 }
 
 }  // namespace financial_detail

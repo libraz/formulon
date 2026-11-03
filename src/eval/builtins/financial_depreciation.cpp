@@ -159,7 +159,7 @@ Value Sln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (life == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  return finalize((cost - salvage) / life);
+  return to_finite_value((cost - salvage) / life);
 }
 
 // --- SYD(cost, salvage, life, period) -----------------------------------
@@ -186,7 +186,7 @@ Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double result = (cost - salvage) * (life - period + 1.0) * 2.0 / (life * (life + 1.0));
-  return finalize(result);
+  return to_finite_value(result);
 }
 
 // --- DDB(cost, salvage, life, period, [factor=2]) -----------------------
@@ -210,7 +210,7 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period <= 0.0 || period > life || factor <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finalize(ddb_charge(cost, salvage, life, period, factor));
+  return to_finite_value(ddb_charge(cost, salvage, life, period, factor));
 }
 
 // --- DB(cost, salvage, life, period, [month=12]) ------------------------
@@ -284,9 +284,9 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     }
   }
   if (partial_last) {
-    return finalize((12.0 - month_int) * (rate * (book / 12.0)));
+    return to_finite_value((12.0 - month_int) * (rate * (book / 12.0)));
   }
-  return finalize(dep);
+  return to_finite_value(dep);
 }
 
 // --- VDB(cost, salvage, life, start_period, end_period, [factor=2],
@@ -353,7 +353,7 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       n = n + 1.0;
       charge = ddb(n);
     }
-    return finalize(((end_period - n) + 1.0) * charge + total);
+    return to_finite_value(((end_period - n) + 1.0) * charge + total);
   }
 
   double life = life_arg;
@@ -366,7 +366,7 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     const double first = ddb(1.0);
     const double straight = (cost - salvage) / life;
     if (straight - first > 0.0) {
-      return finalize((end_period - start) * straight + total);
+      return to_finite_value((end_period - start) * straight + total);
     }
     const double fraction = start - whole;
     book = -(fraction * first) + cost;
@@ -388,17 +388,17 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   double slope = 0.0;
   for (auto i = static_cast<std::int64_t>(whole); i > 0; --i) {
     if (walk(&charge, &slope)) {
-      return finalize((end_period - start) * slope + total);
+      return to_finite_value((end_period - start) * slope + total);
     }
     book = book - charge;
     life = life - 1.0;
   }
   while (true) {
     if (walk(&charge, &slope)) {
-      return finalize((end_period - start) * slope + total);
+      return to_finite_value((end_period - start) * slope + total);
     }
     if (!((end_period - start) - 1.0 > 0.0)) {
-      return finalize((end_period - start) * charge + total);
+      return to_finite_value((end_period - start) * charge + total);
     }
     total = total + charge;
     book = book - charge;
@@ -494,7 +494,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
   }
   first = builtins_detail::round_half_away_decimals(std::min(first, cost - salvage), 0);
   if (period == 0.0) {
-    return finalize(first);
+    return to_finite_value(first);
   }
   double book = cost - first;
   double dep = 0.0;
@@ -510,7 +510,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     }
     book -= dep;
   }
-  return finalize(builtins_detail::round_half_away_decimals(dep, 0));
+  return to_finite_value(builtins_detail::round_half_away_decimals(dep, 0));
 }
 
 // --- AMORLINC(cost, date_purchased, first_period, salvage, period, rate,
@@ -571,7 +571,7 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   first = std::min(first, cost - salvage);
   const double period = std::trunc(parsed.value().period);
   if (period == 0.0) {
-    return finalize(first);
+    return to_finite_value(first);
   }
   double remaining = (cost - salvage) - first;
   double charge = rate * cost;
@@ -579,7 +579,7 @@ Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     charge = std::min(charge, remaining);
     remaining = std::max(remaining - charge, 0.0);
   }
-  return finalize(charge);
+  return to_finite_value(charge);
 }
 
 }  // namespace financial_detail
