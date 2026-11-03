@@ -13,11 +13,14 @@
 #include <cstdint>
 #include <vector>
 
-#include "parser/ast_shift.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
 namespace formulon {
+
+namespace parser {
+class RefTransform;
+}  // namespace parser
 
 class Workbook;
 
