@@ -543,10 +543,6 @@ TEST(WorkbookSheetOps, AddSheetRecoversMissingReferenceWithNoGraphNodes) {
   EXPECT_DOUBLE_EQ(after.as_number(), 12.0);
 }
 
-TEST(WorkbookSheetOps, AddSheetCheckedRecoversMissingSheetReferences) {
-  ExerciseMissingSheetRecovery([](Workbook& wb) { ASSERT_TRUE(static_cast<bool>(wb.add_sheet_checked("Missing"))); });
-}
-
 TEST(WorkbookSheetOps, AddSheetValidatedRecoversMissingSheetReferences) {
   ExerciseMissingSheetRecovery([](Workbook& wb) { ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("Missing"))); });
 }

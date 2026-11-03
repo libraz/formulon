@@ -213,10 +213,7 @@ TEST(WorkbookSheetOps, AppendReportsTheIndexOfTheSheetItAppended) {
   Workbook wb = Workbook::create_empty();
   EXPECT_EQ(wb.add_sheet("First"), 0U);
   EXPECT_EQ(wb.add_sheet("Second"), 1U);
-
-  auto checked = wb.add_sheet_checked("Third");
-  ASSERT_TRUE(static_cast<bool>(checked));
-  EXPECT_EQ(checked.value(), 2U);
+  EXPECT_EQ(wb.add_sheet("Third"), 2U);
 
   ASSERT_EQ(wb.sheet_count(), 3U);
   EXPECT_EQ(wb.sheet(0).name(), "First");
@@ -246,13 +243,9 @@ TEST(WorkbookSheetOps, AppendStopsAtTheSheetIdCeiling) {
   for (std::size_t i = 0; i < Workbook::kMaxSheets; ++i) {
     name.assign("S");
     name.append(std::to_string(i));
-    ASSERT_TRUE(static_cast<bool>(wb.add_sheet_checked(name))) << "rejected at sheet " << i;
+    ASSERT_EQ(wb.add_sheet(name), i) << "rejected at sheet " << i;
   }
   ASSERT_EQ(wb.sheet_count(), Workbook::kMaxSheets);
-
-  auto checked = wb.add_sheet_checked("Overflow");
-  ASSERT_FALSE(static_cast<bool>(checked));
-  EXPECT_EQ(checked.error().code, FormulonErrorCode::kSheetCountLimitExceeded);
 
   auto validated = wb.add_sheet_validated("Overflow");
   ASSERT_FALSE(static_cast<bool>(validated));

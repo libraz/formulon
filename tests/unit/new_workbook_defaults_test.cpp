@@ -254,7 +254,7 @@ TEST(NewWorkbookDefaults, AddedSheetsMatchTheFirstSheet) {
     ASSERT_NE(c, nullptr);
     Workbook wb = Workbook::create_for_profile(profile);
     ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("Second")));
-    ASSERT_TRUE(static_cast<bool>(wb.add_sheet_checked("Third")));
+    ASSERT_TRUE(static_cast<bool>(wb.add_sheet_validated("Third")));
     const std::vector<std::uint8_t> pkg = Save(wb);
     ASSERT_FALSE(pkg.empty());
     for (const char* part : {"xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml"}) {

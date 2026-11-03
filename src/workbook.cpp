@@ -384,13 +384,6 @@ std::size_t Workbook::add_sheet(std::string name) {
   return sheets_.size() - 1U;
 }
 
-Expected<std::size_t, Error> Workbook::add_sheet_checked(std::string name) {
-  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
-  append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name), new_sheet_profile());
-  return sheets_.size() - 1U;
-}
-
 Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(validate_sheet_name(name));

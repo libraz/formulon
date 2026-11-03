@@ -185,25 +185,10 @@ class Workbook {
   /// Duplicate names are not rejected at this layer, deliberately: this is
   /// the entry point that can build a workbook Excel would refuse, which
   /// is what the reader-rejection tests need to author their fixtures.
-  /// Anything appending from outside the process must not use it. Callers
-  /// that append from external input use `add_sheet_checked`; the file
-  /// readers validate the name through `add_sheet_validated`, and every
-  /// binding through `add_sheet_entered`.
+  /// Anything appending from outside the process must not use it: the
+  /// file readers validate the name through `add_sheet_validated`, and
+  /// every binding through `add_sheet_entered`.
   std::size_t add_sheet(std::string name);
-
-  /// Appends a new sheet with display name `name` and returns its index,
-  /// rejecting the append once the workbook holds `kMaxSheets` sheets.
-  ///
-  /// The name itself is taken verbatim, so this is the entry point for
-  /// callers that must preserve whatever name their source carried while
-  /// still refusing a sheet count the dependency graph cannot address.
-  /// The file readers do not use it: a name arriving from a file is
-  /// untrusted input and goes through `add_sheet_validated`, because a
-  /// duplicate name silently resolves every lookup to the first match.
-  ///
-  /// Errors:
-  ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
-  Expected<std::size_t, Error> add_sheet_checked(std::string name);
 
   /// Appends a new sheet after validating `name` structurally: strict
   /// UTF-8, non-empty, at most 31 UTF-16 code units, no forbidden character
