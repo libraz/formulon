@@ -167,6 +167,7 @@ set(FORMULON_CORE_SOURCES
   src/io/iso_date.cpp
   src/io/ooxml_reader.cpp
   src/io/ooxml/external_link_reader.cpp
+  src/io/ooxml/package_rels_reader.cpp
   src/io/ooxml/package_validator.cpp
   src/io/ooxml/pivot_target_reader.cpp
   src/io/ooxml/part_dom.cpp
@@ -308,7 +309,6 @@ set(FORMULON_CORE_SOURCES
   src/eval/dynamic_read_log.cpp
   src/eval/dep_extractor.cpp
   src/eval/defined_name_resolve.cpp
-  src/eval/dirty_set.cpp
   src/eval/range_dep_index.cpp
   src/eval/iterative_solver.cpp
   src/eval/recalc_dynamic_reads.cpp
@@ -418,6 +418,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/datetime_lazy.cpp
   src/eval/number_parse.cpp
   src/eval/range_args.cpp
+  src/eval/scalar_args.cpp
   src/eval/scalar_ops.cpp
   src/eval/x87_arith.cpp
   src/eval/spill_committer.cpp

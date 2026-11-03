@@ -281,11 +281,11 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
   }
 }
 
-std::uint32_t xti_sup_book(const SheetRangeTable& table, std::uint32_t book) {
+std::uint32_t xti_sup_book(bool names_self, std::uint32_t book) {
   if (book == 0U) {
     return 0U;
   }
-  return book - (xti_names_self(table) ? 0U : 1U);
+  return book - (names_self ? 0U : 1U);
 }
 
 bool xti_names_self(const SheetRangeTable& table) {

@@ -16,6 +16,7 @@
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sst_writer.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -39,20 +40,22 @@ std::uint32_t StyleWord(const Cell& cell) {
   return (cell.xf_index & 0xFFFFFFU) | (show_phonetic ? (1U << kShowPhoneticShift) : 0U);
 }
 
+/// Mask of the style word `EmitCellHeader` writes: the 24-bit style index and
+/// the fPhShow flag in bit 24.
+constexpr std::uint32_t kStyleWordMask = (1U << (kShowPhoneticShift + 1U)) - 1U;
+
 /// Emits the standard XLSB cell-header (column, iStyleRef, fPhShow):
 ///   * column    : u32
 ///   * iStyleRef : 3 bytes, little-endian (index into the xf table)
 ///   * fPhShow   : u8 (bit 0 = the style word's bit 24)
 ///
-/// `xf_index` is the cell's style-table index; it must round-trip so a
-/// styled cell keeps its formatting through `write_xlsb -> read_xlsb`.
-/// `ReadCellHeader` decodes the same 3-byte little-endian layout.
+/// `xf_index` is the cell's style word; it must round-trip so a styled cell
+/// keeps its formatting through `write_xlsb -> read_xlsb`. Bits above the
+/// flag are dropped so they cannot reach the fourth byte's reserved bits.
+/// `ReadCellHeader` decodes the same layout.
 void EmitCellHeader(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index) {
   emit_u32(dst, col);
-  // iStyleRef: 24-bit little-endian style index. Excel xf indices always
-  // fit in 24 bits; mask defensively so a corrupt oversized index cannot
-  // bleed into the phonetic flag, which is the fourth byte (fPhShow).
-  emit_u32(dst, xf_index & ((1U << (kShowPhoneticShift + 1U)) - 1U));
+  emit_u32(dst, xf_index & kStyleWordMask);
 }
 
 /// Returns the `BErr` byte a cell value of `e` is stored as (see
@@ -60,6 +63,41 @@ void EmitCellHeader(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint
 /// performs in `BrtCellError`.
 std::uint8_t ErrorWireCode(ErrorCode e) {
   return static_cast<std::uint8_t>(ooxml_code(stored_cell_error(e)));
+}
+
+/// How a cached scalar is stored: a number, or a single byte (boolean value
+/// or error wire code). A non-finite number is stored as `#NUM!`.
+struct StoredScalar {
+  enum class Shape { kNumber, kBool, kError, kOther };
+  Shape shape = Shape::kOther;
+  double number = 0.0;
+  std::uint8_t byte = 0;
+};
+
+StoredScalar StoreScalar(const Value& v) {
+  StoredScalar out;
+  switch (v.kind()) {
+    case ValueKind::Number:
+      if (std::isfinite(v.as_number())) {
+        out.shape = StoredScalar::Shape::kNumber;
+        out.number = v.as_number();
+      } else {
+        out.shape = StoredScalar::Shape::kError;
+        out.byte = ErrorWireCode(ErrorCode::Num);
+      }
+      break;
+    case ValueKind::Bool:
+      out.shape = StoredScalar::Shape::kBool;
+      out.byte = v.as_boolean() ? 1U : 0U;
+      break;
+    case ValueKind::Error:
+      out.shape = StoredScalar::Shape::kError;
+      out.byte = ErrorWireCode(v.as_error());
+      break;
+    default:
+      break;
+  }
+  return out;
 }
 
 /// Parses `cell.formula_text` into an AST and encodes it as a Ptg
@@ -110,39 +148,34 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint
   std::vector<std::uint8_t>& p = scratch;
   EmitCellHeader(p, col, xf_index);
 
-  XlsbRecordType type = XlsbRecordType::BrtFmlaNum;
-  switch (cached.kind()) {
-    case ValueKind::Number: {
-      const double value = cached.as_number();
-      if (std::isfinite(value)) {
-        type = XlsbRecordType::BrtFmlaNum;
-        emit_double(p, value);
-      } else {
-        type = XlsbRecordType::BrtFmlaError;
-        emit_u8(p, ErrorWireCode(ErrorCode::Num));
-      }
-      break;
-    }
-    case ValueKind::Bool:
-      type = XlsbRecordType::BrtFmlaBool;
-      emit_u8(p, cached.as_boolean() ? 1U : 0U);
-      break;
-    case ValueKind::Error:
-      type = XlsbRecordType::BrtFmlaError;
-      emit_u8(p, ErrorWireCode(cached.as_error()));
-      break;
-    case ValueKind::Text:
-      type = XlsbRecordType::BrtFmlaString;
-      emit_xlwidestring(p, cached.as_text());
-      break;
-    default:
-      // Blank / Array / Lambda / Ref: Excel always materialises a
-      // formula cell's cached value as one of the four scalar kinds
-      // above. For round-trip we default to BrtFmlaNum with a 0.0
-      // payload — the read-back path uses the decoded formula, and this
-      // keeps the wire format well-formed.
+  XlsbRecordType type;
+  const StoredScalar scalar = StoreScalar(cached);
+  switch (scalar.shape) {
+    case StoredScalar::Shape::kNumber:
       type = XlsbRecordType::BrtFmlaNum;
-      emit_double(p, 0.0);
+      emit_double(p, scalar.number);
+      break;
+    case StoredScalar::Shape::kBool:
+      type = XlsbRecordType::BrtFmlaBool;
+      emit_u8(p, scalar.byte);
+      break;
+    case StoredScalar::Shape::kError:
+      type = XlsbRecordType::BrtFmlaError;
+      emit_u8(p, scalar.byte);
+      break;
+    case StoredScalar::Shape::kOther:
+      if (cached.is_text()) {
+        type = XlsbRecordType::BrtFmlaString;
+        emit_xlwidestring(p, cached.as_text());
+      } else {
+        // Blank / Array / Lambda / Ref: Excel always materialises a
+        // formula cell's cached value as one of the four scalar kinds
+        // above. For round-trip we default to BrtFmlaNum with a 0.0
+        // payload — the read-back path uses the decoded formula, and this
+        // keeps the wire format well-formed.
+        type = XlsbRecordType::BrtFmlaNum;
+        emit_double(p, 0.0);
+      }
       break;
   }
   emit_u16(p, always_calculates ? 0x0002U : 0U);  // grbitFlags: fAlwaysCalc
@@ -195,28 +228,24 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint
   switch (cached.kind()) {
     case ValueKind::Blank:
       break;
-    case ValueKind::Number: {
-      const double v = cached.as_number();
-      if (!std::isfinite(v)) {
-        type = XlsbRecordType::BrtCellError;
-        emit_u8(p, ErrorWireCode(ErrorCode::Num));
-      } else if (rk_round_trips_value(v)) {
-        type = XlsbRecordType::BrtCellRk;
-        emit_rk_number(p, v);
+    case ValueKind::Number:
+    case ValueKind::Bool:
+    case ValueKind::Error: {
+      const StoredScalar scalar = StoreScalar(cached);
+      if (scalar.shape == StoredScalar::Shape::kNumber) {
+        if (rk_round_trips_value(scalar.number)) {
+          type = XlsbRecordType::BrtCellRk;
+          emit_rk_number(p, scalar.number);
+        } else {
+          type = XlsbRecordType::BrtCellReal;
+          emit_double(p, scalar.number);
+        }
       } else {
-        type = XlsbRecordType::BrtCellReal;
-        emit_double(p, v);
+        type = scalar.shape == StoredScalar::Shape::kBool ? XlsbRecordType::BrtCellBool : XlsbRecordType::BrtCellError;
+        emit_u8(p, scalar.byte);
       }
       break;
     }
-    case ValueKind::Bool:
-      type = XlsbRecordType::BrtCellBool;
-      emit_u8(p, cached.as_boolean() ? 1U : 0U);
-      break;
-    case ValueKind::Error:
-      type = XlsbRecordType::BrtCellError;
-      emit_u8(p, ErrorWireCode(cached.as_error()));
-      break;
     case ValueKind::Text:
       type = XlsbRecordType::BrtCellIsst;
       emit_u32(p, sst.intern(cached.as_text(), phonetic, phonetic_props));
@@ -313,9 +342,10 @@ void emit_data_table_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uin
     emit_u32(p, usable ? input->row : 0U);
     emit_u32(p, usable ? input->col : 0U);
   }
-  emit_u8(p, static_cast<std::uint8_t>((table.row_oriented ? 0x01U : 0U) | (table.two_dimensional ? 0x02U : 0U) |
-                                       (table.r1.deleted ? 0x04U : 0U) | (table.r2.deleted ? 0x08U : 0U) |
-                                       (table.always_calc ? 0x10U : 0U)));
+  emit_u8(p, static_cast<std::uint8_t>(
+                 (table.row_oriented ? kTableRowInput : 0U) | (table.two_dimensional ? kTableTwoDimensional : 0U) |
+                 (table.r1.deleted ? kTableDeletedInput1 : 0U) | (table.r2.deleted ? kTableDeletedInput2 : 0U) |
+                 (table.always_calc ? kTableAlwaysCalc : 0U)));
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtTable), p);
   const Value& v = cell.cached_value;
   if (v.is_text()) {

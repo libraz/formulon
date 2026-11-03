@@ -19,15 +19,14 @@
 
 #include "eval/areas_lazy.h"
 
-#include <cmath>
 #include <cstdint>
 #include <string_view>
 
-#include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
+#include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -94,44 +93,25 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
     // false condition yields a Bool in Excel (1 "area" by AREAS' contract is
     // not meaningful), so a missing branch falls back to the 1-area count.
     if (strings::case_insensitive_eq(fname, "IF")) {
-      const std::uint32_t fn_arity = n.as_call_arity();
-      if (fn_arity == 2U || fn_arity == 3U) {
-        const Value cond = eval_node(n.as_call_arg(0), arena, registry, ctx);
-        if (cond.is_error()) {
-          return kAreasInvalid;
-        }
-        auto b = coerce_to_bool(cond);
-        if (!b) {
-          return kAreasInvalid;
-        }
-        if (b.value()) {
-          return count_areas(n.as_call_arg(1), arena, registry, ctx, propagated);
-        }
-        if (fn_arity == 3U) {
-          return count_areas(n.as_call_arg(2), arena, registry, ctx, propagated);
-        }
+      const std::uint32_t if_arity = n.as_call_arity();
+      if (if_arity != 2U && if_arity != 3U) {
+        return 1;
+      }
+      const SelectedBranch picked = select_if_branch(n, arena, registry, ctx);
+      if (picked.kind == SelectedBranch::Kind::kArgument) {
+        return count_areas(n.as_call_arg(picked.arg), arena, registry, ctx, propagated);
+      }
+      if (picked.kind == SelectedBranch::Kind::kArraySubject || picked.value.is_error()) {
+        return kAreasInvalid;
       }
       return 1;
     }
     // CHOOSE(index, v1, v2, ...) returns the selected value branch; recurse
     // into it. A 1-based index outside [1, arity-1] is #VALUE! in Excel.
     if (strings::case_insensitive_eq(fname, "CHOOSE")) {
-      const std::uint32_t fn_arity = n.as_call_arity();
-      if (fn_arity >= 2U) {
-        const Value idx_v = eval_node(n.as_call_arg(0), arena, registry, ctx);
-        if (idx_v.is_error()) {
-          return kAreasInvalid;
-        }
-        auto idx_e = coerce_to_number(idx_v);
-        if (!idx_e) {
-          return kAreasInvalid;
-        }
-        const double idx_d = std::trunc(idx_e.value());
-        const double max_idx = static_cast<double>(fn_arity - 1U);
-        if (idx_d >= 1.0 && idx_d <= max_idx) {
-          const auto idx = static_cast<std::uint32_t>(idx_d);
-          return count_areas(n.as_call_arg(idx), arena, registry, ctx, propagated);
-        }
+      const SelectedBranch picked = select_choose_branch(n, arena, registry, ctx);
+      if (picked.kind == SelectedBranch::Kind::kArgument) {
+        return count_areas(n.as_call_arg(picked.arg), arena, registry, ctx, propagated);
       }
       return kAreasInvalid;
     }

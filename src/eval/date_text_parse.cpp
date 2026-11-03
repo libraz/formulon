@@ -779,6 +779,19 @@ int round_millis(std::string_view digits) noexcept {
   return digits.size() > 3 && digits[3] >= '5' ? millis + 1 : millis;
 }
 
+// Range-checks a CJK-unit clock time (h <= 23, m <= 59, s <= 59) and yields
+// its day fraction and the unconsumed tail.
+bool finish_clock_time(const DigitRun& hour, const DigitRun& minute, const DigitRun& second, std::string_view tail,
+                       double* out_days, std::string_view* rest) noexcept {
+  if (hour.value > 23 || minute.value > 59 || second.value > 59) {
+    return false;
+  }
+  const double seconds = hour.value * 3600.0 + minute.value * 60.0 + second.value;
+  *out_days = seconds / static_cast<double>(date_time::kSecondsPerDay);
+  *rest = tail;
+  return true;
+}
+
 // Parses the kanji time form `H時M分[S秒]` (h <= 23, m <= 59, s <= 59). It
 // takes no fraction, marker or trailing separator.
 bool parse_kanji_time_text(std::string_view s, double* out_days, std::string_view* rest) noexcept {
@@ -791,13 +804,7 @@ bool parse_kanji_time_text(std::string_view s, double* out_days, std::string_vie
   if (!s.empty() && is_digit(s[0]) && !scan_run_with_unit(&s, kKanjiByou, &second)) {
     return false;
   }
-  if (hour.value > 23 || minute.value > 59 || second.value > 59) {
-    return false;
-  }
-  const double seconds = hour.value * 3600.0 + minute.value * 60.0 + second.value;
-  *out_days = seconds / static_cast<double>(date_time::kSecondsPerDay);
-  *rest = s;
-  return true;
+  return finish_clock_time(hour, minute, second, s, out_days, rest);
 }
 
 // Byte length of the marker spelling `name` heading `s` in any case, where a
@@ -833,13 +840,7 @@ bool parse_hangul_time_text(std::string_view s, double* out_days, std::string_vi
   if (!s.empty() && !scan_spaced_hangul_field(&s, kHangulCho, &second)) {
     return false;
   }
-  if (hour.value > 23 || minute.value > 59 || second.value > 59) {
-    return false;
-  }
-  const double seconds = hour.value * 3600.0 + minute.value * 60.0 + second.value;
-  *out_days = seconds / static_cast<double>(date_time::kSecondsPerDay);
-  *rest = s;
-  return true;
+  return finish_clock_time(hour, minute, second, s, out_days, rest);
 }
 
 // Consumes a 12-hour marker after at least one blank: `A`, `P`, `AM` or `PM`

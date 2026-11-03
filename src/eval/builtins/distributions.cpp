@@ -60,8 +60,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-using builtins_detail::NumberTriple;
-
 using builtins_detail::kPi;
 using builtins_detail::read_optional_number;
 using builtins_detail::read_required_number;
@@ -70,10 +68,6 @@ using builtins_detail::to_finite_value;
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args) {
-  return builtins_detail::read_number_triple(args, 0, 1, 2);
-}
 
 using stats_detail::read_triple_cumulative;
 using stats_detail::TripleCumulative;
@@ -163,7 +157,7 @@ Value BetaDist(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // for y in (0, 1), then rescales via x = A + y * (B - A). #NUM! on
 // p <= 0, p >= 1, alpha <= 0, beta <= 0, A >= B.
 Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto parsed = read_number_triple(args);
+  auto parsed = builtins_detail::read_number_triple(args, 0, 1, 2);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -183,11 +177,7 @@ Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (p <= 0.0 || p >= 1.0 || alpha <= 0.0 || beta_shape <= 0.0 || a >= b) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = stats::beta_inv_excel(p, alpha, beta_shape, a, b);
-  if (!std::isfinite(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return to_finite_value(r);
+  return to_finite_value(stats::beta_inv_excel(p, alpha, beta_shape, a, b));
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +377,7 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // GAMMA.INV(p, alpha, beta) - inverse of GAMMA.DIST's CDF, `beta` times the
 // unit-scale gamma quantile (`stats::gamma_inv_excel`).
 Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_number_triple(args);
+  auto parsed = builtins_detail::read_number_triple(args, 0, 1, 2);
   if (!parsed) {
     return Value::error(parsed.error());
   }
@@ -489,7 +479,7 @@ Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 //   exp(mean + sd * stats_detail::InverseStandardNormal(p))
 // #NUM! on p <= 0, p >= 1, sd <= 0.
 Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto parsed = read_number_triple(args);
+  auto parsed = builtins_detail::read_number_triple(args, 0, 1, 2);
   if (!parsed) {
     return Value::error(parsed.error());
   }

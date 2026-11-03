@@ -320,14 +320,13 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
   return true;
 }
 
-// Walks `arg_node` as an AST array literal, evaluating each element into
-// `out_cells` in row-major order. Records the literal's `(rows, cols)`
-// shape. On the first evaluated element that turns out to be an error,
-// returns `false` and reports the error via `*out_err` (callers treat
-// the error as the overall result of SUMPRODUCT).
-bool flatten_array_literal(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx, std::vector<Value>* out_cells, std::uint32_t* out_rows,
-                           std::uint32_t* out_cols, Value* out_err) {
+// Resolves `arg_node` through `resolve_range_arg` into `out_cells` in
+// row-major order, recording its `(rows, cols)` shape. On the first cell that
+// is an error, returns `false` and reports the error via `*out_err` (callers
+// treat the error as the overall result of SUMPRODUCT).
+bool resolve_error_free_range(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx, std::vector<Value>* out_cells, std::uint32_t* out_rows,
+                              std::uint32_t* out_cols, Value* out_err) {
   auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
   if (!resolved) {
     *out_err = Value::error(resolved.error());
@@ -550,7 +549,7 @@ Value eval_column_lazy(const parser::AstNode& call, Arena& arena, const Function
 //     (including the "all args are 1x1 scalars" edge). Any mismatch
 //     returns `#VALUE!`.
 //   * RangeOp / Ref args are expanded via `resolve_range_arg`.
-//   * ArrayLiteral args are walked by `flatten_array_literal`, which
+//   * ArrayLiteral args are walked by `resolve_error_free_range`, which
 //     evaluates each element through `eval_node` so nested calls /
 //     literals behave correctly.
 //   * BinaryOp / UnaryOp args are evaluated in array context via
@@ -639,7 +638,7 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
       a.cells = std::move(rr.cells);
     } else if (k == parser::NodeKind::ArrayLiteral) {
       Value err = Value::blank();
-      if (!flatten_array_literal(arg_node, arena, registry, ctx, &a.cells, &a.rows, &a.cols, &err)) {
+      if (!resolve_error_free_range(arg_node, arena, registry, ctx, &a.cells, &a.rows, &a.cols, &err)) {
         return err;
       }
     } else {
@@ -872,7 +871,7 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
   const parser::AstNode& arg = call.as_call_arg(0);
 
   // ArrayLiteral arg: materialise cells one-by-one preserving error cells
-  // verbatim. The `flatten_array_literal` helper shared with SUMPRODUCT
+  // verbatim. The `resolve_error_free_range` helper shared with SUMPRODUCT
   // short-circuits on the first error to match SUMPRODUCT semantics, but
   // TRANSPOSE must keep error cells in place — Mac Excel returns
   // `=TRANSPOSE({1,#N/A;2,3})` as an array containing #N/A at the

@@ -24,7 +24,6 @@
 #include "eval/lookups/common.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
-#include "eval/wildcard.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -36,26 +35,42 @@ namespace {
 
 template <typename CellAt>
 std::size_t scan_exact_text_lookup(std::string_view raw, ExcelProfile profile, std::size_t count, CellAt&& cell_at) {
-  if (!scan_has_wildcard(raw)) {
-    const std::string literal = unescape_wildcard_literal(raw);
+  const PreparedTextQuery query = prepare_text_query(raw, profile, CollationStrength::kClassicExact);
+  for (std::size_t i = 0; i < count; ++i) {
+    if (prepared_text_query_matches(cell_at(i), query, profile)) {
+      return i;
+    }
+  }
+  return SIZE_MAX;
+}
+
+// First cell equal to a number / blank / boolean `lookup_value`, or SIZE_MAX.
+// A blank lookup_value acts as 0. `blank_cells_match_zero` lets a blank cell
+// match a zero target (VLOOKUP / HLOOKUP / LOOKUP scans); MATCH's exact mode
+// never matches blank cells.
+template <typename CellAt>
+std::size_t scan_exact_typed(const Value& lookup_value, std::size_t count, bool blank_cells_match_zero,
+                             CellAt&& cell_at) {
+  if (lookup_value.is_number() || lookup_value.is_blank()) {
+    const double target = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
     for (std::size_t i = 0; i < count; ++i) {
       const Value& cell = cell_at(i);
-      if (cell.is_text() && collate(cell.as_text(), literal, profile, CollationStrength::kClassicExact) == 0) {
+      if (cell.is_number() && cell.as_number() == target) {
+        return i;
+      }
+      if (blank_cells_match_zero && cell.is_blank() && target == 0.0) {
         return i;
       }
     }
     return SIZE_MAX;
   }
-
-  const std::string pat_lower = lookup_wildcard_key(raw, profile);
-  for (std::size_t i = 0; i < count; ++i) {
-    const Value& cell = cell_at(i);
-    if (!cell.is_text()) {
-      continue;
-    }
-    const std::string cell_lower = lookup_wildcard_key(cell.as_text(), profile);
-    if (wildcard_match(pat_lower, cell_lower)) {
-      return i;
+  if (lookup_value.is_boolean()) {
+    const bool target = lookup_value.as_boolean();
+    for (std::size_t i = 0; i < count; ++i) {
+      const Value& cell = cell_at(i);
+      if (cell.is_boolean() && cell.as_boolean() == target) {
+        return i;
+      }
     }
   }
   return SIZE_MAX;
@@ -203,30 +218,7 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       const std::string_view raw = lookup_value.as_text();
       return scan_exact_text_lookup(raw, profile, n, cell_at);
     }
-    if (lookup_value.is_number() || lookup_value.is_blank()) {
-      const double target = lookup_value.is_blank() ? 0.0 : lookup_value.as_number();
-      for (std::size_t i = 0; i < n; ++i) {
-        const Value& cell = cell_at(i);
-        if (cell.is_number() && cell.as_number() == target) {
-          return i;
-        }
-        if (cell.is_blank() && target == 0.0) {
-          return i;
-        }
-      }
-      return SIZE_MAX;
-    }
-    if (lookup_value.is_boolean()) {
-      const bool target = lookup_value.as_boolean();
-      for (std::size_t i = 0; i < n; ++i) {
-        const Value& cell = cell_at(i);
-        if (cell.is_boolean() && cell.as_boolean() == target) {
-          return i;
-        }
-      }
-      return SIZE_MAX;
-    }
-    return SIZE_MAX;
+    return scan_exact_typed(lookup_value, n, /*blank_cells_match_zero=*/true, cell_at);
   }
 
   // Approximate match: binary search, falling back to a left-to-right scan at
@@ -314,11 +306,12 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
 
   // A reference table is scanned along its walked extent -- the same cells
   // a full expansion would scan -- and only the scanned line is read.
+  const bool read_by_reference = by_reference && by_reference.value();
   const std::vector<Value>* scan_cells = &cells;
   std::uint32_t scan_rows = rows;
   std::uint32_t scan_cols = cols;
   std::vector<Value> scan_line;
-  if (by_reference && by_reference.value()) {
+  if (read_by_reference) {
     const DeclaredRect& walked = table.walked;
     auto line = axis == LookupAxis::Column
                     ? read_table_block(table, walked.row_first, walked.row_last, table.declared.col_first,
@@ -334,7 +327,7 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     scan_cols = axis == LookupAxis::Column ? 1U : walked.cols();
   }
   const auto fetch = [&](std::size_t off) -> Value {
-    if (scan_cells == &scan_line) {
+    if (read_by_reference) {
       if (result_index == 1U) {
         return scan_line[off];
       }
@@ -386,38 +379,17 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
   // typed literal equality for other lookup kinds. Non-matching cell kinds
   // do not count.
   if (match_type == 0) {
+    const auto cell_at = [&cells](std::size_t i) -> const Value& { return cells[i]; };
+    std::size_t index = SIZE_MAX;
     if (lookup.is_text()) {
-      const std::size_t index = scan_exact_text_lookup(lookup.as_text(), profile, n,
-                                                       [&cells](std::size_t i) -> const Value& { return cells[i]; });
-      return index == SIZE_MAX ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(index + 1));
-    }
-    if (lookup.is_number() || lookup.is_blank()) {
+      index = scan_exact_text_lookup(lookup.as_text(), profile, n, cell_at);
+    } else if (!lookup.is_blank()) {
       // Blank as lookup_value never matches anything in exact mode (Excel
       // behaviour: blank search values short-circuit to #N/A even when the
       // array contains blank cells).
-      if (lookup.is_blank()) {
-        return Value::error(ErrorCode::NA);
-      }
-      const double target = lookup.as_number();
-      for (std::size_t i = 0; i < n; ++i) {
-        const Value& cell = cells[i];
-        if (cell.is_number() && cell.as_number() == target) {
-          return Value::number(static_cast<double>(i + 1));
-        }
-      }
-      return Value::error(ErrorCode::NA);
+      index = scan_exact_typed(lookup, n, /*blank_cells_match_zero=*/false, cell_at);
     }
-    if (lookup.is_boolean()) {
-      const bool target = lookup.as_boolean();
-      for (std::size_t i = 0; i < n; ++i) {
-        const Value& cell = cells[i];
-        if (cell.is_boolean() && cell.as_boolean() == target) {
-          return Value::number(static_cast<double>(i + 1));
-        }
-      }
-      return Value::error(ErrorCode::NA);
-    }
-    return Value::error(ErrorCode::NA);
+    return index == SIZE_MAX ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(index + 1));
   }
 
   // Approximate match. Wildcards are literal text here.
@@ -489,11 +461,11 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     if (mt_val.is_error()) {
       return fail_lookup(lookup, arena, mt_val);
     }
-    auto mt_num = coerce_to_number(mt_val);
-    if (!mt_num) {
-      return fail_lookup(lookup, arena, Value::error(mt_num.error()));
+    auto mt_index = coerce_to_index_number(mt_val);
+    if (!mt_index) {
+      return fail_lookup(lookup, arena, Value::error(mt_index.error()));
     }
-    const double mt_raw = truncate_index(mt_num.value());
+    const double mt_raw = mt_index.value();
     if (mt_raw == -1.0) {
       match_type = -1;
     } else if (mt_raw == 0.0) {

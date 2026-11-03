@@ -63,9 +63,7 @@ Expected<std::uint16_t, Error> read_u16(ByteSpan& cursor) {
   if (cursor.size < 2) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb u16 read out of range", "context=xlsb.record");
   }
-  const std::uint32_t lo = cursor.data[0];
-  const std::uint32_t hi = cursor.data[1];
-  const std::uint16_t v = static_cast<std::uint16_t>(lo | (hi << 8));
+  const std::uint16_t v = load_u16(cursor.data);
   cursor.data += 2;
   cursor.size -= 2;
   return v;
@@ -138,28 +136,29 @@ void append_utf16le_as_utf8(const std::uint8_t* data, std::uint32_t units, std::
   }
 }
 
+bool read_utf16_units(ByteSpan& cursor, std::uint32_t units, std::string* out) {
+  // Compare in the destination width before multiplying: on wasm32 a hostile
+  // u32 `units` can wrap `units * 2` back below `cursor.size`.
+  if (units > cursor.size / 2U) {
+    return false;
+  }
+  const std::size_t byte_len = static_cast<std::size_t>(units) * 2U;
+  append_utf16le_as_utf8(cursor.data, units, out);
+  cursor.data += byte_len;
+  cursor.size -= byte_len;
+  return true;
+}
+
 Expected<std::string, Error> read_xlwidestring(ByteSpan& cursor) {
   ASSIGN_OR_RETURN(auto len, read_u32(cursor));
-  const std::uint32_t cch = len;
-  // 16-bit code units per char; cap at the buffer to avoid large
-  // synthetic allocations on hostile input. The bound on `cch` is also
-  // what makes the `cch * 3` reservation below safe to compute as
-  // `std::size_t`: at this point we know `cch <= cursor.size / 2`, so
-  // `cch * 3 <= cursor.size * 1.5`, which cannot overflow even on the
-  // 32-bit `size_t` of a WASM build (`cursor.size` is always at most the
-  // enclosing record's payload size).
-  if (cch > cursor.size / 2) {
+  std::string out;
+  if (!read_utf16_units(cursor, len, &out)) {
     std::string ctx("context=xlsb.record what=XLWideString cch=");
-    ctx.append(std::to_string(cch));
+    ctx.append(std::to_string(len));
     ctx.append(" cursor_size=");
     ctx.append(std::to_string(cursor.size));
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb wide-string body truncated", std::move(ctx));
   }
-  const std::size_t needed = static_cast<std::size_t>(cch) * 2;
-  std::string out;
-  append_utf16le_as_utf8(cursor.data, cch, &out);
-  cursor.data += needed;
-  cursor.size -= needed;
   return out;
 }
 
@@ -242,18 +241,23 @@ std::vector<FramedRecord> split_records(const std::vector<std::uint8_t>& buf) {
   return out;
 }
 
-bool contains_record_type(const std::vector<std::uint8_t>& buf, std::uint16_t type) {
+std::size_t find_record_offset(const std::vector<std::uint8_t>& buf, std::uint16_t type) {
   ByteSpan cursor{buf.data(), buf.size()};
   while (cursor.size != 0U) {
+    const std::uint8_t* at = cursor.data;
     auto rec = read_record(cursor);
     if (!rec) {
-      return false;
+      break;
     }
     if (rec.value().type == type) {
-      return true;
+      return static_cast<std::size_t>(at - buf.data());
     }
   }
-  return false;
+  return buf.size();
+}
+
+bool contains_record_type(const std::vector<std::uint8_t>& buf, std::uint16_t type) {
+  return find_record_offset(buf, type) != buf.size();
 }
 
 void append_record(std::vector<std::uint8_t>& dst, const std::vector<std::uint8_t>& src, const FramedRecord& rec) {

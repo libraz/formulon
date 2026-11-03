@@ -717,6 +717,16 @@ double neg_two_sinh(double y) noexcept {
   return term + sum;
 }
 
+// Past these parts the cosh / sinh squares overflow and the quotient forms apply (asymmetric: Excel's cut-offs).
+constexpr bool beyond_square_overflow(double v) noexcept {
+  return v > 354.5 || v < -354.0;
+}
+
+// Past these parts exp overflows and the hyperbolic-reciprocal results are 0.
+constexpr bool beyond_exp_overflow(double v) noexcept {
+  return v > 709.0 || v < -708.0;
+}
+
 // IMCSC (sin / cos) and IMSEC (cos / sin, with the imaginary sign flipped):
 // 1 / sin(z) and 1 / cos(z) from the real and imaginary parts directly.
 //
@@ -735,7 +745,7 @@ Value im_csc_sec(const Value* args, Arena& arena, bool sec) {
   }
   const Complex c = z.value();
   // Far from the real axis the result is 0 before any sin / cos is taken.
-  if (c.im > 709.0 || c.im < -708.0) {
+  if (beyond_exp_overflow(c.im)) {
     return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
   }
   if (!builtins_detail::trig_argument_in_range(c.re)) {
@@ -750,7 +760,7 @@ Value im_csc_sec(const Value* args, Arena& arena, bool sec) {
     }
     return text_complex(Complex{1.0 / f1, 0.0, c.suffix}, arena);
   }
-  if (c.im > 354.5 || c.im < -354.0) {
+  if (beyond_square_overflow(c.im)) {
     const double a = f1 * 2.0;
     const double b = f2 * sign2;
     return text_complex(Complex{a / two_cosh(c.im), b / neg_two_sinh(c.im), c.suffix}, arena);
@@ -833,8 +843,8 @@ Value im_tan_cot(const Value* args, Arena& arena, bool cot) {
     const double t = std::tan(c.re);
     return text_complex(Complex{cot ? 1.0 / t : t, 0.0, c.suffix}, arena);
   }
-  if (c.im > 354.5 || c.im < -354.0) {
-    const double direction = (c.im > 354.5 ? 1.0 : -1.0) * (cot ? -1.0 : 1.0);
+  if (beyond_square_overflow(c.im)) {
+    const double direction = (c.im > 0.0 ? 1.0 : -1.0) * (cot ? -1.0 : 1.0);
     return text_complex(Complex{0.0, direction, c.suffix}, arena);
   }
   if (!builtins_detail::trig_argument_in_range(c.re)) {
@@ -869,7 +879,7 @@ Value im_sinh_cosh(const Value* args, Arena& arena, bool cosh) {
     const double v = cosh ? two_cosh(neg_re) : neg_two_sinh(neg_re);
     return text_complex(Complex{v / 2.0, 0.0, c.suffix}, arena);
   }
-  if (c.re > 709.0 || c.re < -708.0) {
+  if (beyond_exp_overflow(c.re)) {
     const double magnitude = std::fabs(c.re);
     const double a = std::cos(c.im) / 2.0;
     const double b = std::sin(c.im) / 2.0;
@@ -908,7 +918,7 @@ Value im_csch_sech(const Value* args, Arena& arena, bool sech) {
     return Value::error(z.error());
   }
   const Complex c = z.value();
-  if (c.im != 0.0 && (c.re > 709.0 || c.re < -708.0)) {
+  if (c.im != 0.0 && beyond_exp_overflow(c.re)) {
     return text_complex(Complex{0.0, 0.0, c.suffix}, arena);
   }
   if (!builtins_detail::trig_argument_in_range(c.im)) {
@@ -919,7 +929,7 @@ Value im_csch_sech(const Value* args, Arena& arena, bool sech) {
     const double v = sech ? two_cosh(neg_re) : neg_two_sinh(neg_re);
     return text_complex(Complex{2.0 / v, 0.0, c.suffix}, arena);
   }
-  if (c.re > 354.5 || c.re < -354.0) {
+  if (beyond_square_overflow(c.re)) {
     const double sinh_term = neg_two_sinh(c.re);
     const double cosh_term = two_cosh(c.re);
     const double real = (std::cos(c.im) * 2.0) / (sech ? cosh_term : sinh_term);

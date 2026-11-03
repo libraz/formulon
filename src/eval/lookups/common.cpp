@@ -10,6 +10,7 @@
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
 #include "eval/name_env_resolve.h"
+#include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "external_book.h"
 #include "parser/ast.h"
@@ -133,6 +134,23 @@ std::string lookup_wildcard_key(std::string_view text, ExcelProfile profile) {
     return fold_and_lower_per_code_point(text);
   }
   return strings::to_ascii_lower(text);
+}
+
+PreparedTextQuery prepare_text_query(std::string_view raw, ExcelProfile profile, CollationStrength strength) {
+  if (scan_has_wildcard(raw)) {
+    return PreparedTextQuery{true, lookup_wildcard_key(raw, profile), strength};
+  }
+  return PreparedTextQuery{false, unescape_wildcard_literal(raw), strength};
+}
+
+bool prepared_text_query_matches(const Value& cell, const PreparedTextQuery& query, ExcelProfile profile) {
+  if (!cell.is_text()) {
+    return false;
+  }
+  if (query.has_pattern) {
+    return wildcard_match(query.prepared, lookup_wildcard_key(cell.as_text(), profile));
+  }
+  return collate(cell.as_text(), query.prepared, profile, query.strength) == 0;
 }
 
 }  // namespace eval

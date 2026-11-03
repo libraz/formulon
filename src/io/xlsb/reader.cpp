@@ -30,6 +30,7 @@
 #include "io/cf_reader.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
+#include "io/ooxml/package_rels_reader.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/rels_walker.h"
@@ -47,6 +48,7 @@
 #include "io/xlsb/styles_reader.h"
 #include "io/xlsb/table_records.h"
 #include "io/xlsb/workbook_bin_reader.h"
+#include "io/xml_utils.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "passthrough_part.h"
@@ -74,14 +76,6 @@ namespace {
 // XML envelope: same shape as the OOXML reader, but the relationship and
 // content types target binary parts (`*.bin`) instead of XML.
 // ---------------------------------------------------------------------------
-
-// `[Content_Types].xml` registers the workbook part under the binary
-// content type for `.xlsb`. The reader gates on this content type to
-// avoid acting on a `.xlsx` archive that happened to be passed in.
-constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
-// Some non-macro xlsb writers emit the alternative content type below;
-// we accept either flavor as "this is an xlsb workbook".
-constexpr std::string_view kCtWorkbookXlsbAlt = "application/vnd.ms-excel.sheet.macroEnabled.main";
 
 /// Drops the leading `/` from a part path (relationship targets can be
 /// absolute or relative, but the ZIP catalogue uses relative names).
@@ -119,13 +113,7 @@ struct ContentTypesView {
 
 Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_t>& ct_bytes) {
   pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(ct_bytes.data(), ct_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=xlsb_reader part=[Content_Types].xml desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "[Content_Types].xml: pugixml parse failed", std::move(ctx));
-  }
+  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "xlsb_reader", "[Content_Types].xml"));
   pugi::xml_node root = doc.child("Types");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
@@ -146,7 +134,7 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
       // genuinely valid package may not emit.
       const std::string_view ext(node.attribute("Extension").value());
       const std::string_view ct(node.attribute("ContentType").value());
-      if (strings::case_insensitive_eq(ext, "bin") && (ct == kCtWorkbookXlsb || ct == kCtWorkbookXlsbAlt)) {
+      if (strings::case_insensitive_eq(ext, "bin") && is_xlsb_workbook_content_type(ct)) {
         saw_workbook = true;
       }
       if (ext.empty()) {
@@ -173,7 +161,7 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
       continue;
     }
     std::string ct = node.attribute("ContentType").value();
-    if (ct == kCtWorkbookXlsb || ct == kCtWorkbookXlsbAlt) {
+    if (is_xlsb_workbook_content_type(ct)) {
       saw_workbook = true;
     }
     const auto [index_it, inserted] = override_indices.try_emplace(part_name, view.overrides.size());
@@ -225,42 +213,6 @@ Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::ui
   }
   return make_error(FormulonErrorCode::kIoRelationshipBroken,
                     "package-level rels: no OfficeDocument relationship found", "context=xlsb_reader part=_rels/.rels");
-}
-
-Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const std::vector<std::uint8_t>& bytes) {
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    return make_error(FormulonErrorCode::kIoXmlParse, "package-level rels: pugixml parse failed",
-                      "context=xlsb_reader part=_rels/.rels desc=" + std::string(parse.description()));
-  }
-  const pugi::xml_node root = ooxml::relationship_root(doc);
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
-                      "context=xlsb_reader part=_rels/.rels");
-  }
-  std::vector<UnknownRelationship> result;
-  for (const pugi::xml_node rel : root.children()) {
-    if (!ooxml::is_relationship_element(rel, root)) {
-      continue;
-    }
-    const std::string_view type(rel.attribute("Type").value());
-    if (type == kRelOfficeDocument || type == kRelCoreProperties || type == kRelExtendedProperties ||
-        type == kRelCustomProperties) {
-      continue;
-    }
-    const bool external = std::string_view(rel.attribute("TargetMode").value()) == "External";
-    std::string target = NormalisePartName(rel.attribute("Target").value());
-    if (type.empty() || target.empty())
-      continue;
-    if (!external && !ooxml::is_safe_part_name(target)) {
-      return make_error(FormulonErrorCode::kIoZipSlip, "package relationship target escapes package root",
-                        "context=xlsb_reader part=_rels/.rels target=" + target);
-    }
-    result.push_back(
-        UnknownRelationship{std::string(rel.attribute("Id").value()), std::string(type), std::move(target), external});
-  }
-  return result;
 }
 
 struct WorkbookRels {
@@ -723,7 +675,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
   ASSIGN_OR_RETURN(auto wb_path, ResolveOfficeDocumentPath(root_rels));
   const std::string workbook_path = wb_path;
-  ASSIGN_OR_RETURN(auto package_rels, ReadUnknownPackageRels(root_rels));
+  ASSIGN_OR_RETURN(auto package_rels, ooxml::read_unknown_package_rels(root_rels, "xlsb_reader"));
 
   // 3. xl/_rels/workbook.xml.rels (still XML in xlsb).
   auto wb_rels_or = LoadWorkbookRels(zip, workbook_path);
@@ -755,7 +707,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return std::move(name_table_or.error());
   }
   const std::vector<XlsbName>& name_table = name_table_or.value();
-  const std::vector<XlsbSupBook> sup_books = DecodeSupBooks(wb_bytes);
+  ASSIGN_OR_RETURN(const std::vector<XlsbSupBook> sup_books, DecodeSupBooks(wb_bytes));
   auto sheet_ranges_or = DecodeExternSheet(wb_bytes, sup_books);
   if (!sheet_ranges_or) {
     return std::move(sheet_ranges_or.error());

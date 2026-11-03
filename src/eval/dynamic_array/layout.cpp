@@ -99,17 +99,8 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
     return false;
   }
   // `vector` must be 1D in either orientation; a 2D rectangle is rejected
-  // here (the WRAP family is for vectors only). Decide 1D-ness from the
-  // argument's DECLARED shape when it is a static reference, not from the
-  // walked array `resolve_array_value` returns: a whole-column/whole-row
-  // reference spanning several columns but populated in only one row
-  // walks as a 1-row array, which would misread it as a vector even
-  // though its declared shape is 2D. Mirrors the same rule IFS / XLOOKUP /
-  // MATCH / LOOKUP already apply via `declared_range_rect`.
-  std::uint32_t declared_rows = arr->rows;
-  std::uint32_t declared_cols = arr->cols;
-  (void)static_reference_shape(call.as_call_arg(0), ctx, &declared_rows, &declared_cols);
-  if (declared_rows != 1U && declared_cols != 1U) {
+  // here (the WRAP family is for vectors only).
+  if (!dynamic_array::is_declared_vector(call.as_call_arg(0), ctx, arr->rows, arr->cols)) {
     error_out = Value::error(ErrorCode::Value);
     return false;
   }
@@ -200,7 +191,6 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
       static_cast<std::uint32_t>((count + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
   const std::uint32_t out_rows = by_row ? wrapped : effective_wrap;
   const std::uint32_t out_cols = by_row ? effective_wrap : wrapped;
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
   Value* buffer = nullptr;
   ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
@@ -211,11 +201,15 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   // a worksheet reference counts as an occupied cell of the new array.
   const Value pad_cell = pad.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
                                         : pad.promote_reference_blank_to_value_array();
-  for (std::size_t i = 0; i < total; ++i) {
-    // WRAPCOLS fills down each column first, so the source index walks the
-    // output in column-major order.
-    const std::size_t flat = by_row ? i : ((i % out_cols) * out_rows) + (i / out_cols);
-    buffer[i] = (flat < count) ? vector_arr->cells[flat].promote_reference_blank_to_value_array() : pad_cell;
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      // WRAPCOLS fills down each column first, so the source index walks the
+      // output in column-major order.
+      const std::size_t flat =
+          by_row ? static_cast<std::size_t>(r) * out_cols + c : static_cast<std::size_t>(c) * out_rows + r;
+      buffer[static_cast<std::size_t>(r) * out_cols + c] =
+          (flat < count) ? vector_arr->cells[flat].promote_reference_blank_to_value_array() : pad_cell;
+    }
   }
   return Value::array(out);
 }

@@ -27,6 +27,7 @@
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
+#include "value_sort_order.h"
 
 namespace formulon {
 namespace eval {
@@ -49,48 +50,6 @@ const ArrayValue* resolve_array_prelude(const parser::AstNode& call, std::uint32
     return nullptr;
   }
   return array;
-}
-
-bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, double& out, Value& error_out) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    error_out = v;
-    return false;
-  }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    error_out = Value::error(coerced.error());
-    return false;
-  }
-  out = coerced.value();
-  return true;
-}
-
-bool eval_bool_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   bool& out, Value& error_out) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    error_out = v;
-    return false;
-  }
-  auto coerced = coerce_to_bool(v);
-  if (!coerced) {
-    error_out = Value::error(coerced.error());
-    return false;
-  }
-  out = coerced.value();
-  return true;
-}
-
-bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                               const EvalContext& ctx, double& out, Value& error_out) {
-  double n = 0.0;
-  if (!eval_number_arg(node, arena, registry, ctx, n, error_out)) {
-    return false;
-  }
-  out = std::trunc(n);
-  return true;
 }
 
 bool resolve_pad_arg(const parser::AstNode* node, Arena& arena, const FunctionRegistry& registry,
@@ -195,34 +154,6 @@ bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std
   return true;
 }
 
-namespace {
-
-// Excel-canonical kind rank for SORT. Lower rank sorts earlier under
-// ascending order. Blank deliberately sits at rank 5 -- the SORT impl
-// special-cases blanks so they always sink to the end regardless of
-// `sort_order`. Numbers / Text / Bool / Error participate normally.
-int sort_kind_rank(const Value& v) {
-  switch (v.kind()) {
-    case ValueKind::Number:
-      return 0;
-    case ValueKind::Text:
-      return 1;
-    case ValueKind::Bool:
-      return 2;
-    case ValueKind::Error:
-      return 3;
-    case ValueKind::Blank:
-      return 5;
-    default:
-      // Array / Ref / Lambda are not produced by cell reads. Slot them
-      // between Error and Blank so they participate predictably without
-      // colliding with real-world cells.
-      return 4;
-  }
-}
-
-}  // namespace
-
 bool ascii_ci_less(std::string_view a, std::string_view b) {
   return collate(a, b, current_eval_profile(), CollationStrength::kDynamic) < 0;
 }
@@ -234,47 +165,68 @@ std::string sort_text_key(const Value& v) {
   return collation_key(v.as_text(), current_eval_profile(), CollationStrength::kDynamic);
 }
 
-namespace {
+bool is_declared_vector(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols) {
+  (void)static_reference_shape(node, ctx, &rows, &cols);
+  return rows == 1U || cols == 1U;
+}
 
-bool sort_cell_less_keyed(const Value& a, const Value& b, const std::string* key_a, const std::string* key_b) {
-  const int ra = sort_kind_rank(a);
-  const int rb = sort_kind_rank(b);
+int cmp_value_keyed(const Value& a, const Value& b, const std::string* key_a, const std::string* key_b) {
+  const int ra = excel_kind_rank(a.kind());
+  const int rb = excel_kind_rank(b.kind());
   if (ra != rb) {
-    return ra < rb;
+    return ra < rb ? -1 : 1;
   }
   switch (a.kind()) {
-    case ValueKind::Number:
-      return a.as_number() < b.as_number();
+    case ValueKind::Number: {
+      const double na = a.as_number();
+      const double nb = b.as_number();
+      if (na < nb) {
+        return -1;
+      }
+      return na > nb ? 1 : 0;
+    }
     case ValueKind::Text:
       if (key_a != nullptr && key_b != nullptr) {
-        return collate_key_compare(*key_a, *key_b) < 0;
+        return collate_key_compare(*key_a, *key_b);
       }
-      return ascii_ci_less(a.as_text(), b.as_text());
+      return collate(a.as_text(), b.as_text(), current_eval_profile(), CollationStrength::kDynamic);
     case ValueKind::Bool:
-      return !a.as_boolean() && b.as_boolean();
-    case ValueKind::Error:
-      return static_cast<int>(a.as_error()) < static_cast<int>(b.as_error());
-    case ValueKind::Blank:
+      if (a.as_boolean() == b.as_boolean()) {
+        return 0;
+      }
+      return a.as_boolean() ? 1 : -1;
+    case ValueKind::Error: {
+      const auto ea = static_cast<int>(a.as_error());
+      const auto eb = static_cast<int>(b.as_error());
+      if (ea < eb) {
+        return -1;
+      }
+      return ea > eb ? 1 : 0;
+    }
     default:
-      return false;
+      // Blank, and kinds with no in-kind order.
+      return 0;
   }
 }
 
-}  // namespace
-
-bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
-                          const std::string* text_key_b, bool descending) {
+int sort_lane_compare_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
+                            const std::string* text_key_b, bool descending) {
   const bool a_blank = key_a.is_blank();
   const bool b_blank = key_b.is_blank();
   if (a_blank != b_blank) {
     // Non-blank wins (sorts earlier) regardless of direction.
-    return !a_blank;
+    return a_blank ? 1 : -1;
   }
-  if (a_blank && b_blank) {
-    return false;
+  if (a_blank) {
+    return 0;
   }
-  return descending ? sort_cell_less_keyed(key_b, key_a, text_key_b, text_key_a)
-                    : sort_cell_less_keyed(key_a, key_b, text_key_a, text_key_b);
+  return descending ? cmp_value_keyed(key_b, key_a, text_key_b, text_key_a)
+                    : cmp_value_keyed(key_a, key_b, text_key_a, text_key_b);
+}
+
+bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
+                          const std::string* text_key_b, bool descending) {
+  return sort_lane_compare_keyed(key_a, text_key_a, key_b, text_key_b, descending) < 0;
 }
 
 std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelProfile profile,
@@ -303,7 +255,7 @@ std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelPro
   }
 
   const auto rep_less = [&](std::uint32_t a, std::uint32_t b) {
-    return sort_cell_less_keyed(*reps[a], *reps[b], &text_keys[a], &text_keys[b]);
+    return cmp_value_keyed(*reps[a], *reps[b], &text_keys[a], &text_keys[b]) < 0;
   };
   std::vector<std::uint32_t> order;
   sorted_index_order(order, static_cast<std::uint32_t>(reps.size()), make_index_less(rep_less));

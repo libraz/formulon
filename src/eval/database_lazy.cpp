@@ -74,6 +74,46 @@ bool resolve_table_arg(const parser::AstNode& arg_node, Arena& arena, const Func
   return true;
 }
 
+// The database header row, text-coerced and folded; a header that cannot be
+// coerced to text (Array / Ref / Lambda) never matches.
+struct FoldedHeaders {
+  std::vector<std::string> text;
+  std::vector<bool> valid;
+};
+
+std::string fold_header_text(std::string_view text, bool jp_fold, bool fold_halfwidth_kana) {
+  return jp_fold ? fold_jp_text(text, /*fold_fullwidth_digits=*/true, fold_halfwidth_kana) : std::string(text);
+}
+
+FoldedHeaders fold_headers(const std::vector<Value>& db_cells, std::uint32_t db_cols, bool jp_fold,
+                           bool fold_halfwidth_kana) {
+  FoldedHeaders headers;
+  headers.text.resize(db_cols);
+  headers.valid.assign(db_cols, false);
+  for (std::uint32_t c = 0; c < db_cols; ++c) {
+    // Error / Blank / Bool / Number headers use the text coercion for an
+    // Excel-visible rendering.
+    auto coerced = coerce_to_text(db_cells[c]);
+    if (coerced) {
+      headers.text[c] = fold_header_text(coerced.value(), jp_fold, fold_halfwidth_kana);
+      headers.valid[c] = true;
+    }
+  }
+  return headers;
+}
+
+// The first column whose folded header equals `folded_needle` under
+// case-insensitive ASCII equality; the header count when none does.
+std::uint32_t find_header_column(const std::string& folded_needle, const FoldedHeaders& headers) {
+  for (std::uint32_t c = 0; c < headers.text.size(); ++c) {
+    if (headers.valid[c] &&
+        strings::case_insensitive_eq(std::string_view(headers.text[c]), std::string_view(folded_needle))) {
+      return c;
+    }
+  }
+  return static_cast<std::uint32_t>(headers.text.size());
+}
+
 // Maps a `field` argument to a 0-indexed column index into `database`.
 //
 //  * Number: truncated toward zero -> 1-based column index. Must lie in
@@ -117,25 +157,11 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
     // through the full kana/width fold. Windows keeps the existing
     // comparison, so half-width and full-width kana remain distinct there.
     const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
-    const std::string folded_needle =
-        jp_fold ? fold_jp_text(field_value.as_text(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/true)
-                : std::string(field_value.as_text());
-    for (std::uint32_t c = 0; c < db_cols; ++c) {
-      const Value& hdr = db_cells[c];
-      // Error / Blank / Bool / Number headers: use the text coercion for
-      // an Excel-visible rendering. A header cell that fails to coerce
-      // (Array / Ref / Lambda) cannot match; keep scanning.
-      auto coerced = coerce_to_text(hdr);
-      if (!coerced) {
-        continue;
-      }
-      const std::string folded_hdr =
-          jp_fold ? fold_jp_text(coerced.value(), /*fold_fullwidth_digits=*/true, /*fold_halfwidth_kana=*/true)
-                  : coerced.value();
-      if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
-        *out_col_index = c;
-        return true;
-      }
+    const FoldedHeaders headers = fold_headers(db_cells, db_cols, jp_fold, /*fold_halfwidth_kana=*/true);
+    const std::uint32_t c = find_header_column(fold_header_text(field_value.as_text(), jp_fold, true), headers);
+    if (c != db_cols) {
+      *out_col_index = c;
+      return true;
     }
     *out_err = Value::error(ErrorCode::Value);
     return false;
@@ -145,12 +171,12 @@ bool resolve_field_column(const Value& field_value, const std::vector<Value>& db
   return false;
 }
 
-// Scans the database header row for the 0-indexed column whose header
-// text matches `header_needle` (a single criteria-header cell) under
-// case-insensitive ASCII equality. Returns `db_cols` as a sentinel for
-// "no match"; callers treat that as a disjunct that cannot be satisfied.
-std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value>& db_cells, std::uint32_t db_cols,
-                             ExcelProfile profile) {
+// Finds the 0-indexed column whose header matches `header_needle` (a single
+// criteria-header cell). Returns `db_cols` as a sentinel for "no match";
+// callers treat that as a disjunct that cannot be satisfied.
+std::uint32_t find_db_column(const Value& header_needle, const FoldedHeaders& headers, bool jp_fold,
+                             bool fold_halfwidth_kana) {
+  const std::uint32_t db_cols = static_cast<std::uint32_t>(headers.text.size());
   if (header_needle.is_blank()) {
     return db_cols;
   }
@@ -158,27 +184,7 @@ std::uint32_t find_db_column(const Value& header_needle, const std::vector<Value
   if (!needle_coerced) {
     return db_cols;
   }
-  // Mac criteria-header matching follows the locale fact table: ja-JP keeps
-  // half-width kana distinct, while en-US folds it with the other width and
-  // kana variants. Windows keeps the existing comparison for both locales.
-  const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
-  const bool fold_halfwidth_kana = jp_fold && !locale_facts(profile).criteria_header_keeps_halfwidth_kana;
-  const std::string folded_needle =
-      jp_fold ? fold_jp_text(needle_coerced.value(), /*fold_fullwidth_digits=*/true, fold_halfwidth_kana)
-              : needle_coerced.value();
-  for (std::uint32_t c = 0; c < db_cols; ++c) {
-    auto hdr_coerced = coerce_to_text(db_cells[c]);
-    if (!hdr_coerced) {
-      continue;
-    }
-    const std::string folded_hdr =
-        jp_fold ? fold_jp_text(hdr_coerced.value(), /*fold_fullwidth_digits=*/true, fold_halfwidth_kana)
-                : hdr_coerced.value();
-    if (strings::case_insensitive_eq(std::string_view(folded_hdr), std::string_view(folded_needle))) {
-      return c;
-    }
-  }
-  return db_cols;
+  return find_header_column(fold_header_text(needle_coerced.value(), jp_fold, fold_halfwidth_kana), headers);
 }
 
 struct CompiledCriterionPredicate {
@@ -207,10 +213,16 @@ std::vector<CompiledCriterionRow> compile_criteria(const std::vector<Value>& db_
     }
   }
 
+  // Mac criteria-header matching follows the locale fact table: ja-JP keeps
+  // half-width kana distinct, while en-US folds it with the other width and
+  // kana variants. Windows keeps the existing comparison for both locales.
+  const bool jp_fold = width_folding(profile) == WidthFolding::kMac;
+  const bool fold_halfwidth_kana = jp_fold && !locale_facts(profile).criteria_header_keeps_halfwidth_kana;
+  const FoldedHeaders headers = fold_headers(db_cells, db_cols, jp_fold, fold_halfwidth_kana);
   std::vector<std::uint32_t> db_column_for_criterion(crit_cols, db_cols);
   for (std::uint32_t c = 0; c < crit_cols; ++c) {
     if (used_columns[c]) {
-      db_column_for_criterion[c] = find_db_column(crit_cells[c], db_cells, db_cols, profile);
+      db_column_for_criterion[c] = find_db_column(crit_cells[c], headers, jp_fold, fold_halfwidth_kana);
     }
   }
 
@@ -537,17 +549,9 @@ namespace {
 // `*out_var`. Sample estimator requires `n >= 2`; population requires
 // `n >= 1`.
 bool compute_variance(const std::vector<double>& nums, bool sample, double* out_var, Value* out_err) {
-  const std::size_t n = nums.size();
-  if (sample) {
-    if (n < 2U) {
-      *out_err = Value::error(ErrorCode::Div0);
-      return false;
-    }
-  } else {
-    if (n == 0U) {
-      *out_err = Value::error(ErrorCode::Div0);
-      return false;
-    }
+  if (nums.size() < (sample ? 2U : 1U)) {
+    *out_err = Value::error(ErrorCode::Div0);
+    return false;
   }
   *out_var = numeric_aggregate_kernels::dispersion_variance(nums, sample);
   return true;

@@ -82,17 +82,7 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
           // calcChain, vbaProject, customXml, ...) survives in
           // passthrough but becomes an orphan in the relationship
           // graph and Excel opens the file in "needs repair" mode.
-          UnknownRelationship entry;
-          entry.id.assign(attr_str(rel, "Id"));
-          entry.type.assign(type);
-          const bool external = attr_str(rel, "TargetMode") == "External";
-          entry.target_external = external;
-          if (external) {
-            entry.target.assign(target);
-          } else {
-            ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
-            entry.target = std::move(resolved);
-          }
+          ASSIGN_OR_RETURN(auto entry, make_unknown_relationship(rel, base_dir));
           rels.unknown_rels.push_back(std::move(entry));
         }
         return Expected<void, Error>::Ok();

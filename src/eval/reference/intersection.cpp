@@ -121,65 +121,30 @@ bool resolve_if_call(const parser::AstNode& node, Arena& arena, const FunctionRe
   // through verbatim, so `ROWS(IF(TRUE, A1:B3, A1:B3))` reports 3
   // rather than degrading to the scalar-fallback 1x1. We short-circuit
   // on `cond` exactly like `eval_if_lazy`.
-  const std::uint32_t arity = node.as_call_arity();
-  if (arity != 2U && arity != 3U) {
-    *out_err = ErrorCode::Value;
-    return false;
+  const SelectedBranch picked = select_if_branch(node, arena, registry, ctx);
+  if (picked.kind == SelectedBranch::Kind::kArgument) {
+    return resolve_picked_reference(node.as_call_arg(picked.arg), arena, registry, ctx, out_sheet, out_top_row,
+                                    out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
   }
-  const Value cond = eval_node(node.as_call_arg(0), arena, registry, ctx);
-  if (cond.is_error()) {
-    *out_err = cond.as_error();
-    return false;
-  }
-  auto coerced = coerce_to_bool(cond);
-  if (!coerced) {
-    *out_err = coerced.error();
-    return false;
-  }
-  if (!coerced.value() && arity == 2U) {
-    // `IF(FALSE, then)` returns boolean FALSE in Excel's scalar path,
-    // which is not a reference. Surface `#VALUE!` so the caller falls
-    // back to the scalar / non-reference branch.
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  const std::uint32_t pick = coerced.value() ? 1U : 2U;
-  return resolve_picked_reference(node.as_call_arg(pick), arena, registry, ctx, out_sheet, out_top_row, out_left_col,
-                                  out_bottom_row, out_right_col, out_is_range, out_err);
+  // `IF(FALSE, then)` returns boolean FALSE in Excel's scalar path, which is
+  // not a reference; surface `#VALUE!` so the caller falls back to the scalar
+  // branch. An array condition is not a reference either.
+  *out_err = picked.kind == SelectedBranch::Kind::kResult && picked.value.is_error() ? picked.value.as_error()
+                                                                                     : ErrorCode::Value;
+  return false;
 }
 
 bool resolve_choose_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                          std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                          bool* out_is_range, ErrorCode* out_err) {
-  const std::uint32_t arity = node.as_call_arity();
-  if (arity < 2U) {
-    *out_err = ErrorCode::Value;
-    return false;
+  const SelectedBranch picked = select_choose_branch(node, arena, registry, ctx);
+  if (picked.kind == SelectedBranch::Kind::kArgument) {
+    return resolve_picked_reference(node.as_call_arg(picked.arg), arena, registry, ctx, out_sheet, out_top_row,
+                                    out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
   }
-  // Evaluate the index argument; CHOOSE expects a 1-based integer
-  // selector. Anything that fails coercion (text, blank-as-strict,
-  // error) propagates with its original code.
-  const Value idx_val = eval_node(node.as_call_arg(0), arena, registry, ctx);
-  if (idx_val.is_error()) {
-    *out_err = idx_val.as_error();
-    return false;
-  }
-  auto idx_int = coerce_to_truncated_int(idx_val);
-  if (!idx_int) {
-    *out_err = idx_int.error();
-    return false;
-  }
-  const int idx = idx_int.value();
-  const std::uint32_t n_choices = arity - 1U;
-  if (idx < 1 || static_cast<std::uint32_t>(idx) > n_choices) {
-    // Excel: out-of-range index -> #VALUE!
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  // The picked choice is at slot `idx` (0 = index, 1..n = choices).
-  return resolve_picked_reference(node.as_call_arg(static_cast<std::uint32_t>(idx)), arena, registry, ctx, out_sheet,
-                                  out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
+  *out_err = picked.kind == SelectedBranch::Kind::kResult ? picked.value.as_error() : ErrorCode::Value;
+  return false;
 }
 
 // IFS / SWITCH pick through the same selector their value path uses; an

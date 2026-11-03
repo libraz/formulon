@@ -78,20 +78,11 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count) {
   return std::move(collected.value());
 }
 
-// Direct-scalar-aware collector for SMALL / LARGE and VAR.S / VAR.P /
-// STDEV.S / STDEV.P (and their legacy VAR / VARP / STDEV / STDEVP
-// aliases). Mirrors the "A"-family rule for direct scalar arguments but
-// differs for the "anything else" category: range-sourced Text / Bool /
-// Blank cells have already been dropped by the dispatcher's
-// `range_filter_numeric_only` filter, so by the time they reach this
-// helper a Text or Bool kind can only come from a direct scalar literal
-// (e.g. `SMALL("3.4", 1)` or `VAR.S(2, TRUE)`) or from an array-literal
-// element that survived the filter (it cannot -- the filter drops those
-// too, so those never appear here either). Direct Number -> kept as-is;
-// direct Bool -> 1.0 / 0.0; direct Text -> strict `coerce_to_number`
-// (propagates #VALUE! on unparseable text like `"Hello"`). Anything else
-// (Blank left over from a dropped optional argument, unresolved Ref,
-// Array, Lambda) is skipped silently, matching AVERAGE-family leniency.
+// Collector for the SMALL / LARGE data arguments. The dispatcher's
+// `range_filter_numeric_only` filter has already dropped range-sourced
+// Text / Bool / Blank cells, so a Text or Bool here is a direct scalar:
+// Bool -> 1 / 0, Text -> strict `coerce_to_number` (`#VALUE!` on unparseable
+// text such as `"Hello"`). Anything else (Blank, Ref, Array, Lambda) is skipped.
 Expected<std::vector<double>, ErrorCode> collect_direct_scalar_coerced(const Value* args, std::uint32_t count) {
   NumericCollectPolicy policy;
   policy.include_bool = true;                  // Direct Bool -> 1 / 0.
@@ -265,7 +256,9 @@ static Value StdevP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // 0 / 1 instead of skipping them. Range-sourced Blanks are still dropped;
 // direct Blank arguments are counted as 0 (see `collect_direct_stats`). Registered
 // with `range_filter_a_coerce = true` so the dispatcher performs the
-// provenance-aware transform on range cells before the impl runs.
+// provenance-aware transform on range cells before the impl runs. VARA /
+// VARPA / STDEVA / STDEVPA reuse the VAR.S / VAR.P / STDEV.S / STDEV.P impls;
+// only the registration flags differ.
 // ---------------------------------------------------------------------------
 
 static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
@@ -311,22 +304,6 @@ static Value MinA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return extreme_a(args, arity, false);
 }
 
-static Value VarA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return var_or_stdev_dispatch(args, arity, true, false);
-}
-
-static Value VarPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return var_or_stdev_dispatch(args, arity, false, false);
-}
-
-static Value StdevA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return var_or_stdev_dispatch(args, arity, true, true);
-}
-
-static Value StdevPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return var_or_stdev_dispatch(args, arity, false, true);
-}
-
 }  // namespace stats_detail
 
 void register_stats_builtins(FunctionRegistry& registry) {
@@ -360,10 +337,10 @@ void register_stats_builtins(FunctionRegistry& registry) {
       {"AVERAGEA", 1u, kVariadic, &stats_detail::AverageA, true, true, false, false, true},
       {"MAXA", 1u, kVariadic, &stats_detail::MaxA, true, true, false, false, true},
       {"MINA", 1u, kVariadic, &stats_detail::MinA, true, true, false, false, true},
-      {"VARA", 1u, kVariadic, &stats_detail::VarA, true, true, false, false, true},
-      {"VARPA", 1u, kVariadic, &stats_detail::VarPA, true, true, false, false, true},
-      {"STDEVA", 1u, kVariadic, &stats_detail::StdevA, true, true, false, false, true},
-      {"STDEVPA", 1u, kVariadic, &stats_detail::StdevPA, true, true, false, false, true},
+      {"VARA", 1u, kVariadic, &stats_detail::VarS, true, true, false, false, true},
+      {"VARPA", 1u, kVariadic, &stats_detail::VarP, true, true, false, false, true},
+      {"STDEVA", 1u, kVariadic, &stats_detail::StdevS, true, true, false, false, true},
+      {"STDEVPA", 1u, kVariadic, &stats_detail::StdevP, true, true, false, false, true},
       {"GEOMEAN", 1u, kVariadic, &stats_detail::GeoMean, true, true, true},
       {"HARMEAN", 1u, kVariadic, &stats_detail::HarMean, true, true, true},
       {"DEVSQ", 1u, kVariadic, &stats_detail::DevSq, true, true, true},

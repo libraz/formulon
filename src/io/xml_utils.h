@@ -43,6 +43,43 @@ inline constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"U
 /// without worrying about delimiters.
 void append_xml_attr(std::string& out, std::string_view name, std::string_view value);
 
+/// Appends the namespace declaration ` xmlns="uri"` (empty `prefix`) or
+/// ` xmlns:prefix="uri"` to `out`. `uri` is a constant namespace URI and is
+/// emitted verbatim.
+void append_xml_ns_decl(std::string& out, std::string_view prefix, std::string_view uri);
+
+/// True for the four XML whitespace characters (space, tab, CR, LF).
+inline constexpr bool is_xml_space(char c) noexcept {
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+/// Namespace prefix of the qualified name `name` (before the first `:`,
+/// colon excluded); empty when `name` is unprefixed.
+inline std::string_view qname_prefix(std::string_view name) {
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? std::string_view{} : name.substr(0, colon);
+}
+
+/// As `qname_prefix`, with the trailing `:` included (ready to prepend to a
+/// local name); empty when `name` is unprefixed.
+inline std::string_view qname_prefix_colon(std::string_view name) {
+  const std::size_t colon = name.find(':');
+  return colon == std::string_view::npos ? std::string_view{} : name.substr(0, colon + 1U);
+}
+
+/// Local name of the qualified name `qname` (the part after any `prefix:`).
+std::string_view local_name(const char* qname);
+
+/// Local name of `node` (the part after any `prefix:`).
+std::string_view local_name(const pugi::xml_node& node);
+
+/// First element child of `parent` whose local name is `name`; when `name` is
+/// empty, the first element child. A null node when there is none.
+pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name);
+
+/// Every element child of `parent` whose local name is `name`, in document order.
+std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::string_view name);
+
 /// Numeric variant of `append_xml_attr`: appends ` name="value"` with
 /// `value` rendered via `std::to_string`. No escaping pass is required
 /// because the rendered digits are always XML-safe.

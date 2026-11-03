@@ -159,7 +159,53 @@ enum class PtgAttrKind : std::uint8_t {
   Baxcel = 0x20,     ///< Baseline reference (preserve).
   Space = 0x40,      ///< Inter-token whitespace (round-trip).
   SpaceSemi = 0x41,  ///< Whitespace + volatile.
+  IfError = 0x80,    ///< IFERROR branch offset.
 };
+
+/// First byte of the Ptgs the encoder and the link-part codecs write, as the
+/// Reference-class (or unclassed) value; a Value / Array variant adds the
+/// class bits.
+inline constexpr std::uint8_t kPtgAdd = 0x03;
+inline constexpr std::uint8_t kPtgSub = 0x04;
+inline constexpr std::uint8_t kPtgMul = 0x05;
+inline constexpr std::uint8_t kPtgDiv = 0x06;
+inline constexpr std::uint8_t kPtgPower = 0x07;
+inline constexpr std::uint8_t kPtgConcat = 0x08;
+inline constexpr std::uint8_t kPtgLt = 0x09;
+inline constexpr std::uint8_t kPtgLe = 0x0A;
+inline constexpr std::uint8_t kPtgEq = 0x0B;
+inline constexpr std::uint8_t kPtgGe = 0x0C;
+inline constexpr std::uint8_t kPtgGt = 0x0D;
+inline constexpr std::uint8_t kPtgNe = 0x0E;
+inline constexpr std::uint8_t kPtgIsect = 0x0F;
+inline constexpr std::uint8_t kPtgUnion = 0x10;
+inline constexpr std::uint8_t kPtgRange = 0x11;
+inline constexpr std::uint8_t kPtgUplus = 0x12;
+inline constexpr std::uint8_t kPtgUminus = 0x13;
+inline constexpr std::uint8_t kPtgPercent = 0x14;
+inline constexpr std::uint8_t kPtgParen = 0x15;
+inline constexpr std::uint8_t kPtgMissArg = 0x16;
+inline constexpr std::uint8_t kPtgStr = 0x17;
+inline constexpr std::uint8_t kPtgAttr = 0x19;
+inline constexpr std::uint8_t kPtgErr = 0x1C;
+inline constexpr std::uint8_t kPtgBool = 0x1D;
+inline constexpr std::uint8_t kPtgInt = 0x1E;
+inline constexpr std::uint8_t kPtgNum = 0x1F;
+inline constexpr std::uint8_t kPtgArray = 0x20;
+inline constexpr std::uint8_t kPtgFunc = 0x21;
+inline constexpr std::uint8_t kPtgFuncVar = 0x22;
+inline constexpr std::uint8_t kPtgName = 0x23;
+inline constexpr std::uint8_t kPtgRef = 0x24;
+inline constexpr std::uint8_t kPtgArea = 0x25;
+inline constexpr std::uint8_t kPtgMemArea = 0x26;
+inline constexpr std::uint8_t kPtgMemErr = 0x27;
+inline constexpr std::uint8_t kPtgMemFunc = 0x29;
+inline constexpr std::uint8_t kPtgRefErr = 0x2A;
+inline constexpr std::uint8_t kPtgRefN = 0x2C;
+inline constexpr std::uint8_t kPtgAreaN = 0x2D;
+inline constexpr std::uint8_t kPtgNameX = 0x39;
+inline constexpr std::uint8_t kPtgRef3d = 0x3A;
+inline constexpr std::uint8_t kPtgArea3d = 0x3B;
 
 /// `PtgAttrSpace` whitespace types ([MS-XLSB] PtgAttrSpaceType) the reader
 /// and writer carry. The attr precedes the token it applies to.

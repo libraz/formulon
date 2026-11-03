@@ -25,6 +25,16 @@ namespace formulon {
 namespace eval {
 namespace {
 
+constexpr bool is_ordering(CriteriaOp op) noexcept {
+  return op == CriteriaOp::Lt || op == CriteriaOp::LtEq || op == CriteriaOp::Gt || op == CriteriaOp::GtEq;
+}
+
+// Whether a cache filled for (`cached_unescape`, `cached_profile`) answers a request for (`unescape`, `profile`).
+bool cache_holds(bool filled, bool cached_unescape, ExcelProfile cached_profile, bool unescape,
+                 ExcelProfile profile) noexcept {
+  return filled && cached_unescape == unescape && same_profile(cached_profile, profile);
+}
+
 // Attempts to strip a leading comparator prefix from `text` and writes the
 // detected operator into `*out_op`. On success returns the remainder of
 // the string; on no-match returns `text` unchanged and leaves `*out_op`
@@ -207,14 +217,18 @@ void ParsedCriterion::copy_parsed_fields_except_storage(const ParsedCriterion& o
   rhs_text = other.rhs_text;
 }
 
+void ParsedCriterion::reset_caches() noexcept {
+  rhs_fold_cached_ = false;
+  rhs_fold_cache_.clear();
+  rhs_key_cached_ = false;
+}
+
 ParsedCriterion& ParsedCriterion::operator=(const ParsedCriterion& other) {
   if (this != &other) {
     copy_parsed_fields_except_storage(other);
     rhs_storage = other.rhs_storage;
     rebind_rhs_text();
-    rhs_fold_cached_ = false;
-    rhs_fold_cache_.clear();
-    rhs_key_cached_ = false;
+    reset_caches();
   }
   return *this;
 }
@@ -224,16 +238,13 @@ ParsedCriterion& ParsedCriterion::operator=(ParsedCriterion&& other) noexcept {
     copy_parsed_fields_except_storage(other);
     rhs_storage = std::move(other.rhs_storage);
     rebind_rhs_text();
-    rhs_fold_cached_ = false;
-    rhs_fold_cache_.clear();
-    rhs_key_cached_ = false;
+    reset_caches();
   }
   return *this;
 }
 
 const std::string& ParsedCriterion::cached_folded_rhs(ExcelProfile profile, bool unescape_first) const {
-  if (rhs_fold_cached_ && rhs_fold_cache_unescape_first_ == unescape_first &&
-      same_profile(rhs_fold_cache_profile_, profile)) {
+  if (cache_holds(rhs_fold_cached_, rhs_fold_cache_unescape_first_, rhs_fold_cache_profile_, unescape_first, profile)) {
     return rhs_fold_cache_;
   }
   const std::string folded_input = unescape_first ? unescape_wildcard_literal(rhs_text) : std::string(rhs_text);
@@ -246,8 +257,7 @@ const std::string& ParsedCriterion::cached_folded_rhs(ExcelProfile profile, bool
 
 const ParsedCriterion::CollationRhs& ParsedCriterion::cached_collation_rhs(ExcelProfile profile,
                                                                            bool unescape_first) const {
-  if (rhs_key_cached_ && rhs_key_cache_unescape_first_ == unescape_first &&
-      same_profile(rhs_key_cache_profile_, profile)) {
+  if (cache_holds(rhs_key_cached_, rhs_key_cache_unescape_first_, rhs_key_cache_profile_, unescape_first, profile)) {
     return rhs_key_cache_;
   }
   const std::string input = unescape_first ? unescape_wildcard_literal(rhs_text) : std::string(rhs_text);
@@ -642,8 +652,7 @@ bool matches_criterion(const Value& cell, const ParsedCriterion& c, ExcelProfile
   // matching no cells — not even the literal empty-string. Without this
   // guard the empty `rhs_text` would compare lexicographically against
   // every cell's text projection and incorrectly match blanks / "".
-  if (!c.rhs_is_number && c.rhs_text.empty() &&
-      (c.op == CriteriaOp::Lt || c.op == CriteriaOp::LtEq || c.op == CriteriaOp::Gt || c.op == CriteriaOp::GtEq)) {
+  if (!c.rhs_is_number && c.rhs_text.empty() && is_ordering(c.op)) {
     return false;
   }
 

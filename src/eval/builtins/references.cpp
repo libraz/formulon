@@ -23,6 +23,7 @@
 #include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "utils/a1_column.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -151,9 +152,7 @@ Value Address(const Value* args, std::uint32_t arity, Arena& arena) {
     if (col_abs) {
       out.push_back('$');
     }
-    char letters[4] = {0, 0, 0, 0};
-    const std::size_t n_letters = refs_internal::column_letters(static_cast<std::uint32_t>(col), letters);
-    out.append(letters, n_letters);
+    a1::append_column_letters(out, static_cast<std::uint32_t>(col) - 1U);
     if (row_abs) {
       out.push_back('$');
     }

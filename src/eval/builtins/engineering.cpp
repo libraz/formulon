@@ -436,24 +436,15 @@ Value BitRShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // DELTA / GESTEP
 // ---------------------------------------------------------------------------
 
-Expected<double, ErrorCode> coerce_delta_gestep_number(const Value& v) {
-  // Excel-quirk: DELTA / GESTEP reject a direct Bool argument with
-  // `#VALUE!` rather than coercing it to 0/1. Matches Excel 365 /
-  // IronCalc oracle.
-  if (v.kind() == ValueKind::Bool) {
-    return ErrorCode::Value;
-  }
-  return coerce_to_number(v);
-}
-
 Value compare_with_optional_step(const Value* args, std::uint32_t arity, bool greater_equal) {
-  auto a = coerce_delta_gestep_number(args[0]);
+  // DELTA / GESTEP reject a direct Bool with #VALUE! rather than coercing it to 0 / 1.
+  auto a = builtins_detail::coerce_to_number_no_bool(args[0]);
   if (!a) {
     return Value::error(a.error());
   }
   double step = 0.0;
   if (arity >= 2) {
-    auto sv = coerce_delta_gestep_number(args[1]);
+    auto sv = builtins_detail::coerce_to_number_no_bool(args[1]);
     if (!sv) {
       return Value::error(sv.error());
     }

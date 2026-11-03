@@ -201,13 +201,17 @@ StyleTableCounts EmittedCounts(const StylesTable& table) {
                           at_least_one(table.borders.size()), at_least_one(table.cell_style_xfs.size())};
 }
 
-void AppendFonts(std::string& out, const StylesTable& table) {
-  // Fonts vector always carries at least one entry (the default).
-  // Reader guarantees this; writer preserves it.
-  const std::size_t count = table.fonts.empty() ? std::size_t{1} : table.fonts.size();
-  out.append("  <fonts");
-  append_xml_attr_uint(out, "count", count);
+// Opens a `<fonts>` / `<fills>` / `<borders>` list. The list always carries
+// at least one entry (the default), so the count is never 0.
+void AppendRecordListOpen(std::string& out, std::string_view tag, std::size_t record_count) {
+  out.append("  <");
+  out.append(tag);
+  append_xml_attr_uint(out, "count", record_count == 0U ? std::size_t{1} : record_count);
   out.append(">\n");
+}
+
+void AppendFonts(std::string& out, const StylesTable& table) {
+  AppendRecordListOpen(out, "fonts", table.fonts.size());
   if (table.fonts.empty()) {
     out.append("    <font><sz val=\"11\"/><name val=\"Calibri\"/></font>\n");
   } else {
@@ -240,10 +244,7 @@ void AppendFonts(std::string& out, const StylesTable& table) {
 }
 
 void AppendFills(std::string& out, const StylesTable& table) {
-  const std::size_t count = table.fills.empty() ? std::size_t{1} : table.fills.size();
-  out.append("  <fills");
-  append_xml_attr_uint(out, "count", count);
-  out.append(">\n");
+  AppendRecordListOpen(out, "fills", table.fills.size());
   if (table.fills.empty()) {
     out.append("    <fill><patternFill patternType=\"none\"/></fill>\n");
   } else {
@@ -257,10 +258,7 @@ void AppendFills(std::string& out, const StylesTable& table) {
 }
 
 void AppendBorders(std::string& out, const StylesTable& table) {
-  const std::size_t count = table.borders.empty() ? std::size_t{1} : table.borders.size();
-  out.append("  <borders");
-  append_xml_attr_uint(out, "count", count);
-  out.append(">\n");
+  AppendRecordListOpen(out, "borders", table.borders.size());
   if (table.borders.empty()) {
     out.append("    <border/>\n");
   } else {

@@ -272,34 +272,70 @@ Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Ar
   return Value::array(out);
 }
 
-// IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
-// is evaluated iff cond coerces to false. When the third argument is
-// omitted Excel returns the boolean `FALSE` for the falsey path. An Array
-// condition instead spills element-wise via `eval_if_array_cond_lazy`.
-Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                   const EvalContext& ctx) {
+SelectedBranch select_if_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
   if (arity != 2 && arity != 3) {
-    return Value::error(ErrorCode::Value);
+    return SelectedBranch::result(Value::error(ErrorCode::Value));
   }
   const Value cond = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (cond.is_error()) {
-    return cond;
+    return SelectedBranch::result(cond);
   }
   if (cond.is_array()) {
-    return eval_if_array_cond_lazy(call, cond, arena, registry, ctx);
+    return SelectedBranch::array_subject(0, cond);
   }
   auto coerced = coerce_to_bool(cond);
   if (!coerced) {
-    return Value::error(coerced.error());
+    return SelectedBranch::result(Value::error(coerced.error()));
   }
   if (coerced.value()) {
-    return eval_selected_arm(call.as_call_arg(1), arena, registry, ctx);
+    return SelectedBranch::argument(1);
   }
   if (arity == 3) {
-    return eval_selected_arm(call.as_call_arg(2), arena, registry, ctx);
+    return SelectedBranch::argument(2);
   }
-  return Value::boolean(false);
+  return SelectedBranch::result(Value::boolean(false));
+}
+
+SelectedBranch select_choose_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                    const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2) {
+    return SelectedBranch::result(Value::error(ErrorCode::Value));
+  }
+  const Value idx_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (idx_val.is_error()) {
+    return SelectedBranch::result(idx_val);
+  }
+  if (idx_val.is_array()) {
+    return SelectedBranch::array_subject(0, idx_val);
+  }
+  auto idx = coerce_to_index_number(idx_val);
+  if (!idx) {
+    return SelectedBranch::result(Value::error(idx.error()));
+  }
+  if (!(idx.value() >= 1.0 && idx.value() <= static_cast<double>(arity - 1))) {
+    return SelectedBranch::result(Value::error(ErrorCode::Value));
+  }
+  return SelectedBranch::argument(static_cast<std::uint32_t>(idx.value()));
+}
+
+// IF(cond, then, else?) - the picked arm alone is evaluated. When the third
+// argument is omitted a false condition yields the boolean `FALSE`. An Array
+// condition instead spills element-wise via `eval_if_array_cond_lazy`.
+Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                   const EvalContext& ctx) {
+  const SelectedBranch picked = select_if_branch(call, arena, registry, ctx);
+  switch (picked.kind) {
+    case SelectedBranch::Kind::kArgument:
+      return eval_selected_arm(call.as_call_arg(picked.arg), arena, registry, ctx);
+    case SelectedBranch::Kind::kArraySubject:
+      return eval_if_array_cond_lazy(call, picked.value, arena, registry, ctx);
+    case SelectedBranch::Kind::kResult:
+      break;
+  }
+  return picked.value;
 }
 
 namespace {

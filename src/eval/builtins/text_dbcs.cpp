@@ -44,18 +44,14 @@ namespace text_detail {
 // Not found / out-of-range `start_num` / `start_num < 1` surface `#VALUE!`.
 // Empty `find_text` returns `start_num` (FIND's quirk).
 Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  if (!uses_dbcs_profile()) {
-    SearchArgs sargs;
-    Value early = Value::blank();
-    if (!read_search_args(args, arity, SearchUnit::Utf16, &sargs, &early)) {
-      return early;
-    }
-    return find_utf16_exact(sargs);
-  }
+  const bool dbcs = uses_dbcs_profile();
   SearchArgs sargs;
   Value early = Value::blank();
-  if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
+  if (!read_search_args(args, arity, dbcs ? SearchUnit::DbcsByte : SearchUnit::Utf16, &sargs, &early)) {
     return early;
+  }
+  if (!dbcs) {
+    return find_utf16_exact(sargs);
   }
   const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, dbcs_codepage());
   for (const DbcsCharRec& rec : chars) {
@@ -73,18 +69,14 @@ Value FindB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // DOS-style wildcards. Mirrors SEARCH semantically in the active profile's
 // byte/unit position space.
 Value SearchB_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  if (!uses_dbcs_profile()) {
-    SearchArgs sargs;
-    Value early = Value::blank();
-    if (!read_search_args(args, arity, SearchUnit::Utf16, &sargs, &early)) {
-      return early;
-    }
-    return find_utf16_folded(sargs);
-  }
+  const bool dbcs = uses_dbcs_profile();
   SearchArgs sargs;
   Value early = Value::blank();
-  if (!read_search_args(args, arity, SearchUnit::DbcsByte, &sargs, &early)) {
+  if (!read_search_args(args, arity, dbcs ? SearchUnit::DbcsByte : SearchUnit::Utf16, &sargs, &early)) {
     return early;
+  }
+  if (!dbcs) {
+    return find_utf16_folded(sargs);
   }
   const DbcsCodepage codepage = dbcs_codepage();
   const std::vector<DbcsCharRec> chars = build_dbcs_char_map(sargs.haystack, codepage);
@@ -280,29 +272,14 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
     return early;
   }
 
-  // Collect (byte_offset, byte_len, dbcs_cost) for each character.
-  struct CharRec {
-    std::size_t offset;
-    std::size_t byte_len;
-    int dbcs_bytes;
-  };
-  std::vector<CharRec> chars;
-  chars.reserve(src.size());
-  {
-    std::size_t i = 0;
-    while (i < src.size()) {
-      const Utf8Step step = next_utf8_step(src, i, codepage);
-      chars.push_back({i, step.byte_len, step.dbcs_bytes});
-      i += step.byte_len;
-    }
-  }
+  const std::vector<DbcsCharRec> chars = build_dbcs_char_map(src, codepage);
 
   // Walk right-to-left accumulating cost until we can't fit the next char.
   std::uint64_t used = 0;
   std::size_t first_full_idx = chars.size();
   bool pad_space = false;
   for (std::size_t k = chars.size(); k > 0; --k) {
-    const CharRec& rec = chars[k - 1];
+    const DbcsCharRec& rec = chars[k - 1];
     const auto cost = static_cast<std::uint64_t>(rec.dbcs_bytes);
     if (used + cost <= budget) {
       used += cost;
@@ -324,7 +301,7 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
     out.push_back(' ');
   }
   if (first_full_idx < chars.size()) {
-    const std::size_t start_byte = chars[first_full_idx].offset;
+    const std::size_t start_byte = chars[first_full_idx].byte_offset;
     out.append(src, start_byte, std::string::npos);
   }
   return Value::text(arena.intern(out));
@@ -458,120 +435,62 @@ Value ReplaceB_(const Value* args, std::uint32_t arity, Arena& arena) {
     return Value::error(parsed.error());
   }
   const std::string& src = parsed.value().text;
-  const int start = parsed.value().start;
-  const int num_bytes = parsed.value().count;
   const std::string& new_text = parsed.value().new_text;
-  const auto start_byte = static_cast<std::uint64_t>(start);         // 1-based
-  const auto budget = static_cast<std::uint64_t>(num_bytes);         // bytes to remove
-  const std::uint64_t end_byte_inclusive = start_byte + budget - 1;  // final byte to delete
+  const auto start_byte = static_cast<std::uint64_t>(parsed.value().start);  // 1-based
+  const auto budget = static_cast<std::uint64_t>(parsed.value().count);      // bytes to remove
 
   std::string prefix;
   std::string suffix;
   prefix.reserve(src.size());
   suffix.reserve(src.size());
-  bool head_pad = false;
   bool tail_pad = false;
-  std::uint64_t cursor = 0;  // DBCS bytes consumed so far (0-based, next char's first byte is cursor+1)
   std::size_t i = 0;
-  bool in_deletion = false;  // we've emitted either the head_pad or started consuming the deletion window
 
+  // Drops whole characters from `i` until `left` bytes are used; a character straddling the end of the
+  // window is dropped whole and replaced by a tail pad.
+  const auto consume_budget = [&](std::uint64_t left) {
+    while (i < src.size() && left > 0) {
+      const Utf8Step step = next_utf8_step(src, i, codepage);
+      const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
+      if (cost > left) {
+        tail_pad = true;
+        left = 0;
+      } else {
+        left -= cost;
+      }
+      i += step.byte_len;
+    }
+  };
+
+  std::uint64_t cursor = 0;  // DBCS bytes consumed so far
   while (i < src.size()) {
     const Utf8Step step = next_utf8_step(src, i, codepage);
     const auto cost = static_cast<std::uint64_t>(step.dbcs_bytes);
-    const std::uint64_t char_start = cursor + 1;   // 1-based first byte
-    const std::uint64_t char_end = cursor + cost;  // 1-based last byte
-
-    if (!in_deletion) {
-      // Still accumulating the prefix or about to enter the deletion window.
-      if (char_end < start_byte) {
-        prefix.append(src, i, step.byte_len);
-        cursor += cost;
-        i += step.byte_len;
-        continue;
-      }
-      if (char_start == start_byte) {
-        // Deletion window starts cleanly at this character.
-        in_deletion = true;
-        // Fall through to the deletion handler below.
-      } else {
-        // Deletion window starts strictly inside this multi-byte character.
-        // Emit a head-pad space in the prefix; conceptually the first byte
-        // of this character has been "consumed" from the deletion budget.
-        head_pad = true;
-        prefix.push_back(' ');
-        cursor += cost;
-        i += step.byte_len;
-        // The remaining (cost - (start_byte - char_start)) bytes of this
-        // character are also deleted from the budget. Since the entire
-        // character is skipped, `budget` effectively decreases by
-        // `char_end - start_byte + 1` (the bytes from start_byte through
-        // char_end). We advance directly past the character.
-        const std::uint64_t consumed_from_budget = char_end - start_byte + 1;
-        if (consumed_from_budget >= budget) {
-          // Budget already exhausted inside this one character; nothing
-          // more to delete. The tail of the deletion window also fell
-          // within this character, so we do NOT emit a tail pad separately.
-          in_deletion = true;
-          // The rest of the loop walks suffix characters; mark we're past
-          // the deletion window.
-          break;
-        }
-        in_deletion = true;
-        // Remaining budget after this character.
-        const std::uint64_t remaining_budget = budget - consumed_from_budget;
-        // Continue from the next character with the remaining budget.
-        // We reset the effective window: simulate an in-progress deletion
-        // by recomputing `end_byte_inclusive_local`.
-        // To keep the logic simple, re-enter the main loop with adjusted
-        // bookkeeping via a helper lambda-free approach: consume characters
-        // fully or emit tail pad on partial overflow.
-        std::uint64_t budget_left = remaining_budget;
-        while (i < src.size() && budget_left > 0) {
-          const Utf8Step s2 = next_utf8_step(src, i, codepage);
-          const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
-          if (c2 <= budget_left) {
-            cursor += c2;
-            i += s2.byte_len;
-            budget_left -= c2;
-          } else {
-            // Partial overlap: final byte of deletion lands inside this
-            // character (only possible with c2 == 2, budget_left == 1).
-            tail_pad = true;
-            cursor += c2;
-            i += s2.byte_len;
-            budget_left = 0;
-          }
-        }
-        break;
+    const std::uint64_t char_start = cursor + 1;
+    const std::uint64_t char_end = cursor + cost;
+    if (char_end < start_byte) {
+      prefix.append(src, i, step.byte_len);
+      cursor += cost;
+      i += step.byte_len;
+      continue;
+    }
+    if (char_start == start_byte) {
+      consume_budget(budget);
+    } else {
+      // The window starts inside this character: it becomes a head pad and its remaining bytes count
+      // against the budget.
+      prefix.push_back(' ');
+      i += step.byte_len;
+      const std::uint64_t consumed = char_end - start_byte + 1;
+      if (consumed < budget) {
+        consume_budget(budget - consumed);
       }
     }
-    // in_deletion is true: consume `budget` bytes starting from `start_byte`.
-    // At this point `char_start == start_byte` on entry.
-    {
-      std::uint64_t budget_left = budget;
-      while (i < src.size() && budget_left > 0) {
-        const Utf8Step s2 = next_utf8_step(src, i, codepage);
-        const auto c2 = static_cast<std::uint64_t>(s2.dbcs_bytes);
-        if (c2 <= budget_left) {
-          cursor += c2;
-          i += s2.byte_len;
-          budget_left -= c2;
-        } else {
-          tail_pad = true;
-          cursor += c2;
-          i += s2.byte_len;
-          budget_left = 0;
-        }
-      }
-      break;
-    }
+    break;
   }
-  // Copy any remaining characters into the suffix.
   if (i < src.size()) {
     suffix.append(src, i, std::string::npos);
   }
-  (void)end_byte_inclusive;
-  (void)head_pad;
 
   std::string out;
   out.reserve(prefix.size() + new_text.size() + (tail_pad ? 1u : 0u) + suffix.size());

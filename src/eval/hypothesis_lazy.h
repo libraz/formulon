@@ -88,7 +88,7 @@ Value eval_z_test_lazy(const parser::AstNode& call, Arena& arena, const Function
 ///
 /// `x_range` and `prob_range` must share a shape (else `#N/A`). Any
 /// `prob_i < 0`, `prob_i > 1`, or sum-of-probs != 1 (absolute tolerance
-/// 1e-12) -> `#NUM!`. With arity 3, returns the sum of `prob_i` for
+/// 1e-5) -> `#NUM!`. With arity 3, returns the sum of `prob_i` for
 /// which `x_i == lower_limit`. With arity 4, returns the sum of `prob_i`
 /// for which `lower_limit <= x_i <= upper_limit`; `upper < lower` ->
 /// `#NUM!`.

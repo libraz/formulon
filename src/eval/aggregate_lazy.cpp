@@ -118,6 +118,26 @@ enum class HiddenScope : std::uint8_t {
   kFiltered,  ///< Only filter-hidden rows (`SUBTOTAL(1..11)`).
 };
 
+// Decodes a plain `Ref` or a `Ref:Ref` range into its endpoints (the same
+// reference twice for a single `Ref`). False for any other node, including
+// OFFSET / INDIRECT endpoints, which carry no static provenance.
+bool static_ref_endpoints(const parser::AstNode& node, const parser::Reference** first,
+                          const parser::Reference** second) {
+  if (node.kind() == parser::NodeKind::Ref) {
+    *first = &node.as_ref();
+    *second = *first;
+    return true;
+  }
+  if (node.kind() == parser::NodeKind::RangeOp && node.as_range_arity() == 2U &&
+      node.as_range_operand(0).kind() == parser::NodeKind::Ref &&
+      node.as_range_operand(1).kind() == parser::NodeKind::Ref) {
+    *first = &node.as_range_operand(0).as_ref();
+    *second = &node.as_range_operand(1).as_ref();
+    return true;
+  }
+  return false;
+}
+
 // Resolves the sheet a reference-shaped argument reads from, together with
 // the 0-based row its first (top-left) cell occupies. Returns nullptr when
 // the argument carries no row provenance.
@@ -128,25 +148,12 @@ enum class HiddenScope : std::uint8_t {
 const Sheet* reference_arg_origin(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t* out_top_row) {
   const parser::Reference* first = nullptr;
   const parser::Reference* second = nullptr;
-  if (node.kind() == parser::NodeKind::Ref) {
-    first = &node.as_ref();
-  } else if (node.kind() == parser::NodeKind::RangeOp) {
-    const parser::AstNode& lhs = node.as_range_operand(0);
-    const parser::AstNode& rhs = node.as_range_operand(1);
-    if (node.as_range_arity() != 2U || lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
-      return nullptr;  // OFFSET / INDIRECT endpoints: no static provenance.
-    }
-    first = &lhs.as_ref();
-    second = &rhs.as_ref();
-  } else {
+  if (!static_ref_endpoints(node, &first, &second)) {
     return nullptr;
   }
 
-  const bool whole_column = first->is_full_col || (second != nullptr && second->is_full_col);
-  std::uint32_t top = whole_column ? 0U : first->row;
-  if (!whole_column && second != nullptr) {
-    top = std::min(first->row, second->row);
-  }
+  const bool whole_column = first->is_full_col || second->is_full_col;
+  const std::uint32_t top = whole_column ? 0U : std::min(first->row, second->row);
 
   // The parser keeps a `:` operator's qualifier on the left endpoint, so
   // `Sheet2!A1:B2` arrives as RangeOp(Ref{sheet=Sheet2}, Ref{sheet=""}) and
@@ -154,7 +161,7 @@ const Sheet* reference_arg_origin(const parser::AstNode& node, const EvalContext
   // so read whichever endpoint carries a name. A pair that names two
   // different sheets is a `#REF!` the range resolver already rejected.
   std::string_view sheet_name = first->sheet;
-  if (sheet_name.empty() && second != nullptr) {
+  if (sheet_name.empty()) {
     sheet_name = second->sheet;
   }
   const Sheet* sheet = ctx.sheet_for_qualifier(sheet_name);
@@ -259,16 +266,7 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
 
   const parser::Reference* first = nullptr;
   const parser::Reference* second = nullptr;
-  if (node.kind() == parser::NodeKind::Ref) {
-    first = &node.as_ref();
-    second = first;
-  } else if (node.kind() == parser::NodeKind::RangeOp && node.as_range_arity() == 2U &&
-             node.as_range_operand(0).kind() == parser::NodeKind::Ref &&
-             node.as_range_operand(1).kind() == parser::NodeKind::Ref) {
-    first = &node.as_range_operand(0).as_ref();
-    second = &node.as_range_operand(1).as_ref();
-  }
-  if (first == nullptr || count == 0U) {
+  if (count == 0U || !static_ref_endpoints(node, &first, &second)) {
     return;
   }
   const Sheet* sheet = nullptr;
@@ -309,6 +307,14 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
         mark(r, c);
       }
     }
+  }
+}
+
+// Appends `n` unflagged (visible, not nested) entries to the flag vectors.
+void append_unflagged(std::vector<bool>* out_hidden, std::vector<bool>* out_nested, std::size_t n) {
+  out_hidden->resize(out_hidden->size() + n, false);
+  if (out_nested != nullptr) {
+    out_nested->resize(out_nested->size() + n, false);
   }
 }
 
@@ -361,10 +367,7 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
         append_nested_flags(node, ctx, rr.rows, rr.cols, out_nested);
       }
     } else {
-      out_hidden->resize(out_hidden->size() + n, false);
-      if (out_nested != nullptr) {
-        out_nested->resize(out_nested->size() + n, false);
-      }
+      append_unflagged(out_hidden, out_nested, n);
     }
     out_cells->insert(out_cells->end(), std::make_move_iterator(rr.cells.begin()),
                       std::make_move_iterator(rr.cells.end()));
@@ -379,10 +382,7 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
       for (std::uint32_t c = 0; c < cols; ++c) {
         const Value v = eval_node(node.as_array_element(r, c), arena, registry, ctx);
         out_cells->push_back(v);
-        out_hidden->push_back(false);
-        if (out_nested != nullptr) {
-          out_nested->push_back(false);
-        }
+        append_unflagged(out_hidden, out_nested, 1U);
       }
     }
     return true;
@@ -397,17 +397,11 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
     const ArrayValue* array = v.as_array();
     const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
     out_cells->insert(out_cells->end(), array->cells, array->cells + n);
-    out_hidden->resize(out_hidden->size() + n, false);
-    if (out_nested != nullptr) {
-      out_nested->resize(out_nested->size() + n, false);
-    }
+    append_unflagged(out_hidden, out_nested, n);
     return true;
   }
   out_cells->push_back(v);
-  out_hidden->push_back(false);
-  if (out_nested != nullptr) {
-    out_nested->push_back(false);
-  }
+  append_unflagged(out_hidden, out_nested, 1U);
   return true;
 }
 
@@ -487,15 +481,6 @@ std::vector<double> to_numbers(const std::vector<Value>& cells) {
 // SUM/PRODUCT/MIN/MAX -> 0, AVERAGE/VAR/STDEV -> #DIV/0!, MEDIAN -> #DIV/0!,
 // COUNT/COUNTA -> 0, MODE.SNGL -> #N/A.
 
-// Lifts an `Expected<double, ErrorCode>` kernel result into the `Value`
-// shape AGGREGATE's dispatcher expects.
-Value lift_kernel_result(Expected<double, ErrorCode> result) {
-  if (!result) {
-    return Value::error(result.error());
-  }
-  return Value::number(result.value());
-}
-
 Value run_count(const std::vector<Value>& cells) {
   // After `apply_filters`, numeric branches retain only Numbers; this gives
   // the same answer as iterating the post-filter `cells` directly.
@@ -530,7 +515,7 @@ Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
 // and lifts the kernel result to `Value`.
 Value run_percentile_inc(std::vector<double> xs, double p) {
   std::sort(xs.begin(), xs.end());
-  return lift_kernel_result(numeric_aggregate_kernels::percentile_sorted_inc(xs, p));
+  return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::percentile_sorted_inc(xs, p));
 }
 
 // PERCENTILE.EXC. Domain / position-formula logic lives in
@@ -538,7 +523,7 @@ Value run_percentile_inc(std::vector<double> xs, double p) {
 // and lifts the kernel result to `Value`.
 Value run_percentile_exc(std::vector<double> xs, double p) {
   std::sort(xs.begin(), xs.end());
-  return lift_kernel_result(numeric_aggregate_kernels::percentile_sorted_exc(xs, p));
+  return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::percentile_sorted_exc(xs, p));
 }
 
 // Shared body of QUARTILE.INC / QUARTILE.EXC: `quart` is truncated, must lie
@@ -570,21 +555,6 @@ Value run_quartile_exc(std::vector<double> xs, double quart_raw) {
 // the two cannot disagree about what is valid.
 bool subtotal_code_skips_hidden(double raw) noexcept {
   return std::isfinite(raw) && raw >= 101.0 && raw < 112.0;
-}
-
-// `fn` applied to each element of `in`, keeping its shape; 1x1 unwraps.
-template <typename Fn>
-Value map_array(const ArrayValue& in, const Fn& fn, Arena& arena) {
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(in.rows) * in.cols;
-  for (std::size_t i = 0; i < n; ++i) {
-    cells[i] = fn(in.cells[i]);
-  }
-  return n == 1U ? cells[0] : Value::array(out);
 }
 
 }  // namespace
@@ -697,7 +667,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
       // An array k fails per element with the data error.
       const Value k_for_error = eval_node(call.as_call_arg(3), arena, registry, ctx);
       if (k_for_error.is_array()) {
-        return map_array(*k_for_error.as_array(), [&err](const Value&) { return err; }, arena);
+        return map_array_with(*k_for_error.as_array(), [&err](const Value&) { return err; }, arena);
       }
       return err;
     }
@@ -738,7 +708,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     };
     const Value k_value = eval_node(call.as_call_arg(3), arena, registry, ctx);
     if (k_value.is_array()) {
-      return map_array(*k_value.as_array(), [&](const Value& k) { return at_k(k, /*last=*/false); }, arena);
+      return map_array_with(*k_value.as_array(), [&](const Value& k) { return at_k(k, /*last=*/false); }, arena);
     }
     return at_k(k_value, /*last=*/true);
   }
@@ -751,7 +721,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     if (ref == nullptr) {
       const Value v = i == 3U ? eval_node(arg, arena, registry, ctx) : Value::blank();
       if (v.is_array()) {
-        return map_array(*v.as_array(), [](const Value&) { return Value::error(ErrorCode::Value); }, arena);
+        return map_array_with(*v.as_array(), [](const Value&) { return Value::error(ErrorCode::Value); }, arena);
       }
       return Value::error(ErrorCode::Value);
     }
@@ -766,35 +736,43 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
 
   switch (code) {
     case kCodeAverage:
-      return lift_kernel_result(numeric_aggregate_kernels::run_average(to_numbers(cells)));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_average(to_numbers(cells)));
     case kCodeCount:
       return run_count(cells);
     case kCodeCountA:
       return run_counta(cells);
     case kCodeMax:
-      return lift_kernel_result(numeric_aggregate_kernels::run_max(to_numbers(cells)));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_max(to_numbers(cells)));
     case kCodeMin:
-      return lift_kernel_result(numeric_aggregate_kernels::run_min(to_numbers(cells)));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_min(to_numbers(cells)));
     case kCodeProduct:
-      return lift_kernel_result(numeric_aggregate_kernels::run_product(to_numbers(cells)));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_product(to_numbers(cells)));
     case kCodeStdevS:
-      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/true));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/true));
     case kCodeStdevP:
-      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/false));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/false));
     case kCodeSum:
-      return lift_kernel_result(numeric_aggregate_kernels::run_sum(to_numbers(cells)));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_sum(to_numbers(cells)));
     case kCodeVarS:
-      return lift_kernel_result(numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/true));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/true));
     case kCodeVarP:
-      return lift_kernel_result(numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/false));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/false));
     case kCodeMedian:
       // The shared kernel sorts internally; do NOT pre-sort. Its empty-slice
       // code is `#NUM!`, which is what standalone MEDIAN reports.
-      return lift_kernel_result(numeric_aggregate_kernels::run_median(to_numbers(cells)));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_median(to_numbers(cells)));
     case kCodeModeSngl:
       // First-occurrence tie-break (Excel MODE.SNGL): the shared kernel
       // consumes the cells in input order, so do NOT sort first.
-      return lift_kernel_result(numeric_aggregate_kernels::mode_first_occurrence(to_numbers(cells)));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::mode_first_occurrence(to_numbers(cells)));
     default:
       // Unreachable: code is constrained to [1, 13] in this branch.
       return Value::error(ErrorCode::Value);

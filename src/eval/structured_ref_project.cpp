@@ -11,6 +11,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/eval_context.h"
+#include "eval/range_args.h"
 #include "eval/structured_ref.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -53,25 +54,22 @@ Value project_structured_ref(std::string_view table_name, std::string_view colum
     return Value::error(rect_or.error());
   }
   const StructuredRefRange rect = std::move(rect_or).value();
-  parser::Reference lhs{};
-  lhs.sheet = rect.sheet_name;
-  lhs.row = rect.row_first;
-  lhs.col = rect.col_first;
-  parser::Reference rhs{};
-  rhs.sheet = rect.sheet_name;
-  rhs.row = rect.row_last;
-  rhs.col = rect.col_last;
   // Single-cell rectangle: read the value directly, mirroring `Ref`.
   if (rect.row_first == rect.row_last && rect.col_first == rect.col_last) {
-    return ctx.resolve_ref(lhs, arena, registry);
+    parser::Reference cell{};
+    cell.sheet = rect.sheet_name;
+    cell.row = rect.row_first;
+    cell.col = rect.col_first;
+    return ctx.resolve_ref(cell, arena, registry);
   }
-  auto cells = ctx.expand_range(lhs, rhs, arena, registry);
-  if (!cells) {
-    return Value::error(cells.error());
+  std::vector<Value> expanded;
+  ErrorCode expand_err = ErrorCode::Ref;
+  if (!expand_resolved_rect_cells(rect.sheet_name, rect.row_first, rect.col_first, rect.row_last, rect.col_last, arena,
+                                  registry, ctx, &expanded, &expand_err, nullptr, nullptr)) {
+    return Value::error(expand_err);
   }
   const std::uint32_t rows = rect.row_last - rect.row_first + 1U;
   const std::uint32_t cols = rect.col_last - rect.col_first + 1U;
-  const std::vector<Value>& expanded = cells.value();
   ArrayValue* arr = array_from_values(rows, cols, expanded.data(), expanded.size(), arena);
   if (arr == nullptr) {
     *out_arena_exhausted = true;

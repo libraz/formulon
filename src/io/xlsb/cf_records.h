@@ -32,6 +32,9 @@ namespace xlsb {
 inline constexpr std::uint16_t kBrtBeginConditionalFormatting = 461;
 inline constexpr std::uint16_t kBrtEndConditionalFormatting = 462;
 
+/// Parses a conditional-format threshold given as text; empty text is 0.
+Expected<double, Error> parse_threshold_number(const std::string& text);
+
 /// Decodes one framed block, starting at its BrtBeginConditionalFormatting
 /// and ending with its BrtEndConditionalFormatting.
 std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const FeatureFormulaReadContext& ctx);

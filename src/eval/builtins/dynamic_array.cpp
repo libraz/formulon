@@ -27,7 +27,6 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
-#include "eval/dynamic_array_limits.h"
 #include "eval/function_registry.h"
 #include "eval/rng.h"
 #include "sheet.h"
@@ -41,13 +40,6 @@ namespace {
 
 using builtins_detail::read_optional_bool;
 using builtins_detail::read_optional_number;
-
-// Per-call ceiling on `rows * cols` to prevent SEQUENCE from issuing a
-// multi-gigabyte arena allocation when the user (or a fuzzer) asks for an
-// enormous grid. Sheet::kMaxRows * Sheet::kMaxCols ~= 1.7e10, well above any
-// reasonable spill footprint; cap at ~1M cells, the same order of magnitude
-// as Mac Excel's effective dynamic-array ceiling for a single formula. Going
-// over surfaces `#NUM!`, matching Excel's overflow code for SEQUENCE.
 
 struct GridShape {
   std::uint32_t rows;
@@ -84,7 +76,7 @@ Expected<GridShape, ErrorCode> validate_grid_shape(double rows_d, double cols_d,
 ///   * `rows` / `cols` snap to a near integer, then truncate toward zero
 ///     (`validate_grid_shape`). Either being `<= 0`
 ///     surfaces `#VALUE!`; either exceeding `Sheet::kMaxRows` /
-///     `Sheet::kMaxCols`, or `rows*cols` exceeding `kMaxSequenceCells`,
+///     `Sheet::kMaxCols`, or `rows*cols` exceeding `kMaxDynamicArrayCells`,
 ///     surfaces `#NUM!`.
 ///   * `start` / `step` are passed through unchanged (any finite double).
 ///
@@ -102,7 +94,7 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   const double start = params.first;
   const double step = params.second;
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer);
   if (arr == nullptr) {
     // Rejected shape or arena OOM -- preserve the spill pipeline's invariant
     // that a function either returns an Array with valid storage or an
@@ -156,7 +148,7 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
   const auto n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
 
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -184,7 +176,7 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
 ///   * `n` is truncated toward zero. `n <= 0` surfaces `#VALUE!` (matches
 ///     Mac Excel's per-call "non-positive dimension" surface).
 ///   * `n` exceeding `Sheet::kMaxRows` / `Sheet::kMaxCols`, or `n*n`
-///     exceeding `kMaxSequenceCells`, surfaces `#NUM!` (the same ceiling
+///     exceeding `kMaxDynamicArrayCells`, surfaces `#NUM!` (the same ceiling
 ///     as SEQUENCE / RANDARRAY -- a hand-tuned 1M-cell limit that
 ///     comfortably fits any realistic identity matrix).
 ///
@@ -207,7 +199,7 @@ Value MUnit(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   }
   const auto n = static_cast<std::uint32_t>(n_t);
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(n, n, arena, buffer, kMaxSequenceCells);
+  ArrayValue* arr = allocate_array_value(n, n, arena, buffer);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

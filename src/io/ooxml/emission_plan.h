@@ -205,6 +205,35 @@ struct EmissionPlan {
 /// Package path of the generated person list.
 inline constexpr std::string_view kPersonsPartPath = "xl/persons/person.xml";
 
+/// Fixed package paths of the generated workbook-level parts.
+inline constexpr std::string_view kWorkbookPartPath = "xl/workbook.xml";
+inline constexpr std::string_view kStylesPartPath = "xl/styles.xml";
+inline constexpr std::string_view kSharedStringsPartPath = "xl/sharedStrings.xml";
+inline constexpr std::string_view kMetadataPartPath = "xl/metadata.xml";
+
+/// Package path of the worksheet at 0-based position `index`
+/// (`xl/worksheets/sheet<index+1>.xml`).
+std::string SheetPartPath(std::size_t index);
+
+/// Package path of that worksheet's rels file.
+std::string SheetRelsPartPath(std::size_t index);
+
+/// Workbook-rels layout: sheets take rId1..rId(N), styles rId(N+1), the
+/// generated shared strings (when present) the next id, and the pivot caches,
+/// external links and retained relationships follow in that order.
+inline std::uint32_t SheetRelId(std::size_t index) {
+  return static_cast<std::uint32_t>(index + 1U);
+}
+inline std::uint32_t StylesRelId(std::size_t sheet_count) {
+  return static_cast<std::uint32_t>(sheet_count + 1U);
+}
+inline std::uint32_t SharedStringsRelId(std::size_t sheet_count) {
+  return static_cast<std::uint32_t>(sheet_count + 2U);
+}
+inline std::uint32_t FirstOptionalRelId(std::size_t sheet_count, bool generated_shared_strings) {
+  return static_cast<std::uint32_t>(sheet_count + 2U + (generated_shared_strings ? 1U : 0U));
+}
+
 /// Builds the emission plan. Performs collision detection between
 /// generated and passthrough paths; collisions are logged via
 /// `StructuredLog` (warn) and the passthrough copy is dropped.

@@ -32,10 +32,47 @@ constexpr std::uint8_t source_bit(DepGraph::DependencySource source) noexcept {
   return static_cast<std::uint8_t>(source);
 }
 
+constexpr DepGraph::DependencySource kAllSources[] = {DepGraph::DependencySource::kAuthored,
+                                                      DepGraph::DependencySource::kSpillFootprint,
+                                                      DepGraph::DependencySource::kDynamicReference};
+
 }  // namespace
 
 void DepGraph::add_dependency(CellNodeId dependent, CellNodeId dependency) {
   add_dependency_source(dependent, dependency, DependencySource::kAuthored);
+}
+
+bool DepGraph::is_known(CellNodeId node) const {
+  return forward_.count(node) != 0U || reverse_.count(node) != 0U;
+}
+
+void DepGraph::note_source_added(const Edge& edge, DependencySource source) {
+  if (source == DependencySource::kSpillFootprint) {
+    spill_footprint_edges_.insert(edge);
+  } else if (source == DependencySource::kAuthored) {
+    ++authored_edge_count_;
+  } else if (source == DependencySource::kDynamicReference) {
+    dynamic_by_dependent_[edge.first].push_back(edge.second);
+    ++dynamic_edge_count_;
+  }
+}
+
+void DepGraph::note_source_removed(const Edge& edge, DependencySource source) {
+  if (source == DependencySource::kSpillFootprint) {
+    spill_footprint_edges_.erase(edge);
+  } else if (source == DependencySource::kAuthored) {
+    --authored_edge_count_;
+  } else if (source == DependencySource::kDynamicReference) {
+    // The bucket is already detached when a whole dependent is cleared.
+    auto dyn = dynamic_by_dependent_.find(edge.first);
+    if (dyn != dynamic_by_dependent_.end()) {
+      erase_first(dyn->second, edge.second);
+      if (dyn->second.empty()) {
+        dynamic_by_dependent_.erase(dyn);
+      }
+    }
+    --dynamic_edge_count_;
+  }
 }
 
 void DepGraph::add_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source) {
@@ -43,31 +80,17 @@ void DepGraph::add_dependency_source(CellNodeId dependent, CellNodeId dependency
   const std::uint8_t bit = source_bit(source);
   auto existing = edge_sources_.find(edge);
   if (existing != edge_sources_.end()) {
-    if ((existing->second & bit) == 0U && source == DependencySource::kSpillFootprint) {
-      spill_footprint_edges_.insert(edge);
-    }
-    if ((existing->second & bit) == 0U && source == DependencySource::kAuthored) {
-      ++authored_edge_count_;
-    }
-    if ((existing->second & bit) == 0U && source == DependencySource::kDynamicReference) {
-      dynamic_by_dependent_[dependent].push_back(dependency);
-      ++dynamic_edge_count_;
+    if ((existing->second & bit) == 0U) {
+      note_source_added(edge, source);
     }
     existing->second = static_cast<std::uint8_t>(existing->second | bit);
     return;
   }
 
-  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
-  const bool dependency_was_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
+  const bool dependent_was_known = is_known(dependent);
+  const bool dependency_was_known = is_known(dependency);
   edge_sources_.emplace(edge, bit);
-  if (source == DependencySource::kSpillFootprint) {
-    spill_footprint_edges_.insert(edge);
-  } else if (source == DependencySource::kAuthored) {
-    ++authored_edge_count_;
-  } else if (source == DependencySource::kDynamicReference) {
-    dynamic_by_dependent_[dependent].push_back(dependency);
-    ++dynamic_edge_count_;
-  }
+  note_source_added(edge, source);
   forward_[dependent].push_back(dependency);
   reverse_[dependency].push_back(dependent);
   if (!dependent_was_known && !is_range_node(dependent)) {
@@ -85,28 +108,15 @@ bool DepGraph::remove_dependency_source(CellNodeId dependent, CellNodeId depende
   if (existing == edge_sources_.end() || (existing->second & bit) == 0U) {
     return false;
   }
-  if (source == DependencySource::kSpillFootprint) {
-    spill_footprint_edges_.erase(edge);
-  } else if (source == DependencySource::kAuthored) {
-    --authored_edge_count_;
-  } else if (source == DependencySource::kDynamicReference) {
-    auto dyn = dynamic_by_dependent_.find(dependent);
-    if (dyn != dynamic_by_dependent_.end()) {
-      erase_first(dyn->second, dependency);
-      if (dyn->second.empty()) {
-        dynamic_by_dependent_.erase(dyn);
-      }
-    }
-    --dynamic_edge_count_;
-  }
+  note_source_removed(edge, source);
   existing->second = static_cast<std::uint8_t>(existing->second & static_cast<std::uint8_t>(~bit));
   if (existing->second != 0U) {
     return false;
   }
   edge_sources_.erase(existing);
 
-  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
-  const bool dependency_was_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
+  const bool dependent_was_known = is_known(dependent);
+  const bool dependency_was_known = is_known(dependency);
   auto fwd = forward_.find(dependent);
   if (fwd != forward_.end()) {
     erase_first(fwd->second, dependency);
@@ -122,8 +132,8 @@ bool DepGraph::remove_dependency_source(CellNodeId dependent, CellNodeId depende
     }
   }
 
-  const bool dependent_is_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
-  const bool dependency_is_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
+  const bool dependent_is_known = is_known(dependent);
+  const bool dependency_is_known = is_known(dependency);
   if (dependent_was_known && !dependent_is_known && !is_range_node(dependent)) {
     --node_count_;
   }
@@ -206,7 +216,7 @@ void DepGraph::clear_dynamic_dependencies_of(CellNodeId dependent) {
   if (pos == dynamic_by_dependent_.end()) {
     return;
   }
-  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
+  const bool dependent_was_known = is_known(dependent);
   std::vector<CellNodeId> dependencies = std::move(pos->second);
   dynamic_by_dependent_.erase(pos);
   clear_outgoing_sources(dependent, dependencies, source_bit(DependencySource::kDynamicReference), dependent_was_known);
@@ -218,8 +228,7 @@ bool DepGraph::is_dynamic_only_edge(CellNodeId dependent, CellNodeId dependency)
 }
 
 void DepGraph::remove_all_sources(CellNodeId dependent, CellNodeId dependency, std::uint8_t mask) {
-  for (const DependencySource source :
-       {DependencySource::kAuthored, DependencySource::kSpillFootprint, DependencySource::kDynamicReference}) {
+  for (const DependencySource source : kAllSources) {
     if ((mask & source_bit(source)) != 0U) {
       remove_dependency_source(dependent, dependency, source);
     }
@@ -244,14 +253,10 @@ void DepGraph::clear_outgoing_sources(CellNodeId dependent, const std::vector<Ce
     if (removed_mask == 0U) {
       continue;
     }
-    if ((removed_mask & source_bit(DependencySource::kAuthored)) != 0U) {
-      --authored_edge_count_;
-    }
-    if ((removed_mask & source_bit(DependencySource::kSpillFootprint)) != 0U) {
-      spill_footprint_edges_.erase(Edge{dependent, dependency});
-    }
-    if ((removed_mask & source_bit(DependencySource::kDynamicReference)) != 0U) {
-      --dynamic_edge_count_;
+    for (const DependencySource source : kAllSources) {
+      if ((removed_mask & source_bit(source)) != 0U) {
+        note_source_removed(Edge{dependent, dependency}, source);
+      }
     }
 
     edge->second = static_cast<std::uint8_t>(edge->second & static_cast<std::uint8_t>(~removed_mask));
@@ -269,8 +274,7 @@ void DepGraph::clear_outgoing_sources(CellNodeId dependent, const std::vector<Ce
       }
     }
 
-    if (dependency != dependent && !is_range_node(dependency) && forward_.count(dependency) == 0U &&
-        reverse_.count(dependency) == 0U) {
+    if (dependency != dependent && !is_range_node(dependency) && !is_known(dependency)) {
       --node_count_;
     }
   }
@@ -287,8 +291,7 @@ void DepGraph::clear_outgoing_sources(CellNodeId dependent, const std::vector<Ce
     }
   }
 
-  if (dependent_was_known && !is_range_node(dependent) && forward_.count(dependent) == 0U &&
-      reverse_.count(dependent) == 0U) {
+  if (dependent_was_known && !is_range_node(dependent) && !is_known(dependent)) {
     --node_count_;
   }
 }
@@ -298,7 +301,7 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
   if (fwd == forward_.end()) {
     return;
   }
-  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
+  const bool dependent_was_known = is_known(dependent);
   std::vector<CellNodeId> dependencies = std::move(fwd->second);
   forward_.erase(fwd);
   dynamic_by_dependent_.erase(dependent);
@@ -315,7 +318,7 @@ void DepGraph::remove_node(CellNodeId node) {
   if (rev == reverse_.end()) {
     return;
   }
-  const bool node_was_known = forward_.count(node) != 0U || reverse_.count(node) != 0U;
+  const bool node_was_known = is_known(node);
   std::vector<CellNodeId> dependents = std::move(rev->second);
   reverse_.erase(rev);
   for (CellNodeId dependent : dependents) {
@@ -375,6 +378,11 @@ bool closes_through_dynamic_edge(const std::vector<CellNodeId>& component, const
   return false;
 }
 
+std::size_t cell_count_of_component(const std::vector<CellNodeId>& component) {
+  return static_cast<std::size_t>(
+      std::count_if(component.begin(), component.end(), [](CellNodeId node) { return !is_range_node(node); }));
+}
+
 std::vector<CellNodeId> cells_of_component(const std::vector<CellNodeId>& component) {
   std::vector<CellNodeId> cells;
   cells.reserve(component.size());
@@ -406,26 +414,15 @@ bool DepGraph::rect_cell_depends_on(CellNodeId node, std::uint32_t row_first, st
   return false;
 }
 
-std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
-  return tarjan_scc_impl(nullptr);
-}
-
 std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
     const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const {
-  return tarjan_scc_impl(&nodes);
-}
-
-std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
-    const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const {
   // Iterative Tarjan to avoid blowing the WASM stack on deep dependency
   // chains. Algorithm summary:
   //
-  //   index[node]   — DFS discovery index of `node`.
-  //   lowlink[node] — smallest index reachable from `node` through tree
-  //                   or back edges that are still on the explicit
-  //                   `dfs_component_stack`.
-  //   on_stack[node] — whether `node` is currently on
-  //                    `dfs_component_stack`.
+  //   index    — DFS discovery index of the node.
+  //   lowlink  — smallest index reachable from the node through tree or back
+  //              edges that are still on the explicit `dfs_component_stack`.
+  //   on_stack — whether the node is currently on `dfs_component_stack`.
   //
   // When a node finishes (we have visited every neighbor) and
   // `lowlink == index`, pop everything down to that node from
@@ -435,35 +432,19 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
   // use a `Frame` stack that records the "neighbor iterator position" so
   // we can resume after a recursive descent without using the C++ stack.
 
-  // Collect every distinct node so the outer loop is well-defined.
   std::vector<CellNodeId> all_nodes;
-  if (nodes != nullptr) {
-    all_nodes.reserve(nodes->size());
-    for (CellNodeId node : *nodes) {
-      all_nodes.push_back(node);
-    }
-  } else {
-    all_nodes.reserve(forward_.size() + reverse_.size());
-    std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
-    seen.reserve(forward_.size() + reverse_.size());
-    for (const auto& entry : forward_) {
-      if (seen.emplace(entry.first, 1).second) {
-        all_nodes.push_back(entry.first);
-      }
-    }
-    for (const auto& entry : reverse_) {
-      if (seen.emplace(entry.first, 1).second) {
-        all_nodes.push_back(entry.first);
-      }
-    }
+  all_nodes.reserve(nodes.size());
+  for (CellNodeId node : nodes) {
+    all_nodes.push_back(node);
   }
 
-  std::unordered_map<CellNodeId, std::int64_t, CellNodeIdHash> index_of;
-  std::unordered_map<CellNodeId, std::int64_t, CellNodeIdHash> lowlink_of;
-  std::unordered_map<CellNodeId, char, CellNodeIdHash> on_stack;
-  index_of.reserve(all_nodes.size());
-  lowlink_of.reserve(all_nodes.size());
-  on_stack.reserve(all_nodes.size());
+  struct Visit {
+    std::int64_t index;
+    std::int64_t lowlink;
+    bool on_stack;
+  };
+  std::unordered_map<CellNodeId, Visit, CellNodeIdHash> visits;
+  visits.reserve(all_nodes.size());
 
   std::vector<CellNodeId> dfs_component_stack;  // Tarjan's S
   dfs_component_stack.reserve(all_nodes.size());
@@ -492,16 +473,14 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
   };
 
   for (CellNodeId root : all_nodes) {
-    if (index_of.count(root) != 0U) {
+    if (visits.count(root) != 0U) {
       continue;
     }
 
     // Push the root frame.
-    index_of[root] = next_index;
-    lowlink_of[root] = next_index;
+    visits[root] = Visit{next_index, next_index, true};
     ++next_index;
     dfs_component_stack.push_back(root);
-    on_stack[root] = 1;
     frames.push_back(Frame{root, 0});
 
     while (!frames.empty()) {
@@ -509,24 +488,22 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
       const std::vector<CellNodeId>& adj = neighbors_of(top.node);
       if (top.neighbor_idx < adj.size()) {
         CellNodeId neighbor = adj[top.neighbor_idx++];
-        if (nodes != nullptr && nodes->count(neighbor) == 0U) {
+        if (nodes.count(neighbor) == 0U) {
           continue;
         }
-        if (index_of.count(neighbor) == 0U) {
+        const auto seen = visits.find(neighbor);
+        if (seen == visits.end()) {
           // Tree edge: descend.
-          index_of[neighbor] = next_index;
-          lowlink_of[neighbor] = next_index;
+          visits[neighbor] = Visit{next_index, next_index, true};
           ++next_index;
           dfs_component_stack.push_back(neighbor);
-          on_stack[neighbor] = 1;
           frames.push_back(Frame{neighbor, 0});
-        } else if (on_stack.count(neighbor) != 0U) {
+        } else if (seen->second.on_stack) {
           // Back edge into an ancestor that's still on the component
           // stack: tighten the current node's lowlink.
-          std::int64_t& cur_low = lowlink_of[top.node];
-          std::int64_t neighbor_index = index_of[neighbor];
-          if (neighbor_index < cur_low) {
-            cur_low = neighbor_index;
+          std::int64_t& cur_low = visits[top.node].lowlink;
+          if (seen->second.index < cur_low) {
+            cur_low = seen->second.index;
           }
         }
         // Cross / forward edges into a node that is no longer on the
@@ -536,8 +513,8 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
         // node, then pop the frame and propagate the lowlink to the
         // parent.
         CellNodeId finished = top.node;
-        std::int64_t finished_low = lowlink_of[finished];
-        std::int64_t finished_index = index_of[finished];
+        const std::int64_t finished_low = visits[finished].lowlink;
+        const std::int64_t finished_index = visits[finished].index;
         frames.pop_back();
 
         if (finished_low == finished_index) {
@@ -546,7 +523,7 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
           while (true) {
             CellNodeId popped = dfs_component_stack.back();
             dfs_component_stack.pop_back();
-            on_stack.erase(popped);
+            visits[popped].on_stack = false;
             component.push_back(popped);
             if (popped == finished) {
               break;
@@ -566,7 +543,7 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
 
         if (!frames.empty()) {
           CellNodeId parent = frames.back().node;
-          std::int64_t& parent_low = lowlink_of[parent];
+          std::int64_t& parent_low = visits[parent].lowlink;
           if (finished_low < parent_low) {
             parent_low = finished_low;
           }
@@ -584,9 +561,9 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
 }
 
 std::vector<std::vector<CellNodeId>> DepGraph::canonical_component_order(
-    std::vector<std::vector<CellNodeId>> sccs, const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const {
+    std::vector<std::vector<CellNodeId>> sccs, const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const {
   const std::size_t count = sccs.size();
-  // Reuses the value type of Tarjan's maps, so no new map is instantiated.
+  // Component index per member.
   std::unordered_map<CellNodeId, std::int64_t, CellNodeIdHash> component_of;
   for (std::size_t i = 0; i < count; ++i) {
     for (const CellNodeId member : sccs[i]) {
@@ -598,7 +575,7 @@ std::vector<std::vector<CellNodeId>> DepGraph::canonical_component_order(
   for (std::size_t i = 0; i < count; ++i) {
     for (const CellNodeId member : sccs[i]) {
       for (const CellNodeId dependency : dependencies_of_ref(member)) {
-        if (nodes != nullptr && nodes->count(dependency) == 0U) {
+        if (nodes.count(dependency) == 0U) {
           continue;
         }
         const auto it = component_of.find(dependency);
@@ -641,25 +618,6 @@ std::vector<std::vector<CellNodeId>> DepGraph::canonical_component_order(
     frontier.swap(next_frontier);
   }
   return ordered;
-}
-
-std::vector<CellNodeId> DepGraph::topological_order() const {
-  // `tarjan_scc()` emits leaves-first; flatten in that order so the
-  // returned vector also satisfies "every node appears before any node
-  // that depends on it".
-  std::vector<std::vector<CellNodeId>> sccs = tarjan_scc();
-  std::vector<CellNodeId> order;
-  std::size_t total = 0;
-  for (const auto& component : sccs) {
-    total += component.size();
-  }
-  order.reserve(total);
-  for (auto& component : sccs) {
-    for (CellNodeId cell : component) {
-      order.push_back(cell);
-    }
-  }
-  return order;
 }
 
 }  // namespace formulon::eval

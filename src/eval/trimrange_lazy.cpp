@@ -11,6 +11,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_resolvers.h"
+#include "eval/scalar_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
@@ -31,17 +32,10 @@ namespace {
 // *out_err. Argument errors propagate verbatim.
 int read_mode_opt(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                   int default_value, Value* out_err) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
+  double mode_d = 0.0;
+  if (!eval_truncated_number_arg(node, arena, registry, ctx, mode_d, *out_err)) {
     return default_value;
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return default_value;
-  }
-  const double mode_d = std::trunc(coerced.value());
   if (mode_d < 0.0 || mode_d > 3.0) {
     *out_err = Value::error(ErrorCode::Value);
     return default_value;

@@ -54,11 +54,8 @@ Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!collected) {
     return Value::error(collected.error());
   }
-  auto result = numeric_aggregate_kernels::run_median(std::move(collected.value()));
-  if (!result) {
-    return Value::error(result.error());
-  }
-  return Value::number(result.value());
+  return numeric_aggregate_kernels::value_from_kernel_result(
+      numeric_aggregate_kernels::run_median(std::move(collected.value())));
 }
 
 // MODE / MODE.SNGL(value, ...) - most-frequent numeric value. Ties resolve
@@ -71,11 +68,7 @@ Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Value);
   }
   const std::vector<double> xs = collect_numerics(args, arity);
-  auto r = numeric_aggregate_kernels::mode_first_occurrence(xs);
-  if (!r) {
-    return Value::error(r.error());
-  }
-  return Value::number(r.value());
+  return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::mode_first_occurrence(xs));
 }
 
 // MODE.MULT(value, ...) - vertical (column) array of every value tied for
@@ -170,22 +163,28 @@ static Value percentile_of_data(const Value* args, std::uint32_t data_count, dou
   return exclusive ? percentile_exc_sorted(xs, k) : percentile_inc_sorted(xs, k);
 }
 
+// Shared body of PERCENTILE.INC / PERCENTILE.EXC: the trailing argument is `k`;
+// the inclusive form requires it in [0, 1], the exclusive form leaves the
+// range check to the interpolation.
+static Value percentile_by_trailing_k(const Value* args, std::uint32_t arity, bool exclusive) {
+  auto k_raw = read_kth_arg(args[arity - 1u]);
+  if (!k_raw) {
+    return Value::error(k_raw.error());
+  }
+  const double k = k_raw.value();
+  if (!exclusive && (k < 0.0 || k > 1.0)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return percentile_of_data(args, arity - 1u, k, exclusive);
+}
+
 // PERCENTILE.INC(array, k) / PERCENTILE(array, k) - linear-interpolation
 // percentile. k is the fractional rank in [0, 1]; out-of-range yields
 // `#NUM!`. Empty numeric slice yields `#NUM!`. The interpolation point is
 // `pos = k * (n - 1)` (0-based); fractional `pos` blends the two
 // neighbours.
 Value PercentileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto k_raw = read_kth_arg(args[arity - 1u]);
-  if (!k_raw) {
-    return Value::error(k_raw.error());
-  }
-  const double k = k_raw.value();
-  if (k < 0.0 || k > 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return percentile_of_data(args, data_count, k, /*exclusive=*/false);
+  return percentile_by_trailing_k(args, arity, /*exclusive=*/false);
 }
 
 // PERCENTILE.EXC(array, k) - exclusive-interpolation percentile. `k` must
@@ -195,18 +194,12 @@ Value PercentileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // `1 <= floor(pos) < n` the result is
 // `xs[idx-1] + (pos - idx) * (xs[idx] - xs[idx-1])`.
 Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto k_raw = read_kth_arg(args[arity - 1u]);
-  if (!k_raw) {
-    return Value::error(k_raw.error());
-  }
-  const double k = k_raw.value();
-  return percentile_of_data(args, data_count, k, /*exclusive=*/true);
+  return percentile_by_trailing_k(args, arity, /*exclusive=*/true);
 }
 
 // Shared body of QUARTILE.INC / QUARTILE.EXC: `quart` must lie in [lo, hi)
 // and is truncated toward zero before becoming the rank `quart / 4`.
-Value quartile_of_data(const Value* args, std::uint32_t arity, double lo, double hi, bool exclusive) {
+static Value quartile_of_data(const Value* args, std::uint32_t arity, double lo, double hi, bool exclusive) {
   const std::uint32_t data_count = arity - 1u;
   auto q_raw = read_kth_arg(args[arity - 1u]);
   if (!q_raw) {

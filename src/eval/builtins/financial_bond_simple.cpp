@@ -118,16 +118,12 @@ Expected<MaturityYearFracs, ErrorCode> maturity_year_fracs(const MaturityInteres
 //   - redemption <= 0                ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
 Value PriceDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto parsed = read_security_rate_args(args, arity);
+  auto parsed = read_security_rate_span(args, arity, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const auto [settlement, maturity, discount, redemption, basis] = parsed.value();
-  auto span = day_count_span(settlement, maturity, basis, date1904);
-  if (!span) {
-    return Value::error(span.error());
-  }
-  const double result = -(((discount * redemption) * span.value().days) / span.value().year) + redemption;
+  const auto [discount, redemption, span] = parsed.value();
+  const double result = -(((discount * redemption) * span.days) / span.year) + redemption;
   return to_finite_value(result);
 }
 
@@ -186,19 +182,15 @@ Value PriceMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
 //   - redemption <= 0                 ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}    ->  #NUM!
 Value YieldDisc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto parsed = read_security_rate_args(args, arity);
+  auto parsed = read_security_rate_span(args, arity, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const auto [settlement, maturity, pr, redemption, basis] = parsed.value();
-  auto span = day_count_span(settlement, maturity, basis, date1904);
-  if (!span) {
-    return Value::error(span.error());
-  }
-  if (span.value().days <= 0.0) {
+  const auto [pr, redemption, span] = parsed.value();
+  if (span.days <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = (span.value().year / span.value().days) * ((redemption - pr) / pr);
+  const double result = (span.year / span.days) * ((redemption - pr) / pr);
   return to_finite_value(result);
 }
 

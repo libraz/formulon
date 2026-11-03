@@ -510,7 +510,6 @@ constexpr std::uint16_t kBeginCellIgnoreEcs = 648;
 constexpr std::uint16_t kCellIgnoreEc = 649;  // u32 flags, Sqrfx at 4
 constexpr std::uint16_t kEndCellIgnoreEcs = 650;
 constexpr std::uint32_t kWebSourceRange = 4U;
-constexpr std::uint16_t kBeginAFilter = 161;  // RfX at 0
 constexpr std::uint16_t kEndAFilter = 162;
 constexpr std::uint16_t kBeginFilterColumn = 163;  // u32 column id
 constexpr std::uint16_t kEndFilterColumn = 164;

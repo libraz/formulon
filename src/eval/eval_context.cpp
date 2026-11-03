@@ -17,6 +17,7 @@
 #include "eval/eval_state.h"
 #include "eval/formula_abandon.h"
 #include "eval/function_registry.h"
+#include "eval/implicit_intersection.h"
 #include "eval/iterative_solver.h"
 #include "eval/range_args.h"
 #include "eval/spill_committer.h"
@@ -74,23 +75,6 @@ const Sheet* resolve_target_sheet(std::string_view sheet_name, const Sheet* curr
     return nullptr;
   }
   return target;
-}
-
-// An ordinary cell reference is one scalar coordinate even when its fresh
-// recursive formula evaluation produces an Array (for example, SEQUENCE at
-// a committed spill anchor). The explicit SpillRef (`A1#`) path bypasses
-// resolve_ref and is therefore the only way to request the whole array.
-// Collapse here, at the shared reference boundary, so direct refs, normal
-// ranges and 3-D ranges all agree while stale formula caches still get fresh
-// recursive resolution. Preserve the empty-array error contract.
-Value scalarize_formula_ref(Value value) {
-  if (!value.is_array()) {
-    return value;
-  }
-  if (value.as_array_rows() == 0U || value.as_array_cols() == 0U) {
-    return Value::error(ErrorCode::Value);
-  }
-  return value.as_array_cells()[0];
 }
 
 // Writes the computed shape into the optional out-params, tolerating null.
@@ -326,11 +310,11 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   // non-recursive behaviour so the two overloads agree.
   if (state_ == nullptr || state_->observing_reads()) {
     const Value cached = adopt_text_into(arena, read.value());
-    return scalarize_result ? scalarize_formula_ref(cached) : cached;
+    return scalarize_result ? implicit_intersect_value(cached) : cached;
   }
 
   if (const Value* memo = state_->lookup_memo(target, ref.row, ref.col); memo != nullptr) {
-    return scalarize_result ? scalarize_formula_ref(*memo) : *memo;
+    return scalarize_result ? implicit_intersect_value(*memo) : *memo;
   }
 
   if (!state_->push_cell(target, ref.row, ref.col)) {
@@ -344,7 +328,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // no surface for yet.
     if (workbook_ != nullptr && workbook_->iterative_options().enabled) {
       const Value cached = adopt_text_into(arena, read.value());
-      return scalarize_result ? scalarize_formula_ref(cached) : cached;
+      return scalarize_result ? implicit_intersect_value(cached) : cached;
     }
     // A cell reading itself is the only member of its cycle, and Excel
     // leaves such a cell at 0 unevaluated.
@@ -393,7 +377,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     if (scalarize_result) {
       // A read-only recursive context cannot commit a dynamic-array result,
       // so an ordinary cell reference still exposes one scalar coordinate.
-      result = scalarize_formula_ref(result);
+      result = implicit_intersect_value(result);
     }
   }
 

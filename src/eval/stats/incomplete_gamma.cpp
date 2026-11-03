@@ -25,8 +25,6 @@ using flushed::div;
 using flushed::mul;
 using flushed::two_sum;
 
-constexpr int kMaxTerms = 100000;
-
 // Tables: 1/sqrt(pi), 1/sqrt(2 pi), 2 pi, -ln 2, the continued-fraction
 // tolerance; then the coefficient sets, highest degree first.
 constexpr double kPhi0 = 0x1.9884533d43651p-2;
@@ -195,9 +193,9 @@ double asymptotic_upper(double a, double x) noexcept {
 // Upper tail by the Legendre continued fraction (modified Lentz).
 double continued_fraction_upper(double a, double x) noexcept {
   const double d0 = dpois_raw(x, a);
-  double f = 1e-30;
+  double f = kLentzTiny;
   double d = 0.0;
-  double c = 1e-30;
+  double c = kLentzTiny;
   double k = 1.0;
   double b = x;
   double an = a;
@@ -205,12 +203,12 @@ double continued_fraction_upper(double a, double x) noexcept {
   for (int it = 0; it < kMaxTerms; ++it) {
     d = b + mul(an, d);
     if (d == 0.0) {
-      d = 1e-30;
+      d = kLentzTiny;
     }
     d = div(1.0, d);
     c = b + div(an, c);
     if (c == 0.0) {
-      c = 1e-30;
+      c = kLentzTiny;
     }
     const double delta = mul(c, d);
     f = mul(f, delta);
@@ -233,8 +231,8 @@ double continued_fraction_upper(double a, double x) noexcept {
 // Lower tail by continued fraction for small a and small x.
 double continued_fraction_lower(double a, double x) noexcept {
   const double pre = dpois_raw(x, a);
-  double f = 1e-30;
-  double c = 1e-30;
+  double f = kLentzTiny;
+  double c = kLentzTiny;
   double d = 0.0;
   double k = 0.0;
   double an = a;
@@ -243,12 +241,12 @@ double continued_fraction_lower(double a, double x) noexcept {
   for (int it = 0; it < kMaxTerms; ++it) {
     d = b + mul(an, d);
     if (d == 0.0) {
-      d = 1e-30;
+      d = kLentzTiny;
     }
     d = div(1.0, d);
     c = b + div(an, c);
     if (c == 0.0) {
-      c = 1e-30;
+      c = kLentzTiny;
     }
     const double delta = mul(c, d);
     f = mul(f, delta);

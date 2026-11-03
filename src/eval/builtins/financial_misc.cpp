@@ -20,16 +20,7 @@ namespace {
 
 // Re-expose the shared POD types under this TU's anonymous namespace so
 // the impl bodies below read naturally.
-using NumberPair = builtins_detail::NumberPair;
 using NumberTriple = builtins_detail::NumberTriple;
-
-Expected<NumberPair, ErrorCode> read_non_bool_number_pair(const Value* args, std::uint32_t first_index,
-                                                          std::uint32_t second_index) {
-  if (args[first_index].kind() == ValueKind::Bool || args[second_index].kind() == ValueKind::Bool) {
-    return ErrorCode::Value;
-  }
-  return builtins_detail::read_number_pair(args, first_index, second_index);
-}
 
 using builtins_detail::read_number_triple;
 
@@ -46,7 +37,7 @@ using builtins_detail::read_number_triple;
 // integer quote is already "decimal". The caller passes the truncated
 // integer denominator; this helper just computes the scale.
 Expected<double, ErrorCode> dollar_scale_from_denom(double denom_raw) {
-  if (std::isnan(denom_raw) || std::isinf(denom_raw)) {
+  if (!std::isfinite(denom_raw)) {
     return ErrorCode::Num;
   }
   if (denom_raw < 0.0) {
@@ -68,7 +59,7 @@ Value dollar_fractional_quote(const Value* args, bool to_decimal) {
   // Excel-quirk: DOLLARDE / DOLLARFR reject a direct Bool argument with
   // `#VALUE!` rather than coercing it to 0/1. Matches Excel 365 /
   // IronCalc oracle.
-  auto input = read_non_bool_number_pair(args, 0, 1);
+  auto input = builtins_detail::read_number_pair_no_bool(args, 0, 1);
   if (!input) {
     return Value::error(input.error());
   }
@@ -89,7 +80,7 @@ Value compound_rate_conversion(const Value* args, bool nominal_to_effective) {
   // Excel-quirk: EFFECT / NOMINAL reject a direct Bool argument with
   // `#VALUE!` rather than coercing it to 0/1. Without this guard the
   // non-positive rate branch below would report `#NUM!` instead.
-  auto input = read_non_bool_number_pair(args, 0, 1);
+  auto input = builtins_detail::read_number_pair_no_bool(args, 0, 1);
   if (!input) {
     return Value::error(input.error());
   }

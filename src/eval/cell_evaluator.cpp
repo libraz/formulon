@@ -12,6 +12,7 @@
 #include "cell.h"
 #include "eval/array_alloc.h"
 #include "eval/builtin_names.h"
+#include "eval/dynamic_read_log.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -130,9 +131,52 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   return result;
 }
 
-bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellNodeId>& cells,
-                               const std::function<Value(CellNodeId, EvalState*)>& evaluate,
-                               const std::function<void(CellNodeId, Value)>& commit) {
+Value CyclicComponentEvaluator::evaluate(CellNodeId cell, EvalState* observer) {
+  if (cell.sheet_id >= workbook_.sheet_count()) {
+    return Value::error(ErrorCode::Ref);
+  }
+  Sheet& sheet = workbook_.sheet(cell.sheet_id);
+  if (!stage_formula_cell(sheet, cell.row, cell.col, staged_)) {
+    // No formula text: nothing to evaluate. Blank keeps a value for the
+    // solver to compare against.
+    return Value::blank();
+  }
+  // Committed Text scalars survive the reset: `set_cell_cached_value`
+  // deep-copies them into the cell, and `commit_spill` does the same for
+  // Array results.
+  arena_.reset();
+  EvaluateCellOptions opts;
+  opts.spill_release_callback = release_callback_;
+  opts.spill_release_user_data = release_user_data_;
+  opts.read_observer = observer;
+  if (log_ != nullptr) {
+    log_->observe(cell, ordinal_, opts, nullptr);
+    log_->note_iterative_member(cell, ordinal_);
+  }
+  Value result = evaluate_cell_for_recalc(workbook_, sheet, staged_, cell.row, cell.col, registry_, arena_, opts);
+  if (log_ != nullptr) {
+    log_->end();
+  }
+  return result;
+}
+
+void CyclicComponentEvaluator::commit(CellNodeId cell, Value value) {
+  if (cell.sheet_id >= workbook_.sheet_count()) {
+    return;
+  }
+  Sheet& sheet = workbook_.sheet(cell.sheet_id);
+  std::unique_lock<std::mutex> guard;
+  if (commit_mutex_ != nullptr) {
+    guard = std::unique_lock<std::mutex>(*commit_mutex_);
+  }
+  sheet.set_cell_cached_value(cell.row, cell.col, value);
+  if (log_ != nullptr) {
+    log_->note_commit(cell, ordinal_);
+  }
+}
+
+bool settle_component_by_reads(const std::vector<CellNodeId>& cells, CyclicComponentEvaluator& evaluator) {
+  const Workbook& workbook = evaluator.workbook();
   EvalState observer;
   for (std::size_t i = 0; i < cells.size(); ++i) {
     const CellNodeId c = cells[i];
@@ -144,15 +188,15 @@ bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellN
       cells.size(),
       [&](std::size_t i, std::vector<std::size_t>* reads) {
         observer.clear_observed_reads();
-        const Value v = evaluate(cells[i], &observer);
+        const Value v = evaluator.evaluate(cells[i], &observer);
         *reads = observer.observed_reads();
         return v;
       },
-      [&](std::size_t i, Value v) { commit(cells[i], v); });
+      [&](std::size_t i, Value v) { evaluator.commit(cells[i], v); });
 }
 
 Value unresolved_cycle_value(const std::vector<CellNodeId>& component) {
-  return cells_of_component(component).size() == 1U ? Value::number(0.0) : Value::error(ErrorCode::Ref);
+  return cell_count_of_component(component) == 1U ? Value::number(0.0) : Value::error(ErrorCode::Ref);
 }
 
 void prepare_iterative_component_seeds(Workbook& workbook, const std::vector<CellNodeId>& cells) {

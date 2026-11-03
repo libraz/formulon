@@ -78,15 +78,7 @@ constexpr BuiltinRegistration absent_on_mac(BuiltinRegistration def) noexcept {
 }
 
 inline bool registration_name_is(std::string_view name, std::string_view expected) noexcept {
-  if (name.size() != expected.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < name.size(); ++i) {
-    if (strings::ascii_to_upper(name[i]) != expected[i]) {
-      return false;
-    }
-  }
-  return true;
+  return strings::case_insensitive_eq(name, expected);
 }
 
 template <std::size_t N>

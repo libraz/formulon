@@ -11,6 +11,7 @@
 #include "io/ooxml_defs.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/cf_x14_link.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/ptg_list.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -23,6 +24,7 @@
 #include "utils/arena.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 
 namespace formulon {
@@ -31,11 +33,6 @@ namespace xlsb {
 namespace {
 
 enum : std::uint16_t {
-  kBrtFRTBegin = 35,
-  kBrtFRTEnd = 36,
-  kBrtACBegin = 37,
-  kBrtACEnd = 38,
-  kBrtBeginAFilter = 161,
   kBrtBeginList = 343,
   kBrtEndList = 344,
   kBrtBeginListCols = 345,
@@ -44,20 +41,16 @@ enum : std::uint16_t {
   kBrtEndListCol = 348,
   kBrtListCCFmla = 351,
   kBrtListTrFmla = 352,
-  kBrtTableStyleClient = 513,
   kBrtBeginSortState = 530,
   kBrtBeginListParts = 660,
   kBrtListPart = 661,
   kBrtEndListParts = 662,
   kBrtList14 = 1111,
-  kBrtUid = 3072,
 };
 
 // ACUID ([MS-XLSB] 2.4.2 BrtACBegin, 2.4.857 BrtUid): the revision uid OOXML
 // spells `xr:uid` / `xr3:uid`. The BrtACBegin payload is the one Excel writes.
 constexpr std::uint8_t kAcBeginPayload[] = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
-constexpr std::string_view kMcNamespace = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-constexpr std::string_view kXrNamespace = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";
 constexpr std::string_view kXr3Namespace = "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3";
 
 constexpr std::uint32_t kNoDxf = 0xFFFFFFFFU;
@@ -79,7 +72,6 @@ constexpr std::uint8_t kFmlaArray = 0x02U;
 
 // `<x14:table>` (alt text) extension of a table, the OOXML twin of BrtList14.
 constexpr std::string_view kTableAltTextExtUri = "{504A1905-F514-4f6f-8877-14C23A59335A}";
-constexpr std::string_view kX14Namespace = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 
 // ListTotalRowFunction ([MS-XLSB] 2.5.88) indexed by value.
 constexpr std::string_view kTotalsFunctions[] = {"",    "average", "count",  "countNums", "max",
@@ -209,7 +201,7 @@ std::optional<SortState> SortStateFromXml(const std::string& xml) {
 std::string AltTextExtLst(const std::string& alt_text, const std::string& summary) {
   std::string out("<extLst><ext");
   append_xml_attr(out, "uri", kTableAltTextExtUri);
-  append_xml_attr(out, "xmlns:x14", kX14Namespace);
+  append_xml_attr(out, "xmlns:x14", kNsX14);
   out.append("><x14:table");
   AppendText(out, "altText", alt_text);
   AppendText(out, "altTextSummary", summary);
@@ -237,7 +229,6 @@ std::optional<std::pair<std::string, std::string>> AltTextFromExtLst(const std::
 
 /// `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` of a [MS-DTYP] GUID.
 std::string GuidText(const std::uint8_t* b) {
-  constexpr char kHex[] = "0123456789ABCDEF";
   // Data1, Data2 and Data3 are little-endian; Data4 is a byte array.
   constexpr int kOrder[] = {3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15};
   std::string out("{");
@@ -246,8 +237,8 @@ std::string GuidText(const std::uint8_t* b) {
       out.push_back('-');
       continue;
     }
-    out.push_back(kHex[b[i] >> 4U]);
-    out.push_back(kHex[b[i] & 0x0FU]);
+    out.push_back(strings::hex_digit_upper(b[i] >> 4U));
+    out.push_back(strings::hex_digit_upper(b[i]));
   }
   out.push_back('}');
   return out;
@@ -258,18 +249,6 @@ std::optional<std::vector<std::uint8_t>> ParseGuid(std::string_view text) {
   if (text.size() != 38U || text.front() != '{' || text.back() != '}') {
     return std::nullopt;
   }
-  auto nibble = [](char c) -> int {
-    if (c >= '0' && c <= '9') {
-      return c - '0';
-    }
-    if (c >= 'a' && c <= 'f') {
-      return c - 'a' + 10;
-    }
-    if (c >= 'A' && c <= 'F') {
-      return c - 'A' + 10;
-    }
-    return -1;
-  };
   std::vector<std::uint8_t> out(16U, 0U);
   std::size_t pos = 1;
   for (const int i : kOrder) {
@@ -279,8 +258,8 @@ std::optional<std::vector<std::uint8_t>> ParseGuid(std::string_view text) {
       }
       continue;
     }
-    const int hi = nibble(text[pos]);
-    const int lo = nibble(text[pos + 1U]);
+    const int hi = strings::hex_digit_value(text[pos]);
+    const int lo = strings::hex_digit_value(text[pos + 1U]);
     if (hi < 0 || lo < 0) {
       return std::nullopt;
     }
@@ -295,7 +274,7 @@ std::optional<std::vector<std::uint8_t>> ParseGuid(std::string_view text) {
 Expected<std::string, Error> ReadAcuid(ByteSpan& cursor) {
   ASSIGN_OR_RETURN(const XlsbRecord uid, read_record(cursor));
   ASSIGN_OR_RETURN(const XlsbRecord end, read_record(cursor));
-  if (uid.type != kBrtUid || uid.payload.size != 16U || end.type != kBrtACEnd) {
+  if (uid.type != kUid || uid.payload.size != 16U || end.type != kAcEnd) {
     return Unsupported(uid.type);
   }
   return GuidText(uid.payload.data);
@@ -310,9 +289,9 @@ void EmitAcuid(std::vector<std::uint8_t>& out, const std::string* guid) {
   if (!bytes) {
     return;
   }
-  emit_record(out, kBrtACBegin, ByteSpan{kAcBeginPayload, sizeof(kAcBeginPayload)});
-  emit_record(out, kBrtUid, *bytes);
-  emit_record(out, kBrtACEnd, ByteSpan{});
+  emit_record(out, kAcBegin, ByteSpan{kAcBeginPayload, sizeof(kAcBeginPayload)});
+  emit_record(out, kUid, *bytes);
+  emit_record(out, kAcEnd, ByteSpan{});
 }
 
 /// With `identity_only`, stops after the id and names: the checks that make a
@@ -436,10 +415,10 @@ void ReadStyleClient(ByteSpan payload, TableStyleInfo* info) {
   auto name = read_xlnullablewidestring(payload);
   info->present = true;
   if (flags) {
-    info->show_first_column = (flags.value() & 0x01U) != 0U;
-    info->show_last_column = (flags.value() & 0x02U) != 0U;
-    info->show_row_stripes = (flags.value() & 0x04U) != 0U;
-    info->show_column_stripes = (flags.value() & 0x08U) != 0U;
+    info->show_first_column = (flags.value() & kStyleClientFirstColumn) != 0U;
+    info->show_last_column = (flags.value() & kStyleClientLastColumn) != 0U;
+    info->show_row_stripes = (flags.value() & kStyleClientRowStripes) != 0U;
+    info->show_column_stripes = (flags.value() & kStyleClientColumnStripes) != 0U;
   }
   if (name) {
     info->name = std::move(name.value());
@@ -586,13 +565,13 @@ std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col
 void EmitStyleClient(std::vector<std::uint8_t>& out, const TableStyleInfo& info) {
   std::vector<std::uint8_t> payload;
   std::uint16_t flags = 0;
-  flags |= info.show_first_column ? 0x01U : 0U;
-  flags |= info.show_last_column ? 0x02U : 0U;
-  flags |= info.show_row_stripes ? 0x04U : 0U;
-  flags |= info.show_column_stripes ? 0x08U : 0U;
+  flags |= info.show_first_column ? kStyleClientFirstColumn : 0U;
+  flags |= info.show_last_column ? kStyleClientLastColumn : 0U;
+  flags |= info.show_row_stripes ? kStyleClientRowStripes : 0U;
+  flags |= info.show_column_stripes ? kStyleClientColumnStripes : 0U;
   emit_u16(payload, flags);
   emit_xlnullablewidestring(payload, info.name.empty() ? std::nullopt : std::optional<std::string_view>(info.name));
-  emit_record(out, kBrtTableStyleClient, payload);
+  emit_record(out, kTableStyleClient, payload);
 }
 
 /// The LISTPARTS block of a tail slot: record index range and its ids.
@@ -725,14 +704,14 @@ Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_i
     if (ended) {
       return Unsupported(rec.type);
     }
-    if (rec.type == kBrtACBegin && !uid && !in_frt) {
+    if (rec.type == kAcBegin && !uid && !in_frt) {
       ASSIGN_OR_RETURN(auto text, ReadAcuid(part));
       uid = std::move(text);
       any_uid = true;
       continue;
     }
-    if (uid && rec.type != kBrtBeginList && rec.type != kBrtBeginAFilter && rec.type != kBrtBeginListCol) {
-      return Unsupported(kBrtACBegin);
+    if (uid && rec.type != kBrtBeginList && rec.type != kBeginAFilter && rec.type != kBrtBeginListCol) {
+      return Unsupported(kAcBegin);
     }
     if (!begun) {
       if (rec.type != kBrtBeginList) {
@@ -754,7 +733,7 @@ Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_i
           return Unsupported(rec.type);
         }
         table.ext_lst_xml = AltTextExtLst(alt_text, summary);
-      } else if (rec.type == kBrtFRTEnd) {
+      } else if (rec.type == kFrtEnd) {
         in_frt = false;
       } else {
         return Unsupported(rec.type);
@@ -762,7 +741,7 @@ Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_i
       continue;
     }
     switch (rec.type) {
-      case kBrtBeginAFilter: {
+      case kBeginAFilter: {
         if (declared_columns || !table.auto_filter_xml.empty()) {
           return Corrupt("xlsb table AutoFilter is out of place");
         }
@@ -843,14 +822,14 @@ Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_i
         }
         in_columns = false;
         break;
-      case kBrtTableStyleClient:
+      case kTableStyleClient:
         if (!declared_columns || in_columns || style_seen) {
           return Corrupt("xlsb table style is out of place");
         }
         ReadStyleClient(rec.payload, &table.style_info);
         style_seen = true;
         break;
-      case kBrtFRTBegin:
+      case kFrtBegin:
         if (!style_seen) {
           return Unsupported(rec.type);
         }
@@ -870,9 +849,9 @@ Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_i
   if (any_uid) {
     // The namespaces Excel declares on a table root that carries uids.
     std::string prefix;
-    append_xml_attr(prefix, "xmlns:mc", kMcNamespace);
+    append_xml_attr(prefix, "xmlns:mc", kNsMarkupCompat);
     append_xml_attr(prefix, "mc:Ignorable", "xr xr3");
-    append_xml_attr(prefix, "xmlns:xr", kXrNamespace);
+    append_xml_attr(prefix, "xmlns:xr", kNsXr);
     append_xml_attr(prefix, "xmlns:xr3", kXr3Namespace);
     if (root_uid) {
       append_xml_attr(prefix, "xr:uid", *root_uid);
@@ -941,13 +920,13 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
   EmitStyleClient(out, table.style_info);
   if (!table.ext_lst_xml.empty()) {
     if (auto alt = AltTextFromExtLst(table.ext_lst_xml)) {
-      emit_record(out, kBrtFRTBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
+      emit_record(out, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
       payload.clear();
       emit_u32(payload, 0U);
       emit_xlnullablewidestring(payload, std::string_view(alt->first));
       emit_xlnullablewidestring(payload, std::string_view(alt->second));
       emit_record(out, kBrtList14, payload);
-      emit_record(out, kBrtFRTEnd, ByteSpan{});
+      emit_record(out, kFrtEnd, ByteSpan{});
     } else {
       ++*lost;
     }

@@ -16,6 +16,8 @@
 #include "io/cell_parser.h"
 #include "io/cf_reader.h"
 #include "io/data_validation_attr_names.h"
+#include "io/ooxml/package_validator.h"
+#include "io/protection_xml.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -31,8 +33,19 @@ namespace io {
 
 namespace {
 
-/// Decodes one A1-style range token (`A1`, `A1:B5`, or `$A$1:$B$5`)
-/// into a `MergeRange`. Single-cell tokens land as `first == last`.
+/// Decodes a `<formula1>` / `<formula2>` body: unescapes `_xHHHH_` control
+/// characters on top of the XML entity decoding, drops a leading `=`, and
+/// canonicalises the text.
+std::string ReadValidationFormula(const pugi::xml_node& formula) {
+  std::string text;
+  AppendOoxmlTextUnescaped(text, formula.text().get());
+  if (!text.empty() && text.front() == '=') {
+    text.erase(0, 1);
+  }
+  return canonical_feature_formula(text);
+}
+
+/// Decodes one A1-style range token (`A1` or `A1:B5`) into a `MergeRange`. Single-cell tokens land as `first == last`.
 /// Both corners are normalised so `first <= last` componentwise.
 Expected<MergeRange, Error> ParseA1RangeMerge(std::string_view ref) {
   MergeRange out{};
@@ -135,13 +148,7 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
     hl.col = range_or.value().first_col;
     hl.last_row = range_or.value().last_row;
     hl.last_col = range_or.value().last_col;
-    // Accept both Office-namespaced ("r:id") and bare "id" attribute spellings.
-    const std::string_view rid_v = attr_str(h, "r:id");
-    if (!rid_v.empty()) {
-      hl.rid.assign(rid_v);
-    } else {
-      hl.rid.assign(attr_str(h, "id"));
-    }
+    hl.rid = ooxml::relationship_ref_id(h);
     hl.location.assign(attr_str(h, "location"));
     hl.display.assign(attr_str(h, "display"));
     hl.tooltip.assign(attr_str(h, "tooltip"));
@@ -235,20 +242,10 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     // in ooxml/sheet_xml_builder.cpp), on top of `.text().get()`'s
     // ordinary XML entity decoding.
     if (pugi::xml_node f1 = dv.child("formula1"); f1) {
-      v.formula1.clear();
-      AppendOoxmlTextUnescaped(v.formula1, f1.text().get());
-      if (!v.formula1.empty() && v.formula1.front() == '=') {
-        v.formula1.erase(0, 1);
-      }
-      v.formula1 = canonical_feature_formula(v.formula1);
+      v.formula1 = ReadValidationFormula(f1);
     }
     if (pugi::xml_node f2 = dv.child("formula2"); f2) {
-      v.formula2.clear();
-      AppendOoxmlTextUnescaped(v.formula2, f2.text().get());
-      if (!v.formula2.empty() && v.formula2.front() == '=') {
-        v.formula2.erase(0, 1);
-      }
-      v.formula2 = canonical_feature_formula(v.formula2);
+      v.formula2 = ReadValidationFormula(f2);
     }
 
     out.push_back(std::move(v));
@@ -299,22 +296,9 @@ SheetProtection read_sheet_protection(const pugi::xml_node& worksheet) {
   // default silently under-reports protection when Excel omits an
   // at-default attribute, so use the tri-state reader with each attribute's
   // real default rather than a blanket `false`.
-  out.sheet = read_xsd_bool(node, "sheet", false);
-  out.objects = read_xsd_bool(node, "objects", false);
-  out.scenarios = read_xsd_bool(node, "scenarios", false);
-  out.format_cells = read_xsd_bool(node, "formatCells", true);
-  out.format_columns = read_xsd_bool(node, "formatColumns", true);
-  out.format_rows = read_xsd_bool(node, "formatRows", true);
-  out.insert_columns = read_xsd_bool(node, "insertColumns", true);
-  out.insert_rows = read_xsd_bool(node, "insertRows", true);
-  out.insert_hyperlinks = read_xsd_bool(node, "insertHyperlinks", true);
-  out.delete_columns = read_xsd_bool(node, "deleteColumns", true);
-  out.delete_rows = read_xsd_bool(node, "deleteRows", true);
-  out.select_locked_cells = read_xsd_bool(node, "selectLockedCells", false);
-  out.select_unlocked_cells = read_xsd_bool(node, "selectUnlockedCells", false);
-  out.sort = read_xsd_bool(node, "sort", true);
-  out.auto_filter = read_xsd_bool(node, "autoFilter", true);
-  out.pivot_tables = read_xsd_bool(node, "pivotTables", true);
+  for (const SheetProtectionFlag& flag : kSheetProtectionFlags) {
+    out.*flag.member = read_xsd_bool(node, flag.attr, flag.default_value);
+  }
 
   return out;
 }

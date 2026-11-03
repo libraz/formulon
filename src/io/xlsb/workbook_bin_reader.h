@@ -95,7 +95,7 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
 Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std::uint8_t>& body);
 
 /// Decodes the supporting-book list in `BrtExternSheet`'s `iSupBook` order.
-std::vector<XlsbSupBook> DecodeSupBooks(const std::vector<std::uint8_t>& body);
+Expected<std::vector<XlsbSupBook>, Error> DecodeSupBooks(const std::vector<std::uint8_t>& body);
 
 /// Decodes the `BrtExternSheet` table into `(itabFirst, itabLast)` ranges.
 Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector<std::uint8_t>& body,

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "io/ooxml/cell_ref_writer.h"
+#include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "sheet.h"
@@ -51,11 +52,12 @@ std::string write_comments(const std::vector<CellComment>& comments, const std::
   for (const CellComment& c : comments) {
     any_uid = any_uid || !c.uid.empty();
   }
-  out.append("<comments xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"");
+  out.append("<comments");
+  append_xml_ns_decl(out, "", kNsSpreadsheetMl);
   if (any_uid) {
-    out.append(
-        " xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"xr\""
-        " xmlns:xr=\"http://schemas.microsoft.com/office/spreadsheetml/2014/revision\"");
+    append_xml_ns_decl(out, "mc", kNsMarkupCompat);
+    out.append(" mc:Ignorable=\"xr\"");
+    append_xml_ns_decl(out, "xr", kNsXr);
   }
   out.append(">\n");
   out.append("  <authors>\n");

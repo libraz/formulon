@@ -81,6 +81,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_cache_reader_test.cpp
   unit/io/pivot_cache_writer_test.cpp
   unit/io/pivot_cache_write_plan_test.cpp
+  unit/io/package_rels_reader_test.cpp
   unit/io/pivot_target_reader_test.cpp
   unit/io/pivot_table_reader_test.cpp
   unit/io/pivot_table_reader_corruption_test.cpp
@@ -133,6 +134,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/feature_records_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
+  unit/io/xlsb/workbook_bin_reader_test.cpp
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/ptg_string_surrogate_test.cpp
   unit/io/xlsb/pivot_field_order_count_test.cpp

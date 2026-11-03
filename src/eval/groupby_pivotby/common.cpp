@@ -34,7 +34,6 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
-#include "value_sort_order.h"
 
 namespace formulon {
 namespace eval {
@@ -56,9 +55,14 @@ std::uint32_t aggregator_arity(const LambdaValue& lv, const FunctionRegistry& re
   return required == 2U ? 2U : 1U;
 }
 
-// Appends the canonical key of one key cell; two cells get equal keys exactly
-// when `group_cell_equal` holds. `row` makes the key unique for cells that
-// never compare equal (NaN, Array / Ref / Lambda).
+std::string numbered_label(std::string_view prefix, std::uint32_t n) {
+  return std::string(prefix) + std::to_string(n);
+}
+
+// Appends the canonical key of one key cell. Cells of one kind get equal keys
+// when they are equal (text at dynamic collation strength, `+0.0` and `-0.0`
+// alike); cross-kind cells never match. `row` makes the key unique for cells
+// that never compare equal (NaN, Array / Ref / Lambda).
 void append_cell_group_key(std::string* out, const Value& v, std::uint32_t row) {
   out->push_back(static_cast<char>(v.kind()));
   switch (v.kind()) {
@@ -95,8 +99,7 @@ void append_cell_group_key(std::string* out, const Value& v, std::uint32_t row) 
       break;
     }
     default:
-      // Array / Ref / Lambda are intentionally never equal in
-      // group_cell_equal, so each row must form its own group.
+      // Array / Ref / Lambda never merge, so each row forms its own group.
       out->append("row");
       out->append(std::to_string(row));
       break;
@@ -111,18 +114,15 @@ std::string_view grand_total_label(const EvalContext& ctx) {
 }
 
 std::string row_field_label(const EvalContext& ctx, std::uint32_t n) {
-  const std::string_view prefix = locale_facts(ctx.excel_profile()).row_field_prefix;
-  return std::string(prefix) + std::to_string(n);
+  return numbered_label(locale_facts(ctx.excel_profile()).row_field_prefix, n);
 }
 
 std::string column_field_label(const EvalContext& ctx, std::uint32_t n) {
-  const std::string_view prefix = locale_facts(ctx.excel_profile()).column_field_prefix;
-  return std::string(prefix) + std::to_string(n);
+  return numbered_label(locale_facts(ctx.excel_profile()).column_field_prefix, n);
 }
 
 std::string value_label(const EvalContext& ctx, std::uint32_t n) {
-  const std::string_view prefix = locale_facts(ctx.excel_profile()).value_field_prefix;
-  return std::string(prefix) + std::to_string(n);
+  return numbered_label(locale_facts(ctx.excel_profile()).value_field_prefix, n);
 }
 
 std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
@@ -329,10 +329,37 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
   for (std::size_t i = 0; i < order->size(); ++i) {
     (*order)[i] = i;
   }
+  // Collation keys are computed once per representative cell rather than on
+  // every comparison.
+  const auto key_cell = [&](std::size_t g, std::uint32_t c) -> const Value& {
+    return keys.cells[static_cast<std::size_t>(repr[g]) * keys.cols + c];
+  };
+  std::vector<std::string> key_text(repr.size() * keys.cols);
+  for (std::size_t g = 0; g < repr.size(); ++g) {
+    for (std::uint32_t c = 0; c < keys.cols; ++c) {
+      key_text[g * keys.cols + c] = dynamic_array::sort_text_key(key_cell(g, c));
+    }
+  }
+  std::vector<std::string> value_text(value_keys.size());
+  for (std::size_t g = 0; g < value_keys.size(); ++g) {
+    value_text[g] = dynamic_array::sort_text_key(value_keys[g]);
+  }
+  const auto cmp_key_cell = [&](std::size_t a, std::size_t b, std::uint32_t c) {
+    return dynamic_array::cmp_value_keyed(key_cell(a, c), key_cell(b, c), &key_text[a * keys.cols + c],
+                                          &key_text[b * keys.cols + c]);
+  };
+  const auto cmp_keys_asc_of = [&](std::size_t a, std::size_t b) {
+    for (std::uint32_t c = 0; c < keys.cols; ++c) {
+      const int r = cmp_key_cell(a, b, c);
+      if (r != 0) {
+        return r;
+      }
+    }
+    return 0;
+  };
   const auto cmp_keys = [&](std::size_t a, std::size_t b) {
     for (std::uint32_t c = 0; c < keys.cols; ++c) {
-      const int r = cmp_value_asc(keys.cells[static_cast<std::size_t>(repr[a]) * keys.cols + c],
-                                  keys.cells[static_cast<std::size_t>(repr[b]) * keys.cols + c]);
+      const int r = cmp_key_cell(a, b, c);
       if (r != 0) {
         return plan.key_descending[c] ? -r : r;
       }
@@ -346,11 +373,11 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
       return !is_error[a];
     }
     if (plan.value_col != 0U) {
-      const int c = cmp_value_asc(value_keys[a], value_keys[b]);
+      const int c = dynamic_array::cmp_value_keyed(value_keys[a], value_keys[b], &value_text[a], &value_text[b]);
       if (c != 0) {
         return plan.value_descending ? (c > 0) : (c < 0);
       }
-      return cmp_keys_asc(keys, repr[a], repr[b]) < 0;
+      return cmp_keys_asc_of(a, b) < 0;
     }
     return cmp_keys(a, b) < 0;
   });
@@ -394,16 +421,7 @@ bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionR
     return false;
   }
   const std::uint32_t mask_n = (mask->rows >= mask->cols) ? mask->rows : mask->cols;
-  // Decide 1D-ness from `node`'s DECLARED shape when it is a static
-  // reference, not from the walked array `read_array_arg` returns: a
-  // multi-column whole reference populated in only one row walks as a
-  // 1-row array, which would misread it as a vector even though its
-  // declared shape is 2D. Mirrors the same rule IFS / XLOOKUP / MATCH /
-  // LOOKUP already apply via `declared_range_rect`.
-  std::uint32_t declared_rows = mask->rows;
-  std::uint32_t declared_cols = mask->cols;
-  (void)static_reference_shape(node, ctx, &declared_rows, &declared_cols);
-  if (declared_rows != 1U && declared_cols != 1U) {
+  if (!dynamic_array::is_declared_vector(node, ctx, mask->rows, mask->cols)) {
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
@@ -454,32 +472,6 @@ std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& includ
     }
   }
   return rows;
-}
-
-// Excel-canonical cell equality for GROUPBY group keys. Text compares at the
-// dynamic collation strength of the evaluating profile. Numbers compare with
-// `==`, so `+0.0` and `-0.0` fall in one group. Cross-kind pairs are never
-// equal: `Number 0` and `Bool FALSE` form distinct groups.
-bool group_cell_equal(const Value& a, const Value& b) {
-  if (a.kind() != b.kind()) {
-    return false;
-  }
-  switch (a.kind()) {
-    case ValueKind::Blank:
-      return true;
-    case ValueKind::Number:
-      return a.as_number() == b.as_number();
-    case ValueKind::Bool:
-      return a.as_boolean() == b.as_boolean();
-    case ValueKind::Error:
-      return a.as_error() == b.as_error();
-    case ValueKind::Text:
-      assert(eval_profile_scope_active());
-      return collate(a.as_text(), b.as_text(), current_eval_profile(), CollationStrength::kDynamic) == 0;
-    default:
-      // Array / Ref / Lambda never merge, so each row forms its own group.
-      return false;
-  }
 }
 
 std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
@@ -550,10 +542,7 @@ Value invoke_aggregator_for_group(const Aggregator& agg, std::uint32_t value_col
   const Value args[2] = {Value::array(slice), all != nullptr ? Value::array(all) : Value::blank()};
   const parser::AstNode* ast_args[2] = {slice_ast, all_ast};
   const Value res = invoke_lambda_values_with_ast(agg.fn, agg.arity, args, ast_args, arena, registry, ctx);
-  if (res.is_array()) {
-    return Value::error(ErrorCode::Calc);
-  }
-  if (res.is_lambda()) {
+  if (res.is_array() || res.is_lambda()) {
     return Value::error(ErrorCode::Calc);
   }
   return res;
@@ -604,55 +593,8 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
 }
 
 int cmp_value_asc(const Value& a, const Value& b) {
-  // Cross-kind ordering buckets come from the shared Excel rank
-  // (Number < Text < Bool < Error < Blank), so GROUPBY / SORT and the pivot
-  // comparator cannot diverge on the relative position of Bool vs Text.
-  const int ba = excel_kind_rank(a.kind());
-  const int bb = excel_kind_rank(b.kind());
-  if (ba != bb) {
-    return ba < bb ? -1 : 1;
-  }
-  switch (a.kind()) {
-    case ValueKind::Number: {
-      const double na = a.as_number();
-      const double nb = b.as_number();
-      if (na < nb) {
-        return -1;
-      }
-      return na > nb ? 1 : 0;
-    }
-    case ValueKind::Text:
-      assert(eval_profile_scope_active());
-      return collate(a.as_text(), b.as_text(), current_eval_profile(), CollationStrength::kDynamic);
-    case ValueKind::Bool:
-      if (a.as_boolean() == b.as_boolean()) {
-        return 0;
-      }
-      return a.as_boolean() ? 1 : -1;
-    case ValueKind::Error: {
-      const auto ea = static_cast<int>(a.as_error());
-      const auto eb = static_cast<int>(b.as_error());
-      if (ea < eb) {
-        return -1;
-      }
-      return ea > eb ? 1 : 0;
-    }
-    default:
-      // Blank, and kinds with no in-kind order.
-      return 0;
-  }
-}
-
-int cmp_keys_asc(const ArrayValue& keys, std::uint32_t a_row, std::uint32_t b_row) {
-  for (std::uint32_t c = 0; c < keys.cols; ++c) {
-    const Value& va = keys.cells[static_cast<std::size_t>(a_row) * keys.cols + c];
-    const Value& vb = keys.cells[static_cast<std::size_t>(b_row) * keys.cols + c];
-    const int r = cmp_value_asc(va, vb);
-    if (r != 0) {
-      return r;
-    }
-  }
-  return 0;
+  assert(!(a.is_text() && b.is_text()) || eval_profile_scope_active());
+  return dynamic_array::cmp_value_keyed(a, b, nullptr, nullptr);
 }
 
 }  // namespace eval

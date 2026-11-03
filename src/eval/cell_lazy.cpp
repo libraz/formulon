@@ -56,14 +56,8 @@ Value arena_text(Arena& arena, std::string_view s) {
   if (s.empty()) {
     return Value::text({});
   }
-  char* buf = static_cast<char*>(arena.allocate(s.size(), alignof(char)));
-  if (buf == nullptr) {
-    return Value::error(ErrorCode::Value);
-  }
-  for (std::size_t i = 0; i < s.size(); ++i) {
-    buf[i] = s[i];
-  }
-  return Value::text(std::string_view(buf, s.size()));
+  const std::string_view copy = arena.intern(s);
+  return copy.empty() ? Value::error(ErrorCode::Value) : Value::text(copy);
 }
 
 // Resolves the optional `reference` argument to the top-left cell of the
@@ -219,17 +213,14 @@ const CellXf* effective_cell_xf(const Workbook& workbook, const Sheet& sheet, st
 // reference whose target sheet is missing surfaces `#REF!`.
 Value resolve_cell_locked(std::string_view sheet, std::uint32_t row, std::uint32_t col, const EvalContext& ctx) {
   const Workbook* workbook = ctx.workbook();
-  const Sheet* target = ctx.current_sheet();
-  if (!sheet.empty()) {
-    if (workbook == nullptr) {
-      // Qualified reference but no workbook bound to resolve it: default to
-      // locked rather than fabricating a #REF!.
-      return Value::number(1.0);
-    }
-    target = workbook->sheet_by_name(sheet);
-    if (target == nullptr) {
-      return Value::error(ErrorCode::Ref);
-    }
+  if (!sheet.empty() && workbook == nullptr) {
+    // Qualified reference but no workbook bound to resolve it: default to
+    // locked rather than fabricating a #REF!.
+    return Value::number(1.0);
+  }
+  const Sheet* target = ctx.sheet_for_qualifier(sheet);
+  if (!sheet.empty() && target == nullptr) {
+    return Value::error(ErrorCode::Ref);
   }
   const CellXf* xf =
       workbook != nullptr && target != nullptr ? effective_cell_xf(*workbook, *target, row, col) : nullptr;
@@ -240,10 +231,7 @@ Value resolve_cell_locked(std::string_view sheet, std::uint32_t row, std::uint32
 const CellXf* resolve_cell_xf(std::string_view sheet_name, std::uint32_t row, std::uint32_t col,
                               const EvalContext& ctx) {
   const Workbook* workbook = ctx.workbook();
-  const Sheet* target = ctx.current_sheet();
-  if (!sheet_name.empty()) {
-    target = workbook == nullptr ? nullptr : workbook->sheet_by_name(sheet_name);
-  }
+  const Sheet* target = ctx.sheet_for_qualifier(sheet_name);
   if (workbook == nullptr || target == nullptr) {
     return nullptr;
   }
@@ -435,8 +423,55 @@ bool resolve_topleft_or_formula_cell(const parser::AstNode& call, Arena& arena, 
 
 }  // namespace
 
+namespace {
+
+enum class CellKey : std::uint8_t {
+  kAddress,
+  kCol,
+  kRow,
+  kContents,
+  kType,
+  kWidth,
+  kColor,
+  kPrefix,
+  kFormat,
+  kProtect,
+  kFilename,
+  kParentheses,
+  kUnknown,
+};
+
+// The info_type keys; `reads_value` marks the keys that read the referenced cell's value.
+struct CellKeyInfo {
+  std::string_view name;
+  CellKey key;
+  bool reads_value;
+};
+
+constexpr CellKeyInfo kCellKeys[] = {
+    {"address", CellKey::kAddress, false},   {"col", CellKey::kCol, false},
+    {"row", CellKey::kRow, false},           {"contents", CellKey::kContents, true},
+    {"type", CellKey::kType, true},          {"width", CellKey::kWidth, false},
+    {"color", CellKey::kColor, false},       {"prefix", CellKey::kPrefix, false},
+    {"format", CellKey::kFormat, false},     {"protect", CellKey::kProtect, false},
+    {"filename", CellKey::kFilename, false}, {"parentheses", CellKey::kParentheses, false},
+};
+
+// Excel matches info_type case-insensitively; every key is ASCII.
+const CellKeyInfo* find_cell_key(std::string_view info_type) noexcept {
+  for (const CellKeyInfo& entry : kCellKeys) {
+    if (strings::case_insensitive_eq(info_type, entry.name)) {
+      return &entry;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 bool cell_info_reads_value(std::string_view info_type) noexcept {
-  return strings::case_insensitive_eq(info_type, "contents") || strings::case_insensitive_eq(info_type, "type");
+  const CellKeyInfo* entry = find_cell_key(info_type);
+  return entry != nullptr && entry->reads_value;
 }
 
 Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -460,13 +495,13 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (info_text.value().empty()) {
     return Value::error(ErrorCode::Value);
   }
-  // Excel matches info_type case-insensitively; every key is ASCII.
-  const std::string key = strings::to_ascii_lower(info_text.value());
+  const CellKeyInfo* const key_info = find_cell_key(info_text.value());
+  const CellKey key = key_info != nullptr ? key_info->key : CellKey::kUnknown;
 
   // Reference-dependent protection query: reads the referenced cell's xf
   // `locked` flag. Resolves the top-left (or the formula cell for the
   // one-argument form) like the address / row / col keys below.
-  if (key == "protect") {
+  if (key == CellKey::kProtect) {
     std::uint32_t row = 0;
     std::uint32_t col = 0;
     std::string_view sheet;
@@ -486,13 +521,13 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // Reference-dependent keys: address / col / row / contents / type / width / color / prefix / format.
   // Resolve the top-left first so any reference-side error propagates
   // before we branch on the key.
-  if (key == "address" || key == "col" || key == "row" || key == "contents" || key == "type" || key == "width" ||
-      key == "color" || key == "prefix" || key == "format") {
+  if (key != CellKey::kUnknown && key != CellKey::kProtect && key != CellKey::kFilename &&
+      key != CellKey::kParentheses) {
     std::uint32_t row = 0;
     std::uint32_t col = 0;
     std::string_view sheet;
     Value early_result = Value::blank();
-    const bool reads_value = cell_info_reads_value(key);
+    const bool reads_value = key_info->reads_value;
     if (!resolve_topleft_or_formula_cell(call, arena, registry, reads_value ? ctx : ctx.without_dynamic_read_callback(),
                                          &row, &col, &sheet, &early_result)) {
       return early_result;
@@ -502,34 +537,34 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     if (reads_value && call.as_call_arity() == 2U) {
       ctx.note_dynamic_read(sheet, DeclaredRect{row, row, col, col, /*whole_axis=*/false});
     }
-    if (key == "address") {
+    if (key == CellKey::kAddress) {
       return build_address(arena, sheet, row, col);
     }
-    if (key == "col") {
+    if (key == CellKey::kCol) {
       return Value::number(static_cast<double>(col + 1U));
     }
-    if (key == "row") {
+    if (key == CellKey::kRow) {
       return Value::number(static_cast<double>(row + 1U));
     }
-    if (key == "width") {
+    if (key == CellKey::kWidth) {
       return resolve_cell_width(sheet, col, arena, ctx);
     }
-    if (key == "prefix") {
+    if (key == CellKey::kPrefix) {
       return arena_text(arena, cell_prefix(resolve_cell_xf(sheet, row, col, ctx)));
     }
-    if (key == "color") {
+    if (key == CellKey::kColor) {
       return Value::number(
           text_format::negative_section_has_color(number_format_for_xf(resolve_cell_xf(sheet, row, col, ctx), ctx),
                                                   text_format::FormatDialect::kStored)
               ? 1.0
               : 0.0);
     }
-    if (key == "format") {
+    if (key == CellKey::kFormat) {
       return arena_text(arena, cell_format_code(resolve_cell_xf(sheet, row, col, ctx)));
     }
     // "contents" / "type" both need the resolved cell's value.
     const Value resolved = resolve_topleft_value(sheet, row, col, arena, registry, ctx);
-    if (key == "contents") {
+    if (key == CellKey::kContents) {
       // Excel's blank-as-zero rule for CELL("contents", blank_cell).
       if (resolved.is_blank()) {
         return Value::number(0.0);
@@ -560,14 +595,14 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // even when the reference would otherwise error). If the reference
   // argument itself is a top-level error literal that path is rare;
   // the spec calls for fixed stubs here so we don't pre-evaluate.
-  if (key == "filename") {
+  if (key == CellKey::kFilename) {
     // No filesystem path on the Workbook yet. Mac returns blank when the
     // workbook has never been saved; we surface empty text instead so
     // the top-level blank-as-zero rule (`evaluate()` in tree_walker)
     // does not collapse the result to 0.
     return arena_text(arena, "");
   }
-  if (key == "parentheses") {
+  if (key == CellKey::kParentheses) {
     // No parenthesis-format flag yet.
     return Value::number(0.0);
   }

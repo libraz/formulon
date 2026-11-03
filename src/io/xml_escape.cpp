@@ -30,10 +30,9 @@ bool IsOoxmlEscape(std::string_view in, std::size_t pos, std::uint16_t* code) {
 }
 
 void AppendOoxmlEscape(std::string& out, unsigned char byte) {
-  constexpr char kHex[] = "0123456789ABCDEF";
   out.append("_x00");
-  out.push_back(kHex[(byte >> 4U) & 0x0FU]);
-  out.push_back(kHex[byte & 0x0FU]);
+  out.push_back(strings::hex_digit_upper(byte >> 4U));
+  out.push_back(strings::hex_digit_upper(byte));
   out.push_back('_');
 }
 

@@ -77,7 +77,7 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
 ///   * `Ref` / `RangeOp` / `Call(OFFSET|CHOOSE|IF|ROW|COLUMN)` -> expand
 ///     via `resolve_range_arg`; wrap the resulting flat cells + shape in
 ///     a freshly arena-allocated `ArrayValue`.
-///   * `ArrayLiteral` -> walk via the existing `flatten_array_literal`
+///   * `ArrayLiteral` -> walk via the existing `resolve_error_free_range`
 ///     pattern; wrap into an `ArrayValue`.
 ///   * `BinaryOp` -> recurse into `eval_binop_array_ctx`.
 ///   * `UnaryOp` -> recurse into the operand via `eval_node_as_array`,

@@ -99,6 +99,20 @@ ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& 
 ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Value* values, std::size_t count,
                               Arena& arena);
 
+/// Applies `fn(cell, ctx)` to every cell of `in` into a same-shaped array
+/// under `kMaxDerivedArrayCells`. A 1x1 result unwraps to its scalar;
+/// allocation failure is `#NUM!`.
+Value map_array_cells(const ArrayValue& in, Value (*fn)(const Value& cell, void* ctx), void* ctx, Arena& arena);
+
+/// `map_array_cells` for a callable `fn(const Value&) -> Value`; the loop stays
+/// in the shared non-template helper.
+template <typename Fn>
+Value map_array_with(const ArrayValue& in, const Fn& fn, Arena& arena) {
+  return map_array_cells(
+      in, [](const Value& cell, void* ctx) { return (*static_cast<const Fn*>(ctx))(cell); },
+      const_cast<void*>(static_cast<const void*>(&fn)), arena);
+}
+
 }  // namespace eval
 }  // namespace formulon
 

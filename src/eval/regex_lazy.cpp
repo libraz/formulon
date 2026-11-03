@@ -48,6 +48,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/scalar_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -104,17 +105,10 @@ std::atomic<std::uint64_t> g_compile_count{0U};
 // false.
 bool coerce_int_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                     long long& out, Value& out_err) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    out_err = v;
+  double d = 0.0;
+  if (!eval_truncated_number_arg(node, arena, registry, ctx, d, out_err)) {
     return false;
   }
-  auto num = coerce_to_number(v);
-  if (!num) {
-    out_err = Value::error(num.error());
-    return false;
-  }
-  const double d = std::trunc(num.value());
   // Defend against NaN / Inf surviving truncation.
   if (!(d == d) || d > static_cast<double>(0x7FFFFFFF) || d < -static_cast<double>(0x7FFFFFFF)) {
     out_err = Value::error(ErrorCode::Value);
@@ -1107,25 +1101,20 @@ Value broadcast_over_text(const ArrayValue* in, Arena& arena, PerCell&& per_cell
     return Value::error(ErrorCode::Num);
   }
   const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  // Per-cell subject buffers must outlive any result built from a span of
-  // them; keep them around for the whole loop.
-  std::vector<std::string> subjects;
-  subjects.reserve(n);
+  // Results are interned into the arena, so a subject only lives for its own cell.
   for (std::size_t i = 0; i < n; ++i) {
     const Value& cell = in->cells[i];
     if (cell.is_error()) {
       cells[i] = cell;
-      subjects.emplace_back();
       continue;
     }
     auto t = coerce_to_text(cell);
     if (!t) {
       cells[i] = Value::error(t.error());
-      subjects.emplace_back();
       continue;
     }
-    subjects.push_back(std::move(t.value()));
-    cells[i] = per_cell(std::string_view(subjects.back()));
+    const std::string subject = std::move(t.value());
+    cells[i] = per_cell(std::string_view(subject));
   }
   return Value::array(out);
 }

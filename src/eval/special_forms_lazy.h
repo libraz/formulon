@@ -51,7 +51,7 @@ Value eval_and_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
                     const EvalContext& ctx);
 Value eval_or_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
 
-/// The branch a multi-way special form (IFS / SWITCH) selects for a scalar
+/// The branch a branching special form (IF / CHOOSE / IFS / SWITCH) selects for a scalar
 /// subject, without evaluating it. The value path evaluates the picked
 /// argument and the reference path resolves it as a rectangle, so both
 /// read one selection rule.
@@ -69,6 +69,16 @@ struct SelectedBranch {
   static SelectedBranch result(const Value& v) { return {Kind::kResult, 0, v}; }
   static SelectedBranch array_subject(std::uint32_t index, const Value& v) { return {Kind::kArraySubject, index, v}; }
 };
+
+/// Picks the IF arm for a scalar condition. A false condition with no else
+/// arm yields the result `FALSE`; an array condition is the array subject.
+SelectedBranch select_if_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx);
+
+/// Picks the CHOOSE value for a scalar index, truncating it toward zero with
+/// no near-integer snap. An array index is the array subject.
+SelectedBranch select_choose_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                    const EvalContext& ctx);
 
 /// Picks the IFS arm whose condition is the first TRUE one.
 SelectedBranch select_ifs_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

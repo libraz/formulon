@@ -28,8 +28,7 @@ namespace {
 /// [0.0, 1.0). Zero arguments. Volatile: each call draws a fresh sample
 /// from the thread-local Mersenne Twister.
 Value Rand_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  std::uniform_real_distribution<double> dist(0.0, 1.0);
-  return Value::number(dist(thread_local_rng()));
+  return Value::number(sample_uniform_real(0.0, 1.0, thread_local_rng()));
 }
 
 /// RANDBETWEEN(bottom, top). Returns a uniform random integer in the closed
@@ -47,7 +46,7 @@ Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
   const auto& pair = bounds.value();
   const double lo_d = std::ceil(pair.first);
   const double hi_d = std::floor(pair.second);
-  if (std::isnan(lo_d) || std::isinf(lo_d) || std::isnan(hi_d) || std::isinf(hi_d)) {
+  if (!std::isfinite(lo_d) || !std::isfinite(hi_d)) {
     return Value::error(ErrorCode::Num);
   }
   if (lo_d > hi_d) {

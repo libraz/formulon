@@ -203,9 +203,6 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     }
     sort_index = static_cast<std::uint32_t>(n);
   }
-  if (sort_index < 1U || sort_index > key_max) {
-    return Value::error(ErrorCode::Value);
-  }
   const std::uint32_t key_idx = sort_index - 1U;  // convert to 0-based
 
   // sort_order: 1 ascending (default), -1 descending. Anything else is
@@ -330,11 +327,9 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
       const Value& key_rhs = key_at(spec.arr, rhs);
       const std::string* tk_lhs = &spec.text_keys[lhs];
       const std::string* tk_rhs = &spec.text_keys[rhs];
-      if (dynamic_array::sort_lane_less_keyed(key_lhs, tk_lhs, key_rhs, tk_rhs, spec.descending)) {
-        return true;
-      }
-      if (dynamic_array::sort_lane_less_keyed(key_rhs, tk_rhs, key_lhs, tk_lhs, spec.descending)) {
-        return false;
+      const int order = dynamic_array::sort_lane_compare_keyed(key_lhs, tk_lhs, key_rhs, tk_rhs, spec.descending);
+      if (order != 0) {
+        return order < 0;
       }
       // Equal under this key -> fall through to next.
     }

@@ -20,7 +20,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
-#include "io/xsd_double.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -310,10 +310,7 @@ void RewriteX14Rules(std::vector<std::uint8_t>& records, Visit&& visit) {
       if (kept != 0U || rules == 0U) {
         if (kept != rules && head_ok) {
           std::vector<std::uint8_t> head(recs[k].payload.data, recs[k].payload.data + recs[k].payload.size);
-          const std::uint32_t ccf = static_cast<std::uint32_t>(kept);
-          for (std::size_t b = 0; b < 4U; ++b) {
-            head[head.size() - 8U + b] = static_cast<std::uint8_t>(ccf >> (8U * b));
-          }
+          store_u32(head.data() + head.size() - 8U, static_cast<std::uint32_t>(kept));
           emit_record(inner, kBeginCondFmt14, head);
         } else {
           append_record(inner, records, recs[k]);
@@ -458,9 +455,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
         }
         if (v->type == cf::CfvoType::Number || v->type == cf::CfvoType::Percent ||
             v->type == cf::CfvoType::Percentile) {
-          if (!v->value.empty() && !parse_xsd_double(v->value, &num)) {
-            return Refuse("xlsb conditional format threshold is not a number: " + v->value);
-          }
+          ASSIGN_OR_RETURN(num, parse_threshold_number(v->value));
         }
         std::vector<std::uint8_t> p(4U, 0U);
         emit_u32(p, kCfvo14Types[static_cast<std::size_t>(v->type)]);
@@ -672,9 +667,7 @@ Expected<void, Error> EmitIconCfvo14(std::vector<std::uint8_t>& dst, const cf::C
     emit_frt_formula(p, f.value());
     cb_fmla = f.value().cb_fmla;
   } else if (v.type == cf::CfvoType::Number || v.type == cf::CfvoType::Percent || v.type == cf::CfvoType::Percentile) {
-    if (!v.value.empty() && !parse_xsd_double(v.value, &num)) {
-      return Refuse("xlsb conditional format threshold is not a number: " + v.value);
-    }
+    ASSIGN_OR_RETURN(num, parse_threshold_number(v.value));
     emit_u32(p, 0U);
   } else {
     return Refuse("xlsb icon set threshold must be a number, percent, percentile or formula");
@@ -699,11 +692,7 @@ Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::C
     return Refuse("xlsb custom icon set rule needs a positive priority");
   }
   std::vector<std::uint8_t> head(kRule14Bytes, 0U);
-  const auto put = [&head](std::size_t at, std::uint32_t v) {
-    for (std::size_t b = 0; b < 4U; ++b) {
-      head[at + b] = static_cast<std::uint8_t>(v >> (8U * b));
-    }
-  };
+  const auto put = [&head](std::size_t at, std::uint32_t v) { store_u32(head.data() + at, v); };
   put(4, kTypeMultistate);
   put(8, kTemplateMultistate);
   put(12, 0xFFFFFFFFU);
@@ -735,13 +724,14 @@ Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::C
       return s;
     }
   }
+  std::vector<std::uint8_t> ip;
   for (const cf::CfIcon& icon : set.custom_icons) {
     const std::optional<std::int32_t> kpi = Kpi14(icon.icon_set);
     if (!kpi || (*kpi >= 0 && (icon.icon_id < 0 ||
                                static_cast<std::size_t>(icon.icon_id) >= cf::cf_icon_set_icon_count(icon.icon_set)))) {
       return Refuse("xlsb custom icon names no icon of a known set: " + icon.icon_set);
     }
-    std::vector<std::uint8_t> ip(4U, 0U);
+    ip.assign(4U, 0U);
     emit_u32(ip, static_cast<std::uint32_t>(*kpi));
     emit_u32(ip, static_cast<std::uint32_t>(*kpi == -1 ? -1 : icon.icon_id));
     emit_record(dst, kCfIcon, ip);

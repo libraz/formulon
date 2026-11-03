@@ -28,6 +28,7 @@
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/inverse_distributions.h"
+#include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -47,7 +48,7 @@ double normal_pdf_excel(double x, double mean, double sd) {
   t = flush_subnormal(t * -0.5);
   t = std::exp(t);
   t = flush_subnormal(t / sd);
-  return flush_subnormal(t * 0.3989422804014327);
+  return flush_subnormal(t * stats::kInvSqrt2Pi);
 }
 
 static Value NormDistCompute(double x, double mean, double sd, bool cumulative) {
@@ -189,11 +190,6 @@ static double ChisqPdf(double x, double df) noexcept {
   return flush_subnormal(stats::dpois_raw(flush_subnormal(x / 2.0), a) * flush_subnormal(a / x));
 }
 
-// Upper bound for `df` accepted by Excel 365's CHISQ.*, T.* and F.* families.
-// Values above this surface `#NUM!`; the cap matches the threshold documented
-// in Excel's online help and tracked by the oracle suite.
-static constexpr double kDfMax = 1.0e10;
-
 // Reads `(x, df)` with `df` floored toward -inf; a floored `df` outside
 // `[1, df_max]` is `#NUM!`.
 static Expected<NumberPair, ErrorCode> read_floored_df_pair(const Value* args, double df_max) {
@@ -219,7 +215,7 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   const double x = input.value().first;
   const double df = std::floor(input.value().second);
-  if (x < 0.0 || df < 1.0 || df > kDfMax) {
+  if (x < 0.0 || df < 1.0 || df > stats::kMaxDegreesOfFreedom) {
     return Value::error(ErrorCode::Num);
   }
   double r;
@@ -247,7 +243,7 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // (Excel 365 does accept non-integer `df` and floors it before the domain
 // check; the CHISQ.INV family uses the same convention.)
 Value ChisqDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_floored_df_pair(args, kDfMax);
+  auto input = read_floored_df_pair(args, stats::kMaxDegreesOfFreedom);
   if (!input) {
     return Value::error(input.error());
   }
@@ -263,7 +259,7 @@ Value ChisqDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 // CHISQ.INV(p, df) - inverse of the left-tailed chi-squared CDF. `p` must
 // lie in `[0, 1)`; `p == 1` and `p` outside the unit interval yield `#NUM!`.
 Value ChisqInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_floored_df_pair(args, kDfMax);
+  auto input = read_floored_df_pair(args, stats::kMaxDegreesOfFreedom);
   if (!input) {
     return Value::error(input.error());
   }
@@ -283,7 +279,7 @@ Value ChisqInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // surfaces `#NUM!`. Equivalent to `CHISQ.INV(1 - p, df)` modulo the
 // closed/open endpoint conventions above.
 Value ChisqInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_floored_df_pair(args, kDfMax);
+  auto input = read_floored_df_pair(args, stats::kMaxDegreesOfFreedom);
   if (!input) {
     return Value::error(input.error());
   }
@@ -343,7 +339,7 @@ Value TDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (df == 0.0 && !input.value().cumulative) {
     return Value::error(ErrorCode::Div0);
   }
-  if (df < 1.0 || df > kDfMax) {
+  if (df < 1.0 || df > stats::kMaxDegreesOfFreedom) {
     return Value::error(ErrorCode::Num);
   }
   return to_finite_value(input.value().cumulative ? stats::t_dist_tail_excel(x, df, false)
@@ -354,7 +350,7 @@ Value TDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // enforces `x >= 0` here (the function is defined as the probability that
 // |T| exceeds x in absolute value); negative x yields `#NUM!`.
 Value TDist2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_floored_df_pair(args, kDfMax);
+  auto input = read_floored_df_pair(args, stats::kMaxDegreesOfFreedom);
   if (!input) {
     return Value::error(input.error());
   }
@@ -369,7 +365,7 @@ Value TDist2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // T.DIST.RT(x, deg_freedom) - right-tailed Student's t CDF, `1 - CDF(x)`.
 // `x` is unrestricted; `df` must satisfy the same domain as T.DIST.
 Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_floored_df_pair(args, kDfMax);
+  auto input = read_floored_df_pair(args, stats::kMaxDegreesOfFreedom);
   if (!input) {
     return Value::error(input.error());
   }
@@ -380,7 +376,7 @@ Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // `p` must lie in the open unit interval; the median is returned exactly
 // at `p == 0.5`. `df` floors toward -inf and must satisfy `df >= 1`.
 Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_floored_df_pair(args, kDfMax);
+  auto input = read_floored_df_pair(args, stats::kMaxDegreesOfFreedom);
   if (!input) {
     return Value::error(input.error());
   }
@@ -403,7 +399,7 @@ Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // tail probability is formed directly (`p/2`, or `1 - p/2` for p > 1), never
 // as `1 - p/2` before inverting.
 Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_floored_df_pair(args, kDfMax);
+  auto input = read_floored_df_pair(args, stats::kMaxDegreesOfFreedom);
   if (!input) {
     return Value::error(input.error());
   }
@@ -430,7 +426,7 @@ Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double x = input.value().first;
   const double d1 = std::floor(input.value().second);
   const double d2 = std::floor(input.value().third);
-  if (x < 0.0 || d1 < 1.0 || d1 > kDfMax || d2 < 1.0 || d2 > kDfMax) {
+  if (x < 0.0 || d1 < 1.0 || d1 > stats::kMaxDegreesOfFreedom || d2 < 1.0 || d2 > stats::kMaxDegreesOfFreedom) {
     return Value::error(ErrorCode::Num);
   }
   double r;
@@ -450,7 +446,7 @@ Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // Reads `(x, d1, d2)` with both degrees of freedom floored toward -inf; a
-// floored `d1` or `d2` outside `[1, kDfMax]` is `#NUM!`.
+// floored `d1` or `d2` outside `[1, stats::kMaxDegreesOfFreedom]` is `#NUM!`.
 static Expected<NumberTriple, ErrorCode> read_floored_f_triple(const Value* args) {
   auto input = read_number_triple(args, 0, 1, 2);
   if (!input) {
@@ -458,7 +454,7 @@ static Expected<NumberTriple, ErrorCode> read_floored_f_triple(const Value* args
   }
   const double d1 = std::floor(input.value().second);
   const double d2 = std::floor(input.value().third);
-  if (d1 < 1.0 || d1 > kDfMax || d2 < 1.0 || d2 > kDfMax) {
+  if (d1 < 1.0 || d1 > stats::kMaxDegreesOfFreedom || d2 < 1.0 || d2 > stats::kMaxDegreesOfFreedom) {
     return ErrorCode::Num;
   }
   return NumberTriple{input.value().first, d1, d2};

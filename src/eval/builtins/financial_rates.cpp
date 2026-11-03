@@ -33,6 +33,13 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
+// T-Bill day-count constants: the 360-day discount year, the bond-equivalent
+// year (366 only for a 366-day span) and the half-year split of TBILLEQ.
+constexpr double kTBillYear = 360.0;
+constexpr double kBondYear = 365.0;
+constexpr double kLeapYearDays = 366.0;
+constexpr double kHalfYearDays = 182.0;
+
 struct TBillArgs {
   double value;
   double dsm;
@@ -101,19 +108,15 @@ Expected<TBillArgs, ErrorCode> read_tbill_args(const Value* args, bool date1904)
 //   - pr <= 0 or redemption <= 0  ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}  ->  #NUM!
 Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto parsed = read_security_rate_args(args, arity);
+  auto parsed = read_security_rate_span(args, arity, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const auto [settlement, maturity, pr, redemption, basis] = parsed.value();
-  auto span = day_count_span(settlement, maturity, basis, date1904);
-  if (!span) {
-    return Value::error(span.error());
-  }
-  if (span.value().days <= 0.0) {
+  const auto [pr, redemption, span] = parsed.value();
+  if (span.days <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = (1.0 - pr / redemption) * (span.value().year / span.value().days);
+  const double result = (1.0 - pr / redemption) * (span.year / span.days);
   return to_finite_value(result);
 }
 
@@ -128,19 +131,15 @@ Value Disc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date19
 //   - investment <= 0 or redemption <= 0  ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}  ->  #NUM!
 Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto parsed = read_security_rate_args(args, arity);
+  auto parsed = read_security_rate_span(args, arity, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const auto [settlement, maturity, investment, redemption, basis] = parsed.value();
-  auto span = day_count_span(settlement, maturity, basis, date1904);
-  if (!span) {
-    return Value::error(span.error());
-  }
-  if (span.value().days <= 0.0) {
+  const auto [investment, redemption, span] = parsed.value();
+  if (span.days <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = (span.value().year / span.value().days) * ((redemption - investment) / investment);
+  const double result = (span.year / span.days) * ((redemption - investment) / investment);
   return to_finite_value(result);
 }
 
@@ -156,16 +155,12 @@ Value Intrate(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
 //   - basis not in {0, 1, 2, 3, 4}  ->  #NUM!
 //   - (discount * DSM) / B >= 1  ->  #NUM!
 Value Received(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto parsed = read_security_rate_args(args, arity);
+  auto parsed = read_security_rate_span(args, arity, date1904);
   if (!parsed) {
     return Value::error(parsed.error());
   }
-  const auto [settlement, maturity, investment, disc_rate, basis] = parsed.value();
-  auto span = day_count_span(settlement, maturity, basis, date1904);
-  if (!span) {
-    return Value::error(span.error());
-  }
-  const double x = (disc_rate * span.value().days) / span.value().year;
+  const auto [investment, disc_rate, span] = parsed.value();
+  const double x = (disc_rate * span.days) / span.year;
   if (!(x < 1.0)) {
     // The discount consumes the whole face value (result would be infinite or negative).
     return Value::error(ErrorCode::Num);
@@ -198,7 +193,7 @@ Value TBillPrice(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
   if (discount <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = 100.0 * (1.0 - discount * dsm / 360.0);
+  const double result = 100.0 * (1.0 - discount * dsm / kTBillYear);
   if (result <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -226,7 +221,7 @@ Value TBillYield(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, b
   if (pr <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = ((100.0 - pr) / pr) * (360.0 / dsm);
+  const double result = ((100.0 - pr) / pr) * (kTBillYear / dsm);
   return to_finite_value(result);
 }
 
@@ -263,23 +258,22 @@ Value TBillEq(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool
   if (discount <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double rate = discount;
-  if (dsm <= 182.0) {
-    const double denom = 360.0 - rate * dsm;
+  if (dsm <= kHalfYearDays) {
+    const double denom = kTBillYear - discount * dsm;
     if (denom == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    return to_finite_value((365.0 * rate) / denom);
+    return to_finite_value((kBondYear * discount) / denom);
   }
   // Long branch: 182 < DSM. The semi-annual-compounding quadratic, with
   // Y = 366 only when DSM is exactly 366 and Excel's operation order:
   //
-  //   p    = ((rate * 100) * DSM) / 360       P = (100 - p) / 100
+  //   p    = ((discount * 100) * DSM) / 360  P = (100 - p) / 100
   //   A    = ((-2) * DSM) / Y                 Bq = ((2 * DSM) / Y - 1) * (1 - 1 / P)
   //   disc = (DSM / Y)^2 - Bq
   //   TBILLEQ = ((sqrt(disc) * 2) + A) / ((2 * DSM) / Y - 1)
-  const double year = dsm == 366.0 ? 366.0 : 365.0;
-  const double p = ((rate * 100.0) * dsm) / 360.0;
+  const double year = dsm == kLeapYearDays ? kLeapYearDays : kBondYear;
+  const double p = ((discount * 100.0) * dsm) / kTBillYear;
   const double price_fraction = (100.0 - p) / 100.0;
   if (price_fraction <= 0.0) {
     return Value::error(ErrorCode::Num);

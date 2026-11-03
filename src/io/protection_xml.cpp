@@ -105,7 +105,7 @@ std::vector<ProtectedRange> read_protected_ranges(const WorksheetRawExtensions& 
     if (!doc.load_buffer(child.xml.data(), child.xml.size())) {
       continue;
     }
-    for (pugi::xml_node node : doc.child(std::string(kProtectedRanges).c_str()).children("protectedRange")) {
+    for (pugi::xml_node node : doc.child(kProtectedRanges.data()).children("protectedRange")) {
       ProtectedRange range;
       range.name = attr_str(node, "name");
       range.sqref = attr_str(node, "sqref");
@@ -129,7 +129,7 @@ void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<
     if (!IsProtectedRanges(child) || !doc.load_buffer(child.xml.data(), child.xml.size())) {
       continue;
     }
-    for (pugi::xml_node node : doc.child(std::string(kProtectedRanges).c_str()).children("protectedRange")) {
+    for (pugi::xml_node node : doc.child(kProtectedRanges.data()).children("protectedRange")) {
       std::string inner;
       for (pugi::xml_node element : node.children()) {
         append_raw_xml(inner, element);

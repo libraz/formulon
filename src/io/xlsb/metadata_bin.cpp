@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 
@@ -26,8 +27,6 @@ constexpr std::uint16_t kBrtEndEsfmdInfo = 340;
 constexpr std::uint16_t kBrtMdb = 51;  // One cell-metadata entry.
 constexpr std::uint16_t kBrtBeginExt = 52;
 constexpr std::uint16_t kBrtEndExt = 53;
-constexpr std::uint16_t kBrtBeginFRT = 35;
-constexpr std::uint16_t kBrtEndFRT = 36;
 constexpr std::uint16_t kBrtBeginDynamicArrayExt = 4096;
 constexpr std::uint16_t kBrtDynamicArrayProperties = 4097;
 
@@ -171,12 +170,12 @@ std::vector<std::uint8_t> build_dynamic_array_metadata_bin() {
   emit_record(out, kBrtBeginExt, ByteSpan{});
   payload.clear();
   emit_u32(payload, 0x00020002U);
-  emit_record(out, kBrtBeginFRT, payload);
+  emit_record(out, kFrtBegin, payload);
   emit_record(out, kBrtBeginDynamicArrayExt, ByteSpan{});
   payload.clear();
   emit_u16(payload, 1U);
   emit_record(out, kBrtDynamicArrayProperties, payload);
-  emit_record(out, kBrtEndFRT, ByteSpan{});
+  emit_record(out, kFrtEnd, ByteSpan{});
   emit_record(out, kBrtEndExt, ByteSpan{});
   emit_record(out, kBrtEndEsfmdInfo, ByteSpan{});
 

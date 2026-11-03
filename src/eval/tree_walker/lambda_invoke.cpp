@@ -124,12 +124,12 @@ void evaluate_call_args(const parser::AstNode* const* call_args, std::uint32_t a
   }
 }
 
+// Binds `lv`'s parameters for a call into `*out`; the error a call surfaces
+// instead when the arity does not fit or the lambda has no body.
 // `syntax_args` is the call site's argument AST, consulted for one thing
 // only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
 // one. It is deliberately separate from `ast_args`, the per-argument AST
 // `eval_binding_source` chose to record on the binding.
-// Binds `lv`'s parameters for a call into `*env`; the error a call surfaces
-// instead when the arity does not fit or the lambda has no body.
 std::optional<ErrorCode> bind_lambda_params(const LambdaValue* lv, std::uint32_t arity, const Value* args,
                                             const parser::AstNode* const* ast_args,
                                             const parser::AstNode* const* syntax_args, Arena& arena, NameEnv* out) {
@@ -288,6 +288,10 @@ bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const 
     return false;
   }
   lv = call.lambda();
+  if (!lambda_accepts_arity(lv, arity)) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
   std::vector<Value> args;
   std::vector<const parser::AstNode*> bound_asts;
   evaluate_call_args(call_args, arity, arena, registry, ctx, &args, &bound_asts);

@@ -162,6 +162,8 @@ struct ParsedCriterion {
 
   void rebind_rhs_text() noexcept;
   void copy_parsed_fields_except_storage(const ParsedCriterion& other);
+  /// Drops the folded-RHS and collation-key caches.
+  void reset_caches() noexcept;
 
   mutable bool rhs_fold_cached_ = false;
   mutable bool rhs_fold_cache_unescape_first_ = false;

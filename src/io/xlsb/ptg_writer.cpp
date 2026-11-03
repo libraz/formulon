@@ -573,7 +573,7 @@ class Encoder {
       for (unsigned i = 1; i <= it->second; ++i) {
         emit_space(node, parser::WhitespaceSlot::kBeforeOpen, static_cast<std::uint16_t>(i));
         emit_space(node, parser::WhitespaceSlot::kBeforeClose, static_cast<std::uint16_t>(i));
-        emit_u8(out_, 0x15);  // PtgParen, one per pair
+        emit_u8(out_, kPtgParen);  // PtgParen, one per pair
       }
     }
     return Expected<void, Error>::Ok();
@@ -582,15 +582,15 @@ class Encoder {
   EncodedFormula take() { return EncodedFormula{std::move(out_), std::move(extra_)}; }
 
   void emit_attr_semi() {
-    emit_u8(out_, 0x19);  // PtgAttr
-    emit_u8(out_, 0x01);  // bitSemi
+    emit_u8(out_, kPtgAttr);
+    emit_u8(out_, static_cast<std::uint8_t>(PtgAttrKind::Semi));
     emit_u16(out_, 0);
   }
 
   /// Drops the leading `PtgAttrSemi` when a `PtgAttrSpace` follows it, which
   /// then carries the volatile flag as `PtgAttrSpaceSemi`.
   void fold_attr_semi() {
-    if (out_.size() >= 8U && out_[4] == 0x19 && out_[5] == static_cast<std::uint8_t>(PtgAttrKind::Space)) {
+    if (out_.size() >= 8U && out_[4] == kPtgAttr && out_[5] == static_cast<std::uint8_t>(PtgAttrKind::Space)) {
       out_.erase(out_.begin(), out_.begin() + 4);
       out_[1] = static_cast<std::uint8_t>(PtgAttrKind::SpaceSemi);
     }
@@ -610,7 +610,7 @@ class Encoder {
         continue;
       }
       const std::uint8_t type = ptg_space_type(slot, run.ch == '\n');
-      emit_attr(static_cast<std::uint8_t>(PtgAttrKind::Space), static_cast<std::uint16_t>(type | (run.count << 8)));
+      emit_attr(PtgAttrKind::Space, static_cast<std::uint16_t>(type | (run.count << 8)));
     }
   }
 
@@ -658,12 +658,12 @@ class Encoder {
       case parser::NodeKind::ErrorLiteral:
         if (measured_calls_ && node.as_error_literal() == ErrorCode::Ref) {
           // Excel stores a written #REF! as a reference error with its slot's class.
-          emit_u8(out_, ClassedPtg(0x2A, cls(false)));  // PtgRefErr
+          emit_u8(out_, ClassedPtg(kPtgRefErr, cls(false)));  // PtgRefErr
           emit_u32(out_, 0);
           emit_u16(out_, 0);
           return Expected<void, Error>::Ok();
         }
-        emit_u8(out_, 0x1C);  // PtgErr
+        emit_u8(out_, kPtgErr);  // PtgErr
         emit_u8(out_, error_wire_code(node.as_error_literal()));
         return Expected<void, Error>::Ok();
       case parser::NodeKind::Ref:
@@ -700,7 +700,7 @@ class Encoder {
         // A built-in named as a value is its hidden `_xleta.` name, always value class.
         if (std::find(function_values_.begin(), function_values_.end(), &node) != function_values_.end()) {
           if (const auto it = name_table_.find(function_value_storage_name(node.as_name())); it != name_table_.end()) {
-            emit_u8(out_, ClassedPtg(0x23, kPtgValueClass));  // PtgName
+            emit_u8(out_, ClassedPtg(kPtgName, kPtgValueClass));  // PtgName
             emit_u32(out_, it->second);
             return Expected<void, Error>::Ok();
           }
@@ -774,30 +774,30 @@ class Encoder {
   Expected<void, Error> emit_literal(const Value& v) {
     switch (v.kind()) {
       case ValueKind::Blank:
-        emit_u8(out_, 0x16);  // PtgMissArg
+        emit_u8(out_, kPtgMissArg);  // PtgMissArg
         return Expected<void, Error>::Ok();
       case ValueKind::Number: {
         const double d = v.as_number();
         // Prefer PtgInt for small non-negative integers.
         if (d >= 0.0 && d <= 65535.0 && d == static_cast<double>(static_cast<std::uint16_t>(d))) {
-          emit_u8(out_, 0x1E);  // PtgInt
+          emit_u8(out_, kPtgInt);  // PtgInt
           emit_u16(out_, static_cast<std::uint16_t>(d));
         } else {
-          emit_u8(out_, 0x1F);  // PtgNum
+          emit_u8(out_, kPtgNum);  // PtgNum
           emit_double(out_, d);
         }
         return Expected<void, Error>::Ok();
       }
       case ValueKind::Bool:
-        emit_u8(out_, 0x1D);  // PtgBool
+        emit_u8(out_, kPtgBool);  // PtgBool
         emit_u8(out_, v.as_boolean() ? 1U : 0U);
         return Expected<void, Error>::Ok();
       case ValueKind::Text:
-        emit_u8(out_, 0x17);  // PtgStr
+        emit_u8(out_, kPtgStr);  // PtgStr
         emit_ptg_string_body(out_, v.as_text());
         return Expected<void, Error>::Ok();
       case ValueKind::Error:
-        emit_u8(out_, 0x1C);  // PtgErr
+        emit_u8(out_, kPtgErr);  // PtgErr
         emit_u8(out_, error_wire_code(v.as_error()));
         return Expected<void, Error>::Ok();
       case ValueKind::Array:
@@ -828,7 +828,7 @@ class Encoder {
     // different case than its binding is still that parameter.
     for (auto it = let_scope_.rbegin(); it != let_scope_.rend(); ++it) {
       if (strings::case_insensitive_eq(it->first, name)) {
-        emit_u8(out_, measured_calls_ ? ClassedPtg(0x23, cls) : std::uint8_t{0x23});  // PtgName
+        emit_u8(out_, measured_calls_ ? ClassedPtg(kPtgName, cls) : kPtgName);  // PtgName
         emit_u32(out_, it->second);
         return Expected<void, Error>::Ok();
       }
@@ -838,7 +838,7 @@ class Encoder {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
                         std::string("context=xlsb_ptg_writer name=") + std::string(name));
     }
-    emit_u8(out_, ClassedPtg(0x23, cls));  // PtgName
+    emit_u8(out_, ClassedPtg(kPtgName, cls));  // PtgName
     emit_u32(out_, it->second);
     return Expected<void, Error>::Ok();
   }
@@ -889,7 +889,7 @@ class Encoder {
   /// `BrtExternSheet` entry of `book` (0: this workbook's own names).
   Expected<void, Error> emit_name_x(std::uint32_t ilbl, std::uint8_t cls, std::uint32_t book = 0U) {
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiNoSheet, kXtiNoSheet, book));
-    emit_u8(out_, ClassedPtg(0x39, cls));  // PtgNameX
+    emit_u8(out_, ClassedPtg(kPtgNameX, cls));  // PtgNameX
     emit_u16(out_, ixti);
     emit_u32(out_, ilbl);
     return Expected<void, Error>::Ok();
@@ -935,7 +935,7 @@ class Encoder {
     if (it_lambda == name_table_.end()) {
       return unsupported_node("Lambda(_xlfn.LAMBDA not registered)");
     }
-    emit_u8(out_, 0x23);  // PtgName (reference-class): the LAMBDA name-ref
+    emit_u8(out_, kPtgName);  // PtgName (reference-class): the LAMBDA name-ref
     emit_u32(out_, it_lambda->second);
     const std::uint32_t n = node.as_lambda_param_count();
     for (std::uint32_t i = 0; i < n; ++i) {
@@ -944,7 +944,7 @@ class Encoder {
       if (it_param == name_table_.end()) {
         return unsupported_node("Lambda(param name not registered)");
       }
-      emit_u8(out_, 0x23);  // PtgName (reference-class): the parameter name-ref
+      emit_u8(out_, kPtgName);  // PtgName (reference-class): the parameter name-ref
       emit_u32(out_, it_param->second);
       let_scope_.emplace_back(raw_name, it_param->second);
       shapes_.bind(raw_name, Shape::kArray);  // bound to whatever a call passes
@@ -965,7 +965,7 @@ class Encoder {
     if (cparams > 0xFF) {
       return unsupported_node(too_many);
     }
-    emit_u8(out_, ClassedPtg(0x22, cls));  // PtgFuncVar result
+    emit_u8(out_, ClassedPtg(kPtgFuncVar, cls));  // PtgFuncVar result
     emit_u8(out_, static_cast<std::uint8_t>(cparams));
     emit_u16(out_, 255);
     return Expected<void, Error>::Ok();
@@ -983,7 +983,7 @@ class Encoder {
     if (it_let == name_table_.end()) {
       return unsupported_node("LetBinding(_xlfn.LET not registered)");
     }
-    emit_u8(out_, 0x23);  // PtgName (reference-class): the LET name-ref
+    emit_u8(out_, kPtgName);  // PtgName (reference-class): the LET name-ref
     emit_u32(out_, it_let->second);
     const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
     // Bindings and the body take their argument the way an `S` parameter does.
@@ -996,7 +996,7 @@ class Encoder {
       if (it_param == name_table_.end()) {
         return unsupported_node("LetBinding(param name not registered)");
       }
-      emit_u8(out_, 0x23);  // PtgName (reference-class): the binding-name-ref
+      emit_u8(out_, kPtgName);  // PtgName (reference-class): the binding-name-ref
       emit_u32(out_, it_param->second);
       next_slot_ = slot;
       RETURN_IF_ERROR(emit(node.as_let_binding_expr(i)));
@@ -1028,17 +1028,17 @@ class Encoder {
       return emit_area_ref(first, last, ref.sheet, cls);
     }
     if (ref.sheet.empty() && base_ && IsRelative(ref)) {
-      emit_u8(out_, ClassedPtg(0x2C, cls));  // PtgRefN
+      emit_u8(out_, ClassedPtg(kPtgRefN, cls));  // PtgRefN
       emit_loc(out_, OffsetFrom(ref, *base_));
       return Expected<void, Error>::Ok();
     }
     if (ref.sheet.empty()) {
-      emit_u8(out_, ClassedPtg(0x24, cls));  // PtgRef
+      emit_u8(out_, ClassedPtg(kPtgRef, cls));  // PtgRef
       emit_loc(out_, ref);
       return Expected<void, Error>::Ok();
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
-    emit_u8(out_, ClassedPtg(0x3A, cls));  // PtgRef3d
+    emit_u8(out_, ClassedPtg(kPtgRef3d, cls));  // PtgRef3d
     emit_u16(out_, ixti);
     emit_loc(out_, ref);
     return Expected<void, Error>::Ok();
@@ -1048,12 +1048,12 @@ class Encoder {
   Expected<void, Error> emit_area_ref(const parser::Reference& first, const parser::Reference& last,
                                       std::string_view sheet, std::uint8_t cls) {
     if (sheet.empty()) {
-      emit_u8(out_, ClassedPtg(0x25, cls));  // PtgArea
+      emit_u8(out_, ClassedPtg(kPtgArea, cls));  // PtgArea
       emit_area(out_, first, last);
       return Expected<void, Error>::Ok();
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(sheet));
-    emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
+    emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
     emit_u16(out_, ixti);
     emit_area(out_, first, last);
     return Expected<void, Error>::Ok();
@@ -1076,12 +1076,12 @@ class Encoder {
     // A value/array-class 3-D reference used as a function
     // argument reads back as #REF! in real Excel -- do not promote here.
     if (node.as_ref3d_is_range()) {
-      emit_u8(out_, promote ? ValueClassPtg(0x3B) : 0x3B);  // PtgArea3d
+      emit_u8(out_, promote ? ValueClassPtg(kPtgArea3d) : kPtgArea3d);  // PtgArea3d
       emit_u16(out_, ixti);
       emit_area(out_, node.as_ref3d_cell(), node.as_ref3d_cell_end());
       return Expected<void, Error>::Ok();
     }
-    emit_u8(out_, promote ? ValueClassPtg(0x3A) : 0x3A);  // PtgRef3d
+    emit_u8(out_, promote ? ValueClassPtg(kPtgRef3d) : kPtgRef3d);  // PtgRef3d
     emit_u16(out_, ixti);
     emit_loc(out_, node.as_ref3d_cell());
     return Expected<void, Error>::Ok();
@@ -1125,14 +1125,14 @@ class Encoder {
     parser::Reference a = node.as_external_ref_cell();
     parser::Reference b = node.as_external_ref_is_range() ? node.as_external_ref_cell_end() : a;
     if (!node.as_external_ref_is_range() && !a.is_full_col && !a.is_full_row) {
-      emit_u8(out_, ClassedPtg(0x3A, cls));  // PtgRef3d
+      emit_u8(out_, ClassedPtg(kPtgRef3d, cls));  // PtgRef3d
       emit_u16(out_, ixti);
       emit_loc(out_, a);
       return Expected<void, Error>::Ok();
     }
     // A whole column or row is the grid-spanning area.
     SpanGrid(a, b);
-    emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
+    emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
     emit_u16(out_, ixti);
     emit_area(out_, a, b);
     return Expected<void, Error>::Ok();
@@ -1200,14 +1200,14 @@ class Encoder {
     RETURN_IF_ERROR(emit_operand(operand, slot));
     switch (node.as_unary_op()) {
       case parser::UnaryOp::Plus:
-        emit_u8(out_, 0x12);  // PtgUplus
+        emit_u8(out_, kPtgUplus);  // PtgUplus
         break;
       case parser::UnaryOp::Minus:
-        emit_u8(out_, 0x13);  // PtgUminus
+        emit_u8(out_, kPtgUminus);  // PtgUminus
         break;
       case parser::UnaryOp::Percent:
         emit_space(node, parser::WhitespaceSlot::kBeforeOperator);
-        emit_u8(out_, 0x14);  // PtgPercent
+        emit_u8(out_, kPtgPercent);  // PtgPercent
         break;
     }
     return Expected<void, Error>::Ok();
@@ -1224,43 +1224,43 @@ class Encoder {
   }
 
   static std::uint8_t binop_ptg(parser::BinOp op) {
-    std::uint8_t byte = 0x03;
+    std::uint8_t byte = kPtgAdd;
     switch (op) {
       case parser::BinOp::Add:
-        byte = 0x03;
+        byte = kPtgAdd;
         break;
       case parser::BinOp::Sub:
-        byte = 0x04;
+        byte = kPtgSub;
         break;
       case parser::BinOp::Mul:
-        byte = 0x05;
+        byte = kPtgMul;
         break;
       case parser::BinOp::Div:
-        byte = 0x06;
+        byte = kPtgDiv;
         break;
       case parser::BinOp::Pow:
-        byte = 0x07;
+        byte = kPtgPower;
         break;
       case parser::BinOp::Concat:
-        byte = 0x08;
+        byte = kPtgConcat;
         break;
       case parser::BinOp::Lt:
-        byte = 0x09;
+        byte = kPtgLt;
         break;
       case parser::BinOp::LtEq:
-        byte = 0x0A;
+        byte = kPtgLe;
         break;
       case parser::BinOp::Eq:
-        byte = 0x0B;
+        byte = kPtgEq;
         break;
       case parser::BinOp::GtEq:
-        byte = 0x0C;
+        byte = kPtgGe;
         break;
       case parser::BinOp::Gt:
-        byte = 0x0D;
+        byte = kPtgGt;
         break;
       case parser::BinOp::NotEq:
-        byte = 0x0E;
+        byte = kPtgNe;
         break;
     }
     return byte;
@@ -1285,8 +1285,8 @@ class Encoder {
     std::vector<Rect> rects;
     const bool cached = !in_memory_token_ && promote_root_ && !base_;
     if (cached && StaticRects(node, rects) && rects.size() == 1U) {
-      emit_u8(out_, promote ? ValueClassPtg(0x26) : 0x26);  // PtgMemArea
-      emit_u32(out_, 0);                                    // unused
+      emit_u8(out_, promote ? ValueClassPtg(kPtgMemArea) : kPtgMemArea);  // PtgMemArea
+      emit_u32(out_, 0);                                                  // unused
       emit_u32(extra_, 1U);
       emit_u32(extra_, rects[0].row_first);
       emit_u32(extra_, rects[0].row_last);
@@ -1297,7 +1297,7 @@ class Encoder {
     if (!promote && !cached) {
       return emit_range_tokens(node);
     }
-    emit_u8(out_, promote ? ValueClassPtg(0x29) : 0x29);  // PtgMemFunc
+    emit_u8(out_, promote ? ValueClassPtg(kPtgMemFunc) : kPtgMemFunc);  // PtgMemFunc
     return emit_wrapped_range(node);
   }
 
@@ -1310,12 +1310,17 @@ class Encoder {
     const auto status = emit_range_tokens(node);
     in_memory_token_ = outer;
     RETURN_IF_ERROR(status);
+    return patch_memory_cce(cce_at);
+  }
+
+  /// Back-fills the `cce` placeholder at `cce_at` with the byte length of
+  /// what the memory token covers.
+  Expected<void, Error> patch_memory_cce(std::size_t cce_at) {
     const std::size_t cce = out_.size() - cce_at - 2U;
     if (cce > 0xFFFFU) {
       return unsupported_node("memory token (cce>65535)");
     }
-    out_[cce_at] = static_cast<std::uint8_t>(cce & 0xFFU);
-    out_[cce_at + 1U] = static_cast<std::uint8_t>(cce >> 8);
+    patch_u16(cce_at, cce);
     return Expected<void, Error>::Ok();
   }
 
@@ -1336,11 +1341,11 @@ class Encoder {
         RETURN_IF_ERROR(emit(node.as_range_operand(i)));
         if (width == 2U) {
           RETURN_IF_ERROR(emit(node.as_range_operand(i + 1U)));
-          emit_u8(out_, 0x11);  // PtgRange
+          emit_u8(out_, kPtgRange);  // PtgRange
         }
       }
       if (i > 0U) {
-        emit_u8(out_, 0x11);  // PtgRange
+        emit_u8(out_, kPtgRange);  // PtgRange
       }
       i += width;
     }
@@ -1368,13 +1373,13 @@ class Encoder {
     if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
       if (a.sheet.empty() && base_ && (IsRelative(a) || IsRelative(b))) {
         lead();
-        emit_u8(out_, ClassedPtg(0x2D, cls));  // PtgAreaN
+        emit_u8(out_, ClassedPtg(kPtgAreaN, cls));  // PtgAreaN
         emit_area(out_, OffsetFrom(a, *base_), OffsetFrom(b, *base_));
         return Expected<void, Error>::Ok();
       }
       if (a.sheet.empty()) {
         lead();
-        emit_u8(out_, ClassedPtg(0x25, cls));  // PtgArea
+        emit_u8(out_, ClassedPtg(kPtgArea, cls));  // PtgArea
         emit_area(out_, a, b);
         return Expected<void, Error>::Ok();
       }
@@ -1382,7 +1387,7 @@ class Encoder {
       const int ixti = itab >= 0 ? try_resolve_range_ixti(itab, itab) : -1;
       if (ixti >= 0) {
         lead();
-        emit_u8(out_, ClassedPtg(0x3B, cls));  // PtgArea3d
+        emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
         emit_u16(out_, static_cast<std::uint16_t>(ixti));
         emit_area(out_, a, b);
         return Expected<void, Error>::Ok();
@@ -1397,7 +1402,7 @@ class Encoder {
       RETURN_IF_ERROR(emit(node.as_intersect_lhs()));
       RETURN_IF_ERROR(emit(node.as_intersect_rhs()));
       emit_space(node, parser::WhitespaceSlot::kBeforeOperator);
-      emit_u8(out_, 0x0F);  // PtgIsect
+      emit_u8(out_, kPtgIsect);  // PtgIsect
       return Expected<void, Error>::Ok();
     }
     const std::uint32_t arity = node.as_union_arity();
@@ -1408,7 +1413,7 @@ class Encoder {
     RETURN_IF_ERROR(emit(node.as_union_child(0)));
     for (std::uint32_t i = 1; i < arity; ++i) {
       RETURN_IF_ERROR(emit(node.as_union_child(i)));
-      emit_u8(out_, 0x10);  // PtgUnion
+      emit_u8(out_, kPtgUnion);  // PtgUnion
     }
     return Expected<void, Error>::Ok();
   }
@@ -1429,15 +1434,15 @@ class Encoder {
     // A formula with a base cell (CF / DV) is evaluated per cell, so it has no single result to cache.
     if (promote_root_ && !base_ && StaticRects(node, rects)) {
       if (root && rects.size() != 1U) {
-        emit_u8(out_, ValueClassPtg(0x27));  // PtgMemErr
+        emit_u8(out_, ValueClassPtg(kPtgMemErr));  // PtgMemErr
         emit_u8(out_, error_wire_code(rects.empty() ? ErrorCode::Null : ErrorCode::Value));
         emit_u8(out_, 0);
         emit_u16(out_, 0);
         return emit_wrapped(node);
       }
       if (!rects.empty()) {
-        emit_u8(out_, root ? ValueClassPtg(0x26) : 0x26);  // PtgMemArea
-        emit_u32(out_, 0);                                 // unused
+        emit_u8(out_, root ? ValueClassPtg(kPtgMemArea) : kPtgMemArea);  // PtgMemArea
+        emit_u32(out_, 0);                                               // unused
         emit_u32(extra_, static_cast<std::uint32_t>(rects.size()));
         for (const Rect& r : rects) {
           emit_u32(extra_, r.row_first);
@@ -1449,7 +1454,7 @@ class Encoder {
       }
     }
     if (!promote_root_ && root) {
-      emit_u8(out_, 0x29);  // PtgMemFunc
+      emit_u8(out_, kPtgMemFunc);  // PtgMemFunc
       return emit_wrapped(node);
     }
     return emit_union_or_intersect(node);
@@ -1464,13 +1469,7 @@ class Encoder {
     const auto status = emit_union_or_intersect(node);
     in_memory_token_ = false;
     RETURN_IF_ERROR(status);
-    const std::size_t cce = out_.size() - cce_at - 2U;
-    if (cce > 0xFFFFU) {
-      return unsupported_node("memory token (cce>65535)");
-    }
-    out_[cce_at] = static_cast<std::uint8_t>(cce & 0xFFU);
-    out_[cce_at + 1U] = static_cast<std::uint8_t>(cce >> 8);
-    return Expected<void, Error>::Ok();
+    return patch_memory_cce(cce_at);
   }
 
   Expected<void, Error> emit_call(const parser::AstNode& node) {
@@ -1516,32 +1515,32 @@ class Encoder {
     std::vector<std::size_t> gotos;
     if (strings::case_insensitive_eq(name, "IF") && (arity == 2U || arity == 3U)) {
       RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
-      const std::size_t attr_if = emit_attr(0x02);
+      const std::size_t attr_if = emit_attr(PtgAttrKind::If);
       RETURN_IF_ERROR(emit_call_arg(node, name, 1U));
-      gotos.push_back(emit_attr(0x08));
+      gotos.push_back(emit_attr(PtgAttrKind::Goto));
       patch_u16(attr_if + 2U, out_.size() - (attr_if + 4U));
       if (arity == 3U) {
         RETURN_IF_ERROR(emit_call_arg(node, name, 2U));
-        gotos.push_back(emit_attr(0x08));
+        gotos.push_back(emit_attr(PtgAttrKind::Goto));
       }
     } else if (strings::case_insensitive_eq(name, "CHOOSE") && arity >= 2U) {
       RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
       // PtgAttrChoose: the choice count, then one offset per choice and one
       // past the last, each from the start of that offset table.
-      const std::size_t table = emit_attr(0x04, static_cast<std::uint16_t>(arity - 1U)) + 4U;
+      const std::size_t table = emit_attr(PtgAttrKind::Choose, static_cast<std::uint16_t>(arity - 1U)) + 4U;
       out_.resize(table + 2U * arity);
       for (std::uint32_t i = 1; i < arity; ++i) {
         patch_u16(table + 2U * (i - 1U), out_.size() - table);
         RETURN_IF_ERROR(emit_call_arg(node, name, i));
-        gotos.push_back(emit_attr(0x08));
+        gotos.push_back(emit_attr(PtgAttrKind::Goto));
       }
       patch_u16(table + 2U * (arity - 1U), out_.size() - table);
     } else if (strings::case_insensitive_eq(name, "IFERROR") && arity == 2U) {
       RETURN_IF_ERROR(emit_call_arg(node, name, 0U));
-      const std::size_t attr_if_error = emit_attr(0x80);
+      const std::size_t attr_if_error = emit_attr(PtgAttrKind::IfError);
       RETURN_IF_ERROR(emit_call_arg(node, name, 1U));
       patch_u16(attr_if_error + 2U, out_.size() - (attr_if_error + 4U));
-      gotos.push_back(emit_attr(0x08));
+      gotos.push_back(emit_attr(PtgAttrKind::Goto));
     } else {
       for (std::uint32_t i = 0; i < arity; ++i) {
         RETURN_IF_ERROR(emit_call_arg(node, name, i));
@@ -1558,8 +1557,8 @@ class Encoder {
     }
     // Excel 365 stores a one-argument SUM as `PtgAttrSum` rather than a call.
     if (arity == 1U && strings::case_insensitive_eq(name, "SUM")) {
-      emit_u8(out_, 0x19);  // PtgAttr
-      emit_u8(out_, 0x10);  // bitSum
+      emit_u8(out_, kPtgAttr);
+      emit_u8(out_, static_cast<std::uint8_t>(PtgAttrKind::Sum));
       emit_u16(out_, 0);
       return Expected<void, Error>::Ok();
     }
@@ -1568,7 +1567,7 @@ class Encoder {
       if (arity > 0xFF) {
         return unsupported_node("Call(arity>255)");
       }
-      emit_u8(out_, ClassedPtg(0x22, token_class));  // PtgFuncVar result
+      emit_u8(out_, ClassedPtg(kPtgFuncVar, token_class));  // PtgFuncVar result
       emit_u8(out_, static_cast<std::uint8_t>(arity));
       emit_u16(out_, entry->id);
     } else {
@@ -1576,7 +1575,7 @@ class Encoder {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: fixed-arity function arity mismatch",
                           std::string("context=xlsb_ptg_writer fn=") + std::string(name));
       }
-      emit_u8(out_, ClassedPtg(0x21, token_class));  // PtgFunc result
+      emit_u8(out_, ClassedPtg(kPtgFunc, token_class));  // PtgFunc result
       emit_u16(out_, entry->id);
     }
     patch_gotos();
@@ -1594,11 +1593,11 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  /// Emits `PtgAttr` of kind `bits` with `data` and returns its offset.
-  std::size_t emit_attr(std::uint8_t bits, std::uint16_t data = 0U) {
+  /// Emits `PtgAttr` of `kind` with `data` and returns its offset.
+  std::size_t emit_attr(PtgAttrKind kind, std::uint16_t data = 0U) {
     const std::size_t at = out_.size();
-    emit_u8(out_, 0x19);  // PtgAttr
-    emit_u8(out_, bits);
+    emit_u8(out_, kPtgAttr);
+    emit_u8(out_, static_cast<std::uint8_t>(kind));
     emit_u16(out_, data);
     return at;
   }
@@ -1643,7 +1642,7 @@ class Encoder {
                         "xlsb encoder: hidden-name callee has no BrtName registered",
                         std::string("context=xlsb_ptg_writer fn=") + std::string(name));
     }
-    emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
+    emit_u8(out_, kPtgName);  // PtgName (reference-class): the callee name-ref
     emit_u32(out_, it->second);
     return Expected<void, Error>::Ok();
   }
@@ -1663,8 +1662,8 @@ class Encoder {
       // Always a PtgFuncVar argument below, so it stays reference-class.
       RETURN_IF_ERROR(emit_ref(node.as_spill_ref(), kPtgReferenceClass));
     }
-    emit_u8(out_, ClassedPtg(0x22, cls));  // PtgFuncVar result
-    emit_u8(out_, 2);                      // cparams: name-ref + one anchor operand
+    emit_u8(out_, ClassedPtg(kPtgFuncVar, cls));  // PtgFuncVar result
+    emit_u8(out_, 2);                             // cparams: name-ref + one anchor operand
     emit_u16(out_, 255);
     return Expected<void, Error>::Ok();
   }
@@ -1678,7 +1677,7 @@ class Encoder {
     RETURN_IF_ERROR(emit_hidden_callee("SINGLE"));
     next_slot_ = Slot{name_body_ ? 'R' : xlsb_parameter_class("SINGLE", 0), false};
     RETURN_IF_ERROR(emit(node.as_implicit_intersection_operand()));
-    emit_u8(out_, reference_result ? std::uint8_t{0x22} : ValueClassPtg(0x22));  // PtgFuncVar result
+    emit_u8(out_, reference_result ? kPtgFuncVar : ValueClassPtg(kPtgFuncVar));  // PtgFuncVar result
     emit_u8(out_, 2);                                                            // cparams: name-ref + the operand
     emit_u16(out_, 255);
     return Expected<void, Error>::Ok();
@@ -1691,7 +1690,7 @@ class Encoder {
     // element row-major as a tag byte and its payload.
     const std::uint32_t rows = node.as_array_rows();
     const std::uint32_t cols = node.as_array_cols();
-    emit_u8(out_, ClassedPtg(0x20, cls));  // PtgArray
+    emit_u8(out_, ClassedPtg(kPtgArray, cls));  // PtgArray
     emit_u16(out_, static_cast<std::uint16_t>(cols - 1U));
     emit_u16(out_, static_cast<std::uint16_t>(rows - 1U));
     for (int i = 0; i < 10; ++i) {

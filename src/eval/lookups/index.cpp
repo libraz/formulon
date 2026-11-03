@@ -27,6 +27,8 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/special_forms_lazy.h"
+#include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -85,22 +87,16 @@ Value index_whole_row(const std::vector<Value>& cells, std::uint32_t cols, std::
 // lazy lookup implementations keep these two cases separate so that a
 // scalar INDEX / CHOOSE call retains its historical short-circuit and result
 // shape, while an array selector can use the same row-major broadcast rules
-// as the dynamic-array dispatcher without re-evaluating its AST.
-struct SelectorView {
-  const Value* scalar = nullptr;
-  const ArrayValue* array = nullptr;
-  std::uint32_t rows = 1U;
-  std::uint32_t cols = 1U;
-
-  bool is_array() const noexcept { return array != nullptr; }
-};
+// as the dynamic-array dispatcher without re-evaluating its AST. A scalar is
+// a 1x1 view onto `value`, which must outlive the view.
+using SelectorView = ArrayView;
 
 SelectorView make_selector_view(const Value& value) {
   if (!value.is_array()) {
-    return SelectorView{&value, nullptr, 1U, 1U};
+    return SelectorView{1U, 1U, &value};
   }
   const ArrayValue* array = value.as_array();
-  return SelectorView{nullptr, array, array->rows, array->cols};
+  return SelectorView{array->rows, array->cols, array->cells};
 }
 
 // Returns the value supplied by a selector at an output coordinate. A
@@ -109,17 +105,9 @@ SelectorView make_selector_view(const Value& value) {
 // synthetic #N/A from an actual error cell, which keeps the precedence logic
 // in the INDEX compositor explicit.
 Value selector_at(const SelectorView& selector, std::uint32_t row, std::uint32_t col, bool* missing) {
-  *missing = false;
-  if (!selector.is_array()) {
-    return *selector.scalar;
-  }
-  const std::uint32_t source_row = selector.rows == 1U ? 0U : row;
-  const std::uint32_t source_col = selector.cols == 1U ? 0U : col;
-  if (source_row >= selector.rows || source_col >= selector.cols) {
-    *missing = true;
-    return Value::error(ErrorCode::NA);
-  }
-  return selector.array->cells[static_cast<std::size_t>(source_row) * selector.cols + source_col];
+  const Value* cell = broadcast_cell(selector, row, col);
+  *missing = cell == nullptr;
+  return cell != nullptr ? *cell : Value::error(ErrorCode::NA);
 }
 
 std::uint32_t selector_rows(const SelectorView& row, const SelectorView& col) {
@@ -166,31 +154,47 @@ DecodedIndex decode_index_cell(const Value& value, IndexSnap snap) {
   return DecodedIndex{IndexAxisState::kValid, static_cast<std::uint32_t>(raw), ErrorCode::Value};
 }
 
+// Decodes scalar `row_num` / `col_num` selectors; `col` stays 0 when
+// `col_num` was not given. Returns false with the first selector error.
+bool decode_row_col(const Value& row_val, const Value& col_val, bool col_explicit, DecodedIndex* row, DecodedIndex* col,
+                    ErrorCode* out_err) {
+  *row = decode_index_cell(row_val, IndexSnap::kNearInteger);
+  if (row->state == IndexAxisState::kError) {
+    *out_err = row->error;
+    return false;
+  }
+  *col = DecodedIndex{IndexAxisState::kValid, 0U, ErrorCode::Value};
+  if (col_explicit) {
+    *col = decode_index_cell(col_val, IndexSnap::kNearInteger);
+    if (col->state == IndexAxisState::kError) {
+      *out_err = col->error;
+      return false;
+    }
+  }
+  return true;
+}
+
 std::vector<DecodedIndex> decode_selector(const SelectorView& selector, IndexSnap snap) {
   const std::size_t count = static_cast<std::size_t>(selector.rows) * selector.cols;
   std::vector<DecodedIndex> decoded;
   decoded.reserve(count);
-  if (!selector.is_array()) {
-    decoded.push_back(decode_index_cell(*selector.scalar, snap));
-    return decoded;
-  }
   for (std::size_t i = 0; i < count; ++i) {
-    decoded.push_back(decode_index_cell(selector.array->cells[i], snap));
+    decoded.push_back(decode_index_cell(selector.cells[i], snap));
   }
   return decoded;
 }
 
+// The decoded counterpart of `selector_at`: `decoded` runs parallel to the
+// selector's cells, so the supplying cell's offset indexes it.
 const DecodedIndex& decoded_selector_at(const SelectorView& selector, const std::vector<DecodedIndex>& decoded,
                                         std::uint32_t row, std::uint32_t col, bool* missing) {
-  *missing = false;
-  const std::uint32_t source_row = selector.rows == 1U ? 0U : row;
-  const std::uint32_t source_col = selector.cols == 1U ? 0U : col;
-  if (source_row >= selector.rows || source_col >= selector.cols) {
-    *missing = true;
+  const Value* cell = broadcast_cell(selector, row, col);
+  *missing = cell == nullptr;
+  if (cell == nullptr) {
     static const DecodedIndex kMissing{IndexAxisState::kError, 0U, ErrorCode::NA};
     return kMissing;
   }
-  return decoded[static_cast<std::size_t>(source_row) * selector.cols + source_col];
+  return decoded[static_cast<std::size_t>(cell - selector.cells)];
 }
 
 enum class IndexTileKind : std::uint8_t { kScalar, kRow, kColumn, kWhole };
@@ -760,30 +764,16 @@ Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& ind
 // evaluated for the scalar-index path.
 Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  // Need at least index_num plus one value.
-  if (arity < 2) {
-    return Value::error(ErrorCode::Value);
+  const SelectedBranch picked = select_choose_branch(call, arena, registry, ctx);
+  switch (picked.kind) {
+    case SelectedBranch::Kind::kArgument:
+      return eval_selected_arm(call.as_call_arg(picked.arg), arena, registry, ctx);
+    case SelectedBranch::Kind::kArraySubject:
+      return eval_choose_array_index_lazy(call, picked.value, arena, registry, ctx);
+    case SelectedBranch::Kind::kResult:
+      break;
   }
-  const Value idx_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (idx_val.is_error()) {
-    return idx_val;
-  }
-  if (idx_val.is_array()) {
-    return eval_choose_array_index_lazy(call, idx_val, arena, registry, ctx);
-  }
-  auto idx_num = coerce_to_number(idx_val);
-  if (!idx_num) {
-    return Value::error(idx_num.error());
-  }
-  // Excel truncates (toward zero) rather than rounds: CHOOSE(2.9, ...)
-  // selects the 2nd value, not the 3rd.
-  const double raw = truncate_index(idx_num.value());
-  if (!(raw >= 1.0 && raw <= static_cast<double>(arity - 1))) {
-    return Value::error(ErrorCode::Value);
-  }
-  const auto n = static_cast<std::uint32_t>(raw);
-  return eval_selected_arm(call.as_call_arg(n), arena, registry, ctx);
+  return picked.value;
 }
 
 // INDEX(array, row_num, [column_num])
@@ -867,16 +857,11 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (!source_ok || rows == 0U || cols == 0U) {
     return Value::error(source_error == ErrorCode::Value ? ErrorCode::Ref : source_error);
   }
-  const DecodedIndex row = decode_index_cell(row_val, IndexSnap::kNearInteger);
-  if (row.state == IndexAxisState::kError) {
-    return Value::error(row.error);
-  }
-  DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
-  if (col_explicit) {
-    col = decode_index_cell(col_val, IndexSnap::kNearInteger);
-    if (col.state == IndexAxisState::kError) {
-      return Value::error(col.error);
-    }
+  DecodedIndex row;
+  DecodedIndex col;
+  ErrorCode decode_error = ErrorCode::Value;
+  if (!decode_row_col(row_val, col_val, col_explicit, &row, &col, &decode_error)) {
+    return Value::error(decode_error);
   }
   const auto pick = index_pick(rows, cols, row.index, col.index, col_explicit, by_reference && by_reference.value());
   if (!pick) {
@@ -931,18 +916,10 @@ bool resolve_index_reference(const parser::AstNode& call, Arena& arena, const Fu
     *out_err = ErrorCode::Value;
     return false;
   }
-  const DecodedIndex row = decode_index_cell(row_val, IndexSnap::kNearInteger);
-  if (row.state == IndexAxisState::kError) {
-    *out_err = row.error;
+  DecodedIndex row;
+  DecodedIndex col;
+  if (!decode_row_col(row_val, col_val, col_explicit, &row, &col, out_err)) {
     return false;
-  }
-  DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
-  if (col_explicit) {
-    col = decode_index_cell(col_val, IndexSnap::kNearInteger);
-    if (col.state == IndexAxisState::kError) {
-      *out_err = col.error;
-      return false;
-    }
   }
   const auto pick = index_pick(bottom - top + 1U, right - left + 1U, row.index, col.index, col_explicit, true);
   if (!pick) {

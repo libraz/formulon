@@ -187,13 +187,6 @@ Expected<double, ErrorCode> apply_pow_ieee(double base, double exp);
 ///   rejected, which is the whole point of the strict variant.
 Expected<double, ErrorCode> matrix_strict_number(const Value& v);
 
-/// Same as `matrix_strict_number` but with a `(row, col)` context for
-/// future structured-log enrichment. The semantics are identical; the
-/// row / col arguments are accepted today so call sites in `regression`
-/// / `forecast` families can be migrated without churn when richer
-/// diagnostics land.
-Expected<double, ErrorCode> matrix_strict_number_cell(const Value& v, std::uint32_t row, std::uint32_t col);
-
 // ---------------------------------------------------------------------------
 // Configurable numeric collection
 // ---------------------------------------------------------------------------
@@ -242,9 +235,9 @@ struct NumericCollectPolicy {
 /// Flattens `v` into a vector of `double` according to `policy`.
 ///
 /// Iteration: `Array` cells are visited in row-major order; any other
-/// kind is treated as a single-cell input. `Blank` cells are always
-/// dropped (counting blanks as zero is `collect_a`'s job, not this
-/// helper's). `Ref` and `Lambda` are always dropped — callers that
+/// kind is treated as a single-cell input. `Blank` cells are dropped
+/// unless `policy.blank_as_zero` is set, in which case they contribute
+/// `0.0`. Nested `Array`, `Ref` and `Lambda` are always dropped — callers that
 /// care about them must resolve refs before calling in.
 ///
 /// Returns the propagated `ErrorCode` if `policy.error_on_error_cell`

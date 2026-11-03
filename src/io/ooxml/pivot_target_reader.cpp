@@ -12,6 +12,7 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -23,27 +24,11 @@ Expected<std::string, Error> load_pivot_cache_records_target(const ZipReader& zi
     return std::string{};
   }
   const std::string base_dir = dir_of(definition_path);
-  std::string records_target;
-  auto visit_status = visit_relationship_nodes(zip, rels_path, "pivotCache rels",
-                                               [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-                                                 const std::string_view type = rel.attribute("Type").value();
-                                                 const std::string_view target = rel.attribute("Target").value();
-                                                 if (target.empty()) {
-                                                   return Expected<void, Error>::Ok();
-                                                 }
-                                                 if (type == kRelPivotCacheRecords) {
-                                                   auto resolved = resolve_relative_path(base_dir, target);
-                                                   if (!resolved) {
-                                                     return std::move(resolved.error());
-                                                   }
-                                                   records_target = std::move(resolved).value();
-                                                 }
-                                                 return Expected<void, Error>::Ok();
-                                               });
-  if (!visit_status) {
-    return std::move(visit_status.error());
-  }
-  return records_target;
+  pugi::xml_document doc;
+  RETURN_IF_ERROR(load_relationship_document(zip, rels_path, "pivotCache rels", "ooxml_reader", &doc));
+  ASSIGN_OR_RETURN(auto targets, collect_relationship_targets(doc, base_dir, kRelPivotCacheRecords));
+  // The last records relationship wins when a malformed definition declares several.
+  return targets.empty() ? std::string{} : std::move(targets.back());
 }
 
 }  // namespace ooxml

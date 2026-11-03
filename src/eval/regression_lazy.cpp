@@ -350,17 +350,7 @@ Value eval_forecast_linear_lazy(const parser::AstNode& call, Arena& arena, const
   if (!x_val.is_array()) {
     return at(x_val);
   }
-  const ArrayValue& in = *x_val.as_array();
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t count = static_cast<std::size_t>(in.rows) * in.cols;
-  for (std::size_t i = 0; i < count; ++i) {
-    cells[i] = at(in.cells[i]);
-  }
-  return count == 1U ? cells[0] : Value::array(out);
+  return map_array_with(*x_val.as_array(), at, arena);
 }
 
 Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -386,10 +376,8 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // them, just like Blank / Bool / Text cells (verified against
   // FREQUENCY({1;2;3}, {2;#N/A}) returning the {2;#N/A} bins reduced to
   // [2] with count<=2 in slot 0).
-  for (const Value& v : data_arr.cells) {
-    if (v.is_error()) {
-      return v;
-    }
+  if (const Value* error_cell = first_error(data_arr.cells)) {
+    return *error_cell;
   }
 
   // Distil bins_array into a flat numeric vector.

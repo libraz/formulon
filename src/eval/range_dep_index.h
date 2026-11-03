@@ -208,7 +208,8 @@ class RangeDepIndex {
     return (static_cast<std::uint64_t>(sheet_id) << 32U) | (row / kBandRows);
   }
 
-  std::uint32_t intern_range(const CellRangeDependency& range);
+  /// Returns the id of `range`, registering it when absent (`is_new`).
+  AddResult intern_range(const CellRangeDependency& range);
   void release_range(std::uint32_t range_id);
 
   std::vector<RangeEntry> ranges_;

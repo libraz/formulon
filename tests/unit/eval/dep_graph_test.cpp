@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <unordered_set>
 #include <vector>
 
@@ -31,14 +32,9 @@ std::vector<CellNodeId> Sorted(std::vector<CellNodeId> v) {
   return v;
 }
 
-// Position of `id` inside `order`, or -1 if not present.
-int IndexOf(const std::vector<CellNodeId>& order, CellNodeId id) {
-  for (std::size_t i = 0; i < order.size(); ++i) {
-    if (order[i] == id) {
-      return static_cast<int>(i);
-    }
-  }
-  return -1;
+// SCCs of the subgraph induced by `nodes`.
+std::vector<std::vector<CellNodeId>> Scc(const DepGraph& g, std::initializer_list<CellNodeId> nodes) {
+  return g.tarjan_scc_subset(std::unordered_set<CellNodeId, CellNodeIdHash>(nodes));
 }
 
 // Index of the SCC containing `id` in `sccs`, or -1.
@@ -56,8 +52,7 @@ TEST(DepGraph, EmptyGraph) {
   DepGraph g;
   EXPECT_TRUE(g.empty());
   EXPECT_EQ(g.node_count(), 0u);
-  EXPECT_TRUE(g.tarjan_scc().empty());
-  EXPECT_TRUE(g.topological_order().empty());
+  EXPECT_TRUE(Scc(g, {}).empty());
   EXPECT_TRUE(g.dependents_of(Make(0, 0, 0)).empty());
   EXPECT_TRUE(g.dependencies_of(Make(0, 0, 0)).empty());
 }
@@ -459,7 +454,7 @@ TEST(DepGraph, TarjanLinearChainReverseTopological) {
   g.add_dependency(a, b);
   g.add_dependency(b, c);
 
-  auto sccs = g.tarjan_scc();
+  auto sccs = Scc(g, {a, b, c});
   ASSERT_EQ(sccs.size(), 3u);
   for (const auto& comp : sccs) {
     EXPECT_EQ(comp.size(), 1u);
@@ -530,8 +525,10 @@ TEST(DepGraph, TarjanOrderIgnoresEdgeInsertionOrder) {
     DepGraph g;
     g.add_dependency(a1, c1_first ? c1 : a2);
     g.add_dependency(a1, c1_first ? a2 : c1);
-    const auto order = g.topological_order();
-    EXPECT_EQ(order, (std::vector<CellNodeId>{c1, a2, a1})) << c1_first;
+    const auto sccs = Scc(g, {a1, c1, a2});
+    ASSERT_EQ(sccs.size(), 3u);
+    EXPECT_EQ((std::vector<CellNodeId>{sccs[0][0], sccs[1][0], sccs[2][0]}), (std::vector<CellNodeId>{c1, a2, a1}))
+        << c1_first;
   }
 }
 
@@ -540,7 +537,7 @@ TEST(DepGraph, TarjanSelfLoopIsSingleton) {
   CellNodeId a = Make(0, 0, 0);
   g.add_dependency(a, a);
 
-  auto sccs = g.tarjan_scc();
+  auto sccs = Scc(g, {a});
   ASSERT_EQ(sccs.size(), 1u);
   ASSERT_EQ(sccs[0].size(), 1u);
   EXPECT_EQ(sccs[0][0], a);
@@ -558,7 +555,7 @@ TEST(DepGraph, TarjanSimpleCycleTwoNodes) {
   g.add_dependency(a, b);
   g.add_dependency(b, a);
 
-  auto sccs = g.tarjan_scc();
+  auto sccs = Scc(g, {a, b});
   ASSERT_EQ(sccs.size(), 1u);
   EXPECT_EQ(Sorted(sccs[0]), Sorted({a, b}));
 }
@@ -576,7 +573,7 @@ TEST(DepGraph, TarjanLargerCycle) {
   g.add_dependency(c, a);
   g.add_dependency(d, a);
 
-  auto sccs = g.tarjan_scc();
+  auto sccs = Scc(g, {a, b, c, d});
   ASSERT_EQ(sccs.size(), 2u);
 
   // Find the cycle SCC (3 members) and the singleton.
@@ -615,26 +612,11 @@ TEST(DepGraph, TarjanTwoIndependentSccs) {
   g.add_dependency(c, d);
   g.add_dependency(d, c);
 
-  auto sccs = g.tarjan_scc();
+  auto sccs = Scc(g, {a, b, c, d});
   ASSERT_EQ(sccs.size(), 2u);
   for (const auto& comp : sccs) {
     EXPECT_EQ(comp.size(), 2u);
   }
-}
-
-TEST(DepGraph, TopologicalOrderRespectsDependencies) {
-  // a -> b -> c. In topo order, c (leaf) appears before b before a.
-  DepGraph g;
-  CellNodeId a = Make(0, 0, 0);
-  CellNodeId b = Make(0, 0, 1);
-  CellNodeId c = Make(0, 0, 2);
-  g.add_dependency(a, b);
-  g.add_dependency(b, c);
-
-  auto order = g.topological_order();
-  ASSERT_EQ(order.size(), 3u);
-  EXPECT_LT(IndexOf(order, c), IndexOf(order, b));
-  EXPECT_LT(IndexOf(order, b), IndexOf(order, a));
 }
 
 TEST(DepGraph, FanoutDependentsAllPresent) {

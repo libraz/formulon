@@ -230,9 +230,7 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
       }
       const std::vector<std::uint8_t>& rels_bytes = rels_or.value();
       pugi::xml_document rels_doc;
-      pugi::xml_parse_result rels_parse =
-          rels_doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-      if (rels_parse) {
+      if (load_xml_buffer(rels_doc, rels_bytes, "ooxml_reader", body_rels_path)) {
         pugi::xml_node rels_root = relationship_root(rels_doc);
         if (rels_root) {
           // Pick the relationship whose Id matches the body's inner

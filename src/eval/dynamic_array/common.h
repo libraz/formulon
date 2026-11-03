@@ -23,6 +23,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/collation.h"
+#include "eval/scalar_args.h"
 #include "excel_profile.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -53,23 +54,11 @@ const ArrayValue* resolve_array_prelude(const parser::AstNode& call, std::uint32
                                         bool reject_empty, Arena& arena, const FunctionRegistry& registry,
                                         const EvalContext& ctx, Value& error_out);
 
-/// Evaluate `node` and coerce it to a number. On error or coercion failure
-/// writes the caller-visible error to `error_out` and returns `false`.
-bool eval_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, double& out, Value& error_out);
-
-/// Evaluate `node` and coerce it through `coerce_to_bool`. On error or
-/// coercion failure writes the caller-visible error to `error_out` and
-/// returns `false`.
-bool eval_bool_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   bool& out, Value& error_out);
-
-/// Evaluate `node`, coerce to a finite number, and truncate toward zero.
-/// On error or coercion failure writes the caller-visible error to
-/// `error_out` and returns `false`. Shared by every helper that takes a
-/// numeric scalar argument (counts, indices, ignore masks, etc.).
-bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                               const EvalContext& ctx, double& out, Value& error_out);
+/// The scalar argument readers live in `eval/scalar_args.h`; re-exported so
+/// the family's call sites keep reading in terms of their own namespace.
+using formulon::eval::eval_bool_arg;
+using formulon::eval::eval_number_arg;
+using formulon::eval::eval_truncated_number_arg;
 
 /// Resolves an optional `pad_with` argument into `pad`. A null `node` (argument
 /// absent) pads with #N/A; an array pad contributes its first cell; an empty
@@ -103,9 +92,21 @@ ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena
 /// when the lane holds an Array / Ref / Lambda cell, which equals no lane.
 bool unique_lane_key(const ArrayValue& arr, std::uint32_t lane, bool by_col, std::string* out);
 
+/// True when `node` is a 1-D vector in either orientation. A static
+/// reference is judged by its declared shape, not by the walked `rows` x
+/// `cols`: a multi-column whole-row reference populated in one row walks as a
+/// 1-row array yet is 2-D.
+bool is_declared_vector(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols);
+
 /// Collation key of a text cell (empty for any other kind); compute once per
 /// cell and pass to `sort_lane_less_keyed`.
 std::string sort_text_key(const Value& v);
+
+/// Three-way ascending order of two cells: `Number < Text < Bool < Error <
+/// Blank`, text by the current profile's dynamic-array collation (via the
+/// precomputed keys when both are non-null), `FALSE < TRUE`, errors by code.
+/// Cells of a kind with no in-kind order compare equal.
+int cmp_value_keyed(const Value& a, const Value& b, const std::string* key_a, const std::string* key_b);
 
 /// Lane-level less for SORT / SORTBY with precomputed `sort_text_key`
 /// results; a null key falls back to collating the text directly. Blank keys
@@ -116,6 +117,11 @@ std::string sort_text_key(const Value& v);
 /// ordering.
 bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
                           const std::string* text_key_b, bool descending);
+
+/// Three-way form of `sort_lane_less_keyed`: negative when `key_a` sorts
+/// first, positive when `key_b` does, zero when they tie.
+int sort_lane_compare_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
+                            const std::string* text_key_b, bool descending);
 
 /// Dynamic-array text order of the current eval profile. Returns `true` iff
 /// `a` sorts strictly before `b`.

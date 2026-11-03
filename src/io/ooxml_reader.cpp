@@ -14,9 +14,8 @@
 // SST is loaded ahead of the per-sheet read loop, each sheet queues its
 // `(row, col, sst_index)` tuples in a per-sheet `SheetReadContext`, and
 // a final resolution pass replaces the placeholder `Text("")` values
-// with views into the SST. Styles (`xl/styles.xml`) is parsed for
-// validation only — the runtime style model lands when the formatter
-// pipeline begins consuming it.
+// with views into the SST. Styles (`xl/styles.xml`) are parsed into the
+// workbook's style table.
 
 #include "io/ooxml_reader.h"
 
@@ -40,6 +39,7 @@
 #include "io/defined_names_internal.h"
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml/external_link_reader.h"
+#include "io/ooxml/package_rels_reader.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/pivot_target_reader.h"
 #include "io/ooxml/relationship_xml.h"
@@ -77,43 +77,6 @@
 namespace formulon {
 namespace io {
 namespace {
-
-Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const std::vector<std::uint8_t>& bytes) {
-  pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, bytes, "ooxml_reader", "package-level rels"));
-  const pugi::xml_node root = ooxml::relationship_root(doc);
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
-                      "context=ooxml_reader part=_rels/.rels");
-  }
-  std::vector<UnknownRelationship> result;
-  for (const pugi::xml_node rel : root.children()) {
-    if (!ooxml::is_relationship_element(rel, root)) {
-      continue;
-    }
-    const std::string_view type(rel.attribute("Type").value());
-    if (type == kRelOfficeDocument || type == kRelCoreProperties || type == kRelExtendedProperties ||
-        type == kRelCustomProperties) {
-      continue;
-    }
-    const bool external = std::string_view(rel.attribute("TargetMode").value()) == "External";
-    std::string target(rel.attribute("Target").value());
-    if (type.empty() || target.empty()) {
-      continue;
-    }
-    if (!external) {
-      if (target.front() == '/')
-        target.erase(0, 1);
-      if (!ooxml::is_safe_part_name(target)) {
-        return make_error(FormulonErrorCode::kIoZipSlip, "package relationship target escapes package root",
-                          "context=ooxml_reader part=_rels/.rels target=" + target);
-      }
-    }
-    result.push_back(
-        UnknownRelationship{std::string(rel.attribute("Id").value()), std::string(type), std::move(target), external});
-  }
-  return result;
-}
 
 // Content type for the binary printer-settings part; the orchestrator
 // stamps it onto the passthrough record when it captures a sheet's
@@ -310,10 +273,8 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
     break;
   }
 
-  // 4b. Styles — read for validation only at this slice. The full
-  // numFmt/font/fill runtime model lands later when the formatter
-  // pipeline begins consuming it. Mark consumed regardless of whether
-  // the rel was present, mirroring the SST treatment above.
+  // 4b. Styles. Mark consumed regardless of whether the rel was present,
+  // mirroring the SST treatment above.
   if (!wb_rels.styles_path.empty()) {
     ASSIGN_OR_RETURN(
         auto styles_bytes,
@@ -705,9 +666,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
                       "context=ooxml_reader");
   }
   ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
-  ASSIGN_OR_RETURN(auto wb_path, ooxml::resolve_office_document_path(root_rels));
-  const std::string workbook_path = wb_path;
-  ASSIGN_OR_RETURN(auto package_rels, ReadUnknownPackageRels(root_rels));
+  ASSIGN_OR_RETURN(const std::string workbook_path, ooxml::resolve_office_document_path(root_rels));
+  ASSIGN_OR_RETURN(auto package_rels, ooxml::read_unknown_package_rels(root_rels, "ooxml_reader"));
 
   // 3. xl/_rels/workbook.xml.rels — load and validate. We need both the
   // sheet rId -> part-path map (for the per-sheet read loop below) and
@@ -858,7 +818,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     // shell with <sheetData> stripped so the streamed cell tree is never
     // materialised — recovering conditional formats, view / layout,
     // merges, hyperlinks, data validations, protection, and print
-    // settings that the SAX path used to drop. Row overrides
+    // settings the streamed cell tree does not carry. Row overrides
     // (<row ht=/hidden=>) live inside <sheetData> and stay DOM-only.
     //
     // Both parses below are in place: the DOM aliases the buffer it was
@@ -965,8 +925,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // implicit-intersection formula) keeps its legacy meaning.
   {
     std::uint32_t xldapr = 0U;
-    if (auto metadata = zip.read_entry("xl/metadata.xml"); metadata) {
-      xldapr = xldapr_cell_metadata_index(metadata.value());
+    if (zip.has_entry("xl/metadata.xml")) {
+      if (auto metadata = zip.read_entry("xl/metadata.xml"); metadata) {
+        xldapr = xldapr_cell_metadata_index(metadata.value());
+      }
     }
     for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
       std::unordered_set<std::uint64_t> marked;

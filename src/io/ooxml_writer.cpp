@@ -67,6 +67,7 @@
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -139,7 +140,9 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   std::string out;
   out.reserve(256 + t.columns.size() * 64);
   out.append(kXmlDecl);
-  out.append("<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"");
+  out.append("<table");
+  append_xml_ns_decl(out, "", kNsSpreadsheetMl);
+  out.append(" id=\"");
   out.append(std::to_string(numeric_id));
   out.append("\" name=\"");
   AppendXmlAttrEscaped(out, t.name);
@@ -248,16 +251,20 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
 
 /// `xl/metadata.xml` carrying only the XLDAPR entry, byte for byte as Excel
 /// 365 writes it for a workbook whose metadata is dynamic arrays alone.
-constexpr std::string_view kDynamicArrayMetadataXml =
-    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
-    "<metadata xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-    "xmlns:xda=\"http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray\"><metadataTypes count=\"1\">"
-    "<metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" pasteAll=\"1\" pasteValues=\"1\" "
-    "merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" clearComments=\"1\" assign=\"1\" "
-    "coerce=\"1\" cellMeta=\"1\"/></metadataTypes><futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst>"
-    "<ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\"><xda:dynamicArrayProperties fDynamic=\"1\" "
-    "fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata><cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/>"
-    "</bk></cellMetadata></metadata>";
+std::string BuildDynamicArrayMetadataXml() {
+  std::string out("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n<metadata");
+  append_xml_ns_decl(out, "", kNsSpreadsheetMl);
+  append_xml_ns_decl(out, "xda", kNsDynamicArray);
+  out.append(
+      "><metadataTypes count=\"1\">"
+      "<metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" pasteAll=\"1\" pasteValues=\"1\" "
+      "merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" clearComments=\"1\" assign=\"1\" "
+      "coerce=\"1\" cellMeta=\"1\"/></metadataTypes><futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst>"
+      "<ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\"><xda:dynamicArrayProperties fDynamic=\"1\" "
+      "fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata><cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/>"
+      "</bk></cellMetadata></metadata>");
+  return out;
+}
 
 /// Finds the 1-based `<cellMetadata>/<bk>` index a saved dynamic-array
 /// spill anchor's `<c cm="N">` must name to link it to a retained
@@ -273,7 +280,7 @@ constexpr std::string_view kDynamicArrayMetadataXml =
 /// data, linked data types, ...).
 std::uint32_t FindDynamicArrayCellMetadataIndex(const std::vector<PassthroughPart>& passthrough_parts) {
   for (const PassthroughPart& part : passthrough_parts) {
-    if (part.path == "xl/metadata.xml") {
+    if (part.path == kMetadataPartPath) {
       return xldapr_cell_metadata_index(part.bytes);
     }
   }
@@ -314,7 +321,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // part without one leaves `cm=` off, as does a workbook with no such
   // formula.
   std::uint32_t dynamic_array_cm_index = FindDynamicArrayCellMetadataIndex(wb.passthrough_parts());
-  const bool retained_metadata = source_index.find("xl/metadata.xml") != nullptr;
+  const bool retained_metadata = source_index.find(kMetadataPartPath) != nullptr;
   if (!retained_metadata && has_dynamic_array_formula(wb)) {
     plan.generated_dynamic_metadata = true;
     dynamic_array_cm_index = 1U;
@@ -335,40 +342,20 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // that slips past it).
   std::unordered_set<std::string> written_paths;
 
-  // 1. [Content_Types].xml
-  {
-    auto result = AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(wb, plan), &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
-  }
+  // [Content_Types].xml
+  RETURN_IF_ERROR(AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(wb, plan), &written_paths));
 
-  // 2. _rels/.rels
-  {
-    auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan, &diagnostics), &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
-  }
+  // _rels/.rels
+  RETURN_IF_ERROR(AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan, &diagnostics), &written_paths));
 
-  // 3. xl/workbook.xml
-  {
-    auto result = AddPart(writer.get(), "xl/workbook.xml", BuildWorkbookXml(wb, plan), &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
-  }
+  // xl/workbook.xml
+  RETURN_IF_ERROR(AddPart(writer.get(), kWorkbookPartPath, BuildWorkbookXml(wb, plan), &written_paths));
 
-  // 4. xl/_rels/workbook.xml.rels
-  {
-    auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels",
-                          BuildWorkbookRels(sheet_count, plan, wb, &diagnostics), &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
-  }
+  // xl/_rels/workbook.xml.rels
+  RETURN_IF_ERROR(AddPart(writer.get(), "xl/_rels/workbook.xml.rels",
+                          BuildWorkbookRels(sheet_count, plan, wb, &diagnostics), &written_paths));
 
-  // 5. Per-sheet: worksheet, sheet rels (when the sheet's rels file
+  // Per-sheet: worksheet, sheet rels (when the sheet's rels file
   // declares at least one relationship).
   for (std::size_t i = 0; i < sheet_count; ++i) {
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
@@ -379,19 +366,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     // worksheet body's `r:id` references and the rels file this writer
     // emits always agree on which id names which relationship.
     const SheetRelsResult& rels_result = plan.sheet_rels[i];
-    std::string part_path("xl/worksheets/sheet");
-    part_path.append(std::to_string(i + 1));
-    part_path.append(".xml");
-    auto wresult =
-        AddPart(writer.get(), part_path,
+    RETURN_IF_ERROR(
+        AddPart(writer.get(), SheetPartPath(i),
                 BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
                                   rels_result.printer_settings_rid, rels_result.drawing_rid,
                                   rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs.size(),
                                   dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer),
-                &written_paths);
-    if (!wresult) {
-      return std::move(wresult.error());
-    }
+                &written_paths));
     // An empty rels file is invalid OOXML; Excel repairs the package and
     // drops it. `relationship_count` is the single predicate for whether
     // this sheet's rels part is worth writing at all — for example, a
@@ -399,49 +380,29 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     // the inline `location=` attribute) declares zero relationships and
     // gets no rels part.
     if (rels_result.relationship_count > 0) {
-      std::string rels_path("xl/worksheets/_rels/sheet");
-      rels_path.append(std::to_string(i + 1));
-      rels_path.append(".xml.rels");
-      auto rels_add = AddPart(writer.get(), rels_path, rels_result.xml, &written_paths);
-      if (!rels_add) {
-        return std::move(rels_add.error());
-      }
+      RETURN_IF_ERROR(AddPart(writer.get(), SheetRelsPartPath(i), rels_result.xml, &written_paths));
     }
   }
 
-  // 6. xl/styles.xml
-  {
-    auto result = AddPart(writer.get(), "xl/styles.xml", write_styles(wb.styles()), &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
-  }
+  // xl/styles.xml
+  RETURN_IF_ERROR(AddPart(writer.get(), kStylesPartPath, write_styles(wb.styles()), &written_paths));
 
-  // 6.4. xl/metadata.xml — the dynamic-array metadata, as Excel 365 writes it.
+  // xl/metadata.xml — the dynamic-array metadata, as Excel 365 writes it.
   if (plan.generated_dynamic_metadata) {
-    auto result = AddPart(writer.get(), "xl/metadata.xml", std::string(kDynamicArrayMetadataXml), &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
+    RETURN_IF_ERROR(AddPart(writer.get(), kMetadataPartPath, BuildDynamicArrayMetadataXml(), &written_paths));
   }
 
-  // 6.5. xl/sharedStrings.xml — emitted only when literal text cells are
+  // xl/sharedStrings.xml — emitted only when literal text cells are
   // present. The matching relationship and content-type Override are
   // generated from the same plan flag above.
   if (!shared_strings.empty()) {
-    auto result = AddPart(writer.get(), "xl/sharedStrings.xml", WriteSharedStrings(shared_strings), &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
+    RETURN_IF_ERROR(AddPart(writer.get(), kSharedStringsPartPath, WriteSharedStrings(shared_strings), &written_paths));
   }
 
-  // 7. xl/tables/tableN.xml — one per planned table.
+  // xl/tables/tableN.xml — one per planned table.
   for (const auto& per_sheet : plan.tables_by_sheet) {
     for (const EmissionPlan::PerSheetTable& t : per_sheet) {
-      auto result = AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id), &written_paths);
-      if (!result) {
-        return std::move(result.error());
-      }
+      RETURN_IF_ERROR(AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id), &written_paths));
     }
   }
 
@@ -471,41 +432,28 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     return it == cache_plans.end() ? nullptr : &it->second;
   };
 
-  // 8. Pivot caches — for each planned cache, emit the definition, the
+  // Pivot caches — for each planned cache, emit the definition, the
   // records, and the definition's own rels file (which points at the
   // matching records part). The records target stored on the rels file
   // is just the basename because both parts live in the same package
   // directory (`xl/pivotCache/`).
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
-    // A cache with no declared source used to be written as the minimal
-    // `<cacheSource type="worksheet"/>`, and Excel offers to repair every
-    // package containing one. There is no form of that element Excel
-    // accepts without a `<worksheetSource>`: a declared range is enough
-    // even when the sheet holds no data, because the records carry the
-    // values. So the fallback described a state that cannot be saved, and
-    // failing here is the only way the host learns of it -- the package
-    // is otherwise well-formed and schema-valid, and nothing short of
-    // opening it in Excel reports the problem.
+    // A cache with no declared source cannot be saved: Excel offers to
+    // repair any package whose `<cacheSource type="worksheet"/>` lacks a
+    // `<worksheetSource>`. A declared range is enough even when the sheet
+    // holds no data, because the records carry the values. The package would
+    // otherwise be well-formed and schema-valid, so failing here is the only
+    // way the host learns of it.
     if (!c.cache->worksheet_source().present) {
       std::string context("context=ooxml_writer cache_id=");
       context.append(std::to_string(c.cache_id));
       return make_error(FormulonErrorCode::kIoWriteFailed, "pivot cache has no worksheet source; set one before saving",
                         std::move(context));
     }
-    {
-      auto result = AddPart(writer.get(), c.definition_path,
-                            write_pivot_cache_definition(*c.cache, plan_for(c.cache_id)), &written_paths);
-      if (!result) {
-        return std::move(result.error());
-      }
-    }
-    {
-      auto result = AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache, plan_for(c.cache_id)),
-                            &written_paths);
-      if (!result) {
-        return std::move(result.error());
-      }
-    }
+    RETURN_IF_ERROR(AddPart(writer.get(), c.definition_path,
+                            write_pivot_cache_definition(*c.cache, plan_for(c.cache_id)), &written_paths));
+    RETURN_IF_ERROR(AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache, plan_for(c.cache_id)),
+                            &written_paths));
     {
       // Records target is relative to the definition's directory, so
       // pass the basename of `records_path` (everything after the last
@@ -515,41 +463,32 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       const std::string_view records_filename = slash == std::string::npos
                                                     ? std::string_view(c.records_path)
                                                     : std::string_view(c.records_path).substr(slash + 1);
-      auto result = AddPart(writer.get(), c.definition_rels_path,
-                            BuildSingleRelationshipRels(kRelPivotCacheRecords, records_filename), &written_paths);
-      if (!result) {
-        return std::move(result.error());
-      }
+      RETURN_IF_ERROR(AddPart(writer.get(), c.definition_rels_path,
+                              BuildSingleRelationshipRels(kRelPivotCacheRecords, records_filename), &written_paths));
     }
   }
 
-  // 9. Pivot tables — one per planned pivot-table entry, package-wide.
-  // Sheet-rels emission in step 5 already wired a rId to each part.
+  // Pivot tables — one per planned pivot-table entry, package-wide.
+  // The per-sheet rels already wired a rId to each part.
   for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
     for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
-      auto result = AddPart(
+      RETURN_IF_ERROR(AddPart(
           writer.get(), t.path,
           write_pivot_table_definition(*t.table, ProjectPivotSpan(wb, *t.table), plan_for(t.table->pivot_cache_id())),
-          &written_paths);
-      if (!result) {
-        return std::move(result.error());
-      }
+          &written_paths));
       // The table's own rels file names the cache definition it draws
       // from. A table whose cache id resolved to no planned cache gets
       // no rels part, so the package never carries a dangling target.
       if (!t.cache_definition_target.empty()) {
-        auto rels_result =
-            AddPart(writer.get(), t.rels_path,
-                    BuildSingleRelationshipRels(kRelPivotCacheDefinition, t.cache_definition_target), &written_paths);
-        if (!rels_result) {
-          return std::move(rels_result.error());
-        }
+        RETURN_IF_ERROR(AddPart(writer.get(), t.rels_path,
+                                BuildSingleRelationshipRels(kRelPivotCacheDefinition, t.cache_definition_target),
+                                &written_paths));
       }
     }
   }
 
-  // 9.25. External links — the generated body of each link without a
-  // current loaded one (a kept body is a passthrough part, step 10), and
+  // External links — the generated body of each link without a
+  // current loaded one (a kept body is a passthrough part), and
   // every written link's rels file pointing at the remote workbook.
   for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
     // A rels part describes the part it is named after, so a link whose
@@ -569,22 +508,16 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                         "context=write_ooxml part=" + e.part_path);
     }
     if (!e.generated_body.empty()) {
-      auto result = AddPart(writer.get(), e.part_path, e.generated_body, &written_paths);
-      if (!result) {
-        return std::move(result.error());
-      }
+      RETURN_IF_ERROR(AddPart(writer.get(), e.part_path, e.generated_body, &written_paths));
     }
     std::string rels_xml = BuildExternalLinkRels(*e.record);
     if (rels_xml.empty()) {
       continue;
     }
-    auto result = AddPart(writer.get(), rels_path, rels_xml, &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
+    RETURN_IF_ERROR(AddPart(writer.get(), rels_path, rels_xml, &written_paths));
   }
 
-  // 9.5. Comments + VML drawings — one pair per sheet that has at
+  // Comments + VML drawings — one pair per sheet that has at
   // least one note or thread (a VML alone for a drawing of form controls
   // only), plus the sheet's threaded comments. The
   // comments part carries the notes and one legacy stub per thread. The
@@ -598,44 +531,29 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
     const Sheet& sheet = wb.sheet(i);
     if (!cplan.comments_path.empty()) {
-      auto cresult =
-          AddPart(writer.get(), cplan.comments_path,
-                  write_comments(legacy_comments_with_stubs(sheet), sheet.comment_authors()), &written_paths);
-      if (!cresult) {
-        return std::move(cresult.error());
-      }
+      RETURN_IF_ERROR(AddPart(writer.get(), cplan.comments_path,
+                              write_comments(legacy_comments_with_stubs(sheet), sheet.comment_authors()),
+                              &written_paths));
     }
     if (cplan.vml_source != nullptr) {
-      auto vresult = AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes, &written_paths);
-      if (!vresult) {
-        return std::move(vresult.error());
-      }
+      RETURN_IF_ERROR(AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes, &written_paths));
     } else {
-      auto vresult = AddPart(writer.get(), cplan.vml_path,
-                             write_vml_drawing(sheet.comment_shapes(), cplan.numeric_id, sheet.comment_vml_extra_xml()),
-                             &written_paths);
-      if (!vresult) {
-        return std::move(vresult.error());
-      }
+      RETURN_IF_ERROR(AddPart(
+          writer.get(), cplan.vml_path,
+          write_vml_drawing(sheet.comment_shapes(), cplan.numeric_id, sheet.comment_vml_extra_xml()), &written_paths));
     }
     if (!cplan.threaded_path.empty()) {
-      auto tresult = AddPart(writer.get(), cplan.threaded_path, write_threaded_comments(sheet.threaded_comments()),
-                             &written_paths);
-      if (!tresult) {
-        return std::move(tresult.error());
-      }
+      RETURN_IF_ERROR(AddPart(writer.get(), cplan.threaded_path, write_threaded_comments(sheet.threaded_comments()),
+                              &written_paths));
     }
   }
   if (plan.generated_persons) {
-    auto presult = AddPart(writer.get(), kPersonsPartPath, write_persons(wb.persons()), &written_paths);
-    if (!presult) {
-      return std::move(presult.error());
-    }
+    RETURN_IF_ERROR(AddPart(writer.get(), kPersonsPartPath, write_persons(wb.persons()), &written_paths));
   }
 
-  // 10. Passthrough parts — bytes from the original archive, written
-  // verbatim. Their `<Override>` registration was already emitted in
-  // step 1 (when content_type was non-empty).
+  // Passthrough parts — bytes from the original archive, written
+  // verbatim. Their `<Override>` registration was already emitted with
+  // [Content_Types].xml (when content_type was non-empty).
   // Chart caches are refreshed into replacement bytes; the model is untouched.
   auto refreshed_or = refreshed_chart_parts(wb);
   if (!refreshed_or) {
@@ -652,10 +570,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
     const PassthroughPart* replacement = refreshed_index.find(part->path);
     const auto& bytes = replacement != nullptr ? replacement->bytes : part->bytes;
-    auto result = AddPartBytes(writer.get(), part->path, bytes, &written_paths);
-    if (!result) {
-      return std::move(result.error());
-    }
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), part->path, bytes, &written_paths));
   }
 
   auto bytes_or = FinalizeArchive(writer, "context=write_ooxml");

@@ -26,18 +26,9 @@ constexpr const char* kDefaultThemePath = "xl/theme/theme1.xml";
 constexpr std::array<const char*, kThemeColorCount> kSchemeNames = {
     "dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"};
 
-/// Local part of a possibly prefixed element name.
-std::string_view local_name(const char* qualified) {
-  std::string_view name(qualified);
-  const std::size_t colon = name.find(':');
-  return colon == std::string_view::npos ? name : name.substr(colon + 1U);
-}
-
 /// Namespace prefix including the trailing colon, or empty.
 std::string prefix_of(const char* qualified) {
-  std::string_view name(qualified);
-  const std::size_t colon = name.find(':');
-  return colon == std::string_view::npos ? std::string() : std::string(name.substr(0U, colon + 1U));
+  return std::string(qname_prefix_colon(qualified));
 }
 
 pugi::xml_node find_child(const pugi::xml_node& parent, std::string_view local) {

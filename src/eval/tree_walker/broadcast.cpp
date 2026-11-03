@@ -105,37 +105,59 @@ Value apply_binop_per_cell(parser::BinOp op, const Value& lhs, const Value& rhs,
   return Value::error(ErrorCode::Value);
 }
 
+namespace {
+
+// Excel 365 broadcast shape: each axis extends to the larger operand's size.
+// A size-1 axis broadcasts; a size-mismatch on a non-1 axis pads the shortfall
+// with #N/A (handled per-cell via `broadcast_cell`).
+void broadcast_shape(const ArrayView& a, const ArrayView& b, std::uint32_t* rows, std::uint32_t* cols) {
+  *rows = a.rows > b.rows ? a.rows : b.rows;
+  *cols = a.cols > b.cols ? a.cols : b.cols;
+}
+
+// Result cell at (r, c): the operator applied to the cells each operand
+// contributes, or #N/A where one operand cannot supply the position.
+Value broadcast_binop_cell(parser::BinOp op, const ArrayView& la, const ArrayView& ra, std::uint32_t r, std::uint32_t c,
+                           Arena& arena) {
+  const Value* lv = broadcast_cell(la, r, c);
+  const Value* rv = broadcast_cell(ra, r, c);
+  if (lv == nullptr || rv == nullptr) {
+    return Value::error(ErrorCode::NA);
+  }
+  return apply_binop_per_cell(op, *lv, *rv, arena);
+}
+
+// Builds a dense `rows` x `cols` array whose position (r, c) is `f(r, c)`;
+// `#NUM!` when the arena cannot hold it.
+template <class F>
+Value build_dense_result(std::uint32_t rows, std::uint32_t cols, Arena& arena, F&& f) {
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::size_t i = 0;
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c, ++i) {
+      buf[i] = f(r, c);
+    }
+  }
+  return Value::array(out);
+}
+
+}  // namespace
+
 Value broadcast_binop(parser::BinOp op, const Value& lhs, const Value& rhs, Arena& arena) {
   Value l_slot = Value::blank();
   Value r_slot = Value::blank();
   const ArrayView la = as_array_view(lhs, &l_slot);
   const ArrayView ra = as_array_view(rhs, &r_slot);
-
-  // Excel 365 broadcast shape: each axis extends to the larger operand's
-  // size. A size-1 axis broadcasts; a size-mismatch on a non-1 axis pads the
-  // shortfall with #N/A (handled per-cell via `broadcast_cell`).
-  const std::uint32_t out_rows = la.rows > ra.rows ? la.rows : ra.rows;
-  const std::uint32_t out_cols = la.cols > ra.cols ? la.cols : ra.cols;
-
-  Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::size_t i = 0;
-  for (std::uint32_t r = 0; r < out_rows; ++r) {
-    for (std::uint32_t c = 0; c < out_cols; ++c, ++i) {
-      const Value* lv = broadcast_cell(la, r, c);
-      const Value* rv = broadcast_cell(ra, r, c);
-      if (lv == nullptr || rv == nullptr) {
-        // One operand cannot supply this position: Excel fills #N/A.
-        buf[i] = Value::error(ErrorCode::NA);
-        continue;
-      }
-      buf[i] = apply_binop_per_cell(op, *lv, *rv, arena);
-    }
-  }
-  return Value::array(out);
+  std::uint32_t out_rows = 0;
+  std::uint32_t out_cols = 0;
+  broadcast_shape(la, ra, &out_rows, &out_cols);
+  return build_dense_result(out_rows, out_cols, arena, [&](std::uint32_t r, std::uint32_t c) {
+    return broadcast_binop_cell(op, la, ra, r, c, arena);
+  });
 }
 
 Value broadcast_unary(parser::UnaryOp op, const Value& operand, Arena& arena) {
@@ -171,18 +193,7 @@ Shaped build_tail_result(std::uint32_t rows, std::uint32_t cols, std::uint32_t h
                          F&& f) {
   const bool by_rows = axis == TailAxis::kRows;
   if (head >= (by_rows ? rows : cols)) {
-    Value* buf = nullptr;
-    ArrayValue* out = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
-    if (out == nullptr) {
-      return Shaped{Value::error(ErrorCode::Num), nullptr};
-    }
-    std::size_t i = 0;
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c, ++i) {
-        buf[i] = f(r, c);
-      }
-    }
-    return Shaped{Value::array(out), nullptr};
+    return Shaped{build_dense_result(rows, cols, arena, f), nullptr};
   }
   const std::uint64_t head_cells = static_cast<std::uint64_t>(head) * (by_rows ? cols : rows);
   const std::size_t tail_len = by_rows ? cols : rows;
@@ -231,8 +242,9 @@ Shaped broadcast_binop(parser::BinOp op, const Shaped& lhs, const Shaped& rhs, A
   Value r_slot = Value::blank();
   const ArrayView la = as_array_view(lhs, &l_slot);
   const ArrayView ra = as_array_view(rhs, &r_slot);
-  const std::uint32_t out_rows = la.rows > ra.rows ? la.rows : ra.rows;
-  const std::uint32_t out_cols = la.cols > ra.cols ? la.cols : ra.cols;
+  std::uint32_t out_rows = 0;
+  std::uint32_t out_cols = 0;
+  broadcast_shape(la, ra, &out_rows, &out_cols);
   const std::uint32_t out_ext = axis == TailAxis::kRows ? out_rows : out_cols;
 
   // Every position past the result head must read a constant from each
@@ -251,12 +263,7 @@ Shaped broadcast_binop(parser::BinOp op, const Shaped& lhs, const Shaped& rhs, A
     }
   }
   return build_tail_result(out_rows, out_cols, head, axis, arena, [&](std::uint32_t r, std::uint32_t c) {
-    const Value* lv = broadcast_cell(la, r, c);
-    const Value* rv = broadcast_cell(ra, r, c);
-    if (lv == nullptr || rv == nullptr) {
-      return Value::error(ErrorCode::NA);
-    }
-    return apply_binop_per_cell(op, *lv, *rv, arena);
+    return broadcast_binop_cell(op, la, ra, r, c, arena);
   });
 }
 

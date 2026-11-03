@@ -339,15 +339,6 @@ Expected<double, ErrorCode> matrix_strict_number(const Value& v) {
   return ErrorCode::Value;
 }
 
-Expected<double, ErrorCode> matrix_strict_number_cell(const Value& v, std::uint32_t /*row*/, std::uint32_t /*col*/) {
-  // Row / col are accepted today but unused: matrix-strict callers like
-  // LINEST / FORECAST.ETS have always reported a single propagating
-  // error for the whole matrix. The arguments are reserved so call
-  // sites that already track `(row, col)` for iteration can migrate
-  // without a churn round when structured-log enrichment lands.
-  return matrix_strict_number(v);
-}
-
 Expected<std::vector<double>, ErrorCode> collect_numerics(const Value& v, NumericCollectPolicy policy) {
   // An Array iterates its row-major cells; any other kind is treated as a
   // 1-element input.

@@ -22,12 +22,17 @@ void AppendCellRefForRef(std::string& out, std::uint32_t row, std::uint32_t col)
   out.append(std::to_string(row + 1));
 }
 
-void AppendRangeRef(std::string& out, const MergeRange& r) {
-  AppendCellRefForRef(out, r.first_row, r.first_col);
-  if (r.first_row != r.last_row || r.first_col != r.last_col) {
+void AppendRangeRef(std::string& out, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                    std::uint32_t last_col) {
+  AppendCellRefForRef(out, first_row, first_col);
+  if (first_row != last_row || first_col != last_col) {
     out.push_back(':');
-    AppendCellRefForRef(out, r.last_row, r.last_col);
+    AppendCellRefForRef(out, last_row, last_col);
   }
+}
+
+void AppendRangeRef(std::string& out, const MergeRange& r) {
+  AppendRangeRef(out, r.first_row, r.first_col, r.last_row, r.last_col);
 }
 
 }  // namespace io

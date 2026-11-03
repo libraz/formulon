@@ -28,6 +28,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 
 namespace formulon {
@@ -344,10 +345,7 @@ Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // One GCD / LCM argument: a boolean is #VALUE!; otherwise coerced and
 // truncated to a non-negative integer below 2^53, else #NUM!.
 Expected<std::uint64_t, ErrorCode> read_gcd_lcm_arg(const Value& v) {
-  if (v.is_boolean()) {
-    return ErrorCode::Value;
-  }
-  auto coerced = coerce_to_number(v);
+  auto coerced = builtins_detail::coerce_to_number_no_bool(v);
   if (!coerced) {
     return std::move(coerced.error());
   }
@@ -589,10 +587,19 @@ Value Roman(const Value* args, std::uint32_t arity, Arena& arena) {
 // BASE / DECIMAL
 // ---------------------------------------------------------------------------
 
+constexpr double kMinRadix = 2.0;
+constexpr double kMaxRadix = 36.0;
+// BASE accepts a minimum length up to this many digits.
+constexpr double kMaxBaseMinLength = 255.0;
+// DECIMAL accepts text of at most this many UTF-16 units.
+constexpr std::uint32_t kMaxDecimalTextUnits = 255U;
+// Largest integer BASE renders (2^53 - 1).
+constexpr double kMaxBaseNumber = static_cast<double>((static_cast<std::uint64_t>(1) << 53u) - 1);
+
 // BASE(num, radix, [min_len]) - non-negative integer -> string in `radix`
 // (2..36). Pads with leading '0' to `min_len`. num must fit in 2^53-1;
 // larger or negative num yields #NUM!. radix out of range -> #NUM!. min_len
-// must be in 0..255; out-of-range -> #VALUE!.
+// must be in 0..255; out-of-range -> #NUM!.
 Value Base(const Value* args, std::uint32_t arity, Arena& arena) {
   auto num_radix = builtins_detail::read_number_pair(args, 0, 1);
   if (!num_radix) {
@@ -606,13 +613,13 @@ Value Base(const Value* args, std::uint32_t arity, Arena& arena) {
       return Value::error(len_v.error());
     }
     const double lf = std::trunc(len_v.value());
-    if (lf < 0.0 || lf > 255.0) {
+    if (lf < 0.0 || lf > kMaxBaseMinLength) {
       return Value::error(ErrorCode::Num);
     }
     min_len = static_cast<int>(lf);
   }
   const double rf = std::trunc(pair.second);
-  if (rf < 2.0 || rf > 36.0) {
+  if (rf < kMinRadix || rf > kMaxRadix) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
@@ -620,8 +627,7 @@ Value Base(const Value* args, std::uint32_t arity, Arena& arena) {
   if (nf < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double kMax = static_cast<double>((static_cast<std::uint64_t>(1) << 53u) - 1);
-  if (nf > kMax) {
+  if (nf > kMaxBaseNumber) {
     return Value::error(ErrorCode::Num);
   }
   std::string digits = builtins_detail::to_radix_digits(static_cast<std::uint64_t>(nf), radix);
@@ -645,20 +651,13 @@ Value Decimal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(radix_v.error());
   }
   const double rf = std::trunc(radix_v.value());
-  if (rf < 2.0 || rf > 36.0) {
+  if (rf < kMinRadix || rf > kMaxRadix) {
     return Value::error(ErrorCode::Num);
   }
   const int radix = static_cast<int>(rf);
   // The text may hold at most 255 characters (UTF-16 code units).
   std::string_view s = text.value();
-  std::size_t units = 0;
-  for (const char ch : s) {
-    const auto b = static_cast<unsigned char>(ch);
-    if ((b & 0xC0U) != 0x80U) {
-      units += b >= 0xF0U ? 2U : 1U;
-    }
-  }
-  if (units > 255U) {
+  if (utf16_units_in(s) > kMaxDecimalTextUnits) {
     return Value::error(ErrorCode::Value);
   }
   // Leading blanks are skipped; a trailing blank is not a digit.

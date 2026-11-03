@@ -112,10 +112,8 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
 
   // Any error cell in the coefficient range propagates. Scan in
   // row-major order so the left-most error wins.
-  for (const Value& v : coefficients) {
-    if (v.is_error()) {
-      return v;
-    }
+  if (const Value* error_cell = first_error(coefficients)) {
+    return *error_cell;
   }
 
   // A directly supplied scalar coefficient (`=SERIESSUM(2, 0, 1, 5)`) is

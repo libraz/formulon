@@ -36,6 +36,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
 #include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -46,25 +47,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Resolves the array argument into a vector of raw `Value`s in row-major
-// order. Accepts every shape `resolve_range_arg` resolves — `Ref` /
-// `RangeOp` / `SpillRef` / `ArrayLiteral` and dynamic-array producers
-// such as `SEQUENCE`. A subtree that collapses to a bare scalar is
-// rejected with `#VALUE!` because a lone value is not a valid array
-// argument for RANK / PERCENTRANK; an error inside the subtree
-// propagates with its own code. Returns `true` on success; on failure
-// writes the Excel error into `*out_err` and returns `false`.
-bool resolve_array_cells(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
-  auto resolved = resolve_range_arg_no_scalar(arg_node, arena, registry, ctx, ErrorCode::Value);
-  if (!resolved) {
-    *out_err = Value::error(resolved.error());
-    return false;
-  }
-  *out_cells = std::move(resolved.value().cells);
-  return true;
-}
-
 // Collects the numeric cells of the resolved array in scan order,
 // propagating any error cell first (matching Excel's left-to-right
 // error precedence). Returns the error `Value` on the left of the
@@ -73,13 +55,11 @@ std::variant<Value, std::vector<double>> collect_rank_array(const parser::AstNod
                                                             const FunctionRegistry& registry, const EvalContext& ctx) {
   std::vector<Value> cells;
   Value err = Value::blank();
-  if (!resolve_array_cells(arg_node, arena, registry, ctx, &cells, &err)) {
+  if (!resolve_flat_cells(arg_node, arena, registry, ctx, &cells, &err)) {
     return err;
   }
-  for (const Value& v : cells) {
-    if (v.is_error()) {
-      return v;
-    }
+  if (const Value* error_cell = first_error(cells)) {
+    return *error_cell;
   }
   std::vector<double> nums;
   nums.reserve(cells.size());
@@ -102,15 +82,12 @@ std::variant<Value, std::vector<double>> collect_rank_array(const parser::AstNod
 /// Excel 365 ja-JP behaviour.
 std::variant<Value, double> coerce_scalar_number(const parser::AstNode& arg, Arena& arena,
                                                  const FunctionRegistry& registry, const EvalContext& ctx) {
-  const Value v = eval_node(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    return v;
+  double n = 0.0;
+  Value err = Value::blank();
+  if (!eval_number_arg(arg, arena, registry, ctx, n, err)) {
+    return err;
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return Value{Value::error(coerced.error())};
-  }
-  return coerced.value();
+  return n;
 }
 
 // Truncates `raw` to `significance` fractional digits (>= 1). Excel

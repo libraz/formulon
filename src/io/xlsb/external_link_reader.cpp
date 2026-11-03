@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "external_book.h"
+#include "io/xlsb/ptg.h"
 #include "io/xlsb/record.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
@@ -18,16 +19,11 @@ namespace io {
 namespace xlsb {
 namespace {
 
-/// Opcodes of the two reference Ptgs a supporting-workbook defined name
-/// stores. Both appear unclassed (no value/array class bit) in every
-/// sample.
-constexpr std::uint8_t kPtgRef3d = 0x3A;
-constexpr std::uint8_t kPtgArea3d = 0x3B;
-
-/// Byte length of each, inside an external link part: an opcode plus
-/// four (Ref3d) or six (Area3d) 16-bit fields. These are *not* the
-/// worksheet layouts of the same opcodes, which use 32-bit rows and a
-/// single `ixti`.
+/// Byte length of the two reference Ptgs a supporting-workbook defined name
+/// stores (`kPtgRef3d`, `kPtgArea3d`; both unclassed), inside an external
+/// link part: an opcode plus four (Ref3d) or six (Area3d) 16-bit fields.
+/// These are *not* the worksheet layouts of the same opcodes, which use
+/// 32-bit rows and a single `ixti`.
 constexpr std::size_t kExternRef3dBytes = 9U;
 constexpr std::size_t kExternArea3dBytes = 13U;
 

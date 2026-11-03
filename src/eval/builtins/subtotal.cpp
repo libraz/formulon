@@ -126,19 +126,8 @@ bool collect_numeric(const Value* args, std::uint32_t arity, std::vector<double>
     // SUBTOTAL aligns with the range rule for both, since direct scalar
     // arguments to SUBTOTAL are unusual outside synthetic tests; the
     // IronCalc oracle corpus exercises only range-sourced inputs.
-    continue;
   }
   return true;
-}
-
-// Converts an `Expected<double, ErrorCode>` from a shared
-// `numeric_aggregate_kernels::run_*` call into the `Value` shape SUBTOTAL's
-// dispatcher expects.
-Value lift_kernel_result(Expected<double, ErrorCode> result) {
-  if (!result) {
-    return Value::error(result.error());
-  }
-  return Value::number(result.value());
 }
 
 Value run_count(const Value* args, std::uint32_t arity) {
@@ -173,23 +162,27 @@ Value run_numeric(const Value* args, std::uint32_t arity, Mode mode) {
   }
   switch (mode) {
     case Mode::kAverage:
-      return lift_kernel_result(numeric_aggregate_kernels::run_average(xs));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_average(xs));
     case Mode::kMax:
-      return lift_kernel_result(numeric_aggregate_kernels::run_max(xs));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_max(xs));
     case Mode::kMin:
-      return lift_kernel_result(numeric_aggregate_kernels::run_min(xs));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_min(xs));
     case Mode::kProduct:
-      return lift_kernel_result(numeric_aggregate_kernels::run_product(xs));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_product(xs));
     case Mode::kStdev:
-      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(xs, /*sample=*/true));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_stdev(xs, /*sample=*/true));
     case Mode::kStdevP:
-      return lift_kernel_result(numeric_aggregate_kernels::run_stdev(xs, /*sample=*/false));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_stdev(xs, /*sample=*/false));
     case Mode::kSum:
-      return lift_kernel_result(numeric_aggregate_kernels::run_sum(xs));
+      return numeric_aggregate_kernels::value_from_kernel_result(numeric_aggregate_kernels::run_sum(xs));
     case Mode::kVar:
-      return lift_kernel_result(numeric_aggregate_kernels::run_variance(xs, /*sample=*/true));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_variance(xs, /*sample=*/true));
     case Mode::kVarP:
-      return lift_kernel_result(numeric_aggregate_kernels::run_variance(xs, /*sample=*/false));
+      return numeric_aggregate_kernels::value_from_kernel_result(
+          numeric_aggregate_kernels::run_variance(xs, /*sample=*/false));
     case Mode::kCount:
     case Mode::kCountA:
       break;

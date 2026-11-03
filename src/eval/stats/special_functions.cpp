@@ -18,6 +18,7 @@
 #include <limits>
 
 #include "eval/stats/horner.h"
+#include "eval/stats/numeric_constants.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -171,7 +172,7 @@ double erfinv_core(double y) noexcept {
   } else if (v > 0.9375) {
     const double a = flush_subnormal((1.0 + v) * 0.5);
     const double b = flush_subnormal((1.0 - v) * 0.5);
-    r = flush_subnormal(tail_quantile(a, b) * 0.7071067811865476);
+    r = flush_subnormal(tail_quantile(a, b) * kInvSqrt2);
   } else {
     const double w = std::sqrt(-std::log(1.0 - v));
     if (v > 0.85) {
@@ -204,7 +205,7 @@ double erfc_excel(double x) noexcept {
 }
 
 double normal_cdf(double z) noexcept {
-  return flush_subnormal(erfc_excel(flush_subnormal(z * -0.7071067811865476)) * 0.5);
+  return flush_subnormal(erfc_excel(flush_subnormal(z * -kInvSqrt2)) * 0.5);
 }
 
 double erfinv_excel(double y) noexcept {

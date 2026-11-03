@@ -41,6 +41,7 @@
 
 #include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "io/xsd_int.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
@@ -55,14 +56,9 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Returns true for ASCII whitespace per the XML spec (S production).
-bool IsXmlSpace(char c) noexcept {
-  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
-}
-
 /// Skips ASCII whitespace at `*p`, advancing the pointer.
 void SkipSpace(const char* end, const char** p) noexcept {
-  while (*p < end && IsXmlSpace(**p)) {
+  while (*p < end && is_xml_space(**p)) {
     ++(*p);
   }
 }
@@ -270,7 +266,7 @@ struct AttrIterator {
   /// Pulls the next attribute. Returns false when no more remain.
   bool next(std::string_view* key, std::string_view* value) noexcept {
     // Skip leading whitespace.
-    while (!rest.empty() && IsXmlSpace(rest.front())) {
+    while (!rest.empty() && is_xml_space(rest.front())) {
       rest.remove_prefix(1);
     }
     if (rest.empty()) {
@@ -279,7 +275,7 @@ struct AttrIterator {
     // Key = chars up to '=' (no whitespace permitted in well-formed XML
     // but be lenient).
     std::size_t i = 0;
-    while (i < rest.size() && rest[i] != '=' && !IsXmlSpace(rest[i])) {
+    while (i < rest.size() && rest[i] != '=' && !is_xml_space(rest[i])) {
       ++i;
     }
     if (i == 0 || i == rest.size()) {
@@ -287,14 +283,14 @@ struct AttrIterator {
     }
     *key = rest.substr(0, i);
     rest.remove_prefix(i);
-    while (!rest.empty() && IsXmlSpace(rest.front())) {
+    while (!rest.empty() && is_xml_space(rest.front())) {
       rest.remove_prefix(1);
     }
     if (rest.empty() || rest.front() != '=') {
       return false;
     }
     rest.remove_prefix(1);  // '='
-    while (!rest.empty() && IsXmlSpace(rest.front())) {
+    while (!rest.empty() && is_xml_space(rest.front())) {
       rest.remove_prefix(1);
     }
     if (rest.empty()) {
@@ -412,7 +408,7 @@ bool ScanTextContent(const char* begin, const char* end, const char** p, std::st
   while (*p < end) {
     const char c = **p;
     if (c != '<') {
-      run_has_non_space = run_has_non_space || !IsXmlSpace(c);
+      run_has_non_space = run_has_non_space || !is_xml_space(c);
       run_has_special = run_has_special || c == '&' || c == '\r';
       ++(*p);
       continue;
@@ -438,7 +434,7 @@ bool ScanTextContent(const char* begin, const char* end, const char** p, std::st
     if (at_close) {
       ++(*p);  // past '/'
       const char* close_name_begin = *p;
-      while (*p < end && **p != '>' && !IsXmlSpace(**p)) {
+      while (*p < end && **p != '>' && !is_xml_space(**p)) {
         ++(*p);
       }
       const std::string_view close_name(close_name_begin, static_cast<std::size_t>(*p - close_name_begin));

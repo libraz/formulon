@@ -1,14 +1,14 @@
 #include "io/xlsb/auto_filter_records.h"
 
-#include <cmath>
-#include <cstdlib>
 #include <optional>
 #include <string>
 #include <utility>
 
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record_writer.h"
 #include "sheet.h"
 #include "utils/double_format.h"
+#include "utils/double_parse.h"
 #include "utils/status_macros.h"
 
 namespace formulon {
@@ -17,7 +17,6 @@ namespace xlsb {
 namespace {
 
 enum : std::uint16_t {
-  kBrtBeginAFilter = 161,
   kBrtEndAFilter = 162,
   kBrtBeginFilterColumn = 163,
   kBrtEndFilterColumn = 164,
@@ -94,18 +93,6 @@ std::uint8_t SgnFromOperator(FilterOperator op) {
       return 6;
   }
   return 2;
-}
-
-std::optional<double> ParseNumber(const std::string& text) {
-  if (text.empty()) {
-    return std::nullopt;
-  }
-  char* end = nullptr;
-  const double value = std::strtod(text.c_str(), &end);
-  if (end != text.c_str() + text.size() || !std::isfinite(value)) {
-    return std::nullopt;
-  }
-  return value;
 }
 
 Expected<void, Error> ReadCustomFilter(ByteSpan payload, CustomFilter* out) {
@@ -323,7 +310,7 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
 
 void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter) {
   std::vector<std::uint8_t> payload;
-  const std::optional<double> number = ParseNumber(filter.val);
+  const std::optional<double> number = parse_full_double(filter.val);
   emit_u8(payload, number ? kVtsNumber : kVtsString);
   emit_u8(payload, SgnFromOperator(filter.op));
   emit_double(payload, number.value_or(0.0));
@@ -553,7 +540,7 @@ std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoF
   std::uint32_t lost = 0;
   std::vector<std::uint8_t> payload;
   emit_rfx(payload, filter.range);
-  emit_record(out, kBrtBeginAFilter, payload);
+  emit_record(out, kBeginAFilter, payload);
   for (const FilterColumn& col : filter.columns) {
     payload.clear();
     emit_u32(payload, col.col_id);

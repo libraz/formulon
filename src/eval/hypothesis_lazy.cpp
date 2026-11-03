@@ -29,6 +29,7 @@
 #include "eval/numeric_pairs.h"
 #include "eval/range_args.h"
 #include "eval/stats/hypothesis_tests.h"
+#include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -190,15 +191,11 @@ Value eval_chisq_test_lazy(const parser::AstNode& call, Arena& arena, const Func
     return Value::error(ErrorCode::NA);
   }
   // Errors propagate, left-to-right (actual first).
-  for (const Value& v : actual.cells) {
-    if (v.is_error()) {
-      return v;
-    }
+  if (const Value* error_cell = first_error(actual.cells)) {
+    return *error_cell;
   }
-  for (const Value& v : expected.cells) {
-    if (v.is_error()) {
-      return v;
-    }
+  if (const Value* error_cell = first_error(expected.cells)) {
+    return *error_cell;
   }
   // Degrees of freedom: (r-1)(c-1) for a true 2-D contingency table;
   // `n - 1` for a 1-D sequence (a single row or a single column). Fewer
@@ -307,9 +304,32 @@ Value eval_z_test_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   // Upper-tail area of the standard normal at z.
   const double z = (std::sqrt(n) * (mean - x)) / sigma;
-  const double p = stats::erfc_excel(z * 0.7071067811865476) * 0.5;
+  const double p = stats::erfc_excel(z * stats::kInvSqrt2) * 0.5;
   return to_finite_value(p);
 }
+
+namespace {
+
+// PROB's tolerance on |sum(prob) - 1|.
+constexpr double kProbSumTolerance = 1e-5;
+
+// Reads a PROB limit: a number, or blank as 0; anything else is #VALUE!.
+bool read_limit(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                double* out, Value* out_err) {
+  const Value v = eval_node(node, arena, registry, ctx);
+  if (v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  if (!v.is_number() && !v.is_blank()) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  *out = v.is_blank() ? 0.0 : v.as_number();
+  return true;
+}
+
+}  // namespace
 
 Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
@@ -336,25 +356,18 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     }
     prob_sum += p;
   }
-  // Excel accepts probability vectors that only sum to 1 within ordinary
-  // rounding — e.g. three cells of 0.333333 sum to 0.999999, whose distance
-  // from 1.0 is a hair over 1e-6 in IEEE-754 — yet Excel returns a number.
-  // A 1e-12 absolute tolerance rejected those; the bound is loosened to
-  // 1e-5 so a few decimal-rounded cells comfortably qualify while coarse
-  // errors (the 1.1 / 0.9 range) still surface #NUM!.
-  // NOTE: Excel's exact threshold is unverified; confirm on a live oracle.
-  if (std::fabs(prob_sum - 1.0) > 1e-5) {
+  // Probability vectors that only sum to 1 within decimal rounding (three
+  // cells of 0.333333) are accepted; coarse errors surface #NUM!. Excel's
+  // exact threshold is unmeasured.
+  if (std::fabs(prob_sum - 1.0) > kProbSumTolerance) {
     return Value::error(ErrorCode::Num);
   }
 
-  const Value lower_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-  if (lower_v.is_error()) {
-    return lower_v;
+  double lower = 0.0;
+  Value limit_err = Value::blank();
+  if (!read_limit(call.as_call_arg(2), arena, registry, ctx, &lower, &limit_err)) {
+    return limit_err;
   }
-  if (!lower_v.is_number() && !lower_v.is_blank()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const double lower = lower_v.is_blank() ? 0.0 : lower_v.as_number();
 
   if (arity == 3U) {
     // Upper omitted: degenerate single-point probability — sum of the
@@ -368,14 +381,10 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return to_finite_value(total);
   }
 
-  const Value upper_v = eval_node(call.as_call_arg(3), arena, registry, ctx);
-  if (upper_v.is_error()) {
-    return upper_v;
+  double upper = 0.0;
+  if (!read_limit(call.as_call_arg(3), arena, registry, ctx, &upper, &limit_err)) {
+    return limit_err;
   }
-  if (!upper_v.is_number() && !upper_v.is_blank()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const double upper = upper_v.is_blank() ? 0.0 : upper_v.as_number();
   if (upper < lower) {
     // Empty interval (lower_limit > upper_limit): Mac Excel treats this
     // as zero probability mass rather than a parameter error.

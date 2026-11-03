@@ -25,6 +25,7 @@
 #include "parser/parser.h"
 #include "utils/arena.h"
 #include "utils/number_text.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 
 namespace formulon {
@@ -543,7 +544,7 @@ Error Refuse(const std::string& what) {
 
 void EmitColor(std::vector<std::uint8_t>& dst, cf::Color c) {
   const auto bytes = EncodeColor(c);
-  emit_record(dst, kColor, std::vector<std::uint8_t>(bytes.begin(), bytes.end()));
+  emit_record(dst, kColor, ByteSpan{bytes.data(), bytes.size()});
 }
 
 Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValueObject& v, bool in_icon_set,
@@ -561,9 +562,8 @@ Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValue
       return std::move(f.error());
     }
     formula = std::move(f).value();
-  } else if (v.type != cf::CfvoType::Min && v.type != cf::CfvoType::Max &&
-             !(v.value.empty() || parse_xsd_double(v.value, &num))) {
-    return Refuse("xlsb conditional format threshold is not a number: " + v.value);
+  } else if (v.type != cf::CfvoType::Min && v.type != cf::CfvoType::Max) {
+    ASSIGN_OR_RETURN(num, parse_threshold_number(v.value));
   }
   std::vector<std::uint8_t> p;
   emit_u32(p, itype);
@@ -761,6 +761,14 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
 }
 
 }  // namespace
+
+Expected<double, Error> parse_threshold_number(const std::string& text) {
+  double num = 0;
+  if (!text.empty() && !parse_xsd_double(text, &num)) {
+    return Refuse("xlsb conditional format threshold is not a number: " + text);
+  }
+  return num;
+}
 
 std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const FeatureFormulaReadContext& ctx) {
   BlockCursor blocks(block);

@@ -85,6 +85,27 @@ Value materialize_rectangle(const parser::Reference& top_left, const parser::Ref
   return Value::array(arr);
 }
 
+// The corner `Reference`s of `rect`. The first carries `lhs`'s sheet
+// qualifier, as `Sheet1!A1:B2` parses; the last does too when `qualify_last`
+// is set, and otherwise inherits it in `expand_range`.
+void rect_corner_refs(const DeclaredRect& rect, const parser::Reference& lhs, bool qualify_last,
+                      parser::Reference* top_left, parser::Reference* bottom_right) {
+  parser::Reference first{};
+  parser::Reference last{};
+  first.sheet = lhs.sheet;
+  first.sheet_quoted = lhs.sheet_quoted;
+  first.row = rect.row_first;
+  first.col = rect.col_first;
+  if (qualify_last) {
+    last.sheet = lhs.sheet;
+    last.sheet_quoted = lhs.sheet_quoted;
+  }
+  last.row = rect.row_last;
+  last.col = rect.col_last;
+  *top_left = first;
+  *bottom_right = last;
+}
+
 // Recovers the rectangle a bare whole-axis reference declares, so it can be
 // evaluated through the same path as any other bare range.
 //
@@ -112,18 +133,9 @@ bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* to
   if (!rect || !rect.value().whole_axis) {
     return false;
   }
-  parser::Reference first{};
-  parser::Reference last{};
   // The parser keeps the sheet qualifier on the left endpoint, matching how
   // `Sheet1!A1:B2` parses; `expand_range` inherits it for the rectangle.
-  first.sheet = lhs.sheet;
-  first.sheet_quoted = lhs.sheet_quoted;
-  first.row = rect.value().row_first;
-  first.col = rect.value().col_first;
-  last.row = rect.value().row_last;
-  last.col = rect.value().col_last;
-  *top_left = first;
-  *bottom_right = last;
+  rect_corner_refs(rect.value(), lhs, /*qualify_last=*/false, top_left, bottom_right);
   return true;
 }
 
@@ -155,21 +167,9 @@ bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_l
   if (!rect || rect.value().whole_axis || rect.value().single_cell()) {
     return false;
   }
-  parser::Reference first{};
-  parser::Reference last{};
-  // `eval_node` carries the left endpoint's qualifier onto both corners, and
-  // `expand_range` lets the right corner inherit it either way; reproducing
-  // it keeps the two entry points describing one rectangle.
-  first.sheet = lhs.sheet;
-  first.sheet_quoted = lhs.sheet_quoted;
-  first.row = rect.value().row_first;
-  first.col = rect.value().col_first;
-  last.sheet = lhs.sheet;
-  last.sheet_quoted = lhs.sheet_quoted;
-  last.row = rect.value().row_last;
-  last.col = rect.value().col_last;
-  *top_left = first;
-  *bottom_right = last;
+  // `eval_node` carries the left endpoint's qualifier onto both corners;
+  // reproducing it keeps the two entry points describing one rectangle.
+  rect_corner_refs(rect.value(), lhs, /*qualify_last=*/true, top_left, bottom_right);
   return true;
 }
 
@@ -601,17 +601,12 @@ Value first_element(const Shaped& s) {
 // Operand of a broadcast binary op at output cell (r, c), coerced to a
 // number; empty when the operand cannot supply that cell or is not numeric.
 std::optional<double> broadcast_operand_number(const Value& v, std::uint32_t r, std::uint32_t c) {
-  if (!v.is_array()) {
-    const auto n = coerce_to_number(v);
-    return n ? std::optional<double>(n.value()) : std::nullopt;
-  }
-  const ArrayValue* a = v.as_array();
-  const std::uint32_t ri = a->rows == 1U ? 0U : r;
-  const std::uint32_t ci = a->cols == 1U ? 0U : c;
-  if (ri >= a->rows || ci >= a->cols) {
+  Value slot = Value::blank();
+  const Value* cell = broadcast_cell(as_array_view(v, &slot), r, c);
+  if (cell == nullptr) {
     return std::nullopt;
   }
-  const auto n = coerce_to_number(a->cells[static_cast<std::size_t>(ri) * a->cols + ci]);
+  const auto n = coerce_to_number(*cell);
   return n ? std::optional<double>(n.value()) : std::nullopt;
 }
 
@@ -905,6 +900,45 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
 
 namespace {
 
+// Evaluates `node` as a fixed-point iteration against the bound workbook's
+// iterative-calculation options. The result goes through the shared top-level
+// surface contract in the caller.
+Value run_iterative_fixed_point(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx) {
+  const IterativeOptions& iopts = ctx.workbook()->iterative_options();
+  const std::uint32_t max_iter = iopts.max_iterations == 0U ? 1U : iopts.max_iterations;
+  const Sheet* anchor_sheet = ctx.current_sheet();
+  const std::uint32_t anchor_row = ctx.formula_row();
+  const std::uint32_t anchor_col = ctx.formula_col();
+  // Excel seeds a fresh circular cell at 0 before the first pass.
+  Value current = Value::number(0.0);
+  for (std::uint32_t pass = 0; pass < max_iter; ++pass) {
+    EvalState pass_state;
+    // Seed the anchor cell so any self-reference resolves to the previous
+    // pass's value without re-entrant evaluation.
+    pass_state.memoize(anchor_sheet, anchor_row, anchor_col, current);
+    EvalContext pass_ctx = ctx.with_state(pass_state);
+    Value next = densify(eval_root_shaped(node, arena, registry, pass_ctx), arena);
+    // Apply the blank -> 0 surface contract so a blank-resolving pass is
+    // comparable to a numeric one.
+    if (next.is_blank() && node.kind() != parser::NodeKind::Literal) {
+      next = Value::number(0.0);
+    }
+    // Fixed-point convergence is defined only for numeric values. A
+    // nonnumeric result cannot become convergent by repeating an otherwise
+    // independent top-level formula, so retain its first result.
+    if (!next.is_number()) {
+      return next;
+    }
+    const bool converged = std::fabs(next.as_number() - current.as_number()) < iopts.max_change;
+    current = next;
+    if (converged) {
+      break;
+    }
+  }
+  return current;
+}
+
 // What the top-level evaluation makes of an array result.
 enum class TopResult : std::uint8_t {
   kSpill,         // weighed against the anchor's spill footprint
@@ -998,47 +1032,7 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
   } else if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() &&
              ctx.current_sheet() != nullptr && ctx.workbook() != nullptr &&
              ctx.workbook()->iterative_options().enabled) {
-    const IterativeOptions& iopts = ctx.workbook()->iterative_options();
-    const std::uint32_t max_iter = iopts.max_iterations == 0U ? 1U : iopts.max_iterations;
-    const Sheet* anchor_sheet = ctx.current_sheet();
-    const std::uint32_t anchor_row = ctx.formula_row();
-    const std::uint32_t anchor_col = ctx.formula_col();
-    // Excel seeds a fresh circular cell at 0 before the first pass.
-    Value current = Value::number(0.0);
-    for (std::uint32_t pass = 0; pass < max_iter; ++pass) {
-      EvalState pass_state;
-      // Seed the anchor cell so any self-reference resolves to the previous
-      // pass's value without re-entrant evaluation.
-      pass_state.memoize(anchor_sheet, anchor_row, anchor_col, current);
-      EvalContext pass_ctx = ctx_with_counters.with_state(pass_state);
-      Value next = densify(eval_root_shaped(node, arena, registry, pass_ctx), arena);
-      // Apply the blank -> 0 surface contract so a blank-resolving pass is
-      // comparable to a numeric one (matches the contract applied below for
-      // the non-iterative path).
-      if (next.is_blank() && node.kind() != parser::NodeKind::Literal) {
-        next = Value::number(0.0);
-      }
-      // Fixed-point convergence is defined only for numeric values. A
-      // nonnumeric result cannot become convergent by repeating an otherwise
-      // independent top-level formula, so retain its first result and let the
-      // shared surface contract below render it (#CALC!, #SPILL!, etc.).
-      if (!next.is_number()) {
-        current = next;
-        break;
-      }
-      // Convergence test: absolute change of the numeric value.
-      bool converged = false;
-      if (next.is_number() && current.is_number()) {
-        const double delta = std::fabs(next.as_number() - current.as_number());
-        converged = delta < iopts.max_change;
-      }
-      current = next;
-      if (converged) {
-        break;
-      }
-    }
-    // Fall through to the shared top-level surface contract below.
-    sv.value = current;
+    sv.value = run_iterative_fixed_point(node, arena, registry, ctx_with_counters);
   } else {
     sv = eval_root_shaped(node, arena, registry, ctx_with_counters);
   }
@@ -1152,12 +1146,7 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
       Value* buffer = nullptr;
       ArrayValue* promoted = allocate_array_value(arr->rows, arr->cols, arena, buffer, kMaxDerivedArrayCells);
       if (promoted == nullptr) {
-        if (arena.exhausted()) {
-          if (EvalState* state = ctx.state(); state != nullptr) {
-            state->mark_out_of_memory();
-          }
-        }
-        return Value::error(ErrorCode::Num);
+        return arena.exhausted() ? out_of_memory() : Value::error(ErrorCode::Num);
       }
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = arr->cells[i];

@@ -24,6 +24,29 @@
 namespace formulon::io {
 namespace {
 
+// Calls `fn(formattings)` for every <x14:conditionalFormattings> under an
+// <ext> of `ext_lst`, in document order.
+template <typename Fn>
+void ForEachX14Formattings(const pugi::xml_node& ext_lst, Fn&& fn) {
+  for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
+    for (pugi::xml_node formattings = ext.child("x14:conditionalFormattings"); formattings;
+         formattings = formattings.next_sibling("x14:conditionalFormattings")) {
+      fn(formattings);
+    }
+  }
+}
+
+// Calls `fn(block)` for every <x14:conditionalFormatting> of `ext_lst`.
+template <typename Fn>
+void ForEachX14Block(const pugi::xml_node& ext_lst, Fn&& fn) {
+  ForEachX14Formattings(ext_lst, [&fn](const pugi::xml_node& formattings) {
+    for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
+         block = block.next_sibling("x14:conditionalFormatting")) {
+      fn(block);
+    }
+  });
+}
+
 /// Collects the children of `parent` named `name` for which `doomed`
 /// returns true, then removes them. Two-phase so removal never races the
 /// sibling iteration.
@@ -208,31 +231,25 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
   // A captured data bar whose settings no longer decode to the model's is
   // rewritten from the model: the model is the source of truth after load.
   bool changed = false;
-  for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
-    for (pugi::xml_node formattings = ext.child("x14:conditionalFormattings"); formattings;
-         formattings = formattings.next_sibling("x14:conditionalFormattings")) {
-      for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
-           block = block.next_sibling("x14:conditionalFormatting")) {
-        for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
-          if (const auto icons = model_icon_sets.find(rule.attribute("id").value()); icons != model_icon_sets.end()) {
-            changed |= PatchX14IconSet(rule, *icons->second, indexer);
-            continue;
-          }
-          const auto it = model_bars.find(rule.attribute("id").value());
-          const pugi::xml_node bar = rule.child("x14:dataBar");
-          if (it == model_bars.end() || !bar) {
-            continue;
-          }
-          cf::DataBarSpec decoded = *it->second;
-          apply_x14_data_bar_overlay(bar, &decoded);
-          if (!SameX14BarSettings(decoded, *it->second)) {
-            PatchX14DataBar(bar, *it->second);
-            changed = true;
-          }
-        }
+  ForEachX14Block(ext_lst, [&](const pugi::xml_node& block) {
+    for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+      if (const auto icons = model_icon_sets.find(rule.attribute("id").value()); icons != model_icon_sets.end()) {
+        changed |= PatchX14IconSet(rule, *icons->second, indexer);
+        continue;
+      }
+      const auto it = model_bars.find(rule.attribute("id").value());
+      const pugi::xml_node bar = rule.child("x14:dataBar");
+      if (it == model_bars.end() || !bar) {
+        continue;
+      }
+      cf::DataBarSpec decoded = *it->second;
+      apply_x14_data_bar_overlay(bar, &decoded);
+      if (!SameX14BarSettings(decoded, *it->second)) {
+        PatchX14DataBar(bar, *it->second);
+        changed = true;
       }
     }
-  }
+  });
 
   std::unordered_set<std::string> claimed;
   CollectClaimedRuleIds(ext_lst, &claimed);
@@ -297,18 +314,12 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
   // in the model. Rules without an id have no legacy counterpart to
   // dangle against and are kept.
   bool changed = false;
-  for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
-    for (pugi::xml_node formattings = ext.child("x14:conditionalFormattings"); formattings;
-         formattings = formattings.next_sibling("x14:conditionalFormattings")) {
-      for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
-           block = block.next_sibling("x14:conditionalFormatting")) {
-        changed |= RemoveMatchingChildren(block, "x14:cfRule", [&surviving_ids](const pugi::xml_node& rule) {
-          const char* id = rule.attribute("id").value();
-          return id[0] != '\0' && surviving_ids.count(id) == 0U && x14_cf_rule_model_can_hold(rule);
-        });
-      }
-    }
-  }
+  ForEachX14Block(ext_lst, [&](const pugi::xml_node& block) {
+    changed |= RemoveMatchingChildren(block, "x14:cfRule", [&surviving_ids](const pugi::xml_node& rule) {
+      const char* id = rule.attribute("id").value();
+      return id[0] != '\0' && surviving_ids.count(id) == 0U && x14_cf_rule_model_can_hold(rule);
+    });
+  });
 
   if (!changed) {
     // Nothing was pruned; hand the original bytes back untouched so an
@@ -320,12 +331,11 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
   // first: <x14:conditionalFormatting> with no <x14:cfRule> left, then
   // <x14:conditionalFormattings> with no block left, then <ext> elements
   // with no element payload at all.
+  ForEachX14Formattings(ext_lst, [](const pugi::xml_node& formattings) {
+    RemoveMatchingChildren(formattings, "x14:conditionalFormatting",
+                           [](const pugi::xml_node& block) { return !block.child("x14:cfRule"); });
+  });
   for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
-    for (pugi::xml_node formattings = ext.child("x14:conditionalFormattings"); formattings;
-         formattings = formattings.next_sibling("x14:conditionalFormattings")) {
-      RemoveMatchingChildren(formattings, "x14:conditionalFormatting",
-                             [](const pugi::xml_node& block) { return !block.child("x14:cfRule"); });
-    }
     RemoveMatchingChildren(ext, "x14:conditionalFormattings",
                            [](const pugi::xml_node& formattings) { return !has_element_child(formattings); });
   }

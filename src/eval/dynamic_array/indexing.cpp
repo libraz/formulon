@@ -28,12 +28,12 @@ bool map_choose_index(const Value& cell, std::uint32_t axis_size, std::uint32_t&
     error_out = cell;
     return false;
   }
-  auto number = coerce_to_number(cell);
+  auto number = coerce_to_index_number(cell);
   if (!number) {
     error_out = Value::error(number.error());
     return false;
   }
-  const double truncated = std::trunc(number.value());
+  const double truncated = number.value();
   const double magnitude = std::fabs(truncated);
   if (truncated == 0.0 || magnitude > static_cast<double>(axis_size)) {
     error_out = Value::error(ErrorCode::Value);

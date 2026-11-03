@@ -292,8 +292,7 @@ std::string CollapseXmlWhitespace(std::string_view text) {
   out.reserve(text.size());
   bool pending_space = false;
   for (const char ch : text) {
-    const bool is_space = ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
-    if (is_space) {
+    if (is_xml_space(ch)) {
       if (!out.empty()) {
         pending_space = true;
       }

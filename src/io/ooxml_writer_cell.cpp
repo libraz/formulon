@@ -41,6 +41,7 @@
 #include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
@@ -94,7 +95,7 @@ void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force, bool 
     append_xml_attr_uint(out, "s", xf_index);
   }
   if (show_phonetic) {
-    out.append(" ph=\"1\"");
+    emit_xsd_bool_attr(out, "ph", true);
   }
 }
 
@@ -136,19 +137,8 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
   out.push_back('"');
   AppendStyleAttr(out, xf_index, force_style, show_phonetic);
   if (value.is_number()) {
-    // Defensive: NaN / +/-Inf must never reach append_xml_number, which
-    // would emit `nan`/`inf` text inside `<v>` (Excel rejects this on
-    // load). The caller AppendCellXml pre-screens, but a future caller
-    // path may not — downgrade to #NUM! here as a last line of defence.
-    const double v = value.as_number();
-    if (!std::isfinite(v)) {
-      out.append(" t=\"e\"><v>");
-      out.append(display_name(ErrorCode::Num));
-      out.append("</v></c>");
-      return;
-    }
     out.append("><v>");
-    append_xml_number(out, v);
+    append_xml_number(out, value.as_number());
     out.append("</v></c>");
     return;
   }
@@ -187,10 +177,6 @@ void AppendLiteralCellBody(std::string& out, const Value& value, const std::vect
   out.append("</v></c>");
 }
 
-// Emits the <c> element for `(row, col)` into `out`. Returns true when a
-// cell was written, false when the cell was suppressed (blank literal,
-// phantom of a spill region).
-//
 // The `t=` a formula cell's cached value needs (none for a number); a
 // non-finite number is stored as the error `<v>` below writes for it.
 void AppendFormulaValueType(std::string& out, const Value& cached) {
@@ -262,6 +248,10 @@ void AppendPhantomCellXml(std::string& out, std::uint32_t row, std::uint32_t col
   out.append("</c>");
 }
 
+// Emits the <c> element for `(row, col)` into `out`. Returns true when a
+// cell was written, false when the cell was suppressed (blank literal,
+// phantom of a spill region).
+//
 // Spill anchor handling: if `(row, col)` is anchored, the formula is
 // emitted with t="array" and the cached value (cells[0]) becomes the
 // <v>. Phantoms are suppressed by the caller via spill_region_covering;
@@ -438,29 +428,28 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool defa
     append_xml_number(out, layout.height);
     out.append("\"");
     if (layout.custom_height) {
-      out.append(" customHeight=\"1\"");
+      emit_xsd_bool_attr(out, "customHeight", true);
     }
   }
   if (layout.hidden) {
-    out.append(" hidden=\"1\"");
+    emit_xsd_bool_attr(out, "hidden", true);
   } else if (default_zero_height) {
-    out.append(" hidden=\"0\"");
+    emit_xsd_bool_attr(out, "hidden", false);
   }
   if (layout.outline_level != 0U) {
     append_xml_attr_uint(out, "outlineLevel", layout.outline_level);
   }
   if (layout.collapsed) {
-    out.append(" collapsed=\"1\"");
+    emit_xsd_bool_attr(out, "collapsed", true);
   }
   if (layout.show_phonetic) {
-    out.append(" ph=\"1\"");
+    emit_xsd_bool_attr(out, "ph", true);
   }
   if (layout.has_style) {
     // OOXML row style is effective only with customFormat=1. Emit s even
     // when the explicit style xf is zero so style="0" survives a save.
-    out.append(" s=\"");
-    out.append(std::to_string(layout.style_xf));
-    out.append("\" customFormat=\"1\"");
+    append_xml_attr_uint(out, "s", layout.style_xf);
+    emit_xsd_bool_attr(out, "customFormat", true);
   }
 }
 

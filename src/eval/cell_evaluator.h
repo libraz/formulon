@@ -20,8 +20,10 @@
 
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <vector>
 
+#include "cell.h"
 #include "eval/dep_graph.h"
 #include "eval/eval_context.h"
 #include "eval/spill_committer.h"
@@ -30,12 +32,12 @@
 namespace formulon {
 
 class Arena;
-struct Cell;
 class Sheet;
 class Workbook;
 
 namespace eval {
 
+class DynamicReadLog;
 class FunctionRegistry;
 
 /// Knobs for `evaluate_cell_for_recalc`. The defaults reproduce the plain
@@ -97,14 +99,54 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
                                std::uint32_t col, const FunctionRegistry& registry, Arena& arena,
                                const EvaluateCellOptions& opts = {});
 
+/// Evaluation and commit glue for the members of a cyclic component, shared
+/// by the serial engine and the parallel scheduler. `evaluate` stages the
+/// member's formula, resets `arena` and runs `evaluate_cell_for_recalc`;
+/// `commit` writes a result back to the cell store under `commit_mutex` when
+/// one is supplied. A non-null `log` attributes OFFSET / INDIRECT reads to the
+/// component at `ordinal`.
+class CyclicComponentEvaluator {
+ public:
+  CyclicComponentEvaluator(Workbook& workbook, const FunctionRegistry& registry, Arena& arena,
+                           SpillReleaseCallback release_callback, void* release_user_data, DynamicReadLog* log,
+                           std::uint64_t ordinal, std::mutex* commit_mutex)
+      : workbook_(workbook),
+        registry_(registry),
+        arena_(arena),
+        release_callback_(release_callback),
+        release_user_data_(release_user_data),
+        log_(log),
+        ordinal_(ordinal),
+        commit_mutex_(commit_mutex) {}
+
+  const Workbook& workbook() const noexcept { return workbook_; }
+
+  /// Evaluates `cell` as the recalc driver does, passing `observer` as
+  /// `EvaluateCellOptions::read_observer`.
+  Value evaluate(CellNodeId cell, EvalState* observer);
+
+  /// Writes `value` to `cell`'s cached value.
+  void commit(CellNodeId cell, Value value);
+
+ private:
+  Workbook& workbook_;
+  const FunctionRegistry& registry_;
+  Arena& arena_;
+  SpillReleaseCallback release_callback_;
+  void* release_user_data_;
+  DynamicReadLog* log_;
+  std::uint64_t ordinal_;
+  std::mutex* commit_mutex_;
+  // Outlives each evaluation: a string literal in the formula surfaces in the
+  // returned Value as a view into this buffer, and the caller consumes each
+  // result before asking for the next one (which resets the arena).
+  Cell staged_;
+};
+
 /// Settles the cells of a statically cyclic component by what they read (see
 /// `settle_cycle_by_reads`), the one rule every recalc driver applies with
-/// iterative calculation off. `evaluate(cell, observer)` evaluates `cell` as
-/// the driver does, passing `observer` as `EvaluateCellOptions::read_observer`;
-/// `commit` writes the result back. Returns false on a genuine cycle.
-bool settle_component_by_reads(const Workbook& workbook, const std::vector<CellNodeId>& cells,
-                               const std::function<Value(CellNodeId, EvalState*)>& evaluate,
-                               const std::function<void(CellNodeId, Value)>& commit);
+/// iterative calculation off. Returns false on a genuine cycle.
+bool settle_component_by_reads(const std::vector<CellNodeId>& cells, CyclicComponentEvaluator& evaluator);
 
 /// The value every member cell of a genuine cycle holds with iterative
 /// calculation off: 0 for a cell whose cycle runs through itself alone, which

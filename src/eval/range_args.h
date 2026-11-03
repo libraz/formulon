@@ -121,6 +121,15 @@ Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNo
                                                              const FunctionRegistry& registry, const EvalContext& ctx,
                                                              ErrorCode scalar_error);
 
+/// `resolve_range_arg_no_scalar` (scalar rejected with `#VALUE!`) flattened
+/// row-major into `*out_cells`. On failure writes the Excel error into
+/// `*out_err` and returns false.
+bool resolve_flat_cells(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err);
+
+/// The first Error cell of `cells` in order, or nullptr when there is none.
+const Value* first_error(const std::vector<Value>& cells);
+
 /// True for the reference-producing calls (`OFFSET` / `CHOOSE` / `IF` /
 /// `ROW` / `COLUMN`) that `resolve_range_arg` expands into a rectangle.
 bool is_range_shaped_call_name(std::string_view name);

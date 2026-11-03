@@ -28,6 +28,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_properties_records.h"
+#include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sparkline_records.h"
 #include "io/xlsb/sst_writer.h"
 #include "io/xlsb/table_records.h"
@@ -84,19 +85,20 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   const double twips = has_height ? std::round(layout->height * 20.0) : 0.0;
   emit_u16(p, static_cast<std::uint16_t>(std::clamp(twips, 0.0, 65535.0)));  // miyRw
   emit_u8(p, 0);                                                             // flags1
-  std::uint8_t flags2 = layout == nullptr ? 0U : static_cast<std::uint8_t>(layout->outline_level & 0x07U);
+  std::uint8_t flags2 =
+      layout == nullptr ? 0U : static_cast<std::uint8_t>(layout->outline_level & kRowOutlineLevelMask);
   // Every header states visibility, so a row without an override carries the sheet default.
   if (layout != nullptr ? layout->hidden : default_hidden) {
-    flags2 |= 0x10U;  // fDyZero
+    flags2 |= kRowZeroHeight;
   }
   if (layout != nullptr && layout->collapsed) {
-    flags2 |= 0x08U;  // fCollapsed
+    flags2 |= kRowCollapsed;
   }
   if (layout != nullptr && layout->custom_height) {
-    flags2 |= 0x20U;  // fUnsynced
+    flags2 |= kRowUnsynced;
   }
   if (layout != nullptr && layout->has_style) {
-    flags2 |= 0x40U;  // fGhostDirty: iStyleRef is an effective row style
+    flags2 |= kRowGhostDirty;
   }
   emit_u8(p, flags2);
   // fPhShow is a distinct byte, not part of flags2.  It is required even
@@ -115,11 +117,12 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
     return;
   }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginColInfos), ByteSpan{});
+  std::vector<std::uint8_t> p;
   for (const ColumnLayout& column : layout.columns) {
     if (column.first > column.last || column.last >= Sheet::kMaxCols) {
       continue;
     }
-    std::vector<std::uint8_t> p;
+    p.clear();
     emit_u32(p, column.first);
     emit_u32(p, column.last);
     const bool has_width = HasExplicitColumnWidth(column);
@@ -128,13 +131,13 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
     // BrtColInfo has no style-presence bit; ixfe is mandatory. OOXML spans
     // without a style therefore canonicalize to style 0 on an XLSB reload.
     emit_u32(p, column.has_style ? column.style_xf : 0U);  // ixfe
-    std::uint16_t flags = has_width ? 0x0002U : 0U;        // fUserSet
+    std::uint16_t flags = has_width ? kColUserSet : 0U;
     if (column.hidden) {
-      flags |= 0x0001U;
+      flags |= kColHidden;
     }
-    flags |= static_cast<std::uint16_t>((column.outline_level & 0x07U) << 8U);
+    flags |= static_cast<std::uint16_t>((column.outline_level & kColOutlineLevelMask) << kColOutlineShift);
     if (column.collapsed) {
-      flags |= 0x0800U;  // fCollapsed
+      flags |= kColCollapsed;
     }
     emit_u16(p, flags);
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtColInfo), p);
@@ -211,11 +214,12 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   std::vector<std::uint8_t> count;
   emit_u32(count, static_cast<std::uint32_t>(valid_count));
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginMergeCells), count);
+  std::vector<std::uint8_t> payload;
   for (const MergeRange& merge : sheet.merges()) {
     if (!IsEmittableMerge(merge)) {
       continue;
     }
-    std::vector<std::uint8_t> payload;
+    payload.clear();
     emit_rfx(payload, merge);
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtMergeCell), payload);
   }
@@ -235,22 +239,6 @@ Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet
   return Expected<void, Error>::Ok();
 }
 
-/// Offset of the first framed record of `type` in `records`, or its size.
-std::size_t FindRecord(const std::vector<std::uint8_t>& records, std::uint16_t type) {
-  ByteSpan cursor{records.data(), records.size()};
-  while (cursor.size != 0U) {
-    const std::uint8_t* at = cursor.data;
-    auto rec = read_record(cursor);
-    if (!rec) {
-      break;
-    }
-    if (rec.value().type == type) {
-      return static_cast<std::size_t>(at - records.data());
-    }
-  }
-  return records.size();
-}
-
 /// Emits the retained records between the merge and hyperlink blocks
 /// (BrtPhoneticInfo, and any block the reader could not decode) with the
 /// model's conditional formats and validations in grammar order: phonetic
@@ -259,7 +247,7 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
                                                   const std::vector<std::uint8_t>& retained,
                                                   const FeatureFormulaWriteContext& ctx,
                                                   const std::unordered_set<std::string>& x14_linked) {
-  const auto raw_dvals = static_cast<std::ptrdiff_t>(FindRecord(retained, kBrtBeginDVals));
+  const auto raw_dvals = static_cast<std::ptrdiff_t>(find_record_offset(retained, kBrtBeginDVals));
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
   for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
     if (auto s = emit_cf_block(body, format, ctx, x14_linked); !s) {
@@ -369,9 +357,10 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   struct PhantomShell {
     std::uint32_t anchor_row = 0;
     std::uint32_t anchor_col = 0;
-    Value value = Value::blank();
+    const Value* value = nullptr;  // into the sheet's spill region, or `blank`
     bool always_calculates = false;
   };
+  const Value blank = Value::blank();
   std::map<std::uint32_t, std::map<std::uint32_t, PhantomShell>> phantoms;
   for (const auto& [anchor_row, cells] : sheet.rows()) {
     for (const auto& [col, cell] : cells) {
@@ -389,8 +378,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
             continue;  // anchor: emitted as an anchor record, not a phantom
           }
           const std::size_t idx = static_cast<std::size_t>(r) * region->cols + c;
-          Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
-          phantoms[anchor_row + r][col + c] = PhantomShell{anchor_row, col, std::move(value), always};
+          const Value* value = idx < region->cells.size() ? &region->cells[idx] : &blank;
+          phantoms[anchor_row + r][col + c] = PhantomShell{anchor_row, col, value, always};
         }
       }
     }
@@ -517,9 +506,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
               region != nullptr && !region->cells.empty() ? region->cells.front() : cell->cached_value;
           bool downgraded_to_literal = false;
           if (dynamic) {
-            std::vector<std::uint8_t> metadata_index;
-            emit_u32(metadata_index, dynamic_array_ifmd);  // XLDAPR dynamic-array metadata entry
-            emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), metadata_index);
+            cell_payload.clear();
+            emit_u32(cell_payload, dynamic_array_ifmd);  // XLDAPR dynamic-array metadata entry
+            emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), cell_payload);
           }
           if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, col, row, last_row, last_col,
                                          sheet_names, sheet_ranges, name_table, sst, downgraded_formula_count,
@@ -545,7 +534,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           continue;
         }
         const std::uint32_t xf_index = select_effective_xf(sheet, row, col).xf_index;
-        emit_array_phantom(body, cell_payload, col, xf_index, cur_ph->second.value, cur_ph->second.anchor_row,
+        emit_array_phantom(body, cell_payload, col, xf_index, *cur_ph->second.value, cur_ph->second.anchor_row,
                            cur_ph->second.anchor_col, cur_ph->second.always_calculates);
       }
     }

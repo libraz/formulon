@@ -104,11 +104,10 @@ std::string_view ElementText(std::string_view block, std::string_view open_tag, 
 }
 
 std::string_view Trim(std::string_view text) {
-  while (!text.empty() &&
-         (text.front() == ' ' || text.front() == '\t' || text.front() == '\r' || text.front() == '\n')) {
+  while (!text.empty() && is_xml_space(text.front())) {
     text.remove_prefix(1U);
   }
-  while (!text.empty() && (text.back() == ' ' || text.back() == '\t' || text.back() == '\r' || text.back() == '\n')) {
+  while (!text.empty() && is_xml_space(text.back())) {
     text.remove_suffix(1U);
   }
   return text;

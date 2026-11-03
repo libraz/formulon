@@ -1,11 +1,10 @@
 //
 // Shared OOXML schema constants used by the reader and writer.
 // Only the namespace and relationship type URIs that more than one reader / writer
-// (OOXML or XLSB) needs are hoisted here; content-type strings that are needed by exactly one side
-// (e.g. the `kCtWorkbook*` family the reader uses for kind detection,
-// or the writer-only `kCtPackageRels` / `kCtComments`) stay in the
-// consuming `.cpp` so this header tracks the minimum shared surface
-// and not the union.
+// (OOXML or XLSB) needs are hoisted here, plus the XLSB workbook content types
+// shared by format detection and the XLSB reader. Content-type strings needed by
+// exactly one side (e.g. the writer-only `kCtPackageRels` / `kCtComments`) stay in
+// the consuming `.cpp` so this header tracks the minimum shared surface.
 //
 // Header-only, `<string_view>`-only, `inline constexpr` — no
 // translation unit needed. Lives under `io/` because no module
@@ -35,6 +34,12 @@ inline constexpr std::string_view kNsPackageRelationships =
 inline constexpr std::string_view kNsMarkupCompat = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 inline constexpr std::string_view kNsX14 = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 inline constexpr std::string_view kNsExcelMain = "http://schemas.microsoft.com/office/excel/2006/main";
+inline constexpr std::string_view kNsContentTypes = "http://schemas.openxmlformats.org/package/2006/content-types";
+inline constexpr std::string_view kNsXr = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";
+inline constexpr std::string_view kNsXr2 = "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2";
+inline constexpr std::string_view kNsXxl21 = "http://schemas.microsoft.com/office/spreadsheetml/2021/extlinks2021";
+inline constexpr std::string_view kNsDynamicArray =
+    "http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray";
 
 // Relationship type URIs used by Excel-produced packages. The values
 // are the canonical ECMA-376 strings; comparison is case-sensitive and
@@ -81,12 +86,23 @@ inline constexpr std::string_view kRelTheme =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
 inline constexpr std::string_view kRelSheetMetadata =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
+inline constexpr std::string_view kRelCalcChain =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
 inline constexpr std::string_view kRelCoreProperties =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 inline constexpr std::string_view kRelExtendedProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
 inline constexpr std::string_view kRelCustomProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+
+// XLSB workbook content types ([Content_Types].xml). Either form marks the
+// package as MS-XLSB.
+inline constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
+inline constexpr std::string_view kCtWorkbookXlsbAlt = "application/vnd.ms-excel.sheet.macroEnabled.main";
+
+inline bool is_xlsb_workbook_content_type(std::string_view content_type) {
+  return content_type == kCtWorkbookXlsb || content_type == kCtWorkbookXlsbAlt;
+}
 
 }  // namespace io
 }  // namespace formulon

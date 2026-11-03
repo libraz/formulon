@@ -149,13 +149,12 @@ bool parse_a1_range(std::string_view ref, MergeRange* out) {
 }
 
 bool next_sqref_token(std::string_view sqref, std::size_t* pos, std::string_view* token) {
-  const auto is_space = [](char ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'; };
   std::size_t i = *pos;
-  while (i < sqref.size() && is_space(sqref[i])) {
+  while (i < sqref.size() && is_xml_space(sqref[i])) {
     ++i;
   }
   const std::size_t start = i;
-  while (i < sqref.size() && !is_space(sqref[i])) {
+  while (i < sqref.size() && !is_xml_space(sqref[i])) {
     ++i;
   }
   *pos = i;

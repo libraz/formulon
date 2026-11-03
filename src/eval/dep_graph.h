@@ -10,7 +10,7 @@
 //     cell is rewritten (its old outgoing edges are dropped, its new ones
 //     are added).
 //   * "How do I evaluate the cells in an order that respects dependencies?"
-//     -> `tarjan_scc()` returns strongly connected components in
+//     -> `tarjan_scc_subset()` returns strongly connected components in
 //     **reverse-topological order** (leaves first, roots last) so the
 //     evaluator can run SCCs from inputs to outputs and detect cycles.
 //
@@ -233,39 +233,19 @@ class DepGraph {
   bool rect_cell_depends_on(CellNodeId node, std::uint32_t row_first, std::uint32_t col_first, std::uint32_t row_last,
                             std::uint32_t col_last) const;
 
-  /// Computes the strongly connected components of the graph using an
-  /// iterative Tarjan algorithm. Each inner vector is one SCC; SCCs are
-  /// emitted in **reverse-topological order**: a component appears before
-  /// any component that depends on it. So if `A` reads `B`, the SCC
-  /// containing `B` is emitted before the SCC containing `A`. Within a
-  /// component, the order of cells is unspecified.
+  /// Computes the strongly connected components of the induced subgraph
+  /// containing only `nodes`, with an iterative Tarjan algorithm. Edges to
+  /// cells outside the set are ignored, so incremental recalc stays
+  /// proportional to its dirty closure. Every supplied node is emitted,
+  /// including nodes with no recorded edges.
   ///
-  /// Singleton SCCs include cells that are isolated as well as cells in
-  /// non-cyclic positions; a multi-cell SCC indicates a cycle (e.g. a
-  /// circular reference). A self-loop on a cell `X` produces a singleton
-  /// SCC `{X}` — callers that need to flag self-loops separately must
-  /// check `dependencies_of(X)` for `X`.
-  ///
-  /// Complexity: O(V + E).
-  std::vector<std::vector<CellNodeId>> tarjan_scc() const;
-
-  /// Computes SCCs for the induced subgraph containing only `nodes`.
-  /// Edges to cells outside the set are ignored. This keeps incremental
-  /// recalc proportional to its dirty closure instead of the workbook-wide
-  /// dependency graph. Every supplied node is emitted, including nodes with
-  /// no recorded edges.
+  /// SCCs are emitted in **reverse-topological order** (a component appears
+  /// before any component that reads it is emitted... see below) with cells
+  /// in address order inside a component. A multi-cell SCC is a cycle; a
+  /// self-loop on `X` yields the singleton `{X}`, so callers flag self-loops
+  /// through `dependencies_of(X)`. Complexity: O(V + E).
   std::vector<std::vector<CellNodeId>> tarjan_scc_subset(
       const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const;
-
-  /// Returns a topological ordering of the cells: every cell appears
-  /// before any cell that depends on it. The ordering is derived from
-  /// `tarjan_scc()` (each SCC contributes its cells in unspecified order).
-  ///
-  /// When the graph contains a cycle, the cycle's cells appear in the
-  /// returned ordering at an arbitrary position relative to one another;
-  /// callers that need an SCC-aware ordering should use `tarjan_scc()`
-  /// directly.
-  std::vector<CellNodeId> topological_order() const;
 
   /// Number of cells with at least one outgoing or incoming edge; virtual
   /// range nodes are not counted. O(1) — backed by a counter kept in sync
@@ -278,14 +258,18 @@ class DepGraph {
  private:
   using AdjacencyMap = std::unordered_map<CellNodeId, std::vector<CellNodeId>, CellNodeIdHash>;
 
-  std::vector<std::vector<CellNodeId>> tarjan_scc_impl(
-      const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const;
+  /// Whether `node` has any recorded edge, in either direction.
+  bool is_known(CellNodeId node) const;
+  /// Updates the per-source counters and indexes for a provenance bit newly set on `edge`.
+  void note_source_added(const Edge& edge, DependencySource source);
+  /// Updates the per-source counters and indexes for a provenance bit cleared from `edge`.
+  void note_source_removed(const Edge& edge, DependencySource source);
 
   /// Reorders `sccs`, given in any topological order of the condensation,
   /// into its Kahn layers, each sorted by lowest member address. Edges
-  /// leaving `nodes` (when non-null) are ignored.
+  /// leaving `nodes` are ignored.
   std::vector<std::vector<CellNodeId>> canonical_component_order(
-      std::vector<std::vector<CellNodeId>> sccs, const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const;
+      std::vector<std::vector<CellNodeId>> sccs, const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const;
 
   void add_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
   bool remove_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
@@ -357,6 +341,9 @@ bool closes_through_dynamic_edge(const std::vector<CellNodeId>& component, const
 /// Returns the cell members of an SCC, dropping virtual range nodes, which
 /// have nothing to evaluate.
 std::vector<CellNodeId> cells_of_component(const std::vector<CellNodeId>& component);
+
+/// Returns the number of cell members of an SCC (`cells_of_component(component).size()`).
+std::size_t cell_count_of_component(const std::vector<CellNodeId>& component);
 
 }  // namespace formulon::eval
 

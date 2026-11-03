@@ -66,34 +66,37 @@ class RunningUtf16Units {
   std::uint64_t committed_units_ = 0;
 };
 
-// Flattened text argument cells: `texts`, in order, `repeat` times over.
-struct TextPiece {
+// Flattened text argument cells: `texts` holds every cell's text, and each run
+// covers `count` consecutive texts repeated `repeat` times over.
+struct TextRuns {
+  struct Run {
+    std::size_t first;
+    std::size_t count;
+    std::uint64_t repeat;
+  };
   std::vector<std::string> texts;
-  std::uint64_t repeat;
+  std::vector<Run> runs;
+
+  void add_single(std::string text, std::uint64_t repeat) {
+    texts.push_back(std::move(text));
+    runs.push_back(Run{texts.size() - 1U, 1U, repeat});
+  }
 };
 
-// One text cell repeated `repeat` times; the string is moved in, not copied
-// through an initializer list.
-TextPiece single_text_piece(std::string text, std::uint64_t repeat) {
-  TextPiece piece{{}, repeat};
-  piece.texts.push_back(std::move(text));
-  return piece;
-}
-
 // Appends `v`'s text projection as a single cell.
-bool push_cell(const Value& v, std::vector<TextPiece>* out, Value* out_err) {
+bool push_cell(const Value& v, TextRuns* out, Value* out_err) {
   auto t = coerce_to_text(v);
   if (!t) {
     *out_err = Value::error(t.error());
     return false;
   }
-  out->push_back(single_text_piece(std::move(t.value()), 1U));
+  out->add_single(std::move(t.value()), 1U);
   return true;
 }
 
 // Flattens a whole-axis array in row-major order: the repeated tail becomes
 // one run, so the declared size is honoured without being expanded.
-bool flatten_tail_array(const TailArray& ta, std::vector<TextPiece>* out, Value* out_err) {
+bool flatten_tail_array(const TailArray& ta, TextRuns* out, Value* out_err) {
   if (ta.axis == TailAxis::kRows) {
     for (std::uint32_t r = 0; r < ta.head; ++r) {
       for (std::uint32_t c = 0; c < ta.cols; ++c) {
@@ -102,17 +105,20 @@ bool flatten_tail_array(const TailArray& ta, std::vector<TextPiece>* out, Value*
         }
       }
     }
-    TextPiece run{{}, ta.rows - ta.head};
+    const std::size_t first = out->texts.size();
     for (std::uint32_t c = 0; c < ta.cols; ++c) {
       auto t = coerce_to_text(ta.tail[c]);
       if (!t) {
         *out_err = Value::error(t.error());
         return false;
       }
-      run.texts.push_back(std::move(t.value()));
+      out->texts.push_back(std::move(t.value()));
     }
-    if (run.repeat > 0U) {
-      out->push_back(std::move(run));
+    const std::uint64_t repeat = ta.rows - ta.head;
+    if (repeat > 0U) {
+      out->runs.push_back(TextRuns::Run{first, ta.cols, repeat});
+    } else {
+      out->texts.resize(first);
     }
     return true;
   }
@@ -128,7 +134,7 @@ bool flatten_tail_array(const TailArray& ta, std::vector<TextPiece>* out, Value*
         *out_err = Value::error(t.error());
         return false;
       }
-      out->push_back(single_text_piece(std::move(t.value()), ta.cols - ta.head));
+      out->add_single(std::move(t.value()), ta.cols - ta.head);
     }
   }
   return true;
@@ -142,7 +148,7 @@ bool flatten_tail_array(const TailArray& ta, std::vector<TextPiece>* out, Value*
 // through the dispatcher's per-position loop (which cannot special-case
 // `delimiter` — see the header comment).
 bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx, std::vector<TextPiece>* out, Value* out_err) {
+                      const EvalContext& ctx, TextRuns* out, Value* out_err) {
   // An operator over a whole column / row is joined at its declared size, the
   // way SUMPRODUCT reads it: `A:A&""` keeps every row past the used range.
   const parser::AstNode& target = resolve_range_binding(node, ctx.name_env(), /*accept_ref=*/false);
@@ -176,7 +182,8 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
   }
   const ArrayValue* arr = v.as_array();
   const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
-  out->reserve(out->size() + n);
+  out->texts.reserve(out->texts.size() + n);
+  out->runs.reserve(out->runs.size() + n);
   for (std::size_t i = 0; i < n; ++i) {
     if (!push_cell(arr->cells[i], out, out_err)) {
       return false;
@@ -189,7 +196,7 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
   if (static_reference_shape(node, ctx, &rows, &cols)) {
     const std::uint64_t declared = static_cast<std::uint64_t>(rows) * cols;
     if (declared > n) {
-      out->push_back(single_text_piece(std::string(), declared - n));
+      out->add_single(std::string(), declared - n);
     }
   }
   return true;
@@ -236,9 +243,8 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
   const bool ignore_empty = ignore_c.value();
 
   // text1, [text2], ... (args 2..N): each may be scalar, range, or array;
-  // flatten every argument's cells, in call order, into one text-piece
-  // list.
-  std::vector<TextPiece> pieces;
+  // flatten every argument's cells, in call order, into one run list.
+  TextRuns pieces;
   for (std::uint32_t i = 2; i < arity; ++i) {
     Value err = Value::blank();
     if (!flatten_text_arg(call.as_call_arg(i), arena, registry, ctx, &pieces, &err)) {
@@ -254,20 +260,21 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
   for (const std::string& d : delimiters) {
     all_delimiters_empty = all_delimiters_empty && d.empty();
   }
-  for (const TextPiece& piece : pieces) {
+  for (const TextRuns::Run& piece : pieces.runs) {
     // A run of only empty cells that are skipped, or joined by empty
     // delimiters, adds nothing however often it repeats. Any other run grows
     // the result each round, so the cap below ends a long one early.
     bool contributes = false;
-    for (const std::string& text : piece.texts) {
-      contributes = contributes || !text.empty();
+    for (std::size_t t = piece.first; t < piece.first + piece.count; ++t) {
+      contributes = contributes || !pieces.texts[t].empty();
     }
     if (!contributes && (ignore_empty || all_delimiters_empty)) {
       first = first && ignore_empty;
       continue;
     }
     for (std::uint64_t k = 0; k < piece.repeat; ++k) {
-      for (const std::string& text : piece.texts) {
+      for (std::size_t t = piece.first; t < piece.first + piece.count; ++t) {
+        const std::string& text = pieces.texts[t];
         if (ignore_empty && text.empty()) {
           continue;
         }

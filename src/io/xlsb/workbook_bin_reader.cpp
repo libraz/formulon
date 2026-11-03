@@ -140,23 +140,25 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
 
 namespace {
 
-/// Decodes a UTF-16LE name of `units` code units starting at `cursor`,
-/// advancing it past the name. `units` is caller-known (from a fixed-size
-/// header field), unlike `read_xlwidestring`'s self-describing length. This
-/// path intentionally avoids Expected<std::string, Error>: malformed
-/// workbook names are common fuzz inputs, and libc++'s variant dispatch
-/// under UBSan must not turn recoverable input errors into a process abort.
-bool ReadFixedWideString(ByteSpan& cursor, std::uint32_t units, std::string& out) {
-  // Check in the destination width before multiplying. On wasm32, a hostile
-  // u32 `units` value can wrap `units * 2` back below cursor.size otherwise.
-  if (units > cursor.size / 2U) {
+/// BrtName fixed header: flags (u16), 3 reserved bytes, itab (u32).
+constexpr std::size_t kBrtNameHeaderBytes = 9;
+constexpr std::size_t kBrtNameItabOffset = 5;
+constexpr std::uint16_t kBrtNameFlagHidden = 0x0001U;
+
+struct BrtNameHeader {
+  std::uint16_t flags = 0;
+  std::uint32_t itab = 0;
+};
+
+/// Consumes the fixed BrtName header from `p`; false when it is truncated.
+bool ReadBrtNameHeader(ByteSpan& p, BrtNameHeader& out) {
+  if (p.size < kBrtNameHeaderBytes) {
     return false;
   }
-  const std::size_t byte_len = static_cast<std::size_t>(units) * 2U;
-  out.clear();
-  append_utf16le_as_utf8(cursor.data, units, &out);
-  cursor.data += byte_len;
-  cursor.size -= byte_len;
+  out.flags = load_u16(p.data);
+  out.itab = load_u32(p.data + kBrtNameItabOffset);
+  p.data += kBrtNameHeaderBytes;
+  p.size -= kBrtNameHeaderBytes;
   return true;
 }
 
@@ -204,33 +206,27 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
       continue;
     }
     ByteSpan p = rec.payload;
-    if (p.size < 5) {
+    BrtNameHeader header;
+    if (!ReadBrtNameHeader(p, header)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "workbook.bin: BrtName header truncated",
                         "context=xlsb_reader");
     }
-    auto flags_or = read_u16(p);
-    if (!flags_or) {
-      return std::move(flags_or.error());
-    }
-    p.data += 3;  // 3 reserved bytes between flags and itab.
-    p.size -= 3;
-    ASSIGN_OR_RETURN(auto itab, read_u32(p));
     ASSIGN_OR_RETURN(auto cch, read_u32(p));
     std::string name;
-    if (!ReadFixedWideString(p, cch, name)) {
+    if (!read_utf16_units(p, cch, &name)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb fixed-length wide string truncated",
                         "context=xlsb_reader");
     }
     XlsbName entry;
-    entry.itab = static_cast<std::int32_t>(itab);
+    entry.itab = static_cast<std::int32_t>(header.itab);
     entry.name = std::move(name);
-    entry.hidden = (flags_or.value() & 0x0001U) != 0;
+    entry.hidden = (header.flags & kBrtNameFlagHidden) != 0;
     names.push_back(std::move(entry));
   }
   return names;
 }
 
-std::vector<XlsbSupBook> DecodeSupBooks(const std::vector<std::uint8_t>& body) {
+Expected<std::vector<XlsbSupBook>, Error> DecodeSupBooks(const std::vector<std::uint8_t>& body) {
   std::vector<XlsbSupBook> books;
   ByteSpan cursor{body.data(), body.size()};
   bool inside = false;
@@ -238,7 +234,7 @@ std::vector<XlsbSupBook> DecodeSupBooks(const std::vector<std::uint8_t>& body) {
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
-      break;
+      return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
     const auto type = static_cast<XlsbRecordType>(rec.type);
@@ -331,7 +327,7 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
       // 0 is this workbook.
       std::uint32_t external_book = std::numeric_limits<std::uint32_t>::max();
       if (books.empty()) {
-        external_book = sup_book == 0U ? 0U : sup_book;
+        external_book = sup_book;
       } else if (sup_book < books.size()) {
         external_book = books[sup_book].external_book;
       }
@@ -390,12 +386,11 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
       continue;
     }
     ByteSpan p = rec.payload;
-    if (p.size < 9) {
+    BrtNameHeader header;
+    if (!ReadBrtNameHeader(p, header)) {
       return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
                         "workbook.bin: BrtName header truncated (defined-name pass)", "context=xlsb_reader");
     }
-    p.data += 9;  // flags (2) + 3 reserved bytes + itab (4).
-    p.size -= 9;
     ASSIGN_OR_RETURN(auto cch, read_u32(p));
     // Divide first: `cch * 2` wraps on wasm32.
     if (cch > p.size / 2U) {

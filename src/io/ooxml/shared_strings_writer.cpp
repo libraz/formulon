@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/ooxml_defs.h"
 #include "io/phonetic_pr.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -111,7 +112,9 @@ std::string WriteSharedStrings(const SharedStrings& strings) {
   std::string out;
   out.reserve(128U + strings.entries().size() * 32U);
   out.append(kXmlDecl);
-  out.append("<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"");
+  out.append("<sst");
+  append_xml_ns_decl(out, "", kNsSpreadsheetMl);
+  out.append(" count=\"");
   out.append(std::to_string(strings.total_count()));
   out.append("\" uniqueCount=\"");
   out.append(std::to_string(strings.entries().size()));

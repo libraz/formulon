@@ -35,6 +35,7 @@
 #include "utils/arena.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -84,7 +85,6 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   std::string out;
   // Worst case: every byte expands to 3 characters.
   out.reserve(s.size() * 3);
-  constexpr char kHex[] = "0123456789ABCDEF";
   for (char raw : s) {
     const auto c = static_cast<unsigned char>(raw);
     if (is_unreserved(c)) {
@@ -92,8 +92,8 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       continue;
     }
     out.push_back('%');
-    out.push_back(kHex[(c >> 4) & 0x0F]);
-    out.push_back(kHex[c & 0x0F]);
+    out.push_back(strings::hex_digit_upper(c >> 4U));
+    out.push_back(strings::hex_digit_upper(c));
   }
   return Value::text(arena.intern(out));
 }
@@ -139,9 +139,6 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //     is the only way to read `return_type()` and reject a number / string /
 //     boolean XPath before it is evaluated as a node set.
 
-// Extracts the text content of a pugixml node. For element nodes we
-// concatenate the children's text (pugixml's xml_text::as_string handles
-// leaf CDATA / PCDATA); for attribute nodes we return the attribute value.
 std::string_view trim_ascii_ws(std::string_view s) noexcept {
   std::size_t first = 0;
   while (first < s.size()) {
@@ -196,6 +193,8 @@ Value filterxml_value_from_text(std::string_view raw, Arena& arena) {
   return Value::text(arena.intern(std::string(text)));
 }
 
+// Value of one XPath result: an element or document yields its direct text
+// children, an attribute its value; any other node kind is `#VALUE!`.
 Value node_value(const pugi::xpath_node& n, Arena& arena) {
   if (n.node()) {
     if (n.node().type() != pugi::node_element && n.node().type() != pugi::node_document) {

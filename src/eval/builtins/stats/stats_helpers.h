@@ -65,16 +65,8 @@ using NumberTriple = builtins_detail::NumberTriple;
 using builtins_detail::read_required_number;
 using builtins_detail::to_finite_value;
 
-// Stats-namespace spellings of the shared numeric argument readers.
-inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::uint32_t first_index,
-                                                        std::uint32_t second_index) {
-  return builtins_detail::read_number_pair(args, first_index, second_index);
-}
-
-inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
-                                                            std::uint32_t second_index, std::uint32_t third_index) {
-  return builtins_detail::read_number_triple(args, first_index, second_index, third_index);
-}
+using builtins_detail::read_number_pair;
+using builtins_detail::read_number_triple;
 
 inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t index) {
   auto value = coerce_to_bool(args[index]);

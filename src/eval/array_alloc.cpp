@@ -55,6 +55,19 @@ ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Valu
   return arr;
 }
 
+Value map_array_cells(const ArrayValue& in, Value (*fn)(const Value& cell, void* ctx), void* ctx, Arena& arena) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t count = static_cast<std::size_t>(in.rows) * in.cols;
+  for (std::size_t i = 0; i < count; ++i) {
+    cells[i] = fn(in.cells[i], ctx);
+  }
+  return count == 1U ? cells[0] : Value::array(out);
+}
+
 const TailArray* make_tail_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, std::uint32_t head,
                                  TailAxis axis, const Value* cells, const Value* tail, bool from_reference) {
   // A reference read is no evaluated array; an operation's result is.

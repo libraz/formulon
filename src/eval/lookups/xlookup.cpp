@@ -16,6 +16,7 @@
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/collation.h"
+#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
@@ -25,7 +26,6 @@
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
 #include "eval/regex_lazy.h"
-#include "eval/wildcard.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -53,13 +53,6 @@ enum class XMatchMode : std::int8_t { Exact = 0, Smaller = -1, Larger = 1, Wildc
 // a duplicate run resolves to whichever equal the probing path reaches.
 enum class XSearchMode : std::int8_t { FirstToLast = 1, LastToFirst = -1, BinaryAsc = 2, BinaryDesc = -2 };
 
-// Three-way compare of (cell - lookup) honouring Excel 365's cross-type
-// ordering for XLOOKUP approximate-match: kind-rank first, value second.
-// Rank 0 = Number / Blank (Blank acts as 0.0), Rank 1 = Text (case-insensitive
-// ASCII compare), Rank 2 = Bool (FALSE < TRUE), Rank 3 = Error (ordered by
-// ERROR.TYPE code). Anything else (Array, Ref, Lambda) is incomparable and the
-// function returns `false` so callers can decide how to handle it. On success
-// writes the sign to `*out_cmp` and returns `true`.
 // Position of an error in ERROR.TYPE order (`#NULL!` 1 .. `#N/A` 7); other
 // errors sort after them.
 int error_order(ErrorCode code) {
@@ -83,6 +76,13 @@ int error_order(ErrorCode code) {
   }
 }
 
+// Three-way compare of (cell - lookup) honouring Excel 365's cross-type
+// ordering for XLOOKUP approximate-match: kind-rank first, value second.
+// Rank 0 = Number / Blank (Blank acts as 0.0), Rank 1 = Text (case-insensitive
+// ASCII compare), Rank 2 = Bool (FALSE < TRUE), Rank 3 = Error (ordered by
+// ERROR.TYPE code). Anything else (Array, Ref, Lambda) is incomparable and the
+// function returns `false` so callers can decide how to handle it. On success
+// writes the sign to `*out_cmp` and returns `true`.
 bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, int* out_cmp) {
   auto cmp_numeric = [](double x, double y) -> int {
     if (x < y) {
@@ -143,31 +143,14 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
   return true;
 }
 
-// Exact-equality test with optional DOS-style wildcard expansion on Text vs
-// Text pairs. For non-text / cross-type kinds this is a literal equality
-// compare with the same "Blank acts as numeric 0" rule VLOOKUP / HLOOKUP use
-// (classic.cpp's `lookup_scan`) -- but NOT the rule MATCH's own exact-match
-// branch (match_type 0) uses: a blank lookup_value there returns #N/A
-// unconditionally rather than matching a blank cell as 0 (classic.cpp,
-// exact-match block). MATCH's approximate modes (match_type +-1) do fold a
-// blank lookup_value to 0 for ordering purposes, which is the rule this
-// comment used to (over-)generalize to MATCH as a whole.
-// When `wildcards` is true and the text has an unescaped `*` / `?`, the
-// folded keys go through `wildcard_match`; otherwise the unescaped literal is
-// compared through the collator.
-bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, ExcelProfile profile) {
+// Exact-equality test for the scan paths that do not prepare a wildcard
+// query. Text pairs compare through the collator; the other kinds use literal
+// equality with the "Blank acts as numeric 0" rule VLOOKUP / HLOOKUP use
+// (classic.cpp's `lookup_scan`), not MATCH's exact mode, where a blank
+// lookup_value is #N/A unconditionally.
+bool xlookup_exact_eq(const Value& cell, const Value& lookup, ExcelProfile profile) {
   if (lookup.is_text()) {
-    if (!cell.is_text()) {
-      return false;
-    }
-    if (!wildcards) {
-      return collate(cell.as_text(), lookup.as_text(), profile, CollationStrength::kDynamic) == 0;
-    }
-    const std::string_view raw = lookup.as_text();
-    if (!scan_has_wildcard(raw)) {
-      return collate(cell.as_text(), unescape_wildcard_literal(raw), profile, CollationStrength::kDynamic) == 0;
-    }
-    return wildcard_match(lookup_wildcard_key(raw, profile), lookup_wildcard_key(cell.as_text(), profile));
+    return cell.is_text() && collate(cell.as_text(), lookup.as_text(), profile, CollationStrength::kDynamic) == 0;
   }
   if (lookup.is_number() || lookup.is_blank()) {
     const double target = lookup.is_blank() ? 0.0 : lookup.as_number();
@@ -183,32 +166,6 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
     return cell.is_boolean() && cell.as_boolean() == lookup.as_boolean();
   }
   return false;
-}
-
-// The wildcard query is immutable for one linear scan. Keeping the folded
-// pattern or unescaped literal here avoids repeating query-side work for every
-// candidate cell. The candidate still needs its own profile-specific fold when
-// the query is a pattern.
-struct PreparedWildcardQuery {
-  bool has_pattern = false;
-  std::string prepared;
-};
-
-PreparedWildcardQuery prepare_wildcard_query(std::string_view raw, ExcelProfile profile) {
-  if (scan_has_wildcard(raw)) {
-    return PreparedWildcardQuery{true, lookup_wildcard_key(raw, profile)};
-  }
-  return PreparedWildcardQuery{false, unescape_wildcard_literal(raw)};
-}
-
-bool prepared_wildcard_eq(const Value& cell, const PreparedWildcardQuery& query, ExcelProfile profile) {
-  if (!cell.is_text()) {
-    return false;
-  }
-  if (query.has_pattern) {
-    return wildcard_match(query.prepared, lookup_wildcard_key(cell.as_text(), profile));
-  }
-  return collate(cell.as_text(), query.prepared, profile, CollationStrength::kDynamic) == 0;
 }
 
 // Scan `cells` (already flattened to a 1-D axis of the lookup_array) for
@@ -239,14 +196,14 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     auto idx_at = [&](std::size_t k) -> std::size_t { return reverse ? (n - 1U - k) : k; };
 
     if (match_mode == XMatchMode::Exact || match_mode == XMatchMode::Wildcard) {
-      std::optional<PreparedWildcardQuery> prepared;
+      std::optional<PreparedTextQuery> prepared;
       if (wildcards && lookup_value.is_text()) {
-        prepared = prepare_wildcard_query(lookup_value.as_text(), profile);
+        prepared = prepare_text_query(lookup_value.as_text(), profile, CollationStrength::kDynamic);
       }
       for (std::size_t k = 0; k < n; ++k) {
         const std::size_t i = idx_at(k);
-        if (prepared.has_value() ? prepared_wildcard_eq(cells[i], prepared.value(), profile)
-                                 : xlookup_exact_eq(cells[i], lookup_value, wildcards, profile)) {
+        if (prepared.has_value() ? prepared_text_query_matches(cells[i], prepared.value(), profile)
+                                 : xlookup_exact_eq(cells[i], lookup_value, profile)) {
           return i;
         }
       }
@@ -257,6 +214,7 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
     // under the mode's ordering, short-circuit on any exact hit. `cmp`
     // only gives us the sign vs. lookup, so to rank two candidate cells
     // against each other we re-use `xlookup_cmp` on the pair directly.
+    const bool smaller = match_mode == XMatchMode::Smaller;
     std::size_t best = SIZE_MAX;
     for (std::size_t k = 0; k < n; ++k) {
       const std::size_t i = idx_at(k);
@@ -267,32 +225,17 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
       if (cmp == 0) {
         return i;  // exact hit always wins
       }
-      if (match_mode == XMatchMode::Smaller) {
-        if (cmp >= 0) {
-          continue;  // cell > lookup, not a candidate
-        }
-        if (best == SIZE_MAX) {
-          best = i;
-          continue;
-        }
-        int pair_cmp = 0;
-        if (xlookup_cmp(cells[i], cells[best], profile, &pair_cmp) && pair_cmp > 0) {
-          // New candidate is larger than the current best (and still <= lookup).
-          best = i;
-        }
-      } else {
-        if (cmp <= 0) {
-          continue;  // cell < lookup, not a candidate
-        }
-        if (best == SIZE_MAX) {
-          best = i;
-          continue;
-        }
-        int pair_cmp = 0;
-        if (xlookup_cmp(cells[i], cells[best], profile, &pair_cmp) && pair_cmp < 0) {
-          // New candidate is smaller than the current best (and still >= lookup).
-          best = i;
-        }
+      if ((cmp < 0) != smaller) {
+        continue;  // on the wrong side of lookup, not a candidate
+      }
+      if (best == SIZE_MAX) {
+        best = i;
+        continue;
+      }
+      // A candidate nearer the lookup than the current best replaces it.
+      int pair_cmp = 0;
+      if (xlookup_cmp(cells[i], cells[best], profile, &pair_cmp) && (smaller ? pair_cmp > 0 : pair_cmp < 0)) {
+        best = i;
       }
     }
     return best;
@@ -406,11 +349,13 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
     return ErrorCode::Value;
   }
 
+  XlookupPlan plan;
+
   // 1) lookup_value — errors propagate; Blank acts as numeric 0 via the
   //    comparison primitives.
-  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (lookup.is_error()) {
-    return lookup.as_error();
+  plan.lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (plan.lookup.is_error()) {
+    return plan.lookup.as_error();
   }
 
   // 2) lookup_array — must be a 1-D range.
@@ -423,7 +368,7 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   std::uint32_t l_rows = lookup_resolved.value().rows;
   std::uint32_t l_cols = lookup_resolved.value().cols;
   const bool lookup_declared = static_reference_shape(call.as_call_arg(1), ctx, &l_rows, &l_cols);
-  std::vector<Value> lookup_cells = std::move(lookup_resolved.value().cells);
+  plan.lookup_cells = std::move(lookup_resolved.value().cells);
   if (l_rows != 1U && l_cols != 1U) {
     return ErrorCode::Value;
   }
@@ -438,21 +383,21 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   if (!return_resolved) {
     return std::move(return_resolved.error());
   }
-  const std::uint32_t r_rows = return_resolved.value().rows;
-  const std::uint32_t r_cols = return_resolved.value().cols;
-  std::vector<Value> return_cells = std::move(return_resolved.value().cells);
-  const bool horizontal_lookup = l_rows == 1U && l_cols != 1U;
+  plan.r_rows = return_resolved.value().rows;
+  plan.r_cols = return_resolved.value().cols;
+  plan.return_cells = std::move(return_resolved.value().cells);
+  plan.horizontal_lookup = l_rows == 1U && l_cols != 1U;
   // The number of result lanes parallel to the lookup axis, and the width
   // of the slice returned per match.
-  const std::uint32_t lookup_len = static_cast<std::uint32_t>(lookup_cells.size());
-  const std::uint32_t match_extent = horizontal_lookup ? r_cols : r_rows;
-  const std::uint32_t slice_extent = horizontal_lookup ? r_rows : r_cols;
+  const std::uint32_t lookup_len = static_cast<std::uint32_t>(plan.lookup_cells.size());
+  const std::uint32_t match_extent = plan.horizontal_lookup ? plan.r_cols : plan.r_rows;
+  plan.slice_extent = plan.horizontal_lookup ? plan.r_rows : plan.r_cols;
   // Two static references agree by declared shape (`A:A` never pairs with
   // `B1:B5`); the walked cells must then line up lane for lane.
-  std::uint32_t r_shape_rows = r_rows;
-  std::uint32_t r_shape_cols = r_cols;
+  std::uint32_t r_shape_rows = plan.r_rows;
+  std::uint32_t r_shape_cols = plan.r_cols;
   if (lookup_declared && static_reference_shape(call.as_call_arg(2), ctx, &r_shape_rows, &r_shape_cols) &&
-      (horizontal_lookup ? r_shape_cols : r_shape_rows) != (horizontal_lookup ? l_cols : l_rows)) {
+      (plan.horizontal_lookup ? r_shape_cols : r_shape_rows) != (plan.horizontal_lookup ? l_cols : l_rows)) {
     return ErrorCode::Value;
   }
   if (match_extent != lookup_len) {
@@ -460,23 +405,10 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
   }
 
   // 5) match_mode and 6) search_mode (both optional).
-  XMatchMode match_mode = XMatchMode::Exact;
-  XSearchMode search_mode = XSearchMode::FirstToLast;
   if (const std::optional<Value> mode_err =
-          parse_xmatch_modes(call, 4U, 5U, arena, registry, ctx, &match_mode, &search_mode)) {
+          parse_xmatch_modes(call, 4U, 5U, arena, registry, ctx, &plan.match_mode, &plan.search_mode)) {
     return mode_err->as_error();
   }
-
-  XlookupPlan plan;
-  plan.lookup = lookup;
-  plan.lookup_cells = std::move(lookup_cells);
-  plan.return_cells = std::move(return_cells);
-  plan.r_rows = r_rows;
-  plan.r_cols = r_cols;
-  plan.horizontal_lookup = horizontal_lookup;
-  plan.slice_extent = slice_extent;
-  plan.match_mode = match_mode;
-  plan.search_mode = search_mode;
   return plan;
 }
 
@@ -577,17 +509,12 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
   const XlookupPlan& plan = planned.value();
   const Value& lookup = plan.lookup;
-  const std::vector<Value>& lookup_cells = plan.lookup_cells;
-  const std::vector<Value>& return_cells = plan.return_cells;
-  const std::uint32_t r_rows = plan.r_rows;
   const std::uint32_t r_cols = plan.r_cols;
   const bool horizontal_lookup = plan.horizontal_lookup;
-  const std::uint32_t slice_extent = plan.slice_extent;
-  const XMatchMode match_mode = plan.match_mode;
-  const XSearchMode search_mode = plan.search_mode;
+  const std::vector<Value>& return_cells = plan.return_cells;
 
   const auto match_one = [&](const Value& query) {
-    return match_query(lookup_cells, query, match_mode, search_mode, ctx.excel_profile());
+    return match_query(plan.lookup_cells, query, plan.match_mode, plan.search_mode, ctx.excel_profile());
   };
 
   // Evaluate if_not_found at most once, and only after the first true miss.
@@ -650,7 +577,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // the existing multi-cell return behavior: the matched row (vertical
   // lookup) or column (horizontal lookup) spills as an array.
   const std::size_t off = match.offset;
-  if (slice_extent == 1U) {
+  if (plan.slice_extent == 1U) {
     // Single-cell result. `off` indexes the match axis; with a 1-lane
     // return_array the flat index is `off` regardless of orientation.
     return return_cells[off];
@@ -658,7 +585,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Gather the matched slice with one stride: column `off` is `r_rows` cells
   // `r_cols` apart (an r_rows x 1 array); row `off` is `r_cols` adjacent cells
   // (a 1 x r_cols array).
-  const std::uint32_t count = horizontal_lookup ? r_rows : r_cols;
+  const std::uint32_t count = plan.slice_extent;
   const std::size_t start = horizontal_lookup ? off : off * r_cols;
   const std::size_t stride = horizontal_lookup ? r_cols : 1U;
   Value* buffer = nullptr;
@@ -743,10 +670,7 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
   const std::uint32_t rows = resolved.value().rows;
   const std::uint32_t cols = resolved.value().cols;
   std::vector<Value> cells = std::move(resolved.value().cells);
-  std::uint32_t shape_rows = rows;
-  std::uint32_t shape_cols = cols;
-  static_reference_shape(call.as_call_arg(1), ctx, &shape_rows, &shape_cols);
-  if (shape_rows != 1U && shape_cols != 1U) {
+  if (!dynamic_array::is_declared_vector(call.as_call_arg(1), ctx, rows, cols)) {
     return Value::error(ErrorCode::Value);
   }
   if (cells.empty()) {

@@ -338,12 +338,11 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     shown.insert(shown.begin(), '{');
     shown.push_back('}');
   }
-  char* buf = static_cast<char*>(arena.allocate(shown.size(), alignof(char)));
-  if (buf == nullptr) {
+  const std::string_view copy = arena.intern(shown);
+  if (copy.empty() && !shown.empty()) {
     return Value::error(ErrorCode::Value);
   }
-  std::copy(shown.begin(), shown.end(), buf);
-  return Value::text(std::string_view(buf, shown.size()));
+  return Value::text(copy);
 }
 
 Value eval_n_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
@@ -556,6 +555,12 @@ Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const Function
   return Value::error(ErrorCode::NA);
 }
 
+// Windows ja-JP CODE: U+9AD9 (hashigo-daka) reads as its vendor-extension code,
+// and anything the code page cannot hold reads as '?'.
+constexpr std::uint32_t kHashigoTakaCodepoint = 0x9AD9u;
+constexpr double kHashigoTakaCode = 38526.0;
+constexpr double kUnmappableCode = 63.0;
+
 Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {
   if (call.as_call_arity() != 1U) {
@@ -578,11 +583,11 @@ Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     if (!decoded.valid) {
       return Value::error(ErrorCode::Value);
     }
-    if (decoded.codepoint == 0x9AD9u) {
-      return Value::number(38526.0);
+    if (decoded.codepoint == kHashigoTakaCodepoint) {
+      return Value::number(kHashigoTakaCode);
     }
     if (decoded.codepoint > 0xFFFFu || is_hangul(decoded.codepoint)) {
-      return Value::number(63.0);
+      return Value::number(kUnmappableCode);
     }
   }
   const FunctionDef* def = registry.lookup("CODE");
@@ -607,6 +612,7 @@ Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     if (!text) {
       return Value::error(text.error());
     }
+    const DbcsCodepage dbcs_codepage = locale_facts(profile).dbcs_codepage;
     std::uint64_t bytes = 0;
     std::size_t i = 0;
     while (i < text.value().size()) {
@@ -618,7 +624,7 @@ Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       if (step == 1U && cp == 0xFFFDu) {
         bytes += 1U;
       } else if (cp <= 0x00FFu || (cp >= 0xFF61u && cp <= 0xFF9Fu) ||
-                 (is_hangul(cp) && locale_facts(profile).dbcs_codepage == DbcsCodepage::kJis0208)) {
+                 (is_hangul(cp) && dbcs_codepage == DbcsCodepage::kJis0208)) {
         bytes += 1U;
       } else {
         bytes += 2U;

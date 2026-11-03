@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/collation.h"
 #include "eval/declared_rect.h"
 #include "excel_profile.h"
 #include "parser/reference.h"
@@ -46,6 +47,19 @@ Value promote_array_result_cell(const Value& value);
 // point on its own (no voicing-mark composition); zh and Windows fold ASCII
 // case only.
 std::string lookup_wildcard_key(std::string_view text, ExcelProfile profile);
+
+// A text lookup_value prepared once for a linear scan: either a folded
+// wildcard pattern or an unescaped literal compared through the collator at
+// `strength`. Non-text cells never match.
+struct PreparedTextQuery {
+  bool has_pattern = false;
+  std::string prepared;
+  CollationStrength strength = CollationStrength::kDynamic;
+};
+
+PreparedTextQuery prepare_text_query(std::string_view raw, ExcelProfile profile, CollationStrength strength);
+
+bool prepared_text_query_matches(const Value& cell, const PreparedTextQuery& query, ExcelProfile profile);
 
 // Spills `per_lane(query)` for every cell of an array-valued lookup_value, in
 // the query array's shape, lanes in row-major order. The lookup family

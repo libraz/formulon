@@ -27,6 +27,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/reference/common.h"
+#include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -170,41 +171,21 @@ bool expand_indirect_call(const parser::AstNode& call, Arena& arena, const Funct
 bool expand_choose_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
                         std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  const std::uint32_t arity = call.as_call_arity();
-  // Need at least the index plus one value, matching `eval_choose_lazy`.
-  if (arity < 2U) {
-    *out_err_code = ErrorCode::Value;
-    return false;
+  const SelectedBranch picked = select_choose_branch(call, arena, registry, ctx);
+  switch (picked.kind) {
+    case SelectedBranch::Kind::kArgument:
+      // `resolve_range_arg` routes a nested OFFSET / CHOOSE / IF back through
+      // these expanders, so chains flatten cleanly.
+      return expand_resolved_range(call.as_call_arg(picked.arg), arena, registry, ctx, out_cells, out_err_code,
+                                   out_rows, out_cols);
+    case SelectedBranch::Kind::kArraySubject:
+      return expand_array_result(eval_choose_array_index_lazy(call, picked.value, arena, registry, ctx), out_cells,
+                                 out_err_code, out_rows, out_cols);
+    case SelectedBranch::Kind::kResult:
+      break;
   }
-  // Evaluate the index argument; CHOOSE expects a 1-based integer
-  // selector. Errors propagate with their original code, mirroring
-  // `eval_choose_lazy`.
-  const Value idx_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (idx_val.is_error()) {
-    *out_err_code = idx_val.as_error();
-    return false;
-  }
-  if (idx_val.is_array()) {
-    const Value result = eval_choose_array_index_lazy(call, idx_val, arena, registry, ctx);
-    return expand_array_result(result, out_cells, out_err_code, out_rows, out_cols);
-  }
-  auto idx_num = coerce_to_number(idx_val);
-  if (!idx_num) {
-    *out_err_code = idx_num.error();
-    return false;
-  }
-  // Excel truncates (toward zero) rather than rounds: CHOOSE(2.9, ...)
-  // selects the 2nd value, not the 3rd, exactly as `eval_choose_lazy`.
-  const double raw = truncate_index(idx_num.value());
-  if (!(raw >= 1.0 && raw <= static_cast<double>(arity - 1U))) {
-    *out_err_code = ErrorCode::Value;
-    return false;
-  }
-  const auto picked_slot = static_cast<std::uint32_t>(raw);
-  // `resolve_range_arg` routes a nested OFFSET / CHOOSE / IF back through
-  // these expanders, so chains flatten cleanly.
-  return expand_resolved_range(call.as_call_arg(picked_slot), arena, registry, ctx, out_cells, out_err_code, out_rows,
-                               out_cols);
+  *out_err_code = picked.value.as_error();
+  return false;
 }
 
 bool expand_array_result(const Value& result, std::vector<Value>* out_cells, ErrorCode* out_err_code,

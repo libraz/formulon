@@ -184,8 +184,9 @@ Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double n = static_cast<double>(xs.size());
-  const double mean = mean_of(xs);
-  const double variance = compute_mean_ss(xs).ss / (n - 1.0);
+  const MeanSS ms = compute_mean_ss(xs);
+  const double mean = ms.mean;
+  const double variance = ms.ss / (n - 1.0);
   if (!(variance > 0.0)) {
     return Value::error(ErrorCode::Div0);
   }

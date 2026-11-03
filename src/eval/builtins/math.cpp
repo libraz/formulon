@@ -115,22 +115,27 @@ Value round_to_digits(const Value* args, std::uint32_t arity, RoundFn round, boo
   return to_finite_value(round(value.value(), d));
 }
 
+// CEILING / FLOOR / MROUND / TRUNC treat empty-string text as `#VALUE!` rather
+// than coercing it to zero (which is what the general arithmetic rule in
+// `coerce_to_number` does). This matters because the subsequent `s == 0`
+// branch would otherwise convert `FLOOR(10, "")` to `#DIV/0!` -- Excel's
+// observed behaviour is `#VALUE!`.
+inline bool is_empty_text(const Value& v) {
+  if (v.kind() != ValueKind::Text)
+    return false;
+  const std::string_view t = v.as_text();
+  for (char c : t) {
+    if (c != ' ' && c != '\t')
+      return false;
+  }
+  return true;
+}
+
 // TRUNC(value, digits?) - truncate toward zero at `digits` decimals (default
 // 0), on the digits of the value's 15-significant-digit view. `digits` may be
 // negative (e.g. `TRUNC(1234.5, -1) = 1230`).
 Value Trunc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  // Empty-string arguments surface #VALUE! rather than coercing to 0, same
-  // rule as CEILING / FLOOR / MROUND.
-  auto is_empty = [](const Value& v) {
-    if (v.kind() != ValueKind::Text)
-      return false;
-    for (char c : v.as_text()) {
-      if (c != ' ' && c != '\t')
-        return false;
-    }
-    return true;
-  };
-  if (is_empty(args[0]) || (arity >= 2 && is_empty(args[1]))) {
+  if (is_empty_text(args[0]) || (arity >= 2 && is_empty_text(args[1]))) {
     return Value::error(ErrorCode::Value);
   }
   return round_to_digits(args, arity, &builtins_detail::round_down_decimals);
@@ -239,22 +244,6 @@ Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // modern `*.MATH` variants (below) drop this rule entirely and use
 // `|significance|` unconditionally.
 
-// CEILING / FLOOR / MROUND treat empty-string text as `#VALUE!` rather
-// than coercing it to zero (which is what the general arithmetic rule in
-// `coerce_to_number` does). This matters because the subsequent `s == 0`
-// branch would otherwise convert `FLOOR(10, "")` to `#DIV/0!` -- Excel's
-// observed behaviour is `#VALUE!`.
-inline bool is_empty_text(const Value& v) {
-  if (v.kind() != ValueKind::Text)
-    return false;
-  const std::string_view t = v.as_text();
-  for (char c : t) {
-    if (c != ' ' && c != '\t')
-      return false;
-  }
-  return true;
-}
-
 inline double signum(double x) {
   if (x > 0.0) {
     return 1.0;
@@ -337,16 +326,6 @@ Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return legacy_significance_round(args, Value::error(ErrorCode::Div0), [](double q) { return std::floor(q); });
 }
 
-// Coerces two numeric arguments, rejecting a Bool in either slot with
-// `#VALUE!` (MROUND and QUOTIENT, unlike the arithmetic operators, do not
-// accept direct Bool operands).
-Expected<builtins_detail::NumberPair, ErrorCode> coerce_non_bool_pair(const Value* args) {
-  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
-    return ErrorCode::Value;
-  }
-  return builtins_detail::read_number_pair(args, 0, 1);
-}
-
 // MROUND(number, multiple) - nearest multiple of `|multiple|` to `number`,
 // with ties rounded away from zero. Opposite-signed inputs yield #NUM!;
 // `multiple = 0` returns 0 (Excel's documented quirk).
@@ -357,7 +336,7 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Excel 365 rejects direct Bool arguments to MROUND with #VALUE!
   // (mirrors the strict-Bool rejection in BIN2*/OCT2*/HEX2*). Number
   // and Text arguments still coerce normally.
-  auto pair = coerce_non_bool_pair(args);
+  auto pair = builtins_detail::read_number_pair_no_bool(args, 0, 1);
   if (!pair) {
     return Value::error(pair.error());
   }
@@ -485,7 +464,7 @@ Value Odd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 Value Quotient(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Excel's QUOTIENT rejects boolean operands (#VALUE!) even though MOD and
   // arithmetic operators accept them. Verified against Mac Excel 365 / IronCalc.
-  auto pair = coerce_non_bool_pair(args);
+  auto pair = builtins_detail::read_number_pair_no_bool(args, 0, 1);
   if (!pair) {
     return Value::error(pair.error());
   }

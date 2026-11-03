@@ -501,7 +501,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   std::string out;
   out.reserve(512 + wb.sheet_count() * 128 + plan.passthrough_kept.size() * 128);
   out.append(kXmlDecl);
-  out.append("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n");
+  out.append("<Types");
+  append_xml_ns_decl(out, "", kNsContentTypes);
+  out.append(">\n");
   auto append_default = [&out](std::string_view extension, std::string_view content_type) {
     out.append("  <Default");
     append_xml_attr(out, "Extension", extension);
@@ -654,7 +656,9 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
   std::string out;
   out.reserve(entries.size() + 192);
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  out.append("<Relationships");
+  append_xml_ns_decl(out, "", kNsPackageRelationships);
+  out.append(">\n");
   out.append(entries);
   out.append("</Relationships>\n");
   return out;
@@ -666,7 +670,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   std::string out;
   out.reserve(256 + sheet_count * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  out.append("<Relationships");
+  append_xml_ns_decl(out, "", kNsPackageRelationships);
+  out.append(">\n");
   std::uint32_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const std::string target = "worksheets/sheet" + std::to_string(i + 1U) + ".bin";

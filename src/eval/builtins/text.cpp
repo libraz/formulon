@@ -84,10 +84,8 @@ Value Lower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // A collapsed run keeps the character that *started* it rather than
 // normalising to an ASCII space: `"a　　b"` trims to `"a　b"`, and a mixed
 // run takes its first member, so `" 　 "` collapses to `" "` while `"　 "`
-// collapses to `"　"`. Emitting an ASCII space for every run reads as the
-// obvious simplification and is what this did; it silently rewrote
-// ja-JP text, since a full-width space between two words is typography
-// rather than padding.
+// collapses to `"　"`. A full-width space between two words is typography
+// rather than padding, so it is never rewritten to an ASCII space.
 Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
@@ -359,14 +357,9 @@ Value Unichar(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (n < 1 || n > 0x10FFFF) {
     return Value::error(ErrorCode::Value);
   }
-  if (n >= 0xD800 && n <= 0xDFFF) {
-    // UTF-16 surrogate halves do not represent characters on their own.
-    return Value::error(ErrorCode::Value);
-  }
   const std::string encoded = encode_utf8_codepoint(static_cast<std::uint32_t>(n));
   if (encoded.empty()) {
-    // Defensive: encoder validates internally; an empty string here would
-    // mean the helper rejected our codepoint despite the range checks.
+    // The encoder rejects UTF-16 surrogate halves, which are not characters on their own.
     return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(encoded));

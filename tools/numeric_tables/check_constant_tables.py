@@ -375,6 +375,7 @@ def build_checks() -> List[Check]:
         _scalar("kLnSqrt2Pi", "stats/numeric_constants.h", "kLnSqrt2Pi", ln_sqrt_2pi),
         _scalar("kInvSqrtPi", "stats/numeric_constants.h", "kInvSqrtPi", inv_sqrt_pi),
         _scalar("kPi", "stats/numeric_constants.h", "kPi", lambda: rn(pi())),
+        _scalar("kInvSqrt2", "stats/numeric_constants.h", "kInvSqrt2", lambda: rn(dec_sqrt(Decimal("0.5")))),
         _scalar("kEulerGamma", dist, "kEulerGamma", lambda: rn(dec_euler_gamma())),
         _scalar("kSqrtPi", dist, "kSqrtPi", lambda: rn(dec_sqrt(pi()))),
         _scalar("kSqrtHalfPi", dist, "kSqrtHalfPi", lambda: rn(dec_sqrt(pi() / 2))),
@@ -390,10 +391,7 @@ def build_checks() -> List[Check]:
                 f"[s^{2 * (9 - i)}] (sinh(s/2)/(s/2))^(b-1) as a polynomial in b; nearest",
             )
         )
-    for lit, fn in (
-        ("0.7071067811865476", lambda: rn(dec_sqrt(Decimal("0.5")))),
-        ("1.4142135623730951", lambda: rn(dec_sqrt(2))),
-    ):
+    for lit, fn in (("1.4142135623730951", lambda: rn(dec_sqrt(2))),):
         checks.append(Check(f"literal {lit}", special, lit, "inline", lambda fn=fn: [fn()], "nearest"))
     return checks
 

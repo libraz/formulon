@@ -98,12 +98,6 @@ struct R1C1Base {
 /// which describes no rectangle.
 A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base);
 
-/// Writes the uppercase A1 column letters for the 1-based column `col`
-/// to `out`. Returns the number of letters written (1..3); `out` must
-/// have room for at least 3 chars. `col` must satisfy
-/// `1 <= col <= 16384`; callers are expected to range-check first.
-std::size_t column_letters(std::uint32_t col, char* out);
-
 }  // namespace refs_internal
 }  // namespace eval
 }  // namespace formulon

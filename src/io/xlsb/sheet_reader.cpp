@@ -22,6 +22,7 @@
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/sheet_properties_records.h"
+#include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sparkline_records.h"
 #include "io/xlsb/view_records.h"
 #include "parser/ast.h"
@@ -132,9 +133,9 @@ bool DecodeDataTableRecord(ByteSpan p, DataTable* out) {
   }
   DataTable table;
   table.ref = ref;
-  table.row_oriented = (flags.value() & 0x01U) != 0U;
-  table.two_dimensional = (flags.value() & 0x02U) != 0U;
-  table.always_calc = (flags.value() & 0x10U) != 0U;
+  table.row_oriented = (flags.value() & kTableRowInput) != 0U;
+  table.two_dimensional = (flags.value() & kTableTwoDimensional) != 0U;
+  table.always_calc = (flags.value() & kTableAlwaysCalc) != 0U;
   const auto input = [&](bool present, bool deleted, std::uint32_t row, std::uint32_t col, DataTableInput* in) {
     in->present = present;
     in->deleted = present && deleted;
@@ -145,8 +146,8 @@ bool DecodeDataTableRecord(ByteSpan p, DataTable* out) {
     in->col = col;
     return Sheet::coord_in_grid(row, col);
   };
-  if (!input(true, (flags.value() & 0x04U) != 0U, cells[0], cells[1], &table.r1) ||
-      !input(table.two_dimensional, (flags.value() & 0x08U) != 0U, cells[2], cells[3], &table.r2)) {
+  if (!input(true, (flags.value() & kTableDeletedInput1) != 0U, cells[0], cells[1], &table.r1) ||
+      !input(table.two_dimensional, (flags.value() & kTableDeletedInput2) != 0U, cells[2], cells[3], &table.r2)) {
     return false;
   }
   // Spelled out on an xlsx save, as for a table built here; `aca` has no XLSB bit.
@@ -693,14 +694,14 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
                             "context=xlsb_reader");
         }
         const std::uint8_t flags = flags2_or.value();
-        const bool has_style = (flags & 0x40U) != 0U;
-        // flags2 bit 0x20 (fUnsynced) is the sole custom-height signal.
+        const bool has_style = (flags & kRowGhostDirty) != 0U;
+        // flags2 bit fUnsynced is the sole custom-height signal.
         // Excel stores the rendered height in `miyRw` for every row,
         // including rows left at the sheet default, so a non-zero `miyRw`
         // says nothing about whether the source made the height custom.
         // Mirrors the OOXML reader, where the override follows `ht`
         // presence rather than the `customHeight` attribute.
-        const bool has_height = (flags & 0x20U) != 0U;
+        const bool has_height = (flags & kRowUnsynced) != 0U;
         RowLayout layout;
         layout.row = state.current_row;
         if (has_height) {
@@ -708,9 +709,9 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
           layout.has_height = true;
           layout.custom_height = true;
         }
-        layout.hidden = (flags & 0x10U) != 0U;
-        layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
-        layout.collapsed = (flags & 0x08U) != 0U;
+        layout.hidden = (flags & kRowZeroHeight) != 0U;
+        layout.outline_level = static_cast<std::uint8_t>(flags & kRowOutlineLevelMask);
+        layout.collapsed = (flags & kRowCollapsed) != 0U;
         layout.has_style = has_style;
         layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
         state.row_headers.push_back(SheetDecodeState::DecodedRowHeader{
@@ -740,7 +741,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       layout.first = first_or.value();
       layout.last = last_or.value();
       layout.width = static_cast<double>(width_or.value()) / 256.0;
-      layout.has_width = width_or.value() != 0U || (flags_or.value() & 0x0002U) != 0U;
+      layout.has_width = width_or.value() != 0U || (flags_or.value() & kColUserSet) != 0U;
       // BrtColInfo always carries ixfe; unlike OOXML there is no separate
       // style-presence bit. Treat the mandatory value as an effective style
       // (including ixfe=0), so an XLSB round-trip may canonicalize a
@@ -748,9 +749,9 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
       // rendering semantics.
       layout.has_style = true;
       layout.style_xf = style_xf_or.value();
-      layout.hidden = (flags_or.value() & 0x0001U) != 0U;
-      layout.outline_level = static_cast<std::uint8_t>((flags_or.value() >> 8U) & 0x07U);
-      layout.collapsed = (flags_or.value() & 0x0800U) != 0U;
+      layout.hidden = (flags_or.value() & kColHidden) != 0U;
+      layout.outline_level = static_cast<std::uint8_t>((flags_or.value() >> kColOutlineShift) & kColOutlineLevelMask);
+      layout.collapsed = (flags_or.value() & kColCollapsed) != 0U;
       wb.sheet(sheet_index).mutable_layout().columns.push_back(std::move(layout));
       return RecordDisposition::kModelled;
     }
@@ -997,48 +998,91 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(
 /// block.  This explicit grammar classification is needed when the source
 /// has no BrtHLink at all but the in-memory caller adds one before writing.
 bool is_after_hyperlinks(std::uint16_t type) {
+  enum : std::uint16_t {
+    kBrtPrintOptions = 477,
+    kBrtMargins = 476,
+    kBrtBeginHeaderFooter = 479,
+    kBrtEndHeaderFooter = 480,
+    kBrtPageSetup = 478,
+    kBrtBeginRwBrk = 392,
+    kBrtBrk = 396,
+    kBrtEndRwBrk = 393,
+    kBrtBeginColBrk = 394,
+    kBrtEndColBrk = 395,
+    kBrtBigName = 625,
+    kBrtBeginCellWatches = 605,
+    kBrtCellWatch = 607,
+    kBrtEndCellWatches = 606,
+    kBrtBeginCellIgnoreECs = 648,
+    kBrtCellIgnoreEC = 649,
+    kBrtEndCellIgnoreECs = 650,
+    kBrtBeginSmartTags = 594,
+    kBrtBeginCellSmartTags = 592,
+    kBrtBeginCellSmartTag = 590,
+    kBrtCellSmartTagProperty = 589,
+    kBrtEndCellSmartTag = 591,
+    kBrtEndCellSmartTags = 593,
+    kBrtEndSmartTags = 595,
+    kBrtDrawing = 550,
+    kBrtLegacyDrawing = 551,
+    kBrtLegacyDrawingHF = 552,
+    kBrtBkhim = 562,
+    kBrtBeginOleObjects = 638,
+    kBrtOleObject = 639,
+    kBrtEndOleObjects = 640,
+    kBrtBeginActiveXControls = 643,
+    kBrtActiveX = 644,
+    kBrtEndActiveXControls = 645,
+    kBrtBeginWebPubItems = 554,
+    kBrtBeginWebPubItem = 556,
+    kBrtEndWebPubItem = 557,
+    kBrtEndWebPubItems = 555,
+    kBrtBeginTableParts = 660,
+    kBrtTablePart = 661,
+    kBrtEndTableParts = 662,
+  };
   switch (type) {
-    case 477:  // BrtPrintOptions
-    case 476:  // BrtMargins
-    case 479:  // BrtBeginHeaderFooter
-    case 480:  // BrtEndHeaderFooter
-    case 478:  // BrtPageSetup
-    case 392:  // BrtBeginRwBrk
-    case 396:  // BrtBrk
-    case 393:  // BrtEndRwBrk
-    case 394:  // BrtBeginColBrk
-    case 395:  // BrtEndColBrk
-    case 625:  // BrtBigName
-    case 605:  // BrtBeginCellWatches
-    case 607:  // BrtCellWatch
-    case 606:  // BrtEndCellWatches
-    case 648:  // BrtBeginCellIgnoreECs
-    case 649:  // BrtCellIgnoreEC
-    case 650:  // BrtEndCellIgnoreECs
-    case 594:  // BrtBeginSmartTags
-    case 592:  // BrtBeginCellSmartTags
-    case 590:  // BrtBeginCellSmartTag
-    case 589:  // BrtCellSmartTagProperty
-    case 591:  // BrtEndCellSmartTag
-    case 593:  // BrtEndCellSmartTags
-    case 595:  // BrtEndSmartTags
-    case 550:  // BrtDrawing
-    case 551:  // BrtLegacyDrawing
-    case 552:  // BrtLegacyDrawingHF
-    case 562:  // BrtBkhim
-    case 638:  // BrtBeginOleObjects
-    case 639:  // BrtOleObject
-    case 640:  // BrtEndOleObjects
-    case 643:  // BrtBeginActiveXControls
-    case 644:  // BrtActiveX
-    case 645:  // BrtEndActiveXControls
-    case 554:  // BrtBeginWebPubItems
-    case 556:  // BrtBeginWebPubItem
-    case 557:  // BrtEndWebPubItem
-    case 555:  // BrtEndWebPubItems
-    case 660:  // BrtBeginTableParts
-    case 661:  // BrtTablePart
-    case 662:  // BrtEndTableParts
+    case kBrtPrintOptions:
+    case kBrtMargins:
+    case kBrtBeginHeaderFooter:
+    case kBrtEndHeaderFooter:
+    case kBrtPageSetup:
+    case kBrtBeginRwBrk:
+    case kBrtBrk:
+    case kBrtEndRwBrk:
+    case kBrtBeginColBrk:
+    case kBrtEndColBrk:
+    case kBrtBigName:
+    case kBrtBeginCellWatches:
+    case kBrtCellWatch:
+    case kBrtEndCellWatches:
+    case kBrtBeginCellIgnoreECs:
+    case kBrtCellIgnoreEC:
+    case kBrtEndCellIgnoreECs:
+    case kBrtBeginSmartTags:
+    case kBrtBeginCellSmartTags:
+    case kBrtBeginCellSmartTag:
+    case kBrtCellSmartTagProperty:
+    case kBrtEndCellSmartTag:
+    case kBrtEndCellSmartTags:
+    case kBrtEndSmartTags:
+    case kBrtDrawing:
+    case kBrtLegacyDrawing:
+    case kBrtLegacyDrawingHF:
+    case kBrtBkhim:
+    case kBrtBeginOleObjects:
+    case kBrtOleObject:
+    case kBrtEndOleObjects:
+    case kBrtBeginActiveXControls:
+    case kBrtActiveX:
+    case kBrtEndActiveXControls:
+    case kBrtBeginWebPubItems:
+    case kBrtBeginWebPubItem:
+    case kBrtEndWebPubItem:
+    case kBrtEndWebPubItems:
+    case kBrtBeginTableParts:
+    case kBrtTablePart:
+    case kBrtEndTableParts:
       return true;
     default:
       return false;

@@ -50,6 +50,45 @@ void append_xml_attr(std::string& out, std::string_view name, std::string_view v
   out.push_back('"');
 }
 
+void append_xml_ns_decl(std::string& out, std::string_view prefix, std::string_view uri) {
+  out.append(" xmlns");
+  if (!prefix.empty()) {
+    out.push_back(':');
+    out.append(prefix);
+  }
+  out.append("=\"");
+  out.append(uri);
+  out.push_back('"');
+}
+
+std::string_view local_name(const char* qname) {
+  const char* colon = std::strchr(qname, ':');
+  return colon != nullptr ? colon + 1 : qname;
+}
+
+std::string_view local_name(const pugi::xml_node& node) {
+  return local_name(node.name());
+}
+
+pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name) {
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (child.type() == pugi::node_element && (name.empty() || local_name(child) == name)) {
+      return child;
+    }
+  }
+  return {};
+}
+
+std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::string_view name) {
+  std::vector<pugi::xml_node> out;
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (child.type() == pugi::node_element && local_name(child) == name) {
+      out.push_back(child);
+    }
+  }
+  return out;
+}
+
 void append_xml_attr_uint(std::string& out, std::string_view name, std::uint64_t value) {
   AppendAttrOpen(out, name);
   out.append(std::to_string(value));

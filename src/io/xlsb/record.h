@@ -234,6 +234,11 @@ Expected<double, Error> read_double(ByteSpan& cursor);
 /// passes through as its own code point.
 void append_utf16le_as_utf8(const std::uint8_t* data, std::uint32_t units, std::string* out);
 
+/// Decodes `units` UTF-16LE code units at `cursor` and appends them to `*out`
+/// as UTF-8, advancing `cursor`. Returns false, leaving both untouched, when
+/// fewer than `units` code units remain.
+bool read_utf16_units(ByteSpan& cursor, std::uint32_t units, std::string* out);
+
 /// Reads an `XLWideString` ([MS-XLSB] §2.5.166): a 32-bit length-prefix
 /// followed by `length` UCS-2 little-endian code units. The returned
 /// string is UTF-8 encoded. Lone surrogates are passed through as if
@@ -269,6 +274,10 @@ struct FramedRecord {
 
 /// Splits `buf` into framed records; empty when it does not parse whole.
 std::vector<FramedRecord> split_records(const std::vector<std::uint8_t>& buf);
+
+/// Offset of the first framed record of `type` in `buf`, or `buf.size()` when
+/// there is none before a framing error.
+std::size_t find_record_offset(const std::vector<std::uint8_t>& buf, std::uint16_t type);
 
 /// True when `buf` holds a record of `type` before any framing error.
 bool contains_record_type(const std::vector<std::uint8_t>& buf, std::uint16_t type);

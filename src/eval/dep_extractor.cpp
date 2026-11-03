@@ -122,6 +122,16 @@ bool lambda_is_active(const parser::AstNode* lambda, const WalkState& state) noe
   return false;
 }
 
+// Looks up a sheet by display name; false when no sheet matches.
+bool find_sheet_index(const Workbook& workbook, std::string_view name, std::size_t* out) {
+  const std::size_t idx = workbook.sheet_index_by_name(name);
+  if (idx >= workbook.sheet_count()) {
+    return false;
+  }
+  *out = idx;
+  return true;
+}
+
 // Resolves the sheet id for a `Reference`. Returns true and writes
 // `*out_sheet_id` on success; returns false (and writes nothing) when the
 // qualifier names an unknown sheet. An empty qualifier resolves to the
@@ -134,8 +144,8 @@ bool resolve_sheet_id(const parser::Reference& ref, const WalkState& state, std:
   // Linear scan over the workbook's sheets to find the index. The workbook
   // typically owns O(1)-O(10) sheets so a hash is premature; mirroring the
   // strategy used by `Workbook::sheet_by_name`.
-  const std::size_t idx = state.workbook->sheet_index_by_name(ref.sheet);
-  if (idx == static_cast<std::size_t>(-1)) {
+  std::size_t idx = 0;
+  if (!find_sheet_index(*state.workbook, ref.sheet, &idx)) {
     return false;
   }
   // `idx` is below `sheet_count()`, which `Workbook::kMaxSheets` bounds at
@@ -153,14 +163,9 @@ void add_cell_dep(WalkState& state, CellNodeId cell) {
 }
 
 void add_range_dep(WalkState& state, CellRangeDependency range) {
-  for (const CellRangeDependency& existing : state.out->range_deps) {
-    if (existing.sheet_id == range.sheet_id && existing.row_first == range.row_first &&
-        existing.row_last == range.row_last && existing.col_first == range.col_first &&
-        existing.col_last == range.col_last) {
-      return;
-    }
+  if (std::find(state.out->range_deps.begin(), state.out->range_deps.end(), range) == state.out->range_deps.end()) {
+    state.out->range_deps.push_back(range);
   }
-  state.out->range_deps.push_back(range);
 }
 
 void add_three_d_span_dep(WalkState& state, std::size_t sheet_first, std::size_t sheet_last) {
@@ -851,9 +856,10 @@ void walk_ref3d(const parser::AstNode& node, WalkState& state) {
   if (state.workbook == nullptr) {
     return;
   }
-  const std::size_t begin_idx = state.workbook->sheet_index_by_name(node.as_ref3d_sheet_begin());
-  const std::size_t end_idx = state.workbook->sheet_index_by_name(node.as_ref3d_sheet_end());
-  if (begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1)) {
+  std::size_t begin_idx = 0;
+  std::size_t end_idx = 0;
+  if (!find_sheet_index(*state.workbook, node.as_ref3d_sheet_begin(), &begin_idx) ||
+      !find_sheet_index(*state.workbook, node.as_ref3d_sheet_end(), &end_idx)) {
     return;  // Missing endpoint: evaluator surfaces #REF! at eval time.
   }
   const std::size_t lo = std::min(begin_idx, end_idx);
@@ -862,22 +868,8 @@ void walk_ref3d(const parser::AstNode& node, WalkState& state) {
   // The shared rectangle is read once per sheet in the span, so the
   // graph-footprint ceiling is applied to it before the span multiplies
   // the cost.
-  const std::uint64_t area =
-      (static_cast<std::uint64_t>(normalized.value().row_last - normalized.value().row_first) + 1U) *
-      (static_cast<std::uint64_t>(normalized.value().col_last - normalized.value().col_first) + 1U);
-  const bool compact = normalized.value().whole_axis || area > kMaxMaterializedDependencyCells;
   for (std::size_t s = lo; s <= hi; ++s) {
-    if (compact) {
-      add_range_dep(state, CellRangeDependency{static_cast<std::uint16_t>(s), normalized.value().row_first,
-                                               normalized.value().row_last, normalized.value().col_first,
-                                               normalized.value().col_last});
-      continue;
-    }
-    for (std::uint32_t r = normalized.value().row_first; r <= normalized.value().row_last; ++r) {
-      for (std::uint32_t c = normalized.value().col_first; c <= normalized.value().col_last; ++c) {
-        add_cell_dep(state, CellNodeId{static_cast<std::uint16_t>(s), r, c});
-      }
-    }
+    emit_rect(state, static_cast<std::uint16_t>(s), normalized.value());
   }
 }
 

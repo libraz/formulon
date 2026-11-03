@@ -533,7 +533,7 @@ TEST(CoerceToNumberHostLocale, UnaffectedByCommaDecimalHostLocale) {
 }
 
 // ---------------------------------------------------------------------------
-// matrix_strict_number / matrix_strict_number_cell
+// matrix_strict_number
 // ---------------------------------------------------------------------------
 //
 // Locks in the LINEST / FORECAST.ETS "numbers-only matrix" contract:
@@ -603,24 +603,6 @@ TEST(MatrixStrictNumber, ArrayRejected) {
   auto r = matrix_strict_number(arr);
   ASSERT_FALSE(r.has_value());
   EXPECT_EQ(r.error(), ErrorCode::Value);
-}
-
-TEST(MatrixStrictNumberCell, ForwardsToScalarVariant) {
-  // The `(row, col)` variant has the same semantics today; the
-  // context is reserved for future structured-log enrichment. A
-  // smoke-test on each kind ensures the row / col arguments do not
-  // accidentally alter behaviour.
-  auto r_num = matrix_strict_number_cell(Value::number(7.5), 3, 4);
-  ASSERT_TRUE(r_num.has_value());
-  EXPECT_DOUBLE_EQ(r_num.value(), 7.5);
-
-  auto r_text = matrix_strict_number_cell(Value::text("3.14"), 0, 0);
-  ASSERT_FALSE(r_text.has_value());
-  EXPECT_EQ(r_text.error(), ErrorCode::Value);
-
-  auto r_err = matrix_strict_number_cell(Value::error(ErrorCode::NA), 99, 99);
-  ASSERT_FALSE(r_err.has_value());
-  EXPECT_EQ(r_err.error(), ErrorCode::NA);
 }
 
 // ---------------------------------------------------------------------------

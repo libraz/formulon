@@ -876,8 +876,8 @@ Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
 /// `360*(ey - sy) + 30*(em - sm) + (ed - sd)` after the day components have
 /// been adjusted per the selected rule set.
 ///
-/// US/NASD adjustments mirror `date_time::yearfrac_us30_360` exactly (same
-/// convention, same day-count formula), so the two never drift apart:
+/// US/NASD adjustments (unlike `date_time::yearfrac_us30_360`, there is no
+/// end-of-February rule for the end date):
 ///   1. start day is the last day of February -> start day becomes 30
 ///   2. end day 31 and (post-step-1) start day >= 30 -> end day becomes 30
 ///   3. start day 31                                  -> start day becomes 30

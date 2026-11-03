@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -112,16 +113,13 @@ Value Na(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // propagate `#VALUE!` from a failed coercion or a rejected Bool argument.
 Expected<bool, ErrorCode> truncated_is_even(const Value& v) {
   // Excel rejects Bool inputs to ISEVEN/ISODD outright, without the usual
-  // TRUE->1 / FALSE->0 coercion. Guard before `coerce_to_number`.
-  if (v.kind() == ValueKind::Bool) {
-    return ErrorCode::Value;
-  }
-  auto coerced = coerce_to_number(v);
+  // TRUE->1 / FALSE->0 coercion.
+  auto coerced = builtins_detail::coerce_to_number_no_bool(v);
   if (!coerced) {
     return std::move(coerced.error());
   }
   const double x = coerced.value();
-  if (std::isnan(x) || std::isinf(x)) {
+  if (!std::isfinite(x)) {
     return ErrorCode::Num;
   }
   // `std::fmod` preserves the low bit represented by a finite double without

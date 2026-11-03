@@ -25,6 +25,7 @@
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
+#include "io/protection_xml.h"
 #include "io/sheet_view_xml.h"
 #include "io/sqref_text.h"
 #include "io/xml_escape.h"
@@ -108,6 +109,14 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
   append_xml_attr_uint(out, "count", sheet.validations().size());
   out.append(sheet.validations_extra_attrs());
   out.append(">");
+  const auto append_formula = [&](const char* tag, const std::string& formula) {
+    if (formula.empty()) {
+      return;
+    }
+    out.append("<").append(tag).append(">");
+    AppendXmlEscaped(out, storage_feature_formula(formula, indexer));
+    out.append("</").append(tag).append(">");
+  };
   for (const DataValidation& v : sheet.validations()) {
     out.append("<dataValidation");
     if (const std::string_view t = enum_name(kDataValidationTypeNames, v.type); !t.empty()) {
@@ -155,16 +164,8 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
       AppendRangeRef(out, v.ranges[i]);
     }
     out.append("\">");
-    if (!v.formula1.empty()) {
-      out.append("<formula1>");
-      AppendXmlEscaped(out, storage_feature_formula(v.formula1, indexer));
-      out.append("</formula1>");
-    }
-    if (!v.formula2.empty()) {
-      out.append("<formula2>");
-      AppendXmlEscaped(out, storage_feature_formula(v.formula2, indexer));
-      out.append("</formula2>");
-    }
+    append_formula("formula1", v.formula1);
+    append_formula("formula2", v.formula2);
     out.append("</dataValidation>");
   }
   out.append("</dataValidations>");
@@ -184,11 +185,7 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
   for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
     const Hyperlink& h = sheet.hyperlinks()[i];
     out.append("<hyperlink ref=\"");
-    AppendCellRefForRef(out, h.row, h.col);
-    if (h.row != h.last_row || h.col != h.last_col) {
-      out.push_back(':');
-      AppendCellRefForRef(out, h.last_row, h.last_col);
-    }
+    AppendRangeRef(out, h.row, h.col, h.last_row, h.last_col);
     out.append("\"");
     if (i < rid_per_hyperlink.size() && !rid_per_hyperlink[i].empty()) {
       append_xml_attr(out, "r:id", rid_per_hyperlink[i]);
@@ -473,28 +470,11 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
   // preserves an explicit unlock (`formatCells="0"`) that a blanket
   // "emit when true" writer would drop, silently re-locking the action on
   // the next load. Order mirrors Excel's emission order.
-  const auto append_bool = [&out](const char* name, bool v, bool default_value) {
-    if (v == default_value) {
-      return;
+  for (const SheetProtectionFlag& flag : kSheetProtectionFlags) {
+    if (p.*flag.member != flag.default_value) {
+      emit_xsd_bool_attr(out, flag.attr, p.*flag.member);
     }
-    emit_xsd_bool_attr(out, name, v);
-  };
-  append_bool("sheet", p.sheet, false);
-  append_bool("objects", p.objects, false);
-  append_bool("scenarios", p.scenarios, false);
-  append_bool("formatCells", p.format_cells, true);
-  append_bool("formatColumns", p.format_columns, true);
-  append_bool("formatRows", p.format_rows, true);
-  append_bool("insertColumns", p.insert_columns, true);
-  append_bool("insertRows", p.insert_rows, true);
-  append_bool("insertHyperlinks", p.insert_hyperlinks, true);
-  append_bool("deleteColumns", p.delete_columns, true);
-  append_bool("deleteRows", p.delete_rows, true);
-  append_bool("selectLockedCells", p.select_locked_cells, false);
-  append_bool("sort", p.sort, true);
-  append_bool("autoFilter", p.auto_filter, true);
-  append_bool("pivotTables", p.pivot_tables, true);
-  append_bool("selectUnlockedCells", p.select_unlocked_cells, false);
+  }
   out.append("/>");
   return out;
 }
@@ -627,9 +607,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   out.reserve(192U + sheet_view_xml.size() + sheet_format_xml.size() + cols_xml.size() + sheet_pr_xml.size() +
               print.page_margins_xml.size() + page_setup_xml.size() + sheet_tables.size() * 96);
   out.append(kXmlDecl);
-  out.append(
-      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"");
+  out.append("<worksheet");
+  append_xml_ns_decl(out, "", kNsSpreadsheetMl);
+  append_xml_ns_decl(out, "r", kNsOfficeRelationships);
   // Re-declare the source worksheet root's extra namespaces so prefixed
   // attributes carried in any raw capture below resolve (keeps the output
   // well-formed; mirrors the workbook-root handling).

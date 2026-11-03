@@ -27,6 +27,10 @@ void AppendCellRefForRef(std::string& out, std::uint32_t row, std::uint32_t col)
 /// single cell when first/last coincide.
 void AppendRangeRef(std::string& out, const MergeRange& r);
 
+/// As above, from the 0-based corner coordinates.
+void AppendRangeRef(std::string& out, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                    std::uint32_t last_col);
+
 }  // namespace io
 }  // namespace formulon
 

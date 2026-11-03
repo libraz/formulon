@@ -366,24 +366,6 @@ namespace {
 // additionally enforces a rate >= 0 check upstream.
 enum class XFinKind { Xirr, Xnpv };
 
-// Row-major flatten of a single range-shaped argument into a vector of
-// cells, accepting everything `resolve_range_arg` resolves (`Ref` /
-// `RangeOp` / `SpillRef` / `ArrayLiteral` / dynamic-array producers). A
-// bare scalar is not a valid XIRR / XNPV range argument and surfaces
-// #VALUE!. `out_cells` is cleared on entry; on failure returns false
-// with the Excel-visible error written to `*out_err`.
-bool collect_range_cells(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
-  out_cells->clear();
-  auto resolved = resolve_range_arg_no_scalar(arg, arena, registry, ctx, ErrorCode::Value);
-  if (!resolved) {
-    *out_err = Value::error(resolved.error());
-    return false;
-  }
-  *out_cells = std::move(resolved.value().cells);
-  return true;
-}
-
 // Collects filtered (value, date) pairs from the two parallel ranges
 // with the kind-specific rule set described at the top of this section.
 // The resulting pairs are sorted by date ascending so downstream code
@@ -397,10 +379,10 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
                     std::vector<double>* out_dates, Value* out_err) {
   std::vector<Value> value_cells;
   std::vector<Value> date_cells;
-  if (!collect_range_cells(values_arg, arena, registry, ctx, &value_cells, out_err)) {
+  if (!resolve_flat_cells(values_arg, arena, registry, ctx, &value_cells, out_err)) {
     return false;
   }
-  if (!collect_range_cells(dates_arg, arena, registry, ctx, &date_cells, out_err)) {
+  if (!resolve_flat_cells(dates_arg, arena, registry, ctx, &date_cells, out_err)) {
     return false;
   }
   // Excel requires the two ranges to have the same total cell count

@@ -12,6 +12,7 @@
 #include "io/auto_filter_xml.h"
 #include "io/pivot_table_reader.h"
 #include "io/xlsb/auto_filter_records.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xml_utils.h"
 #include "pivot/pivot_types.h"
@@ -71,15 +72,11 @@ enum : std::uint16_t {
 /// Pivot style and filter records, named and laid out per [MS-XLSB]
 /// 2.1.7.40 (PIVOTTABLE: ... BrtTableStyleClient [SXFILTERS] ...).
 enum : std::uint16_t {
-  kFrtBegin = 35,           // BrtFRTBegin
-  kFrtEnd = 36,             // BrtFRTEnd
-  kBeginAFilter = 161,      // BrtBeginAFilter
-  kTableStyleClient = 513,  // BrtTableStyleClient
-  kBeginSXFilters = 599,    // BrtBeginSXFilters
-  kEndSXFilters = 600,      // BrtEndSXFilters
-  kBeginSXFilter = 601,     // BrtBeginSXFILTER
-  kEndSXFilter = 602,       // BrtEndSXFilter
-  kSxFilter15 = 2079,       // BrtSxFilter15
+  kBeginSXFilters = 599,  // BrtBeginSXFilters
+  kEndSXFilters = 600,    // BrtEndSXFilters
+  kBeginSXFilter = 601,   // BrtBeginSXFILTER
+  kEndSXFilter = 602,     // BrtEndSXFilter
+  kSxFilter15 = 2079,     // BrtSxFilter15
 };
 
 /// `ST_PivotFilterType` spellings indexed by `PivotFilterType` (2.5.104),
@@ -402,11 +399,11 @@ pivot::PivotStyleInfo DecodeStyleClient(ByteSpan payload) {
   auto flags = read_u16(payload);
   auto name = read_xlnullablewidestring(payload);
   if (flags) {
-    info.show_last_column = (flags.value() & 0x02U) != 0U;
-    info.show_row_stripes = (flags.value() & 0x04U) != 0U;
-    info.show_col_stripes = (flags.value() & 0x08U) != 0U;
-    info.show_row_headers = (flags.value() & 0x10U) != 0U;
-    info.show_col_headers = (flags.value() & 0x20U) != 0U;
+    info.show_last_column = (flags.value() & kStyleClientLastColumn) != 0U;
+    info.show_row_stripes = (flags.value() & kStyleClientRowStripes) != 0U;
+    info.show_col_stripes = (flags.value() & kStyleClientColumnStripes) != 0U;
+    info.show_row_headers = (flags.value() & kStyleClientRowHeaders) != 0U;
+    info.show_col_headers = (flags.value() & kStyleClientColumnHeaders) != 0U;
   }
   if (name) {
     info.name = std::move(name.value());

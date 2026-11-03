@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "utils/strings.h"
 
@@ -524,28 +526,74 @@ const XlsbFuncEntry* lookup_func_by_id(std::uint16_t id) {
   return &(*it);
 }
 
-const XlsbFuncEntry* lookup_func_by_name(std::string_view name) {
-  for (std::size_t i = 0; i < kEntriesCount; ++i) {
-    if (strings::case_insensitive_eq(name, kEntries[i].name)) {
-      return &kEntries[i];
+namespace {
+
+/// Indices into `kEntries` ordered by name (case-insensitive, then id order),
+/// built on first use.
+const std::vector<std::uint16_t>& EntriesByName() {
+  static const std::vector<std::uint16_t> index = [] {
+    std::vector<std::uint16_t> rows(kEntriesCount);
+    for (std::size_t i = 0; i < kEntriesCount; ++i) {
+      rows[i] = static_cast<std::uint16_t>(i);
     }
+    std::sort(rows.begin(), rows.end(), [](std::uint16_t a, std::uint16_t b) {
+      const int order = strings::case_insensitive_compare(kEntries[a].name, kEntries[b].name);
+      return order != 0 ? order < 0 : a < b;
+    });
+    return rows;
+  }();
+  return index;
+}
+
+}  // namespace
+
+const XlsbFuncEntry* lookup_func_by_name(std::string_view name) {
+  const std::vector<std::uint16_t>& index = EntriesByName();
+  // NOLINTNEXTLINE(readability-qualified-auto): iterator may be a raw pointer or a wrapper.
+  auto it = std::lower_bound(index.begin(), index.end(), name, [](std::uint16_t row, std::string_view key) {
+    return strings::case_insensitive_compare(kEntries[row].name, key) < 0;
+  });
+  if (it == index.end() || !strings::case_insensitive_eq(name, kEntries[*it].name)) {
+    return nullptr;
   }
-  return nullptr;
+  return &kEntries[*it];
 }
 
 namespace {
 
-/// The letter `table` (in `kParameterClasses`' form) gives argument `index`
-/// of `name`, or 0 when it lists no entry for `name`.
-char ParameterClassIn(std::string_view table, std::string_view name, std::uint32_t index) {
-  std::string needle = EntryPrefix(name);
-  needle.push_back(':');
-  const std::size_t at = table.find(needle);
-  if (at == std::string_view::npos) {
+/// One `|NAME:LETTERS|` row of a parameter-class table.
+using ClassRow = std::pair<std::string_view, std::string_view>;
+
+/// Splits `table` (in `kParameterClasses`' form) into rows ordered by name.
+std::vector<ClassRow> BuildClassIndex(std::string_view table) {
+  std::vector<ClassRow> rows;
+  std::size_t at = 0;
+  while ((at = table.find('|', at)) != std::string_view::npos && at + 1 < table.size()) {
+    const std::size_t colon = table.find(':', at + 1);
+    if (colon == std::string_view::npos) {
+      break;
+    }
+    const std::size_t end = table.find('|', colon + 1);
+    rows.emplace_back(table.substr(at + 1, colon - at - 1), table.substr(colon + 1, end - colon - 1));
+    at = end;
+  }
+  std::sort(rows.begin(), rows.end(), [](const ClassRow& a, const ClassRow& b) {
+    return strings::case_insensitive_compare(a.first, b.first) < 0;
+  });
+  return rows;
+}
+
+/// The letter `rows` gives argument `index` of `name`, or 0 when it lists no
+/// entry for `name`.
+char ParameterClassIn(const std::vector<ClassRow>& rows, std::string_view name, std::uint32_t index) {
+  // NOLINTNEXTLINE(readability-qualified-auto): iterator may be a raw pointer or a wrapper.
+  auto it = std::lower_bound(rows.begin(), rows.end(), name, [](const ClassRow& row, std::string_view key) {
+    return strings::case_insensitive_compare(row.first, key) < 0;
+  });
+  if (it == rows.end() || !strings::case_insensitive_eq(it->first, name)) {
     return 0;
   }
-  const std::size_t begin = at + needle.size();
-  std::string_view letters = table.substr(begin, table.find('|', begin) - begin);
+  std::string_view letters = it->second;
   std::size_t period = 1;
   if (letters.back() == '2') {
     period = 2;
@@ -561,12 +609,14 @@ char ParameterClassIn(std::string_view table, std::string_view name, std::uint32
 }  // namespace
 
 char xlsb_parameter_class(std::string_view name, std::uint32_t index) {
-  const char letter = ParameterClassIn(kParameterClasses, name, index);
+  static const std::vector<ClassRow> rows = BuildClassIndex(kParameterClasses);
+  const char letter = ParameterClassIn(rows, name, index);
   return letter != 0 ? letter : 'V';
 }
 
 char xlsb_legacy_parameter_class(std::string_view name, std::uint32_t index) {
-  const char letter = ParameterClassIn(kLegacyParameterClasses, name, index);
+  static const std::vector<ClassRow> rows = BuildClassIndex(kLegacyParameterClasses);
+  const char letter = ParameterClassIn(rows, name, index);
   return letter != 0 ? letter : xlsb_parameter_class(name, index);
 }
 

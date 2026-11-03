@@ -11,8 +11,38 @@
 
 #include "protection.h"
 #include "sheet_passthrough.h"
+#include "sheet_view.h"
 
 namespace formulon::io {
+
+/// One boolean attribute of `<sheetProtection>`: its member and ECMA-376
+/// §18.3.1.85 schema default (eleven action flags default to true, the rest
+/// to false).
+struct SheetProtectionFlag {
+  const char* attr;
+  bool SheetProtection::*member;
+  bool default_value;
+};
+
+/// The boolean `<sheetProtection>` attributes in Excel's emission order.
+inline constexpr SheetProtectionFlag kSheetProtectionFlags[] = {
+    {"sheet", &SheetProtection::sheet, false},
+    {"objects", &SheetProtection::objects, false},
+    {"scenarios", &SheetProtection::scenarios, false},
+    {"formatCells", &SheetProtection::format_cells, true},
+    {"formatColumns", &SheetProtection::format_columns, true},
+    {"formatRows", &SheetProtection::format_rows, true},
+    {"insertColumns", &SheetProtection::insert_columns, true},
+    {"insertRows", &SheetProtection::insert_rows, true},
+    {"insertHyperlinks", &SheetProtection::insert_hyperlinks, true},
+    {"deleteColumns", &SheetProtection::delete_columns, true},
+    {"deleteRows", &SheetProtection::delete_rows, true},
+    {"selectLockedCells", &SheetProtection::select_locked_cells, false},
+    {"sort", &SheetProtection::sort, true},
+    {"autoFilter", &SheetProtection::auto_filter, true},
+    {"pivotTables", &SheetProtection::pivot_tables, true},
+    {"selectUnlockedCells", &SheetProtection::select_unlocked_cells, false},
+};
 
 /// Decodes a `<workbookProtection>` element; empty or unparseable XML yields
 /// an all-default record.

@@ -179,19 +179,6 @@ std::size_t unescape_quoted_sheet(std::string_view quoted, char* out, std::size_
 
 }  // namespace
 
-std::size_t column_letters(std::uint32_t col, char* out) {
-  if (col == 0U || out == nullptr || col > a1::kMaxColumns) {
-    return 0U;
-  }
-  const std::size_t n = col <= 26U ? 1U : (col <= 702U ? 2U : 3U);
-  std::uint32_t value = col;
-  for (std::size_t i = n; i-- > 0;) {
-    out[i] = static_cast<char>('A' + (value - 1U) % 26U);
-    value = (value - 1U) / 26U;
-  }
-  return n;
-}
-
 // Outcome of reading an optional leading `Sheet!` qualifier.
 enum class SheetQualifier : std::uint8_t {
   kNone,       ///< No qualifier; `*i` is unmoved and the whole text is the reference.

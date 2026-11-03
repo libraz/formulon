@@ -1,5 +1,6 @@
-// Record ids shared by the future-record (FRT / AC) wrappers and the x14
-// conditional-formatting, sparkline and print-option records around them.
+// Record ids shared by the future-record (FRT / AC) wrappers, the x14
+// conditional-formatting, sparkline and print-option records around them, and
+// the autofilter / table-style records several readers dispatch on.
 
 #ifndef FORMULON_IO_XLSB_FRT_RECORDS_H_
 #define FORMULON_IO_XLSB_FRT_RECORDS_H_
@@ -14,6 +15,17 @@ inline constexpr std::uint16_t kFrtBegin = 35;
 inline constexpr std::uint16_t kFrtEnd = 36;
 inline constexpr std::uint16_t kAcBegin = 37;
 inline constexpr std::uint16_t kAcEnd = 38;
+
+inline constexpr std::uint16_t kBeginAFilter = 161;
+inline constexpr std::uint16_t kTableStyleClient = 513;
+
+/// BrtTableStyleClient flag bits.
+inline constexpr std::uint16_t kStyleClientFirstColumn = 0x01U;
+inline constexpr std::uint16_t kStyleClientLastColumn = 0x02U;
+inline constexpr std::uint16_t kStyleClientRowStripes = 0x04U;
+inline constexpr std::uint16_t kStyleClientColumnStripes = 0x08U;
+inline constexpr std::uint16_t kStyleClientRowHeaders = 0x10U;
+inline constexpr std::uint16_t kStyleClientColumnHeaders = 0x20U;
 
 inline constexpr std::uint16_t kMargins = 476;
 inline constexpr std::uint16_t kPrintOptions = 477;

@@ -16,38 +16,11 @@ namespace formulon::io {
 namespace {
 
 constexpr const char* kSparklineUri = "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}";
-constexpr const char* kNsXr2 = "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2";
 constexpr std::size_t kMaxItems = 1U << 16;
 
 constexpr const char* kTypeNames[] = {"line", "column", "stacked"};
 constexpr const char* kAxisNames[] = {"individual", "group", "custom"};
 constexpr const char* kEmptyNames[] = {"gap", "zero", "span"};
-
-// Element-name helpers that ignore the prefix, since Excel and other writers bind the x14 and xm namespaces to
-// different prefixes.
-std::string_view local_name(const char* qname) {
-  const char* colon = std::strchr(qname, ':');
-  return colon != nullptr ? colon + 1 : qname;
-}
-
-std::string_view local_name(const pugi::xml_node& node) {
-  return local_name(node.name());
-}
-
-std::vector<pugi::xml_node> children_local(const pugi::xml_node& parent, std::string_view name) {
-  std::vector<pugi::xml_node> out;
-  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
-    if (child.type() == pugi::node_element && local_name(child) == name) {
-      out.push_back(child);
-    }
-  }
-  return out;
-}
-
-pugi::xml_node child_local(const pugi::xml_node& parent, std::string_view name) {
-  const std::vector<pugi::xml_node> found = children_local(parent, name);
-  return found.empty() ? pugi::xml_node() : found.front();
-}
 
 // Child order of `CT_SparklineGroup`; anything else sorts last.
 constexpr std::string_view kChildOrder[] = {"colorSeries", "colorNegative", "colorAxis", "colorMarkers",
@@ -243,11 +216,11 @@ Expected<void, Error> validate_group(const SparklineGroup& g) {
 }
 
 void apply_group(pugi::xml_node node, const SparklineGroup& g) {
-  const std::string px = std::string(node.name()).substr(0, std::string(node.name()).find(':') + 1U);
+  const std::string px(qname_prefix_colon(node.name()));
   const std::string xm = [&node] {
     pugi::xml_node f = child_local(child_local(child_local(node, "sparklines"), "sparkline"), "f");
     const std::string_view name = f.name();
-    return f ? std::string(name.substr(0, name.find(':') + 1U)) : std::string("xm:");
+    return f ? std::string(qname_prefix_colon(name)) : std::string("xm:");
   }();
   set_text_attr(node, "type", kTypeNames[static_cast<int>(g.type)], g.type == SparklineType::kLine);
   set_text_attr(node, "displayEmptyCellsAs", kEmptyNames[static_cast<int>(g.empty_cells_as)],
@@ -305,12 +278,12 @@ void apply_group(pugi::xml_node node, const SparklineGroup& g) {
 }
 
 void apply_items(pugi::xml_node group, const std::vector<SparklineItem>& items) {
-  const std::string px = std::string(group.name()).substr(0, std::string(group.name()).find(':') + 1U);
+  const std::string px(qname_prefix_colon(group.name()));
   pugi::xml_node list = child_local(group, "sparklines");
   std::string xm = "xm:";
   if (list) {
     const std::string_view name = child_local(child_local(list, "sparkline"), "f").name();
-    xm = name.empty() ? xm : std::string(name.substr(0, name.find(':') + 1U));
+    xm = name.empty() ? xm : std::string(qname_prefix_colon(name));
     while (list.first_child()) {
       list.remove_child(list.first_child());
     }
@@ -376,12 +349,12 @@ Expected<void, Error> add_sparkline_group(std::string& ext_lst_xml, const Sparkl
     return invalid("sparkline group: the worksheet extension list does not parse");
   }
   pugi::xml_node list = ensure_groups_list(doc);
-  const std::string px = std::string(list.name()).substr(0, std::string(list.name()).find(':') + 1U);
+  const std::string px(qname_prefix_colon(list.name()));
   pugi::xml_node node = list.append_child((px + "sparklineGroup").c_str());
   apply_group(node, group);
   set_flag(node, "rightToLeft", group.right_to_left);
   if (!group.uid.empty()) {
-    node.append_attribute("xmlns:xr2").set_value(kNsXr2);
+    node.append_attribute("xmlns:xr2").set_value(kNsXr2.data());
     node.append_attribute("xr2:uid").set_value(group.uid.c_str());
   }
   apply_items(node, group.items);

@@ -24,6 +24,7 @@
 #include <string_view>
 
 #include "eval/coerce.h"
+#include "eval/stats/numeric_constants.h"
 #include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/expected.h"
@@ -34,12 +35,8 @@ namespace formulon {
 namespace eval {
 namespace builtins_detail {
 
-/// Mathematical constant pi to ~15 significant digits. Matches the value
-/// `std::acos(-1.0)` produces on any IEEE-754 system, which keeps
-/// `RADIANS(180) == kPi` exact and the normal-PDF normalisation
-/// (`1 / sqrt(2 * kPi)`) byte-for-byte identical across math, stats,
-/// and distributions TUs.
-inline constexpr double kPi = 3.14159265358979323846;
+/// Mathematical constant pi, shared with the stats kernels.
+using stats::kPi;
 
 /// Wraps a scalar result in a `Value::number`, surfacing `#NUM!` for
 /// non-finite (`NaN` / `Inf`) values. This is the universal "finalise a
@@ -49,7 +46,7 @@ inline constexpr double kPi = 3.14159265358979323846;
 /// numeric impl reports overflow / domain-violation via the same code
 /// path.
 inline Value to_finite_value(double r) noexcept {
-  if (std::isnan(r) || std::isinf(r)) {
+  if (!std::isfinite(r)) {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(r);
@@ -57,7 +54,7 @@ inline Value to_finite_value(double r) noexcept {
 
 /// `r` itself when finite, otherwise `#NUM!`; the `Expected` counterpart of `to_finite_value`.
 inline Expected<double, ErrorCode> finite_or_num(double r) noexcept {
-  if (std::isnan(r) || std::isinf(r)) {
+  if (!std::isfinite(r)) {
     return ErrorCode::Num;
   }
   return r;
@@ -247,6 +244,14 @@ inline Expected<double, ErrorCode> read_required_number(const Value* args, std::
   return coerce_to_number(args[index]);
 }
 
+/// Like `coerce_to_number`, but a direct Bool is `#VALUE!` instead of 1 / 0.
+inline Expected<double, ErrorCode> coerce_to_number_no_bool(const Value& v) {
+  if (v.kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
+  return coerce_to_number(v);
+}
+
 /// Reads an optional trailing numeric argument at position `index`,
 /// returning `default_value` when `arity <= index`. Otherwise behaves
 /// like `read_required_number`. The default is returned by value so
@@ -283,6 +288,16 @@ inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::
     return std::move(second.error());
   }
   return NumberPair{first.value(), second.value()};
+}
+
+/// `read_number_pair` that rejects a direct Bool in either slot with `#VALUE!`
+/// before coercing anything.
+inline Expected<NumberPair, ErrorCode> read_number_pair_no_bool(const Value* args, std::uint32_t first_index,
+                                                                std::uint32_t second_index) {
+  if (args[first_index].kind() == ValueKind::Bool || args[second_index].kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
+  return read_number_pair(args, first_index, second_index);
 }
 
 /// Reads three required numeric arguments and returns them as a

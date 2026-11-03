@@ -145,6 +145,14 @@ std::vector<ValueRun> group_equal_values(const std::vector<double>& xs);
 /// there can equal values differ in bits.
 void select_kth_preserving_sort_bits(std::vector<double>& xs, std::size_t target);
 
+/// Lifts a kernel result into the `Value` shape the dispatchers return.
+inline Value value_from_kernel_result(const Expected<double, ErrorCode>& result) {
+  if (!result) {
+    return Value::error(result.error());
+  }
+  return Value::number(result.value());
+}
+
 }  // namespace numeric_aggregate_kernels
 }  // namespace formulon
 

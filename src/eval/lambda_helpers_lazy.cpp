@@ -9,7 +9,6 @@
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
-#include "eval/dynamic_array_limits.h"
 #include "eval/eval_context.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
@@ -21,6 +20,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 
 namespace formulon {
@@ -413,6 +413,22 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   return Value::array(out_arr);
 }
 
+namespace {
+
+// One REDUCE / SCAN step: the lambda applied to the accumulator and element `i`.
+// An errored element reaches the lambda verbatim, so a body that guards with
+// IFERROR keeps folding and one that does not leaves the error in the
+// accumulator.
+Value fold_step(const FoldInputs& fi, std::size_t i, const Value& acc, Arena& arena, const FunctionRegistry& registry,
+                const EvalContext& ctx) {
+  Value args[2] = {acc, fi.in->cells[i]};
+  // Only the seed can be a reference; every later accumulator is a result.
+  const parser::AstNode* arg_asts[2] = {i == 0U ? fi.acc_ast : nullptr, element_ast(fi.origin, fi.in, i, arena)};
+  return invoke_lambda_values_with_ast(fi.lv, 2U, args, arg_asts, arena, registry, ctx);
+}
+
+}  // namespace
+
 Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
   FoldInputs fi;
@@ -429,18 +445,8 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
     return acc;
   }
 
-  Value args[2] = {Value::blank(), Value::blank()};
-  const parser::AstNode* arg_asts[2] = {nullptr, nullptr};
   for (std::size_t i = 0; i < total; ++i) {
-    args[0] = acc;
-    args[1] = fi.in->cells[i];
-    // Only the seed can be a reference; every later accumulator is a result.
-    arg_asts[0] = i == 0U ? fi.acc_ast : nullptr;
-    arg_asts[1] = element_ast(fi.origin, fi.in, i, arena);
-    // An errored cell reaches the lambda verbatim, matching SCAN: a body
-    // that guards with IFERROR keeps folding, and one that does not leaves
-    // the error in the accumulator, which is what the fold returns.
-    acc = invoke_lambda_values_with_ast(fi.lv, 2U, args, arg_asts, arena, registry, ctx);
+    acc = fold_step(fi, i, acc, arena, registry, ctx);
   }
   return acc;
 }
@@ -468,19 +474,9 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Num);
   }
 
-  Value args[2] = {Value::blank(), Value::blank()};
-  const parser::AstNode* arg_asts[2] = {nullptr, nullptr};
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   for (std::size_t i = 0; i < total; ++i) {
-    args[0] = acc;
-    args[1] = fi.in->cells[i];
-    arg_asts[0] = i == 0U ? fi.acc_ast : nullptr;
-    arg_asts[1] = element_ast(fi.origin, fi.in, i, arena);
-    // An errored cell is handed to the lambda verbatim rather than
-    // short-circuited: a body that guards with IFERROR recovers, and one
-    // that does not returns the error, which then rides the accumulator
-    // into every later cell. Both outcomes are per-cell, not whole-call.
-    const Value res = invoke_lambda_values_with_ast(fi.lv, 2U, args, arg_asts, arena, registry, ctx);
+    const Value res = fold_step(fi, i, acc, arena, registry, ctx);
     // A single output slot per cell: a multi-cell lambda return would need nested spilling.
     if (!store_scalar_result(res, &out_cells[i])) {
       return Value::error(ErrorCode::Calc);
@@ -515,7 +511,7 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return err;
   }
   if (abandons_formula(rows, cols) ||
-      static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
+      static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxDynamicArrayCells) {
     return Value::error(ErrorCode::Num);
   }
 

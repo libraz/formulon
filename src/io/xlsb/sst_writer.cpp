@@ -106,8 +106,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sst(const SstBuilder& sst) {
   }
 
   // One BrtSSTItem per entry: (u8 flags, XLWideString[, phonetic tail]).
+  std::vector<std::uint8_t> p;
   for (const SstEntry& entry : sst.entries()) {
-    std::vector<std::uint8_t> p;
+    p.clear();
     const bool has_phonetic = !entry.phonetic.empty();
     emit_u8(p, has_phonetic ? kRichStrPhonetic : 0U);
     emit_xlwidestring(p, entry.text);

@@ -376,6 +376,18 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     }
   }
 
+  // Rows of `members` that fall in outer column group `outer`.
+  const auto rows_in_outer_col_group = [&](const std::vector<std::uint32_t>& members, std::size_t outer) {
+    std::vector<std::uint32_t> rows;
+    for (const std::uint32_t row : members) {
+      const std::size_t offset = static_cast<std::size_t>(row - data_start_row);
+      if (offset < col_tag.size() && col_hierarchy.outer_of_group[col_tag[offset]] == outer) {
+        rows.push_back(row);
+      }
+    }
+    return rows;
+  };
+
   // Subtotal cells are the intersection of one flat row group and one outer
   // column group. Empty intersections stay blank, just like ordinary pivot
   // body cells; an aggregator error is retained in that one cell.
@@ -394,13 +406,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         n_rows, std::vector<std::vector<Value>>(outer_count, std::vector<Value>(val_cols, placeholder_cell())));
     for (std::size_t rg = 0; rg < n_rows; ++rg) {
       for (std::size_t outer = 0; outer < outer_count; ++outer) {
-        std::vector<std::uint32_t> intersection;
-        for (const std::uint32_t row : row_members[rg]) {
-          const std::size_t offset = static_cast<std::size_t>(row - data_start_row);
-          if (offset < col_tag.size() && col_hierarchy.outer_of_group[col_tag[offset]] == outer) {
-            intersection.push_back(row);
-          }
-        }
+        const std::vector<std::uint32_t> intersection = rows_in_outer_col_group(row_members[rg], outer);
         if (!intersection.empty()) {
           col_subtotal_body[rg][outer] = aggregate_value_columns(*values, val_cols, intersection, outer_col_agg[outer],
                                                                  arena, registry, ctx, ErrorCode::Calc);
@@ -644,25 +650,21 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       row[0] = row_fields->cells[static_cast<std::size_t>(row_hierarchy.repr_of_outer[o]) * key_cols];
       for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
         const ColSlot& slot = col_slots[ci];
-        std::vector<std::uint32_t> intersection;
+        std::vector<std::uint32_t> outer_intersection;
+        const std::vector<std::uint32_t>* intersection = &outer_intersection;
         if (slot.kind == ColSlotKind::Leaf) {
-          intersection = by_col_group[slot.col_group];
+          intersection = &by_col_group[slot.col_group];
         } else if (slot.kind == ColSlotKind::OuterSubtotal) {
           // Row and column subtotals intersect at their two outer keys.
-          for (const std::uint32_t source_row : row_hierarchy.rows_of_outer[o]) {
-            const std::size_t offset = static_cast<std::size_t>(source_row - data_start_row);
-            if (offset < col_tag.size() && col_hierarchy.outer_of_group[col_tag[offset]] == slot.outer_group) {
-              intersection.push_back(source_row);
-            }
-          }
+          outer_intersection = rows_in_outer_col_group(row_hierarchy.rows_of_outer[o], slot.outer_group);
         }
-        if (intersection.empty()) {
+        if (intersection->empty()) {
           continue;  // no data at this intersection; Excel leaves it blank.
         }
         const Aggregator& slot_agg =
             slot.kind == ColSlotKind::Leaf ? col_agg[slot.col_group] : outer_col_agg[slot.outer_group];
         const std::vector<Value> cells =
-            aggregate_value_columns(*values, val_cols, intersection, slot_agg, arena, registry, ctx, ErrorCode::Calc);
+            aggregate_value_columns(*values, val_cols, *intersection, slot_agg, arena, registry, ctx, ErrorCode::Calc);
         const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
         for (std::uint32_t v = 0; v < val_cols; ++v) {
           row[base + v] = cells[v];
@@ -687,23 +689,23 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // Merged single-column layout: the combined top row (col-axis labels,
     // plus the row_fields header label when output_emits_header) is
     // always emitted -- see the comment on merged_single_col_layout above.
-    out_rows.push_back(render_merged_header_row());
+    emit_row(&out_rows, render_merged_header_row());
   } else {
     // Multi-column layout: always emit L col-axis label rows; emit a
     // separate header row when output_emits_header is true.
     if (layout.output_emits_header) {
-      out_rows.push_back(render_col_fields_header_row());
+      emit_row(&out_rows, render_col_fields_header_row());
     }
     for (std::uint32_t level = 0; level < col_levels; ++level) {
-      out_rows.push_back(render_col_axis_row(level));
+      emit_row(&out_rows, render_col_axis_row(level));
     }
     if (layout.output_emits_header) {
-      out_rows.push_back(render_header_row());
+      emit_row(&out_rows, render_header_row());
     }
   }
   // Optional TOP grand-total row.
   if (emit_col_totals_row && row_total_depth < 0) {
-    out_rows.push_back(render_totals_row());
+    emit_row(&out_rows, render_totals_row());
   }
   // Body rows. With subtotals each outer row group's rows are bracketed by
   // its subtotal row, placed on the same side of the block as the grand
@@ -711,23 +713,23 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_row_subtotals) {
     for (std::size_t o : outer_row_order) {
       if (row_total_depth < 0) {
-        out_rows.push_back(row_subtotal_rows[o]);
+        emit_row(&out_rows, row_subtotal_rows[o]);
       }
       for (std::size_t rg : row_groups_of_outer[o]) {
-        out_rows.push_back(render_body_row(rg));
+        emit_row(&out_rows, render_body_row(rg));
       }
       if (row_total_depth > 0) {
-        out_rows.push_back(row_subtotal_rows[o]);
+        emit_row(&out_rows, row_subtotal_rows[o]);
       }
     }
   } else {
     for (std::size_t ri = 0; ri < n_rows; ++ri) {
-      out_rows.push_back(render_body_row(row_order[ri]));
+      emit_row(&out_rows, render_body_row(row_order[ri]));
     }
   }
   // Optional BOTTOM grand-total row.
   if (emit_col_totals_row && row_total_depth > 0) {
-    out_rows.push_back(render_totals_row());
+    emit_row(&out_rows, render_totals_row());
   }
 
   return rows_to_array_value(out_rows, out_cols, arena);

@@ -7,22 +7,11 @@
 #include <string_view>
 
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml_defs.h"
 #include "io/zip_reader.h"
 
 namespace formulon {
 namespace io {
-namespace {
-
-// XLSB workbook content types ([Content_Types].xml Override). Either form
-// marks the package as MS-XLSB.
-constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
-constexpr std::string_view kCtWorkbookXlsbAlt = "application/vnd.ms-excel.sheet.macroEnabled.main";
-
-bool is_xlsb_workbook_content_type(std::string_view content_type) {
-  return content_type == kCtWorkbookXlsb || content_type == kCtWorkbookXlsbAlt;
-}
-
-}  // namespace
 
 WorkbookFormat detect_workbook_format(ByteSpan bytes) {
   ZipReader zip;

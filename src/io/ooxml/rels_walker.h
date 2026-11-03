@@ -14,9 +14,11 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_xml.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
+#include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -69,8 +71,9 @@ inline Expected<void, Error> load_relationship_document(const ZipReader& zip, st
 template <typename Fn>
 Expected<void, Error> visit_relationship_nodes(const pugi::xml_document& doc, Fn&& fn) {
   const pugi::xml_node root = relationship_root(doc);
+  const bool legacy_root = is_legacy_relationships_root(root);
   for (const pugi::xml_node rel : root.children()) {
-    if (!is_relationship_element(rel, root)) {
+    if (!is_relationship_element(rel, legacy_root)) {
       continue;
     }
     auto status = fn(rel);
@@ -98,6 +101,39 @@ template <typename Fn>
 Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
                                                Fn&& fn) {
   return visit_relationship_nodes(zip, rels_path, label, "ooxml_reader", std::forward<Fn>(fn));
+}
+
+/// Resolves every relationship of `rel_type` in `doc` against `base_dir`, in
+/// document order. Relationships without a `Target` are skipped.
+inline Expected<std::vector<std::string>, Error> collect_relationship_targets(const pugi::xml_document& doc,
+                                                                              std::string_view base_dir,
+                                                                              std::string_view rel_type) {
+  std::vector<std::string> targets;
+  RETURN_IF_ERROR(visit_relationship_nodes(doc, [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+    const std::string_view target = rel.attribute("Target").value();
+    if (!target.empty() && std::string_view(rel.attribute("Type").value()) == rel_type) {
+      ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
+      targets.push_back(std::move(resolved));
+    }
+    return Expected<void, Error>::Ok();
+  }));
+  return targets;
+}
+
+/// Captures `rel` verbatim as an `UnknownRelationship`: an in-package target
+/// is resolved against `base_dir`, an external one is kept as written.
+inline Expected<UnknownRelationship, Error> make_unknown_relationship(const pugi::xml_node& rel,
+                                                                      std::string_view base_dir) {
+  UnknownRelationship entry;
+  entry.id = rel.attribute("Id").value();
+  entry.type = rel.attribute("Type").value();
+  entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+  if (entry.target_external) {
+    entry.target = rel.attribute("Target").value();
+  } else {
+    ASSIGN_OR_RETURN(entry.target, resolve_relative_path(base_dir, rel.attribute("Target").value()));
+  }
+  return entry;
 }
 
 }  // namespace ooxml

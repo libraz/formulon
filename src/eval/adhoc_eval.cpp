@@ -11,6 +11,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/implicit_intersection.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
@@ -24,20 +25,6 @@ namespace formulon {
 namespace eval {
 
 namespace {
-
-// Reduces a possibly-array `Value` to a single scalar by taking the
-// top-left cell of an array result. See the header for why this is neither
-// implicit intersection nor spilling. A degenerate empty array (which
-// producers should never emit) surfaces as `#VALUE!`.
-Value reduce_to_scalar(Value v) {
-  if (!v.is_array()) {
-    return v;
-  }
-  if (v.as_array_rows() == 0 || v.as_array_cols() == 0) {
-    return Value::error(ErrorCode::Value);
-  }
-  return v.as_array_cells()[0];
-}
 
 // Builds the read-only evaluation context shared by both drivers. The
 // deliberate omission of `with_mutable_sheet` is the purity guarantee:
@@ -86,7 +73,7 @@ Value parse_and_evaluate(const Workbook& workbook, const Sheet& sheet, std::uint
 
 Value evaluate_formula_text(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
                             std::string_view formula, Arena& arena, const FunctionRegistry& registry) {
-  return reduce_to_scalar(parse_and_evaluate(workbook, sheet, row, col, formula, arena, registry));
+  return implicit_intersect_value(parse_and_evaluate(workbook, sheet, row, col, formula, arena, registry));
 }
 
 Value evaluate_formula_text_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,

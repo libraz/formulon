@@ -106,7 +106,7 @@ std::vector<std::uint8_t> build_worksheet_shell_bytes(const std::vector<std::uin
     }
     const std::size_t after = hit + kOpen.size();
     const char d = after < sv.size() ? sv[after] : '\0';
-    if (d == ' ' || d == '\t' || d == '\r' || d == '\n' || d == '>' || d == '/') {
+    if (is_xml_space(d) || d == '>' || d == '/') {
       open = hit;
       break;
     }

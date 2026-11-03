@@ -216,68 +216,105 @@ Shaped evaluate_defined_name_shaped(const DefinedName* def, Arena& arena, const 
 
 }  // namespace
 
-Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx) {
+namespace {
+
+// The outcome of locating a name: the definition to evaluate, or (`resolved`)
+// the final value when no definition applies.
+struct NameLookup {
+  const DefinedName* def = nullptr;
+  bool resolved = false;
+  Value value = Value::blank();
+};
+
+NameLookup unresolved_name(ErrorCode code) {
+  NameLookup lookup;
+  lookup.resolved = true;
+  lookup.value = Value::error(code);
+  return lookup;
+}
+
+NameLookup lookup_name(std::string_view name, const EvalContext& ctx) {
   if (ctx.workbook() == nullptr) {
-    return Value::error(ErrorCode::Name);
+    return unresolved_name(ErrorCode::Name);
   }
-  return evaluate_defined_name(find_defined_name(ctx, name), arena, registry, ctx);
+  NameLookup lookup;
+  lookup.def = find_defined_name(ctx, name);
+  return lookup;
 }
 
-Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
-                                     const EvalContext& ctx) {
+NameLookup lookup_self_book_name(std::string_view name, const EvalContext& ctx) {
   const Workbook* wb = ctx.workbook();
   if (wb == nullptr) {
-    return Value::error(ErrorCode::Name);
+    return unresolved_name(ErrorCode::Name);
   }
-  return evaluate_defined_name(find_self_book_defined_name(*wb, name), arena, registry, ctx);
+  NameLookup lookup;
+  lookup.def = find_self_book_defined_name(*wb, name);
+  return lookup;
 }
 
-Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
-                                 const FunctionRegistry& registry, const EvalContext& ctx) {
+NameLookup lookup_sheet_name(std::string_view sheet, std::string_view name, Arena& arena, const EvalContext& ctx) {
   const Workbook* wb = ctx.workbook();
   if (wb == nullptr) {
-    return Value::error(ErrorCode::Name);
+    return unresolved_name(ErrorCode::Name);
   }
   if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
     // `Src2!Name` with no sheet `Src2` is the book-scope name of a linked
     // book written without an extension, when such a link exists; with no
     // such link the name is unknown.
     if (const ExternalLinkRecord* link = wb->link_for_sheet_qualifier(sheet); link != nullptr) {
-      return resolve_external_book_name(link->book, ExternalBook::kNoSheet, name, arena);
+      NameLookup lookup;
+      lookup.resolved = true;
+      lookup.value = resolve_external_book_name(link->book, ExternalBook::kNoSheet, name, arena);
+      return lookup;
     }
-    return Value::error(ErrorCode::Name);
+    return unresolved_name(ErrorCode::Name);
   }
-  return evaluate_defined_name(find_sheet_defined_name(*wb, sheet, name), arena, registry, ctx);
+  NameLookup lookup;
+  lookup.def = find_sheet_defined_name(*wb, sheet, name);
+  return lookup;
+}
+
+Value evaluate_lookup(const NameLookup& lookup, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  return lookup.resolved ? lookup.value : evaluate_defined_name(lookup.def, arena, registry, ctx);
+}
+
+Shaped evaluate_lookup_shaped(const NameLookup& lookup, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx) {
+  return lookup.resolved ? Shaped{lookup.value, nullptr}
+                         : evaluate_defined_name_shaped(lookup.def, arena, registry, ctx);
+}
+
+}  // namespace
+
+Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx) {
+  return evaluate_lookup(lookup_name(name, ctx), arena, registry, ctx);
+}
+
+Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                     const EvalContext& ctx) {
+  return evaluate_lookup(lookup_self_book_name(name, ctx), arena, registry, ctx);
+}
+
+Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
+                                 const FunctionRegistry& registry, const EvalContext& ctx) {
+  return evaluate_lookup(lookup_sheet_name(sheet, name, arena, ctx), arena, registry, ctx);
 }
 
 Shaped resolve_defined_name_shaped(std::string_view name, Arena& arena, const FunctionRegistry& registry,
                                    const EvalContext& ctx) {
-  if (ctx.workbook() == nullptr) {
-    return Shaped{Value::error(ErrorCode::Name), nullptr};
-  }
-  return evaluate_defined_name_shaped(find_defined_name(ctx, name), arena, registry, ctx);
+  return evaluate_lookup_shaped(lookup_name(name, ctx), arena, registry, ctx);
 }
 
 Shaped resolve_self_book_defined_name_shaped(std::string_view name, Arena& arena, const FunctionRegistry& registry,
                                              const EvalContext& ctx) {
-  const Workbook* wb = ctx.workbook();
-  if (wb == nullptr) {
-    return Shaped{Value::error(ErrorCode::Name), nullptr};
-  }
-  return evaluate_defined_name_shaped(find_self_book_defined_name(*wb, name), arena, registry, ctx);
+  return evaluate_lookup_shaped(lookup_self_book_name(name, ctx), arena, registry, ctx);
 }
 
 Shaped resolve_sheet_defined_name_shaped(std::string_view sheet, std::string_view name, Arena& arena,
                                          const FunctionRegistry& registry, const EvalContext& ctx) {
-  const Workbook* wb = ctx.workbook();
-  if (wb == nullptr) {
-    return Shaped{Value::error(ErrorCode::Name), nullptr};
-  }
-  if (wb->sheet_index_by_name(sheet) >= wb->sheet_count()) {
-    return Shaped{resolve_sheet_defined_name(sheet, name, arena, registry, ctx), nullptr};
-  }
-  return evaluate_defined_name_shaped(find_sheet_defined_name(*wb, sheet, name), arena, registry, ctx);
+  return evaluate_lookup_shaped(lookup_sheet_name(sheet, name, arena, ctx), arena, registry, ctx);
 }
 
 }  // namespace eval

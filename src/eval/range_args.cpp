@@ -190,38 +190,19 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
           // returns boolean FALSE — not a reference — so we surface
           // `#VALUE!` and let the caller fall back to the scalar branch
           // (mirrors the `IF` block in `resolve_reference_call`).
-          const std::uint32_t arity = arg_node.as_call_arity();
-          if (arity != 2U && arity != 3U) {
-            *out_err_code = ErrorCode::Value;
-            return false;
-          }
-          const Value cond = eval_node(arg_node.as_call_arg(0), arena, registry, ctx);
-          if (cond.is_error()) {
-            *out_err_code = cond.as_error();
-            return false;
-          }
-          if (cond.is_array()) {
-            // An array condition picks per cell instead of short-circuiting,
-            // which is what makes `SUMPRODUCT(IF(A1:A5<=3, A1:A5, 0))` and
-            // `COUNT(IF(...))` aggregate the masked column rather than fail
-            // to coerce a rectangle to one bool. The broadcast belongs to the
-            // lazy `IF` seam and is shared rather than repeated here, so this
-            // path and a bare `IF(cond, a, b)` cannot answer differently for
-            // one formula. The dispatcher's IF argument path resolves through this branch.
-            const Value result = eval_if_array_cond_lazy(arg_node, cond, arena, registry, ctx);
+          const SelectedBranch picked = select_if_branch(arg_node, arena, registry, ctx);
+          if (picked.kind == SelectedBranch::Kind::kArraySubject) {
+            // An array condition picks per cell instead of short-circuiting, so
+            // `SUMPRODUCT(IF(A1:A5<=3, A1:A5, 0))` aggregates the masked column.
+            const Value result = eval_if_array_cond_lazy(arg_node, picked.value, arena, registry, ctx);
             return expand_array_result(result, out_cells, out_err_code, &out_rows, &out_cols);
           }
-          auto coerced = coerce_to_bool(cond);
-          if (!coerced) {
-            *out_err_code = coerced.error();
+          if (picked.kind == SelectedBranch::Kind::kResult) {
+            // `IF(FALSE, then)` is the scalar FALSE, not a reference.
+            *out_err_code = picked.value.is_error() ? picked.value.as_error() : ErrorCode::Value;
             return false;
           }
-          if (!coerced.value() && arity == 2U) {
-            *out_err_code = ErrorCode::Value;
-            return false;
-          }
-          const std::uint32_t pick = coerced.value() ? 1U : 2U;
-          const parser::AstNode& chosen = arg_node.as_call_arg(pick);
+          const parser::AstNode& chosen = arg_node.as_call_arg(picked.arg);
           return resolve_range_arg_into(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols,
                                         out_scalar);
         }
@@ -296,34 +277,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
       *out_err_code = endpoint_err;
       return false;
     }
-    parser::Reference union_lhs{};
-    parser::Reference union_rhs{};
-    union_lhs.sheet = union_sheet;
-    union_lhs.row = union_top;
-    union_lhs.col = union_left;
-    union_rhs.sheet = union_sheet;
-    union_rhs.row = union_bottom;
-    union_rhs.col = union_right;
-    auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
-    if (!expanded) {
-      *out_err_code = expanded.error();
-      return false;
-    }
-    *out_cells = std::move(expanded.value());
-    // Defensive normalisation: while the union is constructed with min /
-    // max above (so union_rhs >= union_lhs is the documented invariant),
-    // a future refactor that stops using min / max — or a malformed
-    // endpoint resolver returning a degenerate rectangle — would silently
-    // wrap the unsigned subtraction below into a multi-billion shape.
-    // Recompute both axes through min/max so the dimension is always
-    // positive regardless of which endpoint became the union top-left.
-    const std::uint32_t r_lo = std::min(union_lhs.row, union_rhs.row);
-    const std::uint32_t r_hi = std::max(union_lhs.row, union_rhs.row);
-    out_rows = r_hi - r_lo + 1U;
-    const std::uint32_t c_lo = std::min(union_lhs.col, union_rhs.col);
-    const std::uint32_t c_hi = std::max(union_lhs.col, union_rhs.col);
-    out_cols = c_hi - c_lo + 1U;
-    return true;
+    return expand_resolved_rect_cells(union_sheet, union_top, union_left, union_bottom, union_right, arena, registry,
+                                      ctx, out_cells, out_err_code, &out_rows, &out_cols);
   }
   if (arg_node.kind() == parser::NodeKind::Ref) {
     const parser::Reference& ref = arg_node.as_ref();
@@ -575,12 +530,12 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
       continue;
     }
     const DeclaredRect& rect = *walked.value();
-    const std::uint32_t r_lo = rect.row_first;
-    const std::uint32_t r_hi = rect.row_last;
-    const std::uint32_t c_lo = rect.col_first;
-    const std::uint32_t c_hi = rect.col_last;
-    for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
-      for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
+    const std::size_t needed = out->size() + static_cast<std::size_t>(rect.rows()) * rect.cols();
+    if (needed > out->capacity()) {
+      out->reserve(std::max(needed, out->capacity() * 2U));
+    }
+    for (std::uint32_t r = rect.row_first; r <= rect.row_last; ++r) {
+      for (std::uint32_t c = rect.col_first; c <= rect.col_last; ++c) {
         parser::Reference per_sheet{};
         per_sheet.sheet = sheet_name;
         per_sheet.row = r;
@@ -601,6 +556,26 @@ Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_no
     return err;
   }
   return result;
+}
+
+bool resolve_flat_cells(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
+  auto resolved = resolve_range_arg_no_scalar(arg_node, arena, registry, ctx, ErrorCode::Value);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
+    return false;
+  }
+  *out_cells = std::move(resolved.value().cells);
+  return true;
+}
+
+const Value* first_error(const std::vector<Value>& cells) {
+  for (const Value& v : cells) {
+    if (v.is_error()) {
+      return &v;
+    }
+  }
+  return nullptr;
 }
 
 Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNode& arg_node, Arena& arena,

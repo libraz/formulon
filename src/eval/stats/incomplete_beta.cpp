@@ -30,7 +30,6 @@ constexpr double kTwoOverSqrtPi = 0x1.20dd750429b6dp+0;
 constexpr double kQuarterSqrtPi = 0x1.c5bf891b4ef6bp-2;
 constexpr double kTwoPowNeg1p5 = 0x1.6a09e667f3bcdp-2;
 constexpr std::uint64_t kBfracTolBits = 0x3ce4000000000001ULL;
-constexpr int kMaxTerms = 100000;
 
 using flushed::bits_of;
 using flushed::compensated_sum;
@@ -203,9 +202,8 @@ double continued_fraction(double a, double b, double x, double y) noexcept {
   lam += a;
   const double bc = x > 0.99 ? beta_density_excel(b, a, y) : beta_density_excel(a, b, x);
   const double pre = mul(bc, mul(x, y));
-  constexpr double kTiny = 1e-30;
-  double f = kTiny;
-  double c = kTiny;
+  double f = kLentzTiny;
+  double c = kLentzTiny;
   double d = 0.0;
   double m = 0.0;
   double an = 1.0;
@@ -214,11 +212,11 @@ double continued_fraction(double a, double b, double x, double y) noexcept {
   for (int it = 0; it < kMaxTerms; ++it) {
     d = mul(an, d) + bn;
     if (d == 0.0) {
-      d = kTiny;
+      d = kLentzTiny;
     }
     c = div(an, c) + bn;
     if (c == 0.0) {
-      c = kTiny;
+      c = kLentzTiny;
     }
     d = div(1.0, d);
     const double delta = mul(c, d);
@@ -887,7 +885,7 @@ double t_dist_pdf_excel(double x, double df) noexcept {
   }
   const double x2 = mul(x, x);
   if (df == 1.0) {
-    return div(1.0, mul(3.141592653589793, 1.0 + x2));
+    return div(1.0, mul(kPi, 1.0 + x2));
   }
   if (df == 2.0) {
     return std::exp(mul(std::log(x2 + 2.0), -1.5));
@@ -904,7 +902,7 @@ double t_dist_pdf_excel(double x, double df) noexcept {
   } else {
     u = mul(nh, excel_log1p(div(x2, df)));
   }
-  const double r = div(0.3989422804014327, std::sqrt(div(x2, df) + 1.0));
+  const double r = div(kInvSqrt2Pi, std::sqrt(div(x2, df) + 1.0));
   return mul(std::exp(t - u), r);
 }
 
@@ -921,7 +919,7 @@ double t_dist_2t_excel(double x, double df) noexcept {
 
 double t_dist_tail_excel(double x, double df, bool upper) noexcept {
   df = std::trunc(df);
-  if (df < 1.0 || df > 1e10) {
+  if (df < 1.0 || df > kMaxDegreesOfFreedom) {
     return kNaN;
   }
   const bool keep = (!upper) != (x >= 0.0);

@@ -10,6 +10,7 @@
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
+#include "eval/scalar_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -165,33 +166,21 @@ std::vector<std::string> split_by_any(std::string_view text, const std::vector<s
 // returns the default value (caller must check *out_err first).
 int read_int_opt(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                  int default_value, Value* out_err) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return default_value;
-  }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
+  double n = 0.0;
+  if (!eval_number_arg(node, arena, registry, ctx, n, *out_err)) {
     return default_value;
   }
   // Saturated before the caller's whitelist check, so a huge argument narrows defined.
-  return truncate_saturated_int(coerced.value());
+  return truncate_saturated_int(n);
 }
 
 bool read_bool_opt(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                    bool default_value, Value* out_err) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
+  bool b = false;
+  if (!eval_bool_arg(node, arena, registry, ctx, b, *out_err)) {
     return default_value;
   }
-  auto coerced = coerce_to_bool(v);
-  if (!coerced) {
-    *out_err = Value::error(coerced.error());
-    return default_value;
-  }
-  return coerced.value();
+  return b;
 }
 
 }  // namespace

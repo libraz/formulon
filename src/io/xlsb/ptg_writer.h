@@ -126,8 +126,8 @@ struct SheetRangeTable {
 /// The `iSupBook` the file stores for an XTI naming `book`: this workbook's
 /// `BrtSupSelf` comes first when any XTI names it, then one `BrtSupBookSrc`
 /// per link. Index 0 is therefore an external link in a table without a
-/// self entry.
-std::uint32_t xti_sup_book(const SheetRangeTable& table, std::uint32_t book);
+/// self entry. `names_self` is `xti_names_self` of the table.
+std::uint32_t xti_sup_book(bool names_self, std::uint32_t book);
 
 /// True when an XTI names this workbook, which then needs `BrtSupSelf`.
 bool xti_names_self(const SheetRangeTable& table);

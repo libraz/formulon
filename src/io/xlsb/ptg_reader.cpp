@@ -26,6 +26,7 @@
 #include "io/xlsb/record.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -42,9 +43,8 @@ constexpr std::uint32_t kRowCount = 1U << 20;
 // tells us the reference is `#REF!`.
 Error unsupported_ptg(std::uint8_t first_byte, const char* name) {
   std::string ctx("context=xlsb_ptg_reader byte=0x");
-  static constexpr char kHex[] = "0123456789ABCDEF";
-  ctx.push_back(kHex[(first_byte >> 4) & 0xF]);
-  ctx.push_back(kHex[first_byte & 0xF]);
+  ctx.push_back(strings::hex_digit_upper(first_byte >> 4U));
+  ctx.push_back(strings::hex_digit_upper(first_byte));
   if (name != nullptr) {
     ctx.append(" ptg=").append(name);
   }
@@ -63,12 +63,8 @@ Error corrupt_stack(const char* detail) {
 // Ptgs remain authoritative for the AST, so this reader only validates and
 // consumes the opaque cache payload to keep later RgbExtra entries aligned.
 Expected<void, Error> skip_ptg_extra_mem(ByteSpan& extra) {
-  auto count_or = read_u32(extra);
-  if (!count_or) {
-    return std::move(count_or.error());
-  }
+  ASSIGN_OR_RETURN(const std::size_t count, read_u32(extra));
   constexpr std::size_t kUncheckedRfXBytes = 16U;
-  const std::size_t count = count_or.value();
   if (count > extra.size / kUncheckedRfXBytes) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgExtraMem range array truncated",
                       "context=xlsb_ptg_reader");
@@ -84,11 +80,8 @@ Expected<void, Error> skip_ptg_extra_mem(ByteSpan& extra) {
 // validating the advertised bound catches a malformed cache marker without
 // skipping the actual formula.
 Expected<void, Error> read_mem_expression_size(ByteSpan& cursor, const char* ptg_name) {
-  auto cce_or = read_u16(cursor);
-  if (!cce_or) {
-    return std::move(cce_or.error());
-  }
-  if (static_cast<std::size_t>(cce_or.value()) > cursor.size) {
+  ASSIGN_OR_RETURN(auto cce, read_u16(cursor));
+  if (static_cast<std::size_t>(cce) > cursor.size) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
                       std::string(ptg_name) + " binary-reference expression truncated", "context=xlsb_ptg_reader");
   }
@@ -110,19 +103,23 @@ ErrorCode error_from_wire(std::uint8_t code) {
 /// followed by UTF-16LE units. (The engine's writer emits the same
 /// shape; this matched pair is what guarantees round-trip.)
 Expected<std::string, Error> read_ptg_string(ByteSpan& cursor) {
-  auto cch_or = read_u16(cursor);
-  if (!cch_or) {
-    return std::move(cch_or.error());
-  }
-  const std::uint32_t cch = cch_or.value();
-  if (cursor.size < static_cast<std::size_t>(cch) * 2U) {
+  ASSIGN_OR_RETURN(auto cch, read_u16(cursor));
+  std::string out;
+  if (!read_utf16_units(cursor, cch, &out)) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb PtgStr body truncated", "context=xlsb.ptg");
   }
-  std::string out;
-  append_utf16le_as_utf8(cursor.data, cch, &out);
-  cursor.data += static_cast<std::size_t>(cch) * 2U;
-  cursor.size -= static_cast<std::size_t>(cch) * 2U;
   return out;
+}
+
+/// Pushes `node` on the operand stack, or fails when the arena could not
+/// allocate it; `what` names the token for the message.
+Expected<void, Error> push_node(std::vector<parser::AstNode*>& stack, parser::AstNode* node, const char* what) {
+  if (node == nullptr) {
+    return make_error(FormulonErrorCode::kOutOfMemory, std::string("arena exhausted (") + what + ")",
+                      "context=xlsb_ptg_reader");
+  }
+  stack.push_back(node);
+  return Expected<void, Error>::Ok();
 }
 
 // Builds one corner from its row and its flag-carrying column field.
@@ -140,15 +137,9 @@ parser::Reference make_corner(std::uint32_t row, std::uint16_t col, std::string_
 /// relative-flag bits) into a `parser::Reference`. `sheet` is applied as
 /// the reference's sheet qualifier (empty for the local sheet).
 Expected<parser::Reference, Error> read_loc(ByteSpan& cursor, std::string_view sheet) {
-  auto row_or = read_u32(cursor);
-  if (!row_or) {
-    return std::move(row_or.error());
-  }
-  auto col_or = read_u16(cursor);
-  if (!col_or) {
-    return std::move(col_or.error());
-  }
-  return make_corner(row_or.value(), col_or.value(), sheet);
+  ASSIGN_OR_RETURN(auto row, read_u32(cursor));
+  ASSIGN_OR_RETURN(auto col, read_u16(cursor));
+  return make_corner(row, col, sheet);
 }
 
 /// Decodes the `RgceArea` two-corner range coordinate: rows first, then
@@ -158,62 +149,60 @@ Expected<parser::Reference, Error> read_loc(ByteSpan& cursor, std::string_view s
 Expected<std::pair<parser::Reference, parser::Reference>, Error> read_area(ByteSpan& cursor,
                                                                            std::string_view sheet_first,
                                                                            std::string_view sheet_last) {
-  auto row1_or = read_u32(cursor);
-  if (!row1_or) {
-    return std::move(row1_or.error());
-  }
-  auto row2_or = read_u32(cursor);
-  if (!row2_or) {
-    return std::move(row2_or.error());
-  }
-  auto col1_or = read_u16(cursor);
-  if (!col1_or) {
-    return std::move(col1_or.error());
-  }
-  auto col2_or = read_u16(cursor);
-  if (!col2_or) {
-    return std::move(col2_or.error());
-  }
-  return std::make_pair(make_corner(row1_or.value(), col1_or.value(), sheet_first),
-                        make_corner(row2_or.value(), col2_or.value(), sheet_last));
+  ASSIGN_OR_RETURN(auto row1, read_u32(cursor));
+  ASSIGN_OR_RETURN(auto row2, read_u32(cursor));
+  ASSIGN_OR_RETURN(auto col1, read_u16(cursor));
+  ASSIGN_OR_RETURN(auto col2, read_u16(cursor));
+  return std::make_pair(make_corner(row1, col1, sheet_first), make_corner(row2, col2, sheet_last));
 }
 
-// `first`:`last` as a formula spells it. Excel stores whole columns (`A:A`)
-// as an area over every row with the rows absolute, and whole rows alike.
+// How an area spells in a formula: Excel stores whole columns (`A:A`) as an
+// area over every row with the rows absolute, and whole rows alike. `one` is
+// set when the whole-column or whole-row area covers a single column or row.
+struct FullAxis {
+  bool cols = false;
+  bool rows = false;
+  bool one = false;
+};
+
+FullAxis classify_full_axis(const parser::Reference& first, const parser::Reference& last) {
+  FullAxis axis;
+  axis.cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
+  axis.rows = !axis.cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
+  axis.one = axis.cols ? first.col == last.col && first.col_abs == last.col_abs
+                       : axis.rows && first.row == last.row && first.row_abs == last.row_abs;
+  return axis;
+}
+
+// `first`:`last` as a formula spells it.
 parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Reference last) {
-  const bool cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
-  const bool rows = !cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
-  if (cols || rows) {
-    first.is_full_col = last.is_full_col = cols;
-    first.is_full_row = last.is_full_row = rows;
-    const bool one = cols ? first.col == last.col && first.col_abs == last.col_abs
-                          : first.row == last.row && first.row_abs == last.row_abs;
-    if (one) {
+  const FullAxis axis = classify_full_axis(first, last);
+  const bool full = axis.cols || axis.rows;
+  if (full) {
+    first.is_full_col = last.is_full_col = axis.cols;
+    first.is_full_row = last.is_full_row = axis.rows;
+    if (axis.one) {
       return parser::make_ref(arena, first);
     }
   }
   parser::AstNode* lhs = parser::make_ref(arena, first);
   parser::AstNode* rhs = parser::make_ref(arena, last);
-  return lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs, /*spliced=*/cols || rows);
+  return lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs, /*spliced=*/full);
 }
 
 // The external counterpart of `make_area`: whole columns and rows read back
 // as such, a single one as the cell form with its flag set.
 parser::AstNode* make_external_area(Arena& arena, std::string_view book, std::string_view sheet,
                                     std::string_view sheet_end, parser::Reference first, parser::Reference last) {
-  const bool cols = first.row == 0U && last.row == Sheet::kMaxRows - 1U && first.row_abs && last.row_abs;
-  const bool rows = !cols && first.col == 0U && last.col == Sheet::kMaxCols - 1U && first.col_abs && last.col_abs;
-  bool is_range = true;
-  if (cols || rows) {
-    first.is_full_col = last.is_full_col = cols;
-    first.is_full_row = last.is_full_row = rows;
-    is_range = cols ? !(first.col == last.col && first.col_abs == last.col_abs)
-                    : !(first.row == last.row && first.row_abs == last.row_abs);
-    if (!is_range) {
+  const FullAxis axis = classify_full_axis(first, last);
+  if (axis.cols || axis.rows) {
+    first.is_full_col = last.is_full_col = axis.cols;
+    first.is_full_row = last.is_full_row = axis.rows;
+    if (axis.one) {
       last = first;
     }
   }
-  return parser::make_external_ref(arena, {}, book, sheet, sheet_end, first, last, is_range);
+  return parser::make_external_ref(arena, {}, book, sheet, sheet_end, first, last, /*is_range=*/!axis.one);
 }
 
 // Resolves a `PtgRefN` / `PtgAreaN` corner read by `read_loc` / `read_area`
@@ -250,14 +239,8 @@ Expected<void, Error> check_ref_domain(const parser::Reference& r, const char* p
 // contract for range endpoints.
 Expected<void, Error> check_area_domain(const parser::Reference& first, const parser::Reference& last,
                                         const char* ptg_name) {
-  auto first_or = check_ref_domain(first, ptg_name);
-  if (!first_or) {
-    return first_or;
-  }
-  auto last_or = check_ref_domain(last, ptg_name);
-  if (!last_or) {
-    return last_or;
-  }
+  RETURN_IF_ERROR(check_ref_domain(first, ptg_name));
+  RETURN_IF_ERROR(check_ref_domain(last, ptg_name));
   if (first.row > last.row || first.col > last.col) {
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
                       std::string("xlsb ") + ptg_name + " corners out of order", "context=xlsb_ptg_reader");
@@ -267,30 +250,18 @@ Expected<void, Error> check_area_domain(const parser::Reference& first, const pa
 
 // `read_loc` followed by `check_ref_domain`.
 Expected<parser::Reference, Error> read_checked_loc(ByteSpan& cursor, std::string_view sheet, const char* ptg_name) {
-  auto ref_or = read_loc(cursor, sheet);
-  if (!ref_or) {
-    return std::move(ref_or.error());
-  }
-  auto domain_or = check_ref_domain(ref_or.value(), ptg_name);
-  if (!domain_or) {
-    return std::move(domain_or.error());
-  }
-  return ref_or;
+  ASSIGN_OR_RETURN(auto ref, read_loc(cursor, sheet));
+  RETURN_IF_ERROR(check_ref_domain(ref, ptg_name));
+  return ref;
 }
 
 // `read_area` followed by `check_area_domain`.
 Expected<std::pair<parser::Reference, parser::Reference>, Error> read_checked_area(ByteSpan& cursor,
                                                                                    std::string_view sheet_first,
                                                                                    const char* ptg_name) {
-  auto area_or = read_area(cursor, sheet_first, {});
-  if (!area_or) {
-    return std::move(area_or.error());
-  }
-  auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, ptg_name);
-  if (!domain_or) {
-    return std::move(domain_or.error());
-  }
-  return area_or;
+  ASSIGN_OR_RETURN(auto area, read_area(cursor, sheet_first, {}));
+  RETURN_IF_ERROR(check_area_domain(area.first, area.second, ptg_name));
+  return area;
 }
 
 }  // namespace
@@ -719,11 +690,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     bool keeps_pending_space = false;
     const std::uint8_t first_byte = cursor.data[0];
     if (first_byte == kPtgList && cursor.size >= 2U && cursor.data[1] == kEptgList) {
-      auto list_or = decode_ptg_list(cursor, arena, tables);
-      if (!list_or) {
-        return std::move(list_or.error());
-      }
-      stack.push_back(list_or.value());
+      ASSIGN_OR_RETURN(auto list, decode_ptg_list(cursor, arena, tables));
+      stack.push_back(list);
       if (pending_spaces != 0) {
         record_space(PtgKind::Area, stack.back());
         pending_spaces = 0;
@@ -748,63 +716,33 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       // only the marker payload (and the matching PtgMemArea extra cache).
       case PtgKind::MemArea:
       case PtgKind::MemNoMem: {
-        auto unused_or = read_u32(cursor);
-        if (!unused_or) {
-          return std::move(unused_or.error());
-        }
-        auto size_check = read_mem_expression_size(cursor, info->name);
-        if (!size_check) {
-          return std::move(size_check.error());
-        }
+        RETURN_IF_ERROR(read_u32(cursor));
+        RETURN_IF_ERROR(read_mem_expression_size(cursor, info->name));
         if (info->kind == PtgKind::MemArea) {
-          auto extra_check = skip_ptg_extra_mem(extra);
-          if (!extra_check) {
-            return std::move(extra_check.error());
-          }
+          RETURN_IF_ERROR(skip_ptg_extra_mem(extra));
         }
         keeps_pending_space = true;
         break;
       }
       case PtgKind::MemErr: {
-        auto error_or = read_u8(cursor);
-        if (!error_or) {
-          return std::move(error_or.error());
-        }
-        auto unused_or = read_u8(cursor);
-        if (!unused_or) {
-          return std::move(unused_or.error());
-        }
-        auto unused2_or = read_u16(cursor);
-        if (!unused2_or) {
-          return std::move(unused2_or.error());
-        }
-        auto size_check = read_mem_expression_size(cursor, info->name);
-        if (!size_check) {
-          return std::move(size_check.error());
-        }
+        RETURN_IF_ERROR(read_u8(cursor));
+        RETURN_IF_ERROR(read_u8(cursor));
+        RETURN_IF_ERROR(read_u16(cursor));
+        RETURN_IF_ERROR(read_mem_expression_size(cursor, info->name));
         keeps_pending_space = true;
         break;
       }
       case PtgKind::MemFunc: {
-        auto size_check = read_mem_expression_size(cursor, info->name);
-        if (!size_check) {
-          return std::move(size_check.error());
-        }
+        RETURN_IF_ERROR(read_mem_expression_size(cursor, info->name));
         keeps_pending_space = true;
         break;
       }
 
       // ---- Operands -------------------------------------------------------
       case PtgKind::Int: {
-        auto v_or = read_u16(cursor);
-        if (!v_or) {
-          return std::move(v_or.error());
-        }
-        parser::AstNode* n = parser::make_literal(arena, Value::number(static_cast<double>(v_or.value())));
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgInt)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        ASSIGN_OR_RETURN(auto v, read_u16(cursor));
+        parser::AstNode* n = parser::make_literal(arena, Value::number(static_cast<double>(v)));
+        RETURN_IF_ERROR(push_node(stack, n, "PtgInt"));
         break;
       }
       case PtgKind::Num: {
@@ -822,57 +760,33 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (n != nullptr && v < 0.0) {
           n = parser::make_unary_op(arena, parser::UnaryOp::Minus, n);
         }
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNum)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgNum"));
         break;
       }
       case PtgKind::Str: {
-        auto s_or = read_ptg_string(cursor);
-        if (!s_or) {
-          return std::move(s_or.error());
-        }
-        const std::string_view interned = arena.intern(s_or.value());
+        ASSIGN_OR_RETURN(auto s, read_ptg_string(cursor));
+        const std::string_view interned = arena.intern(s);
         parser::AstNode* n = parser::make_literal(arena, Value::text(interned));
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgStr)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgStr"));
         break;
       }
       case PtgKind::Bool: {
-        auto b_or = read_u8(cursor);
-        if (!b_or) {
-          return std::move(b_or.error());
-        }
-        parser::AstNode* n = parser::make_literal(arena, Value::boolean(b_or.value() != 0));
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgBool)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        ASSIGN_OR_RETURN(auto b, read_u8(cursor));
+        parser::AstNode* n = parser::make_literal(arena, Value::boolean(b != 0));
+        RETURN_IF_ERROR(push_node(stack, n, "PtgBool"));
         break;
       }
       case PtgKind::Err: {
-        auto code_or = read_u8(cursor);
-        if (!code_or) {
-          return std::move(code_or.error());
-        }
-        parser::AstNode* n = parser::make_error_literal(arena, error_from_wire(code_or.value()));
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgErr)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        ASSIGN_OR_RETURN(auto code, read_u8(cursor));
+        parser::AstNode* n = parser::make_error_literal(arena, error_from_wire(code));
+        RETURN_IF_ERROR(push_node(stack, n, "PtgErr"));
         break;
       }
       case PtgKind::MissArg: {
         // An omitted argument (e.g. `IF(,x,y)`) maps to a blank literal;
         // the formatter renders it as an empty slot.
         parser::AstNode* n = parser::make_literal(arena, Value::blank());
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgMissArg)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgMissArg"));
         break;
       }
       case PtgKind::Array: {
@@ -892,16 +806,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         cursor.data += 14;
         cursor.size -= 14;
-        auto rows_or = read_u32(extra);
-        if (!rows_or) {
-          return std::move(rows_or.error());
-        }
-        auto cols_or = read_u32(extra);
-        if (!cols_or) {
-          return std::move(cols_or.error());
-        }
-        const std::uint32_t rows = rows_or.value();
-        const std::uint32_t cols = cols_or.value();
+        ASSIGN_OR_RETURN(const std::uint32_t rows, read_u32(extra));
+        ASSIGN_OR_RETURN(const std::uint32_t cols, read_u32(extra));
         if (rows == 0 || cols == 0) {
           return make_error(FormulonErrorCode::kIoXlsbCorrupt, "PtgArray zero dimension", "context=xlsb_ptg_reader");
         }
@@ -916,12 +822,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                             "context=xlsb_ptg_reader");
         }
         for (std::uint32_t i = 0; i < count; ++i) {
-          auto tag_or = read_u8(extra);
-          if (!tag_or) {
-            return std::move(tag_or.error());
-          }
+          ASSIGN_OR_RETURN(auto tag, read_u8(extra));
           parser::AstNode* elem = nullptr;
-          switch (tag_or.value()) {
+          switch (tag) {
             case 0: {  // number (verified: tag byte 0x00 precedes the double)
               if (extra.size < 8) {
                 return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgArray number truncated",
@@ -935,33 +838,23 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
               break;
             }
             case 1: {  // string: u16 count + UTF-16LE, as PtgStr carries it
-              auto s_or = read_ptg_string(extra);
-              if (!s_or) {
-                return std::move(s_or.error());
-              }
-              elem = parser::make_literal(arena, Value::text(arena.intern(s_or.value())));
+              ASSIGN_OR_RETURN(auto s, read_ptg_string(extra));
+              elem = parser::make_literal(arena, Value::text(arena.intern(s)));
               break;
             }
             case 2: {  // boolean: one byte
-              auto b_or = read_u8(extra);
-              if (!b_or) {
-                return std::move(b_or.error());
-              }
-              elem = parser::make_literal(arena, Value::boolean(b_or.value() != 0));
+              ASSIGN_OR_RETURN(auto b, read_u8(extra));
+              elem = parser::make_literal(arena, Value::boolean(b != 0));
               break;
             }
             case 4: {  // error: the code, then three unused bytes
-              auto e_or = read_u32(extra);
-              if (!e_or) {
-                return std::move(e_or.error());
-              }
-              elem =
-                  parser::make_error_literal(arena, error_from_wire(static_cast<std::uint8_t>(e_or.value() & 0xFFU)));
+              ASSIGN_OR_RETURN(auto e, read_u32(extra));
+              elem = parser::make_error_literal(arena, error_from_wire(static_cast<std::uint8_t>(e & 0xFFU)));
               break;
             }
             default:
               return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "PtgArray element tag not decoded",
-                                "context=xlsb_ptg_reader tag=" + std::to_string(tag_or.value()));
+                                "context=xlsb_ptg_reader tag=" + std::to_string(tag));
           }
           if (elem == nullptr) {
             return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArray element)",
@@ -970,10 +863,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           elems[i] = elem;
         }
         parser::AstNode* n = parser::make_array_literal(arena, rows, cols, elems);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArray)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgArray"));
         break;
       }
 
@@ -985,20 +875,14 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // placeholders share this same token; the future-function
         // dispatch above (`decode_future_function`) is what tells them
         // apart, by inspecting the resolved name's prefix.
-        auto ilbl_or = read_u32(cursor);
-        if (!ilbl_or) {
-          return std::move(ilbl_or.error());
-        }
-        const std::string_view name = resolve_name(ilbl_or.value());
+        ASSIGN_OR_RETURN(auto ilbl, read_u32(cursor));
+        const std::string_view name = resolve_name(ilbl);
         if (name.empty()) {
           return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb PtgName: ilbl out of range",
-                            "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
+                            "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl));
         }
-        parser::AstNode* n = make_local_name_ref(ilbl_or.value(), /*qualified=*/false);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgName)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        parser::AstNode* n = make_local_name_ref(ilbl, /*qualified=*/false);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgName"));
         break;
       }
 
@@ -1009,33 +893,22 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // name is book-scope, so it qualifies no sheet), which is why
         // this resolves the book through `sheet_ranges` but never asks
         // `external_sheet_for_ixti` for a sheet.
-        auto ixti_or = read_u16(cursor);
-        if (!ixti_or) {
-          return std::move(ixti_or.error());
-        }
-        auto ilbl_or = read_u32(cursor);
-        if (!ilbl_or) {
-          return std::move(ilbl_or.error());
-        }
-        const std::uint32_t ixti = ixti_or.value();
+        ASSIGN_OR_RETURN(const std::uint32_t ixti, read_u16(cursor));
+        ASSIGN_OR_RETURN(auto ilbl, read_u32(cursor));
         // An ExternSheet entry of this workbook names one of its own
         // `BrtName` records; that record's own scope decides the qualifier.
         // A workbook-scoped record is the self-book `[0]!Name`, which is
         // what Excel saves both that spelling and `Sheet1!Name` as when
         // Sheet1 has no local `Name`.
         if (ixti < sheet_ranges.size() && sheet_ranges[ixti].external_book == 0U) {
-          const std::string_view name = resolve_name(ilbl_or.value());
+          const std::string_view name = resolve_name(ilbl);
           if (name.empty()) {
             return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb PtgNameX: ilbl out of range",
-                              "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
+                              "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl));
           }
-          parser::AstNode* n = name_table[ilbl_or.value() - 1U].itab < 0
-                                   ? parser::make_external_name_ref(arena, {}, "0", {}, name)
-                                   : make_local_name_ref(ilbl_or.value(), /*qualified=*/true);
-          if (n == nullptr) {
-            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
-          }
-          stack.push_back(n);
+          parser::AstNode* n = name_table[ilbl - 1U].itab < 0 ? parser::make_external_name_ref(arena, {}, "0", {}, name)
+                                                              : make_local_name_ref(ilbl, /*qualified=*/true);
+          RETURN_IF_ERROR(push_node(stack, n, "PtgNameX"));
           break;
         }
         const std::uint32_t book = ixti < sheet_ranges.size() ? sheet_ranges[ixti].external_book : 0U;
@@ -1044,33 +917,23 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
                             "PtgNameX names a supporting workbook this reader cannot bind", "context=xlsb_ptg_reader");
         }
         const std::vector<std::string>& names = external_books[book - 1U].names;
-        if (ilbl_or.value() == 0 || ilbl_or.value() > names.size()) {
+        if (ilbl == 0 || ilbl > names.size()) {
           return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                             "PtgNameX ilbl is outside the supporting workbook's name table",
-                            "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl_or.value()));
+                            "context=xlsb_ptg_reader ilbl=" + std::to_string(ilbl));
         }
         // The book is spelled as its link index; ingestion rewrites it to the
         // file name the formula bar shows.
-        parser::AstNode* n =
-            parser::make_external_name_ref(arena, {}, std::to_string(book), {}, names[ilbl_or.value() - 1U]);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgNameX)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        parser::AstNode* n = parser::make_external_name_ref(arena, {}, std::to_string(book), {}, names[ilbl - 1U]);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgNameX"));
         break;
       }
 
       // ---- References -----------------------------------------------------
       case PtgKind::Ref: {
-        auto ref_or = read_checked_loc(cursor, {}, "PtgRef");
-        if (!ref_or) {
-          return std::move(ref_or.error());
-        }
-        parser::AstNode* n = parser::make_ref(arena, ref_or.value());
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        ASSIGN_OR_RETURN(auto ref, read_checked_loc(cursor, {}, "PtgRef"));
+        parser::AstNode* n = parser::make_ref(arena, ref);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgRef"));
         break;
       }
       case PtgKind::RefN:
@@ -1080,174 +943,102 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         parser::AstNode* n = nullptr;
         if (info->kind == PtgKind::RefN) {
-          auto ref_or = read_loc(cursor, {});
-          if (!ref_or) {
-            return std::move(ref_or.error());
-          }
-          resolve_relative(ref_or.value(), *base);
-          auto domain_or = check_ref_domain(ref_or.value(), info->name);
-          if (!domain_or) {
-            return std::move(domain_or.error());
-          }
-          n = parser::make_ref(arena, ref_or.value());
+          ASSIGN_OR_RETURN(auto ref, read_loc(cursor, {}));
+          resolve_relative(ref, *base);
+          RETURN_IF_ERROR(check_ref_domain(ref, info->name));
+          n = parser::make_ref(arena, ref);
         } else {
-          auto area_or = read_area(cursor, {}, {});
-          if (!area_or) {
-            return std::move(area_or.error());
-          }
-          resolve_relative(area_or.value().first, *base);
-          resolve_relative(area_or.value().second, *base);
-          auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, info->name);
-          if (!domain_or) {
-            return std::move(domain_or.error());
-          }
-          n = make_area(arena, area_or.value().first, area_or.value().second);
+          ASSIGN_OR_RETURN(auto area, read_area(cursor, {}, {}));
+          resolve_relative(area.first, *base);
+          resolve_relative(area.second, *base);
+          RETURN_IF_ERROR(check_area_domain(area.first, area.second, info->name));
+          n = make_area(arena, area.first, area.second);
         }
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRefN/PtgAreaN)",
-                            "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgRefN/PtgAreaN"));
         break;
       }
       case PtgKind::Area: {
-        auto area_or = read_checked_area(cursor, {}, "PtgArea");
-        if (!area_or) {
-          return std::move(area_or.error());
-        }
-        parser::AstNode* n = make_area(arena, area_or.value().first, area_or.value().second);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea range)",
-                            "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea"));
+        parser::AstNode* n = make_area(arena, area.first, area.second);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgArea range"));
         break;
       }
       case PtgKind::Ref3d: {
-        auto ixti_or = read_u16(cursor);
-        if (!ixti_or) {
-          return std::move(ixti_or.error());
-        }
+        ASSIGN_OR_RETURN(auto ixti, read_u16(cursor));
         // A single-cell 3-D reference can span more than one sheet
         // (e.g. `Data:S2!B1`) entirely through the ExternSheet entry's
         // `(itabFirst, itabLast)` — the Ptg token itself is identical to
         // the single-sheet form. Build a `Ref3D` node when the range is
         // genuinely multi-sheet; otherwise the plain qualified `Ref`
         // this token already produced.
-        if (ixti_is_external(ixti_or.value())) {
+        if (ixti_is_external(ixti)) {
           std::string_view external_sheet;
           std::string_view external_sheet_end;
-          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet, external_sheet_end);
+          const std::uint32_t book = external_sheet_for_ixti(ixti, external_sheet, external_sheet_end);
           if (book == 0) {
             return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                               "PtgRef3d qualifies a sheet of an external workbook this reader cannot bind",
                               "context=xlsb_ptg_reader");
           }
-          auto loc_or = read_checked_loc(cursor, {}, "PtgRef3d");
-          if (!loc_or) {
-            return std::move(loc_or.error());
-          }
-          parser::AstNode* n = parser::make_external_ref(arena, {}, std::to_string(book), external_sheet,
-                                                         external_sheet_end, loc_or.value(), loc_or.value(),
-                                                         /*is_range=*/false);
-          if (n == nullptr) {
-            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef3d external)",
-                              "context=xlsb_ptg_reader");
-          }
-          stack.push_back(n);
+          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d"));
+          parser::AstNode* n =
+              parser::make_external_ref(arena, {}, std::to_string(book), external_sheet, external_sheet_end, loc, loc,
+                                        /*is_range=*/false);
+          RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d external"));
           break;
         }
         std::string_view begin_sheet;
         std::string_view end_sheet;
-        if (sheet_range_for_ixti(ixti_or.value(), begin_sheet, end_sheet)) {
-          auto loc_or = read_checked_loc(cursor, {}, "PtgRef3d");
-          if (!loc_or) {
-            return std::move(loc_or.error());
-          }
-          parser::AstNode* n =
-              parser::make_ref3d(arena, arena.intern(begin_sheet), arena.intern(end_sheet), loc_or.value());
-          if (n == nullptr) {
-            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef3d range)",
-                              "context=xlsb_ptg_reader");
-          }
-          stack.push_back(n);
+        if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
+          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d"));
+          parser::AstNode* n = parser::make_ref3d(arena, arena.intern(begin_sheet), arena.intern(end_sheet), loc);
+          RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d range"));
           break;
         }
-        auto ref_or = read_checked_loc(cursor, sheet_for_ixti(ixti_or.value()), "PtgRef3d");
-        if (!ref_or) {
-          return std::move(ref_or.error());
-        }
-        parser::Reference ref = ref_or.value();
+        ASSIGN_OR_RETURN(parser::Reference ref, read_checked_loc(cursor, sheet_for_ixti(ixti), "PtgRef3d"));
         ref.sheet = arena.intern(ref.sheet);
         ref.sheet_quoted = parser::local_sheet_needs_quoting_a1(ref.sheet);
         parser::AstNode* n = parser::make_ref(arena, ref);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef3d)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d"));
         break;
       }
       case PtgKind::Area3d: {
-        auto ixti_or = read_u16(cursor);
-        if (!ixti_or) {
-          return std::move(ixti_or.error());
-        }
+        ASSIGN_OR_RETURN(auto ixti, read_u16(cursor));
         // A genuine 3-D range (multiple sheets AND a cell rectangle, e.g.
         // `Sheet1:Sheet2!A1:B2`) decodes into a range-tail `Ref3D`. A
         // single-sheet qualified area (`Sheet2!A1:B2`) keeps the plain
         // `RangeOp` of two qualified refs.
-        if (ixti_is_external(ixti_or.value())) {
+        if (ixti_is_external(ixti)) {
           std::string_view external_sheet;
           std::string_view external_sheet_end;
-          const std::uint32_t book = external_sheet_for_ixti(ixti_or.value(), external_sheet, external_sheet_end);
+          const std::uint32_t book = external_sheet_for_ixti(ixti, external_sheet, external_sheet_end);
           if (book == 0) {
             return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                               "PtgArea3d qualifies a sheet of an external workbook this reader cannot bind",
                               "context=xlsb_ptg_reader");
           }
-          auto area_or = read_checked_area(cursor, {}, "PtgArea3d");
-          if (!area_or) {
-            return std::move(area_or.error());
-          }
+          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d"));
           parser::AstNode* n = make_external_area(arena, std::to_string(book), external_sheet, external_sheet_end,
-                                                  area_or.value().first, area_or.value().second);
-          if (n == nullptr) {
-            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d external)",
-                              "context=xlsb_ptg_reader");
-          }
-          stack.push_back(n);
+                                                  area.first, area.second);
+          RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d external"));
           break;
         }
         std::string_view begin_sheet;
         std::string_view end_sheet;
-        if (sheet_range_for_ixti(ixti_or.value(), begin_sheet, end_sheet)) {
-          auto area_or = read_checked_area(cursor, {}, "PtgArea3d");
-          if (!area_or) {
-            return std::move(area_or.error());
-          }
+        if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
+          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d"));
           parser::AstNode* n = parser::make_ref3d_range(arena, arena.intern(begin_sheet), arena.intern(end_sheet),
-                                                        area_or.value().first, area_or.value().second);
-          if (n == nullptr) {
-            return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d range)",
-                              "context=xlsb_ptg_reader");
-          }
-          stack.push_back(n);
+                                                        area.first, area.second);
+          RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d range"));
           break;
         }
-        const std::string_view sheet = sheet_for_ixti(ixti_or.value());
-        auto area_or = read_checked_area(cursor, sheet, "PtgArea3d");
-        if (!area_or) {
-          return std::move(area_or.error());
-        }
-        parser::Reference first = area_or.value().first;
+        const std::string_view sheet = sheet_for_ixti(ixti);
+        ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, sheet, "PtgArea3d"));
+        parser::Reference first = area.first;
         first.sheet = arena.intern(first.sheet);
         first.sheet_quoted = parser::local_sheet_needs_quoting_a1(first.sheet);
-        parser::AstNode* n = make_area(arena, first, area_or.value().second);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgArea3d range)",
-                            "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        parser::AstNode* n = make_area(arena, first, area.second);
+        RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d range"));
         break;
       }
       case PtgKind::RefErr:
@@ -1258,24 +1049,13 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         // for the area forms) and emit a `#REF!` literal.
         const bool area = info->kind == PtgKind::AreaErr || info->kind == PtgKind::AreaErr3d;
         if (info->kind == PtgKind::RefErr3d || info->kind == PtgKind::AreaErr3d) {
-          auto ixti_or = read_u16(cursor);
-          if (!ixti_or) {
-            return std::move(ixti_or.error());
-          }
+          RETURN_IF_ERROR(read_u16(cursor));
         }
         for (int i = area ? 2 : 1; i > 0; --i) {
-          auto skip = read_loc(cursor, {});
-          if (!skip) {
-            return std::move(skip.error());
-          }
+          RETURN_IF_ERROR(read_loc(cursor, {}));
         }
         parser::AstNode* n = parser::make_error_literal(arena, ErrorCode::Ref);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory,
-                            area ? "arena exhausted (PtgAreaErr)" : "arena exhausted (PtgRefErr)",
-                            "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, area ? "PtgAreaErr" : "PtgRefErr"));
         break;
       }
 
@@ -1403,10 +1183,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         }
         children.push_back(rhs);
         parser::AstNode* n = parser::make_union_op(arena, children.data(), static_cast<std::uint32_t>(children.size()));
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (union op)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "union op"));
         break;
       }
       case PtgKind::Isect: {
@@ -1416,11 +1193,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         parser::AstNode* rhs = pop();
         parser::AstNode* lhs = pop();
         parser::AstNode* n = parser::make_intersect_op(arena, lhs, rhs);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (intersect op)",
-                            "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "intersect op"));
         break;
       }
 
@@ -1439,10 +1212,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           op = parser::UnaryOp::Percent;
         }
         parser::AstNode* n = parser::make_unary_op(arena, op, operand);
-        if (n == nullptr) {
-          return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (unary op)", "context=xlsb_ptg_reader");
-        }
-        stack.push_back(n);
+        RETURN_IF_ERROR(push_node(stack, n, "unary op"));
         break;
       }
       case PtgKind::Paren: {
@@ -1458,85 +1228,56 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
 
       // ---- Functions ------------------------------------------------------
       case PtgKind::Func: {
-        auto id_or = read_u16(cursor);
-        if (!id_or) {
-          return std::move(id_or.error());
-        }
-        const XlsbFuncEntry* entry = lookup_func_by_id(id_or.value());
+        ASSIGN_OR_RETURN(auto id, read_u16(cursor));
+        const XlsbFuncEntry* entry = lookup_func_by_id(id);
         if (entry == nullptr) {
           return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb PtgFunc unknown function id",
-                            "context=xlsb_ptg_reader id=" + std::to_string(id_or.value()));
+                            "context=xlsb_ptg_reader id=" + std::to_string(id));
         }
         // Fixed arity.
-        auto call_or = pop_call(entry->name, entry->arg_min, "PtgFunc", "function (fixed)");
-        if (!call_or) {
-          return std::move(call_or.error());
-        }
-        stack.push_back(call_or.value());
+        ASSIGN_OR_RETURN(auto call, pop_call(entry->name, entry->arg_min, "PtgFunc", "function (fixed)"));
+        stack.push_back(call);
         break;
       }
       case PtgKind::FuncVar: {
-        auto cparams_or = read_u8(cursor);
-        if (!cparams_or) {
-          return std::move(cparams_or.error());
-        }
-        auto id_or = read_u16(cursor);
-        if (!id_or) {
-          return std::move(id_or.error());
-        }
-        const std::uint32_t cparams = cparams_or.value();
+        ASSIGN_OR_RETURN(const std::uint32_t cparams, read_u8(cursor));
+        ASSIGN_OR_RETURN(auto id, read_u16(cursor));
         // id == 255 is the "future function" sentinel: the real callee
         // is not in the classic function-id table at all (XLOOKUP, LET,
         // TEXTJOIN, CONCAT, IFS, SEQUENCE, ...). Its name was pushed as
         // the FIRST operand via a preceding `PtgName`, so `cparams`
         // counts that name-ref plus the real arguments.
-        if (id_or.value() == 255) {
-          auto call_or = decode_future_function(cparams);
-          if (!call_or) {
-            return std::move(call_or.error());
-          }
-          stack.push_back(call_or.value());
+        if (id == 255) {
+          ASSIGN_OR_RETURN(auto call, decode_future_function(cparams));
+          stack.push_back(call);
           break;
         }
-        const XlsbFuncEntry* entry = lookup_func_by_id(id_or.value());
+        const XlsbFuncEntry* entry = lookup_func_by_id(id);
         if (entry == nullptr) {
           return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb PtgFuncVar unknown function id",
-                            "context=xlsb_ptg_reader id=" + std::to_string(id_or.value()));
+                            "context=xlsb_ptg_reader id=" + std::to_string(id));
         }
-        auto call_or = pop_call(entry->name, cparams, "PtgFuncVar", "function (var)");
-        if (!call_or) {
-          return std::move(call_or.error());
-        }
-        stack.push_back(call_or.value());
+        ASSIGN_OR_RETURN(auto call, pop_call(entry->name, cparams, "PtgFuncVar", "function (var)"));
+        stack.push_back(call);
         break;
       }
 
       // ---- Attributes -----------------------------------------------------
       case PtgKind::Attr: {
-        auto sub_or = read_u8(cursor);
-        if (!sub_or) {
-          return std::move(sub_or.error());
-        }
-        const auto sub = static_cast<PtgAttrKind>(sub_or.value());
+        ASSIGN_OR_RETURN(auto sub_byte, read_u8(cursor));
+        const auto sub = static_cast<PtgAttrKind>(sub_byte);
         switch (sub) {
           case PtgAttrKind::Sum: {
             // Optimised single-argument SUM. The attr carries a u16 of
             // unused data; collapse the top operand into `SUM(x)`.
-            auto unused_or = read_u16(cursor);
-            if (!unused_or) {
-              return std::move(unused_or.error());
-            }
+            RETURN_IF_ERROR(read_u16(cursor));
             if (stack.empty()) {
               return corrupt_stack("attr-sum");
             }
             parser::AstNode* operand = pop();
             const parser::AstNode* args[1] = {operand};
             parser::AstNode* n = parser::make_call(arena, arena.intern("SUM"), args, 1);
-            if (n == nullptr) {
-              return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (attr-sum)",
-                                "context=xlsb_ptg_reader");
-            }
-            stack.push_back(n);
+            RETURN_IF_ERROR(push_node(stack, n, "attr-sum"));
             break;
           }
           case PtgAttrKind::Space:
@@ -1568,22 +1309,13 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
             // unsigned integers, not 4-byte -- reading them as u32 desyncs
             // the rest of the Ptg stream for any Excel-authored CHOOSE().
             if (sub == PtgAttrKind::Choose) {
-              auto count_or = read_u16(cursor);
-              if (!count_or) {
-                return std::move(count_or.error());
-              }
-              const std::uint32_t entries = static_cast<std::uint32_t>(count_or.value()) + 1U;
+              ASSIGN_OR_RETURN(auto count, read_u16(cursor));
+              const std::uint32_t entries = static_cast<std::uint32_t>(count) + 1U;
               for (std::uint32_t i = 0; i < entries; ++i) {
-                auto off_or = read_u16(cursor);
-                if (!off_or) {
-                  return std::move(off_or.error());
-                }
+                RETURN_IF_ERROR(read_u16(cursor));
               }
             } else {
-              auto unused_or = read_u16(cursor);
-              if (!unused_or) {
-                return std::move(unused_or.error());
-              }
+              RETURN_IF_ERROR(read_u16(cursor));
             }
             // These attrs are control-flow only; they do not consume or
             // produce operands.

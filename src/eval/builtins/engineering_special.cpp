@@ -77,10 +77,7 @@ using builtins_detail::to_finite_value;
 // parsed via coerce_to_number, Blank -> 0. NaN / Inf are left to the caller
 // to interpret (most call sites treat NaN as #NUM! at the result stage).
 Expected<double, ErrorCode> coerce_real_arg(const Value& v) {
-  if (v.kind() == ValueKind::Bool) {
-    return ErrorCode::Value;
-  }
-  return coerce_to_number(v);
+  return builtins_detail::coerce_to_number_no_bool(v);
 }
 
 // Largest BESSEL order Excel evaluates; the next integer is #NUM! for every x

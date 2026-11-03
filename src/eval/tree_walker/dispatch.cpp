@@ -50,6 +50,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/tail_array.h"
+#include "eval/tree_walker/broadcast.h"
 #include "eval/tree_walker/depth_guard.h"
 #include "eval/tree_walker_lazy_table.h"
 #include "parser/ast.h"
@@ -141,11 +142,10 @@ bool append_expanded_range(const FunctionDef& def, const parser::Reference& lhs,
   auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
   if (!expanded) {
     const Value err = Value::error(expanded.error());
-    if (def.propagate_errors) {
+    if (!absorb_arg_error(def, err, values)) {
       *immediate_return = err;
       return false;
     }
-    values->push_back(err);
     return true;
   }
   Value range_err = Value::blank();
@@ -181,33 +181,32 @@ bool is_full_axis_range(const parser::Reference& lhs, const parser::Reference& r
 namespace {
 
 // One argument slot for element-wise broadcasting of a scalar function
-// over array-shaped arguments: either a scalar (`scalar != nullptr`) or
-// an ArrayValue (`array != nullptr`).
+// over array-shaped arguments: a scalar (a 1x1 view, `scalar` set), an
+// ArrayValue, or a whole column / row (`view.tail` set).
 struct BroadcastArg {
-  const Value* scalar;
-  const ArrayValue* array;
-  std::uint32_t rows;
-  std::uint32_t cols;
-  const TailArray* tail = nullptr;  ///< Set instead of `array` for a whole column / row.
+  ArrayView view;
+  bool scalar;
 };
+
+BroadcastArg scalar_broadcast_arg(const Value& v) {
+  return {ArrayView{1U, 1U, &v}, true};
+}
+
+BroadcastArg array_broadcast_arg(const ArrayValue& a) {
+  return {ArrayView{a.rows, a.cols, a.cells}, false};
+}
+
+BroadcastArg tail_broadcast_arg(const TailArray& t) {
+  return {ArrayView{t.rows, t.cols, t.cells, t.head, t.tail, t.axis}, false};
+}
 
 // Element of `arg` at output position (r, c) under Excel's 1xN / Nx1
 // broadcast rules. A scalar supplies every position; an array whose
 // non-1 extent is smaller than the output cannot supply the position and
 // yields `#N/A`, matching Excel's ragged-broadcast fill.
 Value broadcast_element(const BroadcastArg& arg, std::uint32_t r, std::uint32_t c) {
-  if (arg.scalar != nullptr) {
-    return *arg.scalar;
-  }
-  const std::uint32_t ri = arg.rows == 1U ? 0U : r;
-  const std::uint32_t ci = arg.cols == 1U ? 0U : c;
-  if (ri >= arg.rows || ci >= arg.cols) {
-    return Value::error(ErrorCode::NA);
-  }
-  if (arg.tail != nullptr) {
-    return tail_array_at(*arg.tail, ri, ci);
-  }
-  return arg.array->cells[static_cast<std::size_t>(ri) * arg.cols + ci];
+  const Value* cell = broadcast_cell(arg.view, r, c);
+  return cell != nullptr ? *cell : Value::error(ErrorCode::NA);
 }
 
 // Evaluates a scalar (non-range-aware) function element-wise across the
@@ -223,12 +222,7 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
   std::vector<BroadcastArg> views;
   views.reserve(args.size());
   for (const Value& v : args) {
-    if (v.is_array()) {
-      const ArrayValue* a = v.as_array();
-      views.push_back({nullptr, a, a->rows, a->cols});
-    } else {
-      views.push_back({&v, nullptr, 1U, 1U});
-    }
+    views.push_back(v.is_array() ? array_broadcast_arg(*v.as_array()) : scalar_broadcast_arg(v));
   }
   Value* cells = nullptr;
   ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, cells, kMaxDerivedArrayCells);
@@ -265,22 +259,15 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
 // array its last argument evaluated to, with `values` holding the other
 // arguments. A 1x1 result unwraps to a scalar.
 Value lift_last_arg_call(const FunctionDef& def, std::vector<Value> values, const ArrayValue& last, Arena& arena) {
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(last.rows, last.cols, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(last.rows) * last.cols;
-  for (std::size_t i = 0; i < n; ++i) {
-    values.back() = last.cells[i];
-    cells[i] = def.propagate_errors && last.cells[i].is_error()
-                   ? last.cells[i]
+  return map_array_with(
+      last,
+      [&](const Value& cell) {
+        values.back() = cell;
+        return def.propagate_errors && cell.is_error()
+                   ? cell
                    : def.impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
-  }
-  if (n == 1U) {
-    return cells[0];
-  }
-  return Value::array(out);
+      },
+      arena);
 }
 
 // `broadcast_scalar_call` for arguments of which `tails[i]` (when non-null) is
@@ -319,16 +306,15 @@ Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Va
   const std::vector<Value>& source = mixed ? dense_args : args;
   for (std::size_t i = 0; i < source.size(); ++i) {
     if (!mixed && tails[i] != nullptr) {
-      views.push_back({nullptr, nullptr, tails[i]->rows, tails[i]->cols, tails[i]});
+      views.push_back(tail_broadcast_arg(*tails[i]));
     } else if (source[i].is_array()) {
-      const ArrayValue* a = source[i].as_array();
-      views.push_back({nullptr, a, a->rows, a->cols});
+      views.push_back(array_broadcast_arg(*source[i].as_array()));
     } else {
-      views.push_back({&source[i], nullptr, 1U, 1U});
+      views.push_back(scalar_broadcast_arg(source[i]));
     }
-    if (views.back().scalar == nullptr) {
-      out_rows = std::max(out_rows, views.back().rows);
-      out_cols = std::max(out_cols, views.back().cols);
+    if (!views.back().scalar) {
+      out_rows = std::max(out_rows, views.back().view.rows);
+      out_cols = std::max(out_cols, views.back().view.cols);
     }
   }
   const auto eval_cell = [&](std::vector<Value>& cell_args, std::uint32_t r, std::uint32_t c) {
@@ -363,10 +349,10 @@ Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Va
   const std::uint32_t extent = along_rows ? out_rows : out_cols;
   std::uint32_t head = 0;
   for (const BroadcastArg& v : views) {
-    if (v.tail != nullptr) {
-      head = std::max(head, v.tail->head);
-    } else if (v.scalar == nullptr) {
-      const std::uint32_t ext = along_rows ? v.rows : v.cols;
+    if (v.view.tail != nullptr) {
+      head = std::max(head, v.view.head);
+    } else if (!v.scalar) {
+      const std::uint32_t ext = along_rows ? v.view.rows : v.view.cols;
       if (ext > 1U) {
         head = std::max(head, ext);
       }

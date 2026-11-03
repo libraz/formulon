@@ -12,46 +12,15 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
 namespace ooxml {
 
-namespace {
-
-/// Collects every relationship of `rel_type` in the sheet's rels part,
-/// resolving each `Target` against `sheet_dir`. Other rel types
-/// (printerSettings, drawings, comments, ...) are handled by sibling helpers.
-Expected<std::vector<std::string>, Error> collect_targets_of_type(const pugi::xml_document& document,
-                                                                  std::string_view sheet_dir,
-                                                                  std::string_view rel_type) {
-  std::vector<std::string> targets;
-  auto visit_status = visit_relationship_nodes(document, [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-    const std::string_view type = rel.attribute("Type").value();
-    const std::string_view target = rel.attribute("Target").value();
-    if (target.empty()) {
-      return Expected<void, Error>::Ok();
-    }
-    if (type == rel_type) {
-      auto resolved = resolve_relative_path(sheet_dir, target);
-      if (!resolved) {
-        return std::move(resolved.error());
-      }
-      targets.push_back(std::move(resolved).value());
-    }
-    return Expected<void, Error>::Ok();
-  });
-  if (!visit_status) {
-    return std::move(visit_status.error());
-  }
-  return targets;
-}
-
-}  // namespace
-
 Expected<std::vector<std::string>, Error> collect_sheet_table_targets(const pugi::xml_document& document,
                                                                       std::string_view sheet_dir) {
-  return collect_targets_of_type(document, sheet_dir, kRelTable);
+  return collect_relationship_targets(document, sheet_dir, kRelTable);
 }
 
 Expected<SheetAuxRels, Error> collect_sheet_aux_rels(const pugi::xml_document& document, std::string_view sheet_dir,
@@ -66,7 +35,7 @@ Expected<SheetAuxRels, Error> collect_sheet_aux_rels(const pugi::xml_document& d
     std::string path;
   };
   std::vector<VmlCandidate> vml_candidates;
-  auto visit_status = visit_relationship_nodes(document, [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+  RETURN_IF_ERROR(visit_relationship_nodes(document, [&](const pugi::xml_node& rel) -> Expected<void, Error> {
     const std::string_view type = rel.attribute("Type").value();
     const std::string_view target = rel.attribute("Target").value();
     if (target.empty()) {
@@ -81,59 +50,29 @@ Expected<SheetAuxRels, Error> collect_sheet_aux_rels(const pugi::xml_document& d
       // the OOXML producer wrote them (no relative-path resolution).
       out.hyperlink_rid_to_target.emplace(id, std::string(target));
     } else if (type == kRelComments) {
-      auto resolved = resolve_relative_path(sheet_dir, target);
-      if (!resolved) {
-        return std::move(resolved.error());
-      }
-      out.comments_path = std::move(resolved).value();
+      ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(sheet_dir, target));
+      out.comments_path = std::move(resolved);
     } else if (type == kRelThreadedComment) {
-      auto resolved = resolve_relative_path(sheet_dir, target);
-      if (!resolved) {
-        return std::move(resolved.error());
-      }
-      out.threaded_comments_path = std::move(resolved).value();
+      ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(sheet_dir, target));
+      out.threaded_comments_path = std::move(resolved);
     } else if (type == kRelVmlDrawing) {
-      auto resolved = resolve_relative_path(sheet_dir, target);
-      if (!resolved) {
-        return std::move(resolved.error());
-      }
-      vml_candidates.push_back(VmlCandidate{std::string(rel.attribute("Id").value()), std::move(resolved).value()});
+      ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(sheet_dir, target));
+      vml_candidates.push_back(VmlCandidate{std::string(rel.attribute("Id").value()), std::move(resolved)});
     } else if (type == kRelPrinterSettings) {
-      auto resolved = resolve_relative_path(sheet_dir, target);
-      if (!resolved) {
-        return std::move(resolved.error());
-      }
+      ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(sheet_dir, target));
       out.printer_settings_rid.assign(rel.attribute("Id").value());
-      out.printer_settings_path = std::move(resolved).value();
+      out.printer_settings_path = std::move(resolved);
     } else if (type == kRelDrawing) {
-      auto resolved = resolve_relative_path(sheet_dir, target);
-      if (!resolved) {
-        return std::move(resolved.error());
-      }
-      out.drawing_path = std::move(resolved).value();
+      ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(sheet_dir, target));
+      out.drawing_path = std::move(resolved);
     } else if (type != kRelTable && type != kRelPivotTable) {
-      UnknownRelationship entry;
-      entry.id = rel.attribute("Id").value();
-      entry.type = std::string(type);
-      entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
-      if (entry.target_external) {
-        entry.target = std::string(target);
-      } else {
-        auto resolved = resolve_relative_path(sheet_dir, target);
-        if (!resolved) {
-          return std::move(resolved.error());
-        }
-        entry.target = std::move(resolved).value();
-      }
+      ASSIGN_OR_RETURN(auto entry, make_unknown_relationship(rel, sheet_dir));
       if (!entry.id.empty()) {
         out.unknown_rels.push_back(std::move(entry));
       }
     }
     return Expected<void, Error>::Ok();
-  });
-  if (!visit_status) {
-    return std::move(visit_status.error());
-  }
+  }));
   // Select the one `kRelVmlDrawing` candidate that models comment
   // geometry: prefer the id the worksheet body's `<legacyDrawing>`
   // element names, since that is the unambiguous signal a producer
@@ -175,7 +114,7 @@ Expected<SheetAuxRels, Error> collect_sheet_aux_rels(const pugi::xml_document& d
 
 Expected<std::vector<std::string>, Error> collect_sheet_pivot_table_targets(const pugi::xml_document& document,
                                                                             std::string_view sheet_dir) {
-  return collect_targets_of_type(document, sheet_dir, kRelPivotTable);
+  return collect_relationship_targets(document, sheet_dir, kRelPivotTable);
 }
 
 }  // namespace ooxml

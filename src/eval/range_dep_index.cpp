@@ -11,10 +11,10 @@
 
 namespace formulon::eval {
 
-std::uint32_t RangeDepIndex::intern_range(const CellRangeDependency& range) {
+RangeDepIndex::AddResult RangeDepIndex::intern_range(const CellRangeDependency& range) {
   const auto existing = range_ids_.find(range);
   if (existing != range_ids_.end()) {
-    return existing->second;
+    return AddResult{existing->second, false};
   }
 
   std::uint32_t range_id = 0;
@@ -43,7 +43,7 @@ std::uint32_t RangeDepIndex::intern_range(const CellRangeDependency& range) {
     ids.push_back(range_id);
   }
   ++live_range_count_;
-  return range_id;
+  return AddResult{range_id, true};
 }
 
 void RangeDepIndex::release_range(std::uint32_t range_id) {
@@ -83,8 +83,9 @@ void RangeDepIndex::release_range(std::uint32_t range_id) {
 }
 
 RangeDepIndex::AddResult RangeDepIndex::add(CellNodeId owner, const CellRangeDependency& range) {
-  const bool is_new = range_ids_.count(range) == 0U;
-  const std::uint32_t range_id = intern_range(range);
+  const AddResult interned = intern_range(range);
+  const std::uint32_t range_id = interned.range_id;
+  const bool is_new = interned.is_new;
   std::vector<OwnedRange>& owned = ranges_by_owner_[owner];
   for (const OwnedRange& existing : owned) {
     if (existing.range_id == range_id) {

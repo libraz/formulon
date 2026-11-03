@@ -17,6 +17,8 @@
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/stored_cell_error.h"
+#include "io/xlsb/frt_records.h"
+#include "io/xlsb/ptg.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
@@ -29,17 +31,11 @@ namespace {
 
 // Records of the part `XlsbRecordType` does not list, because the reader
 // skips them. Payloads below are the ones Excel 365 writes.
-constexpr std::uint16_t kBrtFrtBegin = 37;
-constexpr std::uint16_t kBrtFrtEnd = 38;
 constexpr std::uint16_t kBrtAlternateUrls = 5108;
 constexpr std::uint16_t kBrtExternNameBits = 586;
 
-constexpr std::uint8_t kFrtVersionPayload[] = {0x01, 0x00, 0x06, 0x11, 0x00, 0x80};
+constexpr std::uint8_t kAcVersionPayload[] = {0x01, 0x00, 0x06, 0x11, 0x00, 0x80};
 constexpr std::uint8_t kNameBitsPayload[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-
-constexpr std::uint8_t kPtgRef3d = 0x3A;
-constexpr std::uint8_t kPtgArea3d = 0x3B;
-constexpr std::uint8_t kPtgErr = 0x1C;
 
 struct LinkRelIds {
   std::string target;
@@ -180,14 +176,14 @@ std::vector<std::uint8_t> build_external_link_bin(const ExternalLinkRecord& link
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginExternalBook), p);
 
   if (!ids.absolute.empty()) {
-    emit_record(out, kBrtFrtBegin, ByteSpan{kFrtVersionPayload, sizeof(kFrtVersionPayload)});
+    emit_record(out, kAcBegin, ByteSpan{kAcVersionPayload, sizeof(kAcVersionPayload)});
     p.clear();
     emit_u32(p, 0);
     emit_u32(p, 0);
     emit_xlwidestring(p, ids.absolute);
     emit_u32(p, 0);
     emit_record(out, kBrtAlternateUrls, p);
-    emit_record(out, kBrtFrtEnd, ByteSpan{});
+    emit_record(out, kAcEnd, ByteSpan{});
   }
 
   p.clear();
@@ -226,7 +222,9 @@ std::string build_external_link_rels(const ExternalLinkRecord& link) {
   const LinkRelIds ids = RelIdsOf(link);
   std::string out;
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  out.append("<Relationships");
+  append_xml_ns_decl(out, "", kNsPackageRelationships);
+  out.append(">\n");
   // Excel lists the absolute URL first.
   if (!ids.absolute.empty()) {
     AppendRelationship(out, ids.absolute, kRelExternalLinkPath, link.absolute_target, /*target_external=*/true,

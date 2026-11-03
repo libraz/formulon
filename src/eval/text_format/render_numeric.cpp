@@ -30,39 +30,52 @@ namespace text_format {
 namespace number_format_detail {
 namespace {
 
-// Rounds `v` to `decimals` fractional places, half-away-from-zero. The
-// result's integer and fractional digit strings are written into
-// `*int_digits` and `*frac_digits` (decimal digits only, no sign, no
-// leading zeros on the integer side for zero values — except the integer
-// is always at least `"0"`).
-//
-// This helper does not handle scientific notation; see `render_scientific`.
+// `General` renders in an 11-character-wide field.
+constexpr int kGeneralWidth = 11;
+
+// The 15-significant-digit exponential view of `v` (`-d.ddddddddddddddde+XX`)
+// split into its mantissa text and decimal exponent. `has_exponent` is false
+// for a non-finite `v`, which has no exponent.
+struct Exponential15 {
+  char text[48];
+  std::size_t mantissa_length = 0;
+  int exp10 = 0;
+  bool has_exponent = false;
+
+  std::string_view mantissa() const { return std::string_view(text, mantissa_length); }
+};
+
+Exponential15 exponential15(double v) {
+  Exponential15 out;
+  const int n = format_exponential(out.text, sizeof(out.text), excel_decimal_view(v, kExcelSignificantDigits),
+                                   kExcelSignificantDigits - 1);
+  const std::string_view text(out.text, n > 0 ? static_cast<std::size_t>(n) : 0U);
+  const std::size_t e = text.find('e');
+  if (e != std::string_view::npos) {
+    out.mantissa_length = e;
+    out.exp10 = static_cast<int>(parse_double_prefix(text.substr(e + 1U)).value);
+    out.has_exponent = true;
+  }
+  return out;
+}
+
 // Decimal exponent of the leading digit of `v`'s 15-significant-digit decimal. log10 rounds
 // 999999999999999 up to exactly 15.
 int decimal_exponent15(double v) {
-  char buf[48];
-  const int n =
-      format_exponential(buf, sizeof(buf), excel_decimal_view(v, kExcelSignificantDigits), kExcelSignificantDigits - 1);
-  const std::string_view text(buf, n > 0 ? static_cast<std::size_t>(n) : 0U);
-  const std::size_t e = text.find('e');
-  return e == std::string_view::npos ? 0 : static_cast<int>(parse_double_prefix(text.substr(e + 1U)).value);
+  return exponential15(v).exp10;
 }
 
 // Returns the 15-significant-digit decimal of `v` divided by 10^exponent. Shifting the exponent of that text keeps
 // Excel's display view (ties decided on 15 digits) and avoids the ULP drift of 219 repeated multiplications.
 double shift_decimal_exponent(double v, int exponent) {
-  char buf[48];
-  const int n =
-      format_exponential(buf, sizeof(buf), excel_decimal_view(v, kExcelSignificantDigits), kExcelSignificantDigits - 1);
-  const std::string_view text(buf, n > 0 ? static_cast<std::size_t>(n) : 0U);
-  const std::size_t e = text.find('e');
-  if (e == std::string_view::npos) {
+  const Exponential15 view = exponential15(v);
+  if (!view.has_exponent) {
     return v;
   }
-  const ParsedDouble parsed = parse_double_prefix(text.substr(e + 1U));
-  std::string shifted(text.substr(0, e + 1U));
+  std::string shifted(view.mantissa());
+  shifted.push_back('e');
   char exp_buf[16];
-  const int m = format_signed(exp_buf, sizeof(exp_buf), static_cast<long long>(parsed.value) - exponent);
+  const int m = format_signed(exp_buf, sizeof(exp_buf), static_cast<long long>(view.exp10) - exponent);
   shifted.append(exp_buf, m > 0 ? static_cast<std::size_t>(m) : 0U);
   double out = v;
   return parse_double_exact(shifted, &out) ? out : v;
@@ -91,6 +104,10 @@ std::vector<std::string> distribute_digits(std::string_view digits, std::size_t 
   return slots;
 }
 
+// Rounds `v` to `decimals` fractional places, half-away-from-zero. The
+// result's integer and fractional digit strings are written into
+// `*int_digits` and `*frac_digits` (decimal digits only, no sign; the integer
+// is always at least `"0"`). Scientific notation is `render_numeric`'s job.
 void format_fixed_digits(double v, int decimals, bool* negative, std::string* int_digits, std::string* frac_digits) {
   // Use strict `< 0.0` rather than `signbit` so that `-0.0` rounds to "0" with
   // no sign byte. Mac Excel's two-section formats (`#,##0_);(#,##0)`) expect
@@ -113,7 +130,7 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
     // Once the 15 significant digits have been emitted, any extra fixed
     // places are known zeros. Rendering them from the binary double would
     // reintroduce representation residue (0.1 + 0.2 -> ...00004).
-    rendered_decimals = std::min(requested_decimals, std::max(0, 14 - exponent));
+    rendered_decimals = std::min(requested_decimals, std::max(0, kExcelSignificantDigits - 1 - exponent));
   }
   char buf[64];
   const int n = format_fixed(buf, sizeof(buf), abs_v, rendered_decimals);
@@ -193,30 +210,12 @@ void format_general(std::string& out, double v) {
     }
   }
   // Decimal exponent and trimmed digit count of the 15-significant-digit view.
-  int exp10 = 0;
-  int significant = 1;
-  {
-    char view[48];
-    const int n = format_exponential_tie_toward_zero(view, sizeof(view), abs_v, 14);
-    const char* e = view;
-    for (int i = 0; i < n; ++i) {
-      if (view[i] == 'e') {
-        e = view + i + 1;
-        break;
-      }
-    }
-    const bool negative_exponent = *e == '-';
-    for (++e; e < view + n && *e >= '0' && *e <= '9'; ++e) {
-      exp10 = exp10 * 10 + (*e - '0');
-    }
-    if (negative_exponent) {
-      exp10 = -exp10;
-    }
-    // Digits are `d` then `.` then fourteen more; drop trailing zeros.
-    significant = 15;
-    while (significant > 1 && view[significant == 1 ? 0 : significant] == '0') {
-      --significant;
-    }
+  const Exponential15 view = exponential15(abs_v);
+  int exp10 = view.exp10;
+  // Digits are `d` then `.` then fourteen more; drop trailing zeros.
+  int significant = kExcelSignificantDigits;
+  while (significant > 1 && view.text[significant] == '0') {
+    --significant;
   }
 
   // Scientific form: as many mantissa digits as fit in 11 characters with the
@@ -226,7 +225,7 @@ void format_general(std::string& out, double v) {
     const int exp_abs = exp10 < 0 ? -exp10 : exp10;
     const int exp_digits = exp_abs >= 99 ? 3 : 2;
     // Layout `X.FFF...E+YY`: one integer digit, a point, `frac` digits, `E`, a sign and the exponent.
-    const int frac = std::max(0, 11 - 4 - exp_digits);
+    const int frac = std::max(0, kGeneralWidth - 4 - exp_digits);
     char buf[64];
     const int n = format_exponential(buf, sizeof(buf), v, frac);
     if (n <= 0) {
@@ -261,7 +260,7 @@ void format_general(std::string& out, double v) {
   // From 1e11 up the form is scientific. Below 1e-4 it is fixed only when the
   // 15-digit value needs at most nine decimals, else scientific.
   int fixed_decimals = -1;
-  if (exp10 >= 11) {
+  if (exp10 >= kGeneralWidth) {
     emit_scientific();
     return;
   }
@@ -277,7 +276,7 @@ void format_general(std::string& out, double v) {
   // 11 characters, trailing zeros trimmed afterwards. A value that rounds up
   // to a twelfth integer digit goes scientific.
   const int integer_digits = (exp10 >= 0) ? (exp10 + 1) : 1;
-  const int frac = fixed_decimals >= 0 ? fixed_decimals : std::max(0, 11 - integer_digits - 1);
+  const int frac = fixed_decimals >= 0 ? fixed_decimals : std::max(0, kGeneralWidth - integer_digits - 1);
   char buf[64];
   const int n = format_fixed(buf, sizeof(buf), v, frac);
   if (n <= 0) {
@@ -290,7 +289,7 @@ void format_general(std::string& out, double v) {
   if (integer_length == std::string_view::npos) {
     integer_length = fixed.size();
   }
-  if (integer_length > (fixed.front() == '-' ? 12U : 11U)) {
+  if (integer_length > static_cast<std::size_t>(kGeneralWidth) + (fixed.front() == '-' ? 1U : 0U)) {
     exp10 = static_cast<int>(integer_length) - (fixed.front() == '-' ? 1 : 0) - 1;
     emit_scientific();
     return;
@@ -315,7 +314,7 @@ void append_dbnum_general(std::string& out, const DbnumStyle* style, bool keep_s
   } else if (abs_v >= 1.0 && !keep_scientific) {
     const int exp10 = static_cast<int>(std::floor(std::log10(abs_v)));
     bool negative = false;
-    format_fixed_digits(abs_v, std::max(0, 14 - exp10), &negative, &int_digits, &frac_digits);
+    format_fixed_digits(abs_v, std::max(0, kExcelSignificantDigits - 1 - exp10), &negative, &int_digits, &frac_digits);
     while (!frac_digits.empty() && frac_digits.back() == '0') {
       frac_digits.pop_back();
     }
@@ -608,8 +607,7 @@ FormatStatus render_numeric(const Section& section, std::string_view fmt, double
         }
         break;
       case Tok::Point:
-        if (section.fraction_zero_digits + section.fraction_opt_digits + section.fraction_pad_digits > 0 ||
-            !frac_digits_str.empty()) {
+        if (frac_digits > 0 || !frac_digits_str.empty()) {
           result.push_back(facts.decimal_separator);
         }
         past_point = true;

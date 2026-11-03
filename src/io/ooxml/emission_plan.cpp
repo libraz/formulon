@@ -46,6 +46,14 @@ std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::str
   return path;
 }
 
+std::string SheetPartPath(std::size_t index) {
+  return NumberedPartPath("xl/worksheets/sheet", static_cast<std::uint32_t>(index + 1U), ".xml");
+}
+
+std::string SheetRelsPartPath(std::size_t index) {
+  return NumberedPartPath("xl/worksheets/_rels/sheet", static_cast<std::uint32_t>(index + 1U), ".xml.rels");
+}
+
 bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
   return plan.passthrough_path_index.contains(plan.passthrough_kept, path);
 }
@@ -155,15 +163,15 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
-  paths.insert("xl/workbook.xml");
+  paths.insert(std::string(kWorkbookPartPath));
   paths.insert("xl/_rels/workbook.xml.rels");
-  paths.insert("xl/styles.xml");
+  paths.insert(std::string(kStylesPartPath));
   if (generated_shared_strings) {
-    paths.insert("xl/sharedStrings.xml");
+    paths.insert(std::string(kSharedStringsPartPath));
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (!wb.sheet(i).is_opaque_ooxml_sheet()) {
-      paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
+      paths.insert(SheetPartPath(i));
     }
   }
   for (const EmissionPlan::PerSheetTable& t : flat_tables) {
@@ -215,7 +223,7 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   // writer's own sheet rels output.
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (!wb.sheet(i).is_opaque_ooxml_sheet()) {
-      paths.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
+      paths.insert(SheetRelsPartPath(i));
     }
   }
   return paths;
@@ -406,7 +414,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     // sheets rId1..rId(sheet_count), styles rId(sheet_count+1),
     // first cache rId(sheet_count+2). Cast safe: workbook size is
     // bounded well within uint32 range.
-    entry.workbook_rid = static_cast<std::uint32_t>(wb.sheet_count() + 2 + (generated_shared_strings ? 1U : 0U) + i);
+    entry.workbook_rid = FirstOptionalRelId(wb.sheet_count(), generated_shared_strings) + static_cast<std::uint32_t>(i);
     plan.pivot_caches.push_back(std::move(entry));
   }
 
@@ -501,10 +509,10 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   // External link relationships. Assigned rIds follow the pivot caches
   // in the workbook-rels numbering scheme, mirroring how Excel emits
   // them when multiple optional sections coexist.
-  PlanExternalLinks(
-      wb, source_passthrough, source_passthrough_index,
-      static_cast<std::size_t>(wb.sheet_count()) + 2U + (generated_shared_strings ? 1U : 0U) + plan.pivot_caches.size(),
-      plan);
+  PlanExternalLinks(wb, source_passthrough, source_passthrough_index,
+                    static_cast<std::size_t>(FirstOptionalRelId(wb.sheet_count(), generated_shared_strings)) +
+                        plan.pivot_caches.size(),
+                    plan);
   std::unordered_set<std::string> regenerated_link_bodies;
   for (const EmissionPlan::ExternalLinkPlan& link : plan.external_links) {
     if (!link.generated_body.empty()) {

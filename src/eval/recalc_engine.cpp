@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -33,6 +34,26 @@
 
 namespace formulon::eval {
 namespace {
+
+// Same-thread re-entry would deadlock on the non-recursive engine mutex. The
+// shared `g_in_recalc` flag (also tracked by `recalc_parallel_impl`) turns
+// that into a structured `kGraphRecalcReentrant` error, the friendlier
+// surface for a UDF or progress callback that calls back into the engine.
+std::optional<Error> reentry_error(const char* what) {
+  if (!detail::g_in_recalc) {
+    return std::nullopt;
+  }
+  return make_error(FormulonErrorCode::kGraphRecalcReentrant,
+                    std::string("RecalcEngine::") + what + " called recursively on the same thread",
+                    "the engine does not support nested recalc; the inner call is rejected");
+}
+
+// Marks the dependent end of each edge dirty.
+void mark_edges_dirty(DirtySet& dirty, const std::vector<DepGraph::Edge>& edges) {
+  for (const DepGraph::Edge& edge : edges) {
+    dirty.mark(edge.first);
+  }
+}
 
 // The spill-release queue, the progress snapshot and the wave ceilings are
 // shared with the parallel scheduler; see `spill_release.h`.
@@ -471,65 +492,18 @@ Expected<void, Error> RecalcEngine::evaluate_formula_cell_locked(const SerialEva
 Expected<void, Error> RecalcEngine::evaluate_cyclic_component_locked(const SerialEvalPass& pass,
                                                                      const std::vector<CellNodeId>& component,
                                                                      const char* iterative_oom_message) {
-  const std::size_t sheet_count = pass.workbook.sheet_count();
-  // Evaluation glue for the read-ordered settle (iterative calc off)
-  // and the solver (on). `evaluate_with` mirrors the singleton path's
-  // evaluator glue: parse on the fly, dispatch through `evaluate()`,
-  // fold dynamic-array spills back into a scalar anchor. The `commit`
-  // lambda writes the new value into the cell store so the next
-  // evaluation reads the freshest value back.
-  // Hoisted out of `evaluate_one` so a staged formula's bytes stay live
-  // exactly as long as the arena contents of the same call: a string
-  // literal inside the formula surfaces in the returned Value as a view
-  // into this buffer, and the solver consumes each result before asking
-  // for the next one (which resets the arena).
-  Cell staged;
-  const std::uint64_t component_ordinal = pass.dynamic.next_ordinal();
-  auto evaluate_with = [&](CellNodeId c, EvalState* observer) -> Value {
-    if (c.sheet_id >= sheet_count) {
-      return Value::error(ErrorCode::Ref);
-    }
-    Sheet& sheet = pass.workbook.sheet(c.sheet_id);
-    if (!stage_formula_cell(sheet, c.row, c.col, staged)) {
-      // No formula text: nothing to evaluate. Treat as Blank so the
-      // solver still has a value to compare against — this happens
-      // only on logic bugs but we degrade gracefully.
-      return Value::blank();
-    }
-    // Reset the bump arena per-evaluation. The previous iteration's
-    // committed Text scalars survive this reset because
-    // `Sheet::set_cell_cached_value` deep-copies Text payloads into
-    // each cell's own `cached_text_owned` storage; Array results are
-    // similarly deep-copied into `SpillRegion::owned_strings` by
-    // `Sheet::commit_spill`.
-    arena_->reset();
-    EvaluateCellOptions opts;
-    opts.spill_release_callback = pass.release_callback;
-    opts.spill_release_user_data = pass.release_user_data;
-    opts.read_observer = observer;
-    pass.dynamic.log().observe(c, component_ordinal, opts, nullptr);
-    pass.dynamic.log().note_iterative_member(c, component_ordinal);
-    Value result = evaluate_cell_for_recalc(pass.workbook, sheet, staged, c.row, c.col, pass.registry, *arena_, opts);
-    pass.dynamic.log().end();
-    return result;
-  };
-  auto evaluate_one = [&](CellNodeId c) { return evaluate_with(c, nullptr); };
-  auto commit = [&](CellNodeId c, Value v) {
-    if (c.sheet_id >= sheet_count) {
-      return;
-    }
-    Sheet& sheet = pass.workbook.sheet(c.sheet_id);
-    sheet.set_cell_cached_value(c.row, c.col, v);
-    pass.dynamic.log().note_commit(c, component_ordinal);
-  };
+  CyclicComponentEvaluator evaluator(pass.workbook, pass.registry, *arena_, pass.release_callback,
+                                     pass.release_user_data, &pass.dynamic.log(), pass.dynamic.next_ordinal(),
+                                     /*commit_mutex=*/nullptr);
+  auto evaluate_one = [&](CellNodeId c) { return evaluator.evaluate(c, nullptr); };
+  auto commit = [&](CellNodeId c, Value v) { evaluator.commit(c, v); };
 
   const std::vector<CellNodeId> cells = cells_of_component(component);
   if (!iterative_.enabled) {
     // Excel judges circularity by what evaluation reads, so only a cycle
     // that reads back into itself is one. A cycle through an OFFSET /
     // INDIRECT read keeps its own treatment.
-    const bool settled = !closes_through_dynamic_edge(component, graph_) &&
-                         settle_component_by_reads(pass.workbook, cells, evaluate_with, commit);
+    const bool settled = !closes_through_dynamic_edge(component, graph_) && settle_component_by_reads(cells, evaluator);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, pass.oom_message);
     }
@@ -708,15 +682,8 @@ void RecalcEngine::reset_graph_locked() {
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {
-  // Same-thread re-entry would deadlock on the non-recursive `mutex_`.
-  // The shared `g_in_recalc` flag (also tracked by `recalc_parallel_impl`)
-  // converts that deadlock into a structured `kGraphRecalcReentrant`
-  // error, which is the friendlier surface for a UDF or progress callback
-  // that accidentally calls back into the engine.
-  if (detail::g_in_recalc) {
-    return make_error(FormulonErrorCode::kGraphRecalcReentrant,
-                      "RecalcEngine::recalc called recursively on the same thread",
-                      "the engine does not support nested recalc; the inner call is rejected");
+  if (std::optional<Error> reentry = reentry_error("recalc")) {
+    return *reentry;
   }
   detail::RecalcReentryGuard reentry_guard;
   std::lock_guard<std::mutex> guard(mutex_);
@@ -740,12 +707,8 @@ recalc_next_wave:
   // derived edge here prevents a stale phantom-only cycle, while additions
   // wake the watcher before topology is built.
   const DepGraph::DependencyDelta pre_dependency_delta = reconcile_spill_dependencies_locked(workbook);
-  for (const DepGraph::Edge& edge : pre_dependency_delta.added) {
-    dirty_.mark(edge.first);
-  }
-  for (const DepGraph::Edge& edge : pre_dependency_delta.removed) {
-    dirty_.mark(edge.first);
-  }
+  mark_edges_dirty(dirty_, pre_dependency_delta.added);
+  mark_edges_dirty(dirty_, pre_dependency_delta.removed);
 
   // ---- Phase 1: seed the dirty set with every volatile cell. ----
   // Volatile formulas re-execute every pass even if their inputs are
@@ -824,9 +787,7 @@ recalc_next_wave:
   const bool dependency_retry = !dependency_delta.added.empty() || dynamic_retry;
   if (dependency_retry) {
     wave_budget.count_dependency_wave();
-    for (const DepGraph::Edge& edge : dependency_delta.added) {
-      dirty_.mark(edge.first);
-    }
+    mark_edges_dirty(dirty_, dependency_delta.added);
   }
 
   // A spill shape change can release cells that blocked a different pending
@@ -846,9 +807,7 @@ recalc_next_wave:
     }
     dirty_.clear();
     mark_spill_release_wave_locked(released);
-    for (const DepGraph::Edge& edge : dependency_delta.added) {
-      mark_dirty_locked(edge.first);
-    }
+    mark_edges_dirty(dirty_, dependency_delta.added);
     dynamic.mark_stale_dirty();
     goto recalc_next_wave;
   }
@@ -861,12 +820,8 @@ recalc_next_wave:
 
 Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, const FunctionRegistry& registry,
                                                           const SheetCellRange& viewport) {
-  // Mirror `recalc()` re-entry handling: a callback that calls back into a
-  // recalc API would otherwise deadlock on the engine mutex.
-  if (detail::g_in_recalc) {
-    return make_error(FormulonErrorCode::kGraphRecalcReentrant,
-                      "RecalcEngine::partial_recalc called recursively on the same thread",
-                      "the engine does not support nested recalc; the inner call is rejected");
+  if (std::optional<Error> reentry = reentry_error("partial_recalc")) {
+    return *reentry;
   }
   detail::RecalcReentryGuard reentry_guard;
   std::lock_guard<std::mutex> guard(mutex_);
@@ -921,12 +876,8 @@ partial_recalc_next_wave:
   // watcher; this is essential when a producer rewrite has just invalidated
   // its committed footprint.
   const DepGraph::DependencyDelta pre_dependency_delta = reconcile_spill_dependencies_locked(workbook);
-  for (const DepGraph::Edge& edge : pre_dependency_delta.added) {
-    dirty_.mark(edge.first);
-  }
-  for (const DepGraph::Edge& edge : pre_dependency_delta.removed) {
-    dirty_.mark(edge.first);
-  }
+  mark_edges_dirty(dirty_, pre_dependency_delta.added);
+  mark_edges_dirty(dirty_, pre_dependency_delta.removed);
 
   // ---- Phase 1: enumerate the viewport's seed cells. ----
   // Walk the requested rectangle and pull every populated cell into the

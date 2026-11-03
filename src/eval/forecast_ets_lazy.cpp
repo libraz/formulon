@@ -65,6 +65,9 @@ constexpr std::size_t kSeasonalityLengthPercent = 70U;
 // a 1..12 timeline).
 constexpr double kMaxHorizonSteps = 2147483647.0;
 
+// Confidence level of FORECAST.ETS.CONFINT when the argument is omitted.
+constexpr double kDefaultConfidence = 0.95;
+
 using ets::AggregationMode;
 using ets::detect_seasonality;
 using ets::fit_holt_winters;
@@ -255,20 +258,24 @@ bool read_seasonality(const parser::AstNode* node, Arena& arena, const FunctionR
   return read_option(node, arena, registry, ctx, 1, 0, kMaxSeasonalityArg, out, out_err);
 }
 
+// The argument at `index`, or nullptr when the call omits it.
+const parser::AstNode* optional_arg(const parser::AstNode& call, std::uint32_t arity, std::uint32_t index) {
+  return arity > index ? &call.as_call_arg(index) : nullptr;
+}
+
 bool read_forecast_options(const parser::AstNode& call, std::uint32_t arity, std::uint32_t first_optional, Arena& arena,
                            const FunctionRegistry& registry, const EvalContext& ctx, ForecastOptions* out,
                            Value* out_err) {
   ForecastOptions opts;
-  if (!read_seasonality(arity > first_optional ? &call.as_call_arg(first_optional) : nullptr, arena, registry, ctx,
-                        &opts.seasonality, out_err)) {
+  if (!read_seasonality(optional_arg(call, arity, first_optional), arena, registry, ctx, &opts.seasonality, out_err)) {
     return false;
   }
-  if (!read_data_completion(arity > first_optional + 1U ? &call.as_call_arg(first_optional + 1U) : nullptr, arena,
-                            registry, ctx, &opts.data_completion, out_err)) {
+  if (!read_data_completion(optional_arg(call, arity, first_optional + 1U), arena, registry, ctx, &opts.data_completion,
+                            out_err)) {
     return false;
   }
-  if (!read_aggregation(arity > first_optional + 2U ? &call.as_call_arg(first_optional + 2U) : nullptr, arena, registry,
-                        ctx, &opts.aggregation, out_err)) {
+  if (!read_aggregation(optional_arg(call, arity, first_optional + 2U), arena, registry, ctx, &opts.aggregation,
+                        out_err)) {
     return false;
   }
   *out = opts;
@@ -280,12 +287,12 @@ bool read_seasonality_options(const parser::AstNode& call, std::uint32_t arity, 
                               ForecastOptions* out, Value* out_err) {
   ForecastOptions opts;
   opts.seasonality = 1;
-  if (!read_data_completion(arity > first_optional ? &call.as_call_arg(first_optional) : nullptr, arena, registry, ctx,
-                            &opts.data_completion, out_err)) {
+  if (!read_data_completion(optional_arg(call, arity, first_optional), arena, registry, ctx, &opts.data_completion,
+                            out_err)) {
     return false;
   }
-  if (!read_aggregation(arity > first_optional + 1U ? &call.as_call_arg(first_optional + 1U) : nullptr, arena, registry,
-                        ctx, &opts.aggregation, out_err)) {
+  if (!read_aggregation(optional_arg(call, arity, first_optional + 1U), arena, registry, ctx, &opts.aggregation,
+                        out_err)) {
     return false;
   }
   *out = opts;
@@ -414,17 +421,7 @@ Value at_each_target(const Value& target, bool head_ok, const Value& head_err, c
   if (!target.is_array()) {
     return one(target);
   }
-  const ArrayValue& in = *target.as_array();
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t count = static_cast<std::size_t>(in.rows) * in.cols;
-  for (std::size_t i = 0; i < count; ++i) {
-    cells[i] = one(in.cells[i]);
-  }
-  return count == 1U ? cells[0] : Value::array(out);
+  return map_array_with(*target.as_array(), one, arena);
 }
 
 }  // namespace
@@ -463,8 +460,9 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
     return err;
   }
 
-  double confidence = 0.95;
-  bool head_ok = arity <= 3U || read_double_arg(call.as_call_arg(3), arena, registry, ctx, 0.95, &confidence, &err);
+  double confidence = kDefaultConfidence;
+  bool head_ok =
+      arity <= 3U || read_double_arg(call.as_call_arg(3), arena, registry, ctx, kDefaultConfidence, &confidence, &err);
   // Mac Excel 365 accepts confidence == 0 (degenerate CI, returns 0 since
   // z = InverseStandardNormal(0.5) = 0). The lower-bound rejection is
   // strict (< 0); upper bound stays inclusive on 1 because z diverges to

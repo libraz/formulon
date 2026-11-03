@@ -6,8 +6,7 @@
 //
 // Lives in its own TU so that both the package-level writer
 // (ooxml_writer.cpp) and the cell-level builder (ooxml_writer_cell.cpp) link
-// against a single instantiation; previously each TU carried an
-// anonymous-namespace copy.
+// against a single instantiation.
 
 #ifndef FORMULON_IO_XML_ESCAPE_H_
 #define FORMULON_IO_XML_ESCAPE_H_

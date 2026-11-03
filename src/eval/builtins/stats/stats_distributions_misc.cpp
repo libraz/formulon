@@ -23,6 +23,7 @@
 #include "eval/stats/hypothesis_tests.h"
 #include "eval/stats/incomplete_beta.h"
 #include "eval/stats/inverse_distributions.h"
+#include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -158,7 +159,7 @@ Value Gauss(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   const double x = x_arg.value();
   const double r = std::fabs(x) > 1e-15
                        ? stats::normal_cdf(x) - 0.5
-                       : flush_subnormal(stats::erf_excel(flush_subnormal(x * -0.7071067811865476)) * -0.5);
+                       : flush_subnormal(stats::erf_excel(flush_subnormal(x * -stats::kInvSqrt2)) * -0.5);
   return to_finite_value(r);
 }
 

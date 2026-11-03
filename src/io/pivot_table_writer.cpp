@@ -58,12 +58,14 @@ void AppendOptionalLocationAttr(std::string& out, std::string_view name, std::op
   append_xml_attr_uint(out, name, *value);
 }
 
-/// Excel's x14 extension that hides the caption row of the Values field.
-constexpr std::string_view kValuesRowExtLst =
-    "<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\" "
-    "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
-    "<x14:pivotTableDefinition hideValuesRow=\"1\" "
-    "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/></ext></extLst>";
+/// Appends Excel's x14 extension that hides the caption row of the Values field.
+void AppendValuesRowExtLst(std::string& out) {
+  out.append("<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\"");
+  append_xml_ns_decl(out, "x14", kNsX14);
+  out.append("><x14:pivotTableDefinition hideValuesRow=\"1\"");
+  append_xml_ns_decl(out, "xm", kNsExcelMain);
+  out.append("/></ext></extLst>");
+}
 
 /// True when `attrs` already carries `name` (an attribute captured on read).
 bool HasRawAttr(const std::vector<std::pair<std::string, std::string>>& attrs, std::string_view name) {
@@ -428,7 +430,9 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
     if (x14_ext) {
       out.append("<ext uri=\"");
       out.append(kPivotDataFieldExtUri);
-      out.append("\" xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">");
+      out.append("\"");
+      append_xml_ns_decl(out, "x14", kNsX14);
+      out.append(">");
       out.append("<x14:dataField");
       if (!x14_show_as.empty()) {
         append_xml_attr(out, "pivotShowAs", x14_show_as);
@@ -490,14 +494,9 @@ std::optional<double> FilterNumber(const std::variant<int, double, std::string>&
 }
 
 /// The upper bound of a range filter; empty when unset or not finite.
-std::optional<double> FilterNumberHigh(const std::variant<std::monostate, int, double>& value) {
-  if (const auto* d = std::get_if<double>(&value)) {
-    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
-  }
-  if (const auto* i = std::get_if<int>(&value)) {
-    return static_cast<double>(*i);
-  }
-  return std::nullopt;
+std::optional<double> FilterNumberHigh(const pivot::PivotFilter& filter) {
+  const std::optional<double> high = pivot::filter_number_value_high(filter);
+  return high && std::isfinite(*high) ? high : std::nullopt;
 }
 
 /// Appends `<customFilter operator="..." val="..."/>`; an empty `op` is the
@@ -557,7 +556,7 @@ bool AppendGeneratedFilter(std::string& out, const pivot::PivotFilter& filter, s
                                     : filter.type == pivot::FilterType::LabelDate && text_payload
                                         ? std::nullopt
                                         : FilterNumber(filter.value);
-  const std::optional<double> high = ranged ? FilterNumberHigh(filter.value_high) : std::optional<double>(0.0);
+  const std::optional<double> high = ranged ? FilterNumberHigh(filter) : std::optional<double>(0.0);
   if (!low || !high) {
     return false;
   }
@@ -874,7 +873,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // refresh. A table read from a file keeps its own `<extLst>`.
   if (!HasRawAttr(table.passthrough_attrs(), "updatedVersion") &&
       table.raw_passthrough_xml().find("<extLst") == std::string::npos) {
-    out.append(kValuesRowExtLst);
+    AppendValuesRowExtLst(out);
   }
 
   out.append("</pivotTableDefinition>");

@@ -280,6 +280,29 @@ inline Expected<DayCountSpan, ErrorCode> day_count_span(double start, double end
   }
 }
 
+// The two amounts of `SecurityRateArgs` with the day-count span of its dates.
+struct SecurityRateSpan {
+  double amount1;
+  double amount2;
+  DayCountSpan span;
+};
+
+// Reads `SecurityRateArgs` and measures the settlement-to-maturity span; the
+// argument error precedes the basis error.
+inline Expected<SecurityRateSpan, ErrorCode> read_security_rate_span(const Value* args, std::uint32_t arity,
+                                                                     bool date1904) {
+  auto parsed = read_security_rate_args(args, arity);
+  if (!parsed) {
+    return std::move(parsed.error());
+  }
+  const SecurityRateArgs& a = parsed.value();
+  auto span = day_count_span(a.settlement, a.maturity, a.basis, date1904);
+  if (!span) {
+    return std::move(span.error());
+  }
+  return SecurityRateSpan{a.amount1, a.amount2, span.value()};
+}
+
 // Normalises the `type` argument (end-vs-begin of period). Excel accepts
 // any numeric value; zero means end-of-period, any non-zero value means
 // begin-of-period. We mirror that here so the impl formulas can use `type`

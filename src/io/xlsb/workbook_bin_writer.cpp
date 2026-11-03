@@ -381,6 +381,17 @@ std::optional<XtiEntry> ExternalSeedEntry(const XlsbExternSheetEntry& entry, con
   return std::nullopt;
 }
 
+/// True when any record run of `tail` holds a future-record block.
+bool TailHoldsFutureRecord(const XlsbSheetTail& tail) {
+  for (const std::vector<std::uint8_t>* run :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    if (contains_record_type(*run, kFrtBegin)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// The leading entries of the `BrtExternSheet` table: the source
 /// workbook's table, in its `ixti` order, when a retained sheet tail holds
 /// a block that may reference it, so those verbatim indices keep naming
@@ -392,9 +403,7 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
   SheetRangeTable seed;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const XlsbSheetTail& tail = wb.sheet(i).xlsb_tail();
-    if (tail.extern_sheets.empty() || !(contains_record_type(tail.before_merges, kFrtBegin) ||
-                                        contains_record_type(tail.after_merges_before_hyperlinks, kFrtBegin) ||
-                                        contains_record_type(tail.after_hyperlinks, kFrtBegin))) {
+    if (tail.extern_sheets.empty() || !TailHoldsFutureRecord(tail)) {
       continue;
     }
     for (const XlsbExternSheetEntry& entry : tail.extern_sheets) {
@@ -501,8 +510,9 @@ namespace {
 void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ranges) {
   std::vector<std::uint8_t> p;
   emit_u32(p, static_cast<std::uint32_t>(ranges.xti.size()));
+  const bool names_self = xti_names_self(ranges);
   for (const XtiEntry& entry : ranges.xti) {
-    emit_u32(p, xti_sup_book(ranges, entry.book));
+    emit_u32(p, xti_sup_book(names_self, entry.book));
     emit_u32(p, static_cast<std::uint32_t>(entry.first));
     emit_u32(p, static_cast<std::uint32_t>(entry.last));
   }

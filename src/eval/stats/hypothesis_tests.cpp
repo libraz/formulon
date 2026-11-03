@@ -32,6 +32,22 @@ TestOutcome t_probability(double t, double df, int tails) noexcept {
   return {tails == 1 ? div(p2, 2.0) : p2, false};
 }
 
+// Returns the mean of `v[0..n)` and stores the sum of squared deviations from it in `*ss`.
+double mean_and_ss(const double* v, std::size_t n, double* ss) noexcept {
+  double sum = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    sum = v[i] + sum;
+  }
+  const double mean = div(sum, static_cast<double>(n));
+  double acc = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    const double d = v[i] - mean;
+    acc = mul(d, d) + acc;
+  }
+  *ss = acc;
+  return mean;
+}
+
 }  // namespace
 
 TestOutcome t_test_paired_excel(const double* x, const double* y, std::size_t n, int tails) noexcept {
@@ -79,28 +95,12 @@ TestOutcome t_test_two_sample_excel(const double* x, std::size_t nx, const doubl
   if (nx == 0 || ny == 0) {
     return kDiv0;
   }
-  double s1 = 0.0;
-  double s2 = 0.0;
-  for (std::size_t i = 0; i < nx; ++i) {
-    s1 = x[i] + s1;
-  }
-  for (std::size_t i = 0; i < ny; ++i) {
-    s2 = y[i] + s2;
-  }
   const double dnx = static_cast<double>(nx);
   const double dny = static_cast<double>(ny);
-  const double m1 = div(s1, dnx);
-  const double m2 = div(s2, dny);
-  double sxx = 0.0;
-  double syy = 0.0;
-  for (std::size_t i = 0; i < nx; ++i) {
-    const double dx = x[i] - m1;
-    sxx = mul(dx, dx) + sxx;
-  }
-  for (std::size_t i = 0; i < ny; ++i) {
-    const double dy = y[i] - m2;
-    syy = mul(dy, dy) + syy;
-  }
+  double sxx;
+  double syy;
+  const double m1 = mean_and_ss(x, nx, &sxx);
+  const double m2 = mean_and_ss(y, ny, &syy);
   const double md = m1 - m2;
   const double dn1 = dnx - 1.0;
   const double dn2 = dny - 1.0;
@@ -141,28 +141,12 @@ TestOutcome f_test_excel(const double* x, std::size_t nx, const double* y, std::
   if (nx < 2 || ny < 2) {
     return kDiv0;
   }
-  double s1 = 0.0;
-  double s2 = 0.0;
-  for (std::size_t i = 0; i < nx; ++i) {
-    s1 = x[i] + s1;
-  }
-  for (std::size_t i = 0; i < ny; ++i) {
-    s2 = y[i] + s2;
-  }
   const double dnx = static_cast<double>(nx);
   const double dny = static_cast<double>(ny);
-  const double m1 = div(s1, dnx);
-  const double m2 = div(s2, dny);
-  double sxx = 0.0;
-  double syy = 0.0;
-  for (std::size_t i = 0; i < nx; ++i) {
-    const double dx = x[i] - m1;
-    sxx = mul(dx, dx) + sxx;
-  }
-  for (std::size_t i = 0; i < ny; ++i) {
-    const double dy = y[i] - m2;
-    syy = mul(dy, dy) + syy;
-  }
+  double sxx;
+  double syy;
+  mean_and_ss(x, nx, &sxx);
+  mean_and_ss(y, ny, &syy);
   const double dn1 = dnx - 1.0;
   const double dn2 = dny - 1.0;
   const double var1 = div(sxx, dn1);

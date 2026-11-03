@@ -31,14 +31,19 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Root and `<externalBook>` start tags as Excel writes them, so the
-/// `xxl21:` alternate-URL element resolves without further declarations.
-constexpr std::string_view kExternalLinkOpen =
-    "<externalLink xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-    "xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" mc:Ignorable=\"x14 xxl21\" "
-    "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
-    "xmlns:xxl21=\"http://schemas.microsoft.com/office/spreadsheetml/2021/extlinks2021\">"
-    "<externalBook xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:id=\"";
+/// Appends the root and `<externalBook>` start tags as Excel writes them, so
+/// the `xxl21:` alternate-URL element resolves without further declarations.
+void AppendExternalLinkOpen(std::string& out) {
+  out.append("<externalLink");
+  append_xml_ns_decl(out, "", kNsSpreadsheetMl);
+  append_xml_ns_decl(out, "mc", kNsMarkupCompat);
+  out.append(" mc:Ignorable=\"x14 xxl21\"");
+  append_xml_ns_decl(out, "x14", kNsX14);
+  append_xml_ns_decl(out, "xxl21", kNsXxl21);
+  out.append("><externalBook");
+  append_xml_ns_decl(out, "r", kNsOfficeRelationships);
+  out.append(" r:id=\"");
+}
 
 std::string_view TargetRelId(const ExternalLinkRecord& rec) {
   return rec.body_rel_id.empty() ? std::string_view("rId1") : std::string_view(rec.body_rel_id);
@@ -191,7 +196,7 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
   std::string out;
   out.reserve(512U + book.sheet_names.size() * 48U + book.names.size() * 64U + book.cells.size() * 40U);
   out.append(kXmlDecl);
-  out.append(kExternalLinkOpen);
+  AppendExternalLinkOpen(out);
   AppendXmlAttrEscaped(out, TargetRelId(rec));
   out.append("\">");
   if (!rec.absolute_target.empty()) {
