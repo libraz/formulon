@@ -2,11 +2,11 @@
   "suite": "lookup",
   "description": "MATCH / INDEX / CHOOSE / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T08:42:17Z"
+    "generated_at": "2026-11-03T07:41:47Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -4639,6 +4639,119 @@
       "expect": {
         "kind": "text",
         "value": "b"
+      }
+    },
+    {
+      "id": "choose_array_index_near",
+      "formula": "=CHOOSE({1.9999999},\"a\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a"
+      }
+    },
+    {
+      "id": "choose_array_index_near_column",
+      "formula": "=CHOOSE({1;1.9999999},\"a\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "a"
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "choose_array_index_near_computed",
+      "formula": "=CHOOSE({1}*(3-2^-30),\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "choose_scalar_index_near_computed",
+      "formula": "=CHOOSE(3-2^-30,\"a\",\"b\",\"c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "b"
+      }
+    },
+    {
+      "id": "choose_array_index_near_below_one",
+      "formula": "=CHOOSE({0.9999999},\"a\",\"b\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "choose_range_index_near",
+      "formula": "=CHOOSE(A1:A2,\"a\",\"b\")",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.9999999
+        },
+        "A2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "a"
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "choose_array_index_near_reference",
+      "formula": "=SUM(CHOOSE({1.9999999},A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "choose_scalar_index_near_reference",
+      "formula": "=SUM(CHOOSE(1.9999999,A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
       }
     },
     {

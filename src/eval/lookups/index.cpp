@@ -132,13 +132,17 @@ std::uint32_t selector_cols(const SelectorView& row, const SelectorView& col) {
 
 enum class IndexAxisState : std::uint8_t { kValid, kError };
 
+// INDEX snaps a selector within `kNearIntegerSnap` of an integer before
+// truncating; CHOOSE truncates its index directly, array or scalar.
+enum class IndexSnap : std::uint8_t { kNearInteger, kNone };
+
 struct DecodedIndex {
   IndexAxisState state = IndexAxisState::kValid;
   std::uint32_t index = 0U;
   ErrorCode error = ErrorCode::Value;
 };
 
-DecodedIndex decode_index_cell(const Value& value) {
+DecodedIndex decode_index_cell(const Value& value, IndexSnap snap) {
   if (value.is_error()) {
     return DecodedIndex{IndexAxisState::kError, 0U, value.as_error()};
   }
@@ -149,7 +153,7 @@ DecodedIndex decode_index_cell(const Value& value) {
   const double original = number.value();
   // The lower bound applies after the snap and the truncation toward zero,
   // so anything in (-1, 1) selects the whole spanned dimension.
-  const double raw = truncate_index(snap_near_integer(original));
+  const double raw = truncate_index(snap == IndexSnap::kNearInteger ? snap_near_integer(original) : original);
   if (raw < 0.0) {
     return DecodedIndex{IndexAxisState::kError, 0U, ErrorCode::Value};
   }
@@ -162,16 +166,16 @@ DecodedIndex decode_index_cell(const Value& value) {
   return DecodedIndex{IndexAxisState::kValid, static_cast<std::uint32_t>(raw), ErrorCode::Value};
 }
 
-std::vector<DecodedIndex> decode_selector(const SelectorView& selector) {
+std::vector<DecodedIndex> decode_selector(const SelectorView& selector, IndexSnap snap) {
   const std::size_t count = static_cast<std::size_t>(selector.rows) * selector.cols;
   std::vector<DecodedIndex> decoded;
   decoded.reserve(count);
   if (!selector.is_array()) {
-    decoded.push_back(decode_index_cell(*selector.scalar));
+    decoded.push_back(decode_index_cell(*selector.scalar, snap));
     return decoded;
   }
   for (std::size_t i = 0; i < count; ++i) {
-    decoded.push_back(decode_index_cell(selector.array->cells[i]));
+    decoded.push_back(decode_index_cell(selector.array->cells[i], snap));
   }
   return decoded;
 }
@@ -526,8 +530,8 @@ Value eval_index_array_selector(const IndexSource& source, bool source_ok, Error
   const SelectorView row_selector = make_selector_view(row_value);
   const Value implicit_col = Value::number(0.0);
   const SelectorView col_selector = col_explicit ? make_selector_view(*col_value) : make_selector_view(implicit_col);
-  const std::vector<DecodedIndex> row_decoded = decode_selector(row_selector);
-  const std::vector<DecodedIndex> col_decoded = decode_selector(col_selector);
+  const std::vector<DecodedIndex> row_decoded = decode_selector(row_selector, IndexSnap::kNearInteger);
+  const std::vector<DecodedIndex> col_decoded = decode_selector(col_selector, IndexSnap::kNearInteger);
 
   const std::uint32_t selector_out_rows = selector_rows(row_selector, col_selector);
   const std::uint32_t selector_out_cols = selector_cols(row_selector, col_selector);
@@ -648,7 +652,8 @@ Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstN
   collect_union_areas(call.as_call_arg(0), ctx, &areas);
   std::uint32_t area_idx = 1U;
   if (call.as_call_arity() == 4U && !is_omitted_arg(call.as_call_arg(3))) {
-    const DecodedIndex area = decode_index_cell(eval_node(call.as_call_arg(3), arena, registry, ctx));
+    const DecodedIndex area =
+        decode_index_cell(eval_node(call.as_call_arg(3), arena, registry, ctx), IndexSnap::kNearInteger);
     if (area.state == IndexAxisState::kError) {
       return area.error;
     }
@@ -709,7 +714,7 @@ Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& ind
     return Value::error(ErrorCode::Num);
   }
 
-  const std::vector<DecodedIndex> decoded_indices = decode_selector(index_selector);
+  const std::vector<DecodedIndex> decoded_indices = decode_selector(index_selector, IndexSnap::kNone);
   for (std::uint32_t r = 0; r < out_rows; ++r) {
     for (std::uint32_t c = 0; c < out_cols; ++c) {
       const std::size_t output_index = static_cast<std::size_t>(r) * out_cols + c;
@@ -862,13 +867,13 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (!source_ok || rows == 0U || cols == 0U) {
     return Value::error(source_error == ErrorCode::Value ? ErrorCode::Ref : source_error);
   }
-  const DecodedIndex row = decode_index_cell(row_val);
+  const DecodedIndex row = decode_index_cell(row_val, IndexSnap::kNearInteger);
   if (row.state == IndexAxisState::kError) {
     return Value::error(row.error);
   }
   DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
   if (col_explicit) {
-    col = decode_index_cell(col_val);
+    col = decode_index_cell(col_val, IndexSnap::kNearInteger);
     if (col.state == IndexAxisState::kError) {
       return Value::error(col.error);
     }
@@ -926,14 +931,14 @@ bool resolve_index_reference(const parser::AstNode& call, Arena& arena, const Fu
     *out_err = ErrorCode::Value;
     return false;
   }
-  const DecodedIndex row = decode_index_cell(row_val);
+  const DecodedIndex row = decode_index_cell(row_val, IndexSnap::kNearInteger);
   if (row.state == IndexAxisState::kError) {
     *out_err = row.error;
     return false;
   }
   DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
   if (col_explicit) {
-    col = decode_index_cell(col_val);
+    col = decode_index_cell(col_val, IndexSnap::kNearInteger);
     if (col.state == IndexAxisState::kError) {
       *out_err = col.error;
       return false;
