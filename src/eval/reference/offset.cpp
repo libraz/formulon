@@ -10,7 +10,6 @@
 
 #include "eval/reference/offset.h"
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -195,9 +194,8 @@ bool expand_choose_call(const parser::AstNode& call, Arena& arena, const Functio
     return false;
   }
   // Excel truncates (toward zero) rather than rounds: CHOOSE(2.9, ...)
-  // selects the 2nd value, not the 3rd. For valid `[1, arity-1]` indices
-  // these are non-negative, so `std::floor` matches `eval_choose_lazy`.
-  const double raw = std::floor(idx_num.value());
+  // selects the 2nd value, not the 3rd, exactly as `eval_choose_lazy`.
+  const double raw = truncate_index(idx_num.value());
   if (!(raw >= 1.0 && raw <= static_cast<double>(arity - 1U))) {
     *out_err_code = ErrorCode::Value;
     return false;
