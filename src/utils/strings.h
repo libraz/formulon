@@ -48,6 +48,16 @@ inline std::string_view trim(std::string_view input) noexcept {
   return rtrim(ltrim(input));
 }
 
+/// Returns `input` with leading and trailing spaces and tabs removed; other
+/// whitespace is kept.
+inline std::string_view trim_blanks(std::string_view input) noexcept {
+  const std::size_t start = input.find_first_not_of(" \t");
+  if (start == std::string_view::npos) {
+    return std::string_view();
+  }
+  return input.substr(start, input.find_last_not_of(" \t") - start + 1);
+}
+
 /// Returns `input` with leading U+0020 removed; other whitespace is kept.
 inline std::string_view ltrim_spaces(std::string_view input) noexcept {
   const std::size_t start = input.find_first_not_of(' ');

@@ -26,22 +26,6 @@ namespace eval {
 
 namespace {
 
-/// Trims ASCII spaces / tabs from both ends of `s`. Excel structured
-/// references frequently emit a single space between specifier
-/// fragments (`Table[#This Row]`) but never line breaks; we strip
-/// ASCII spaces only and leave UTF-8 bytes in column names intact.
-std::string_view ascii_trim(std::string_view s) noexcept {
-  std::size_t start = 0;
-  while (start < s.size() && (s[start] == ' ' || s[start] == '\t')) {
-    ++start;
-  }
-  std::size_t end = s.size();
-  while (end > start && (s[end - 1] == ' ' || s[end - 1] == '\t')) {
-    --end;
-  }
-  return s.substr(start, end - start);
-}
-
 /// Maps a `#`-prefixed specifier name (case-insensitive, ASCII-fold) to
 /// its bitmask. Unknown specifiers return 0 so the caller can flag them as
 /// `#NAME?`. `#This Row` is accepted with one space between `This` and
@@ -99,7 +83,7 @@ bool split_top_level_commas(std::string_view payload, std::vector<std::string_vi
 /// Strips a single leading `[` and trailing `]` from `s`. A non-bracketed
 /// input is returned unchanged. Single-sided brackets are malformed.
 bool strip_outer_brackets(std::string_view s, std::string_view* out) {
-  s = ascii_trim(s);
+  s = strings::trim_blanks(s);
   // A trailing `]` is punctuation only when the escape grammar does not
   // consume it as the literal half of `']` (`Col'[x']` is unbracketed).
   bool closes = false;
@@ -127,7 +111,7 @@ bool strip_outer_brackets(std::string_view s, std::string_view* out) {
 /// last, when present) column-name view into the selector slots; returns
 /// `false` on malformed bracketing.
 bool split_column_range(std::string_view text, StructuredRefSelector* sel) {
-  text = ascii_trim(text);
+  text = strings::trim_blanks(text);
   if (text.empty()) {
     return true;
   }
@@ -154,8 +138,8 @@ bool split_column_range(std::string_view text, StructuredRefSelector* sel) {
   if (colon_at == std::string_view::npos) {
     first = text;
   } else {
-    first = ascii_trim(text.substr(0, colon_at));
-    last = ascii_trim(text.substr(colon_at + 1));
+    first = strings::trim_blanks(text.substr(0, colon_at));
+    last = strings::trim_blanks(text.substr(colon_at + 1));
   }
   std::string_view first_inner;
   if (!strip_outer_brackets(first, &first_inner)) {
@@ -232,7 +216,7 @@ std::string unescape_structured_ref_name(std::string_view raw) {
 }
 
 Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::string_view payload) {
-  payload = ascii_trim(payload);
+  payload = strings::trim_blanks(payload);
   StructuredRefSelector sel;
   sel.specifiers = 0u;
 
@@ -246,7 +230,7 @@ Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::str
   // column name is allowed.
   if (payload.front() == '@') {
     sel.specifiers |= StructuredRefSpecifiers::kThisRow;
-    payload = ascii_trim(payload.substr(1));
+    payload = strings::trim_blanks(payload.substr(1));
     if (payload.empty()) {
       // Bare `Table[@]` is not a useful Excel construct; surface #NAME?.
       return ErrorCode::Name;
@@ -260,7 +244,7 @@ Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::str
 
   bool column_seen = false;
   for (std::string_view frag_raw : fragments) {
-    std::string_view frag = ascii_trim(frag_raw);
+    std::string_view frag = strings::trim_blanks(frag_raw);
     if (frag.empty()) {
       return ErrorCode::Name;
     }
@@ -268,7 +252,7 @@ Expected<StructuredRefSelector, ErrorCode> parse_structured_ref_payload(std::str
     if (!strip_outer_brackets(frag, &inner)) {
       return ErrorCode::Name;
     }
-    inner = ascii_trim(inner);
+    inner = strings::trim_blanks(inner);
     if (!inner.empty() && inner.front() == '#') {
       const std::uint8_t bit = classify_hash_specifier(inner);
       if (bit == 0u) {

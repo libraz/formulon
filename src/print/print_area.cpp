@@ -10,6 +10,7 @@
 #include "defined_name.h"
 #include "sheet.h"
 #include "utils/a1_ref.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -79,19 +80,6 @@ std::size_t FindAreaSeparator(std::string_view body, std::size_t start) {
     }
   }
   return std::string_view::npos;
-}
-
-/// Trims spaces and tabs from both ends of `text`.
-std::string_view Trim(std::string_view text) {
-  std::size_t begin = 0;
-  std::size_t end = text.size();
-  while (begin < end && (text[begin] == ' ' || text[begin] == '\t')) {
-    ++begin;
-  }
-  while (end > begin && (text[end - 1] == ' ' || text[end - 1] == '\t')) {
-    --end;
-  }
-  return text.substr(begin, end - begin);
 }
 
 /// Parses one anchor-free A1 reference (e.g. "A1", "BC42") into 0-based
@@ -287,7 +275,7 @@ Expected<std::vector<std::string>, Error> SplitDefinedNameAreas(const Workbook& 
     return tokens;
   }
 
-  const std::string_view body = Trim(*formula);
+  const std::string_view body = strings::trim_blanks(*formula);
   if (body.empty()) {
     return make_error(FormulonErrorCode::kPrintInvalidArea, empty_body_msg,
                       "sheet_index=" + std::to_string(sheet_index));
@@ -299,7 +287,7 @@ Expected<std::vector<std::string>, Error> SplitDefinedNameAreas(const Workbook& 
     if (comma == std::string_view::npos) {
       comma = body.size();
     }
-    const std::string_view raw = Trim(body.substr(start, comma - start));
+    const std::string_view raw = strings::trim_blanks(body.substr(start, comma - start));
     start = comma + 1;
     if (raw.empty()) {
       return make_error(FormulonErrorCode::kPrintInvalidArea, empty_token_msg,
