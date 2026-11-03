@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `fm_sheet_set_row_auto_height` (`setRowAutoHeight`, `set_row_auto_height`)
+  stores a row's automatic height without marking it custom, so a refreshed
+  height is saved as `ht` alone and the row keeps following its content and
+  font.
+- `fm_sheet_range_style_bases_excluding` (`rangeStyleBasesExcluding`,
+  `range_style_bases_excluding`) lists the XFs a selection resolves to while
+  leaving out given cells, for hosts that resolve those cells' style
+  themselves.
+
+### Fixed
+
+- A data bar without an x14 extension (the Excel 2007 form) is drawn as Excel
+  draws it: no axis, and every bar, negative ones included, grows from the
+  left edge in proportion to the minimum-to-maximum span. A data bar with an
+  automatic axis, the default for one added through the API, now writes its
+  x14 extension, so Excel keeps the axis after a save instead of showing the
+  2007 form.
+
 ## [0.18.0] - 2026-10-26
 
 ### BREAKING
