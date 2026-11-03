@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -86,6 +87,21 @@ fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, st
   return *out != nullptr ? 0 : static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 }
 
+fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list<const void*> out_args,
+                                  std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                                  const formulon::pivot::PivotTable** out) {
+  bool null_arg = wb == nullptr;
+  for (const void* arg : out_args) {
+    null_arg = null_arg || arg == nullptr;
+  }
+  if (null_arg) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(fn) + ": NULL argument").c_str());
+  }
+  *out = resolve_pivot(wb->workbook(), sheet_index, pivot_index, fn);
+  return *out != nullptr ? 0 : static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+}
+
 void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table) {
   clear_pivot_derived_state(table);
   wb.mark_all_formulas_dirty();
@@ -147,6 +163,32 @@ formulon::pivot::DateGrouping pivot_date_grouping_from_fm(fm_pivot_date_grouping
 
 formulon::pivot::CalendarSystem pivot_calendar_from_fm(fm_pivot_calendar_t c) {
   return static_cast<formulon::pivot::CalendarSystem>(c);
+}
+
+std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis) {
+  switch (axis) {
+    case formulon::pivot::PivotAxis::Row:
+      return FM_PIVOT_AXIS_ROW;
+    case formulon::pivot::PivotAxis::Col:
+      return FM_PIVOT_AXIS_COL;
+    case formulon::pivot::PivotAxis::Value:
+      return FM_PIVOT_AXIS_VALUE;
+    case formulon::pivot::PivotAxis::Page:
+      return FM_PIVOT_AXIS_PAGE;
+    case formulon::pivot::PivotAxis::None:
+    default:
+      return std::nullopt;
+  }
+}
+
+fm_status_t pivot_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                        std::size_t* out_count, const char* fn, TableCount count) {
+  const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_checked(wb, {out_count}, sheet_index, pivot_index, fn, &table); rc != 0) {
+    return rc;
+  }
+  *out_count = count(*table);
+  return 0;
 }
 
 void grow_record_cells(formulon::pivot::PivotCacheRecord& rec, std::size_t field_idx) {

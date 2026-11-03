@@ -89,28 +89,28 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::vector<std::uint8_t> bytes;
   if (const auto status = read_file(input_path, bytes); status != 0) {
     err << "formulon: paginate: cannot read '" << input_path << "': " << std::strerror(errno) << '\n';
-    return exit_code_for_status(status);
+    return status;
   }
   WorkbookGuard workbook;
   if (const auto status = fm_workbook_load(bytes.data(), bytes.size(), &workbook.handle); status != 0) {
     emit_last_error(err, "paginate");
-    return exit_code_for_status(status);
+    return status;
   }
   if (const auto status = apply_shared_options(workbook.handle, shared); status != 0) {
     emit_last_error(err, "paginate");
-    return exit_code_for_status(status);
+    return status;
   }
   // Geometry resolved from a workbook that lost content on load is the
   // geometry of a different workbook, so the losses are reported before
   // any of it is written.
   if (const auto status = emit_read_diagnostics(workbook.handle, err, "paginate"); status != 0) {
     emit_last_error(err, "paginate");
-    return exit_code_for_status(status);
+    return status;
   }
   PaginationGuard pagination;
   if (const auto status = fm_workbook_paginate(workbook.handle, sheet_index, &pagination.handle); status != 0) {
     emit_last_error(err, "paginate");
-    return exit_code_for_status(status);
+    return status;
   }
 
   out << "sheet=" << sheet_index << '\n';
@@ -120,7 +120,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     fm_print_range_t range{};
     if (const auto status = fm_pagination_print_area_at(pagination.handle, i, &range); status != 0) {
       emit_last_error(err, "paginate");
-      return exit_code_for_status(status);
+      return status;
     }
     if (i != 0) {
       out << ',';

@@ -24,6 +24,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 
@@ -85,8 +86,7 @@ extern "C" fm_status_t fm_workbook_get_theme_fonts(const fm_workbook_t* wb, fm_t
                              "fm_workbook_get_theme_fonts: NULL argument");
   }
   formulon::ThemeFonts fonts = wb->workbook().load_theme().theme.fonts;
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(std::move(fonts.major_latin));
   out->major_latin = store.back().c_str();
   store.emplace_back(std::move(fonts.major_ea));
@@ -146,8 +146,7 @@ extern "C" fm_status_t fm_workbook_theme_script_font_at(const fm_workbook_t* wb,
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_theme_script_font_at: index out of range", "idx=" + std::to_string(idx));
   }
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(from_part ? scripts[idx].script : formulon::office_script(idx));
   *out_script = store.back().c_str();
   store.emplace_back(from_part ? scripts[idx].typeface : formulon::office_script_face(idx, major != 0));
@@ -247,8 +246,7 @@ extern "C" fm_status_t fm_sheet_get_effective_style(const fm_workbook_t* wb, siz
   }
   out->locked = style.locked ? 1 : 0;
   out->hidden = style.hidden ? 1 : 0;
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(std::move(style.num_fmt_code));
   out->num_fmt_code = store.back().c_str();
   return 0;

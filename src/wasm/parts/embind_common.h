@@ -50,6 +50,12 @@ constexpr int32_t kBindingCallbackException = 7003;
 /// argument before any C call.
 constexpr int32_t kInvalidArgument = 2;
 
+/// Largest integer a JS number holds exactly (`Number.MAX_SAFE_INTEGER`).
+constexpr double kMaxSafeInteger = 9007199254740991.0;
+
+/// Largest `uint32_t`, as the double bound handed to the numeric readers.
+constexpr double kMaxU32 = 4294967295.0;
+
 // ---- Value-object mirrors -----------------------------------------------
 //
 // Every cross-boundary record is reflected through a POD struct so embind

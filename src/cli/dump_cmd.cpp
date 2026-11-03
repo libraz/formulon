@@ -60,8 +60,7 @@ fm_status_t dump_cells(const fm_workbook_t* wb, DumpMode mode, std::ostream& out
     if (auto rc = fm_workbook_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
-    const std::string escaped_sheet_name =
-        escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{});
+    const std::string escaped_sheet_name = escape_single_line(view_or_empty(sheet_name));
     std::size_t cell_count = 0;
     if (auto rc = fm_workbook_cell_count(wb, s, &cell_count); rc != 0) {
       return rc;
@@ -92,7 +91,7 @@ fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
-    out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '\n';
+    out << escape_single_line(view_or_empty(sheet_name)) << '\n';
   }
   return 0;
 }
@@ -113,22 +112,18 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_defined_name_at(wb, i, &name, &formula, &local_sheet_id); rc != 0) {
       return rc;
     }
+    const std::string rendered =
+        escape_single_line(view_or_empty(name)) + ' ' + escape_single_line(view_or_empty(formula));
     if (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < n_sheets) {
       const char* sheet_name = nullptr;
       if (auto rc = fm_workbook_sheet_name(wb, static_cast<std::size_t>(local_sheet_id), &sheet_name); rc != 0) {
         return rc;
       }
-      snapshot << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
-               << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
-               << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
+      snapshot << escape_single_line(view_or_empty(sheet_name)) << '!';
     } else if (local_sheet_id >= 0) {
-      snapshot << '#' << local_sheet_id << '!'
-               << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
-               << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
-    } else {
-      snapshot << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
-               << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
+      snapshot << '#' << local_sheet_id << '!';
     }
+    snapshot << rendered << '\n';
   }
   snapshot << "[tables]\n";
   const std::size_t n_tables = fm_workbook_table_count(wb);
@@ -140,10 +135,8 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_table_at(wb, i, &name, &display, &ref, &sheet_index); rc != 0) {
       return rc;
     }
-    snapshot << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
-             << escape_single_line(display != nullptr ? std::string_view(display) : std::string_view{}) << ' '
-             << sheet_index << ' ' << escape_single_line(ref != nullptr ? std::string_view(ref) : std::string_view{})
-             << '\n';
+    snapshot << escape_single_line(view_or_empty(name)) << ' ' << escape_single_line(view_or_empty(display)) << ' '
+             << sheet_index << ' ' << escape_single_line(view_or_empty(ref)) << '\n';
   }
   snapshot << "[passthrough_parts]\n";
   const std::size_t n_parts = fm_workbook_passthrough_count(wb);
@@ -152,7 +145,7 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_passthrough_at(wb, i, &path); rc != 0) {
       return rc;
     }
-    snapshot << escape_single_line(path != nullptr ? std::string_view(path) : std::string_view{}) << '\n';
+    snapshot << escape_single_line(view_or_empty(path)) << '\n';
   }
   out << snapshot.str();
   return 0;

@@ -18,6 +18,7 @@
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_from_fm;
@@ -34,8 +35,7 @@ static_assert(FM_DISPLAY_INVALID_FORMAT == static_cast<int>(formulon::text_forma
 // Publishes a rendering through the handle's read scratch.
 void publish(const fm_workbook_t* wb, formulon::text_format::DisplayText display, const char** out_text,
              int32_t* out_status) {
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(std::move(display.text));
   *out_text = store.back().c_str();
   *out_status = static_cast<int32_t>(display.status);

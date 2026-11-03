@@ -1,6 +1,6 @@
 //
-// Shared private helpers for the three pivot-related TUs
-// (`pivot_layout.cpp`, `pivot_cache.cpp`, `pivot_table.cpp`).
+// Shared private helpers for the pivot-related TUs (`pivot_layout.cpp`,
+// `pivot_cache.cpp`, `pivot_table.cpp`, `pivot_field.cpp`, `pivot_filter.cpp`).
 //
 // The pivot mutation surface is large enough that splitting it into the
 // cache/table axes is worth a dedicated TU each; this header carries
@@ -13,7 +13,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -49,6 +51,13 @@ const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, s
 fm_status_t resolve_pivot_checked(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, const char* fn,
                                   formulon::pivot::PivotTable** out);
 
+// Read-path variant: rejects a NULL `wb` or any NULL entry of `out_args`
+// ("<fn>: NULL argument"), then resolves like `resolve_pivot`. Returns 0 with
+// `*out` set, or the error status with the binding error populated.
+fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list<const void*> out_args,
+                                  std::size_t sheet_index, std::size_t pivot_index, const char* fn,
+                                  const formulon::pivot::PivotTable** out);
+
 // Invalidates the pivot's derived state so the next layout call
 // recomputes. Called after every mutation that could affect projection.
 //
@@ -79,6 +88,15 @@ formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_as_t show_as);
 formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_type_t t);
 formulon::pivot::DateGrouping pivot_date_grouping_from_fm(fm_pivot_date_grouping_t g);
 formulon::pivot::CalendarSystem pivot_calendar_from_fm(fm_pivot_calendar_t c);
+
+// Engine axis to `fm_pivot_axis_t`; `nullopt` for `PivotAxis::None`.
+std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis);
+
+// Shared body of the `fm_workbook_pivot_*_count` getters: validates the
+// arguments, resolves the table and stores `count(table)` in `*out_count`.
+using TableCount = std::size_t (*)(const formulon::pivot::PivotTable& table);
+fm_status_t pivot_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                        std::size_t* out_count, const char* fn, TableCount count);
 
 // Ensures the record's cell vector has at least `field_idx + 1` slots.
 // Newly-added slots are initialised to Blank so existing semantics

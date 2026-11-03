@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
-#include "utils/error.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -72,8 +71,7 @@ JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t 
   }
   JsNarrowNumericReader reader("setCellPhoneticRuns");
   if (!reader.is_array(runs, "setCellPhoneticRuns.runs")) {
-    return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
-                                "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
+    return binding_error_status(kInvalidArgument, "setCellPhoneticRuns: `runs` must be an array of { sb, eb, text }");
   }
   const uint32_t count = reader.length(runs, "setCellPhoneticRuns.runs.length");
   if (!reader.ok()) {
@@ -820,9 +818,9 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
   }
   double cursor_value = 0.0;
   double limit_value = 0.0;
-  if (!js_optional_index(cursor, 0.0, 9007199254740991.0, &cursor_value) ||
-      !js_optional_index(limit, 0.0, 4294967295.0, &limit_value)) {
-    o.set("status", binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
+  if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value) ||
+      !js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
+    o.set("status", binding_error_status(kInvalidArgument,
                                          "getCellsInRange: `cursor` and `limit` must be non-negative integers"));
     return o;
   }
@@ -854,8 +852,8 @@ emscripten::val JsWorkbook::listInvalidCells(uint32_t sheet, emscripten::val cur
   }
   double cursor_value = 0.0;
   double limit_value = 0.0;
-  if (!js_optional_index(cursor, 0.0, 9007199254740991.0, &cursor_value) ||
-      !js_optional_index(limit, 0.0, 4294967295.0, &limit_value)) {
+  if (!js_optional_index(cursor, 0.0, kMaxSafeInteger, &cursor_value) ||
+      !js_optional_index(limit, 0.0, kMaxU32, &limit_value)) {
     o.set("status", binding_error_status(kInvalidArgument,
                                          "listInvalidCells: `cursor` and `limit` must be non-negative integers"));
     return o;

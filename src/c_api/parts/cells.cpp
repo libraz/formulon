@@ -30,6 +30,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::cell_range_page_size;
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_cursor;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_formula_parses;
@@ -40,6 +41,8 @@ using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::TextStore;
@@ -143,9 +146,8 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t s
   if (auto rc = check_utf8("fm_workbook_set_cell_phonetic", {utf8}); rc != 0) {
     return rc;
   }
-  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_cell_phonetic: cell coordinate out of range");
+  if (auto rc = check_cell_coord(row, col, "fm_workbook_set_cell_phonetic"); rc != 0) {
+    return rc;
   }
   wb->workbook().sheet(sheet_index).set_cell_phonetic(row, col, utf8);
   // `PHONETIC()` reads this cell's phonetic reading through the same
@@ -167,9 +169,8 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_runs(fm_workbook_t* wb, siz
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_cell_phonetic_runs: runs is NULL");
   }
-  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_cell_phonetic_runs: cell coordinate out of range");
+  if (auto rc = check_cell_coord(row, col, "fm_workbook_set_cell_phonetic_runs"); rc != 0) {
+    return rc;
   }
 
   std::vector<formulon::PhoneticRun> parsed;
@@ -218,9 +219,8 @@ extern "C" fm_status_t fm_workbook_set_cell_phonetic_properties(fm_workbook_t* w
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_cell_phonetic_properties"); rc != 0) {
     return rc;
   }
-  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_cell_phonetic_properties: cell coordinate out of range");
+  if (auto rc = check_cell_coord(row, col, "fm_workbook_set_cell_phonetic_properties"); rc != 0) {
+    return rc;
   }
   // Both enumerations occupy two bits of the XLSB trailer's flags word, so
   // an out-of-range value would not survive an `.xlsb` save intact. Reject
@@ -259,9 +259,8 @@ extern "C" fm_status_t fm_workbook_set_cell_show_phonetic(fm_workbook_t* wb, siz
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_cell_show_phonetic"); rc != 0) {
     return rc;
   }
-  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_set_cell_show_phonetic: cell coordinate out of range");
+  if (auto rc = check_cell_coord(row, col, "fm_workbook_set_cell_show_phonetic"); rc != 0) {
+    return rc;
   }
   wb->workbook().sheet(sheet_index).set_cell_show_phonetic(row, col, show != 0);
   return 0;
@@ -338,22 +337,16 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_value"); rc != 0) {
     return rc;
   }
-  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_get_value: cell coordinate out of range",
-                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  if (auto rc = check_cell_coord(row, col, "fm_workbook_get_value"); rc != 0) {
+    return rc;
   }
   // `resolve_cell_value` is the spill-aware accessor: phantoms of a
   // dynamic-array spill surface their array cell rather than the raw
   // (blank) cached value.
   const formulon::Value v = wb->workbook().sheet(sheet_index).resolve_cell_value(row, col);
-  // Read-path strings go to `read_scratch`, which is cleared on each read
-  // so it holds only this call's output. Cast away const because the
-  // scratch store is logically internal: mutating it does not affect the
-  // workbook's observable state. The returned text pointer is valid until
-  // the next read on this handle (see `formulon_c.h`).
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  // The returned text pointer is valid until the next read on this handle
+  // (see `formulon_c.h`).
+  TextStore& store = fresh_read_scratch(wb);
   value_to_fm(v, store, out);
   return 0;
 }
@@ -369,8 +362,7 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, si
     return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   // The ABI surfaces a bare reading, so the runs' kana concatenate: the
   // span each covers is `PHONETIC`'s business, not a furigana field's.
   store.emplace_back(cell == nullptr ? std::string() : formulon::flatten_phonetic(cell->phonetic_runs));
@@ -411,8 +403,7 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb
                              "run_index=" + std::to_string(run_index) + " run_count=" + std::to_string(run_count));
   }
   const formulon::PhoneticRun& run = cell->phonetic_runs[run_index];
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(run.text);
   out->sb = run.sb;
   out->eb = run.eb;
@@ -469,8 +460,7 @@ extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t shee
   // Read-path scratch: cleared per call so the lambda text does not
   // accumulate across repeated reads. The returned pointer is valid until
   // the next read on this handle (see `formulon_c.h`).
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(std::move(formatted));
   *out_text = store.back().c_str();
   return 0;
@@ -595,8 +585,7 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   // `out_value`'s text payload goes to `read_scratch` (cleared per call,
   // valid until the next read). `out_formula` above points into the
   // cell's own `formula_text`, not scratch, so clearing here is safe.
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  TextStore& store = fresh_read_scratch(wb);
   if (out_formula != nullptr && table != nullptr) {
     *out_formula = store.emplace_back(formulon::data_table_formula_text(*table)).c_str();
   }
@@ -642,14 +631,6 @@ extern "C" fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, std::uint
 
 namespace {
 
-fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* api) {
-  if (formulon::Sheet::coord_in_grid(row, col)) {
-    return 0;
-  }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell coordinate out of range",
-                           std::string(api) + ": row=" + std::to_string(row) + " col=" + std::to_string(col));
-}
-
 // Shared front half of the two formula getters: validates, then copies the
 // stored formula text (empty for a non-formula) out under the sheet lock.
 fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std::uint32_t row, std::uint32_t col,
@@ -672,13 +653,6 @@ fm_status_t read_stored_formula(const fm_workbook_t* wb, size_t sheet_index, std
     *out_text = formulon::data_table_formula_text(*table);
   }
   return 0;
-}
-
-const char* publish_scratch(const fm_workbook_t* wb, std::string text) {
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
-  store.emplace_back(std::move(text));
-  return store.back().c_str();
 }
 
 }  // namespace

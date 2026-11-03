@@ -585,6 +585,26 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, 
   return check_sheet(wb, sheet_index, fn, "sheet_index");
 }
 
+TextStore& fresh_read_scratch(const fm_workbook_t* wb) {
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
+  return store;
+}
+
+const char* publish_scratch(const fm_workbook_t* wb, std::string text) {
+  TextStore& store = fresh_read_scratch(wb);
+  store.emplace_back(std::move(text));
+  return store.back().c_str();
+}
+
+fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* api) {
+  if (formulon::Sheet::coord_in_grid(row, col)) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "cell coordinate out of range",
+                           std::string(api) + ": row=" + std::to_string(row) + " col=" + std::to_string(col));
+}
+
 fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn) {
   return check_sheet(wb, sheet, fn, "sheet");
 }

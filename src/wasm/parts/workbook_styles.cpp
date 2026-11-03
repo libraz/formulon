@@ -10,11 +10,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <vector>
 
 #include "c_api/formulon_c.h"
-#include "utils/error.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -946,11 +946,10 @@ JsStatus JsWorkbook::setThemeColors(emscripten::val colors) {
   }
   fm_theme_colors tc{};
   JsNarrowNumericReader reader("setThemeColors");
-  if (!reader.is_array(colors, "colors") || reader.length(colors, "colors") != 12U) {
-    return binding_error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument),
-                                "setThemeColors: `colors` must be an array of 12 ARGB numbers");
+  if (!reader.is_array(colors, "colors") || reader.length(colors, "colors") != std::size(tc.argb)) {
+    return binding_error_status(kInvalidArgument, "setThemeColors: `colors` must be an array of 12 ARGB numbers");
   }
-  for (uint32_t i = 0; i < 12U; ++i) {
+  for (uint32_t i = 0; i < std::size(tc.argb); ++i) {
     tc.argb[i] = reader.u32_value(reader.array_element(colors, i, "colors[]"), 0U, "colors[]");
   }
   if (!reader.ok()) {

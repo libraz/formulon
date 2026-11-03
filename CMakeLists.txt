@@ -474,6 +474,8 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/collation.cpp
   src/c_api/parts/locale.cpp
   src/c_api/parts/pivot_cache.cpp
+  src/c_api/parts/pivot_field.cpp
+  src/c_api/parts/pivot_filter.cpp
   src/c_api/parts/pivot_internal.cpp
   src/c_api/parts/pivot_layout.cpp
   src/c_api/parts/pivot_table.cpp
@@ -486,7 +488,9 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/slicers.cpp
   src/c_api/parts/sparklines.cpp
   src/c_api/parts/xml_fragment.cpp
+  src/c_api/parts/sheet_geometry.cpp
   src/c_api/parts/sheet_layout.cpp
+  src/c_api/parts/sheet_view.cpp
   src/c_api/parts/sheets_ui.cpp
   src/c_api/parts/styles.cpp
   src/c_api/parts/styles_mutate.cpp

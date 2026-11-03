@@ -292,6 +292,18 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, 
 // the same validator as the mutators.
 fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn);
 
+// Clears the handle's read scratch and returns it. The store is logically
+// internal (it never affects observable workbook state), so a const handle
+// may refresh it; returned text pointers stay valid until the next read.
+TextStore& fresh_read_scratch(const fm_workbook_t* wb);
+
+// Replaces the read scratch with `text` and returns its stable `c_str()`.
+const char* publish_scratch(const fm_workbook_t* wb, std::string text);
+
+// Rejects a cell coordinate outside the sheet grid, naming `api` and the
+// offending row / column in the diagnostic.
+fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* api);
+
 // Bounds-checks a caller-supplied element index against a collection of
 // `size` entries. On failure writes `"<fn>: <field> out of range"` with an
 // `<field>=<index> count=<size>` context and returns the error status.

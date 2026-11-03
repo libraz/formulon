@@ -55,6 +55,11 @@ std::string render_value(const fm_value_t& v);
 /// output such as `dump`, where embedded newlines must not create records.
 std::string escape_single_line(std::string_view text);
 
+/// Returns `text` as a view, or an empty view for a NULL C string.
+inline std::string_view view_or_empty(const char* text) {
+  return text != nullptr ? std::string_view(text) : std::string_view{};
+}
+
 /// Renders `v` as a JSON object: `{"kind": "...", "value": ...}`.
 /// Strings are JSON-escaped; numbers use `format_double`.
 std::string render_value_json(const fm_value_t& v);

@@ -1,0 +1,159 @@
+//
+// C ABI - sheet geometry in points (cell rectangles, column widths, row
+// heights, and the column width model).
+
+#include "print/sheet_geometry.h"
+
+#include <cstdint>
+
+#include "c_api/formulon_c.h"
+#include "c_api/parts/common.h"
+#include "column_width.h"
+#include "sheet.h"
+#include "utils/error.h"
+#include "workbook.h"
+
+using formulon::c_api::parts::check_column_span;
+using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_row_index;
+using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_rect;
+using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::set_binding_error;
+
+namespace {
+
+// Validates the shared `(sheet, mode)` prefix of the geometry entry points.
+fm_status_t check_geometry_args(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, const char* api) {
+  if (auto rc = check_sheet_index(wb, sheet_index, api); rc != 0) {
+    return rc;
+  }
+  return check_enum_domain(mode, FM_GEOMETRY_PRINT, api, "mode");
+}
+
+formulon::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode) {
+  return formulon::resolve_column_width_model(wb->workbook().styles(), static_cast<formulon::GeometryMode>(mode));
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_cell_rect_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t first_row,
+                                             uint32_t first_col, uint32_t last_row, uint32_t last_col, int32_t mode,
+                                             fm_rect_pt* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cell_rect_pt: NULL argument");
+  }
+  if (auto rc = check_geometry_args(wb, sheet_index, mode, "fm_sheet_cell_rect_pt"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_rect(first_row, first_col, last_row, last_col, "fm_sheet_cell_rect_pt"); rc != 0) {
+    return rc;
+  }
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  const formulon::ColumnWidthModel model = width_model_for(wb, mode);
+  double width = 0.0;
+  for (const double chars : formulon::print::column_widths_chars(sheet, first_col, last_col, model)) {
+    width += formulon::column_chars_to_points(chars, model);
+  }
+  const double y = formulon::print::row_offset_pt(sheet, first_row);
+  *out = fm_rect_pt{};
+  out->x = formulon::print::column_offset_pt(sheet, first_col, model);
+  out->y = y;
+  out->width = width;
+  out->height = first_row == last_row ? formulon::print::effective_row_height_pt(sheet, first_row)
+                                      : formulon::print::row_offset_pt(sheet, last_row + 1U) - y;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_column_width_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t col, int32_t mode,
+                                                double* out_pt) {
+  clear_last_error();
+  if (out_pt == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_column_width_pt: NULL argument");
+  }
+  if (auto rc = check_geometry_args(wb, sheet_index, mode, "fm_sheet_column_width_pt"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_column_span(col, col, "fm_sheet_column_width_pt"); rc != 0) {
+    return rc;
+  }
+  *out_pt =
+      formulon::print::effective_column_width_pt(wb->workbook().sheet(sheet_index), col, width_model_for(wb, mode));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_row_height_pt(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                              double* out_pt) {
+  clear_last_error();
+  if (out_pt == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_row_height_pt: NULL argument");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_row_height_pt"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_row_index(row, "fm_sheet_row_height_pt"); rc != 0) {
+    return rc;
+  }
+  *out_pt = formulon::print::effective_row_height_pt(wb->workbook().sheet(sheet_index), row);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_width_model(const fm_workbook_t* wb, size_t sheet_index, int32_t mode,
+                                            fm_width_model* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_width_model: NULL argument");
+  }
+  if (auto rc = check_geometry_args(wb, sheet_index, mode, "fm_sheet_width_model"); rc != 0) {
+    return rc;
+  }
+  const formulon::ColumnWidthModel model = width_model_for(wb, mode);
+  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
+  mutable_wb->read_scratch.clear();
+  mutable_wb->read_scratch.emplace_back(model.normal_font_name);
+  *out = fm_width_model{};
+  out->points_per_char = model.points_per_char;
+  out->padding_pt = model.padding_pt;
+  out->normal_font_size = model.normal_font_size;
+  out->calibrated = model.calibrated ? 1 : 0;
+  out->normal_font_name = mutable_wb->read_scratch.back().c_str();
+  out->platform = model.platform;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_column_chars_to_pt(const fm_workbook_t* wb, size_t sheet_index, int32_t mode,
+                                                   double chars, double* out_pt) {
+  clear_last_error();
+  if (out_pt == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_column_chars_to_pt: NULL argument");
+  }
+  if (auto rc = check_geometry_args(wb, sheet_index, mode, "fm_sheet_column_chars_to_pt"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_finite_non_negative(chars, "fm_sheet_column_chars_to_pt", "chars"); rc != 0) {
+    return rc;
+  }
+  *out_pt = formulon::column_chars_to_points(chars, width_model_for(wb, mode));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_column_pt_to_chars(const fm_workbook_t* wb, size_t sheet_index, int32_t mode, double pt,
+                                                   double* out_chars) {
+  clear_last_error();
+  if (out_chars == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_column_pt_to_chars: NULL argument");
+  }
+  if (auto rc = check_geometry_args(wb, sheet_index, mode, "fm_sheet_column_pt_to_chars"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_finite_non_negative(pt, "fm_sheet_column_pt_to_chars", "pt"); rc != 0) {
+    return rc;
+  }
+  *out_chars = formulon::column_points_to_chars(pt, width_model_for(wb, mode));
+  return 0;
+}

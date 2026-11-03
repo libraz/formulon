@@ -349,7 +349,7 @@ uint16_t JsNarrowNumericReader::u16_value(const emscripten::val& value, uint16_t
 }
 
 uint32_t JsNarrowNumericReader::u32_value(const emscripten::val& value, uint32_t dflt, const char* field) {
-  return static_cast<uint32_t>(integer_value(value, dflt, field, 0.0, 4294967295.0, "[0, 4294967295]"));
+  return static_cast<uint32_t>(integer_value(value, dflt, field, 0.0, kMaxU32, "[0, 4294967295]"));
 }
 
 int32_t JsNarrowNumericReader::i32_value(const emscripten::val& value, int32_t dflt, const char* field) {

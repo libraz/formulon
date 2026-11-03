@@ -26,6 +26,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::TextStore;
 using formulon::c_api::parts::value_to_fm;
@@ -43,6 +44,18 @@ formulon::Value own_cell_text(const formulon::Value& v, TextStore& owner) {
   const std::string_view text = v.as_text();
   owner.emplace_back(text.data(), text.size());
   return formulon::Value::text(std::string_view(owner.back()));
+}
+
+// Per-call arena for a caller-supplied formula. The byte ceiling keeps a
+// hostile formula to a recoverable error instead of an allocation failure
+// that takes the host down.
+formulon::Arena make_eval_arena() {
+  return formulon::Arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
+}
+
+fm_status_t arena_exhausted_error(const char* api) {
+  return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
+                           (std::string(api) + ": evaluation arena exhausted").c_str());
 }
 
 }  // namespace
@@ -63,24 +76,18 @@ extern "C" fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, siz
   if (auto rc = check_utf8("fm_workbook_evaluate_formula", {formula}); rc != 0) {
     return rc;
   }
-  // Per-call arena backs any text payload in the result until it is copied
-  // into the read scratch below; both are discarded when this call returns.
-  // The byte ceiling keeps a hostile formula to a recoverable error here
-  // instead of an allocation failure that takes the host down.
-  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
+  // The arena backs any text payload in the result until it is copied into
+  // the read scratch below.
+  formulon::Arena arena = make_eval_arena();
   const formulon::Value v =
       formulon::eval::evaluate_formula_text(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                             std::string_view(formula), arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
-    return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
-                             "fm_workbook_evaluate_formula: evaluation arena exhausted");
+    return arena_exhausted_error("fm_workbook_evaluate_formula");
   }
-  // Read-path scratch: cleared per call so returned text pointers stay
-  // valid only until the next read (see `fm_workbook_get_value`). Cast away
-  // const because the scratch is logically internal — it never affects the
-  // workbook's observable state.
-  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  // Returned text pointers stay valid only until the next read (see
+  // `fm_workbook_get_value`).
+  TextStore& store = fresh_read_scratch(wb);
   value_to_fm(v, store, out);
   return 0;
 }
@@ -102,18 +109,14 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* w
   if (auto rc = check_utf8("fm_workbook_evaluate_formula_array", {formula}); rc != 0) {
     return rc;
   }
-  // Per-call arena backs any text payload in the evaluated result until it is
-  // deep-copied into the per-handle stash below; the arena is discarded when
-  // this call returns. The byte ceiling keeps a hostile formula to a
-  // recoverable error here instead of an allocation failure that takes the
-  // host down.
-  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
+  // The arena backs any text payload in the result until it is deep-copied
+  // into the per-handle stash below.
+  formulon::Arena arena = make_eval_arena();
   const formulon::Value v =
       formulon::eval::evaluate_formula_text_array(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                                   std::string_view(formula), arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
-    return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
-                             "fm_workbook_evaluate_formula_array: evaluation arena exhausted");
+    return arena_exhausted_error("fm_workbook_evaluate_formula_array");
   }
 
   // Stash the whole result on the handle. Cast away const for the same reason
@@ -163,12 +166,9 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook
   if (auto rc = check_index(index, stash.cells.size(), "fm_workbook_evaluate_formula_array_cell", "index"); rc != 0) {
     return rc;
   }
-  // Read-path scratch: cleared per call so returned text pointers stay valid
-  // only until the next read (see `fm_workbook_evaluate_formula_array_cell`
-  // contract in `formulon_c.h`). Cast away const for the same reason as the
-  // other read-path entry points.
-  TextStore& scratch = const_cast<TextStore&>(wb->read_scratch);
-  scratch.clear();
+  // Text pointers stay valid only until the next read (see
+  // `fm_workbook_evaluate_formula_array_cell` in `formulon_c.h`).
+  TextStore& scratch = fresh_read_scratch(wb);
   value_to_fm(stash.cells[index], scratch, out);
   return 0;
 }
@@ -195,16 +195,12 @@ extern "C" fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, 
   if (auto rc = check_utf8("fm_workbook_evaluate_cf_formula", {formula}); rc != 0) {
     return rc;
   }
-  // Per-call arena, capped for the same reason as the other ad-hoc entry
-  // points: a caller-supplied formula must not be able to allocate without
-  // bound.
-  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
+  formulon::Arena arena = make_eval_arena();
   const bool fired = formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                                          anchor_row, anchor_col, std::string_view(formula), arena,
                                                          formulon::eval::default_registry());
   if (arena.exhausted()) {
-    return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
-                             "fm_workbook_evaluate_cf_formula: evaluation arena exhausted");
+    return arena_exhausted_error("fm_workbook_evaluate_cf_formula");
   }
   *out = fm_value_t{};
   out->kind = FM_VAL_BOOL;

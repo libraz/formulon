@@ -15,16 +15,22 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/xml_fragment.h"
 #include "cf/auto_filter_eval.h"
+#include "io/auto_filter_xml.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::validate_single_element_fragment;
 
 namespace {
 
@@ -680,4 +686,45 @@ extern "C" fm_status_t fm_table_evaluate_auto_filter(const fm_workbook_t* wb, si
     return rc;
   }
   return evaluate_body(wb, target, out_match, cap, out_len, out_first_row, kApi);
+}
+
+extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
+  clear_last_error();
+  if (out_xml == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_auto_filter_xml: NULL out_xml");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_auto_filter_xml"); rc != 0) {
+    return rc;
+  }
+  *out_xml = publish_scratch(wb, formulon::io::auto_filter_xml(wb->workbook().sheet(sheet_index).auto_filter()));
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
+  clear_last_error();
+  if (xml == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_set_auto_filter_xml: NULL xml");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_auto_filter_xml"); rc != 0) {
+    return rc;
+  }
+  const std::string fragment(xml);
+  if (!fragment.empty()) {
+    if (auto rc = check_utf8(fragment, "fm_sheet_set_auto_filter_xml", "element=autoFilter"); rc != 0) {
+      return rc;
+    }
+    const FragmentValidation validation = validate_single_element_fragment(fragment, "autoFilter");
+    if (!validation.valid) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_sheet_set_auto_filter_xml: invalid autoFilter XML fragment", validation.context);
+    }
+  }
+  // Routed through the workbook so `_FilterDatabase` and SUBTOTAL/AGGREGATE
+  // dirty state follow the change.
+  if (auto result = wb->workbook().set_sheet_auto_filter_xml(sheet_index, fragment); !result) {
+    return set_last_error(result.error());
+  }
+  return 0;
 }

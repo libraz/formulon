@@ -18,7 +18,6 @@
 // serial `recalc` contract. `--quiet` suppresses the `Recalculated ...`
 // status line on stderr; otherwise we print one per successful run.
 
-#include <cctype>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +33,7 @@
 #include "cli/cli.h"
 #include "cli/diagnostics.h"
 #include "cli/file_io.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace cli {
@@ -90,7 +90,7 @@ fm_workbook_format_t format_from_extension(const std::string& path) {
   }
   std::string ext = path.substr(dot + 1);
   for (char& c : ext) {
-    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    c = strings::ascii_to_lower(c);
   }
   return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
 }
