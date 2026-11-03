@@ -19,36 +19,20 @@
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
-#include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/binary_search.h"
 #include "eval/lookups/common.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/wildcard.h"
-#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
-#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
 namespace {
-
-// Lowercased, lookup-normalised form of `s` for exact / wildcard text
-// matching. On Mac profiles this folds kana / full-width variants and
-// full-width digits (`fold_and_lower`); on every other profile it still
-// composes a half-width voicing mark onto its base (`ｶﾞ` -> `ガ`) before
-// ASCII-lowercasing, matching XLOOKUP's `xlookup_exact_eq` so VLOOKUP /
-// HLOOKUP / MATCH agree with it.
-std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
-  if (width_folding(profile) == WidthFolding::kMac) {
-    return fold_and_lower(s, /*fold_fullwidth_digits=*/true);
-  }
-  return strings::to_ascii_lower_owned(compose_jp_halfwidth_voicing(s));
-}
 
 template <typename CellAt>
 std::size_t scan_exact_text_lookup(std::string_view raw, ExcelProfile profile, std::size_t count, CellAt&& cell_at) {
@@ -63,13 +47,13 @@ std::size_t scan_exact_text_lookup(std::string_view raw, ExcelProfile profile, s
     return SIZE_MAX;
   }
 
-  const std::string pat_lower = lookup_text_key(raw, profile);
+  const std::string pat_lower = lookup_wildcard_key(raw, profile);
   for (std::size_t i = 0; i < count; ++i) {
     const Value& cell = cell_at(i);
     if (!cell.is_text()) {
       continue;
     }
-    const std::string cell_lower = lookup_text_key(cell.as_text(), profile);
+    const std::string cell_lower = lookup_wildcard_key(cell.as_text(), profile);
     if (wildcard_match(pat_lower, cell_lower)) {
       return i;
     }

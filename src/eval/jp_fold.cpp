@@ -67,9 +67,8 @@ bool is_voicing_base(std::uint32_t full_cp) {
   return voiced_full_from_base(full_cp) != 0u || semi_voiced_full_from_base(full_cp) != 0u;
 }
 
-}  // namespace
-
-std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, bool fold_halfwidth_kana) {
+std::string fold_jp_text_impl(std::string_view input, bool fold_fullwidth_digits, bool fold_halfwidth_kana,
+                              bool compose_voicing) {
   std::string out;
   out.reserve(input.size());
   std::size_t i = 0;
@@ -111,7 +110,7 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, boo
     // stays FF76 FF9E (see the header for the caller that needs it).
     if (fold_halfwidth_kana && cp >= 0xFF61u && cp <= 0xFF9Du) {
       std::uint32_t base = half_to_full_kana_or_punct(cp);
-      if (is_voicing_base(base) && i + n < input.size()) {
+      if (compose_voicing && is_voicing_base(base) && i + n < input.size()) {
         std::size_t n2 = 0;
         const std::uint32_t next = decode_utf8_step(input, i + n, &n2);
         if (next == 0xFF9Eu) {
@@ -157,6 +156,12 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, boo
   return out;
 }
 
+}  // namespace
+
+std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, bool fold_halfwidth_kana) {
+  return fold_jp_text_impl(input, fold_fullwidth_digits, fold_halfwidth_kana, /*compose_voicing=*/true);
+}
+
 std::string compose_jp_halfwidth_voicing(std::string_view input) {
   std::string out;
   out.reserve(input.size());
@@ -197,6 +202,11 @@ std::string compose_jp_halfwidth_voicing(std::string_view input) {
 
 std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits) {
   return strings::to_ascii_lower_owned(fold_jp_text(input, fold_fullwidth_digits, /*fold_halfwidth_kana=*/true));
+}
+
+std::string fold_and_lower_per_code_point(std::string_view input) {
+  return strings::to_ascii_lower_owned(fold_jp_text_impl(input, /*fold_fullwidth_digits=*/true,
+                                                         /*fold_halfwidth_kana=*/true, /*compose_voicing=*/false));
 }
 
 }  // namespace eval

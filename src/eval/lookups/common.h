@@ -10,10 +10,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "eval/array_alloc.h"
 #include "eval/declared_rect.h"
+#include "excel_profile.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -37,6 +40,12 @@ class FunctionRegistry;
 // that downstream COUNTA sees the occupied cells, while scalar INDEX / CHOOSE
 // paths continue to return the original reference blank unchanged.
 Value promote_array_result_cell(const Value& value);
+
+// Lower-cased key a wildcard pattern and a cell's text are matched on, the
+// same for VLOOKUP / HLOOKUP / MATCH / XLOOKUP / XMATCH. Mac folds each code
+// point on its own (no voicing-mark composition); zh and Windows fold ASCII
+// case only.
+std::string lookup_wildcard_key(std::string_view text, ExcelProfile profile);
 
 // Spills `per_lane(query)` for every cell of an array-valued lookup_value, in
 // the query array's shape, lanes in row-major order. The lookup family

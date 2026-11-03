@@ -1174,10 +1174,12 @@ TEST(BuiltinsXLookupCollation, WildcardModePreservesProfileFolding) {
   const Value win_fullwidth = EvalWithProfile(R"(=XLOOKUP("Ａ*",{"zz";"ABC"},{1;2},,2))", win_365_ja_jp_profile());
   EXPECT_TRUE(ExpectHit(win_fullwidth, 0));
 
+  // A wildcard pattern folds one code point at a time, so a half-width
+  // voicing mark is never composed onto its base: `ｶﾞ*` misses `ガラス`.
   for (const ExcelProfile& profile : profiles) {
     SCOPED_TRACE(excel_profile_id(profile));
-    const Value kana = EvalWithProfile(R"(=XLOOKUP("ｶﾞ*",{"zz";"ガラス"},{1;2},0,2))", profile);
-    EXPECT_TRUE(ExpectHit(kana, 2));
+    const Value kana = EvalWithProfile(R"(=XLOOKUP("ｶﾞ*",{"zz";"ガラス"},{1;2},,2))", profile);
+    EXPECT_TRUE(ExpectHit(kana, 0));
   }
 }
 

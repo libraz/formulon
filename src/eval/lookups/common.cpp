@@ -8,7 +8,9 @@
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/function_registry.h"
+#include "eval/jp_fold.h"
 #include "eval/name_env_resolve.h"
+#include "excel_locale.h"
 #include "external_book.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -16,6 +18,7 @@
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -123,6 +126,13 @@ Value read_table_cell(const ReferenceTable& table, std::uint32_t row, std::uint3
     return Value::error(cell.error());
   }
   return cell.value().front();
+}
+
+std::string lookup_wildcard_key(std::string_view text, ExcelProfile profile) {
+  if (width_folding(profile) == WidthFolding::kMac) {
+    return fold_and_lower_per_code_point(text);
+  }
+  return strings::to_ascii_lower(text);
 }
 
 }  // namespace eval

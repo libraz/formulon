@@ -2,11 +2,11 @@
   "suite": "collation_functions",
   "description": "Mac Excel text collation through the worksheet functions: the 16 function columns (SORT, SORTBY, UNIQUE, MATCH 0/1, VLOOKUP FALSE/TRUE, HLOOKUP FALSE, XLOOKUP, XMATCH, COUNTIF, SUMIF, SWITCH, FILTER, GROUPBY, DCOUNTA) against 8 representative pairs, plus a pairwise selection of further pairs, directions and data positions on one function per strength and addition rule. Every probe resolves to a single scalar. Range-based functions use setup cells; no setup cell is empty.\n",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "it-IT",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-10T22:07:09Z"
+    "generated_at": "2026-11-03T08:53:48Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -2547,6 +2547,546 @@
       "expect": {
         "kind": "number",
         "value": 1.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_fw_latin",
+      "formula": "=IFERROR(MATCH(\"Ａ*\",{\"zz\";\"Ab\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_hw_kana",
+      "formula": "=IFERROR(MATCH(\"ｱ*\",{\"zz\";\"アb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_hw_voiced",
+      "formula": "=IFERROR(MATCH(\"ｶﾞ*\",{\"zz\";\"ガb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_hira_kata",
+      "formula": "=IFERROR(MATCH(\"あ*\",{\"zz\";\"アb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_fw_qmark",
+      "formula": "=IFERROR(MATCH(\"?Ｂ\",{\"zz\";\"aB\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_fw_digit",
+      "formula": "=IFERROR(MATCH(\"１*\",{\"zz\";\"1b\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_fw_latin",
+      "formula": "=IFERROR(VLOOKUP(\"Ａ*\",{\"zz\",1;\"Ab\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_hw_kana",
+      "formula": "=IFERROR(VLOOKUP(\"ｱ*\",{\"zz\",1;\"アb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_hw_voiced",
+      "formula": "=IFERROR(VLOOKUP(\"ｶﾞ*\",{\"zz\",1;\"ガb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_hira_kata",
+      "formula": "=IFERROR(VLOOKUP(\"あ*\",{\"zz\",1;\"アb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_fw_qmark",
+      "formula": "=IFERROR(VLOOKUP(\"?Ｂ\",{\"zz\",1;\"aB\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_fw_digit",
+      "formula": "=IFERROR(VLOOKUP(\"１*\",{\"zz\",1;\"1b\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_fw_latin",
+      "formula": "=IFERROR(HLOOKUP(\"Ａ*\",{\"zz\",\"Ab\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_hw_kana",
+      "formula": "=IFERROR(HLOOKUP(\"ｱ*\",{\"zz\",\"アb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_hw_voiced",
+      "formula": "=IFERROR(HLOOKUP(\"ｶﾞ*\",{\"zz\",\"ガb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_hira_kata",
+      "formula": "=IFERROR(HLOOKUP(\"あ*\",{\"zz\",\"アb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_fw_qmark",
+      "formula": "=IFERROR(HLOOKUP(\"?Ｂ\",{\"zz\",\"aB\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_fw_digit",
+      "formula": "=IFERROR(HLOOKUP(\"１*\",{\"zz\",\"1b\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_fw_latin",
+      "formula": "=IFERROR(XLOOKUP(\"Ａ*\",{\"zz\";\"Ab\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_hw_kana",
+      "formula": "=IFERROR(XLOOKUP(\"ｱ*\",{\"zz\";\"アb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_hw_voiced",
+      "formula": "=IFERROR(XLOOKUP(\"ｶﾞ*\",{\"zz\";\"ガb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_hira_kata",
+      "formula": "=IFERROR(XLOOKUP(\"あ*\",{\"zz\";\"アb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_fw_qmark",
+      "formula": "=IFERROR(XLOOKUP(\"?Ｂ\",{\"zz\";\"aB\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_fw_digit",
+      "formula": "=IFERROR(XLOOKUP(\"１*\",{\"zz\";\"1b\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_fw_latin",
+      "formula": "=IFERROR(XMATCH(\"Ａ*\",{\"zz\";\"Ab\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_hw_kana",
+      "formula": "=IFERROR(XMATCH(\"ｱ*\",{\"zz\";\"アb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_hw_voiced",
+      "formula": "=IFERROR(XMATCH(\"ｶﾞ*\",{\"zz\";\"ガb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_hira_kata",
+      "formula": "=IFERROR(XMATCH(\"あ*\",{\"zz\";\"アb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_fw_qmark",
+      "formula": "=IFERROR(XMATCH(\"?Ｂ\",{\"zz\";\"aB\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_fw_digit",
+      "formula": "=IFERROR(XMATCH(\"１*\",{\"zz\";\"1b\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_ascii_control",
+      "formula": "=IFERROR(MATCH(\"a*\",{\"zz\";\"AB\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_voiced_reverse",
+      "formula": "=IFERROR(MATCH(\"ガ*\",{\"zz\";\"ｶﾞb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_base_vs_voiced",
+      "formula": "=IFERROR(MATCH(\"ｶ*\",{\"zz\";\"ガb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_base_vs_hw_voiced",
+      "formula": "=IFERROR(MATCH(\"ｶ*\",{\"zz\";\"ｶﾞb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_qmark_voicing_mark",
+      "formula": "=IFERROR(MATCH(\"ｶ?b\",{\"zz\";\"ｶﾞb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_match0_hw_voiced_identical",
+      "formula": "=IFERROR(MATCH(\"ｶﾞ*\",{\"zz\";\"ｶﾞb\"},0),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_ascii_control",
+      "formula": "=IFERROR(VLOOKUP(\"a*\",{\"zz\",1;\"AB\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_voiced_reverse",
+      "formula": "=IFERROR(VLOOKUP(\"ガ*\",{\"zz\",1;\"ｶﾞb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_base_vs_voiced",
+      "formula": "=IFERROR(VLOOKUP(\"ｶ*\",{\"zz\",1;\"ガb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_base_vs_hw_voiced",
+      "formula": "=IFERROR(VLOOKUP(\"ｶ*\",{\"zz\",1;\"ｶﾞb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_qmark_voicing_mark",
+      "formula": "=IFERROR(VLOOKUP(\"ｶ?b\",{\"zz\",1;\"ｶﾞb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_vlookup_f_hw_voiced_identical",
+      "formula": "=IFERROR(VLOOKUP(\"ｶﾞ*\",{\"zz\",1;\"ｶﾞb\",2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_ascii_control",
+      "formula": "=IFERROR(HLOOKUP(\"a*\",{\"zz\",\"AB\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_voiced_reverse",
+      "formula": "=IFERROR(HLOOKUP(\"ガ*\",{\"zz\",\"ｶﾞb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_base_vs_voiced",
+      "formula": "=IFERROR(HLOOKUP(\"ｶ*\",{\"zz\",\"ガb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_base_vs_hw_voiced",
+      "formula": "=IFERROR(HLOOKUP(\"ｶ*\",{\"zz\",\"ｶﾞb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_qmark_voicing_mark",
+      "formula": "=IFERROR(HLOOKUP(\"ｶ?b\",{\"zz\",\"ｶﾞb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_hlookup_f_hw_voiced_identical",
+      "formula": "=IFERROR(HLOOKUP(\"ｶﾞ*\",{\"zz\",\"ｶﾞb\";1,2},2,FALSE),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_ascii_control",
+      "formula": "=IFERROR(XLOOKUP(\"a*\",{\"zz\";\"AB\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_voiced_reverse",
+      "formula": "=IFERROR(XLOOKUP(\"ガ*\",{\"zz\";\"ｶﾞb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_base_vs_voiced",
+      "formula": "=IFERROR(XLOOKUP(\"ｶ*\",{\"zz\";\"ガb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_base_vs_hw_voiced",
+      "formula": "=IFERROR(XLOOKUP(\"ｶ*\",{\"zz\";\"ｶﾞb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_qmark_voicing_mark",
+      "formula": "=IFERROR(XLOOKUP(\"ｶ?b\",{\"zz\";\"ｶﾞb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xlookup_hw_voiced_identical",
+      "formula": "=IFERROR(XLOOKUP(\"ｶﾞ*\",{\"zz\";\"ｶﾞb\"},{1;2},0,2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_ascii_control",
+      "formula": "=IFERROR(XMATCH(\"a*\",{\"zz\";\"AB\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_voiced_reverse",
+      "formula": "=IFERROR(XMATCH(\"ガ*\",{\"zz\";\"ｶﾞb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_base_vs_voiced",
+      "formula": "=IFERROR(XMATCH(\"ｶ*\",{\"zz\";\"ガb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_base_vs_hw_voiced",
+      "formula": "=IFERROR(XMATCH(\"ｶ*\",{\"zz\";\"ｶﾞb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_qmark_voicing_mark",
+      "formula": "=IFERROR(XMATCH(\"ｶ?b\",{\"zz\";\"ｶﾞb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "colfn_wc_xmatch_hw_voiced_identical",
+      "formula": "=IFERROR(XMATCH(\"ｶﾞ*\",{\"zz\";\"ｶﾞb\"},2),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
       }
     }
   ]

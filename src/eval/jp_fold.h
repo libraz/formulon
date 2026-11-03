@@ -73,6 +73,11 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits = tr
 /// digits stay unfolded), pass `true` for COUNTIF / SUMIF parity.
 std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits = false);
 
+/// `fold_and_lower` with full-width digits folded and no voicing-mark
+/// composition: every code point folds on its own, so `ｶﾞ` becomes `カ゛`
+/// (two characters), not `ガ`. Mac Excel's lookup-family wildcard match.
+std::string fold_and_lower_per_code_point(std::string_view input);
+
 /// Composes a half-width voicing mark (U+FF9E ﾞ / U+FF9F ﾟ) onto the
 /// preceding half-width katakana base, emitting the full-width voiced /
 /// semi-voiced katakana (`ｶﾞ` -> `ガ`, `ﾊﾟ` -> `パ`). Every other

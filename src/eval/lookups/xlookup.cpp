@@ -18,7 +18,6 @@
 #include "eval/collation.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
-#include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/lookups/binary_search.h"
 #include "eval/lookups/common.h"
@@ -27,10 +26,8 @@
 #include "eval/range_resolvers.h"
 #include "eval/regex_lazy.h"
 #include "eval/wildcard.h"
-#include "excel_locale.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
-#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -146,45 +143,6 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
   return true;
 }
 
-// Width-only fold for profiles without kana folding (zh-CN): full-width and
-// half-width variants compare equal, hiragana stays distinct from katakana.
-std::string fold_width_keep_hiragana(std::string_view s) {
-  std::string out;
-  out.reserve(s.size());
-  std::size_t run_start = 0;
-  std::size_t i = 0;
-  while (i < s.size()) {
-    // Hiragana U+3041..U+3096 is E3 81 81 .. E3 82 96.
-    const bool hiragana =
-        i + 2 < s.size() && static_cast<unsigned char>(s[i]) == 0xE3u &&
-        ((static_cast<unsigned char>(s[i + 1]) == 0x81u && static_cast<unsigned char>(s[i + 2]) >= 0x81u) ||
-         (static_cast<unsigned char>(s[i + 1]) == 0x82u && static_cast<unsigned char>(s[i + 2]) <= 0x96u));
-    if (!hiragana) {
-      ++i;
-      continue;
-    }
-    out += fold_jp_text(s.substr(run_start, i - run_start));
-    out.append(s.substr(i, 3));
-    i += 3;
-    run_start = i;
-  }
-  out += fold_jp_text(s.substr(run_start));
-  return out;
-}
-
-// Lower-cased comparison key of exact-match text under the profile's folding.
-std::string xlookup_exact_key(std::string_view text, ExcelProfile profile) {
-  switch (width_folding(profile)) {
-    case WidthFolding::kMac:
-      return fold_and_lower(text, /*fold_fullwidth_digits=*/true);
-    case WidthFolding::kNone:
-      return strings::to_ascii_lower_owned(fold_width_keep_hiragana(text));
-    case WidthFolding::kWin:
-      break;
-  }
-  return strings::to_ascii_lower_owned(compose_jp_halfwidth_voicing(text));
-}
-
 // Exact-equality test with optional DOS-style wildcard expansion on Text vs
 // Text pairs. For non-text / cross-type kinds this is a literal equality
 // compare with the same "Blank acts as numeric 0" rule VLOOKUP / HLOOKUP use
@@ -209,7 +167,7 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
     if (!scan_has_wildcard(raw)) {
       return collate(cell.as_text(), unescape_wildcard_literal(raw), profile, CollationStrength::kDynamic) == 0;
     }
-    return wildcard_match(xlookup_exact_key(raw, profile), xlookup_exact_key(cell.as_text(), profile));
+    return wildcard_match(lookup_wildcard_key(raw, profile), lookup_wildcard_key(cell.as_text(), profile));
   }
   if (lookup.is_number() || lookup.is_blank()) {
     const double target = lookup.is_blank() ? 0.0 : lookup.as_number();
@@ -238,7 +196,7 @@ struct PreparedWildcardQuery {
 
 PreparedWildcardQuery prepare_wildcard_query(std::string_view raw, ExcelProfile profile) {
   if (scan_has_wildcard(raw)) {
-    return PreparedWildcardQuery{true, xlookup_exact_key(raw, profile)};
+    return PreparedWildcardQuery{true, lookup_wildcard_key(raw, profile)};
   }
   return PreparedWildcardQuery{false, unescape_wildcard_literal(raw)};
 }
@@ -248,7 +206,7 @@ bool prepared_wildcard_eq(const Value& cell, const PreparedWildcardQuery& query,
     return false;
   }
   if (query.has_pattern) {
-    return wildcard_match(query.prepared, xlookup_exact_key(cell.as_text(), profile));
+    return wildcard_match(query.prepared, lookup_wildcard_key(cell.as_text(), profile));
   }
   return collate(cell.as_text(), query.prepared, profile, CollationStrength::kDynamic) == 0;
 }
