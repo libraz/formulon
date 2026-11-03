@@ -196,13 +196,13 @@ constexpr std::string_view kXmNs = "http://schemas.microsoft.com/office/excel/20
 /// mirrors `DataBarSpec::axis_color`'s in-class initializer.
 constexpr cf::Color kDefaultAxisColor{0, 0, 0, 255};
 
-/// True when `d` carries at least one setting the legacy `<dataBar>`
-/// element has no attribute for, so the rule needs an x14 counterpart to
-/// survive a save. False for a plain bar, which keeps a legacy-only file
-/// legacy-only across a round trip.
+/// True when `d` renders differently from a legacy `<dataBar>` (no axis,
+/// one fill colour, gradient), so the rule needs an x14 counterpart to
+/// survive a save. False for a legacy-shaped bar, which keeps a
+/// legacy-only file legacy-only across a round trip.
 bool NeedsX14DataBarPayload(const cf::DataBarSpec& d) {
   return d.border.has_value() || d.negative_border.has_value() || d.negative_fill != d.fill ||
-         d.axis_position != cf::DataBarAxisPosition::Automatic || !d.gradient || d.axis_color != kDefaultAxisColor ||
+         d.axis_position != cf::DataBarAxisPosition::None || !d.gradient || d.axis_color != kDefaultAxisColor ||
          d.direction != cf::DataBarDirection::Context;
 }
 

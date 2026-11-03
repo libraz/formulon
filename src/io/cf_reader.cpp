@@ -257,6 +257,10 @@ void ReadColorScale(const pugi::xml_node& scale, cf::ColorScaleSpec* out) {
 }
 
 void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
+  // Excel draws a bar without an x14 counterpart with no axis: every bar,
+  // negative ones included, grows from the left edge. `ApplyX14DataBarOverlay`
+  // replaces this with the extension's own axis setting.
+  out->axis_position = cf::DataBarAxisPosition::None;
   std::size_t color_idx = 0;
   std::size_t cfvo_idx = 0;
   for (pugi::xml_node child = bar.first_child(); child; child = child.next_sibling()) {
@@ -270,9 +274,7 @@ void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
       ++cfvo_idx;
     } else if (name == "color") {
       // Legacy `<dataBar>` (pre-2010) carries one `<color>` element used
-      // as the positive fill. Negative fill, axis colour/position and
-      // gradient live only in the 2010+ `<x14:dataBar>` extension, which
-      // `ApplyX14DataBarOverlay` folds on top of this.
+      // as the positive fill for every bar, negative ones included.
       if (color_idx == 0) {
         out->fill = ReadColor(child);
         out->negative_fill = out->fill;
@@ -305,8 +307,8 @@ void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
 /// The x14 extension is the only place negative-fill / negative-border /
 /// axis colour+position / gradient-vs-solid are expressed; the legacy
 /// schema has no attributes for them, so the pre-overlay `DataBarSpec`
-/// carries only fallback values (`negative_fill == fill`,
-/// `axis_position == Automatic`, `gradient == true`).
+/// carries only the pre-2010 rendering (`negative_fill == fill`,
+/// `axis_position == None`, `gradient == true`).
 void ApplyX14DataBarOverlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out) {
   if (const pugi::xml_attribute gradient = x14_bar.attribute("gradient"); gradient) {
     out->gradient = parse_xml_bool_attr(gradient);

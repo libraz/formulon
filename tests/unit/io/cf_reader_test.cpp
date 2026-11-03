@@ -365,6 +365,45 @@ TEST(CFReader, X14RuleIdDecodesOoxmlTextEscapesBeforeOverlayLookup) {
 // (re-saving strips the attribute and drops the orphaned overlay), so
 // this is a compatibility path, not the one real input takes -- which is
 // why the test above deliberately uses the nested form instead.
+TEST(CFReader, DataBarX14OverlayWithoutAxisAttributeIsAutomatic) {
+  // The legacy element alone means no axis; an x14 counterpart that omits
+  // `axisPosition` states the schema default instead.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="C1:C10">
+        <cfRule type="dataBar" priority="1">
+          <dataBar>
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+          <extLst>
+            <ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}"><x14:id>{DA7ABA51-AAAA-BBBB-0001-00000000000A}</x14:id></ext>
+          </extLst>
+        </cfRule>
+      </conditionalFormatting>
+      <extLst>
+        <ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}">
+          <x14:conditionalFormattings>
+            <x14:conditionalFormatting>
+              <x14:cfRule type="dataBar" id="{DA7ABA51-AAAA-BBBB-0001-00000000000A}">
+                <x14:dataBar minLength="0" maxLength="100">
+                  <x14:cfvo type="autoMin"/>
+                  <x14:cfvo type="autoMax"/>
+                </x14:dataBar>
+              </x14:cfRule>
+            </x14:conditionalFormatting>
+          </x14:conditionalFormattings>
+        </ext>
+      </extLst>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.data_bar.has_value());
+  EXPECT_EQ(r.data_bar->axis_position, cf::DataBarAxisPosition::Automatic);
+}
+
 TEST(CFReader, DataBarX14OverlayAcceptsLegacyIdAttributeAsFallback) {
   pugi::xml_document doc = Load(R"(
     <worksheet>
@@ -482,8 +521,8 @@ TEST(CFReader, DataBarX14OverlayNegativeSameAsPositiveOverridesExplicitColor) {
 }
 
 TEST(CFReader, DataBarWithoutX14OverlayKeepsLegacyDefaults) {
-  // A pre-2010 (or overlay-less) `<dataBar>` has no way to express
-  // negative fill / axis position; the reader must not invent one.
+  // A pre-2010 (or overlay-less) `<dataBar>` renders the way Excel 2007
+  // drew it: one fill colour and no axis.
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting sqref="C1:C10">
@@ -501,7 +540,7 @@ TEST(CFReader, DataBarWithoutX14OverlayKeepsLegacyDefaults) {
   const auto& r = cfs.value()[0].rules[0];
   ASSERT_TRUE(r.data_bar.has_value());
   EXPECT_EQ(r.data_bar->negative_fill, r.data_bar->fill);
-  EXPECT_EQ(r.data_bar->axis_position, cf::DataBarAxisPosition::Automatic);
+  EXPECT_EQ(r.data_bar->axis_position, cf::DataBarAxisPosition::None);
   EXPECT_TRUE(r.data_bar->gradient);
 }
 

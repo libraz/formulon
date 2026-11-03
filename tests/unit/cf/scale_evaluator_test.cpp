@@ -629,6 +629,33 @@ TEST(CFEvaluator, DataBarNoneAxisIsZero) {
   EXPECT_DOUBLE_EQ(match.data_bar_render->axis_position_pct, 0.0);
 }
 
+TEST(CFEvaluator, DataBarNoneAxisMapsMixedSignDataAcrossTheWholeSpan) {
+  // No axis: every bar grows from the left edge, and the minimum (a
+  // negative value) gets the shortest bar rather than one leftward of an axis.
+  CFEvalHarness harness;
+  const double values[] = {-50.0, -10.0, 0.0, 30.0, 100.0};
+  for (std::uint32_t i = 0; i < 5; ++i) {
+    harness.sheet.set_cell_value(i, 0, Value::number(values[i]));
+  }
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max), RGB(0, 0, 255), DataBarAxisPosition::None);
+  r.data_bar->min_length_pct = 10;
+  r.data_bar->max_length_pct = 90;
+  const auto ctx = SqrefContext(harness, sqref);
+
+  const CFMatch lowest = make_match(r, Value::number(-50.0), ctx);
+  ASSERT_TRUE(lowest.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(lowest.data_bar_render->axis_position_pct, 0.0);
+  EXPECT_DOUBLE_EQ(lowest.data_bar_render->length_pct, 10.0);
+  const CFMatch zero = make_match(r, Value::number(0.0), ctx);
+  ASSERT_TRUE(zero.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(zero.data_bar_render->length_pct, 10.0 + 80.0 * 50.0 / 150.0);
+  const CFMatch highest = make_match(r, Value::number(100.0), ctx);
+  ASSERT_TRUE(highest.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(highest.data_bar_render->length_pct, 90.0);
+}
+
 TEST(CFEvaluator, DataBarSelectsNegativeFillForNegativeValues) {
   CFEvalHarness harness;
   harness.sheet.set_cell_value(0, 0, Value::number(-30.0));

@@ -476,6 +476,38 @@ TEST(XlsbFeatureRecords, X14DataBarsFromAnXlsxSourceAreWritten) {
   EXPECT_EQ(DescribeCf(ReadXlsbBytes(written.value()).sheet(0)), DescribeCf(from_xlsx.sheet(0)));
 }
 
+// A bar without an x14 half has no axis; an automatic axis needs that half
+// to survive, so it gets one written.
+TEST(XlsbFeatureRecords, DataBarAxisFollowsTheX14Half) {
+  Workbook wb = Workbook::create();
+  cf::ConditionalFormat format;
+  format.sqref.push_back({{0, 0}, {4, 0}});
+  for (const cf::DataBarAxisPosition axis : {cf::DataBarAxisPosition::None, cf::DataBarAxisPosition::Automatic}) {
+    cf::CFRule rule;
+    rule.type = cf::RuleType::DataBar;
+    rule.priority = static_cast<std::int32_t>(format.rules.size()) + 1;
+    rule.id = axis == cf::DataBarAxisPosition::None ? "{FC000000-0000-0000-0000-000000000011}"
+                                                    : "{FC000000-0000-0000-0000-000000000012}";
+    cf::DataBarSpec bar;
+    bar.min = {cf::CfvoType::Min, "", true};
+    bar.max = {cf::CfvoType::Max, "", true};
+    bar.fill = cf::Color{0x63, 0xBE, 0x7B, 255};
+    bar.negative_fill = bar.fill;
+    bar.axis_position = axis;
+    rule.data_bar = bar;
+    format.rules.push_back(std::move(rule));
+  }
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(format));
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  EXPECT_EQ(CountRecords(written.value(), "xl/worksheets/sheet1.bin", 1048), 1U);
+  const Workbook back = ReadXlsbBytes(written.value());
+  const std::vector<cf::CFRule>& rules = back.sheet(0).conditional_formats().at(0).rules;
+  ASSERT_EQ(rules.size(), 2U);
+  EXPECT_EQ(rules[0].data_bar->axis_position, cf::DataBarAxisPosition::None);
+  EXPECT_EQ(rules[1].data_bar->axis_position, cf::DataBarAxisPosition::Automatic);
+}
+
 TEST(XlsbFeatureRecords, EditedX14DataBarsReachASavedXlsx) {
   Workbook wb = ReadXlsx("x14bars");
   cf::DataBarSpec& bar = *wb.sheet(0).mutable_conditional_formats()[0].rules[0].data_bar;

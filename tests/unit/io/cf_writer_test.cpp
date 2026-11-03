@@ -637,10 +637,9 @@ TEST(CFWriter, DataBarExtensionIsReachedThroughTheNestedIdNotAnAttribute) {
   EXPECT_EQ(legacy.find("<cfRule type=\"dataBar\" priority=\"1\" id="), std::string::npos) << legacy;
 }
 
-TEST(CFWriter, PlainDataBarProducesNoExtensionContent) {
-  // A bar expressible in the legacy element alone must not grow an x14
-  // overlay: a file that never had one would gain extension bytes on
-  // every save.
+/// One-rule data-bar block with an id, in the shape the legacy element can
+/// hold (no axis, one fill colour) until the caller changes it.
+cf::ConditionalFormat LegacyShapedDataBar() {
   cf::ConditionalFormat cf{};
   cf.sqref.push_back({{0, 0}, {9, 0}});
   cf::CFRule r;
@@ -651,11 +650,31 @@ TEST(CFWriter, PlainDataBarProducesNoExtensionContent) {
   d.max = {cf::CfvoType::Max, "", true};
   d.fill = {0x63, 0x8E, 0xC6, 255};
   d.negative_fill = d.fill;
+  d.axis_position = cf::DataBarAxisPosition::None;
   r.data_bar = std::move(d);
   cf.rules.push_back(std::move(r));
+  return cf;
+}
 
+TEST(CFWriter, PlainDataBarProducesNoExtensionContent) {
+  // A bar expressible in the legacy element alone must not grow an x14
+  // overlay: a file that never had one would gain extension bytes on
+  // every save.
+  const cf::ConditionalFormat cf = LegacyShapedDataBar();
   EXPECT_TRUE(build_x14_cf_overlay_entries({cf}).empty());
   EXPECT_EQ(write_conditional_formattings({cf}, kDxfCount).find("x14:id"), std::string::npos);
+  EXPECT_EQ(RoundTrip({cf})[0].rules[0].data_bar->axis_position, cf::DataBarAxisPosition::None);
+}
+
+TEST(CFWriter, AutomaticAxisDataBarNeedsTheExtension) {
+  // The legacy element draws no axis, so an automatic axis survives a save
+  // only through the x14 counterpart, which states it by omitting the attribute.
+  cf::ConditionalFormat cf = LegacyShapedDataBar();
+  cf.rules[0].data_bar->axis_position = cf::DataBarAxisPosition::Automatic;
+  const std::string entries = build_x14_cf_overlay_entries({cf});
+  ASSERT_NE(entries.find("<x14:dataBar"), std::string::npos) << entries;
+  EXPECT_EQ(entries.find("axisPosition"), std::string::npos) << entries;
+  EXPECT_NE(write_conditional_formattings({cf}, kDxfCount).find("x14:id"), std::string::npos);
 }
 
 TEST(CFWriter, EditedModelRewritesTheLoadedOverlayAndKeepsWhatItDoesNotModel) {

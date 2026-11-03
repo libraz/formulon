@@ -350,6 +350,8 @@ bool DecodeRuleBody(BlockCursor& blocks, cf::CFRule& rule, const MergeRange& bas
         spec.max = std::move(*hi);
         spec.fill = *fill;
         spec.negative_fill = *fill;
+        // A bar without a BrtCFRuleExt counterpart has no axis, as in the xlsx reader.
+        spec.axis_position = cf::DataBarAxisPosition::None;
         rule.data_bar = std::move(spec);
         visual = true;
         break;
