@@ -545,6 +545,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::LocalizeFunctionName, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x3ULL>("localizeFunctionName"),
           GuardedInstanceMethod<&Workbook::MemoryUsage>("memoryUsage"),
           GuardedInstanceMethod<&Workbook::MoveSheet, 0x3ULL>("moveSheet"),
+          GuardedInstanceMethod<&Workbook::CopySheet, 0x3ULL>("copySheet"),
           GuardedInstanceMethod<&Workbook::PartialRecalc, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("partialRecalc"),
           GuardedInstanceMethod<&Workbook::Paginate, 0x1ULL>("paginate"),
           GuardedInstanceMethod<&Workbook::GetSheetPageSetupXml, 0x1ULL>("getSheetPageSetupXml"),

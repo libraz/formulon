@@ -489,6 +489,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_cell_count",
     "fm_workbook_cf_evaluate_range",
     "fm_workbook_clear_pinned_now",
+    "fm_workbook_copy_sheet",
     "fm_workbook_create",
     "fm_workbook_create_empty",
     "fm_workbook_create_for_profile",

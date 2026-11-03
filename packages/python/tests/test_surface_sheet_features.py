@@ -29,6 +29,27 @@ class SheetStructureTests(unittest.TestCase):
             wb.remove_sheet(0)
             self.assertEqual(wb.sheet_count(), 2)
 
+    def test_copy_sheet(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_number(0, 0, 0, 5.0)
+            wb.set_formula(0, 0, 1, "=A1*2")
+            self.assertEqual(wb.copy_sheet(0, 1), 1)
+            self.assertEqual(wb.sheet_name(1), "Sheet1 (2)")
+            self.assertEqual(wb.copy_sheet(0, 0, "Archive"), 0)
+            self.assertEqual(wb.sheet_name(0), "Archive")
+            self.assertEqual(wb.sheet_count(), 3)
+            wb.recalc()
+            self.assertEqual(wb.get_value(0, 0, 1).number, 10.0)
+            with self.assertRaises(FormulonError):
+                wb.copy_sheet(3, 0)
+            with self.assertRaises(FormulonError):
+                wb.copy_sheet(0, 4)
+            with self.assertRaises(FormulonError):
+                wb.copy_sheet(0, 0, "")
+            with self.assertRaises(FormulonError):
+                wb.copy_sheet(0, 0, "ARCHIVE")
+            self.assertEqual(wb.sheet_count(), 3)
+
 
 class MatrixEditTests(unittest.TestCase):
     def test_insert_row_shifts_value_down(self) -> None:

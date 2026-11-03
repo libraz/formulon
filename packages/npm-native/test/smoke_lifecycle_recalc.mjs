@@ -233,3 +233,25 @@ test('Workbook factories return instances of the exported Workbook class', async
   assert.ok(defaultBook instanceof mod.Workbook);
   assert.ok(emptyBook instanceof mod.Workbook);
 });
+
+test('copySheet names the copy automatically or explicitly and reports bad arguments', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setNumber(0, 0, 0, 5).ok);
+  assert.ok(wb.setFormula(0, 0, 1, '=A1*2').ok);
+  const auto = wb.copySheet(0, 1);
+  assert.ok(auto.status.ok, JSON.stringify(auto.status));
+  assert.equal(auto.index, 1);
+  assert.equal(wb.sheetName(1).value, 'Sheet1 (2)');
+  const named = wb.copySheet(0, 0, 'Archive');
+  assert.ok(named.status.ok, JSON.stringify(named.status));
+  assert.equal(named.index, 0);
+  assert.equal(wb.sheetName(0).value, 'Archive');
+  assert.ok(wb.recalc().ok);
+  assert.equal(wb.getValue(0, 0, 1).value.number, 10);
+  assert.equal(wb.copySheet(9, 0).status.status, 5050);
+  assert.equal(wb.copySheet(0, 9).status.status, 5050);
+  assert.equal(wb.copySheet(0, 0, '').status.status, 5051);
+  assert.equal(wb.sheetCount().value, 3);
+  wb.dispose();
+});

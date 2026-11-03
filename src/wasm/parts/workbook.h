@@ -63,6 +63,7 @@ class JsWorkbook {
 
   JsStatus addSheet(const std::string& name);
   JsStatus moveSheet(uint32_t fromIdx, uint32_t toIdx);
+  JsAddStyleResult copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName);
   JsStatus removeSheet(uint32_t index);
   JsStatus renameSheet(uint32_t index, const std::string& newName);
 

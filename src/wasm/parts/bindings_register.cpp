@@ -403,6 +403,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("localizeFormula", &JsWorkbook::localizeFormula)
       .function("localizeFunctionName", &JsWorkbook::localizeFunctionName)
       .function("moveSheet", &JsWorkbook::moveSheet)
+      .function("copySheet", &JsWorkbook::copySheet)
       .function("partialRecalc", &JsWorkbook::partialRecalc)
       .function("paginate", &JsWorkbook::paginate)
       .function("passthroughAt", &JsWorkbook::passthroughAt)

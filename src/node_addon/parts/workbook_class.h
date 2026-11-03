@@ -155,6 +155,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Sheet operations.
   Napi::Value AddSheet(const Napi::CallbackInfo& info);
   Napi::Value RemoveSheet(const Napi::CallbackInfo& info);
+  Napi::Value CopySheet(const Napi::CallbackInfo& info);
   Napi::Value RenameSheet(const Napi::CallbackInfo& info);
   Napi::Value MoveSheet(const Napi::CallbackInfo& info);
   Napi::Value SheetCount(const Napi::CallbackInfo& info);

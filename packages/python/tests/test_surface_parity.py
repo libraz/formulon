@@ -15,6 +15,7 @@ class SurfaceParityTests(unittest.TestCase):
 
     METHODS = [
         "move_sheet",
+        "copy_sheet",
         "remove_sheet",
         "rename_sheet",
         "set_defined_name",

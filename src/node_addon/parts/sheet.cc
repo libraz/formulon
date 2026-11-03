@@ -37,6 +37,26 @@ Napi::Value Workbook::MoveSheet(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_workbook_move_sheet);
 }
 
+Napi::Value Workbook::CopySheet(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeIndexResult(env, NullHandleError(env), 0);
+  }
+  std::string name;
+  const bool has_name = info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull();
+  if (has_name) {
+    if (!info[2].IsString()) {
+      Napi::TypeError::New(env, "positional argument must be a string").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    name = ArgString(info, 2);
+  }
+  uint32_t out = 0;
+  const fm_status_t rc =
+      fm_workbook_copy_sheet(handle_, ArgU32(info, 0), ArgU32(info, 1), has_name ? name.c_str() : nullptr, &out);
+  return MakeIndexResult(env, rc, out);
+}
+
 // `Workbook::SheetCount` is now emitted by the binding codegen (see
 // `src/node_addon/generated/workbook_counts.cc`).
 

@@ -3634,6 +3634,14 @@ export interface Workbook {
   renameSheet(index: number, newName: string): Status;
   /** Moves the sheet from `fromIdx` to `toIdx` (post-removal index). */
   moveSheet(fromIdx: number, toIdx: number): Status;
+  /** Copies the worksheet at `sourceIndex` into the workbook before the sheet now at `insertBefore`
+   *  (`sheetCount()` appends) and returns `{ status, index }` with the copy's index. Without `newName` the copy
+   *  is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source
+   *  sheet are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
+   *  `kSheetIndexOutOfRange`, `kInvalidSheetName`, `kSheetCountLimitExceeded`, `kPreconditionFailed` (very
+   *  hidden source) or `kNotImplemented` (slicers, shapes, pivot charts and other content the copy cannot
+   *  model); the workbook is unchanged on failure. */
+  copySheet(sourceIndex: number, insertBefore: number, newName?: string): AddStyleResult;
   /** Number of sheets. */
   sheetCount(): NumberResult;
   /** Display name of the sheet at `idx`; `kInvalidArgument` when `idx` is out of range. */

@@ -5591,6 +5591,30 @@ class Workbook:
             "fm_workbook_move_sheet",
         )
 
+    def copy_sheet(self, source: int, insert_before: int, new_name: Optional[str] = None) -> int:
+        """Copy the worksheet at ``source`` and return the copy's index.
+
+        The copy goes before the sheet now at ``insert_before`` (``sheet_count``
+        appends). Without ``new_name`` it is named as Excel does (``Src (2)``);
+        an explicit name follows the :meth:`add_sheet` rules. The active sheet
+        does not change.
+
+        Raises:
+          FormulonError: ``kSheetIndexOutOfRange``, ``kInvalidSheetName``,
+            ``kSheetCountLimitExceeded``, ``kPreconditionFailed`` (very hidden
+            source) or ``kNotImplemented`` (content the copy cannot model).
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = 0 if new_name is None else scope.cstr(new_name)
+            return _read_count(
+                LIB.fm_workbook_copy_sheet,
+                h,
+                _uint(source, "source"),
+                _uint(insert_before, "insert_before"),
+                name_ptr,
+            )
+
     def remove_sheet(self, index: int) -> None:
         """Remove the sheet at ``index``.
 

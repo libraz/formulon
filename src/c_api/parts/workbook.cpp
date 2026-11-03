@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -309,6 +310,30 @@ extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_i
   // The enumeration cache is keyed by sheet index. Moving sheets can put a
   // different Sheet at a cached index with the same cell revision.
   wb->clear_cell_enumeration_cache();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, uint32_t source_index, uint32_t insert_before,
+                                              const char* new_name, uint32_t* out_index) {
+  clear_last_error();
+  if (wb == nullptr || out_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_copy_sheet: NULL argument");
+  }
+  std::optional<std::string> name;
+  if (new_name != nullptr) {
+    if (auto rc = check_utf8("fm_workbook_copy_sheet", {new_name}); rc != 0) {
+      return rc;
+    }
+    name = std::string(new_name);
+  }
+  auto r = wb->workbook().copy_sheet(source_index, insert_before, std::move(name));
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  // The enumeration cache is keyed by sheet index; inserting a sheet shifts
+  // every later index.
+  wb->clear_cell_enumeration_cache();
+  *out_index = static_cast<uint32_t>(r.value());
   return 0;
 }
 

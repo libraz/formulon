@@ -31,6 +31,7 @@ fm_workbook_sheet_count
 fm_workbook_sheet_name
 fm_workbook_add_sheet
 fm_workbook_move_sheet
+fm_workbook_copy_sheet
 fm_workbook_get_active_sheet
 fm_workbook_set_active_sheet
 fm_workbook_remove_sheet

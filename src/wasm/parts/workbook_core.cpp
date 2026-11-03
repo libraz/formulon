@@ -298,6 +298,23 @@ JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
   return status_from_rc(fm_workbook_move_sheet(handle_, fromIdx, toIdx));
 }
 
+JsAddStyleResult JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName) {
+  JsAddStyleResult r;
+  if (handle_ == nullptr) {
+    r.status = invalid_handle_status();
+    return r;
+  }
+  std::string name;
+  const bool has_name = js_value_present(newName);
+  if (has_name) {
+    name = newName.as<std::string>();
+  }
+  uint32_t out = 0;
+  const fm_status_t rc =
+      fm_workbook_copy_sheet(handle_, sourceIndex, insertBefore, has_name ? name.c_str() : nullptr, &out);
+  return index_result(rc, out);
+}
+
 JsAddStyleResult JsWorkbook::activeSheet() const {
   JsAddStyleResult r;
   if (handle_ == nullptr) {

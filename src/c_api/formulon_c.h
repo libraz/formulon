@@ -605,6 +605,42 @@ FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_nam
 FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index, uint32_t to_index);
 
 /**
+ * @brief Copies the worksheet at `source_index` into the workbook.
+ *
+ * The copy is placed before the sheet now at `insert_before` (`sheet_count`
+ * appends) and its index is written to `*out_index`. References qualified
+ * with the source sheet are re-pointed at the copy; tables are renamed and
+ * rebound; sheet-scoped names, and workbook names referring to the source,
+ * gain a copy scoped to the new sheet; pivot tables share the source's cache.
+ * The active sheet and the tab selection do not change. See
+ * `Workbook::copy_sheet` for the full contract. On any failure the workbook is
+ * left unchanged.
+ *
+ * @param wb            Workbook handle. Must be non-NULL.
+ * @param source_index  0-based index of the sheet to copy.
+ * @param insert_before 0-based index of the sheet the copy goes before;
+ *                      `sheet_count` appends.
+ * @param new_name      Strict UTF-8 display name validated like
+ *                      `fm_workbook_add_sheet`, or `NULL` to name the copy as
+ *                      Excel does (`Src (2)`).
+ * @param out_index     Receives the copy's index. Must be non-NULL.
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`;
+ *         `kBindingUtf8EncodingError` when `new_name` is malformed UTF-8;
+ *         `kSheetIndexOutOfRange` when `source_index >= sheet_count` or
+ *         `insert_before > sheet_count`;
+ *         `kInvalidSheetName` when `new_name` is empty, too long, contains a
+ *         forbidden character or collides with an existing sheet;
+ *         `kSheetCountLimitExceeded` when the workbook is full;
+ *         `kPreconditionFailed` when the source is very hidden;
+ *         `kNotImplemented` when the source is not a worksheet or carries
+ *         content the copy cannot model (unrecognised relationships, slicers,
+ *         shapes, pivot charts, or a drawing retained from an `.xlsb`).
+ */
+FM_API fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, uint32_t source_index, uint32_t insert_before,
+                                          const char* new_name, uint32_t* out_index);
+
+/**
  * @brief Reads the active sheet: the first `<workbookView>`'s `activeTab`.
  *
  * A workbook with no `<bookViews>` (an XLSB load included) reports its first
