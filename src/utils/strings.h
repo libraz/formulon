@@ -60,7 +60,6 @@ inline std::string_view rtrim_spaces(std::string_view input) noexcept {
   return last == std::string_view::npos ? std::string_view() : input.substr(0, last + 1);
 }
 
-/// Returns the ASCII lowercase form of `c`, or `c` unchanged for non-letters.
 /// Value of an ASCII hexadecimal digit (either case), or -1 for any other byte.
 constexpr int hex_digit_value(char c) noexcept {
   if (c >= '0' && c <= '9') {
@@ -75,6 +74,7 @@ constexpr int hex_digit_value(char c) noexcept {
   return -1;
 }
 
+/// Returns the ASCII lowercase form of `c`, or `c` unchanged for non-letters.
 constexpr char ascii_to_lower(char c) noexcept {
   return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
 }
