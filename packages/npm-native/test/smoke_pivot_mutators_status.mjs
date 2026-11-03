@@ -789,6 +789,7 @@ const STATUS_ACCESSORS = [
   ['canonicalizeFunctionName', ['SUM', 'win-365-en_US'], ['NOPE_XYZ', 'win-365-en_US']],
   ['pinnedNow', [], null],
   ['spillInfo', [0, 0, 0], [99, 0, 0]],
+  ['getArrayFormula', [0, 0, 0], [99, 0, 0]],
   ['getColumnWidthPt', [0, 0, 0], [99, 0, 0]],
   ['getRowHeightPt', [0, 0], [99, 0]],
   ['columnCharsToPt', [0, 0, 8], [99, 0, 8]],
@@ -803,6 +804,7 @@ function assertFailurePayload(name, r) {
   if (Array.isArray(r)) assert.equal(r.length, 0, name);
   else if ('now' in r) assert.equal(r.now, null, name);
   else if ('engaged' in r) assert.equal(r.engaged, false, name);
+  else if ('arrayFormula' in r) assert.equal(r.arrayFormula, null, name);
   else if (typeof r.value === 'string') assert.equal(r.value, '', name);
   else assert.equal(r.value, 0, name);
 }

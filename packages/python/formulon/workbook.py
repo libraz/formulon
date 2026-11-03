@@ -191,6 +191,7 @@ __all__ = [
     "SparklineGroup",
     "SparklineType",
     "SpillInfo",
+    "ArrayFormula",
     "EffectiveStyleSource",
     "Table",
     "Theme",
@@ -2521,6 +2522,15 @@ class SpillInfo:
     anchor_col: int
     rows: int
     cols: int
+
+
+@dataclass(frozen=True)
+class ArrayFormula:
+    """A legacy array (CSE) formula: the block it fills and its stored text."""
+
+    #: The block's inclusive rectangle; its top-left cell holds the formula.
+    ref: MergeRange
+    formula: str
 
 
 @dataclass(frozen=True)
@@ -11590,6 +11600,56 @@ class Workbook:
                 rows=d["rows"],
                 cols=d["cols"],
             )
+
+    # -- Legacy array (CSE) formulas ---------------------------------------
+    def get_array_formula(self, sheet: int, row: int, col: int) -> Optional[ArrayFormula]:
+        """Return the legacy array formula covering ``(row, col)``, or ``None``.
+
+        Every cell of the block reports the same :class:`ArrayFormula`.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.ARRAY_FORMULA)
+            _check(
+                LIB.fm_workbook_get_array_formula(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr),
+                "fm_workbook_get_array_formula",
+            )
+            d = S.ARRAY_FORMULA.unpack(LIB, ptr)
+            if not d["engaged"]:
+                return None
+            return ArrayFormula(
+                ref=MergeRange(
+                    first_row=d["anchor_row"],
+                    first_col=d["anchor_col"],
+                    last_row=d["anchor_row"] + d["rows"] - 1,
+                    last_col=d["anchor_col"] + d["cols"] - 1,
+                ),
+                formula=LIB.read_cstr(d["formula"]),
+            )
+
+    def set_array_formula(self, sheet: int, row: int, col: int, rows: int, cols: int, formula: str) -> None:
+        """Enter ``formula`` as one legacy array formula over ``rows`` x ``cols`` cells.
+
+        ``(row, col)`` is the block's top-left cell; all coordinates are
+        0-based. Every cell of the rectangle loses its value and formula, and
+        the next :meth:`recalc` distributes the result. Refused when the
+        rectangle partially overlaps another array, or intersects a merged
+        area, a data table, a PivotTable or (for more than one cell) a table.
+        Writing to the top-left cell of a block replaces the whole block.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            formula_ptr = scope.cstr(formula)
+            status = LIB.fm_workbook_set_array_formula(
+                h,
+                _uint(sheet, "sheet"),
+                _uint(row, "row"),
+                _uint(col, "col"),
+                _uint(rows, "rows"),
+                _uint(cols, "cols"),
+                formula_ptr,
+            )
+            _check(status, "fm_workbook_set_array_formula")
 
     # -- Function catalog (workbook-independent) ---------------------------
     @staticmethod

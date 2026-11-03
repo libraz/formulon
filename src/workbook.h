@@ -373,6 +373,44 @@ class Workbook {
   Expected<void, Error> set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                          std::string formula, FormulaSource source = FormulaSource::kEntered);
 
+  /// The legacy array formula (CSE block) that `(row, col)` belongs to.
+  struct ArrayFormulaInfo {
+    /// Top-left cell of the block, which holds the formula.
+    std::uint32_t anchor_row = 0;
+    std::uint32_t anchor_col = 0;
+    /// Extent of the block in cells.
+    std::uint32_t rows = 0;
+    std::uint32_t cols = 0;
+    /// The anchor's stored formula text, as `Sheet::read_formula_cell` returns it.
+    std::string formula;
+  };
+
+  /// The legacy array formula covering `(row, col)`, identical for every cell
+  /// of the block, or `nullopt` when the cell is outside any block, the sheet
+  /// does not exist or the coordinate is outside the grid. A dynamic-array
+  /// spill is not a legacy array formula.
+  std::optional<ArrayFormulaInfo> array_formula_at(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) const;
+
+  /// Enters `formula` as one legacy array formula over the `rows` x `cols`
+  /// rectangle whose top-left cell is `(row, col)`, as Ctrl+Shift+Enter does.
+  /// A 1 x 1 rectangle is allowed. Every cell of the rectangle loses its value
+  /// and formula (styles are kept); the anchor takes the formula, marked as a
+  /// block of that extent and not as a dynamic array, and the next recalc
+  /// distributes the result, filling `#N/A` where a smaller result cannot
+  /// reach. A write to the anchor replaces the whole block, which is how a
+  /// block is cleared.
+  ///
+  /// Returns `kInvalidArgument` for a missing sheet, a zero extent, or a
+  /// rectangle outside the grid or larger than a spill may be. Returns
+  /// `kPreconditionFailed`, changing nothing, when the rectangle partially
+  /// overlaps another array block (one wholly inside it is replaced),
+  /// intersects a merged area, a data table's result range or a PivotTable,
+  /// or, for more than one cell, a table. A formula that does not parse is
+  /// stored as `set_cell_formula` stores it.
+  Expected<void, Error> set_array_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                          std::uint32_t rows, std::uint32_t cols, std::string formula,
+                                          FormulaSource source = FormulaSource::kEntered);
+
   /// Formula-bar spelling of formula text as the model stores it, for cells,
   /// defined names, conditional formats and data validations alike: Excel's
   /// `_xlfn.` / `_xlws.` / `_xlpm.` storage prefixes stripped, the stored
@@ -1213,6 +1251,10 @@ class Workbook {
   // `set_cell_value` without the array / data-table write refusals.
   void put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
   void put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  // `set_cell_formula` without the write refusals; a non-zero `block_rows` x
+  // `block_cols` stores the cell as the anchor of a legacy array block.
+  void put_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string formula,
+                        FormulaSource source, std::uint32_t block_rows, std::uint32_t block_cols);
   // Whether the dirty set is non-empty, read under the engine mutex.
   bool has_dirty_cells() const;
   // Whether any sheet holds a data table, read under the engine mutex.

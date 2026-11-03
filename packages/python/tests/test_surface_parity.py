@@ -148,6 +148,8 @@ class SurfaceParityTests(unittest.TestCase):
         "precedents",
         "dependents",
         "spill_info",
+        "get_array_formula",
+        "set_array_formula",
         "function_count",
         "function_name_at",
         "function_metadata",

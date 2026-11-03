@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -623,6 +624,61 @@ extern "C" fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, std::uint
   out->cols = region->cols;
   out->engaged = 1;
   return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Legacy array (CSE) formulas
+// ---------------------------------------------------------------------------
+
+extern "C" fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                                     std::uint32_t col, fm_array_formula_t* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_array_formula: NULL argument");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_workbook_get_array_formula"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_cell_coord(row, col, "fm_workbook_get_array_formula"); rc != 0) {
+    return rc;
+  }
+  *out = fm_array_formula_t{};
+  const std::optional<formulon::Workbook::ArrayFormulaInfo> info = wb->workbook().array_formula_at(sheet, row, col);
+  if (!info.has_value()) {
+    return 0;
+  }
+  out->anchor_row = info->anchor_row;
+  out->anchor_col = info->anchor_col;
+  out->rows = info->rows;
+  out->cols = info->cols;
+  out->formula = publish_scratch(wb, info->formula);
+  out->engaged = 1;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_array_formula(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
+                                                     std::uint32_t col, std::uint32_t rows, std::uint32_t cols,
+                                                     const char* formula) {
+  clear_last_error();
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_workbook_set_array_formula"); rc != 0) {
+    return rc;
+  }
+  if (formula == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_array_formula: formula is NULL");
+  }
+  if (auto rc = check_cell_coord(row, col, "fm_workbook_set_array_formula"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_formula_parses("fm_workbook_set_array_formula", formula,
+                                     "row=" + std::to_string(row) + " col=" + std::to_string(col));
+      rc != 0) {
+    return rc;
+  }
+  return enter_cell(wb, sheet, row, col, [&](formulon::Workbook& book) {
+    return book.set_array_formula(sheet, row, col, rows, cols, std::string(formula));
+  });
 }
 
 // ---------------------------------------------------------------------------

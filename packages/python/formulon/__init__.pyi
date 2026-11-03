@@ -1856,6 +1856,11 @@ class SpillInfo:
     cols: int
 
 @dataclass(frozen=True)
+class ArrayFormula:
+    ref: MergeRange
+    formula: str
+
+@dataclass(frozen=True)
 class FunctionMetadata:
     name: str
     min_arity: int
@@ -3220,6 +3225,8 @@ class Workbook:
     def precedents(self, sheet: int, row: int, col: int, depth: int = ...) -> List[CellNode]: ...
     def dependents(self, sheet: int, row: int, col: int, depth: int = ...) -> List[CellNode]: ...
     def spill_info(self, sheet: int, row: int, col: int) -> SpillInfo: ...
+    def get_array_formula(self, sheet: int, row: int, col: int) -> Optional[ArrayFormula]: ...
+    def set_array_formula(self, sheet: int, row: int, col: int, rows: int, cols: int, formula: str) -> None: ...
 
     # Function catalog (workbook-independent).
     @staticmethod

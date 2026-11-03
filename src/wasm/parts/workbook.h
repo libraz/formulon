@@ -569,6 +569,9 @@ class JsWorkbook {
                               const std::string& profile_id) const;
   emscripten::val collationClasses(emscripten::val values, int32_t strength, const std::string& profile_id) const;
   emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const;
+  JsStatus setArrayFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols,
+                           const std::string& formula);
 
   // ---- PivotCache mutation -----------------------------------------------
 

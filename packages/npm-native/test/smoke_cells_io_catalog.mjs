@@ -794,6 +794,31 @@ test('spillInfo reports a dynamic-array region', async () => {
   assert.equal(info.cols, 1);
 });
 
+test('array formulas can be authored, read from every cell and cleared', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  for (let r = 0; r < 3; r += 1) assert.ok(wb.setNumber(0, r, 0, r + 1).ok);
+  const none = wb.getArrayFormula(0, 0, 2);
+  assert.ok(none.status.ok);
+  assert.equal(none.arrayFormula, null);
+  assert.ok(wb.setArrayFormula(0, 0, 2, 3, 1, '=A1:A3*2').ok);
+  assert.ok(wb.recalc().ok);
+  for (let r = 0; r < 3; r += 1) {
+    const found = wb.getArrayFormula(0, r, 2);
+    assert.ok(found.status.ok);
+    assert.deepEqual(found.arrayFormula.ref, { row: 0, col: 2, rows: 3, cols: 1 });
+    assert.ok(found.arrayFormula.formula.includes('A1:A3'));
+  }
+  assert.equal(wb.getValue(0, 2, 2).value.number, 6);
+  // A partial overlap and a write into a non-anchor cell are refused.
+  assert.equal(wb.setArrayFormula(0, 1, 2, 2, 1, '=1').ok, false);
+  assert.equal(wb.setNumber(0, 1, 2, 1).ok, false);
+  assert.ok(wb.setBlank(0, 0, 2).ok);
+  assert.ok(wb.recalc().ok);
+  assert.equal(wb.getArrayFormula(0, 1, 2).arrayFormula, null);
+  assert.equal(wb.getArrayFormula(99, 0, 0).status.ok, false);
+});
+
 test('getLambdaText is wired and reports the documented contract', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

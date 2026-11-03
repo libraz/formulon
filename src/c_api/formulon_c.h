@@ -5184,6 +5184,74 @@ FM_API fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, uint32_t shee
                                           fm_spill_info_t* out);
 
 /* -------------------------------------------------------------------------- */
+/* Legacy array (CSE) formulas                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Result shape for `fm_workbook_get_array_formula`.
+ *
+ *   * `engaged` — `1` when `(row, col)` belongs to a legacy array formula
+ *     (`<f t="array" ref=...>`), `0` otherwise. The other fields carry
+ *     meaning only when `engaged == 1`; `formula` is `NULL` otherwise.
+ *   * `anchor_row`, `anchor_col` — the block's top-left cell, which holds
+ *     the formula.
+ *   * `rows`, `cols` — block dimensions including the anchor.
+ *   * `formula` — the anchor's stored formula text, spelled as
+ *     `fm_workbook_get_formula` returns it. Scratch-backed: valid until the
+ *     next call on `wb` that publishes scratch text.
+ *
+ * Every cell of the block reports the same values.
+ */
+typedef struct {
+  uint32_t anchor_row;
+  uint32_t anchor_col;
+  uint32_t rows;
+  uint32_t cols;
+  const char* formula;
+  int32_t engaged; /* 0/1 */
+} fm_array_formula_t;
+
+/**
+ * @brief Returns the legacy array formula covering `(sheet, row, col)`.
+ *
+ * A dynamic-array spill is not a legacy array formula; use
+ * `fm_workbook_spill_info` for that. When the cell is outside any block,
+ * sets `out->engaged = 0` and leaves the remaining fields zero / `NULL`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range or the coordinate
+ *         is outside the grid.
+ */
+FM_API fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                                 fm_array_formula_t* out);
+
+/**
+ * @brief Enters `formula` as one legacy array formula over the `rows` x
+ *        `cols` rectangle whose top-left cell is `(row, col)`.
+ *
+ * Every cell of the rectangle loses its value and formula (styles are
+ * kept); a recalc distributes the result, filling `#N/A` where a smaller
+ * result cannot reach. A block wholly inside the rectangle is replaced.
+ * Writing a value, blank or formula to the anchor of a block replaces the
+ * whole block, which is how a block is cleared; a write to any other cell
+ * of a block is refused.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` or `formula` is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range, `rows` or `cols`
+ *         is zero, or the rectangle leaves the grid or exceeds the
+ *         dynamic-array cell ceiling;
+ *         a parser code when `formula` does not parse;
+ *         `kPreconditionFailed`, changing nothing, when the rectangle
+ *         partially overlaps another array block, intersects a merged
+ *         area, a data table or a PivotTable, or (for more than one cell) a
+ *         table.
+ */
+FM_API fm_status_t fm_workbook_set_array_formula(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
+                                                 uint32_t rows, uint32_t cols, const char* formula);
+
+/* -------------------------------------------------------------------------- */
 /* Function catalog metadata                                                  */
 /* -------------------------------------------------------------------------- */
 

@@ -135,6 +135,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value Precedents(const Napi::CallbackInfo& info);
   Napi::Value Dependents(const Napi::CallbackInfo& info);
   Napi::Value SpillInfo(const Napi::CallbackInfo& info);
+  Napi::Value GetArrayFormula(const Napi::CallbackInfo& info);
+  Napi::Value SetArrayFormula(const Napi::CallbackInfo& info);
 
   // External links.
   Napi::Value GetExternalLinks(const Napi::CallbackInfo& info);

@@ -35,6 +35,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_grouping_test.cpp
   formulon_c_pivot_lifecycle_test.cpp
   formulon_c_pivot_read_test.cpp
+  formulon_c_pivot_save_shape_test.cpp
   formulon_c_print_settings_test.cpp
   formulon_c_protection_test.cpp
   formulon_c_range_style_test.cpp
@@ -42,6 +43,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_sheet_features_test.cpp
   formulon_c_sheet_layout_test.cpp
   formulon_c_spill_test.cpp
+  formulon_c_array_formula_test.cpp
   formulon_c_styles_alignment_test.cpp
   formulon_c_styles_cell_xf_test.cpp
   formulon_c_styles_dxf_test.cpp

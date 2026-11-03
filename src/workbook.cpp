@@ -1681,7 +1681,12 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   RETURN_IF_ERROR(check_cell_target("set_cell_formula", sheet_index, sheets_.size(), row, col));
   RETURN_IF_ERROR(check_not_part_of_array("set_cell_formula", sheets_[sheet_index], row, col));
   RETURN_IF_ERROR(check_not_part_of_data_table("set_cell_formula", sheets_[sheet_index], row, col));
+  put_cell_formula(sheet_index, row, col, std::move(formula), source, 0U, 0U);
+  return Expected<void, Error>::Ok();
+}
 
+void Workbook::put_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string formula,
+                                FormulaSource source, std::uint32_t block_rows, std::uint32_t block_cols) {
   // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
   // storage prefixes to the canonical formula-bar form at the single
   // ingestion point every reader (OOXML DOM / SAX, XLSB) and binding
@@ -1727,8 +1732,8 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     // Marked as Excel 365 marks a typed formula; a reader replaces this with
     // the file's own mark.
     sheets_[sheet_index].set_cell_dynamic_array(
-        row, col, root != nullptr && io::entered_as_dynamic_array(*this, sheet_index, *root));
-    sheets_[sheet_index].set_cell_array_block(row, col, 0U, 0U);
+        row, col, block_rows == 0U && root != nullptr && io::entered_as_dynamic_array(*this, sheet_index, *root));
+    sheets_[sheet_index].set_cell_array_block(row, col, block_rows, block_cols);
 
     if (root != nullptr) {
       if (may_name_external_book) {
@@ -1747,6 +1752,147 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     mutator.mark_dirty(node);
     mark_dependents_dirty(mutator, node);
   }
+}
+
+namespace {
+
+bool rects_intersect(const MergeRange& a, const MergeRange& b) noexcept {
+  return a.first_row <= b.last_row && b.first_row <= a.last_row && a.first_col <= b.last_col &&
+         b.first_col <= a.last_col;
+}
+
+bool rect_contains(const MergeRange& outer, const MergeRange& inner) noexcept {
+  return outer.first_row <= inner.first_row && inner.last_row <= outer.last_row && outer.first_col <= inner.first_col &&
+         inner.last_col <= outer.last_col;
+}
+
+// Refusal of `target` as the extent of a new legacy array formula, on the
+// first structure it collides with. A legacy array block wholly inside
+// `target` is replaced, so only one it partially overlaps counts.
+Expected<void, Error> check_array_target_free(const char* op, const Workbook& wb, std::size_t sheet_index,
+                                              const MergeRange& target) {
+  const Sheet& sheet = wb.sheet(sheet_index);
+  const auto refuse = [&](const char* what) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, std::string(op) + ": " + what,
+                      "row=" + std::to_string(target.first_row) + " col=" + std::to_string(target.first_col));
+  };
+  for (const CellAddress address : sheet.formula_cells_in(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U)) {
+    const Cell* cell = sheet.cell_at(address.row, address.col);
+    if (cell == nullptr || cell->array_block_rows == 0U) {
+      continue;
+    }
+    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
+                           address.col + cell->array_block_cols - 1U};
+    if (rects_intersect(block, target) && !rect_contains(target, block)) {
+      return refuse("cannot change part of an array");
+    }
+  }
+  for (const MergeRange& merge : sheet.merges()) {
+    if (rects_intersect(normalized(merge), target)) {
+      return refuse("array formulas are not valid in merged cells");
+    }
+  }
+  for (const DataTable& table : sheet.data_tables()) {
+    if (rects_intersect(normalized(table.ref), target)) {
+      return refuse("cannot change part of a data table");
+    }
+  }
+  for (const std::unique_ptr<pivot::PivotTable>& pivot : sheet.pivot_tables()) {
+    if (pivot == nullptr || pivot->span_rows() == 0U || pivot->span_cols() == 0U) {
+      continue;
+    }
+    const MergeRange area{pivot->anchor_row(), pivot->anchor_col(), pivot->anchor_row() + pivot->span_rows() - 1U,
+                          pivot->anchor_col() + pivot->span_cols() - 1U};
+    if (rects_intersect(area, target)) {
+      return refuse("cannot change part of a PivotTable");
+    }
+  }
+  if (target.first_row != target.last_row || target.first_col != target.last_col) {
+    for (const TableMetadata& table : wb.tables()) {
+      const std::optional<MergeRange> ref =
+          table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
+      if (ref.has_value() && rects_intersect(*ref, target)) {
+        return refuse("multi-cell array formulas are not valid in a table");
+      }
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
+std::optional<Workbook::ArrayFormulaInfo> Workbook::array_formula_at(std::size_t sheet_index, std::uint32_t row,
+                                                                     std::uint32_t col) const {
+  if (sheet_index >= sheets_.size() || !Sheet::coord_in_grid(row, col)) {
+    return std::nullopt;
+  }
+  const Sheet& sheet = sheets_[sheet_index];
+  std::optional<SpillFootprint> block = sheet.array_block_covering(row, col);
+  if (!block.has_value()) {
+    // Before a recalc distributes the block, only its anchor is known to the
+    // sheet: look for the anchor above and to the left.
+    for (const CellAddress address : sheet.formula_cells_in(0U, 0U, row, col)) {
+      const Cell* anchor = sheet.cell_at(address.row, address.col);
+      if (anchor != nullptr && anchor->array_block_rows != 0U && row - address.row < anchor->array_block_rows &&
+          col - address.col < anchor->array_block_cols) {
+        block = SpillFootprint{address.row, address.col, anchor->array_block_rows, anchor->array_block_cols};
+        break;
+      }
+    }
+  }
+  if (!block.has_value()) {
+    return std::nullopt;
+  }
+  Sheet::CellRead read;
+  sheet.read_formula_cell(block->anchor_row, block->anchor_col, read);
+  return ArrayFormulaInfo{block->anchor_row, block->anchor_col, block->rows, block->cols,
+                          std::string(read.formula_text())};
+}
+
+Expected<void, Error> Workbook::set_array_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                                  std::uint32_t rows, std::uint32_t cols, std::string formula,
+                                                  FormulaSource source) {
+  RETURN_IF_ERROR(check_cell_target("set_array_formula", sheet_index, sheets_.size(), row, col));
+  if (rows == 0U || cols == 0U) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_array_formula: rows and cols must be >= 1",
+                      "rows=" + std::to_string(rows) + " cols=" + std::to_string(cols));
+  }
+  if (rows > Sheet::kMaxRows - row || cols > Sheet::kMaxCols - col ||
+      static_cast<std::uint64_t>(rows) * cols > kMaxRangeExpansionCells) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_array_formula: array outside grid or too large",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col) + " rows=" + std::to_string(rows) +
+                          " cols=" + std::to_string(cols));
+  }
+  const MergeRange target{row, col, row + rows - 1U, col + cols - 1U};
+  RETURN_IF_ERROR(check_array_target_free("set_array_formula", *this, sheet_index, target));
+
+  // The block's own cells must hold nothing: a stored value or formula would
+  // make the distributed result a #SPILL!. Only populated coordinates are
+  // visited, so the cost follows what is there, not the rectangle's area.
+  struct Cleared {
+    std::vector<CellAddress> cells;
+  } cleared;
+  std::uint64_t cursor = 0;
+  while (cursor != Sheet::kCellCursorEnd) {
+    cursor = sheets_[sheet_index].cells_in_range(
+        target.first_row, target.first_col, target.last_row, target.last_col, cursor, 4096U,
+        [](const Sheet::RangeCell& cell, void* ctx) {
+          static_cast<Cleared*>(ctx)->cells.push_back(CellAddress{cell.row, cell.col});
+        },
+        &cleared);
+  }
+  for (const CellAddress address : cleared.cells) {
+    if (address.row == row && address.col == col) {
+      continue;
+    }
+    // Clearing one cell can take a whole block or spill with it.
+    if (sheets_[sheet_index].cell_at(address.row, address.col) == nullptr &&
+        !sheets_[sheet_index].committed_spill_footprint_covering(address.row, address.col).has_value()) {
+      continue;
+    }
+    put_cell_value(sheet_index, address.row, address.col, Value::blank());
+  }
+  put_cell_formula(sheet_index, row, col, std::move(formula), source, rows, cols);
   return Expected<void, Error>::Ok();
 }
 

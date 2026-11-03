@@ -1,5 +1,5 @@
 // Dependency-graph trace (precedents / dependents), dynamic-array
-// spill info, external-link enumeration, and the function-catalog
+// spill info, legacy array formulas, external-link enumeration, and the function-catalog
 // metadata surface (metadata / names / localize / canonicalize). These
 // are grouped here because they are non-mutating projections that share
 // no state with the styles / sheet TUs.
@@ -108,6 +108,43 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
   out.Set("rows", Napi::Number::New(env, spill.rows));
   out.Set("cols", Napi::Number::New(env, spill.cols));
   return out;
+}
+
+// ---- Legacy array (CSE) formulas ------------------------------------
+
+Napi::Value Workbook::GetArrayFormula(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("arrayFormula", env.Null());
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  fm_array_formula_t array{};
+  const fm_status_t rc =
+      fm_workbook_get_array_formula(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &array);
+  out.Set("status", MakeStatus(env, rc));
+  if (rc != 0 || array.engaged == 0) {
+    return out;
+  }
+  Napi::Object ref = Napi::Object::New(env);
+  ref.Set("row", Napi::Number::New(env, array.anchor_row));
+  ref.Set("col", Napi::Number::New(env, array.anchor_col));
+  ref.Set("rows", Napi::Number::New(env, array.rows));
+  ref.Set("cols", Napi::Number::New(env, array.cols));
+  Napi::Object value = Napi::Object::New(env);
+  value.Set("ref", ref);
+  value.Set("formula", Napi::String::New(env, array.formula));
+  out.Set("arrayFormula", value);
+  return out;
+}
+
+Napi::Value Workbook::SetArrayFormula(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string formula = ArgString(info, 5);
+    return fm_workbook_set_array_formula(handle, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), ArgU32(info, 3),
+                                         ArgU32(info, 4), formula.c_str());
+  });
 }
 
 // ---- External links -------------------------------------------------

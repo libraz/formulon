@@ -30,6 +30,7 @@ from .metadata import (
 from .workbook import (
     AnchorEditAs,
     AnchorKind,
+    ArrayFormula,
     AutoFilter,
     AutoFilterColumn,
     AutoFilterDateGroup,
@@ -362,6 +363,7 @@ __all__ = [
     "SparklineGroup",
     "SparklineType",
     "SpillInfo",
+    "ArrayFormula",
     "StyleBatchIndices",
     "Table",
     "TableColumn",

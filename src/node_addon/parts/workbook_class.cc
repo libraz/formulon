@@ -735,6 +735,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetActiveSheet, 0x1ULL>("setActiveSheet"),
           GuardedInstanceMethod<&Workbook::SheetName, 0x1ULL>("sheetName"),
           GuardedInstanceMethod<&Workbook::SpillInfo, 0x7ULL>("spillInfo"),
+          GuardedInstanceMethod<&Workbook::GetArrayFormula, 0x7ULL>("getArrayFormula"),
+          GuardedInstanceMethod<&Workbook::SetArrayFormula, 0x1FULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x20ULL>("setArrayFormula"),
           GuardedInstanceMethod<&Workbook::TableAt, 0x1ULL>("tableAt"),
           GuardedInstanceMethod<&Workbook::CreateTable, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("createTable"),
           GuardedInstanceMethod<&Workbook::UpdateTable, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("updateTable"),

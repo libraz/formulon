@@ -133,6 +133,7 @@ function envelopeProbes(wb) {
     ['CompareTextResult', true, () => wb.compareText('a', 'b', 0, 'nope')],
     ['CollationClassesResult', true, () => wb.collationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
     ['SpillInfo', true, () => wb.spillInfo(99, 0, 0)],
+    ['ArrayFormulaResult', true, () => wb.getArrayFormula(99, 0, 0)],
     ['SheetFormatDefaultsResult', true, () => wb.getSheetFormatDefaults(99)],
     ['CellRectResult', true, () => wb.getCellRectPt(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],
     ['WidthModelResult', true, () => wb.getWidthModel(99, 0)],

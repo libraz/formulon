@@ -624,6 +624,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("sheetCount", &JsWorkbook::sheetCount)
       .function("sheetName", &JsWorkbook::sheetName)
       .function("spillInfo", &JsWorkbook::spillInfo)
+      .function("getArrayFormula", &JsWorkbook::getArrayFormula)
+      .function("setArrayFormula", &JsWorkbook::setArrayFormula)
       .function("tableAt", &JsWorkbook::tableAt)
       .function("tableCount", &JsWorkbook::tableCount)
       .function("updateTable", &JsWorkbook::updateTable)

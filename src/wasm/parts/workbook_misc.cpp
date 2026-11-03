@@ -3,7 +3,8 @@
 // `precedents` / `dependents` and their shared `trace_to_val` bridge,
 // `functionMetadata` / `functionNames` / `localizeFunctionName` /
 // `canonicalizeFunctionName` / `localizeFormula` / `canonicalizeFormula` /
-// `localeFacts`, `compareText` / `collationClasses`, and `spillInfo`.
+// `localeFacts`, `compareText` / `collationClasses`, `spillInfo`, and the
+// legacy array formula accessors.
 
 #include <emscripten/val.h>
 
@@ -214,6 +215,40 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
   item.set("rows", info.rows);
   item.set("cols", info.cols);
   return item;
+}
+
+// ---- Legacy array (CSE) formulas ---------------------------------------
+
+emscripten::val JsWorkbook::getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const {
+  emscripten::val o = emscripten::val::object();
+  o.set("arrayFormula", emscripten::val::null());
+  if (handle_ == nullptr) {
+    o.set("status", invalid_handle_status());
+    return o;
+  }
+  fm_array_formula_t info{};
+  const fm_status_t rc = fm_workbook_get_array_formula(handle_, sheet, row, col, &info);
+  o.set("status", status_from_rc(rc));
+  if (rc == 0 && info.engaged != 0) {
+    emscripten::val ref = emscripten::val::object();
+    ref.set("row", info.anchor_row);
+    ref.set("col", info.anchor_col);
+    ref.set("rows", info.rows);
+    ref.set("cols", info.cols);
+    emscripten::val array = emscripten::val::object();
+    array.set("ref", ref);
+    array.set("formula", std::string(info.formula));
+    o.set("arrayFormula", array);
+  }
+  return o;
+}
+
+JsStatus JsWorkbook::setArrayFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols,
+                                     const std::string& formula) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  return status_from_rc(fm_workbook_set_array_formula(handle_, sheet, row, col, rows, cols, formula.c_str()));
 }
 
 emscripten::val JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,

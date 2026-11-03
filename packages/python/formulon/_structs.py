@@ -559,6 +559,18 @@ SPILL_INFO = Struct(
     ],
 )
 
+ARRAY_FORMULA = Struct(
+    "fm_array_formula_t",
+    [
+        ("anchor_row", U32),
+        ("anchor_col", U32),
+        ("rows", U32),
+        ("cols", U32),
+        ("formula", PTR),
+        ("engaged", I32),
+    ],
+)
+
 FUNCTION_METADATA = Struct(
     "fm_function_metadata_t",
     [

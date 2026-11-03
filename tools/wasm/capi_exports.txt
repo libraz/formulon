@@ -265,6 +265,10 @@ fm_cell_nodes_at
 # -- Dynamic-array spill ---------------------------------------------------------
 fm_workbook_spill_info
 
+# -- Legacy array (CSE) formulas -------------------------------------------------
+fm_workbook_get_array_formula
+fm_workbook_set_array_formula
+
 # -- Styles ----------------------------------------------------------------------
 fm_cell_get_xf_index
 fm_cell_set_xf_index

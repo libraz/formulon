@@ -57,6 +57,7 @@ class StructLayoutTests(unittest.TestCase):
         "READ_DIAGNOSTICS": 20,
         "SAVE_DIAGNOSTICS": 20,
         "SPILL_INFO": 20,
+        "ARRAY_FORMULA": 24,
         "FUNCTION_METADATA": 24,
         "LOCALE_FACTS": 56,
         "CIVIL_TIME": 24,
@@ -372,6 +373,33 @@ class SpillTests(unittest.TestCase):
             self.assertTrue(info.engaged)
             self.assertEqual(info.rows, 3)
             self.assertEqual((info.anchor_row, info.anchor_col), (0, 0))
+
+
+class ArrayFormulaTests(unittest.TestCase):
+    def test_set_get_clear_and_refusals(self) -> None:
+        with Workbook.create_default() as wb:
+            for r in range(3):
+                wb.set_number(0, r, 0, float(r + 1))
+            self.assertIsNone(wb.get_array_formula(0, 0, 2))
+            wb.set_array_formula(0, 0, 2, 3, 1, "=A1:A3*2")
+            wb.recalc()
+            for r in range(3):
+                found = wb.get_array_formula(0, r, 2)
+                self.assertIsNotNone(found)
+                assert found is not None
+                self.assertEqual(
+                    (found.ref.first_row, found.ref.first_col, found.ref.last_row, found.ref.last_col),
+                    (0, 2, 2, 2),
+                )
+                self.assertIn("A1:A3", found.formula)
+            self.assertEqual(wb.get_value(0, 2, 2).to_python(), 6.0)
+            with self.assertRaises(FormulonError):
+                wb.set_array_formula(0, 1, 2, 2, 1, "=1")
+            with self.assertRaises(FormulonError):
+                wb.set_number(0, 1, 2, 1.0)
+            wb.set_blank(0, 0, 2)
+            wb.recalc()
+            self.assertIsNone(wb.get_array_formula(0, 1, 2))
 
 
 class ExternalLinkTests(unittest.TestCase):

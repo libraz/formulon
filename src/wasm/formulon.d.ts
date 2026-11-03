@@ -1575,6 +1575,20 @@ export function mergeFunctionMetadata(
 /** Signature of {@link mergeFunctionMetadata}. */
 export type MergeFunctionMetadata = typeof mergeFunctionMetadata;
 
+/** A legacy array (CSE) formula: the block it fills and its stored text. `ref` is the block's rectangle,
+ *  its top-left cell `(row, col)` holding the formula; every cell of the block reports the same value. */
+export interface ArrayFormula {
+  readonly ref: { readonly row: number; readonly col: number; readonly rows: number; readonly cols: number };
+  readonly formula: string;
+}
+
+/** Return type of `Workbook.getArrayFormula`. `arrayFormula` is `null` when the cell is outside any
+ *  legacy array block. */
+export interface ArrayFormulaResult {
+  readonly status: Status;
+  readonly arrayFormula: ArrayFormula | null;
+}
+
 /** Spill region info returned by `spillInfo(sheet, row, col)`. On failure
  *  `engaged` is `false` and the other fields are zero. */
 export interface SpillInfo {
@@ -4969,6 +4983,21 @@ export interface Workbook {
    *  which is already spill-aware. When the cell is not part of any
    *  region, `engaged` is `false` and the other fields are zero. */
   spillInfo(sheet: number, row: number, col: number): SpillInfo;
+
+  /** Returns the legacy array (CSE, `<f t="array">`) formula covering `(sheet, row, col)`, the same
+   *  value for every cell of the block; `arrayFormula` is `null` outside any block. A dynamic-array
+   *  spill is not a legacy array formula; read that through `spillInfo`. */
+  getArrayFormula(sheet: number, row: number, col: number): ArrayFormulaResult;
+
+  /** Enters `formula` as one legacy array formula over `rows` x `cols` cells whose top-left cell is
+   *  `(row, col)`; a 1 x 1 block is allowed. Every cell of the rectangle loses its value and formula
+   *  (styles are kept) and the next recalc distributes the result, filling `#N/A` where a smaller
+   *  result cannot reach. Refused, changing nothing, when the rectangle partially overlaps another
+   *  array (one wholly inside is replaced), intersects a merged area, a data table or a PivotTable,
+   *  or, for more than one cell, a table. Writing a value, blank or formula to a block's top-left
+   *  cell replaces the whole block, which is how a block is cleared; a write to any other cell of
+   *  a block is refused. */
+  setArrayFormula(sheet: number, row: number, col: number, rows: number, cols: number, formula: string): Status;
 }
 
 /** Static factories on the Workbook class. */
