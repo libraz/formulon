@@ -9,6 +9,7 @@
 #include "parser/parser.h"
 #include "pugixml.hpp"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -17,9 +18,7 @@ namespace {
 
 // What a defined name's formula shows of it without evaluation.
 xlsb::NameShape NameFormulaShape(std::string_view formula) {
-  if (!formula.empty() && formula.front() == '=') {
-    formula.remove_prefix(1);
-  }
+  formula = strip_formula_prefix(formula);
   Arena arena;
   const parser::AstNode* body = parser::parse_strict(formula, arena);
   xlsb::NameShape shape;
@@ -173,9 +172,7 @@ std::vector<xlsb::NameShape> defined_name_shapes(const Workbook& wb) {
     }
     state[i] = State::kResolving;
     std::string_view formula = names[i].formula;
-    if (!formula.empty() && formula.front() == '=') {
-      formula.remove_prefix(1);
-    }
+    formula = strip_formula_prefix(formula);
     const xlsb::NameShapes referenced = [&](const parser::AstNode& node) {
       const std::size_t found = FindDefinedName(names, NameOf(node), names[i].local_sheet_id);
       if (found >= names.size()) {
@@ -224,9 +221,7 @@ bool formula_cell_always_calculates(const Sheet& sheet, std::uint32_t row, std::
     }
   }
   std::string_view formula = cell.formula_text;
-  if (formula.front() == '=') {
-    formula.remove_prefix(1);
-  }
+  formula = strip_formula_prefix(formula);
   Arena arena;
   parser::Parser parser(formula, arena);
   const parser::AstNode* root = parser.parse();

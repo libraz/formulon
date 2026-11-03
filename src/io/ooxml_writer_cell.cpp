@@ -50,6 +50,7 @@
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/index_sort.h"
 #include "value.h"
 
@@ -314,9 +315,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   if (has_formula) {
     const SpillRegion* anchored = sheet.spill_region_at_anchor(row, col);
     std::string_view formula = cell.formula_text;
-    if (!formula.empty() && formula.front() == '=') {
-      formula.remove_prefix(1);
-    }
+    formula = strip_formula_prefix(formula);
     Arena formula_arena;
     parser::Parser formula_parser(formula, formula_arena);
     parser::AstNode* formula_root = formula_parser.parse();

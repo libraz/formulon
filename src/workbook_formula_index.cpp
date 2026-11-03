@@ -20,6 +20,7 @@
 #include "sheet.h"
 #include "sheet_name.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/strings.h"
 #include "workbook.h"
 
@@ -33,9 +34,7 @@ parser::AstNode* parse_indexable_formula(std::string_view body, Arena& arena) {
 // first. Null when the body is empty (the arena is then left untouched) or
 // does not parse.
 parser::AstNode* parse_stored_formula(std::string_view text, Arena& arena) {
-  if (!text.empty() && text.front() == '=') {
-    text.remove_prefix(1);
-  }
+  text = strip_formula_prefix(text);
   if (text.empty()) {
     return nullptr;
   }

@@ -12,7 +12,6 @@
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
-#include "eval/formula_text_utils.h"
 #include "eval/lazy_impls.h"        // eval_node, eval_node_shaped
 #include "eval/name_env_resolve.h"  // is_range_shaped_ast
 #include "eval/shape_ops_lazy.h"    // eval_node_as_array
@@ -21,6 +20,7 @@
 #include "parser/ast.h"
 #include "sheet.h"
 #include "utils/expected.h"
+#include "utils/formula_text.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"

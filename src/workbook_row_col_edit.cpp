@@ -37,6 +37,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/formula_text.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -336,9 +337,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
       continue;
     }
     std::string_view body = formula_cell->formula_text;
-    if (!body.empty() && body.front() == '=') {
-      body.remove_prefix(1);
-    }
+    body = strip_formula_prefix(body);
     parser_arena.reset();
     parser::AstNode* root = parse_indexable_formula(body, parser_arena);
     if (root == nullptr) {

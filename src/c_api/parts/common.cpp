@@ -23,6 +23,7 @@
 #include "styles.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/formula_text.h"
 #include "utils/number_text.h"
 #include "value.h"
 #include "workbook.h"
@@ -667,9 +668,7 @@ fm_status_t check_entered_formula_parses(const char* api, std::string_view formu
   *stored =
       formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
   std::string_view body = *stored;
-  if (!body.empty() && body.front() == '=') {
-    body.remove_prefix(1);
-  }
+  body = strip_formula_prefix(body);
   formulon::Arena arena;
   if (!formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name) &&
       formulon::eval::parse_formula_entry(body, arena) != nullptr) {

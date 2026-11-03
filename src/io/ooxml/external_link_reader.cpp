@@ -17,6 +17,7 @@
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "utils/a1_ref.h"
+#include "utils/formula_text.h"
 #include "value.h"
 
 namespace formulon {
@@ -35,9 +36,7 @@ namespace {
 /// supporting workbook's namespace against cells this cache does not
 /// hold. `out->resolvable` stays false and the reference reads `#REF!`.
 bool ParseExternalRefersTo(std::string_view text, const ExternalBook& book, ExternalBookName* out) {
-  if (!text.empty() && text.front() == '=') {
-    text.remove_prefix(1);
-  }
+  text = strip_formula_prefix(text);
   // Sheet qualifier, up to the last `!` so a quoted name containing one
   // cannot truncate the reference.
   const std::size_t bang = text.rfind('!');

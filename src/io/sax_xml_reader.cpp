@@ -47,6 +47,7 @@
 #include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/formula_text.h"
 
 namespace formulon {
 namespace io {
@@ -1054,9 +1055,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       }
       DecodeOoxmlTextIfPresent(&body, &scratch->ooxml_formula);
       // Strip '=' only after both decodings, so `&#61;1+1` and `_x003D_1+1` match.
-      if (!body.empty() && body.front() == '=') {
-        body.remove_prefix(1);
-      }
+      body = strip_formula_prefix(body);
       record->formula = body;
     } else if (child.name == "v") {
       if (child.self_closing) {

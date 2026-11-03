@@ -15,7 +15,6 @@
 #include "c_api/parts/cell_range.h"
 #include "c_api/parts/common.h"
 #include "cell.h"
-#include "eval/formula_text_utils.h"
 #include "eval/lambda_format.h"
 #include "eval/lambda_value.h"
 #include "parser/ast_format_r1c1.h"
@@ -25,6 +24,7 @@
 #include "style_resolve.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/formula_text.h"
 #include "utils/index_sort.h"
 #include "value.h"
 #include "workbook.h"
@@ -708,8 +708,7 @@ extern "C" fm_status_t fm_workbook_get_formula_r1c1(const fm_workbook_t* wb, siz
     return 0;
   }
   formulon::Arena arena;
-  const formulon::parser::AstNode* root =
-      formulon::parser::parse_strict(formulon::eval::strip_formula_prefix(text), arena);
+  const formulon::parser::AstNode* root = formulon::parser::parse_strict(formulon::strip_formula_prefix(text), arena);
   if (root == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
                              "fm_workbook_get_formula_r1c1: stored formula does not parse",

@@ -14,7 +14,6 @@
 #include "eval/builtin_names.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
-#include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -26,6 +25,7 @@
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/formula_text.h"
 #include "value.h"
 #include "workbook.h"
 

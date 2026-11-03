@@ -13,6 +13,7 @@
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "utils/arena.h"
+#include "utils/formula_text.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
@@ -171,9 +172,7 @@ struct Resolver {
 
 Expected<ResolvedSource, Error> resolve_chart_source(const Workbook& wb, std::size_t host_sheet,
                                                      std::string_view formula, const eval::FunctionRegistry& registry) {
-  if (!formula.empty() && formula.front() == '=') {
-    formula.remove_prefix(1);
-  }
+  formula = strip_formula_prefix(formula);
   if (wb.sheet_count() == 0 || (host_sheet != kChartNoHostSheet && host_sheet >= wb.sheet_count())) {
     return invalid(formula, "no such host sheet");
   }
