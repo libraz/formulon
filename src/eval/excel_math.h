@@ -68,6 +68,11 @@ inline double excel_log1p(double x) noexcept {
   return flush_subnormal(excel_math_detail::atanh_series(flush_subnormal(x / (x + 2.0))) * 2.0);
 }
 
+// Round half away from zero.
+inline double round_away(double v) noexcept {
+  return v >= 0.0 ? std::floor(v + 0.5) : -std::floor(-v + 0.5);
+}
+
 inline double excel_expm1(double x) noexcept {
   const double ax = std::fabs(x);
   if (ax > 1.0) {

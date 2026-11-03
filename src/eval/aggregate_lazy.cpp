@@ -411,6 +411,18 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
   return true;
 }
 
+// Moves cells[i] down to slot `*kept` and advances it.
+void keep_cell(std::vector<Value>* cells, std::size_t* kept, std::size_t i) {
+  if (*kept != i) {
+    (*cells)[*kept] = std::move((*cells)[i]);
+  }
+  ++*kept;
+}
+
+void truncate_cells(std::vector<Value>* cells, std::size_t kept) {
+  cells->erase(cells->begin() + static_cast<std::vector<Value>::difference_type>(kept), cells->end());
+}
+
 // Filters `cells` in place according to the options bit and the function
 // code's expected provenance:
 //
@@ -433,10 +445,7 @@ bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Valu
         continue;
       }
       if (code == kCodeCountA) {
-        if (kept != i) {
-          (*cells)[kept] = std::move((*cells)[i]);
-        }
-        ++kept;  // an error cell is a non-blank cell
+        keep_cell(cells, &kept, i);  // an error cell is a non-blank cell
         continue;
       }
       *out_err = v;
@@ -444,22 +453,16 @@ bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Valu
     }
     if (code == kCodeCountA) {
       if (!v.is_blank() || v.blank_counts_for_counta()) {
-        if (kept != i) {
-          (*cells)[kept] = std::move((*cells)[i]);
-        }
-        ++kept;
+        keep_cell(cells, &kept, i);
       }
       continue;
     }
     // Numeric branches: drop everything that is not a Number.
     if (v.is_number()) {
-      if (kept != i) {
-        (*cells)[kept] = std::move((*cells)[i]);
-      }
-      ++kept;
+      keep_cell(cells, &kept, i);
     }
   }
-  cells->erase(cells->begin() + static_cast<std::vector<Value>::difference_type>(kept), cells->end());
+  truncate_cells(cells, kept);
   return true;
 }
 
@@ -595,12 +598,9 @@ void aggregate_filter_detail::compact_by_flags(std::vector<Value>* cells, const 
     if (drop_hidden || drop_nested) {
       continue;
     }
-    if (kept != i) {
-      (*cells)[kept] = std::move((*cells)[i]);
-    }
-    ++kept;
+    keep_cell(cells, &kept, i);
   }
-  cells->erase(cells->begin() + static_cast<std::vector<Value>::difference_type>(kept), cells->end());
+  truncate_cells(cells, kept);
 }
 
 Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -704,33 +704,43 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     // k is a scalar metadata arg: errors propagate regardless of the
     // options bit (matches the function_num / options contract). An array k
     // evaluates the function once per element.
-    const std::vector<double> xs = to_numbers(cells);
-    const auto at_k = [&](const Value& k_value) -> Value {
+    std::vector<double> xs = to_numbers(cells);
+    // The runners sort their copy; the last (or only) evaluation hands `xs` over.
+    const auto at_k = [&](const Value& k_value, bool last) -> Value {
       auto k_raw_or = scalar_number(k_value);
       if (!k_raw_or) {
         return Value::error(k_raw_or.error());
       }
       const double k_raw = k_raw_or.value();
+      const auto data = [&]() -> std::vector<double> {
+        if (last) {
+          return std::move(xs);
+        }
+        return xs;
+      };
       switch (code) {
         case kCodeLarge:
-          return run_large_small(xs, k_raw, /*want_large=*/true);
+          return run_large_small(data(), k_raw, /*want_large=*/true);
         case kCodeSmall:
-          return run_large_small(xs, k_raw, /*want_large=*/false);
+          return run_large_small(data(), k_raw, /*want_large=*/false);
         case kCodePercentileInc:
-          return run_percentile_inc(xs, k_raw);
+          return run_percentile_inc(data(), k_raw);
         case kCodeQuartileInc:
-          return run_quartile_inc(xs, k_raw);
+          return run_quartile_inc(data(), k_raw);
         case kCodePercentileExc:
-          return run_percentile_exc(xs, k_raw);
+          return run_percentile_exc(data(), k_raw);
         case kCodeQuartileExc:
-          return run_quartile_exc(xs, k_raw);
+          return run_quartile_exc(data(), k_raw);
         default:
           // Unreachable: code is constrained to [14, 19] in this branch.
           return Value::error(ErrorCode::Value);
       }
     };
     const Value k_value = eval_node(call.as_call_arg(3), arena, registry, ctx);
-    return k_value.is_array() ? map_array(*k_value.as_array(), at_k, arena) : at_k(k_value);
+    if (k_value.is_array()) {
+      return map_array(*k_value.as_array(), [&](const Value& k) { return at_k(k, /*last=*/false); }, arena);
+    }
+    return at_k(k_value, /*last=*/true);
   }
 
   // Codes 1..13 take references only: a value argument is #VALUE!, and an

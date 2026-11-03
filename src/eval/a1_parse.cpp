@@ -8,14 +8,13 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <string>
 #include <string_view>
 
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
 #include "sheet.h"
 #include "utils/a1_column.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace eval {
@@ -40,10 +39,7 @@ std::uint32_t parse_column_letters(std::string_view text, std::size_t* i) {
   std::uint32_t col = 0;
   std::size_t letters_seen = 0;
   while (*i < text.size() && is_letter(text[*i])) {
-    char ch = text[*i];
-    if (ch >= 'a' && ch <= 'z') {
-      ch = static_cast<char>(ch - ('a' - 'A'));
-    }
+    const char ch = strings::ascii_to_upper(text[*i]);
     col = col * 26u + static_cast<std::uint32_t>(ch - 'A' + 1);
     ++(*i);
     ++letters_seen;
@@ -184,15 +180,16 @@ std::size_t unescape_quoted_sheet(std::string_view quoted, char* out, std::size_
 }  // namespace
 
 std::size_t column_letters(std::uint32_t col, char* out) {
-  if (col == 0U || out == nullptr) {
+  if (col == 0U || out == nullptr || col > a1::kMaxColumns) {
     return 0U;
   }
-  std::string letters;
-  if (!a1::append_column_letters(letters, col - 1U)) {
-    return 0U;
+  const std::size_t n = col <= 26U ? 1U : (col <= 702U ? 2U : 3U);
+  std::uint32_t value = col;
+  for (std::size_t i = n; i-- > 0;) {
+    out[i] = static_cast<char>('A' + (value - 1U) % 26U);
+    value = (value - 1U) / 26U;
   }
-  std::memcpy(out, letters.data(), letters.size());
-  return letters.size();
+  return n;
 }
 
 // Outcome of reading an optional leading `Sheet!` qualifier.
@@ -323,11 +320,7 @@ bool parse_r1c1_axis(std::string_view text, std::size_t* i, const LocaleFacts& f
   if (*i >= text.size()) {
     return true;
   }
-  char head = text[*i];
-  if (head >= 'a' && head <= 'z') {
-    head = static_cast<char>(head - ('a' - 'A'));
-  }
-  if (head != marker) {
+  if (strings::ascii_to_upper(text[*i]) != marker) {
     return true;
   }
   ++*i;

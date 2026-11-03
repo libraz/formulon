@@ -436,6 +436,9 @@ src/eval/aggregate_lazy.cpp
   src/eval/workdays_lazy.cpp
   src/eval/financial_lazy.cpp
   src/eval/forecast_ets_lazy.cpp
+  src/eval/ets_calendar.cpp
+  src/eval/ets_detect.cpp
+  src/eval/ets_grid.cpp
   src/eval/ets_series.cpp
   src/eval/holt_winters.cpp
   src/eval/getpivotdata_lazy.cpp

@@ -75,10 +75,6 @@ bool is_ascii_alpha(char c) noexcept {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
-char ascii_upper(char c) noexcept {
-  return c >= 'a' && c <= 'z' ? static_cast<char>(c - ('a' - 'A')) : c;
-}
-
 // Skips U+0020 blanks; true when at least one was skipped.
 bool skip_blanks(std::string_view* s) noexcept {
   std::size_t n = 0;
@@ -336,7 +332,7 @@ ShapeMatch parse_era_text(std::string_view s, double* out_serial, std::string_vi
     return ShapeMatch::kNoMatch;
   }
   for (const EraName& name : kEraNames) {
-    if (ascii_upper(s[0]) != name.letter) {
+    if (strings::ascii_to_upper(s[0]) != name.letter) {
       continue;
     }
     s.remove_prefix(1);
@@ -814,7 +810,7 @@ std::size_t match_marker_name(std::string_view s, std::string_view name) noexcep
     if (name.substr(j, kNarrowNoBreakSpace.size()) == kNarrowNoBreakSpace && i < s.size() && s[i] == ' ') {
       ++i;
       j += kNarrowNoBreakSpace.size();
-    } else if (i < s.size() && ascii_upper(s[i]) == ascii_upper(name[j])) {
+    } else if (i < s.size() && strings::ascii_to_upper(s[i]) == strings::ascii_to_upper(name[j])) {
       ++i;
       ++j;
     } else {
@@ -877,8 +873,8 @@ bool scan_meridiem(std::string_view* s, bool* pm) noexcept {
   while (letters < tail.size() && is_ascii_alpha(tail[letters])) {
     ++letters;
   }
-  const char c0 = ascii_upper(tail[0]);
-  if ((c0 != 'A' && c0 != 'P') || (letters != 1 && (letters != 2 || ascii_upper(tail[1]) != 'M'))) {
+  const char c0 = strings::ascii_to_upper(tail[0]);
+  if ((c0 != 'A' && c0 != 'P') || (letters != 1 && (letters != 2 || strings::ascii_to_upper(tail[1]) != 'M'))) {
     return false;
   }
   *pm = c0 == 'P';

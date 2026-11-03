@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/excel_math.h"
 #include "utils/error.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -133,11 +134,6 @@ double mul(double a, double b) noexcept {
 
 double div(double a, double b) noexcept {
   return flush_subnormal(a / b);
-}
-
-// Round half away from zero.
-double round_away(double v) noexcept {
-  return v >= 0.0 ? std::floor(v + 0.5) : -std::floor(-v + 0.5);
 }
 
 // Least-squares slope of `y[0..n)` against 1..n. With `state`, the seasonal

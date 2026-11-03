@@ -453,14 +453,21 @@ bool apply_ordering(CriteriaOp op, int cmp) {
 }
 
 bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile profile) {
-  // Project the cell to its text rendering. `coerce_to_text` yields the
-  // Excel-visible spelling for numbers / bools and passes Text through; a
+  // Project the cell to its text rendering. Text is viewed in place;
+  // `coerce_to_text` yields the Excel-visible spelling for numbers / bools; a
   // failure (unsupported kind) falls back to non-match. Blank becomes "".
-  const auto cell_text_exp = coerce_to_text(cell);
-  if (!cell_text_exp) {
-    return false;
+  std::string coerced_text;
+  std::string_view cell_text;
+  if (cell.kind() == ValueKind::Text) {
+    cell_text = cell.as_text();
+  } else {
+    auto cell_text_exp = coerce_to_text(cell);
+    if (!cell_text_exp) {
+      return false;
+    }
+    coerced_text = cell_text_exp.take();
+    cell_text = coerced_text;
   }
-  const std::string& cell_text = cell_text_exp.value();
 
   // Text equality and ordering go through the collator; the wildcard path
   // keeps the byte-level fold. Wildcard detection on the criterion happened
