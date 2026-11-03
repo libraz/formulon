@@ -396,12 +396,12 @@ std::vector<CellNodeId> cells_of_component(const std::vector<CellNodeId>& compon
 
 bool DepGraph::rect_cell_depends_on(CellNodeId node, std::uint32_t row_first, std::uint32_t col_first,
                                     std::uint32_t row_last, std::uint32_t col_last) const {
-  std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
+  std::unordered_set<CellNodeId, CellNodeIdHash> seen;
   std::vector<CellNodeId> queue{node};
-  seen.emplace(node, 1);
+  seen.insert(node);
   for (std::size_t head = 0; head < queue.size(); ++head) {
     for (const CellNodeId dependent : dependents_of_ref(queue[head])) {
-      if (!seen.emplace(dependent, 1).second) {
+      if (!seen.insert(dependent).second) {
         continue;
       }
       if (dependent.sheet_id == node.sheet_id && dependent.row >= row_first && dependent.row <= row_last &&
@@ -564,10 +564,10 @@ std::vector<std::vector<CellNodeId>> DepGraph::canonical_component_order(
     std::vector<std::vector<CellNodeId>> sccs, const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const {
   const std::size_t count = sccs.size();
   // Component index per member.
-  std::unordered_map<CellNodeId, std::int64_t, CellNodeIdHash> component_of;
+  std::unordered_map<CellNodeId, std::size_t, CellNodeIdHash> component_of;
   for (std::size_t i = 0; i < count; ++i) {
     for (const CellNodeId member : sccs[i]) {
-      component_of.emplace(member, static_cast<std::int64_t>(i));
+      component_of.emplace(member, i);
     }
   }
   std::vector<std::vector<std::size_t>> successors(count);
@@ -579,8 +579,8 @@ std::vector<std::vector<CellNodeId>> DepGraph::canonical_component_order(
           continue;
         }
         const auto it = component_of.find(dependency);
-        if (it != component_of.end() && static_cast<std::size_t>(it->second) != i) {
-          successors[static_cast<std::size_t>(it->second)].push_back(i);
+        if (it != component_of.end() && it->second != i) {
+          successors[it->second].push_back(i);
           ++in_degree[i];
         }
       }
