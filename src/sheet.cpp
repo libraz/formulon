@@ -24,6 +24,7 @@
 #include "pivot/pivot_table.h"
 #include "sheet_spill_table.h"
 #include "utils/arena.h"
+#include "utils/derived_guid.h"
 #include "utils/index_sort.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -71,6 +72,76 @@ Cell* find_formula_cell(std::unordered_map<std::uint32_t, RowCells>& rows, std::
   return cell != nullptr && !cell->formula_text.empty() ? cell : nullptr;
 }
 
+/// Copies `src` into the fresh slot `dst`. A Text value viewing the cell's
+/// own buffer is re-pointed at the copy's buffer; any other view (a shared
+/// string) is kept as is.
+void clone_cell(const Cell& src, Cell& dst) {
+  dst.formula_text = src.formula_text;
+  dst.cached_value = src.cached_value;
+  if (src.cached_text_owned != nullptr) {
+    dst.cached_text_owned = std::make_unique<std::string>(*src.cached_text_owned);
+    if (src.cached_value.is_text() && src.cached_value.as_text().data() == src.cached_text_owned->data()) {
+      dst.cached_value = Value::text(*dst.cached_text_owned);
+    }
+  }
+  dst.phonetic_runs = src.phonetic_runs;
+  dst.xf_index = src.xf_index;
+  dst.phonetic_props = src.phonetic_props;
+  dst.dynamic_array = src.dynamic_array;
+  dst.has_explicit_xf = src.has_explicit_xf;
+  dst.show_phonetic = src.show_phonetic;
+  dst.phonetic_present = src.phonetic_present;
+  dst.array_block_cols = src.array_block_cols;
+  dst.array_block_rows = src.array_block_rows;
+}
+
+/// `derived_guid(guid, salt)`, keeping an absent (empty) GUID absent.
+void rederive_guid(std::string& guid, std::string_view salt) {
+  if (!guid.empty()) {
+    guid = derived_guid(guid, salt);
+  }
+}
+
+/// Re-derives the value of the ` xr:uid="..."` pair in an escaped attribute
+/// list, if present.
+void rederive_uid_attr(std::string& attrs, std::string_view salt) {
+  constexpr std::string_view kAttr = " xr:uid=\"";
+  const std::size_t at = attrs.find(kAttr);
+  if (at == std::string::npos) {
+    return;
+  }
+  const std::size_t begin = at + kAttr.size();
+  const std::size_t end = attrs.find('"', begin);
+  if (end == std::string::npos) {
+    return;
+  }
+  const std::string guid = derived_guid(std::string_view(attrs).substr(begin, end - begin), salt);
+  attrs.replace(begin, end - begin, guid);
+}
+
+/// Removes the `codeName` attribute from the start tag of a raw `<sheetPr>`.
+void strip_code_name(std::string& sheet_pr_xml) {
+  constexpr std::string_view kAttr = "codeName=";
+  const std::size_t tag_end = sheet_pr_xml.find('>');
+  for (std::size_t at = sheet_pr_xml.find(kAttr); at != std::string::npos && at < tag_end;
+       at = sheet_pr_xml.find(kAttr, at + 1U)) {
+    const char before = at > 0U ? sheet_pr_xml[at - 1U] : '\0';
+    if (before != ' ' && before != '\t' && before != '\n' && before != '\r') {
+      continue;
+    }
+    const std::size_t value = at + kAttr.size();
+    if (value >= sheet_pr_xml.size() || (sheet_pr_xml[value] != '"' && sheet_pr_xml[value] != '\'')) {
+      continue;
+    }
+    const std::size_t close = sheet_pr_xml.find(sheet_pr_xml[value], value + 1U);
+    if (close == std::string::npos || close > tag_end) {
+      return;
+    }
+    sheet_pr_xml.erase(at - 1U, close + 1U - (at - 1U));
+    return;
+  }
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -86,6 +157,78 @@ Sheet::Sheet(Sheet&&) noexcept = default;
 Sheet& Sheet::operator=(Sheet&&) noexcept = default;
 
 Sheet::~Sheet() = default;
+
+Sheet Sheet::clone_as(std::string name) const {
+  Sheet copy(std::move(name));
+  const std::string salt = copy.name_;
+  {
+    const std::lock_guard<std::mutex> guard(*spill_mutex_);
+    copy.rows_.reserve(rows_.size());
+    for (const auto& [row, cells] : rows_) {
+      RowCells& dst = copy.rows_[row];
+      for (const auto& [col, cell] : cells) {
+        clone_cell(cell, dst.ensure(col));
+      }
+    }
+    copy.formula_cells_ = formula_cells_;
+  }
+  copy.opaque_ooxml_part_path_ = opaque_ooxml_part_path_;
+  copy.opaque_ooxml_relationship_type_ = opaque_ooxml_relationship_type_;
+
+  copy.pivot_tables_.reserve(pivot_tables_.size());
+  for (const std::unique_ptr<pivot::PivotTable>& table : pivot_tables_) {
+    copy.pivot_tables_.push_back(table->clone());
+  }
+  copy.conditional_formats_ = conditional_formats_;
+  copy.merges_ = merges_;
+  copy.data_tables_ = data_tables_;
+
+  copy.hyperlinks_ = hyperlinks_;
+  for (Hyperlink& link : copy.hyperlinks_) {
+    link.rid.clear();
+  }
+  copy.comments_ = comments_;
+  for (CellComment& comment : copy.comments_) {
+    rederive_guid(comment.uid, salt);
+  }
+  // `derived_guid` is a pure function, so a reply's `parent_id` lands on its
+  // thread's new id without a lookup table.
+  copy.threaded_comments_ = threaded_comments_;
+  for (ThreadedComment& comment : copy.threaded_comments_) {
+    rederive_guid(comment.id, salt);
+    rederive_guid(comment.parent_id, salt);
+    for (Mention& mention : comment.mentions) {
+      rederive_guid(mention.mention_id, salt);
+    }
+  }
+  copy.validations_ = validations_;
+  for (DataValidation& validation : copy.validations_) {
+    rederive_uid_attr(validation.extra_attrs, salt);
+  }
+  copy.validations_extra_attrs_ = validations_extra_attrs_;
+
+  copy.protection_ = protection_;
+  copy.view_ = view_;
+  copy.view_.tab_selected = false;
+  copy.layout_ = layout_;
+  copy.format_defaults_ = format_defaults_;
+  copy.print_settings_ = print_settings_;
+  copy.print_settings_.printer_settings_rid.clear();
+  strip_code_name(copy.print_settings_.sheet_pr_xml);
+  copy.raw_extensions_ = raw_extensions_;
+
+  // `source_sheet_id_`, `drawing_rel_target_` and `comment_vml_path_` stay
+  // empty: they name the source's package identity and parts.
+  copy.comment_vml_shapes_ = comment_vml_shapes_;
+  copy.comment_vml_extra_xml_ = comment_vml_extra_xml_;
+  copy.comment_authors_ = comment_authors_;
+  copy.unknown_relationships_ = unknown_relationships_;
+  copy.auto_filter_ = auto_filter_;
+  copy.ext_lst_xml_ = ext_lst_xml_;
+  copy.root_extra_ns_attrs_ = root_extra_ns_attrs_;
+  copy.xlsb_tail_ = xlsb_tail_;
+  return copy;
+}
 
 void Sheet::add_pivot_table(std::unique_ptr<pivot::PivotTable> table) {
   if (table == nullptr) {

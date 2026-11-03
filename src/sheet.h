@@ -200,6 +200,23 @@ class Sheet {
   Sheet& operator=(Sheet&&) noexcept;
   ~Sheet();
 
+  /// An independent copy of this sheet named `name`, for a sheet copy inside
+  /// the same workbook.
+  ///
+  /// Every member is rebuilt rather than aliased: a cell-owned Text result
+  /// gets its own buffer, pivot tables are cloned without their cached
+  /// result, and the mutex is fresh. Spill regions are not copied (the next
+  /// recalc rebuilds them) and the enumeration revision starts at zero.
+  ///
+  /// Fields that would collide with the source in a saved package start
+  /// fresh: `tab_selected`, `source_sheet_id`, the drawing target, the
+  /// comment VML path, every hyperlink and printer-settings rId, and the
+  /// `codeName` attribute of `<sheetPr>`. Note, validation `xr:uid`,
+  /// threaded comment and mention GUIDs are re-derived with
+  /// `derived_guid(old, name)`, so a reply's `parent_id` follows its thread.
+  /// Formula text is copied verbatim; re-pointing references is the caller's.
+  Sheet clone_as(std::string name) const;
+
   /// Current display name of the sheet.
   const std::string& name() const noexcept { return name_; }
 
@@ -1249,6 +1266,7 @@ class Sheet {
   /// cells wholesale. Caller must hold `spill_mutex_`.
   void rebuild_formula_index_locked();
 
+  // A new member must also be handled in `clone_as`.
   std::string name_;
   // Non-empty only for chartsheets / dialog sheets / macro sheets and other
   // non-worksheet OOXML sheet types. Their XML and descendant parts are raw

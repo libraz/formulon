@@ -34,17 +34,25 @@ struct PivotStyleInfo {
 
 /// One pivot table definition + most recent evaluation result.
 ///
-/// Move-only. Designed to be held by the owning `Sheet` via
-/// `std::unique_ptr<PivotTable>` so the address is stable for as long as
-/// the sheet retains the pivot.
+/// Move-only; `clone()` is the one copy. Designed to be held by the owning
+/// `Sheet` via `std::unique_ptr<PivotTable>` so the address is stable for as
+/// long as the sheet retains the pivot.
 class PivotTable {
  public:
   PivotTable() = default;
 
-  PivotTable(const PivotTable&) = delete;
   PivotTable& operator=(const PivotTable&) = delete;
   PivotTable(PivotTable&&) = default;
   PivotTable& operator=(PivotTable&&) = default;
+
+  /// An independent copy of the definition with its own result mutex and no
+  /// cached result; the cache id is kept, so the copy shares the cache.
+  std::unique_ptr<PivotTable> clone() const {
+    std::unique_ptr<PivotTable> copy(new PivotTable(*this));
+    copy->last_result_mutex_ = std::make_shared<std::mutex>();
+    copy->last_result_.reset();
+    return copy;
+  }
 
   // Identity / cache binding -------------------------------------------------
 
@@ -396,6 +404,10 @@ class PivotTable {
   void set_subtotal_hidden_items(bool on) { subtotal_hidden_items_ = on; }
 
  private:
+  // Private so `clone()` is the only copy: the defaulted member-wise copy
+  // shares the result mutex and cache until `clone()` replaces them.
+  PivotTable(const PivotTable&) = default;
+
   static void erase_form_attrs(std::vector<std::pair<std::string, std::string>>& attrs) {
     std::vector<std::pair<std::string, std::string>> kept;
     for (auto& attr : attrs) {
