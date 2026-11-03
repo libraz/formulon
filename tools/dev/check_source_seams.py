@@ -161,6 +161,7 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
     ("pivot/filter_engine.h", "eval/collated_wildcard.h"): "The record filter keeps one caption matcher per filter.",
     ("pivot/filter_engine.cpp", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",
     ("pivot/pivot_evaluator.cpp", "eval/eval_profile_scope.h"): "Pivot evaluation scopes the collation profile.",
+    ("io/ooxml_writer.cpp", "eval/eval_profile_scope.h"): "Pivot write plans collate shared items like evaluation.",
 }
 
 _INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"')

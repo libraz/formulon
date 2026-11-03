@@ -5,15 +5,22 @@
 
 #include "io/pivot_cache_writer.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
+#include "pivot/record_access.h"
+#include "pivot/value_order.h"
 #include "value.h"
 
 namespace formulon::io {
@@ -124,9 +131,135 @@ void AppendSharedItemsHints(std::string& out, const pivot::SharedItemsHints& h) 
   append_raw_attrs(out, h.extra_attrs);
 }
 
+/// Sets a boolean content hint and its presence flag.
+void SetHint(bool& flag, bool& has, bool value) {
+  flag = value;
+  has = true;
+}
+
+/// Spells `v` the way `<n v>` does, for `minValue` / `maxValue`.
+std::string NumberText(double v) {
+  std::string text;
+  append_xml_number(text, v);
+  return text;
+}
+
+/// The `<sharedItems>` hints Excel writes for the kinds `items` holds.
+pivot::SharedItemsHints DeriveHints(const std::vector<Value>& items) {
+  std::size_t numbers = 0;
+  std::size_t texts = 0;
+  std::size_t blanks = 0;
+  std::size_t others = 0;
+  bool integral = true;
+  double lo = 0.0;
+  double hi = 0.0;
+  for (const Value& v : items) {
+    if (v.is_number()) {
+      const double d = v.as_number();
+      lo = numbers == 0 ? d : std::min(lo, d);
+      hi = numbers == 0 ? d : std::max(hi, d);
+      integral = integral && std::isfinite(d) && d == std::floor(d);
+      ++numbers;
+    } else if (v.is_text()) {
+      ++texts;
+    } else if (v.is_blank()) {
+      ++blanks;
+    } else {
+      ++others;
+    }
+  }
+  pivot::SharedItemsHints h;
+  if (others > 0 || items.empty()) {
+    return h;
+  }
+  if (numbers == 0) {
+    if (texts == 0) {
+      SetHint(h.contains_string, h.has_contains_string, false);
+    }
+    if (blanks > 0) {
+      SetHint(h.contains_blank, h.has_contains_blank, true);
+    }
+  } else if (texts == 0) {
+    if (blanks == 0) {
+      SetHint(h.contains_semi_mixed, h.has_contains_semi_mixed, false);
+    }
+    SetHint(h.contains_string, h.has_contains_string, false);
+    if (blanks > 0) {
+      SetHint(h.contains_blank, h.has_contains_blank, true);
+    }
+    SetHint(h.contains_number, h.has_contains_number, true);
+    if (integral) {
+      SetHint(h.contains_integer, h.has_contains_integer, true);
+    }
+    h.has_min_value = true;
+    h.min_value = NumberText(lo);
+    h.has_max_value = true;
+    h.max_value = NumberText(hi);
+  } else {
+    SetHint(h.contains_mixed_types, h.has_contains_mixed_types, true);
+    SetHint(h.contains_number, h.has_contains_number, true);
+    if (blanks > 0) {
+      SetHint(h.contains_blank, h.has_contains_blank, true);
+    }
+  }
+  h.present = true;
+  return h;
+}
+
+bool OnDiscreteAxis(pivot::PivotAxis axis) {
+  return axis == pivot::PivotAxis::Row || axis == pivot::PivotAxis::Col || axis == pivot::PivotAxis::Page;
+}
+
 }  // namespace
 
-std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
+PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
+                                                 const std::vector<const pivot::PivotTable*>& tables) {
+  PivotCacheWritePlan plan;
+  plan.fields.resize(cache.fields().size());
+  for (std::size_t fi = 0; fi < cache.fields().size(); ++fi) {
+    const pivot::PivotCacheField& field = cache.fields()[fi];
+    if (!field.is_database_field || !field.shared_items.empty() || field.shared_items_hints.present ||
+        !field.field_group_xml.empty()) {
+      continue;
+    }
+    bool wanted = false;
+    for (const pivot::PivotTable* table : tables) {
+      if (table != nullptr && fi < table->fields().size()) {
+        const pivot::PivotField& pf = table->fields()[fi];
+        wanted = wanted || OnDiscreteAxis(pf.axis) || !pf.items.empty();
+      }
+    }
+    for (std::size_t r = 0; r < cache.records().size() && !wanted; ++r) {
+      const Value v = pivot::cell_value(cache, cache.records()[r], fi);
+      wanted = v.is_text() || v.is_boolean() || v.is_error() || v.is_blank();
+    }
+    if (!wanted) {
+      continue;
+    }
+    PivotCacheFieldWritePlan& fp = plan.fields[fi];
+    std::map<Value, std::uint32_t, pivot::ValueLess> seen;
+    fp.record_index.reserve(cache.records().size());
+    for (const pivot::PivotCacheRecord& record : cache.records()) {
+      const Value v = pivot::cell_value(cache, record, fi);
+      const auto inserted = seen.emplace(v, static_cast<std::uint32_t>(fp.items.size()));
+      if (inserted.second) {
+        fp.items.push_back(v);
+      }
+      fp.record_index.push_back(inserted.first->second);
+    }
+    fp.derived = true;
+    fp.hints = DeriveHints(fp.items);
+    fp.asc_order.resize(fp.items.size());
+    for (std::size_t k = 0; k < fp.asc_order.size(); ++k) {
+      fp.asc_order[k] = static_cast<std::uint32_t>(k);
+    }
+    std::stable_sort(fp.asc_order.begin(), fp.asc_order.end(),
+                     [&fp](std::uint32_t a, std::uint32_t b) { return pivot::value_less(fp.items[a], fp.items[b]); });
+  }
+  return plan;
+}
+
+std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const PivotCacheWritePlan* plan) {
   std::string out;
   // Pre-reserve a rough lower bound: declaration + root attrs + per-field
   // cost. Empirically ~80B per shared item, ~120B per field; this trims
@@ -192,7 +325,13 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   append_xml_attr_uint(out, "count", cache.fields().size());
   out.append(">");
 
+  std::size_t field_index = 0;
   for (const pivot::PivotCacheField& field : cache.fields()) {
+    const PivotCacheFieldWritePlan* derived =
+        plan != nullptr && field_index < plan->fields.size() && plan->fields[field_index].derived
+            ? &plan->fields[field_index]
+            : nullptr;
+    ++field_index;
     out.append("<cacheField");
     append_xml_attr(out, "name", field.name);
     // `databaseField` defaults to true; emit `="0"` only for a
@@ -203,7 +342,16 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
     append_raw_attrs(out, field.extra_attrs);
     out.append(">");
 
-    if (field.shared_items.empty()) {
+    if (derived != nullptr) {
+      out.append("<sharedItems");
+      AppendSharedItemsHints(out, derived->hints);
+      append_xml_attr_uint(out, "count", derived->items.size());
+      out.append(">");
+      for (const Value& item : derived->items) {
+        AppendInlineTypedValue(out, item);
+      }
+      out.append("</sharedItems>");
+    } else if (field.shared_items.empty()) {
       // Range-typed field: re-emit the captured numeric / date range +
       // grouping hints so Excel's Refresh keeps its grouping boundaries.
       // Falls back to a minimal `containsNumber="1"` placeholder when the
@@ -240,7 +388,7 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   return out;
 }
 
-std::string write_pivot_cache_records(const pivot::PivotCache& cache) {
+std::string write_pivot_cache_records(const pivot::PivotCache& cache, const PivotCacheWritePlan* plan) {
   std::string out;
   // Per-record cost is roughly 7B (`<r></r>`) + per-cell cost. `<x v="N"/>`
   // is ~10B for small N, inline-typed cells run ~12B for blanks up to
@@ -255,13 +403,22 @@ std::string write_pivot_cache_records(const pivot::PivotCache& cache) {
   append_xml_attr_uint(out, "count", cache.records().size());
   out.append(">");
 
+  std::size_t record_ordinal = 0;
   for (const pivot::PivotCacheRecord& record : cache.records()) {
+    const std::size_t r = record_ordinal++;
     out.append("<r>");
     for (std::size_t i = 0; i < field_count; ++i) {
       // Only database fields carry a per-record cell; grouping-derived
       // fields (`databaseField="0"`) are excluded so the record arity
       // matches Excel's (one cell per database field).
       if (!cache.fields()[i].is_database_field) {
+        continue;
+      }
+      if (plan != nullptr && i < plan->fields.size() && plan->fields[i].derived &&
+          r < plan->fields[i].record_index.size()) {
+        out.append("<x");
+        append_xml_attr_uint(out, "v", plan->fields[i].record_index[r]);
+        out.append("/>");
         continue;
       }
       // Missing trailing cells become `<m/>` so every `<r>` has exactly one

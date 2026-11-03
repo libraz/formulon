@@ -21,11 +21,53 @@
 #ifndef FORMULON_IO_PIVOT_CACHE_WRITER_H_
 #define FORMULON_IO_PIVOT_CACHE_WRITER_H_
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
+#include "value.h"
 
 namespace formulon::io {
+
+/// Write-time shape of one cache field.
+struct PivotCacheFieldWritePlan {
+  /// True when the writer emits the field as a discrete one with shared items
+  /// built from its record values; false keeps the model's own encoding.
+  bool derived = false;
+  /// Distinct record values in first-appearance order (the shared items).
+  std::vector<Value> items;
+  /// `<sharedItems>` content hints to emit alongside `items`.
+  pivot::SharedItemsHints hints;
+  /// Per record, the index into `items` of its value.
+  std::vector<std::uint32_t> record_index;
+  /// Indices into `items` in ascending `value_less` order, blank last.
+  std::vector<std::uint32_t> asc_order;
+};
+
+/// Per-field write plan of one cache, parallel to `cache.fields()`.
+///
+/// A cache built through the C API carries no shared items: text columns sit
+/// inline in the records and the definition declares them numeric, which Excel
+/// cannot open. The plan derives the discrete form at write time so the model
+/// stays as authored.
+struct PivotCacheWritePlan {
+  std::vector<PivotCacheFieldWritePlan> fields;
+};
+
+/// Builds the plan for `cache`; `tables` are the pivot tables drawing on it.
+///
+/// A field is derived only when it is a database field with no shared items,
+/// no captured hints and no grouping, and either some table puts it on the
+/// Row / Col / Page axis or authors items for it, or a record value is text,
+/// boolean, error or blank. A purely numeric, blank-free field off every axis
+/// keeps the range-typed placeholder.
+///
+/// The caller must hold an `eval::ScopedEvalProfile`: values are deduplicated
+/// and ordered with `pivot::value_less`.
+PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
+                                                 const std::vector<const pivot::PivotTable*>& tables);
 
 /// Emits a complete `xl/pivotCache/pivotCacheDefinition*.xml` document.
 ///
@@ -52,7 +94,11 @@ namespace formulon::io {
 /// `r:id="rId1"` on the root is a stable placeholder for the records
 /// part; the cache-definition's own rels file (emitted by the writer-
 /// integration PR) will define `rId1` as the records-part target.
-std::string write_pivot_cache_definition(const pivot::PivotCache& cache);
+///
+/// With a non-null `plan`, a derived field is written as a discrete field:
+/// `<sharedItems>` lists the plan's items with its hints. A null plan writes
+/// the model as it stands.
+std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const PivotCacheWritePlan* plan = nullptr);
 
 /// Emits a complete `xl/pivotCache/pivotCacheRecords*.xml` document.
 ///
@@ -69,7 +115,10 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache);
 /// `<r>`, padding with `<m/>` when the record holds fewer cells than the
 /// field count. Excess cells beyond the field count are silently ignored
 /// (the reader truncates symmetrically).
-std::string write_pivot_cache_records(const pivot::PivotCache& cache);
+///
+/// With a non-null `plan`, a derived field's cell is always the shared-item
+/// index `<x v="plan.record_index[r]"/>`, whatever the model holds.
+std::string write_pivot_cache_records(const pivot::PivotCache& cache, const PivotCacheWritePlan* plan = nullptr);
 
 }  // namespace formulon::io
 

@@ -13,8 +13,12 @@
 #include <variant>
 #include <vector>
 
+#include "eval/eval_profile_scope.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/pivot_cache_writer.h"
 #include "io/pivot_table_reader.h"
+#include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 
@@ -1278,6 +1282,120 @@ TEST(PivotTableWriter, AuthoredPageFieldsAreNotDuplicated) {
   EXPECT_NE(xml.find("<pageField fld=\"0\" item=\"3\"/>"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("hier=\"-1\""), std::string::npos) << xml;
   EXPECT_EQ(xml.find("<pageFields", xml.find("<pageFields") + 1), std::string::npos) << xml;
+}
+
+// ---------------------------------------------------------------------------
+// Items synthesized from a cache write plan
+// ---------------------------------------------------------------------------
+
+// A one-field cache whose records read West, East, blank, North; the shared
+// items are therefore West(0) East(1) blank(2) North(3), ascending 1 3 0 2.
+struct DerivedRegion {
+  pivot::PivotCache cache;
+  PivotCacheWritePlan plan;
+
+  DerivedRegion() {
+    const eval::ScopedEvalProfile scope(default_excel_profile());
+    pivot::PivotCacheField field;
+    field.name = "Region";
+    cache.mutable_fields().push_back(std::move(field));
+    for (const char* text : {"West", "East", "", "North"}) {
+      pivot::PivotCacheRecord record;
+      if (text[0] == '\0') {
+        record.cells.push_back(Value::blank());
+      } else {
+        cache.mutable_text_storage().emplace_back(text);
+        record.cells.push_back(Value::text(cache.mutable_text_storage().back()));
+      }
+      cache.mutable_records().push_back(std::move(record));
+    }
+    plan = build_pivot_cache_write_plan(cache, {});
+  }
+};
+
+pivot::PivotTable RegionTable(pivot::PivotAxis axis) {
+  pivot::PivotTable table;
+  table.set_anchor(0U, 0U, 1U, 1U);
+  pivot::PivotField region;
+  region.source_name = "Region";
+  region.axis = axis;
+  table.mutable_fields().push_back(std::move(region));
+  return table;
+}
+
+bool Has(const std::string& xml, std::string_view needle) {
+  return xml.find(needle) != std::string::npos;
+}
+
+TEST(PivotTableWriter, SynthesizedItemsFollowAscendingOrderWithBlankLast) {
+  const DerivedRegion derived;
+  pivot::PivotTable table = RegionTable(pivot::PivotAxis::Row);
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &derived.plan);
+  EXPECT_TRUE(Has(xml,
+                  "<items count=\"5\"><item x=\"1\"/><item x=\"3\"/><item x=\"0\"/><item x=\"2\"/>"
+                  "<item t=\"default\"/></items>"))
+      << xml;
+  // The model is not mutated.
+  EXPECT_TRUE(table.fields()[0].items.empty());
+}
+
+TEST(PivotTableWriter, SynthesizedItemsReverseForDescending) {
+  const DerivedRegion derived;
+  pivot::PivotTable table = RegionTable(pivot::PivotAxis::Row);
+  table.mutable_fields()[0].sort.ascending = false;
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &derived.plan);
+  EXPECT_TRUE(Has(xml, "<item x=\"2\"/><item x=\"0\"/><item x=\"3\"/><item x=\"1\"/><item t=\"default\"/>")) << xml;
+}
+
+TEST(PivotTableWriter, SynthesizedItemsKeepSharedOrderForManualSort) {
+  const DerivedRegion derived;
+  pivot::PivotTable table = RegionTable(pivot::PivotAxis::Col);
+  table.mutable_fields()[0].sort.manual = true;
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &derived.plan);
+  EXPECT_TRUE(Has(xml, "<item x=\"0\"/><item x=\"1\"/><item x=\"2\"/><item x=\"3\"/><item t=\"default\"/>")) << xml;
+  EXPECT_FALSE(Has(xml, "sortType=")) << xml;
+}
+
+TEST(PivotTableWriter, SynthesizedItemsCoverAPageField) {
+  const DerivedRegion derived;
+  pivot::PivotTable table = RegionTable(pivot::PivotAxis::Page);
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &derived.plan);
+  EXPECT_TRUE(Has(xml, "axis=\"axisPage\"")) << xml;
+  EXPECT_TRUE(Has(xml, "<items count=\"5\">")) << xml;
+}
+
+TEST(PivotTableWriter, OffAxisDerivedFieldGetsNoSynthesizedItems) {
+  const DerivedRegion derived;
+  pivot::PivotTable table = RegionTable(pivot::PivotAxis::Value);
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &derived.plan);
+  EXPECT_FALSE(Has(xml, "<items")) << xml;
+}
+
+TEST(PivotTableWriter, AuthoredItemsBindByLabelAndMissingSharedItemsFollow) {
+  const DerivedRegion derived;
+  pivot::PivotTable table = RegionTable(pivot::PivotAxis::Row);
+  pivot::PivotItem north;
+  north.name = "North";
+  pivot::PivotItem east;
+  east.name = "East";
+  east.visible = false;
+  table.mutable_fields()[0].items.push_back(north);
+  table.mutable_fields()[0].items.push_back(east);
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &derived.plan);
+  EXPECT_TRUE(Has(xml,
+                  "<items count=\"5\"><item x=\"3\"/><item x=\"1\" h=\"1\"/><item x=\"0\"/><item x=\"2\"/>"
+                  "<item t=\"default\"/></items>"))
+      << xml;
+}
+
+TEST(PivotTableWriter, DefaultSubtotalOffDropsTheDefaultMarkerOfSynthesizedItems) {
+  const DerivedRegion derived;
+  pivot::PivotTable table = RegionTable(pivot::PivotAxis::Row);
+  table.mutable_fields()[0].default_subtotal = false;
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &derived.plan);
+  EXPECT_TRUE(Has(xml, "defaultSubtotal=\"0\"")) << xml;
+  EXPECT_TRUE(Has(xml, "<items count=\"4\">")) << xml;
+  EXPECT_FALSE(Has(xml, "t=\"default\"")) << xml;
 }
 
 }  // namespace

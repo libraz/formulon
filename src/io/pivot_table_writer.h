@@ -31,6 +31,7 @@
 #include <optional>
 #include <string>
 
+#include "io/pivot_cache_writer.h"
 #include "pivot/pivot_table.h"
 
 namespace formulon::io {
@@ -88,10 +89,17 @@ struct PivotRenderedSpan {
 /// Passing it unconditionally is therefore safe — this function owns the
 /// choice.
 ///
+/// `plan` is the write plan of the cache the table draws on. A field the plan
+/// derives as discrete gets `<items>` bound to the derived shared items: for
+/// an axis field with none authored they are synthesized in the field's sort
+/// order, and authored items are bound by label with the missing shared items
+/// appended. Null emits the items the model holds.
+///
 /// Returns an owning `std::string`; there is no error channel because
 /// the inputs are pure-data (no I/O, no allocation failure surfaced).
 std::string write_pivot_table_definition(const pivot::PivotTable& table,
-                                         std::optional<PivotRenderedSpan> rendered_span = std::nullopt);
+                                         std::optional<PivotRenderedSpan> rendered_span = std::nullopt,
+                                         const PivotCacheWritePlan* plan = nullptr);
 
 }  // namespace formulon::io
 

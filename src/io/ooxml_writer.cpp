@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,6 +34,7 @@
 #include <vector>
 
 #include "chart/chart_cache.h"
+#include "eval/eval_profile_scope.h"
 #include "external_link.h"
 #include "io/auto_filter_xml.h"
 #include "io/comments_writer.h"
@@ -443,6 +445,32 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
   }
 
+  // Write plans bind each cache's inline text and blank columns to shared
+  // items. Dedupe and ordering collate text, so they run under the workbook's
+  // profile.
+  std::map<std::uint32_t, PivotCacheWritePlan> cache_plans;
+  {
+    const eval::ScopedEvalProfile profile_scope(wb.excel_profile());
+    for (const std::unique_ptr<pivot::PivotCache>& cache : wb.pivot_caches()) {
+      if (cache == nullptr) {
+        continue;
+      }
+      std::vector<const pivot::PivotTable*> users;
+      for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
+        for (const std::unique_ptr<pivot::PivotTable>& table : wb.sheet(si).pivot_tables()) {
+          if (table != nullptr && table->pivot_cache_id() == cache->cache_id()) {
+            users.push_back(table.get());
+          }
+        }
+      }
+      cache_plans.emplace(cache->cache_id(), build_pivot_cache_write_plan(*cache, users));
+    }
+  }
+  const auto plan_for = [&cache_plans](std::uint32_t cache_id) -> const PivotCacheWritePlan* {
+    const auto it = cache_plans.find(cache_id);
+    return it == cache_plans.end() ? nullptr : &it->second;
+  };
+
   // 8. Pivot caches — for each planned cache, emit the definition, the
   // records, and the definition's own rels file (which points at the
   // matching records part). The records target stored on the rels file
@@ -465,13 +493,15 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                         std::move(context));
     }
     {
-      auto result = AddPart(writer.get(), c.definition_path, write_pivot_cache_definition(*c.cache), &written_paths);
+      auto result = AddPart(writer.get(), c.definition_path,
+                            write_pivot_cache_definition(*c.cache, plan_for(c.cache_id)), &written_paths);
       if (!result) {
         return std::move(result.error());
       }
     }
     {
-      auto result = AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache), &written_paths);
+      auto result = AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache, plan_for(c.cache_id)),
+                            &written_paths);
       if (!result) {
         return std::move(result.error());
       }
@@ -497,8 +527,10 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // Sheet-rels emission in step 5 already wired a rId to each part.
   for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
     for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
-      auto result = AddPart(writer.get(), t.path,
-                            write_pivot_table_definition(*t.table, ProjectPivotSpan(wb, *t.table)), &written_paths);
+      auto result = AddPart(
+          writer.get(), t.path,
+          write_pivot_table_definition(*t.table, ProjectPivotSpan(wb, *t.table), plan_for(t.table->pivot_cache_id())),
+          &written_paths);
       if (!result) {
         return std::move(result.error());
       }
