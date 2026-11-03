@@ -32,6 +32,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/rate_secant.h"
+#include "eval/scalar_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -748,23 +749,14 @@ Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const 
   // This family is scalar-only, follows the Analysis-ToolPak argument
   // rule, and propagates the left-most argument error (none opt out of
   // that rule), matching the eager dispatcher's pre-evaluation contract.
-  const std::uint32_t evaluated = atp_evaluated_arity(call, entry->min_arity, entry->max_arity);
   std::vector<Value> args;
-  args.reserve(evaluated);
-  for (std::uint32_t i = 0; i < evaluated; ++i) {
-    Value v = eval_node(call.as_call_arg(i), arena, registry, ctx);
-    if (v.is_error()) {
-      return v;
-    }
-    const bool logical = ((entry->logical_args >> i) & 1U) != 0U;
-    const Value atp =
-        atp_arg_error(call.as_call_arg(i), v, atp_slot_required(i, entry->min_arity, entry->max_arity), logical);
-    if (atp.is_error()) {
-      return atp;
-    }
-    args.push_back(v);
+  if (const Value err = eval_scalar_call_args(call, entry->min_arity, entry->max_arity, /*atp_rule=*/true,
+                                              entry->logical_args, arena, registry, ctx, args);
+      err.is_error()) {
+    return err;
   }
-  return entry->impl(args.empty() ? nullptr : args.data(), evaluated, arena, ctx.date1904());
+  return entry->impl(args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()), arena,
+                     ctx.date1904());
 }
 
 }  // namespace eval

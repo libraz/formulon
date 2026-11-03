@@ -14,7 +14,7 @@
 #include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
-#include "eval/omitted_arg.h"
+#include "eval/scalar_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -108,25 +108,14 @@ Value eval_datetime_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // Calendar functions are scalar-only and propagate the left-most argument
   // error (they never opt out of `propagate_errors`), matching the eager
   // dispatcher's pre-evaluation contract.
-  const std::uint32_t evaluated =
-      entry->analysis_toolpak ? atp_evaluated_arity(call, entry->min_arity, entry->max_arity) : arity;
   std::vector<Value> args;
-  args.reserve(evaluated);
-  for (std::uint32_t i = 0; i < evaluated; ++i) {
-    Value v = eval_node(call.as_call_arg(i), arena, registry, ctx);
-    if (v.is_error()) {
-      return v;
-    }
-    if (entry->analysis_toolpak) {
-      const Value atp = atp_arg_error(call.as_call_arg(i), v, atp_slot_required(i, entry->min_arity, entry->max_arity));
-      if (atp.is_error()) {
-        return atp;
-      }
-    }
-    args.push_back(v);
+  if (const Value err = eval_scalar_call_args(call, entry->min_arity, entry->max_arity, entry->analysis_toolpak, 0U,
+                                              arena, registry, ctx, args);
+      err.is_error()) {
+    return err;
   }
-  return invoke_date_entry(*entry, args.empty() ? nullptr : args.data(), evaluated, arena, ctx.date1904(),
-                           ctx.wall_clock());
+  return invoke_date_entry(*entry, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()), arena,
+                           ctx.date1904(), ctx.wall_clock());
 }
 
 }  // namespace eval
