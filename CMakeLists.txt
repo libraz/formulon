@@ -283,6 +283,7 @@ set(FORMULON_CORE_SOURCES
   src/drawing/drawing_xml.cpp
   src/drawing/image_header.cpp
   src/drawing/drawing_edit.cpp
+  src/drawing/drawing_snapshot.cpp
   src/drawing/shape_edit.cpp
   src/drawing/slicer_edit.cpp
   src/chart/chart_xml.cpp
@@ -292,6 +293,10 @@ set(FORMULON_CORE_SOURCES
   src/chart/chart_cache.cpp
   src/chart/chart_template.cpp
   src/chart/chart_edit.cpp
+  src/chart/chart_edit_filter.cpp
+  src/chart/chart_edit_style.cpp
+  src/chart/chart_edit_type.cpp
+  src/chart/chart_edit_xml.cpp
   src/eval/array_alloc.cpp
   src/eval/coerce.cpp
   src/eval/rng.cpp

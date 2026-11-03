@@ -73,6 +73,9 @@ std::string chart_cycle_color(const pugi::xml_node& style, std::size_t idx);
 std::string chart_rect_ref(const std::string& sheet_name, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
                            std::uint32_t right);
 
+/// Appends the `a:ln` in the tx1 tint `lum` percent (e.g. 15 for gridlines, 35 for leader lines).
+void append_grey_ln(std::string& x, int lum);
+
 }  // namespace formulon
 
 #endif  // FORMULON_CHART_CHART_TEMPLATE_H_

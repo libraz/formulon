@@ -1,5 +1,5 @@
 //
-// XML namespaces and extension URIs the chart editors write into chart parts.
+// XML namespaces, content types and extension URIs the chart and drawing editors write.
 // Values are byte-identical to what Excel emits.
 
 #ifndef FORMULON_CHART_CHART_NS_H_
@@ -12,6 +12,10 @@ namespace chart_ns {
 inline constexpr const char* kNsC = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 /// DrawingML main namespace (`a:`).
 inline constexpr const char* kNsA = "http://schemas.openxmlformats.org/drawingml/2006/main";
+/// SpreadsheetDrawing namespace (`xdr:`).
+inline constexpr const char* kNsXdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+/// Content type of a worksheet drawing part.
+inline constexpr const char* kCtDrawing = "application/vnd.openxmlformats-officedocument.drawing+xml";
 /// Office 2013 chart extension namespace (`c15:`).
 inline constexpr const char* kNsC15 = "http://schemas.microsoft.com/office/drawing/2012/chart";
 /// Office 2016 chartex namespace (`cx:`).

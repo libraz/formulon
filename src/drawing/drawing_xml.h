@@ -147,6 +147,15 @@ std::vector<DrawingObject> read_drawing_objects(const pugi::xml_document& doc,
 /// when a chartsheet's rels part does not parse.
 Expected<std::string, Error> sheet_drawing_path(const Workbook& wb, std::size_t sheet);
 
+/// Parses the drawing part at `path` into `doc`. Fails with
+/// `kIoDrawingUnparseable` when the part is missing or does not parse.
+Expected<void, Error> load_drawing_part(const Workbook& wb, std::string_view path, pugi::xml_document& doc);
+
+/// Path of sheet `sheet`'s typed-editable drawing, or empty when it has none.
+/// Fails with `kInvalidArgument` for a bad sheet or a non-worksheet, and with
+/// `kIoDrawingUnparseable` for a drawing retained from an `.xlsb` package.
+Expected<std::string, Error> editable_drawing_path(const Workbook& wb, std::size_t sheet);
+
 /// The relationships of the part at `part_path`; none when it has no rels
 /// part. Fails with `kIoDrawingUnparseable` when the rels part does not parse.
 Expected<std::vector<io::ooxml::DrawingRel>, Error> load_part_rels(const Workbook& wb, std::string_view part_path);

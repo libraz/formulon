@@ -10,22 +10,25 @@
 #include <utility>
 #include <vector>
 
+#include "chart/chart_ns.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/drawing_geometry.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml_defs.h"
+#include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "sheet.h"
-#include "unknown_relationship.h"
 #include "utils/number_text.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace {
 
-constexpr const char* kCtDrawing = "application/vnd.openxmlformats-officedocument.drawing+xml";
-constexpr const char* kNsXdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
-constexpr const char* kNsA = "http://schemas.openxmlformats.org/drawingml/2006/main";
+using chart_ns::kCtDrawing;
+using chart_ns::kNsA;
+using chart_ns::kNsXdr;
 constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 constexpr std::string_view kFillNames[] = {"noFill", "solidFill", "gradFill", "blipFill", "pattFill", "grpFill"};
 
@@ -51,7 +54,7 @@ std::optional<std::string> bound_prefix(pugi::xml_node node, std::string_view ur
   for (pugi::xml_node n = node; n; n = n.parent()) {
     for (pugi::xml_attribute attr = n.first_attribute(); attr; attr = attr.next_attribute()) {
       const std::string_view name = attr.name();
-      if (attr.value() == uri && (name == "xmlns" || name.rfind("xmlns:", 0) == 0)) {
+      if (attr.value() == uri && (name == "xmlns" || strings::starts_with(name, "xmlns:"))) {
         return name == "xmlns" ? std::string() : std::string(name.substr(6)) + ":";
       }
     }
@@ -137,31 +140,6 @@ ShapeInfo read_shape(pugi::xml_node anchor, DrawingObject object) {
   return info;
 }
 
-Expected<void, Error> load_drawing(const Workbook& wb, const std::string& path, pugi::xml_document& doc) {
-  const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
-  if (part == nullptr) {
-    return make_error(FormulonErrorCode::kIoDrawingUnparseable, "drawing: part is missing", path);
-  }
-  return parse_drawing_part(part->bytes, doc);
-}
-
-Expected<std::string, Error> editable_path(const Workbook& wb, std::size_t sheet) {
-  if (sheet >= wb.sheet_count()) {
-    return invalid("drawing: sheet index out of range");
-  }
-  const Sheet& ws = wb.sheet(sheet);
-  for (const UnknownRelationship& rel : ws.unknown_relationships()) {
-    if (rel.type == io::kRelDrawing) {
-      return make_error(FormulonErrorCode::kIoDrawingUnparseable,
-                        "drawing: drawing retained from an xlsb package is not editable", ws.name());
-    }
-  }
-  if (ws.is_opaque_ooxml_sheet()) {
-    return invalid("drawing: only a worksheet's drawing is editable");
-  }
-  return ws.drawing_rel_target();
-}
-
 pugi::xml_node find_shape(pugi::xml_node root, std::uint32_t object_id) {
   for (pugi::xml_node anchor : drawing_anchors(root, false)) {
     const DrawingObject obj = read_drawing_object(anchor, {});
@@ -170,11 +148,6 @@ pugi::xml_node find_shape(pugi::xml_node root, std::uint32_t object_id) {
     }
   }
   return {};
-}
-
-void set_llong_attr(pugi::xml_node node, const char* name, std::int64_t value) {
-  pugi::xml_attribute attr = node.attribute(name);
-  (attr ? attr : node.append_attribute(name)).set_value(static_cast<long long>(value));
 }
 
 // The `child` element of `parent`, created (first or last) when absent.
@@ -271,19 +244,21 @@ Expected<void, Error> place(const Workbook& wb, std::size_t sheet, pugi::xml_nod
   std::int64_t off_y = spec.from.row_off;
   std::int64_t cx = spec.cx;
   std::int64_t cy = spec.cy;
+  std::optional<Geometry> geo;
   if (absolute) {
     pugi::xml_node pos = child_local(anchor, "pos");
-    set_llong_attr(pos, "x", off_x);
-    set_llong_attr(pos, "y", off_y);
+    io::set_attr(pos, "x", off_x);
+    io::set_attr(pos, "y", off_y);
   } else {
+    geo.emplace(wb, wb.sheet(sheet));
     write_anchor_point(child_local(anchor, "from"), spec.from);
-    off_x += sheet_offset_emu(wb, sheet, false, spec.from.col);
-    off_y += sheet_offset_emu(wb, sheet, true, spec.from.row);
+    off_x += geo->offset(false, spec.from.col);
+    off_y += geo->offset(true, spec.from.row);
   }
   if (two_cell) {
     write_anchor_point(child_local(anchor, "to"), spec.to);
-    cx = sheet_offset_emu(wb, sheet, false, spec.to.col) + spec.to.col_off - off_x;
-    cy = sheet_offset_emu(wb, sheet, true, spec.to.row) + spec.to.row_off - off_y;
+    cx = geo->offset(false, spec.to.col) + spec.to.col_off - off_x;
+    cy = geo->offset(true, spec.to.row) + spec.to.row_off - off_y;
     pugi::xml_attribute edit_as = anchor.attribute("editAs");
     if (spec.edit_as == EditAs::kTwoCell) {
       anchor.remove_attribute(edit_as);
@@ -293,17 +268,17 @@ Expected<void, Error> place(const Workbook& wb, std::size_t sheet, pugi::xml_nod
     }
   } else {
     pugi::xml_node ext = child_local(anchor, "ext");
-    set_llong_attr(ext, "cx", cx);
-    set_llong_attr(ext, "cy", cy);
+    io::set_attr(ext, "cx", cx);
+    io::set_attr(ext, "cy", cy);
   }
   pugi::xml_node xfrm = ensure_xfrm(props_of(content));
   const std::string ap = a_prefix(xfrm);
   pugi::xml_node off = ensure_child(xfrm, ap + "off", true);
-  set_llong_attr(off, "x", off_x);
-  set_llong_attr(off, "y", off_y);
+  io::set_attr(off, "x", off_x);
+  io::set_attr(off, "y", off_y);
   pugi::xml_node ext = ensure_child(xfrm, ap + "ext");
-  set_llong_attr(ext, "cx", std::max<std::int64_t>(cx, 0));
-  set_llong_attr(ext, "cy", std::max<std::int64_t>(cy, 0));
+  io::set_attr(ext, "cx", std::max<std::int64_t>(cx, 0));
+  io::set_attr(ext, "cy", std::max<std::int64_t>(cy, 0));
   return Expected<void, Error>::Ok();
 }
 
@@ -428,14 +403,14 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
     if (spec.line_width_emu < 0 || spec.line_width_emu >= kEmuLimit) {
       return invalid("shape: line width out of range");
     }
-    set_llong_attr(ensure_ln(props), "w", spec.line_width_emu);
+    io::set_attr(ensure_ln(props), "w", spec.line_width_emu);
   }
   if ((f & shape_field::kRotation) != 0U) {
     pugi::xml_node xfrm = ensure_xfrm(props);
     if (spec.rotation == 0) {
       xfrm.remove_attribute("rot");
     } else {
-      set_llong_attr(xfrm, "rot", spec.rotation);
+      io::set_attr(xfrm, "rot", spec.rotation);
     }
   }
   if ((f & shape_field::kText) != 0U) {
@@ -445,8 +420,8 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
 }
 
 bool is_connector_prst(const std::string& prst) {
-  return prst == "line" || prst == "straightConnector1" || prst.rfind("bentConnector", 0) == 0 ||
-         prst.rfind("curvedConnector", 0) == 0;
+  return prst == "line" || prst == "straightConnector1" || strings::starts_with(prst, "bentConnector") ||
+         strings::starts_with(prst, "curvedConnector");
 }
 
 void add_marker(pugi::xml_node parent, const std::string& xp, const char* tag) {
@@ -465,7 +440,7 @@ Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::siz
     return shapes;
   }
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_drawing(wb, path, doc));
+  RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   for (pugi::xml_node anchor : drawing_anchors(doc.document_element(), false)) {
     DrawingObject obj = read_drawing_object(anchor, {});
     if (is_shape_kind(obj.kind)) {
@@ -476,7 +451,7 @@ Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::siz
 }
 
 Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, const ShapeSpec& spec) {
-  ASSIGN_OR_RETURN(std::string path, editable_path(wb, sheet));
+  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if ((spec.fields & shape_field::kAnchor) == 0U) {
     return invalid("shape: an anchor is required");
   }
@@ -494,7 +469,7 @@ Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, con
     }
     doc.append_child("xdr:wsDr").append_attribute("xmlns:xdr").set_value(kNsXdr);
   } else {
-    RETURN_IF_ERROR(load_drawing(wb, path, doc));
+    RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   }
   pugi::xml_node root = doc.document_element();
   const std::string xp = xdr_prefix(root);
@@ -563,12 +538,12 @@ Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, con
 }
 
 Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id, const ShapeSpec& spec) {
-  ASSIGN_OR_RETURN(std::string path, editable_path(wb, sheet));
+  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   pugi::xml_document doc;
   if (path.empty()) {
     return invalid("shape: no shape with that id");
   }
-  RETURN_IF_ERROR(load_drawing(wb, path, doc));
+  RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   pugi::xml_node anchor = find_shape(doc.document_element(), object_id);
   if (!anchor) {
     return invalid("shape: no shape with that id");
@@ -584,12 +559,12 @@ Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_
 }
 
 Expected<void, Error> remove_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id) {
-  ASSIGN_OR_RETURN(std::string path, editable_path(wb, sheet));
+  ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   pugi::xml_document doc;
   if (path.empty()) {
     return invalid("shape: no shape with that id");
   }
-  RETURN_IF_ERROR(load_drawing(wb, path, doc));
+  RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   pugi::xml_node root = doc.document_element();
   pugi::xml_node top = find_shape(root, object_id);
   if (!top) {

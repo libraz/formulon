@@ -8,7 +8,9 @@
 #include <string_view>
 #include <utility>
 
+#include "chart/chart_ns.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/drawing_geometry.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml_defs.h"
@@ -206,24 +208,19 @@ Expected<pugi::xml_node, Error> load_slicer_node(const Workbook& wb, const Slot&
   return invalid("slicer: slicer element is missing");
 }
 
-void put_attr(pugi::xml_node node, const char* name, const std::string& value) {
-  pugi::xml_attribute attr = node.attribute(name);
-  (attr ? attr : node.append_attribute(name)).set_value(value.c_str());
-}
-
 // Sets `name` to `value`, or removes it when `value` is the schema default.
 void put_attr_unless(pugi::xml_node node, const char* name, const std::string& value, std::string_view dflt) {
   if (value == dflt) {
     node.remove_attribute(name);
   } else {
-    put_attr(node, name, value);
+    io::set_attr(node, name, value);
   }
 }
 
 void apply_slicer(pugi::xml_node node, const SlicerSpec& s) {
   using namespace slicer_field;
   if ((s.fields & kCaption) != 0U) {
-    put_attr(node, "caption", s.caption);
+    io::set_attr(node, "caption", s.caption);
   }
   if ((s.fields & kStyle) != 0U) {
     put_attr_unless(node, "style", s.style, "");
@@ -232,7 +229,7 @@ void apply_slicer(pugi::xml_node node, const SlicerSpec& s) {
     put_attr_unless(node, "columnCount", std::to_string(s.column_count), "1");
   }
   if ((s.fields & kRowHeight) != 0U) {
-    put_attr(node, "rowHeight", std::to_string(s.row_height));
+    io::set_attr(node, "rowHeight", std::to_string(s.row_height));
   }
 }
 
@@ -257,15 +254,16 @@ void apply_anchor(const Workbook& wb, std::size_t sheet, pugi::xml_node anchor, 
   if (!off || !ext) {
     return;
   }
+  const Geometry geo(wb, wb.sheet(sheet));
   const auto pos = [&](bool rows, const AnchorPoint& p) {
-    return sheet_offset_emu(wb, sheet, rows, rows ? p.row : p.col) + (rows ? p.row_off : p.col_off);
+    return geo.offset(rows, rows ? p.row : p.col) + (rows ? p.row_off : p.col_off);
   };
   const std::int64_t x = pos(false, s.from);
   const std::int64_t y = pos(true, s.from);
-  put_attr(off, "x", std::to_string(x));
-  put_attr(off, "y", std::to_string(y));
-  put_attr(ext, "cx", std::to_string(pos(false, s.to) - x));
-  put_attr(ext, "cy", std::to_string(pos(true, s.to) - y));
+  io::set_attr(off, "x", std::to_string(x));
+  io::set_attr(off, "y", std::to_string(y));
+  io::set_attr(ext, "cx", std::to_string(pos(false, s.to) - x));
+  io::set_attr(ext, "cy", std::to_string(pos(true, s.to) - y));
 }
 
 bool has_control(const std::string& text) {
@@ -443,12 +441,6 @@ Expected<void, Error> write_part(Workbook& wb, const std::string& path, const ch
   return io::ooxml::store_part_dom(wb, path, doc);
 }
 
-void ensure_attr(pugi::xml_node node, const char* name, const char* value) {
-  if (!node.attribute(name)) {
-    node.append_attribute(name).set_value(value);
-  }
-}
-
 // Anchor of a new slicer's frame with its fallback shape; the id, names and markers are set after parsing.
 constexpr const char* kFrameXml =
     "<xdr:twoCellAnchor editAs=\"oneCell\"><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row>"
@@ -539,16 +531,16 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   }
   ++frame_id;
   pugi::xml_node drawing_root = drawing.document_element();
-  ensure_attr(drawing_root, "xmlns:xdr", "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing");
-  ensure_attr(drawing_root, "xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main");
+  io::ensure_attr(drawing_root, "xmlns:xdr", chart_ns::kNsXdr);
+  io::ensure_attr(drawing_root, "xmlns:a", chart_ns::kNsA);
   if (!drawing_root.append_buffer(kFrameXml, std::char_traits<char>::length(kFrameXml))) {
     return invalid("slicer: frame could not be built");
   }
   const pugi::xml_node frame = drawing_root.last_child();
   const pugi::xml_node cnvpr = find_element(frame, "cNvPr");
-  put_attr(cnvpr, "id", std::to_string(frame_id));
-  put_attr(cnvpr, "name", name);
-  put_attr(find_element(frame, "slicer"), "name", name);
+  io::set_attr(cnvpr, "id", std::to_string(frame_id));
+  io::set_attr(cnvpr, "name", name);
+  io::set_attr(find_element(frame, "slicer"), "name", name);
   apply_anchor(wb, sheet, frame, spec);
 
   std::string slicers_path;
@@ -570,23 +562,23 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   const std::string prefix(
       root_name.substr(0, root_name.find(':') == std::string_view::npos ? 0 : root_name.find(':') + 1));
   pugi::xml_node node = slicers.document_element().append_child((prefix + "slicer").c_str());
-  put_attr(node, "name", name);
-  put_attr(node, "cache", cache_name);
+  io::set_attr(node, "name", name);
+  io::set_attr(node, "cache", cache_name);
   apply_slicer(node, spec);
 
   pugi::xml_document cache;
   cache.load_string(kCacheRoot);
-  put_attr(cache.document_element(), "name", cache_name);
-  put_attr(cache.document_element(), "sourceName", col.name);
+  io::set_attr(cache.document_element(), "name", cache_name);
+  io::set_attr(cache.document_element(), "sourceName", col.name);
   const pugi::xml_node table_cache = table_cache_of(cache);
-  put_attr(table_cache, "tableId", std::to_string(table.id));
-  put_attr(table_cache, "column", std::to_string(col.id));
+  io::set_attr(table_cache, "tableId", std::to_string(table.id));
+  io::set_attr(table_cache, "column", std::to_string(col.id));
   apply_cache(table_cache, spec);
 
   const std::string cache_path = unused_path(wb, "xl/slicerCaches/slicerCache");
   RETURN_IF_ERROR(write_part(wb, cache_path, "application/vnd.ms-excel.slicerCache+xml", cache));
   RETURN_IF_ERROR(write_part(wb, slicers_path, "application/vnd.ms-excel.slicer+xml", slicers));
-  RETURN_IF_ERROR(write_part(wb, drawing_path, "application/vnd.openxmlformats-officedocument.drawing+xml", drawing));
+  RETURN_IF_ERROR(write_part(wb, drawing_path, chart_ns::kCtDrawing, drawing));
   if (fresh_drawing) {
     wb.sheet(sheet).set_drawing_rel_target(drawing_path);
   }

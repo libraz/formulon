@@ -317,6 +317,30 @@ Expected<std::string, Error> sheet_drawing_path(const Workbook& wb, std::size_t 
   return std::string();
 }
 
+Expected<void, Error> load_drawing_part(const Workbook& wb, std::string_view path, pugi::xml_document& doc) {
+  const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
+  if (part == nullptr) {
+    return unparseable("part is missing", path);
+  }
+  return parse_drawing_part(part->bytes, doc);
+}
+
+Expected<std::string, Error> editable_drawing_path(const Workbook& wb, std::size_t sheet) {
+  if (sheet >= wb.sheet_count()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "drawing: sheet index out of range");
+  }
+  const Sheet& ws = wb.sheet(sheet);
+  for (const UnknownRelationship& rel : ws.unknown_relationships()) {
+    if (rel.type == io::kRelDrawing) {
+      return unparseable("drawing retained from an xlsb package is not editable", ws.name());
+    }
+  }
+  if (ws.is_opaque_ooxml_sheet()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "drawing: only a worksheet's drawing is editable");
+  }
+  return ws.drawing_rel_target();
+}
+
 Expected<std::vector<io::ooxml::DrawingRel>, Error> load_part_rels(const Workbook& wb, std::string_view part_path) {
   const PassthroughPart* rels = io::ooxml::find_passthrough_part(wb, io::ooxml::rels_path_for_part(part_path));
   if (rels == nullptr) {
@@ -331,12 +355,8 @@ Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, 
   if (path.empty()) {
     return charts;
   }
-  const PassthroughPart* part = io::ooxml::find_passthrough_part(wb, path);
-  if (part == nullptr) {
-    return unparseable("part is missing", path);
-  }
   pugi::xml_document doc;
-  RETURN_IF_ERROR(parse_drawing_part(part->bytes, doc));
+  RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
   const RelationshipTargetIndex relation_index = index_drawing_relationships(rels);
   for (const pugi::xml_node& anchor : drawing_anchors(doc.document_element(), false)) {

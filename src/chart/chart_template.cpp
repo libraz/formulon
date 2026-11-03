@@ -16,6 +16,7 @@
 #include "sheet.h"
 #include "style_resolve.h"
 #include "utils/index_sort.h"
+#include "utils/number_text.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -315,15 +316,6 @@ constexpr const char* kShowFlags =
 constexpr std::uint32_t kAxisId1 = 507100001U;
 constexpr std::uint32_t kAxisId2 = 507100002U;
 
-/// `a:ln` in the tx1 tint `lum` (15 or 25 percent).
-void append_grey_ln(std::string& x, int lum) {
-  x += "<a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"";
-  x += std::to_string(lum * 1000);
-  x += "\"/><a:lumOff val=\"";
-  x += std::to_string(100000 - lum * 1000);
-  x += "\"/></a:schemeClr></a:solidFill><a:round/></a:ln>";
-}
-
 void append_def_rpr(std::string& x, const char* sz, bool title) {
   x += "<a:defRPr sz=\"";
   x += sz;
@@ -462,6 +454,14 @@ std::uint32_t point_count(const std::string& formula) {
 }
 
 }  // namespace
+
+void append_grey_ln(std::string& x, int lum) {
+  x += "<a:ln w=\"9525\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"";
+  x += std::to_string(lum * 1000);
+  x += "\"/><a:lumOff val=\"";
+  x += std::to_string(100000 - lum * 1000);
+  x += "\"/></a:schemeClr></a:solidFill><a:round/></a:ln>";
+}
 
 Expected<ChartSplit, Error> split_chart_source(const Workbook& wb, std::size_t host_sheet, std::string_view source,
                                                ChartInsertKind kind, ChartSeriesDirection direction,
@@ -682,12 +682,9 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
     if (is_line || is_scatter) {
       x += "<c:smooth val=\"0\"/>";
     }
-    static const char kHex[] = "0123456789ABCDEF";
-    std::string uid = "{00000000-";
-    for (int shift = 12; shift >= 0; shift -= 4) {
-      uid += kHex[(i >> shift) & 0xFU];
-    }
-    uid += "-0000-0000-000000000000}";
+    char uid_digits[8];
+    format_hex(uid_digits, sizeof(uid_digits), i & 0xFFFFU, 4, true);
+    const std::string uid = std::string("{00000000-") + uid_digits + "-0000-0000-000000000000}";
     x += "<c:extLst><c:ext uri=\"{C3380CC4-5D6E-409C-BE32-E72D297353CC}\" "
          "xmlns:c16=\"http://schemas.microsoft.com/office/drawing/2014/chart\"><c16:uniqueId val=\"" +
          uid + "\"/></c:ext></c:extLst></c:ser>";
