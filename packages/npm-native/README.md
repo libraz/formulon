@@ -86,101 +86,10 @@ own; what they do is reachable from both JS packages:
   the records added before it in place.
 
 The TypeScript declarations in `dist/index.d.ts` are the authoritative
-method list; the categories below summarise what is registered on the
-`Workbook` class (see `DefineClass` in
-`src/node_addon/parts/workbook_class.cc`):
-
-```
-Static factories
-  Workbook.createDefault(), createEmpty(), createForProfile(profileId),
-  loadBytes(bytes)
-
-Cells & recalc
-  dispose, memoryUsage
-  setNumber, setBool, setText, setBlank, setFormula
-  getValue, getLambdaText
-  recalc, recalcParallel, partialRecalc, recalcDataTables, setIterative, setIterativeProgress, save,
-  saveAs, saveWithDiagnostics, readDiagnostics
-
-Workbook policy / catalog
-  calcMode, setCalcMode, fullPrecision, setFullPrecision, calcOnSave, setCalcOnSave,
-  refMode, setRefMode, date1904, setDate1904, excelProfileId, setExcelProfileId
-  functionMetadata, functionNames,
-  localizeFunctionName, canonicalizeFunctionName,
-  localizeFormula, canonicalizeFormula, localeFacts,
-  compareText, collationClasses
-  precedents, dependents, spillInfo, getArrayFormula, setArrayFormula,
-  getExternalLinks
-
-Sheets & structure
-  addSheet, removeSheet, renameSheet, moveSheet, copySheet, sheetCount, sheetName
-  activeSheet, setActiveSheet
-  insertRows, deleteRows, insertCols, deleteCols
-  cellCount, cellAt, definedNameCount, definedNameAt,
-  tableCount, tableAt, passthroughCount, passthroughAt
-  createTable, updateTable, removeTable, setTableColumnTotals
-  setDefinedName, setDefinedNameScoped, setDefinedNameAttrs
-
-Sheet view / layout / protection
-  getSheetView, setSheetZoom, setSheetFreeze, setSheetTabHidden
-  setSheetTopLeft, setSheetPaneTopLeft, setSheetSplit, getSheetSelection, setSheetSelection
-  getSheetProtection, setSheetProtection
-  getSheetColumns, setColumnWidth, setColumnHidden, setColumnOutline, setColumnCollapsed
-  getSheetRowOverrides, setRowHeight, setRowHidden, setRowOutline, setRowCollapsed
-  setSheetShowFormulas, setSheetShowOutlineSymbols
-  setColumnStyle, clearColumnStyle, setRowStyle, clearRowStyle
-  rangeStyleBases, remapRangeStyle, snapshotRangeStyle, restoreRangeStyle
-
-Styles
-  getCellXfIndex, setCellXfIndex, clearCellXfIndex, getCellXf,
-  getFont, getFill, getBorder, getNumFmt
-  addFont, addFill, addBorder, addNumFmt, addXf
-  fontCount, fillCount, borderCount, xfCount
-  cellStyleCount, cellStyleXfCount, getCellStyle, getCellStyleXf, setCellStyle, removeCellStyle
-  tableStyleCount, getTableStyle, setTableStyle, removeTableStyle,
-  getTableStyleDefaults, setTableStyleDefaults
-  getTheme, setThemeColors, setThemeFonts, setThemeScriptFont, resolveColor, getEffectiveStyle
-
-Merges / comments / hyperlinks / validations
-  addMerge, removeMerge, removeMergeAt, clearMerges, getMerges
-  getComment, setComment, getCommentVisible, setCommentVisible
-  addHyperlink, getHyperlinks, removeHyperlink,
-  removeHyperlinkAt, clearHyperlinks
-  getValidations, addValidation, removeValidationAt, clearValidations
-
-Protection records
-  getWorkbookProtection, setWorkbookProtection
-  getProtectedRanges, addProtectedRange, updateProtectedRange, removeProtectedRange
-
-Drawings & charts
-  probeImage, listDrawingObjects, getImage, insertImage
-  removeDrawing, setDrawingAnchor, setDrawingZOrder, snapshotDrawing, restoreDrawing
-  listShapes, insertShape, updateShape, removeShape
-  listSlicers, addSlicer, updateSlicer, removeSlicer
-  addDataTable, getDataTable, removeDataTable
-  listSparklineGroups, addSparklineGroup, updateSparklineGroup, setSparklineGroupSparklines, removeSparklineGroup
-  getChart, getChartData, previewChartData, insertChart
-  setChartType, setChartTitle, setChartLegend, setChartAxis, setChartDisplay,
-  setChartSeries, setChartPoint, setChartPlot, setChartFilter,
-  addChartSeries, removeChartSeries, setChartSource
-
-Conditional formatting
-  getConditionalFormats, addConditionalFormat,
-  removeConditionalFormatAt, clearConditionalFormats, evaluateCfRange
-
-PivotTables & pivot caches
-  pivotCount, pivotCreate, pivotRemove, pivotLayout
-  pivotCacheId, pivotName, pivotGetGrandTotals, pivotGetStyleInfo, pivotRowFieldOrder,
-  pivotColFieldOrder, pivotFieldAt, pivotFieldItemCount, pivotFieldItemAt,
-  pivotDataFieldAt                             (definition read-back)
-  pivotFilterCount, pivotFilterAdd, pivotFilterAt,
-  pivotFilterClear, pivotFilterRemoveAt        (saved with the pivot)
-  ... (full pivot cache + table mutation surface; see dist/index.d.ts)
-
-Top-level: evalFormula, version, versionString, lastErrorMessage,
-           lastErrorContext, statusString, errorDisplayName,
-           mergeFunctionMetadata, setLogMinLevel, setLogSink
-```
+method list. The methods are the WASM package's, documented one by one in
+the [WASM API reference](https://formulon.libraz.net/api/wasm); the rows
+where the packages differ are tabulated in
+[Package surfaces](https://formulon.libraz.net/api/surfaces).
 
 Every top-level function is available both as a named export and on the
 default export object.
