@@ -385,10 +385,7 @@ bool is_range_producing_call(const parser::AstNode& call_node) {
   if (call_node.kind() != parser::NodeKind::Call) {
     return false;
   }
-  const std::string_view name = call_node.as_call_name();
-  return strings::case_insensitive_eq(name, "OFFSET") || strings::case_insensitive_eq(name, "CHOOSE") ||
-         strings::case_insensitive_eq(name, "IF") || strings::case_insensitive_eq(name, "ROW") ||
-         strings::case_insensitive_eq(name, "COLUMN");
+  return is_range_shaped_call_name(call_node.as_call_name());
 }
 
 // Shared body of ROWS / COLUMNS; `want_rows` picks the reported axis.

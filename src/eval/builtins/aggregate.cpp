@@ -28,7 +28,6 @@
 #include "utils/arena.h"
 #include "utils/cancellation_snap.h"
 #include "utils/error.h"
-#include "utils/strings.h"
 #include "utils/subnormal_flush.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -328,12 +327,7 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
   // Range-shaped args (and the reference-producing calls that expand to
   // rectangles) go through `resolve_range_arg`; cells receive the
   // numeric-only provenance filter.
-  const bool is_range_call =
-      k == parser::NodeKind::Call && (strings::case_insensitive_eq(arg_node.as_call_name(), "OFFSET") ||
-                                      strings::case_insensitive_eq(arg_node.as_call_name(), "CHOOSE") ||
-                                      strings::case_insensitive_eq(arg_node.as_call_name(), "IF") ||
-                                      strings::case_insensitive_eq(arg_node.as_call_name(), "ROW") ||
-                                      strings::case_insensitive_eq(arg_node.as_call_name(), "COLUMN"));
+  const bool is_range_call = k == parser::NodeKind::Call && is_range_shaped_call_name(arg_node.as_call_name());
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef ||
       is_range_call) {
     auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);

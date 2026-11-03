@@ -497,6 +497,11 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
 
 }  // namespace
 
+bool is_range_shaped_call_name(std::string_view name) {
+  RangeShapedKind kind{};
+  return lookup_range_shaped_kind(name, &kind);
+}
+
 bool expand_resolved_rect_cells(std::string_view sheet, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
                                 std::uint32_t right, Arena& arena, const FunctionRegistry& registry,
                                 const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,

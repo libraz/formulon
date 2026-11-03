@@ -121,6 +121,10 @@ Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNo
                                                              const FunctionRegistry& registry, const EvalContext& ctx,
                                                              ErrorCode scalar_error);
 
+/// True for the reference-producing calls (`OFFSET` / `CHOOSE` / `IF` /
+/// `ROW` / `COLUMN`) that `resolve_range_arg` expands into a rectangle.
+bool is_range_shaped_call_name(std::string_view name);
+
 /// Writes the declared shape of `arg_node` when it is a static reference
 /// (after LET passthrough) and returns true; returns false, leaving the
 /// out-params untouched, for any other shape or a reference that does not
