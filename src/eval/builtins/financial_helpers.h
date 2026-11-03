@@ -65,8 +65,7 @@ inline Expected<double, ErrorCode> read_financial_date(const Value* args, std::u
     return std::move(raw.error());
   }
   const double t = std::trunc(raw.value());
-  constexpr double kExcelMaxSerial = 2958465.0;
-  if (!std::isfinite(t) || t < 0.0 || t > kExcelMaxSerial) {
+  if (!std::isfinite(t) || t < 0.0 || t > date_time::kMaxSerial1900) {
     return ErrorCode::Num;
   }
   return t;

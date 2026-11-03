@@ -163,7 +163,7 @@ const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
 
 FormatStatus render_date(const Section& section, std::string_view fmt, double serial, std::string& out, bool date1904) {
   const double max_serial =
-      date1904 ? kMaxDateSerial1900 - ::formulon::date_time::kDate1904EpochGap : kMaxDateSerial1900;
+      date1904 ? date_time::kMaxSerial1900 - date_time::kDate1904EpochGap : date_time::kMaxSerial1900;
   if (!std::isfinite(serial) || serial < 0.0 || serial >= max_serial + 1.0) {
     // Excel rejects out-of-range serials from TEXT.
     return FormatStatus::kOverflow;

@@ -79,6 +79,10 @@ CivilTime host_civil_time() noexcept;
 /// produced under the 1900 system into the workbook's epoch.
 inline constexpr double kDate1904EpochGap = 1462.0;
 
+/// Last serial of the 1900 calendar (9999-12-31). The 1904 system ends the
+/// same day, `kDate1904EpochGap` serials earlier.
+inline constexpr double kMaxSerial1900 = 2958465.0;
+
 /// Last valid day-of-month for a Gregorian (year, month) pair, under the
 /// Gregorian leap rule. Months outside `[1, 12]` return 31 rather than
 /// asserting: every caller normalises first, and the fallback keeps a
@@ -157,6 +161,11 @@ double serial_from_ymd_clamped(int y, unsigned m, unsigned anchor_day, bool date
 /// matches the calendar throughout. Every weekday-dependent builtin and
 /// format token reads the weekday through this one function.
 int weekday_sun0(double serial_floor, bool date1904 = false) noexcept;
+
+/// Serial of the Sunday that starts the week containing `serial_floor`.
+inline double sunday_of_week(double serial_floor, bool date1904 = false) noexcept {
+  return serial_floor - weekday_sun0(serial_floor, date1904);
+}
 
 /// Extracts hour/minute/second from the fractional part of a serial. The
 /// total seconds in the day are rounded to the nearest integer; this

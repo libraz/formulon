@@ -159,6 +159,25 @@ bool has_element_child(const pugi::xml_node& node) {
   return static_cast<bool>(first_element_child(node));
 }
 
+pugi::xml_attribute ensure_attribute(pugi::xml_node node, const char* name) {
+  const pugi::xml_attribute attr = node.attribute(name);
+  return attr ? attr : node.append_attribute(name);
+}
+
+void set_attr(pugi::xml_node node, const char* name, std::string_view value) {
+  ensure_attribute(node, name).set_value(value.data(), value.size());
+}
+
+void set_attr(pugi::xml_node node, const char* name, std::int64_t value) {
+  ensure_attribute(node, name).set_value(static_cast<long long>(value));
+}
+
+void ensure_attr(pugi::xml_node node, const char* name, const char* value) {
+  if (!node.attribute(name)) {
+    node.append_attribute(name).set_value(value);
+  }
+}
+
 std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t default_value) {
   return parse_xml_u32_attr_strict(attr).value_or(default_value);
 }

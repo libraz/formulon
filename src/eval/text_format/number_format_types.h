@@ -22,10 +22,6 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 
-// Last serial of the 1900 calendar (9999-12-31). The 1904 system ends the
-// same day, `kDate1904EpochGap` serials earlier.
-constexpr double kMaxDateSerial1900 = 2958465.0;
-
 // Keep the historic detail-namespace spelling available to number_format.cpp;
 // the single definition lives beside FormatLetters in excel_locale.h.
 using ::formulon::kInvariantFormatLetters;

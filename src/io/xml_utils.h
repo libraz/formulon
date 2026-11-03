@@ -160,6 +160,16 @@ pugi::xml_node first_element_child(const pugi::xml_node& node);
 /// True when `node` has at least one element child.
 bool has_element_child(const pugi::xml_node& node);
 
+/// Attribute `name` of `node`, appended when absent.
+pugi::xml_attribute ensure_attribute(pugi::xml_node node, const char* name);
+
+/// Sets attribute `name` of `node` to `value`, appending it when absent.
+void set_attr(pugi::xml_node node, const char* name, std::string_view value);
+void set_attr(pugi::xml_node node, const char* name, std::int64_t value);
+
+/// Appends attribute `name` = `value` only when `node` does not carry it yet.
+void ensure_attr(pugi::xml_node node, const char* name, const char* value);
+
 /// Returns the attribute value as `uint32_t`, or `def` on missing /
 /// empty / malformed / negative / out-of-range input. Behaviour
 /// matches the legacy `parse_xml_u32_attr(node.attribute(name), def)`

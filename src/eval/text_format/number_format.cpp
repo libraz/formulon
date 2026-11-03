@@ -34,7 +34,6 @@ namespace text_format {
 namespace {
 
 using number_format_detail::CondOp;
-using number_format_detail::kMaxDateSerial1900;
 using number_format_detail::Section;
 
 // A format code split into sections. The views in `raw` point into
@@ -341,7 +340,8 @@ FormatStatus apply_format(double value, std::string_view format, std::string& ou
   if (section.is_date) {
     // The calendar runs from serial 0 to 9999-12-31. The 1904 system also
     // shows a negative serial, as its magnitude behind a leading minus.
-    const double max_serial = date1904 ? kMaxDateSerial1900 - date_time::kDate1904EpochGap : kMaxDateSerial1900;
+    const double max_serial =
+        date1904 ? date_time::kMaxSerial1900 - date_time::kDate1904EpochGap : date_time::kMaxSerial1900;
     // The last calendar day keeps its time fraction; the next whole day is out of range in either epoch.
     const bool out_of_range =
         date1904 ? std::fabs(render_value) >= max_serial + 1.0 : render_value < 0.0 || render_value >= max_serial + 1.0;

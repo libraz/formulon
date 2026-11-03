@@ -221,14 +221,6 @@ Expected<std::string, Error> open_theme_for_edit(Workbook& wb, pugi::xml_documen
   return path;
 }
 
-void set_attr(pugi::xml_node node, const char* name, std::string_view value) {
-  pugi::xml_attribute attr = node.attribute(name);
-  if (!attr) {
-    attr = node.append_attribute(name);
-  }
-  attr.set_value(value.data(), value.size());
-}
-
 /// Sets the face of the `a:font` entry for `script`, appending the entry when absent.
 void set_script_face(pugi::xml_node font_node, std::string_view script, std::string_view typeface) {
   for (pugi::xml_node child : font_node.children()) {
