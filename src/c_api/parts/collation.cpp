@@ -24,15 +24,11 @@
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::value_from_fm;
 
 namespace {
-
-fm_status_t null_argument(const char* api) {
-  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                           (std::string(api) + ": NULL argument").c_str());
-}
 
 fm_status_t check_strength(fm_collation_strength_t strength, const char* api, formulon::eval::CollationStrength* out) {
   if (strength != FM_COLLATION_COMPARE && strength != FM_COLLATION_DYNAMIC && strength != FM_COLLATION_CLASSIC_EXACT) {

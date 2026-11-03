@@ -21,7 +21,9 @@ using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
 
 namespace {
@@ -99,10 +101,10 @@ extern "C" fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, std::uint32_t s
   out.col = hl.col;
   out.last_row = hl.last_row;
   out.last_col = hl.last_col;
-  out.target = (hl.target != nullptr) ? std::string(hl.target) : std::string();
-  out.location = (hl.location != nullptr) ? std::string(hl.location) : std::string();
-  out.display = (hl.display != nullptr) ? std::string(hl.display) : std::string();
-  out.tooltip = (hl.tooltip != nullptr) ? std::string(hl.tooltip) : std::string();
+  out.target = text_or_empty(hl.target);
+  out.location = text_or_empty(hl.location);
+  out.display = text_or_empty(hl.display);
+  out.tooltip = text_or_empty(hl.tooltip);
   // rid stays empty; the writer mints a fresh rIdN on save.
   wb->workbook().sheet(sheet).mutable_hyperlinks().push_back(std::move(out));
   return 0;
@@ -181,11 +183,7 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::uint32_t sheet
   if (auto rc = check_sheet_rect(m.first_row, m.first_col, m.last_row, m.last_col, "fm_sheet_add_merge"); rc != 0) {
     return rc;
   }
-  const auto result = wb->workbook().add_merge(sheet, m);
-  if (!result) {
-    return formulon::c_api::parts::set_last_error(result.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().add_merge(sheet, m));
 }
 
 extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::uint32_t sheet, fm_merge_range range) {
@@ -194,11 +192,7 @@ extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::uint32_t sh
     return rc;
   }
   const formulon::MergeRange q = normalized_merge(range);
-  const auto result = wb->workbook().remove_merges_intersecting(sheet, q);
-  if (!result) {
-    return formulon::c_api::parts::set_last_error(result.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().remove_merges_intersecting(sheet, q));
 }
 
 extern "C" fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index) {
@@ -206,11 +200,7 @@ extern "C" fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, std::uint32_t
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_remove_merge_at"); rc != 0) {
     return rc;
   }
-  const auto result = wb->workbook().remove_merge_at(sheet, index);
-  if (!result) {
-    return formulon::c_api::parts::set_last_error(result.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().remove_merge_at(sheet, index));
 }
 
 extern "C" fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, std::uint32_t sheet) {
@@ -218,11 +208,7 @@ extern "C" fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, std::uint32_t sh
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_clear_merges"); rc != 0) {
     return rc;
   }
-  const auto result = wb->workbook().clear_merges(sheet);
-  if (!result) {
-    return formulon::c_api::parts::set_last_error(result.error());
-  }
-  return 0;
+  return finish_status(wb->workbook().clear_merges(sheet));
 }
 
 extern "C" fm_status_t fm_sheet_get_merge_at(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,
@@ -326,6 +312,19 @@ extern "C" fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, std::uin
   return 0;
 }
 
+namespace {
+
+formulon::CellComment* FindNote(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row, std::uint32_t col) {
+  for (formulon::CellComment& c : wb->workbook().sheet(sheet).mutable_comments()) {
+    if (c.row == row && c.col == col) {
+      return &c;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
                                             std::uint32_t col, const char* author, const char* text) {
   clear_last_error();
@@ -339,19 +338,11 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t she
     return rc;
   }
   auto& list = wb->workbook().sheet(sheet).mutable_comments();
-  // Locate any existing entry first; mutating the list invalidates
-  // iterators so we capture the index instead of an iterator.
-  std::size_t found = list.size();
-  for (std::size_t i = 0; i < list.size(); ++i) {
-    if (list[i].row == row && list[i].col == col) {
-      found = i;
-      break;
-    }
-  }
+  formulon::CellComment* existing = FindNote(wb, sheet, row, col);
   // Empty/NULL text => removal.
   if (text == nullptr || text[0] == '\0') {
-    if (found < list.size()) {
-      list.erase(list.begin() + static_cast<std::ptrdiff_t>(found));
+    if (existing != nullptr) {
+      list.erase(list.begin() + (existing - list.data()));
     }
     return 0;
   }
@@ -366,33 +357,20 @@ extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t she
   formulon::CellComment c;
   c.row = row;
   c.col = col;
-  c.author = (author != nullptr) ? std::string(author) : std::string();
+  c.author = text_or_empty(author);
   c.text = std::string(text);
-  if (found < list.size()) {
-    c.uid = std::move(list[found].uid);
-    c.visible = list[found].visible;
-    c.has_box = list[found].has_box;
-    c.box = list[found].box;
-    c.vml_shape = std::move(list[found].vml_shape);
-    list[found] = std::move(c);
+  if (existing != nullptr) {
+    c.uid = std::move(existing->uid);
+    c.visible = existing->visible;
+    c.has_box = existing->has_box;
+    c.box = existing->box;
+    c.vml_shape = std::move(existing->vml_shape);
+    *existing = std::move(c);
   } else {
     list.push_back(std::move(c));
   }
   return 0;
 }
-
-namespace {
-
-formulon::CellComment* FindNote(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row, std::uint32_t col) {
-  for (formulon::CellComment& c : wb->workbook().sheet(sheet).mutable_comments()) {
-    if (c.row == row && c.col == col) {
-      return &c;
-    }
-  }
-  return nullptr;
-}
-
-}  // namespace
 
 extern "C" fm_status_t fm_sheet_get_comment_visible(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
                                                     std::uint32_t col, std::int32_t* out_visible) {
@@ -531,10 +509,10 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
   out.show_input_message = v.show_input_message != 0;
   out.show_error_message = v.show_error_message != 0;
   out.show_dropdown = v.show_dropdown != 0;
-  out.error_title = (v.error_title != nullptr) ? std::string(v.error_title) : std::string();
-  out.error_message = (v.error_message != nullptr) ? std::string(v.error_message) : std::string();
-  out.prompt_title = (v.prompt_title != nullptr) ? std::string(v.prompt_title) : std::string();
-  out.prompt_message = (v.prompt_message != nullptr) ? std::string(v.prompt_message) : std::string();
+  out.error_title = text_or_empty(v.error_title);
+  out.error_message = text_or_empty(v.error_message);
+  out.prompt_title = text_or_empty(v.prompt_title);
+  out.prompt_message = text_or_empty(v.prompt_message);
   wb->workbook().sheet(sheet).mutable_validations().push_back(std::move(out));
   for (const char* text : formula_fields) {
     if (text != nullptr && text[0] != '\0') {
@@ -616,13 +594,12 @@ extern "C" fm_status_t fm_sheet_set_protection(fm_workbook_t* wb, uint32_t sheet
   }
   formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).mutable_protection();
   // Helper for pointer->string deep copy with NULL-as-empty semantics.
-  const auto copy_or_empty = [](const char* s) -> std::string { return s == nullptr ? std::string() : std::string(s); };
   p.enabled = in->enabled != 0;
-  p.algorithm_name = copy_or_empty(in->algorithm_name);
-  p.hash_value = copy_or_empty(in->hash_value);
-  p.salt_value = copy_or_empty(in->salt_value);
+  p.algorithm_name = text_or_empty(in->algorithm_name);
+  p.hash_value = text_or_empty(in->hash_value);
+  p.salt_value = text_or_empty(in->salt_value);
   p.spin_count = in->spin_count;
-  p.legacy_password = copy_or_empty(in->legacy_password);
+  p.legacy_password = text_or_empty(in->legacy_password);
   p.sheet = in->sheet != 0;
   p.objects = in->objects != 0;
   p.scenarios = in->scenarios != 0;

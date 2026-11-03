@@ -22,17 +22,13 @@ namespace parts {
 // ---- Cell value / formula setters ---------------------------------------
 
 JsStatus JsWorkbook::setNumber(uint32_t sheet, uint32_t row, uint32_t col, double value) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_number(handle_, sheet, row, col, value));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_number(handle_, sheet, row, col, value)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setBool(uint32_t sheet, uint32_t row, uint32_t col, bool value) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_bool(handle_, sheet, row, col, value ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_bool(handle_, sheet, row, col, value ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val errorCode) {
@@ -52,17 +48,13 @@ JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, emscri
 }
 
 JsStatus JsWorkbook::setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_text(handle_, sheet, row, col, text.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_text(handle_, sheet, row, col, text.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val runs) {
@@ -75,7 +67,7 @@ JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t 
   }
   const uint32_t count = reader.length(runs, "setCellPhoneticRuns.runs.length");
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   // Two passes for the same reason `createTable` needs them: no `c_str()`
   // may be taken before `texts` has finished growing.
@@ -94,7 +86,7 @@ JsStatus JsWorkbook::setCellPhoneticRuns(uint32_t sheet, uint32_t row, uint32_t 
     records.push_back(fm_phonetic_run_t{sb, eb, nullptr});
   }
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   for (uint32_t i = 0; i < count; ++i) {
     records[i].text = texts[i].c_str();
@@ -112,24 +104,19 @@ JsStatus JsWorkbook::setCellPhoneticProperties(uint32_t sheet, uint32_t row, uin
   const uint32_t type = reader.u32(properties, "type", 0U, "phoneticProperties.type");
   const uint32_t alignment = reader.u32(properties, "alignment", 0U, "phoneticProperties.alignment");
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   const fm_status_t rc = fm_workbook_set_cell_phonetic_properties(handle_, sheet, row, col, font_id, type, alignment);
   return status_from_rc(rc);
 }
 
 JsStatus JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_blank(handle_, sheet, row, col));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_blank(handle_, sheet, row, col) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 namespace {
@@ -237,10 +224,8 @@ emscripten::val JsWorkbook::getCellShowPhonetic(uint32_t sheet, uint32_t row, ui
 }
 
 JsStatus JsWorkbook::setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col, bool show) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_cell_show_phonetic(handle_, sheet, row, col, show ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_cell_show_phonetic(handle_, sheet, row, col, show ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsEvalResult JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col,
@@ -444,7 +429,7 @@ int32_t js_optional_bool(JsNarrowNumericReader& reader, const emscripten::val& s
   if (!reader.ok() || !js_value_present(value)) {
     return -1;
   }
-  return reader.boolean_value(value, false, field) ? 1 : 0;
+  return reader.boolean_value(value, false) ? 1 : 0;
 }
 
 JsTableStyleToggles js_table_style_toggles(JsNarrowNumericReader& reader, const emscripten::val& spec) {
@@ -495,7 +480,7 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   const emscripten::val columns = reader.value(spec, "columns", "createTable.columns");
   const JsTableStyleToggles toggles = js_table_style_toggles(reader, spec);
   if (!reader.ok()) {
-    out.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    out.status = reader.failure();
     return out;
   }
   if (!reader.is_array(columns, "createTable.columns")) {
@@ -504,7 +489,7 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
   }
   const uint32_t count = reader.length(columns, "createTable.columns.length");
   if (!reader.ok()) {
-    out.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    out.status = reader.failure();
     return out;
   }
   // The pointer vector is filled in a second pass so that no `c_str()` is
@@ -516,7 +501,7 @@ JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
     names.push_back(reader.string_value(column, "createTable.columns[]"));
   }
   if (!reader.ok()) {
-    out.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    out.status = reader.failure();
     return out;
   }
   std::vector<const char*> pointers;
@@ -566,7 +551,7 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   const int32_t totals_row = js_optional_bool(reader, spec, "totalsRow", "updateTable.totalsRow");
   const JsTableStyleToggles toggles = js_table_style_toggles(reader, spec);
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
 
   const char* current_name = nullptr;
@@ -617,17 +602,14 @@ JsStatus JsWorkbook::setTableColumnTotals(uint32_t idx, uint32_t column, emscrip
   const char* label_ptr = reader.optional_string(totals, "label", label, "totals.label");
   const char* formula_ptr = reader.optional_string(totals, "formula", formula, "totals.formula");
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(
       fm_workbook_table_set_column_totals(handle_, idx, column, function_ptr, label_ptr, formula_ptr));
 }
 
 JsStatus JsWorkbook::removeTable(uint32_t idx) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_table_remove(handle_, idx));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_table_remove(handle_, idx) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
@@ -827,7 +809,7 @@ emscripten::val JsWorkbook::getCellsInRange(uint32_t sheet, emscripten::val rang
   JsNarrowNumericReader reader("getCellsInRange");
   const fm_merge_range bounds = js_pull_range(range, &reader);
   if (!reader.ok()) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    o.set("status", reader.failure());
     return o;
   }
   fm_cell_range_t* page = nullptr;
@@ -890,7 +872,7 @@ emscripten::val JsWorkbook::validateValue(uint32_t sheet, uint32_t row, uint32_t
     return o;
   }
   if (!pull_value(reader, value, text, &proposed)) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    o.set("status", reader.failure());
     return o;
   }
   fm_validation_outcome outcome{};

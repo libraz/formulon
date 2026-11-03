@@ -15,8 +15,10 @@
 #include "c_api/parts/common.h"
 #include "utils/error.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
@@ -64,9 +66,9 @@ extern "C" fm_status_t fm_pagination_print_area_at(const fm_pagination_t* pagina
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_pagination_print_area_at: NULL argument");
   }
-  if (index >= pagination->result.print_area.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_pagination_print_area_at: index out of range");
+  if (auto rc = check_index(index, pagination->result.print_area.size(), "fm_pagination_print_area_at", "index");
+      rc != 0) {
+    return rc;
   }
   const formulon::print::CellRange& range = pagination->result.print_area[index];
   *out = fm_print_range_t{range.first_row, range.first_col, range.last_row, range.last_col};
@@ -75,17 +77,22 @@ extern "C" fm_status_t fm_pagination_print_area_at(const fm_pagination_t* pagina
 
 namespace {
 
-fm_status_t break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out, bool horizontal,
-                     const char* null_message, const char* range_message) {
+// Shared body of the break getters. `manual` reads the manual-flag list
+// instead of the position list; the value is returned through `value`.
+fm_status_t break_entry(const fm_pagination_t* pagination, size_t index, const void* out, bool horizontal, bool manual,
+                        const char* fn, uint32_t* value) {
   clear_last_error();
   if (pagination == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, null_message);
+    return null_argument(fn);
   }
-  const std::vector<std::uint32_t>& breaks = horizontal ? pagination->result.h_breaks : pagination->result.v_breaks;
-  if (index >= breaks.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, range_message);
+  const auto& result = pagination->result;
+  const std::size_t size = manual ? (horizontal ? result.h_break_manual.size() : result.v_break_manual.size())
+                                  : (horizontal ? result.h_breaks.size() : result.v_breaks.size());
+  if (auto rc = check_index(index, size, fn, "index"); rc != 0) {
+    return rc;
   }
-  *out = breaks[index];
+  *value = manual ? static_cast<uint32_t>((horizontal ? result.h_break_manual : result.v_break_manual)[index])
+                  : (horizontal ? result.h_breaks : result.v_breaks)[index];
   return 0;
 }
 
@@ -98,8 +105,13 @@ extern "C" size_t fm_pagination_horizontal_break_count(const fm_pagination_t* pa
 
 extern "C" fm_status_t fm_pagination_horizontal_break_at(const fm_pagination_t* pagination, size_t index,
                                                          uint32_t* out_row) {
-  return break_at(pagination, index, out_row, /*horizontal=*/true, "fm_pagination_horizontal_break_at: NULL argument",
-                  "fm_pagination_horizontal_break_at: index out of range");
+  uint32_t value = 0;
+  if (auto rc = break_entry(pagination, index, out_row, true, false, "fm_pagination_horizontal_break_at", &value);
+      rc != 0) {
+    return rc;
+  }
+  *out_row = value;
+  return 0;
 }
 
 extern "C" size_t fm_pagination_vertical_break_count(const fm_pagination_t* pagination) {
@@ -109,8 +121,13 @@ extern "C" size_t fm_pagination_vertical_break_count(const fm_pagination_t* pagi
 
 extern "C" fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pagination, size_t index,
                                                        uint32_t* out_col) {
-  return break_at(pagination, index, out_col, /*horizontal=*/false, "fm_pagination_vertical_break_at: NULL argument",
-                  "fm_pagination_vertical_break_at: index out of range");
+  uint32_t value = 0;
+  if (auto rc = break_entry(pagination, index, out_col, false, false, "fm_pagination_vertical_break_at", &value);
+      rc != 0) {
+    return rc;
+  }
+  *out_col = value;
+  return 0;
 }
 
 extern "C" fm_status_t fm_pagination_paper(const fm_pagination_t* pagination, fm_paper_info* out) {
@@ -189,9 +206,8 @@ extern "C" fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, 
   if (pagination == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_pagination_page_at: NULL argument");
   }
-  if (index >= pagination->result.pages.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_pagination_page_at: index out of range");
+  if (auto rc = check_index(index, pagination->result.pages.size(), "fm_pagination_page_at", "index"); rc != 0) {
+    return rc;
   }
   const formulon::print::PageLayout& page = pagination->result.pages[index];
   *out = fm_page_layout{};
@@ -207,34 +223,26 @@ extern "C" fm_status_t fm_pagination_page_at(const fm_pagination_t* pagination, 
   return 0;
 }
 
-namespace {
-
-fm_status_t break_is_manual(const fm_pagination_t* pagination, size_t index, int32_t* out_manual, bool horizontal,
-                            const char* null_message, const char* range_message) {
-  clear_last_error();
-  if (pagination == nullptr || out_manual == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, null_message);
-  }
-  const std::vector<bool>& manual = horizontal ? pagination->result.h_break_manual : pagination->result.v_break_manual;
-  if (index >= manual.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, range_message);
-  }
-  *out_manual = manual[index] ? 1 : 0;
-  return 0;
-}
-
-}  // namespace
-
 extern "C" fm_status_t fm_pagination_horizontal_break_is_manual(const fm_pagination_t* pagination, size_t index,
                                                                 int32_t* out_manual) {
-  return break_is_manual(pagination, index, out_manual, /*horizontal=*/true,
-                         "fm_pagination_horizontal_break_is_manual: NULL argument",
-                         "fm_pagination_horizontal_break_is_manual: index out of range");
+  uint32_t value = 0;
+  if (auto rc =
+          break_entry(pagination, index, out_manual, true, true, "fm_pagination_horizontal_break_is_manual", &value);
+      rc != 0) {
+    return rc;
+  }
+  *out_manual = static_cast<int32_t>(value);
+  return 0;
 }
 
 extern "C" fm_status_t fm_pagination_vertical_break_is_manual(const fm_pagination_t* pagination, size_t index,
                                                               int32_t* out_manual) {
-  return break_is_manual(pagination, index, out_manual, /*horizontal=*/false,
-                         "fm_pagination_vertical_break_is_manual: NULL argument",
-                         "fm_pagination_vertical_break_is_manual: index out of range");
+  uint32_t value = 0;
+  if (auto rc =
+          break_entry(pagination, index, out_manual, false, true, "fm_pagination_vertical_break_is_manual", &value);
+      rc != 0) {
+    return rc;
+  }
+  *out_manual = static_cast<int32_t>(value);
+  return 0;
 }

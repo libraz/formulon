@@ -28,8 +28,12 @@
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::TextStore;
 
 namespace {
 
@@ -146,22 +150,21 @@ std::string format_range(const formulon::print::CellRange& range) {
 using SpanEndParser = bool (*)(std::string_view, std::size_t*, std::uint32_t*);
 
 /// True when `token` is a whole-row (`1:2`) or whole-column (`A:A`) span
-/// whose endpoints `parse_end` reads within `1..max`, writing the 1-based
-/// endpoints back out.
-bool parse_span(std::string_view token, SpanEndParser parse_end, std::uint32_t max, std::uint32_t* first,
-                std::uint32_t* last) {
+/// whose endpoints `parse_end` reads within `1..max`.
+bool is_span(std::string_view token, SpanEndParser parse_end, std::uint32_t max) {
   const std::size_t colon = token.find(':');
   if (colon == std::string_view::npos) {
     return false;
   }
-  const auto to_end = [&](std::string_view part, std::uint32_t* out) {
+  const auto is_end = [&](std::string_view part) {
     std::size_t pos = 0;
+    std::uint32_t value = 0;
     if (!part.empty() && part.front() == '$') {
       part.remove_prefix(1);
     }
-    return parse_end(part, &pos, out) && pos == part.size() && *out >= 1U && *out <= max;
+    return parse_end(part, &pos, &value) && pos == part.size() && value >= 1U && value <= max;
   };
-  return to_end(token.substr(0, colon), first) && to_end(token.substr(colon + 1), last);
+  return is_end(token.substr(0, colon)) && is_end(token.substr(colon + 1));
 }
 
 }  // namespace
@@ -234,10 +237,7 @@ extern "C" fm_status_t fm_sheet_get_print_area(const fm_workbook_t* wb, size_t s
     }
     rendered.append(format_range(range));
   }
-  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
-  mutable_wb->read_scratch.clear();
-  mutable_wb->read_scratch.emplace_back(std::move(rendered));
-  *out_ranges_a1 = mutable_wb->read_scratch.back().c_str();
+  *out_ranges_a1 = publish_scratch(wb, std::move(rendered));
   return 0;
 }
 
@@ -259,9 +259,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
     // Excel lists rows before columns; the resolver accepts either order,
     // but matching Excel keeps a diffed worksheet quiet.
     if (!rows.empty()) {
-      std::uint32_t first = 0;
-      std::uint32_t last = 0;
-      if (!parse_span(rows, &formulon::a1::parse_uint, Sheet::kMaxRows, &first, &last)) {
+      if (!is_span(rows, &formulon::a1::parse_uint, Sheet::kMaxRows)) {
         return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, kFn,
                                  "repeat_rows=" + std::string(rows));
       }
@@ -269,9 +267,7 @@ extern "C" fm_status_t fm_sheet_set_print_titles(fm_workbook_t* wb, size_t sheet
       formula.append(absolutise_a1_token(rows));
     }
     if (!cols.empty()) {
-      std::uint32_t first = 0;
-      std::uint32_t last = 0;
-      if (!parse_span(cols, &formulon::a1::parse_column_letters, Sheet::kMaxCols, &first, &last)) {
+      if (!is_span(cols, &formulon::a1::parse_column_letters, Sheet::kMaxCols)) {
         return set_binding_error(formulon::FormulonErrorCode::kPrintInvalidArea, kFn,
                                  "repeat_cols=" + std::string(cols));
       }
@@ -321,11 +317,8 @@ extern "C" fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t
   }
   // Both pointers are handed out from one refresh: clearing between the two
   // pushes would dangle the first.
-  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
-  mutable_wb->read_scratch.clear();
-  mutable_wb->read_scratch.emplace_back(std::move(rows));
-  *out_repeat_rows = mutable_wb->read_scratch.back().c_str();
-  mutable_wb->read_scratch.emplace_back(std::move(cols));
-  *out_repeat_cols = mutable_wb->read_scratch.back().c_str();
+  TextStore& store = fresh_read_scratch(wb);
+  *out_repeat_rows = store_cstr(store, rows);
+  *out_repeat_cols = store_cstr(store, cols);
   return 0;
 }

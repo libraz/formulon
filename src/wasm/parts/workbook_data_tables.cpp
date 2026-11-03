@@ -57,7 +57,7 @@ JsStatus JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
     pull_input(reader, spec, "colInput", &table.has_col_input, &table.col_input_row, &table.col_input_col);
   }
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_add_data_table(handle_, sheet, &table));
 }
@@ -89,17 +89,12 @@ emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t 
 }
 
 JsStatus JsWorkbook::removeDataTable(uint32_t sheet, uint32_t row, uint32_t col) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_remove_data_table(handle_, sheet, row, col));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_data_table(handle_, sheet, row, col)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::recalcDataTables() {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_recalc_data_tables(handle_));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_recalc_data_tables(handle_) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

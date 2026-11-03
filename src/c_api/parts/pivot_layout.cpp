@@ -85,10 +85,9 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  if (pivot_index >= sheet.pivot_tables().size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_pivot_layout: pivot_index out of range",
-        "pivot_index=" + std::to_string(pivot_index) + " count=" + std::to_string(sheet.pivot_tables().size()));
+  if (auto rc = check_index(pivot_index, sheet.pivot_tables().size(), "fm_workbook_pivot_layout", "pivot_index");
+      rc != 0) {
+    return rc;
   }
 
   const formulon::pivot::PivotTable* table = sheet.pivot_tables()[pivot_index].get();

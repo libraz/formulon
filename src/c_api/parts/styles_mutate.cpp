@@ -24,11 +24,13 @@
 
 using formulon::effective_num_fmt;
 using formulon::c_api::parts::check_finite_non_negative;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::num_fmt_id_known;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::text_or_empty;
 
 namespace {
 
@@ -297,7 +299,7 @@ formulon::ColorSpec color_from_c(const fm_color_spec& src) noexcept {
 
 formulon::FontRecord font_from_c(const fm_font_record& record) {
   formulon::FontRecord out;
-  out.name = (record.name != nullptr) ? std::string(record.name) : std::string();
+  out.name = text_or_empty(record.name);
   out.size = record.size;
   out.bold = record.bold != 0;
   out.italic = record.italic != 0;
@@ -438,10 +440,8 @@ extern "C" fm_status_t fm_styles_set_font(fm_workbook_t* wb, uint32_t font_index
   // No `ensure_default_style_roots` here: growing the table to satisfy an
   // out-of-range index would install a default-constructed font at every
   // slot below it, which is a different workbook than the caller asked for.
-  if (font_index >= styles.fonts.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_set_font: font_index out of range",
-        "font_index=" + std::to_string(font_index) + " fonts_count=" + std::to_string(styles.fonts.size()));
+  if (auto rc = check_index(font_index, styles.fonts.size(), "fm_styles_set_font", "font_index"); rc != 0) {
+    return rc;
   }
   if (fm_status_t rc = check_finite_non_negative(record.size, "fm_styles_set_font", "font.size"); rc != 0) {
     return rc;
@@ -490,7 +490,7 @@ extern "C" fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record reco
       return 0;
     }
   }
-  styles.fills.push_back(candidate);
+  styles.fills.push_back(std::move(candidate));
   *out_index = static_cast<uint32_t>(styles.fills.size() - 1);
   return 0;
 }
@@ -511,7 +511,7 @@ extern "C" fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record 
       return 0;
     }
   }
-  styles.borders.push_back(candidate);
+  styles.borders.push_back(std::move(candidate));
   *out_index = static_cast<uint32_t>(styles.borders.size() - 1);
   return 0;
 }
@@ -524,7 +524,7 @@ extern "C" fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* form
   if (auto rc = check_utf8("fm_styles_add_num_fmt", {format_code}); rc != 0) {
     return rc;
   }
-  const std::string code = (format_code != nullptr) ? std::string(format_code) : std::string();
+  const std::string code = text_or_empty(format_code);
   const formulon::StylesTable& existing_styles = wb->workbook().styles();
 
   // Step 1: return a built-in slot only when that slot's effective mapping
@@ -622,7 +622,7 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf& record, uint32
       return 0;
     }
   }
-  styles.cell_xfs.push_back(candidate);
+  styles.cell_xfs.push_back(std::move(candidate));
   *out_xf_index = static_cast<uint32_t>(styles.cell_xfs.size() - 1);
   return 0;
 }
@@ -923,10 +923,10 @@ extern "C" fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record
   candidate.has_num_fmt = record.num_fmt_engaged != 0;
   if (candidate.has_num_fmt) {
     candidate.num_fmt_id = record.num_fmt_id;
-    candidate.num_fmt_code = (record.num_fmt_code != nullptr) ? std::string(record.num_fmt_code) : std::string();
+    candidate.num_fmt_code = text_or_empty(record.num_fmt_code);
   }
-  candidate.alignment_xml = (record.alignment_xml != nullptr) ? std::string(record.alignment_xml) : std::string();
-  candidate.protection_xml = (record.protection_xml != nullptr) ? std::string(record.protection_xml) : std::string();
+  candidate.alignment_xml = text_or_empty(record.alignment_xml);
+  candidate.protection_xml = text_or_empty(record.protection_xml);
 
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   for (std::size_t i = 0; i < styles.dxfs.size(); ++i) {

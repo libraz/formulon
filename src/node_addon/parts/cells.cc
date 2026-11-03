@@ -29,7 +29,7 @@ using CellTextFn = fm_status_t (*)(fm_workbook_t*, size_t, uint32_t, uint32_t, c
 Napi::Value InvokeCellText(const Napi::CallbackInfo& info, fm_workbook_t* handle, CellTextFn fn) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
+    return NullHandleError(env);
   }
   const CellAddressArgs address = ReadCellAddress(info);
   const std::string text = Workbook::ArgString(info, 3);

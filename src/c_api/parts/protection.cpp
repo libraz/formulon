@@ -21,25 +21,24 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::text_or_empty;
+using formulon::c_api::parts::TextStore;
 
 namespace {
 
-std::string Text(const char* text) {
-  return text == nullptr ? std::string() : std::string(text);
-}
-
 formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
   formulon::ProtectedRange out;
-  out.name = Text(range.name);
-  out.sqref = Text(range.sqref);
-  out.password = Text(range.password);
-  out.algorithm_name = Text(range.algorithm_name);
-  out.hash_value = Text(range.hash_value);
-  out.salt_value = Text(range.salt_value);
+  out.name = text_or_empty(range.name);
+  out.sqref = text_or_empty(range.sqref);
+  out.password = text_or_empty(range.password);
+  out.algorithm_name = text_or_empty(range.algorithm_name);
+  out.hash_value = text_or_empty(range.hash_value);
+  out.salt_value = text_or_empty(range.salt_value);
   out.spin_count = range.spin_count;
-  out.security_descriptor = Text(range.security_descriptor);
+  out.security_descriptor = text_or_empty(range.security_descriptor);
   return out;
 }
 
@@ -76,8 +75,7 @@ extern "C" fm_status_t fm_workbook_get_protection(fm_workbook_t* wb, fm_workbook
   }
   const formulon::WorkbookProtection p =
       formulon::io::parse_workbook_protection(wb->workbook().workbook_protection_xml());
-  wb->read_scratch.clear();
-  auto& store = wb->read_scratch;
+  TextStore& store = fresh_read_scratch(wb);
   out->lock_structure = p.lock_structure ? 1 : 0;
   out->lock_windows = p.lock_windows ? 1 : 0;
   out->lock_revision = p.lock_revision ? 1 : 0;
@@ -112,15 +110,15 @@ extern "C" fm_status_t fm_workbook_set_protection(fm_workbook_t* wb, const fm_wo
   p.lock_structure = protection->lock_structure != 0;
   p.lock_windows = protection->lock_windows != 0;
   p.lock_revision = protection->lock_revision != 0;
-  p.workbook_password = Text(protection->workbook_password);
-  p.workbook_algorithm_name = Text(protection->workbook_algorithm_name);
-  p.workbook_hash_value = Text(protection->workbook_hash_value);
-  p.workbook_salt_value = Text(protection->workbook_salt_value);
+  p.workbook_password = text_or_empty(protection->workbook_password);
+  p.workbook_algorithm_name = text_or_empty(protection->workbook_algorithm_name);
+  p.workbook_hash_value = text_or_empty(protection->workbook_hash_value);
+  p.workbook_salt_value = text_or_empty(protection->workbook_salt_value);
   p.workbook_spin_count = protection->workbook_spin_count;
-  p.revisions_password = Text(protection->revisions_password);
-  p.revisions_algorithm_name = Text(protection->revisions_algorithm_name);
-  p.revisions_hash_value = Text(protection->revisions_hash_value);
-  p.revisions_salt_value = Text(protection->revisions_salt_value);
+  p.revisions_password = text_or_empty(protection->revisions_password);
+  p.revisions_algorithm_name = text_or_empty(protection->revisions_algorithm_name);
+  p.revisions_hash_value = text_or_empty(protection->revisions_hash_value);
+  p.revisions_salt_value = text_or_empty(protection->revisions_salt_value);
   p.revisions_spin_count = protection->revisions_spin_count;
   formulon::Workbook& book = wb->workbook();
   book.set_workbook_protection_xml(formulon::io::apply_workbook_protection(book.workbook_protection_xml(), p));
@@ -156,8 +154,7 @@ extern "C" fm_status_t fm_sheet_get_protected_range(fm_workbook_t* wb, uint32_t 
     return rc;
   }
   const formulon::ProtectedRange& r = ranges[index];
-  wb->read_scratch.clear();
-  auto& store = wb->read_scratch;
+  TextStore& store = fresh_read_scratch(wb);
   out->spin_count = r.spin_count;
   out->name = store_cstr(store, r.name);
   out->sqref = store_cstr(store, r.sqref);

@@ -83,7 +83,7 @@ val id_envelope(JsStatus status, const char* field, uint32_t id) {
 }
 
 JsStatus argument_error(const JsNarrowNumericReader& reader) {
-  return binding_error_status(kInvalidArgument, reader.message().c_str());
+  return reader.failure();
 }
 
 // ---- Reads ----------------------------------------------------------
@@ -726,7 +726,7 @@ void read_patch(JsNarrowNumericReader& r, Arena& arena, const val& owner, void* 
             store(base, f->value, r.number_value(v, 0.0, f->key));
             break;
           case Wr::kBool:
-            store(base, f->value, static_cast<int32_t>(r.boolean_value(v, false, f->key)));
+            store(base, f->value, static_cast<int32_t>(r.boolean_value(v, false)));
             break;
           case Wr::kTitle:
             store(base, f->value, read_title(r, arena, v, f->key));
@@ -760,7 +760,7 @@ int32_t header_mode(JsNarrowNumericReader& r, const val& v, const char* field) {
   if (!js_value_present(v)) {
     return FM_CHART_HEADER_AUTO;
   }
-  return r.boolean_value(v, false, field) ? FM_CHART_HEADER_YES : FM_CHART_HEADER_NO;
+  return r.boolean_value(v, false) ? FM_CHART_HEADER_YES : FM_CHART_HEADER_NO;
 }
 
 const uint32_t* data_or_null(const std::vector<uint32_t>& v) {
@@ -769,7 +769,7 @@ const uint32_t* data_or_null(const std::vector<uint32_t>& v) {
 
 /// Reads `patch` (absent reads as `{}`) into `base`; false after an argument rejection.
 bool read_patch_arg(JsNarrowNumericReader& r, const val& patch, void* base, const WrField* table, Arena& arena) {
-  read_patch(r, arena, js_value_present(patch) ? patch : val::object(), base, table);
+  read_patch(r, arena, js_object_or_empty(patch), base, table);
   return r.ok();
 }
 
@@ -801,7 +801,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
     return read_envelope(kBindingInvalidHandle, "data", val::null());
   }
   JsNarrowNumericReader reader("previewChartData");
-  const val spec = js_value_present(overrides) ? overrides : val::object();
+  const val spec = js_object_or_empty(overrides);
   std::string source_store;
   fm_chart_preview_overrides o{};
   o.source = reader.optional_string(spec, "source", source_store, "source");
@@ -810,7 +810,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
     const val v = reader.value(spec, key, key);
     if (js_value_present(v)) {
       op = FM_CHART_PATCH_SET;
-      out = is_bool ? (reader.boolean_value(v, false, key) ? 1 : 0) : reader.i32_value(v, 0, key);
+      out = is_bool ? (reader.boolean_value(v, false) ? 1 : 0) : reader.i32_value(v, 0, key);
     }
   };
   set("direction", o.direction_op, o.direction, false);
@@ -853,9 +853,8 @@ val JsWorkbook::insertChart(uint32_t sheet, val options) {
   opts.placement.name = reader.optional_string(options, "name", name_store, "name");
   opts.placement.descr = reader.optional_string(options, "description", descr_store, "description");
   const val placement = reader.value(options, "placement", "placement");
-  set_insert_placement(
-      opts.placement,
-      pull_drawing_anchor(reader, js_value_present(placement) ? placement : val::object(), FM_ANCHOR_KIND_TWO_CELL));
+  set_insert_placement(opts.placement,
+                       pull_drawing_anchor(reader, js_object_or_empty(placement), FM_ANCHOR_KIND_TWO_CELL));
   if (!reader.ok()) {
     return id_envelope(argument_error(reader), "objectId", 0U);
   }
@@ -935,8 +934,7 @@ JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, int32_t 
   // `null` or omitted removes `c:plotVisOnly`.
   int32_t plot_vis_only = FM_CHART_TRI_ABSENT;
   if (js_value_present(plotVisibleOnly)) {
-    plot_vis_only =
-        reader.boolean_value(plotVisibleOnly, false, "plotVisibleOnly") ? FM_CHART_TRI_TRUE : FM_CHART_TRI_FALSE;
+    plot_vis_only = reader.boolean_value(plotVisibleOnly, false) ? FM_CHART_TRI_TRUE : FM_CHART_TRI_FALSE;
   }
   return status_from_rc(fm_sheet_set_chart_display(handle_, sheet, objectId, blanksAs, plot_vis_only));
 }
@@ -1012,10 +1010,8 @@ val JsWorkbook::addChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot,
 }
 
 JsStatus JsWorkbook::removeChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIdx));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_chart_series(handle_, sheet, objectId, plot, seriesIdx)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setChartSource(uint32_t sheet, uint32_t objectId, const std::string& source, int32_t direction,

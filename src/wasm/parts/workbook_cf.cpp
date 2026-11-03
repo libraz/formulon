@@ -44,15 +44,6 @@ fm_cfvo_t js_pull_cfvo(emscripten::val v, formulon::c_api::BorrowedStringArena* 
   return out;
 }
 
-emscripten::val cf_color_to_js(fm_cf_color_t color) {
-  emscripten::val out = emscripten::val::object();
-  out.set("r", color.r);
-  out.set("g", color.g);
-  out.set("b", color.b);
-  out.set("a", color.a);
-  return out;
-}
-
 emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
   emscripten::val out = emscripten::val::object();
   out.set("type", static_cast<uint32_t>(cfvo.type));
@@ -189,7 +180,7 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
       emscripten::val colors = emscripten::val::array();
       for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
         thresholds.set(j, cfvo_to_js(rule.color_scale_thresholds[j]));
-        colors.set(j, cf_color_to_js(rule.color_scale_colors[j]));
+        colors.set(j, emscripten::val(translate_cf_color(rule.color_scale_colors[j])));
       }
       color_scale.set("thresholds", thresholds);
       color_scale.set("colors", colors);
@@ -199,7 +190,7 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
       emscripten::val data_bar = emscripten::val::object();
       data_bar.set("min", cfvo_to_js(rule.data_bar_min));
       data_bar.set("max", cfvo_to_js(rule.data_bar_max));
-      data_bar.set("fill", cf_color_to_js(rule.data_bar_fill));
+      data_bar.set("fill", emscripten::val(translate_cf_color(rule.data_bar_fill)));
       data_bar.set("showValue", rule.data_bar_show_value != 0);
       data_bar.set("minLengthPct", static_cast<uint32_t>(rule.data_bar_min_length_pct));
       data_bar.set("maxLengthPct", static_cast<uint32_t>(rule.data_bar_max_length_pct));
@@ -216,16 +207,16 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
         data_bar.set("axisPosition", static_cast<uint32_t>(rule.data_bar_axis_position));
       }
       if (rule.data_bar_negative_fill_engaged != 0) {
-        data_bar.set("negativeFill", cf_color_to_js(rule.data_bar_negative_fill));
+        data_bar.set("negativeFill", emscripten::val(translate_cf_color(rule.data_bar_negative_fill)));
       }
       if (rule.data_bar_border_engaged != 0) {
-        data_bar.set("border", cf_color_to_js(rule.data_bar_border));
+        data_bar.set("border", emscripten::val(translate_cf_color(rule.data_bar_border)));
       }
       if (rule.data_bar_negative_border_engaged != 0) {
-        data_bar.set("negativeBorder", cf_color_to_js(rule.data_bar_negative_border));
+        data_bar.set("negativeBorder", emscripten::val(translate_cf_color(rule.data_bar_negative_border)));
       }
       if (rule.data_bar_axis_color_engaged != 0) {
-        data_bar.set("axisColor", cf_color_to_js(rule.data_bar_axis_color));
+        data_bar.set("axisColor", emscripten::val(translate_cf_color(rule.data_bar_axis_color)));
       }
       data_bar.set("direction", static_cast<uint32_t>(rule.data_bar_direction));
       item.set("dataBar", data_bar);
@@ -369,7 +360,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     const emscripten::val gradient = reader.value(data_bar, "gradient", "dataBar.gradient");
     if (js_value_present(gradient)) {
       rule.data_bar_gradient_engaged = 1;
-      rule.data_bar_gradient = reader.boolean_value(gradient, true, "dataBar.gradient") ? 1 : 0;
+      rule.data_bar_gradient = reader.boolean_value(gradient, true) ? 1 : 0;
     }
     const emscripten::val axis_position = reader.value(data_bar, "axisPosition", "dataBar.axisPosition");
     if (js_value_present(axis_position)) {
@@ -437,7 +428,7 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
     }
   }
   if (!reader.ok()) {
-    r.status = binding_error_status(kInvalidArgument, reader.message().c_str());
+    r.status = reader.failure();
     return r;
   }
 
@@ -447,17 +438,11 @@ JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::va
 }
 
 JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_cf_remove_at(handle_, sheet, index));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_cf_remove_at(handle_, sheet, index) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearConditionalFormats(uint32_t sheet) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_cf_clear(handle_, sheet));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_cf_clear(handle_, sheet) : kBindingInvalidHandle);
 }
 
 }  // namespace parts

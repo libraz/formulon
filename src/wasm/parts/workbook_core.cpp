@@ -285,17 +285,11 @@ JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
 // ---- Sheet management ----------------------------------------------------
 
 JsStatus JsWorkbook::addSheet(const std::string& name) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_add_sheet(handle_, name.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_add_sheet(handle_, name.c_str()) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::moveSheet(uint32_t fromIdx, uint32_t toIdx) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_move_sheet(handle_, fromIdx, toIdx));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_move_sheet(handle_, fromIdx, toIdx) : kBindingInvalidHandle);
 }
 
 JsAddStyleResult JsWorkbook::copySheet(uint32_t sourceIndex, uint32_t insertBefore, emscripten::val newName) {
@@ -327,38 +321,27 @@ JsAddStyleResult JsWorkbook::activeSheet() const {
 }
 
 JsStatus JsWorkbook::setActiveSheet(uint32_t sheet) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_active_sheet(handle_, sheet));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_active_sheet(handle_, sheet) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::removeSheet(uint32_t index) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_remove_sheet(handle_, index));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_remove_sheet(handle_, index) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::renameSheet(uint32_t index, const std::string& newName) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_rename_sheet(handle_, index, newName.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_rename_sheet(handle_, index, newName.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setDefinedName(const std::string& name, const std::string& formula) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId));
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId)
+                            : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setDefinedNameAttrs(const std::string& name, int32_t localSheetId, emscripten::val attrs) {
@@ -370,10 +353,9 @@ JsStatus JsWorkbook::setDefinedNameAttrs(const std::string& name, int32_t localS
   const emscripten::val hidden_value = reader.value(attrs, "hidden", "attrs.hidden");
   const bool has_comment = js_value_present(comment_value);
   const std::string comment = has_comment ? reader.string(attrs, "comment", "attrs.comment") : std::string();
-  const int32_t hidden =
-      js_value_present(hidden_value) ? (reader.boolean_value(hidden_value, false, "attrs.hidden") ? 1 : 0) : -1;
+  const int32_t hidden = js_value_present(hidden_value) ? (reader.boolean_value(hidden_value, false) ? 1 : 0) : -1;
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_workbook_set_defined_name_attrs(handle_, name.c_str(), localSheetId,
                                                            has_comment ? comment.c_str() : nullptr, hidden));
@@ -490,10 +472,9 @@ JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
 }
 
 JsStatus JsWorkbook::setIterative(bool enabled, int32_t max_iterations, double max_change) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change));
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_set_iterative(handle_, enabled ? 1 : 0, max_iterations, max_change)
+                            : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::getIterative() const {
@@ -525,10 +506,8 @@ JsNumberResult JsWorkbook::calcMode() const {
 }
 
 JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode)));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode))
+                                           : kBindingInvalidHandle);
 }
 
 JsNumberResult JsWorkbook::fullPrecision() const {
@@ -541,10 +520,8 @@ JsNumberResult JsWorkbook::fullPrecision() const {
 }
 
 JsStatus JsWorkbook::setFullPrecision(bool fullPrecision) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_full_precision(handle_, fullPrecision ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_full_precision(handle_, fullPrecision ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsNumberResult JsWorkbook::calcOnSave() const {
@@ -557,10 +534,8 @@ JsNumberResult JsWorkbook::calcOnSave() const {
 }
 
 JsStatus JsWorkbook::setCalcOnSave(bool calcOnSave) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_calc_on_save(handle_, calcOnSave ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_calc_on_save(handle_, calcOnSave ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsNumberResult JsWorkbook::refMode() const {
@@ -573,10 +548,8 @@ JsNumberResult JsWorkbook::refMode() const {
 }
 
 JsStatus JsWorkbook::setRefMode(uint32_t mode) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_ref_mode(handle_, static_cast<std::int32_t>(mode)));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_ref_mode(handle_, static_cast<std::int32_t>(mode))
+                                           : kBindingInvalidHandle);
 }
 
 JsNumberResult JsWorkbook::date1904() const {
@@ -589,10 +562,8 @@ JsNumberResult JsWorkbook::date1904() const {
 }
 
 JsStatus JsWorkbook::setDate1904(bool date1904) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_date1904(handle_, date1904 ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_date1904(handle_, date1904 ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::pinnedNow() const {
@@ -635,10 +606,7 @@ JsStatus JsWorkbook::setPinnedNow(uint32_t year, uint32_t month, uint32_t day, u
 }
 
 JsStatus JsWorkbook::clearPinnedNow() {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_clear_pinned_now(handle_));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_clear_pinned_now(handle_) : kBindingInvalidHandle);
 }
 
 JsStringResult JsWorkbook::excelProfileId() const {
@@ -651,10 +619,8 @@ JsStringResult JsWorkbook::excelProfileId() const {
 }
 
 JsStatus JsWorkbook::setExcelProfileId(const std::string& profile_id) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_excel_profile_id(handle_, profile_id.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_excel_profile_id(handle_, profile_id.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
@@ -668,7 +634,7 @@ emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
   const uint32_t vp_sheet = reader.u32(viewport, "sheet", 0U, "viewport.sheet");
   const fm_merge_range bounds = js_pull_range(viewport, &reader);
   if (!reader.ok()) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    o.set("status", reader.failure());
     o.set("recomputed", static_cast<uint32_t>(0));
     return o;
   }

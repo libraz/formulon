@@ -13,8 +13,10 @@
 #include <type_traits>
 #include <utility>
 
+#include "c_api/binding_status.h"
 #include "c_api/formulon_c.h"
 #include "cf/cf_types.h"
+#include "drawing/drawing_xml.h"
 #include "eval/builtin_names.h"
 #include "num_fmt_locale.h"
 #include "parser/literal_spelling.h"
@@ -27,6 +29,14 @@
 #include "utils/number_text.h"
 #include "value.h"
 #include "workbook.h"
+
+// The binding layers mirror these codes without including utils/error.h.
+static_assert(formulon::c_api::kBindingInvalidHandle ==
+              static_cast<std::int32_t>(formulon::FormulonErrorCode::kBindingInvalidHandle));
+static_assert(formulon::c_api::kBindingCallbackException ==
+              static_cast<std::int32_t>(formulon::FormulonErrorCode::kBindingCallbackException));
+static_assert(formulon::c_api::kInvalidArgument ==
+              static_cast<std::int32_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
 namespace formulon {
 namespace c_api {
@@ -616,6 +626,27 @@ fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, con
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                            (std::string(fn) + ": " + field + " out of range").c_str(),
                            std::string(field) + "=" + std::to_string(index) + " count=" + std::to_string(size));
+}
+
+fm_status_t null_argument(const char* api) {
+  return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                           (std::string(api) + ": NULL argument").c_str());
+}
+
+fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, const char* fn) {
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
+  }
+  return check_row_index(row, fn);
+}
+
+fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as, const char* api) {
+  if (auto rc = check_enum_domain(anchor_kind, static_cast<std::int64_t>(formulon::AnchorKind::kAbsolute), api,
+                                  "anchor_kind");
+      rc != 0) {
+    return rc;
+  }
+  return check_enum_domain(edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), api, "edit_as");
 }
 
 namespace {

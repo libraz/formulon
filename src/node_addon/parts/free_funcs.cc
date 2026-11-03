@@ -122,21 +122,15 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Version(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const char* s = fm_version_string();
-  return JsString(env, s);
+  return JsString(info.Env(), fm_version_string());
 }
 
 Napi::Value LastErrorMessage(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const char* s = fm_last_error_message();
-  return JsString(env, s);
+  return JsString(info.Env(), fm_last_error_message());
 }
 
 Napi::Value LastErrorContext(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  const char* s = fm_last_error_context();
-  return JsString(env, s);
+  return JsString(info.Env(), fm_last_error_context());
 }
 
 Napi::Value StatusString(const Napi::CallbackInfo& info) {
@@ -186,12 +180,18 @@ Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
   Napi::ThreadSafeFunction fresh = Napi::ThreadSafeFunction::New(env, sink, "formulon.logSink", 0, 1);
   // A registered sink must not by itself keep the process alive.
   fresh.Unref(env);
+  // A refused registration keeps the previous sink, so the swap follows it.
+  const fm_status_t rc = fm_set_log_sink(&LogSinkTrampoline, nullptr);
   {
     const std::lock_guard<std::mutex> lock(log_sink_mutex());
-    ReleaseLogSinkLocked();
-    log_sink_tsfn() = fresh;
+    if (rc == 0) {
+      ReleaseLogSinkLocked();
+      log_sink_tsfn() = fresh;
+    } else {
+      fresh.Release();
+    }
   }
-  return MakeStatus(env, fm_set_log_sink(&LogSinkTrampoline, nullptr));
+  return MakeStatus(env, rc);
 }
 
 }  // namespace formulon_node

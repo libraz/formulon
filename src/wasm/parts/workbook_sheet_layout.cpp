@@ -17,42 +17,20 @@ namespace parts {
 
 namespace {
 
-using EntryCountGetter = fm_status_t (*)(const fm_workbook_t*, size_t, size_t*);
-
-// Reads entry `index` of `sheet` into `*out`; false skips an unreadable entry.
-using EntryItemGetter = bool (*)(const fm_workbook_t*, uint32_t, std::size_t, emscripten::val*);
-
-// Builds a `{ status, <key>: [...] }` enumeration result. Only a failed
-// count fails the call; an unreadable entry is left out of the list.
-emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, EntryCountGetter count_getter, const char* key,
-                           EntryItemGetter item_getter) {
+// Builds a `{ status, <key>: [...] }` enumeration result.
+emscripten::val entry_list(const fm_workbook_t* handle, uint32_t sheet, JsListCount count_getter, const char* key,
+                           JsListItem item_getter) {
   emscripten::val r = emscripten::val::object();
   emscripten::val list = emscripten::val::array();
-  std::size_t count = 0;
-  const fm_status_t rc = handle == nullptr ? kBindingInvalidHandle : count_getter(handle, sheet, &count);
-  if (rc != 0) {
-    r.set("status", error_status(rc));
-    r.set(key, list);
-    return r;
-  }
-  std::size_t emitted = 0;
-  for (std::size_t i = 0; i < count; ++i) {
-    emscripten::val out = emscripten::val::undefined();
-    if (!item_getter(handle, sheet, i, &out)) {
-      continue;
-    }
-    list.set(emitted, out);
-    ++emitted;
-  }
-  r.set("status", ok_status());
+  r.set("status", status_from_rc(js_collect_list(handle, sheet, count_getter, item_getter, list)));
   r.set(key, list);
   return r;
 }
 
-bool column_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index, emscripten::val* out) {
+fm_status_t column_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
   fm_column_layout_t entry{};
-  if (fm_sheet_get_column(handle, sheet, index, &entry) != 0) {
-    return false;
+  if (const fm_status_t rc = fm_sheet_get_column(handle, sheet, index, &entry); rc != 0) {
+    return rc;
   }
   *out = emscripten::val::object();
   out->set("first", entry.first);
@@ -66,13 +44,13 @@ bool column_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index
   out->set("hasWidth", (entry.has_width || entry.width != 0.0) ? 1 : 0);
   out->set("hasStyle", entry.has_style ? 1 : 0);
   out->set("styleXf", entry.style_xf);
-  return true;
+  return 0;
 }
 
-bool row_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index, emscripten::val* out) {
+fm_status_t row_entry(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
   fm_row_layout_t entry{};
-  if (fm_sheet_get_row_override(handle, sheet, index, &entry) != 0) {
-    return false;
+  if (const fm_status_t rc = fm_sheet_get_row_override(handle, sheet, index, &entry); rc != 0) {
+    return rc;
   }
   *out = emscripten::val::object();
   out->set("row", entry.row);
@@ -84,7 +62,7 @@ bool row_entry(const fm_workbook_t* handle, uint32_t sheet, std::size_t index, e
   out->set("styleXf", entry.style_xf);
   out->set("hasHeight", entry.has_height ? 1 : 0);
   out->set("customHeight", entry.custom_height ? 1 : 0);
-  return true;
+  return 0;
 }
 
 uint8_t clamp_outline_level(uint32_t level) {
@@ -191,25 +169,22 @@ emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
   emscripten::val print_area = emscripten::val::array();
   emscripten::val horizontal_breaks = emscripten::val::array();
   emscripten::val vertical_breaks = emscripten::val::array();
-  if (handle_ == nullptr) {
-    result.set("status", invalid_handle_status());
+  const auto fail = [&](const JsStatus& status) {
+    result.set("status", status);
     result.set("printArea", print_area);
     result.set("horizontalBreaks", horizontal_breaks);
     result.set("verticalBreaks", vertical_breaks);
     result.set("pageCount", 0);
     set_pagination_detail(&result, nullptr);
     return result;
+  };
+  if (handle_ == nullptr) {
+    return fail(invalid_handle_status());
   }
   fm_pagination_t* pagination = nullptr;
   const fm_status_t rc = fm_workbook_paginate(handle_, sheet, &pagination);
   if (rc != 0) {
-    result.set("status", error_status(rc));
-    result.set("printArea", print_area);
-    result.set("horizontalBreaks", horizontal_breaks);
-    result.set("verticalBreaks", vertical_breaks);
-    result.set("pageCount", 0);
-    set_pagination_detail(&result, nullptr);
-    return result;
+    return fail(error_status(rc));
   }
   const std::size_t area_count = fm_pagination_print_area_count(pagination);
   for (std::size_t i = 0; i < area_count; ++i) {
@@ -350,7 +325,7 @@ JsStatus JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
   in.autoFilter = reader.i32(input, "autoFilter", 0, "protection.autoFilter");
   in.pivotTables = reader.i32(input, "pivotTables", 0, "protection.pivotTables");
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   fm_sheet_protection_t p{};
   p.enabled = in.enabled;
@@ -380,94 +355,66 @@ JsStatus JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
 }
 
 JsStatus JsWorkbook::setSheetZoom(uint32_t sheet, uint32_t zoomScale) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_zoom(handle_, sheet, zoomScale));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_zoom(handle_, sheet, zoomScale) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_freeze(handle_, sheet, freezeRows, freezeCols));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_freeze(handle_, sheet, freezeRows, freezeCols)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetTabHidden(uint32_t sheet, bool hidden) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetVisibility(uint32_t sheet, int32_t visibility) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_visibility(handle_, sheet, visibility));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_visibility(handle_, sheet, visibility)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetShowGridLines(uint32_t sheet, bool show) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_show_grid_lines(handle_, sheet, show ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_show_grid_lines(handle_, sheet, show ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetShowRowColHeaders(uint32_t sheet, bool show) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_show_row_col_headers(handle_, sheet, show ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_show_row_col_headers(handle_, sheet, show ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetShowZeros(uint32_t sheet, bool show) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetShowFormulas(uint32_t sheet, bool show) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_show_formulas(handle_, sheet, show ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_show_formulas(handle_, sheet, show ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetShowOutlineSymbols(uint32_t sheet, bool show) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_show_outline_symbols(handle_, sheet, show ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_show_outline_symbols(handle_, sheet, show ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetRightToLeft(uint32_t sheet, bool rightToLeft) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_right_to_left(handle_, sheet, rightToLeft ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_right_to_left(handle_, sheet, rightToLeft ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetTopLeft(uint32_t sheet, uint32_t row, uint32_t col) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_top_left(handle_, sheet, row, col));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_top_left(handle_, sheet, row, col) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetPaneTopLeft(uint32_t sheet, uint32_t row, uint32_t col) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_pane_top_left(handle_, sheet, row, col));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_pane_top_left(handle_, sheet, row, col)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetSplit(uint32_t sheet, double xTwips, double yTwips) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_split(handle_, sheet, xTwips, yTwips));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_split(handle_, sheet, xTwips, yTwips)
+                                           : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::getSheetSelection(uint32_t sheet) const {
@@ -501,23 +448,19 @@ JsStatus JsWorkbook::setSheetSelection(uint32_t sheet, emscripten::val selection
   const uint32_t col = reader.u32(selection, "activeCol", 0U, "selection.activeCol");
   const std::vector<fm_merge_range> ranges = js_pull_ranges(selection, "ranges", &reader);
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_set_selection(handle_, sheet, row, col, ranges.data(), ranges.size()));
 }
 
 JsStatus JsWorkbook::setSheetTabSelected(uint32_t sheet, bool selected) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_view_mode(handle_, sheet, mode.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_view_mode(handle_, sheet, mode.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 // ---- Column layout overrides --------------------------------------------
@@ -527,45 +470,35 @@ emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
 }
 
 JsStatus JsWorkbook::setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_column_width(handle_, sheet, first, last, width));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_column_width(handle_, sheet, first, last, width)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setColumnHidden(uint32_t sheet, uint32_t first, uint32_t last, bool hidden) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_column_outline(handle_, sheet, first, last, clamp_outline_level(level)));
+  return status_from_rc(handle_ != nullptr
+                            ? fm_sheet_set_column_outline(handle_, sheet, first, last, clamp_outline_level(level))
+                            : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setColumnCollapsed(uint32_t sheet, uint32_t first, uint32_t last, bool collapsed) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_column_collapsed(handle_, sheet, first, last, collapsed ? 1 : 0));
+  return status_from_rc(handle_ != nullptr
+                            ? fm_sheet_set_column_collapsed(handle_, sheet, first, last, collapsed ? 1 : 0)
+                            : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setColumnStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_column_style(handle_, sheet, first, last, xfIndex));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_column_style(handle_, sheet, first, last, xfIndex)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearColumnStyle(uint32_t sheet, uint32_t first, uint32_t last) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_clear_column_style(handle_, sheet, first, last));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_column_style(handle_, sheet, first, last)
+                                           : kBindingInvalidHandle);
 }
 
 // ---- Row layout overrides ----------------------------------------------
@@ -575,52 +508,38 @@ emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
 }
 
 JsStatus JsWorkbook::setRowHeight(uint32_t sheet, uint32_t row, double height) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_row_height(handle_, sheet, row, height));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_height(handle_, sheet, row, height)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setRowAutoHeight(uint32_t sheet, uint32_t row, double height) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_row_auto_height(handle_, sheet, row, height));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_auto_height(handle_, sheet, row, height)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setRowHidden(uint32_t sheet, uint32_t row, bool hidden) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setRowOutline(uint32_t sheet, uint32_t row, uint32_t level) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_row_outline(handle_, sheet, row, clamp_outline_level(level)));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_outline(handle_, sheet, row, clamp_outline_level(level))
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setRowCollapsed(uint32_t sheet, uint32_t row, bool collapsed) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_row_collapsed(handle_, sheet, row, collapsed ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_collapsed(handle_, sheet, row, collapsed ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::setRowStyle(uint32_t sheet, uint32_t first, uint32_t last, uint32_t xfIndex) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_row_style(handle_, sheet, first, last, xfIndex));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_row_style(handle_, sheet, first, last, xfIndex)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearRowStyle(uint32_t sheet, uint32_t first, uint32_t last) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_clear_row_style(handle_, sheet, first, last));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_row_style(handle_, sheet, first, last)
+                                           : kBindingInvalidHandle);
 }
 
 namespace {
@@ -694,7 +613,7 @@ emscripten::val JsWorkbook::rangeStyleBasesExcluding(uint32_t sheet, uint32_t fi
     cols[i] = reader.u32_value(reader.array_element(excludedCols, i, "excludedCols[]"), 0U, "excludedCols[]");
   }
   if (!reader.ok()) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    o.set("status", reader.failure());
     return o;
   }
   return range_style_bases_result(handle_, sheet, firstRow, firstCol, lastRow, lastCol, rows, cols);
@@ -720,7 +639,7 @@ JsStatus JsWorkbook::remapRangeStyle(uint32_t sheet, uint32_t firstRow, uint32_t
     to[i] = reader.u32_value(reader.array_element(toXfs, i, "toXfs[]"), 0U, "toXfs[]");
   }
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(
       fm_sheet_remap_range_style(handle_, sheet, firstRow, firstCol, lastRow, lastCol, from.data(), to.data(), count));
@@ -757,17 +676,12 @@ JsStatus JsWorkbook::restoreRangeStyle(uint32_t sheet, emscripten::val bytes) {
 }
 
 JsStatus JsWorkbook::clearRowHeight(uint32_t sheet, uint32_t row) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_clear_row_height(handle_, sheet, row));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_row_height(handle_, sheet, row) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearColumnWidth(uint32_t sheet, uint32_t first, uint32_t last) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_clear_column_width(handle_, sheet, first, last));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_column_width(handle_, sheet, first, last)
+                                           : kBindingInvalidHandle);
 }
 
 // ---- Sheet format defaults and point geometry ---------------------------
@@ -816,14 +730,12 @@ JsStatus JsWorkbook::setSheetFormatDefaults(uint32_t sheet, emscripten::val defa
   d.default_col_width = reader.number_value(default_col_width, 0.0, "format.defaultColWidth");
   d.default_row_height = reader.number_value(default_row_height, 0.0, "format.defaultRowHeight");
   d.base_col_width = reader.number_value(base_col_width, 8.0, "format.baseColWidth");
-  d.has_default_col_width =
-      reader.boolean_value(has_default_col_width, default_col_width_present, "format.hasDefaultColWidth") ? 1 : 0;
-  d.has_default_row_height =
-      reader.boolean_value(has_default_row_height, default_row_height_present, "format.hasDefaultRowHeight") ? 1 : 0;
-  d.custom_height = reader.boolean_value(custom_height, d.custom_height != 0, "format.customHeight") ? 1 : 0;
-  d.zero_height = reader.boolean_value(zero_height, d.zero_height != 0, "format.zeroHeight") ? 1 : 0;
+  d.has_default_col_width = reader.boolean_value(has_default_col_width, default_col_width_present) ? 1 : 0;
+  d.has_default_row_height = reader.boolean_value(has_default_row_height, default_row_height_present) ? 1 : 0;
+  d.custom_height = reader.boolean_value(custom_height, d.custom_height != 0) ? 1 : 0;
+  d.zero_height = reader.boolean_value(zero_height, d.zero_height != 0) ? 1 : 0;
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_set_format_defaults(handle_, sheet, &d));
 }
@@ -837,7 +749,7 @@ emscripten::val JsWorkbook::getCellRectPt(uint32_t sheet, emscripten::val range,
     JsNarrowNumericReader reader("getCellRectPt");
     const fm_merge_range b = js_pull_range(range, &reader);
     if (!reader.ok()) {
-      status = binding_error_status(kInvalidArgument, reader.message().c_str());
+      status = reader.failure();
     } else {
       const fm_status_t rc =
           fm_sheet_cell_rect_pt(handle_, sheet, b.first_row, b.first_col, b.last_row, b.last_col, mode, &r);

@@ -18,14 +18,19 @@
 #include "utils/error.h"
 #include "workbook.h"
 
-using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_anchor_enums;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
+using formulon::c_api::parts::fill_anchor;
+using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::TextStore;
 
 namespace {
 
@@ -83,33 +88,22 @@ extern "C" fm_status_t fm_sheet_drawing_object_at(const fm_workbook_t* wb, size_
     return set_last_error(objects.error());
   }
   const std::vector<formulon::DrawingObject>& list = objects.value();
-  if (idx >= list.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_drawing_object_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(list.size()));
+  if (auto rc = check_index(idx, list.size(), "fm_sheet_drawing_object_at", "idx"); rc != 0) {
+    return rc;
   }
   const formulon::DrawingObject& obj = list[idx];
-  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->read_scratch.clear();
+  TextStore& store = fresh_read_scratch(wb);
   *out = fm_drawing_object{};
   out->object_id = obj.object_id;
   out->kind = static_cast<int32_t>(obj.kind);
-  out->anchor_kind = static_cast<int32_t>(obj.anchor_kind);
   out->edit_as = static_cast<int32_t>(obj.edit_as);
-  out->from_row = obj.from.row;
-  out->from_col = obj.from.col;
-  out->from_row_off = obj.from.row_off;
-  out->from_col_off = obj.from.col_off;
-  out->to_row = obj.to.row;
-  out->to_col = obj.to.col;
-  out->to_row_off = obj.to.row_off;
-  out->to_col_off = obj.to.col_off;
+  fill_anchor(obj, out);
   out->cx = obj.cx;
   out->cy = obj.cy;
   out->image_format = static_cast<int32_t>(obj.image_format);
-  out->name = store_cstr(scratch->read_scratch, obj.name);
-  out->descr = store_cstr(scratch->read_scratch, obj.descr);
-  out->media_path = store_cstr(scratch->read_scratch, obj.media_path);
+  out->name = store_cstr(store, obj.name);
+  out->descr = store_cstr(store, obj.descr);
+  out->media_path = store_cstr(store, obj.media_path);
   return 0;
 }
 
@@ -160,14 +154,7 @@ extern "C" fm_status_t fm_sheet_insert_image(fm_workbook_t* wb, size_t sheet_ind
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(opts->anchor_kind, static_cast<std::int64_t>(formulon::AnchorKind::kAbsolute), kApi,
-                                  "anchor_kind");
-      rc != 0) {
-    return rc;
-  }
-  if (auto rc =
-          check_enum_domain(opts->edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), kApi, "edit_as");
-      rc != 0) {
+  if (auto rc = check_anchor_enums(opts->anchor_kind, opts->edit_as, kApi); rc != 0) {
     return rc;
   }
   if (auto rc = check_utf8(kApi, {opts->name, opts->descr}); rc != 0) {
@@ -197,8 +184,7 @@ extern "C" fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_i
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_drawing"); rc != 0) {
     return rc;
   }
-  auto removed = formulon::remove_drawing(wb->workbook(), sheet_index, object_id);
-  return removed ? 0 : set_last_error(removed.error());
+  return finish_status(formulon::remove_drawing(wb->workbook(), sheet_index, object_id));
 }
 
 extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -212,14 +198,7 @@ extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t she
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
   }
-  if (auto rc = check_enum_domain(anchor->anchor_kind, static_cast<std::int64_t>(formulon::AnchorKind::kAbsolute), kApi,
-                                  "anchor_kind");
-      rc != 0) {
-    return rc;
-  }
-  if (auto rc =
-          check_enum_domain(anchor->edit_as, static_cast<std::int64_t>(formulon::EditAs::kAbsolute), kApi, "edit_as");
-      rc != 0) {
+  if (auto rc = check_anchor_enums(anchor->anchor_kind, anchor->edit_as, kApi); rc != 0) {
     return rc;
   }
   formulon::DrawingAnchor model;
@@ -231,8 +210,7 @@ extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t she
   model.col_off = anchor->col_off_emu;
   model.width_emu = anchor->width_emu;
   model.height_emu = anchor->height_emu;
-  auto moved = formulon::set_drawing_anchor(wb->workbook(), sheet_index, object_id, model);
-  return moved ? 0 : set_last_error(moved.error());
+  return finish_status(formulon::set_drawing_anchor(wb->workbook(), sheet_index, object_id, model));
 }
 
 extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -241,8 +219,7 @@ extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sh
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_drawing_z_order"); rc != 0) {
     return rc;
   }
-  auto moved = formulon::set_drawing_z_order(wb->workbook(), sheet_index, object_id, index);
-  return moved ? 0 : set_last_error(moved.error());
+  return finish_status(formulon::set_drawing_z_order(wb->workbook(), sheet_index, object_id, index));
 }
 
 extern "C" fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,

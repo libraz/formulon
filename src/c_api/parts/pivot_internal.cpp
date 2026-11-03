@@ -49,16 +49,11 @@ const formulon::pivot::PivotCache* find_cache(const formulon::Workbook& wb, std:
 
 const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, std::size_t sheet_index,
                                                  std::size_t pivot_index, const char* fn) {
-  if (sheet_index >= wb.sheet_count()) {
-    set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "sheet_index out of range",
-                      std::string(fn) + ": sheet_index=" + std::to_string(sheet_index));
+  if (check_index(sheet_index, wb.sheet_count(), fn, "sheet_index") != 0) {
     return nullptr;
   }
   const formulon::Sheet& sheet = wb.sheet(sheet_index);
-  if (pivot_index >= sheet.pivot_tables().size()) {
-    set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "pivot_index out of range",
-                      std::string(fn) + ": pivot_index=" + std::to_string(pivot_index) +
-                          " count=" + std::to_string(sheet.pivot_tables().size()));
+  if (check_index(pivot_index, sheet.pivot_tables().size(), fn, "pivot_index") != 0) {
     return nullptr;
   }
   const formulon::pivot::PivotTable* table = sheet.pivot_tables()[pivot_index].get();

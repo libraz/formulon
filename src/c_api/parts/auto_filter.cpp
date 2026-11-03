@@ -26,10 +26,13 @@ using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate_single_element_fragment;
 
 namespace {
@@ -97,17 +100,13 @@ formulon::MergeRange from_fm(const fm_merge_range& r) {
   return out;
 }
 
-std::string text_or_empty(const char* text) {
-  return text != nullptr ? std::string(text) : std::string();
-}
-
 // --- model -> record --------------------------------------------------------
 
 // Publishes `filter` into `out`, with every string in the handle's read
 // scratch and every array in the handle's AutoFilter arenas.
 void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_auto_filter* out) {
   fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->read_scratch.clear();
+  fresh_read_scratch(wb);
   scratch->filter_column_scratch.clear();
   scratch->filter_value_scratch.clear();
   scratch->date_group_scratch.clear();
@@ -474,7 +473,7 @@ fm_status_t store(fm_workbook_t* wb, const Target& target, formulon::AutoFilter 
   formulon::Workbook& book = wb->workbook();
   auto result = target.table.has_value() ? book.set_table_auto_filter(*target.table, std::move(filter))
                                          : book.set_sheet_auto_filter(target.sheet, std::move(filter));
-  return result ? 0 : set_last_error(result.error());
+  return finish_status(result);
 }
 
 fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filter* filter, const char* api) {
@@ -496,7 +495,7 @@ fm_status_t remove_body(fm_workbook_t* wb, const Target& target) {
   formulon::Workbook& book = wb->workbook();
   auto result = target.table.has_value() ? book.remove_table_auto_filter(*target.table)
                                          : book.remove_sheet_auto_filter(target.sheet);
-  return result ? 0 : set_last_error(result.error());
+  return finish_status(result);
 }
 
 fm_status_t apply_body(fm_workbook_t* wb, const Target& target, const char* api) {
@@ -506,7 +505,7 @@ fm_status_t apply_body(fm_workbook_t* wb, const Target& target, const char* api)
   // Copied: the row edits must not read through storage the workbook owns.
   const formulon::AutoFilter filter = *target.filter;
   auto result = formulon::apply_auto_filter(wb->workbook(), target.sheet, filter);
-  return result ? 0 : set_last_error(result.error());
+  return finish_status(result);
 }
 
 fm_status_t clear_body(fm_workbook_t* wb, const Target& target, const char* api) {
@@ -519,7 +518,7 @@ fm_status_t clear_body(fm_workbook_t* wb, const Target& target, const char* api)
     return rc;
   }
   auto result = formulon::apply_auto_filter(wb->workbook(), target.sheet, filter);
-  return result ? 0 : set_last_error(result.error());
+  return finish_status(result);
 }
 
 fm_status_t evaluate_body(const fm_workbook_t* wb, const Target& target, uint8_t* out_match, size_t cap,

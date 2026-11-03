@@ -18,6 +18,7 @@
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
@@ -145,7 +146,7 @@ extern "C" fm_status_t fm_styles_get_table_style(fm_workbook_t* wb, uint32_t ind
     c.dxf_id = element.dxf_id.value_or(0U);
     elements.push_back(c);
   }
-  wb->read_scratch.clear();
+  fresh_read_scratch(wb);
   wb->table_style_element_scratch.clear();
   *out = fm_table_style_t{};
   out->name = style.name.c_str();

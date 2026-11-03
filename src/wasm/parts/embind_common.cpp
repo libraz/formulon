@@ -178,6 +178,10 @@ bool js_value_present(const emscripten::val& value) {
   return !value.isUndefined() && !value.isNull();
 }
 
+emscripten::val js_object_or_empty(const emscripten::val& value) {
+  return js_value_present(value) ? value : emscripten::val::object();
+}
+
 JsStatus binding_error_status(int32_t code, const char* message) {
   JsStatus s;
   s.ok = false;
@@ -262,8 +266,7 @@ emscripten::val JsNarrowNumericReader::safe_get(const emscripten::val& owner, co
   return result;
 }
 
-bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const char* key, const char* field, double lower,
-                                         double upper, const char* range, double* number) {
+bool JsNarrowNumericReader::present_number(const emscripten::val& value, const char* key, const char* field) {
   if (!js_value_present(value)) {
     return false;
   }
@@ -271,6 +274,14 @@ bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const cha
   // In particular, Symbol and BigInt must never reach val::as on this path.
   if (!value.isNumber()) {
     reject_type(field != nullptr ? field : key, "a Number");
+    return false;
+  }
+  return true;
+}
+
+bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const char* key, const char* field, double lower,
+                                         double upper, const char* range, double* number) {
+  if (!present_number(value, key, field)) {
     return false;
   }
   const double candidate = value.as<double>();
@@ -284,11 +295,7 @@ bool JsNarrowNumericReader::read_integer(const emscripten::val& value, const cha
 
 bool JsNarrowNumericReader::read_number(const emscripten::val& value, const char* key, const char* field,
                                         double* number) {
-  if (!js_value_present(value)) {
-    return false;
-  }
-  if (!value.isNumber()) {
-    reject_type(field != nullptr ? field : key, "a Number");
+  if (!present_number(value, key, field)) {
     return false;
   }
   *number = value.as<double>();
@@ -406,14 +413,13 @@ bool JsNarrowNumericReader::boolean(const emscripten::val& owner, const char* ke
   if (!fetched) {
     return dflt;
   }
-  return boolean_value(value, dflt, field != nullptr ? field : key);
+  return boolean_value(value, dflt);
 }
 
-bool JsNarrowNumericReader::boolean_value(const emscripten::val& value, bool dflt, const char* field) {
+bool JsNarrowNumericReader::boolean_value(const emscripten::val& value, bool dflt) {
   if (!ok()) {
     return dflt;
   }
-  (void)field;
   if (!js_value_present(value)) {
     return dflt;
   }
@@ -527,23 +533,50 @@ emscripten::val JsNarrowNumericReader::array_element(const emscripten::val& arra
   if (!ok()) {
     return emscripten::val::undefined();
   }
-  if (!is_array(array, field)) {
-    if (!ok()) {
-      return emscripten::val::undefined();
-    }
-    reject_type(field, "an array");
+  if (!require_array(array, field)) {
     return emscripten::val::undefined();
   }
   bool completed = false;
   return safe_get(array, emscripten::val(index), field, &completed);
 }
 
+bool JsNarrowNumericReader::require_array(const emscripten::val& value, const char* field) {
+  if (is_array(value, field)) {
+    return true;
+  }
+  if (ok()) {
+    reject_type(field, "an array");
+  }
+  return false;
+}
+
 bool JsNarrowNumericReader::ok() const {
   return message_.empty();
 }
 
+JsStatus JsNarrowNumericReader::failure() const {
+  return binding_error_status(kInvalidArgument, message_.c_str());
+}
+
 const std::string& JsNarrowNumericReader::message() const {
   return message_;
+}
+
+fm_status_t js_collect_list(const fm_workbook_t* handle, size_t sheet, JsListCount count, JsListItem item,
+                            emscripten::val& list) {
+  if (handle == nullptr) {
+    return kBindingInvalidHandle;
+  }
+  size_t n = 0;
+  fm_status_t rc = count(handle, sheet, &n);
+  for (size_t i = 0; rc == 0 && i < n; ++i) {
+    emscripten::val entry = emscripten::val::undefined();
+    rc = item(handle, sheet, i, &entry);
+    if (rc == 0) {
+      list.set(i, entry);
+    }
+  }
+  return rc;
 }
 
 JsNumberResult number_result(fm_status_t rc, double value) {
@@ -733,7 +766,7 @@ std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char*
   if (!reader->ok() || !js_value_present(array)) {
     return out;
   }
-  if (!reader->is_array(array, key)) {
+  if (!reader->require_array(array, key)) {
     return out;
   }
   const uint32_t n = reader->length(array, key);
@@ -749,12 +782,7 @@ std::vector<fm_merge_range> js_pull_ranges(const emscripten::val& v, const char*
     if (!js_value_present(range)) {
       continue;
     }
-    fm_merge_range m{};
-    m.first_row = reader->u32(range, "firstRow", 0U, "sqref.firstRow");
-    m.last_row = reader->u32(range, "lastRow", 0U, "sqref.lastRow");
-    m.first_col = reader->u32(range, "firstCol", 0U, "sqref.firstCol");
-    m.last_col = reader->u32(range, "lastCol", 0U, "sqref.lastCol");
-    out.push_back(m);
+    out.push_back(js_pull_range(range, reader));
   }
   return out;
 }

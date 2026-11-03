@@ -52,7 +52,7 @@ Napi::Value SheetLayoutList(const Napi::CallbackInfo& info, const fm_workbook_t*
                             Napi::Object (*to_js)(Napi::Env, const Entry&)) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return MakeFieldResult(env, MakeErrorStatus(env, kBindingInvalidHandle), field, Napi::Array::New(env));
+    return MakeFieldResult(env, NullHandleError(env), field, Napi::Array::New(env));
   }
   const std::size_t sheet = static_cast<std::size_t>(Workbook::ArgU32(info, 0));
   std::size_t count = 0;
@@ -619,6 +619,23 @@ Napi::Object RangeStyleBasesResult(Napi::Env env, fm_workbook_t* handle, const u
   return out;
 }
 
+// Reads two equal-length arrays of unsigned integers element by element; `key` names them in diagnostics.
+void PullParallelU32(CheckedSpecReader& reader, const Napi::Array& first_arr, const Napi::Array& second_arr,
+                     const char* key, std::vector<uint32_t>* first, std::vector<uint32_t>* second) {
+  const uint32_t count = first_arr.Length();
+  first->assign(count, 0U);
+  second->assign(count, 0U);
+  for (uint32_t i = 0; i < count; ++i) {
+    Napi::Value v;
+    if (reader.ArrayElement(first_arr, i, &v)) {
+      (*first)[i] = reader.U32(v, key, 0U);
+    }
+    if (reader.ArrayElement(second_arr, i, &v)) {
+      (*second)[i] = reader.U32(v, key, 0U);
+    }
+  }
+}
+
 }  // namespace
 
 Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {
@@ -657,15 +674,10 @@ Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   if (rows_arr.Length() != cols_arr.Length()) {
     return refused("rangeStyleBasesExcluding: excludedRows and excludedCols must have the same length");
   }
-  const uint32_t count = rows_arr.Length();
   CheckedSpecReader reader(env);
-  std::vector<uint32_t> rows(count);
-  std::vector<uint32_t> cols(count);
-  for (uint32_t i = 0; i < count; ++i) {
-    const std::string key = std::to_string(i);
-    rows[i] = reader.U32(rows_arr, key.c_str(), 0U);
-    cols[i] = reader.U32(cols_arr, key.c_str(), 0U);
-  }
+  std::vector<uint32_t> rows;
+  std::vector<uint32_t> cols;
+  PullParallelU32(reader, rows_arr, cols_arr, "excludedRows/excludedCols", &rows, &cols);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -687,21 +699,16 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
   if (from_arr.Length() != to_arr.Length()) {
     return MakeBindingArgumentError(env, "remapRangeStyle: fromXfs and toXfs must have the same length");
   }
-  const uint32_t count = from_arr.Length();
   CheckedSpecReader reader(env);
-  std::vector<uint32_t> from(count);
-  std::vector<uint32_t> to(count);
-  for (uint32_t i = 0; i < count; ++i) {
-    const std::string key = std::to_string(i);
-    from[i] = reader.U32(from_arr, key.c_str(), 0U);
-    to[i] = reader.U32(to_arr, key.c_str(), 0U);
-  }
+  std::vector<uint32_t> from;
+  std::vector<uint32_t> to;
+  PullParallelU32(reader, from_arr, to_arr, "fromXfs/toXfs", &from, &to);
   if (!reader.ok()) {
     return env.Undefined();
   }
   return MakeStatus(env, fm_sheet_remap_range_style(handle_, static_cast<std::size_t>(ArgU32(info, 0)), ArgU32(info, 1),
                                                     ArgU32(info, 2), ArgU32(info, 3), ArgU32(info, 4), from.data(),
-                                                    to.data(), count));
+                                                    to.data(), from.size()));
 }
 
 Napi::Value Workbook::SnapshotRangeStyle(const Napi::CallbackInfo& info) {

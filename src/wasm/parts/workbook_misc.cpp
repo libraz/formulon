@@ -245,10 +245,9 @@ emscripten::val JsWorkbook::getArrayFormula(uint32_t sheet, uint32_t row, uint32
 
 JsStatus JsWorkbook::setArrayFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols,
                                      const std::string& formula) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_workbook_set_array_formula(handle_, sheet, row, col, rows, cols, formula.c_str()));
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_set_array_formula(handle_, sheet, row, col, rows, cols, formula.c_str())
+                            : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,
@@ -293,7 +292,7 @@ emscripten::val JsWorkbook::collationClasses(emscripten::val values, int32_t str
     pull_value(reader, element, texts[i], &items[i]);
   }
   if (!reader.ok()) {
-    o.set("status", binding_error_status(kInvalidArgument, reader.message().c_str()));
+    o.set("status", reader.failure());
     return o;
   }
   std::vector<uint32_t> ids(n);

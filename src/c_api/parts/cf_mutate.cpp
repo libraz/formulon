@@ -36,10 +36,12 @@
 
 using formulon::c_api::BorrowedArrayArena;
 using formulon::c_api::BorrowedStringArena;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
 
 // `fm_cf_cell_range_t` mirrors `cf::CFCellRange`, so the model's range
@@ -58,20 +60,20 @@ namespace {
 
 // Walks the sheet's `conditional_formats` vector and resolves the
 // `flat_idx`-th rule into the (block_idx, rule_idx) pair. Returns
-// `true` on success; `false` when `flat_idx` is past the end.
-bool resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t flat_idx,
-                        std::size_t* out_block, std::size_t* out_rule) {
+// 0 on success; the `check_index` error for `fn` when `flat_idx` is past the end.
+fm_status_t resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& blocks, std::size_t flat_idx,
+                               const char* fn, std::size_t* out_block, std::size_t* out_rule) {
   std::size_t cursor = 0;
   for (std::size_t b = 0; b < blocks.size(); ++b) {
     const auto& block = blocks[b];
     if (flat_idx < cursor + block.rules.size()) {
       *out_block = b;
       *out_rule = flat_idx - cursor;
-      return true;
+      return 0;
     }
     cursor += block.rules.size();
   }
-  return false;
+  return check_index(flat_idx, cursor, fn, "idx");
 }
 
 // Materialises a `cf::CFRule` onto the wire-format `fm_cf_rule_t`.
@@ -238,7 +240,7 @@ formulon::cf::Color to_cf_color(fm_cf_color_t color) {
 formulon::cf::CfValueObject to_cfvo(const fm_cfvo_t& src) {
   formulon::cf::CfValueObject out;
   out.type = static_cast<formulon::cf::CfvoType>(src.type);
-  out.value = src.value != nullptr ? std::string(src.value) : std::string();
+  out.value = text_or_empty(src.value);
   out.gte = src.gte != 0;
   return out;
 }
@@ -393,9 +395,8 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
   const auto& blocks = wb->workbook().sheet(sheet_index).conditional_formats();
   std::size_t b = 0;
   std::size_t r = 0;
-  if (!resolve_flat_index(blocks, idx, &b, &r)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_get_at: idx out of range",
-                             "idx=" + std::to_string(idx));
+  if (auto rc = resolve_flat_index(blocks, idx, "fm_sheet_cf_get_at", &b, &r); rc != 0) {
+    return rc;
   }
   // The CF arenas are refreshed here and nowhere else, so the record stays
   // readable across CF mutations and across unrelated reads that recycle
@@ -572,9 +573,8 @@ extern "C" fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, std::size_t shee
   auto& blocks = sheet.mutable_conditional_formats();
   std::size_t b = 0;
   std::size_t r = 0;
-  if (!resolve_flat_index(blocks, idx, &b, &r)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_remove_at: idx out of range",
-                             "idx=" + std::to_string(idx));
+  if (auto rc = resolve_flat_index(blocks, idx, "fm_sheet_cf_remove_at", &b, &r); rc != 0) {
+    return rc;
   }
   blocks[b].rules.erase(blocks[b].rules.begin() + static_cast<std::ptrdiff_t>(r));
   if (blocks[b].rules.empty()) {

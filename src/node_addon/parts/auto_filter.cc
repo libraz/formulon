@@ -309,7 +309,7 @@ Napi::Object EmptyAutoFilterEvaluation(Napi::Env env, Napi::Object status) {
 Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_t* wb, bool table) {
   Napi::Env env = info.Env();
   if (wb == nullptr) {
-    return MakeFieldResult(env, MakeErrorStatus(env, kBindingInvalidHandle), "autoFilter", env.Null());
+    return MakeFieldResult(env, NullHandleError(env), "autoFilter", env.Null());
   }
   const size_t idx = Workbook::ArgU32(info, 0);
   fm_auto_filter af{};
@@ -324,7 +324,7 @@ Napi::Value GetAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_
 Napi::Value EvaluateAutoFilterImpl(const Napi::CallbackInfo& info, const fm_workbook_t* wb, bool table) {
   Napi::Env env = info.Env();
   if (wb == nullptr) {
-    return EmptyAutoFilterEvaluation(env, MakeErrorStatus(env, kBindingInvalidHandle));
+    return EmptyAutoFilterEvaluation(env, NullHandleError(env));
   }
   const size_t idx = Workbook::ArgU32(info, 0);
   Napi::Object out = Napi::Object::New(env);
@@ -365,7 +365,7 @@ Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* con
                               const char* usage) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
+    return NullHandleError(env);
   }
   CheckedSpecReader reader(env);
   AutoFilterInput in;
@@ -383,8 +383,7 @@ Napi::Value SetAutoFilterImpl(const Napi::CallbackInfo& info, fm_workbook_t* con
 
 Napi::Value InvokeAutoFilterOp(const Napi::CallbackInfo& info, fm_workbook_t* handle, AutoFilterOpFn fn) {
   Napi::Env env = info.Env();
-  return handle == nullptr ? MakeErrorStatus(env, kBindingInvalidHandle)
-                           : MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0)));
+  return handle == nullptr ? NullHandleError(env) : MakeStatus(env, fn(handle, Workbook::ArgU32(info, 0)));
 }
 
 }  // namespace

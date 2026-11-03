@@ -689,10 +689,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter);
   Napi::Value BreaksArray(const Napi::CallbackInfo& info, bool rows);
 
-  /// Builds an error-Status envelope when the wrapper has been
-  /// finalized / destroyed but JS still holds a reference.
-  Napi::Object NullHandleError(Napi::Env env) const { return MakeErrorStatus(env, kBindingInvalidHandle); }
-
  private:
   template <typename Lead, typename... Args, size_t... I>
   Napi::Value InvokeSheetCallImpl(const Napi::CallbackInfo& info, fm_status_t (*fn)(fm_workbook_t*, Lead, Args...),

@@ -210,24 +210,41 @@ bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array
   return reader.ok();
 }
 
+fm_status_t shape_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
+  fm_shape s{};
+  const fm_status_t rc = fm_sheet_shape_at(handle, sheet, index, &s);
+  if (rc == 0) {
+    *out = shape_to_val(s);
+  }
+  return rc;
+}
+
+// Reads sparkline group `index` with its sparklines nested under `sparklines`.
+fm_status_t sparkline_group_item(const fm_workbook_t* handle, size_t sheet, size_t index, emscripten::val* out) {
+  fm_sparkline_group g{};
+  fm_status_t rc = fm_sheet_sparkline_group_at(handle, sheet, index, &g);
+  if (rc != 0) {
+    return rc;
+  }
+  emscripten::val group = sparkline_group_to_val(g, emscripten::val::array());
+  for (size_t k = 0; rc == 0 && k < g.sparkline_count; ++k) {
+    fm_sparkline item{};
+    rc = fm_sheet_sparkline_at(handle, sheet, index, k, &item);
+    if (rc == 0) {
+      emscripten::val o = emscripten::val::object();
+      js_set_cstr_fields(o, {{"formula", item.formula}, {"location", item.location}});
+      group["sparklines"].call<void>("push", o);
+    }
+  }
+  *out = group;
+  return rc;
+}
+
 }  // namespace
 
 emscripten::val JsWorkbook::listShapes(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  if (handle_ == nullptr) {
-    arr.set("status", invalid_handle_status());
-    return arr;
-  }
-  size_t count = 0;
-  fm_status_t rc = fm_sheet_shape_count(handle_, sheet, &count);
-  for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_shape s{};
-    rc = fm_sheet_shape_at(handle_, sheet, i, &s);
-    if (rc == 0) {
-      arr.call<void>("push", shape_to_val(s));
-    }
-  }
-  arr.set("status", status_from_rc(rc));
+  arr.set("status", status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_shape_count, &shape_item, arr)));
   return arr;
 }
 
@@ -239,7 +256,7 @@ emscripten::val JsWorkbook::insertShape(uint32_t sheet, emscripten::val spec) {
   ShapeText store;
   const fm_shape shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
-    return object_id_result(binding_error_status(kInvalidArgument, reader.message().c_str()), 0U);
+    return object_id_result(reader.failure(), 0U);
   }
   uint32_t id = 0;
   const fm_status_t rc = fm_sheet_insert_shape(handle_, sheet, &shape, &id);
@@ -254,45 +271,19 @@ JsStatus JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::
   ShapeText store;
   const fm_shape shape = pull_shape(reader, spec, store);
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_update_shape(handle_, sheet, objectId, &shape));
 }
 
 JsStatus JsWorkbook::removeShape(uint32_t sheet, uint32_t objectId) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_remove_shape(handle_, sheet, objectId));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_shape(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::listSparklineGroups(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
-  if (handle_ == nullptr) {
-    arr.set("status", invalid_handle_status());
-    return arr;
-  }
-  size_t count = 0;
-  fm_status_t rc = fm_sheet_sparkline_group_count(handle_, sheet, &count);
-  for (size_t i = 0; rc == 0 && i < count; ++i) {
-    fm_sparkline_group g{};
-    rc = fm_sheet_sparkline_group_at(handle_, sheet, i, &g);
-    emscripten::val group =
-        rc == 0 ? sparkline_group_to_val(g, emscripten::val::array()) : emscripten::val::undefined();
-    for (size_t k = 0; rc == 0 && k < g.sparkline_count; ++k) {
-      fm_sparkline item{};
-      rc = fm_sheet_sparkline_at(handle_, sheet, i, k, &item);
-      if (rc == 0) {
-        emscripten::val o = emscripten::val::object();
-        js_set_cstr_fields(o, {{"formula", item.formula}, {"location", item.location}});
-        group["sparklines"].call<void>("push", o);
-      }
-    }
-    if (rc == 0) {
-      arr.call<void>("push", group);
-    }
-  }
-  arr.set("status", status_from_rc(rc));
+  arr.set("status",
+          status_from_rc(js_collect_list(handle_, sheet, &fm_sheet_sparkline_group_count, &sparkline_group_item, arr)));
   return arr;
 }
 
@@ -309,7 +300,7 @@ JsStatus JsWorkbook::addSparklineGroup(uint32_t sheet, emscripten::val spec) {
     pull_sparklines(reader, reader.value(spec, "sparklines", "group.sparklines"), texts, items);
   }
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   // An empty array reaches the core, which rejects it; keep a valid pointer to pass.
   fm_sparkline none{};
@@ -325,7 +316,7 @@ JsStatus JsWorkbook::updateSparklineGroup(uint32_t sheet, uint32_t index, emscri
   std::string ref_store;
   const fm_sparkline_group group = pull_group(reader, spec, ref_store);
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_update_sparkline_group(handle_, sheet, index, &group));
 }
@@ -339,7 +330,7 @@ JsStatus JsWorkbook::setSparklineGroupSparklines(uint32_t sheet, uint32_t index,
   std::vector<fm_sparkline> items;
   pull_sparklines(reader, sparklines, texts, items);
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   fm_sparkline none{};
   return status_from_rc(fm_sheet_set_sparkline_group_sparklines(handle_, sheet, index,
@@ -347,10 +338,8 @@ JsStatus JsWorkbook::setSparklineGroupSparklines(uint32_t sheet, uint32_t index,
 }
 
 JsStatus JsWorkbook::removeSparklineGroup(uint32_t sheet, uint32_t index) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_remove_sparkline_group(handle_, sheet, index));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_sparkline_group(handle_, sheet, index)
+                                           : kBindingInvalidHandle);
 }
 
 }  // namespace parts

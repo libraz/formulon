@@ -272,10 +272,8 @@ extern "C" fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t in
   if (wb == nullptr || out_utf8 == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_sheet_name: NULL argument");
   }
-  if (index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_sheet_name: sheet_index out of range",
-        "sheet_index=" + std::to_string(index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_index(index, wb->workbook().sheet_count(), "fm_workbook_sheet_name", "sheet_index"); rc != 0) {
+    return rc;
   }
   // `Sheet::name()` returns `const std::string&`, so `c_str()` is
   // NUL-terminated and stable until the sheet is mutated or destroyed.

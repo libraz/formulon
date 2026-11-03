@@ -52,7 +52,7 @@ using MergeEditFn = fm_status_t (*)(fm_workbook_t*, uint32_t, fm_merge_range);
 Napi::Value InvokeMergeEdit(const Napi::CallbackInfo& info, fm_workbook_t* const& handle, MergeEditFn fn) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
+    return NullHandleError(env);
   }
   CheckedSpecReader reader(env);
   fm_merge_range range{};
@@ -292,7 +292,7 @@ template <typename Edit>
 Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::CallbackInfo& info, size_t idx, Edit edit) {
   Napi::Env env = info.Env();
   if (handle == nullptr) {
-    return MakeErrorStatus(env, kBindingInvalidHandle);
+    return NullHandleError(env);
   }
   Napi::Object in = Workbook::ArgObject(info, idx);
   CheckedSpecReader reader(env);

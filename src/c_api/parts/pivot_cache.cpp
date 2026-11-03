@@ -84,10 +84,7 @@ const formulon::pivot::PivotCacheField* lookup_cache_field(const fm_workbook_t* 
   if (*out_status = resolve_cache(wb, cache_id, fn, &cache); *out_status != 0) {
     return nullptr;
   }
-  if (field_idx >= cache->fields().size()) {
-    *out_status = set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                                    (std::string(fn) + ": field_idx out of range").c_str(),
-                                    "field_idx=" + std::to_string(field_idx));
+  if (*out_status = check_index(field_idx, cache->fields().size(), fn, "field_idx"); *out_status != 0) {
     return nullptr;
   }
   return &cache->fields()[field_idx];
@@ -344,10 +341,7 @@ formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std:
   if (*out_status = resolve_cache_mut(wb, cache_id, fn, &cache); *out_status != 0) {
     return nullptr;
   }
-  if (field_idx >= cache->fields().size()) {
-    *out_status = set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                                    (std::string(fn) + ": field_idx out of range").c_str(),
-                                    "field_idx=" + std::to_string(field_idx));
+  if (*out_status = check_index(field_idx, cache->fields().size(), fn, "field_idx"); *out_status != 0) {
     return nullptr;
   }
   // The shared-item mutators all resolve their field through here, so

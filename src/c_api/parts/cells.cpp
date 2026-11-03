@@ -267,17 +267,35 @@ extern "C" fm_status_t fm_workbook_set_cell_show_phonetic(fm_workbook_t* wb, siz
   return 0;
 }
 
+namespace {
+
+// Shared prologue of the phonetic getters: a non-NULL `out` (named `out_name`
+// in the diagnostic; skipped when `out_name` is NULL), a valid sheet, then the
+// cell at (row, col), left NULL when the cell does not exist.
+fm_status_t lookup_phonetic_cell(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                 const char* fn, const void* out, const char* out_name, const formulon::Cell** cell) {
+  if (out_name != nullptr && out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(fn) + ": " + out_name + " is NULL").c_str());
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
+    return rc;
+  }
+  *cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  return 0;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_workbook_get_cell_show_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                           uint32_t col, int32_t* out_show) {
   clear_last_error();
-  if (out_show == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_cell_show_phonetic: out_show is NULL");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_show_phonetic"); rc != 0) {
+  const formulon::Cell* cell = nullptr;
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_workbook_get_cell_show_phonetic", out_show,
+                                     "out_show", &cell);
+      rc != 0) {
     return rc;
   }
-  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   *out_show = cell != nullptr && cell->show_phonetic ? 1 : 0;
   return 0;
 }
@@ -285,14 +303,12 @@ extern "C" fm_status_t fm_workbook_get_cell_show_phonetic(const fm_workbook_t* w
 extern "C" fm_status_t fm_workbook_has_cell_phonetic_properties(const fm_workbook_t* wb, size_t sheet_index,
                                                                 uint32_t row, uint32_t col, int32_t* out_present) {
   clear_last_error();
-  if (out_present == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_has_cell_phonetic_properties: out_present is NULL");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_has_cell_phonetic_properties"); rc != 0) {
+  const formulon::Cell* cell = nullptr;
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_workbook_has_cell_phonetic_properties", out_present,
+                                     "out_present", &cell);
+      rc != 0) {
     return rc;
   }
-  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   *out_present = cell != nullptr && cell->phonetic_present ? 1 : 0;
   return 0;
 }
@@ -355,14 +371,12 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                      uint32_t col, const char** out_text) {
   clear_last_error();
-  if (out_text == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_cell_phonetic: out_text is NULL");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic"); rc != 0) {
+  const formulon::Cell* cell = nullptr;
+  if (auto rc =
+          lookup_phonetic_cell(wb, sheet_index, row, col, "fm_workbook_get_cell_phonetic", out_text, "out_text", &cell);
+      rc != 0) {
     return rc;
   }
-  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   TextStore& store = fresh_read_scratch(wb);
   // The ABI surfaces a bare reading, so the runs' kana concatenate: the
   // span each covers is `PHONETIC`'s business, not a furigana field's.
@@ -374,14 +388,12 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, si
 extern "C" fm_status_t fm_workbook_get_cell_phonetic_run_count(const fm_workbook_t* wb, size_t sheet_index,
                                                                uint32_t row, uint32_t col, uint32_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_cell_phonetic_run_count: out_count is NULL");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic_run_count"); rc != 0) {
+  const formulon::Cell* cell = nullptr;
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_workbook_get_cell_phonetic_run_count", out_count,
+                                     "out_count", &cell);
+      rc != 0) {
     return rc;
   }
-  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   *out_count = cell == nullptr ? 0U : static_cast<uint32_t>(cell->phonetic_runs.size());
   return 0;
 }
@@ -389,19 +401,14 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic_run_count(const fm_workbook
 extern "C" fm_status_t fm_workbook_get_cell_phonetic_run(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                          uint32_t col, uint32_t run_index, fm_phonetic_run_t* out) {
   clear_last_error();
-  if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_get_cell_phonetic_run: out is NULL");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic_run"); rc != 0) {
+  const formulon::Cell* cell = nullptr;
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_workbook_get_cell_phonetic_run", out, "out", &cell);
+      rc != 0) {
     return rc;
   }
-  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   const size_t run_count = cell == nullptr ? 0U : cell->phonetic_runs.size();
-  if (run_index >= run_count) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_get_cell_phonetic_run: run_index out of range",
-                             "run_index=" + std::to_string(run_index) + " run_count=" + std::to_string(run_count));
+  if (auto rc = check_index(run_index, run_count, "fm_workbook_get_cell_phonetic_run", "run_index"); rc != 0) {
+    return rc;
   }
   const formulon::PhoneticRun& run = cell->phonetic_runs[run_index];
   TextStore& store = fresh_read_scratch(wb);
@@ -416,10 +423,12 @@ extern "C" fm_status_t fm_workbook_get_cell_phonetic_properties(const fm_workboo
                                                                 uint32_t row, uint32_t col, uint32_t* out_font_id,
                                                                 uint32_t* out_type, uint32_t* out_alignment) {
   clear_last_error();
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic_properties"); rc != 0) {
+  const formulon::Cell* cell = nullptr;
+  if (auto rc = lookup_phonetic_cell(wb, sheet_index, row, col, "fm_workbook_get_cell_phonetic_properties", nullptr,
+                                     nullptr, &cell);
+      rc != 0) {
     return rc;
   }
-  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   // An absent cell reports the defaults rather than failing, matching the
   // run-count reader: "no annotation" and "no cell" are the same answer to
   // a host walking a range.

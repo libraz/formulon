@@ -536,6 +536,12 @@ export function registerStyles(Module, test) {
       rangeRule.sqref[0].firstRow = 0x100000000;
       assert.throws(() => wb.addConditionalFormat(0, rangeRule), RangeError);
       assert.equal(wb.getConditionalFormats(0).length, cfBefore);
+
+      const notArray = structuredClone(base);
+      notArray.priority = 0;
+      notArray.sqref = 'A1';
+      assert.throws(() => wb.addConditionalFormat(0, notArray), TypeError);
+      assert.equal(wb.getConditionalFormats(0).length, cfBefore);
     } finally {
       wb.delete();
     }

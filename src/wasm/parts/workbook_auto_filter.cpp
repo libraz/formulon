@@ -27,10 +27,8 @@ emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
 }
 
 JsStatus JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str()));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str())
+                                           : kBindingInvalidHandle);
 }
 
 // ---- Typed AutoFilter --------------------------------------------------
@@ -347,12 +345,12 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
   fm_auto_filter f{};
   f.range = js_pull_range(reader.value(filter, "range", "autoFilter.range"), &reader);
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   const emscripten::val columns = js_pull_array(filter, "columns", reader);
   const uint32_t column_count = reader.length(columns, "autoFilter.columns.length");
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   std::vector<FilterColumnStore> stores(column_count);
   std::vector<fm_filter_column> cols(column_count);
@@ -370,7 +368,7 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
     pull_filter_column(column, stores[i], cols[i], reader);
   }
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   f.columns = cols.empty() ? nullptr : cols.data();
   f.column_count = column_count;
@@ -381,18 +379,18 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
     f.has_sort = 1;
     f.sort_ref = js_pull_range(reader.value(sort, "ref", "sort.ref"), &reader);
     if (!reader.ok()) {
-      return binding_error_status(kInvalidArgument, reader.message().c_str());
+      return reader.failure();
     }
     f.column_sort = pull_flag(sort, "columnSort", reader);
     f.case_sensitive = pull_flag(sort, "caseSensitive", reader);
     f.sort_method = reader.i32(sort, "sortMethod", 0, "sort.sortMethod");
     if (!reader.ok()) {
-      return binding_error_status(kInvalidArgument, reader.message().c_str());
+      return reader.failure();
     }
     const emscripten::val list = js_pull_array(sort, "conditions", reader);
     const uint32_t n = reader.length(list, "sort.conditions.length");
     if (!reader.ok()) {
-      return binding_error_status(kInvalidArgument, reader.message().c_str());
+      return reader.failure();
     }
     custom_lists.resize(n);
     conditions.resize(n);
@@ -410,13 +408,13 @@ JsStatus set_auto_filter(fm_workbook_t* wb, const AutoFilterOps& ops, uint32_t i
       pull_sort_condition(condition, custom_lists[i], conditions[i], reader);
     }
     if (!reader.ok()) {
-      return binding_error_status(kInvalidArgument, reader.message().c_str());
+      return reader.failure();
     }
     f.conditions = conditions.empty() ? nullptr : conditions.data();
     f.condition_count = n;
   }
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(ops.set(wb, index, &f));
 }

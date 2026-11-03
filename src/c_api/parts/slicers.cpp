@@ -14,12 +14,17 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fill_anchor;
+using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::TextStore;
 
 namespace {
 
@@ -82,35 +87,25 @@ extern "C" fm_status_t fm_sheet_slicer_at(const fm_workbook_t* wb, size_t sheet_
     return set_last_error(slicers.error());
   }
   const std::vector<formulon::SlicerInfo>& list = slicers.value();
-  if (idx >= list.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_slicer_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(list.size()));
+  if (auto rc = check_index(idx, list.size(), "fm_sheet_slicer_at", "idx"); rc != 0) {
+    return rc;
   }
   const formulon::SlicerInfo& info = list[idx];
   const formulon::DrawingObject& obj = info.object;
-  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->read_scratch.clear();
+  TextStore& store = fresh_read_scratch(wb);
   *out = fm_slicer{};
   out->object_id = obj.object_id;
   out->column_count = info.column_count;
   out->sort_order = static_cast<int32_t>(info.sort_order);
   out->cross_filter = static_cast<int32_t>(info.cross_filter);
-  out->anchor_kind = static_cast<int32_t>(obj.anchor_kind);
-  out->from_row = obj.from.row;
-  out->from_col = obj.from.col;
-  out->to_row = obj.to.row;
-  out->to_col = obj.to.col;
-  out->from_row_off = obj.from.row_off;
-  out->from_col_off = obj.from.col_off;
-  out->to_row_off = obj.to.row_off;
-  out->to_col_off = obj.to.col_off;
+  fill_anchor(obj, out);
   out->row_height = info.row_height;
-  out->name = store_cstr(scratch->read_scratch, info.name);
-  out->caption = store_cstr(scratch->read_scratch, info.caption);
-  out->cache_name = store_cstr(scratch->read_scratch, info.cache_name);
-  out->table_name = store_cstr(scratch->read_scratch, info.table_name);
-  out->column_name = store_cstr(scratch->read_scratch, info.column_name);
-  out->style = store_cstr(scratch->read_scratch, info.style);
+  out->name = store_cstr(store, info.name);
+  out->caption = store_cstr(store, info.caption);
+  out->cache_name = store_cstr(store, info.cache_name);
+  out->table_name = store_cstr(store, info.table_name);
+  out->column_name = store_cstr(store, info.column_name);
+  out->style = store_cstr(store, info.style);
   return 0;
 }
 
@@ -150,8 +145,7 @@ extern "C" fm_status_t fm_sheet_update_slicer(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = to_spec(*spec, kApi, model); rc != 0) {
     return rc;
   }
-  auto updated = formulon::update_slicer(wb->workbook(), sheet_index, idx, model);
-  return updated ? 0 : set_last_error(updated.error());
+  return finish_status(formulon::update_slicer(wb->workbook(), sheet_index, idx, model));
 }
 
 extern "C" fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_index, size_t idx) {
@@ -159,6 +153,5 @@ extern "C" fm_status_t fm_sheet_remove_slicer(fm_workbook_t* wb, size_t sheet_in
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_remove_slicer"); rc != 0) {
     return rc;
   }
-  auto removed = formulon::remove_slicer(wb->workbook(), sheet_index, idx);
-  return removed ? 0 : set_last_error(removed.error());
+  return finish_status(formulon::remove_slicer(wb->workbook(), sheet_index, idx));
 }

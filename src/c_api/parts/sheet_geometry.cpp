@@ -20,6 +20,7 @@ using formulon::c_api::parts::check_row_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
@@ -111,15 +112,12 @@ extern "C" fm_status_t fm_sheet_width_model(const fm_workbook_t* wb, size_t shee
     return rc;
   }
   const formulon::ColumnWidthModel model = width_model_for(wb, mode);
-  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
-  mutable_wb->read_scratch.clear();
-  mutable_wb->read_scratch.emplace_back(model.normal_font_name);
   *out = fm_width_model{};
   out->points_per_char = model.points_per_char;
   out->padding_pt = model.padding_pt;
   out->normal_font_size = model.normal_font_size;
   out->calibrated = model.calibrated ? 1 : 0;
-  out->normal_font_name = mutable_wb->read_scratch.back().c_str();
+  out->normal_font_name = publish_scratch(wb, model.normal_font_name);
   out->platform = model.platform;
   return 0;
 }

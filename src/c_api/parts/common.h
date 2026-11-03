@@ -90,6 +90,14 @@ fm_status_t finish_status(const formulon::Expected<void, formulon::Error>& r);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message, std::string context);
 fm_status_t set_binding_error(formulon::FormulonErrorCode code, const char* message);
 
+// Binding error for a NULL required argument: "<api>: NULL argument".
+fm_status_t null_argument(const char* api);
+
+// `text` as an owned string; NULL reads as empty.
+inline std::string text_or_empty(const char* text) {
+  return text != nullptr ? std::string(text) : std::string();
+}
+
 // Rejects `text` that is not well-formed UTF-8 (`sheet_names::valid_utf8`:
 // surrogate code points, overlong forms and truncated sequences fail) with
 // `kBindingUtf8EncodingError` ("<api>: text is not valid UTF-8", `context`).
@@ -308,6 +316,27 @@ fm_status_t check_cell_coord(std::uint32_t row, std::uint32_t col, const char* a
 // `size` entries. On failure writes `"<fn>: <field> out of range"` with an
 // `<field>=<index> count=<size>` context and returns the error status.
 fm_status_t check_index(std::size_t index, std::size_t size, const char* fn, const char* field);
+
+// `check_sheet_index` followed by `check_row_index`.
+fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row, const char* fn);
+
+// Rejects an `anchor_kind` / `edit_as` ordinal outside the drawing anchor enums.
+fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as, const char* api);
+
+// Copies the anchor kind and the two anchor points of drawing object `obj`
+// into the record `out`; both share the `from_*` / `to_*` field names.
+template <typename Object, typename Record>
+void fill_anchor(const Object& obj, Record* out) {
+  out->anchor_kind = static_cast<std::int32_t>(obj.anchor_kind);
+  out->from_row = obj.from.row;
+  out->from_col = obj.from.col;
+  out->from_row_off = obj.from.row_off;
+  out->from_col_off = obj.from.col_off;
+  out->to_row = obj.to.row;
+  out->to_col = obj.to.col;
+  out->to_row_off = obj.to.row_off;
+  out->to_col_off = obj.to.col_off;
+}
 
 // Deepest row / column outline level the file formats encode (`outlineLevel`
 // is 0-7 in OOXML and three bits in XLSB).

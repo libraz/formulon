@@ -19,15 +19,14 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::text_or_empty;
 
 namespace {
-
-std::string text_or_empty(const char* text) {
-  return text != nullptr ? std::string(text) : std::string();
-}
 
 // Copies `count` caller mentions into the model shape.
 fm_status_t mentions_from_fm(const fm_mention* mentions, uint32_t count, const char* api,
@@ -51,15 +50,11 @@ fm_status_t mentions_from_fm(const fm_mention* mentions, uint32_t count, const c
   return 0;
 }
 
-fm_status_t forward(const formulon::Expected<void, formulon::Error>& result) {
-  return result ? 0 : set_last_error(result.error());
-}
-
 // Resets the read scratch and the arenas this file publishes through, and
 // returns the handle they belong to.
 fm_workbook_t* reset_scratch(const fm_workbook_t* wb) {
   fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->read_scratch.clear();
+  fresh_read_scratch(wb);
   scratch->mention_scratch.clear();
   return scratch;
 }
@@ -143,7 +138,7 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   model.text = text_or_empty(comment->text);
   model.parent_id = text_or_empty(comment->parent_id);
   model.done = comment->done != 0;
-  return forward(wb->workbook().add_threaded_comment(sheet_index, std::move(model)));
+  return finish_status(wb->workbook().add_threaded_comment(sheet_index, std::move(model)));
 }
 
 extern "C" fm_status_t fm_sheet_edit_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id,
@@ -165,7 +160,7 @@ extern "C" fm_status_t fm_sheet_edit_threaded_comment(fm_workbook_t* wb, size_t 
   if (auto rc = mentions_from_fm(mentions, mention_count, kApi, &model); rc != 0) {
     return rc;
   }
-  return forward(wb->workbook().edit_threaded_comment(sheet_index, id, text_or_empty(text), std::move(model)));
+  return finish_status(wb->workbook().edit_threaded_comment(sheet_index, id, text_or_empty(text), std::move(model)));
 }
 
 extern "C" fm_status_t fm_sheet_set_thread_resolved(fm_workbook_t* wb, size_t sheet_index, const char* thread_id,
@@ -181,7 +176,7 @@ extern "C" fm_status_t fm_sheet_set_thread_resolved(fm_workbook_t* wb, size_t sh
   if (auto rc = check_utf8("fm_sheet_set_thread_resolved", {thread_id}); rc != 0) {
     return rc;
   }
-  return forward(wb->workbook().set_thread_resolved(sheet_index, thread_id, done != 0));
+  return finish_status(wb->workbook().set_thread_resolved(sheet_index, thread_id, done != 0));
 }
 
 extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_t sheet_index, const char* id) {
@@ -196,7 +191,7 @@ extern "C" fm_status_t fm_sheet_remove_threaded_comment(fm_workbook_t* wb, size_
   if (auto rc = check_utf8("fm_sheet_remove_threaded_comment", {id}); rc != 0) {
     return rc;
   }
-  return forward(wb->workbook().remove_threaded_comment(sheet_index, id));
+  return finish_status(wb->workbook().remove_threaded_comment(sheet_index, id));
 }
 
 extern "C" fm_status_t fm_workbook_person_count(const fm_workbook_t* wb, size_t* out_count) {
@@ -242,7 +237,7 @@ extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person
   model.display_name = text_or_empty(person->display_name);
   model.user_id = text_or_empty(person->user_id);
   model.provider_id = text_or_empty(person->provider_id);
-  return forward(wb->workbook().add_person(std::move(model)));
+  return finish_status(wb->workbook().add_person(std::move(model)));
 }
 
 extern "C" fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id) {
@@ -254,5 +249,5 @@ extern "C" fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* 
   if (auto rc = check_utf8("fm_workbook_remove_person", {id}); rc != 0) {
     return rc;
   }
-  return forward(wb->workbook().remove_person(id));
+  return finish_status(wb->workbook().remove_person(id));
 }

@@ -29,26 +29,16 @@
 #include <string>
 #include <vector>
 
+#include "c_api/binding_status.h"
 #include "c_api/formulon_c.h"
 
 namespace formulon {
 namespace wasm {
 namespace parts {
 
-/// A JS wrapper was used after its workbook handle was destroyed. This is
-/// the binding-layer `kBindingInvalidHandle` code, not the C ABI's 7001
-/// `kBindingNullPointer` argument-validation error.
-constexpr int32_t kBindingInvalidHandle = 7000;
-
-/// A JS callable handed to the binding threw. Reported on the envelope of
-/// the call that ran it; see `call_js_callback` below.
-constexpr int32_t kBindingCallbackException = 7003;
-
-/// `formulon::FormulonErrorCode::kInvalidArgument` (src/utils/error.h),
-/// mirrored here the same way as the codes above: a value out of a
-/// binding-enforced range, used when the binding itself rejects the
-/// argument before any C call.
-constexpr int32_t kInvalidArgument = 2;
+using formulon::c_api::kBindingCallbackException;
+using formulon::c_api::kBindingInvalidHandle;
+using formulon::c_api::kInvalidArgument;
 
 /// Largest integer a JS number holds exactly (`Number.MAX_SAFE_INTEGER`).
 constexpr double kMaxSafeInteger = 9007199254740991.0;
@@ -283,6 +273,9 @@ JsStatus ok_status();
 /// Returns true when a JS value is neither `undefined` nor `null`.
 bool js_value_present(const emscripten::val& value);
 
+/// Returns `value`, or a fresh empty object when it is `undefined` or `null`.
+emscripten::val js_object_or_empty(const emscripten::val& value);
+
 /// Builds a failure envelope from `code`, copying out the thread-local
 /// diagnostics surfaced by the most recent C-ABI call. `code ==
 /// kBindingInvalidHandle` is special-cased: that failure is raised before
@@ -325,7 +318,7 @@ class JsNarrowNumericReader {
   double number(const emscripten::val& owner, const char* key, double dflt, const char* field = nullptr);
   double number_value(const emscripten::val& value, double dflt, const char* field);
   bool boolean(const emscripten::val& owner, const char* key, bool dflt, const char* field = nullptr);
-  bool boolean_value(const emscripten::val& value, bool dflt, const char* field);
+  bool boolean_value(const emscripten::val& value, bool dflt);
   std::string string(const emscripten::val& owner, const char* key, const char* field = nullptr);
   std::string string_value(const emscripten::val& value, const char* field);
   const char* optional_string(const emscripten::val& owner, const char* key, std::string& storage,
@@ -334,11 +327,15 @@ class JsNarrowNumericReader {
   emscripten::val value(const emscripten::val& owner, const char* key, const char* field = nullptr);
   bool has_own(const emscripten::val& owner, const char* key, const char* field = nullptr);
   bool is_array(const emscripten::val& value, const char* field = nullptr);
+  /// `is_array`, failing the reader with a type error when `value` is not an array.
+  bool require_array(const emscripten::val& value, const char* field);
   uint32_t length(const emscripten::val& array, const char* field = nullptr);
   emscripten::val array_element(const emscripten::val& array, uint32_t index, const char* field = nullptr);
 
   bool ok() const;
   const std::string& message() const;
+  /// Failure envelope carrying the reader's first error.
+  JsStatus failure() const;
 
  private:
   /// Reads `owner[key]`; `*fetched` is false when the reader already failed or the access threw.
@@ -348,6 +345,8 @@ class JsNarrowNumericReader {
                        const char* range);
   bool safe_predicate(const emscripten::val& owner, const emscripten::val& key, int32_t operation, const char* key_name,
                       const char* field);
+  /// True when `value` is present and a JS Number; a present non-Number fails the reader.
+  bool present_number(const emscripten::val& value, const char* key, const char* field);
   bool read_integer(const emscripten::val& value, const char* key, const char* field, double lower, double upper,
                     const char* range, double* number);
   bool read_number(const emscripten::val& value, const char* key, const char* field, double* number);
@@ -362,6 +361,18 @@ class JsNarrowNumericReader {
   std::string operation_;
   std::string message_;
 };
+
+/// Count getter of a count-then-`at` collection scoped to a sheet.
+using JsListCount = fm_status_t (*)(const fm_workbook_t*, size_t, size_t*);
+
+/// Builds entry `index` of the collection scoped to `sheet` into `*out`.
+using JsListItem = fm_status_t (*)(const fm_workbook_t*, size_t, size_t, emscripten::val*);
+
+/// Appends every entry of a count-then-`at` collection to the JS array `list`,
+/// stopping at the first failing call. Returns that status, or
+/// `kBindingInvalidHandle` for a NULL `handle`.
+fm_status_t js_collect_list(const fm_workbook_t* handle, size_t sheet, JsListCount count, JsListItem item,
+                            emscripten::val& list);
 
 /// Builds a `JsNumberResult` from `rc`, carrying `value` only on success.
 JsNumberResult number_result(fm_status_t rc, double value);

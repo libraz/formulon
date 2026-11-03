@@ -123,10 +123,8 @@ JsStatus JsWorkbook::setSheetSheetPrXml(uint32_t sheet, const std::string& xml) 
 }
 
 JsStatus JsWorkbook::setSheetFitToPage(uint32_t sheet, bool enabled) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_fit_to_page(handle_, sheet, enabled ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_fit_to_page(handle_, sheet, enabled ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 // ---- Print area / titles -----------------------------------------------
@@ -136,10 +134,7 @@ emscripten::val JsWorkbook::getSheetPrintArea(uint32_t sheet) const {
 }
 
 JsStatus JsWorkbook::setSheetPrintArea(uint32_t sheet, const std::string& rangesA1) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_print_area(handle_, sheet, rangesA1.c_str()));
+  return xml_set(handle_, sheet, rangesA1, &fm_sheet_set_print_area);
 }
 
 emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {
@@ -166,47 +161,33 @@ emscripten::val JsWorkbook::getSheetPrintTitles(uint32_t sheet) const {
 }
 
 JsStatus JsWorkbook::setSheetPrintTitles(uint32_t sheet, const std::string& repeatRows, const std::string& repeatCols) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_set_print_titles(handle_, sheet, repeatRows.c_str(), repeatCols.c_str()));
+  return status_from_rc(handle_ != nullptr
+                            ? fm_sheet_set_print_titles(handle_, sheet, repeatRows.c_str(), repeatCols.c_str())
+                            : kBindingInvalidHandle);
 }
 
 // ---- Manual page breaks -------------------------------------------------
 
 JsStatus JsWorkbook::addSheetRowBreak(uint32_t sheet, uint32_t row, bool manual) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_add_row_break(handle_, sheet, row, manual ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_add_row_break(handle_, sheet, row, manual ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::addSheetColBreak(uint32_t sheet, uint32_t col, bool manual) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_add_col_break(handle_, sheet, col, manual ? 1 : 0));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_add_col_break(handle_, sheet, col, manual ? 1 : 0)
+                                           : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::removeSheetRowBreak(uint32_t sheet, uint32_t row) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_remove_row_break(handle_, sheet, row));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_row_break(handle_, sheet, row) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::removeSheetColBreak(uint32_t sheet, uint32_t col) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_remove_col_break(handle_, sheet, col));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_remove_col_break(handle_, sheet, col) : kBindingInvalidHandle);
 }
 
 JsStatus JsWorkbook::clearSheetBreaks(uint32_t sheet) {
-  if (handle_ == nullptr) {
-    return invalid_handle_status();
-  }
-  return status_from_rc(fm_sheet_clear_breaks(handle_, sheet));
+  return status_from_rc(handle_ != nullptr ? fm_sheet_clear_breaks(handle_, sheet) : kBindingInvalidHandle);
 }
 
 emscripten::val JsWorkbook::getSheetRowBreaks(uint32_t sheet) const {
@@ -242,9 +223,9 @@ JsStatus JsWorkbook::setSheetPageSetup(uint32_t sheet, emscripten::val setup) {
   out.fit_to_height = reader.u32_value(fit_to_height, 0U, "pageSetup.fitToHeight");
   const emscripten::val fit_to_page = reader.value(setup, "fitToPage", "pageSetup.fitToPage");
   out.fit_to_page_engaged = js_value_present(fit_to_page) ? 1 : 0;
-  out.fit_to_page = reader.boolean_value(fit_to_page, false, "pageSetup.fitToPage") ? 1 : 0;
+  out.fit_to_page = reader.boolean_value(fit_to_page, false) ? 1 : 0;
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_set_page_setup(handle_, sheet, &out));
 }
@@ -274,7 +255,7 @@ JsStatus JsWorkbook::setSheetPageMargins(uint32_t sheet, emscripten::val margins
   out.footer_engaged = js_value_present(footer) ? 1 : 0;
   out.footer = reader.number_value(footer, 0.0, "pageMargins.footer");
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_set_page_margins(handle_, sheet, &out));
 }
@@ -287,19 +268,19 @@ JsStatus JsWorkbook::setSheetPrintOptions(uint32_t sheet, emscripten::val option
   fm_print_options_t out{};
   const emscripten::val grid_lines = reader.value(options, "gridLines", "printOptions.gridLines");
   out.grid_lines_engaged = js_value_present(grid_lines) ? 1 : 0;
-  out.grid_lines = reader.boolean_value(grid_lines, false, "printOptions.gridLines") ? 1 : 0;
+  out.grid_lines = reader.boolean_value(grid_lines, false) ? 1 : 0;
   const emscripten::val headings = reader.value(options, "headings", "printOptions.headings");
   out.headings_engaged = js_value_present(headings) ? 1 : 0;
-  out.headings = reader.boolean_value(headings, false, "printOptions.headings") ? 1 : 0;
+  out.headings = reader.boolean_value(headings, false) ? 1 : 0;
   const emscripten::val horizontal_centered =
       reader.value(options, "horizontalCentered", "printOptions.horizontalCentered");
   out.horizontal_centered_engaged = js_value_present(horizontal_centered) ? 1 : 0;
-  out.horizontal_centered = reader.boolean_value(horizontal_centered, false, "printOptions.horizontalCentered") ? 1 : 0;
+  out.horizontal_centered = reader.boolean_value(horizontal_centered, false) ? 1 : 0;
   const emscripten::val vertical_centered = reader.value(options, "verticalCentered", "printOptions.verticalCentered");
   out.vertical_centered_engaged = js_value_present(vertical_centered) ? 1 : 0;
-  out.vertical_centered = reader.boolean_value(vertical_centered, false, "printOptions.verticalCentered") ? 1 : 0;
+  out.vertical_centered = reader.boolean_value(vertical_centered, false) ? 1 : 0;
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_set_print_options(handle_, sheet, &out));
 }
@@ -333,19 +314,19 @@ JsStatus JsWorkbook::setSheetHeaderFooter(uint32_t sheet, emscripten::val header
   const emscripten::val different_odd_even =
       reader.value(headerFooter, "differentOddEven", "headerFooter.differentOddEven");
   out.different_odd_even_engaged = js_value_present(different_odd_even) ? 1 : 0;
-  out.different_odd_even = reader.boolean_value(different_odd_even, false, "headerFooter.differentOddEven") ? 1 : 0;
+  out.different_odd_even = reader.boolean_value(different_odd_even, false) ? 1 : 0;
   const emscripten::val different_first = reader.value(headerFooter, "differentFirst", "headerFooter.differentFirst");
   out.different_first_engaged = js_value_present(different_first) ? 1 : 0;
-  out.different_first = reader.boolean_value(different_first, false, "headerFooter.differentFirst") ? 1 : 0;
+  out.different_first = reader.boolean_value(different_first, false) ? 1 : 0;
   const emscripten::val scale_with_doc = reader.value(headerFooter, "scaleWithDoc", "headerFooter.scaleWithDoc");
   out.scale_with_doc_engaged = js_value_present(scale_with_doc) ? 1 : 0;
-  out.scale_with_doc = reader.boolean_value(scale_with_doc, false, "headerFooter.scaleWithDoc") ? 1 : 0;
+  out.scale_with_doc = reader.boolean_value(scale_with_doc, false) ? 1 : 0;
   const emscripten::val align_with_margins =
       reader.value(headerFooter, "alignWithMargins", "headerFooter.alignWithMargins");
   out.align_with_margins_engaged = js_value_present(align_with_margins) ? 1 : 0;
-  out.align_with_margins = reader.boolean_value(align_with_margins, false, "headerFooter.alignWithMargins") ? 1 : 0;
+  out.align_with_margins = reader.boolean_value(align_with_margins, false) ? 1 : 0;
   if (!reader.ok()) {
-    return binding_error_status(kInvalidArgument, reader.message().c_str());
+    return reader.failure();
   }
   return status_from_rc(fm_sheet_set_header_footer(handle_, sheet, &out));
 }

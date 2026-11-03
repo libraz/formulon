@@ -50,6 +50,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::fragment_within_size_limit;
 using formulon::c_api::parts::FragmentValidation;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate_single_element_fragment;
 
@@ -102,10 +103,7 @@ fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const
   if (auto rc = check_sheet_index(wb, sheet_index, fn); rc != 0) {
     return rc;
   }
-  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
-  mutable_wb->read_scratch.clear();
-  mutable_wb->read_scratch.emplace_back(wb->workbook().sheet(sheet_index).print_settings().*slot.member);
-  *out_xml = mutable_wb->read_scratch.back().c_str();
+  *out_xml = publish_scratch(wb, wb->workbook().sheet(sheet_index).print_settings().*slot.member);
   return 0;
 }
 

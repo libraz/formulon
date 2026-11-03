@@ -13,12 +13,15 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::TextStore;
 
 namespace {
 
@@ -148,13 +151,11 @@ extern "C" fm_status_t fm_sheet_sparkline_group_at(const fm_workbook_t* wb, size
   }
   const std::vector<io::SparklineGroup> groups =
       io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml());
-  if (idx >= groups.size()) {
-    return set_binding_error(FormulonErrorCode::kInvalidArgument, "fm_sheet_sparkline_group_at: idx out of range",
-                             "idx=" + std::to_string(idx) + " count=" + std::to_string(groups.size()));
+  if (auto rc = check_index(idx, groups.size(), "fm_sheet_sparkline_group_at", "idx"); rc != 0) {
+    return rc;
   }
   const io::SparklineGroup& g = groups[idx];
-  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->read_scratch.clear();
+  TextStore& store = fresh_read_scratch(wb);
   *out = fm_sparkline_group{};
   out->color_series = color_to_c(g.color_series);
   out->color_negative = color_to_c(g.color_negative);
@@ -182,7 +183,7 @@ extern "C" fm_status_t fm_sheet_sparkline_group_at(const fm_workbook_t* wb, size
   out->has_manual_max = g.has_manual_max ? 1 : 0;
   out->date_axis = g.date_axis ? 1 : 0;
   out->empty_cells_as = static_cast<int32_t>(g.empty_cells_as);
-  out->date_axis_ref = store_cstr(scratch->read_scratch, g.date_axis_ref);
+  out->date_axis_ref = store_cstr(store, g.date_axis_ref);
   out->sparkline_count = g.items.size();
   return 0;
 }
@@ -198,15 +199,16 @@ extern "C" fm_status_t fm_sheet_sparkline_at(const fm_workbook_t* wb, size_t she
   }
   const std::vector<io::SparklineGroup> groups =
       io::read_sparkline_groups(wb->workbook().sheet(sheet_index).ext_lst_xml());
-  if (group_idx >= groups.size() || idx >= groups[group_idx].items.size()) {
-    return set_binding_error(FormulonErrorCode::kInvalidArgument, "fm_sheet_sparkline_at: index out of range",
-                             "group_idx=" + std::to_string(group_idx) + " idx=" + std::to_string(idx));
+  if (auto rc = check_index(group_idx, groups.size(), "fm_sheet_sparkline_at", "group_idx"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_index(idx, groups[group_idx].items.size(), "fm_sheet_sparkline_at", "idx"); rc != 0) {
+    return rc;
   }
   const io::SparklineItem& item = groups[group_idx].items[idx];
-  fm_workbook_t* scratch = const_cast<fm_workbook_t*>(wb);
-  scratch->read_scratch.clear();
-  out->formula = store_cstr(scratch->read_scratch, item.formula);
-  out->location = store_cstr(scratch->read_scratch, item.location);
+  TextStore& store = fresh_read_scratch(wb);
+  out->formula = store_cstr(store, item.formula);
+  out->location = store_cstr(store, item.location);
   return 0;
 }
 

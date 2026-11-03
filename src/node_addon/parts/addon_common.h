@@ -41,6 +41,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/binding_status.h"
 #include "c_api/formulon_c.h"
 
 namespace formulon_node {
@@ -51,19 +52,9 @@ Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len)
 /// Copies an engine-owned buffer onto the JS heap and releases the source.
 Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len);
 
-/// `kBindingInvalidHandle` ordinal mirrors `formulon::FormulonErrorCode`
-/// in the 7000-7999 range allocated to bindings (see CLAUDE.md error
-/// code table). The C ABI itself uses 7001 for a NULL pointer; 7000
-/// identifies a wrapper whose handle was already destroyed.
-constexpr fm_status_t kBindingInvalidHandle = 7000;
-/// A JS callable handed to the binding threw. Reported on the envelope of
-/// the call that ran it.
-constexpr fm_status_t kBindingCallbackException = 7003;
-/// `formulon::FormulonErrorCode::kInvalidArgument` (src/utils/error.h),
-/// mirrored here the same way as the 7000-band codes above: the status of
-/// every argument the binding itself rejects before any C call, on this
-/// surface and the WASM one alike.
-constexpr fm_status_t kInvalidArgument = 2;
+using formulon::c_api::kBindingCallbackException;
+using formulon::c_api::kBindingInvalidHandle;
+using formulon::c_api::kInvalidArgument;
 
 // ---------------------------------------------------------------------
 // Status / Value envelope builders
@@ -79,6 +70,12 @@ Napi::Object MakeOkStatus(Napi::Env env);
 /// raised before any C-ABI call, so the envelope carries a synthesised
 /// message rather than the residue of an earlier, unrelated call.
 Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code);
+
+/// Error-Status envelope for a wrapper that was finalized / destroyed while
+/// JS still holds a reference.
+inline Napi::Object NullHandleError(Napi::Env env) {
+  return MakeErrorStatus(env, kBindingInvalidHandle);
+}
 
 /// Builds an error Status envelope for a failure the binding raised
 /// itself, carrying `message` and an empty context. Never reads the
