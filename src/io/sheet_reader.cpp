@@ -21,6 +21,7 @@
 #include <cstring>
 #include <deque>
 #include <limits>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -66,13 +67,47 @@ namespace {
 /// relative reference by `(slave - master)`. The leading '=' is intentionally
 /// absent (OOXML <f> contents never have it).
 struct SharedFormulaMaster {
+  /// Master body parsed once and reused for every follower; lives on the
+  /// heap so the parser's views into `source` stay valid when the record moves.
+  struct Parsed {
+    std::string source;
+    Arena arena{/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes};
+    std::unique_ptr<parser::Parser> parser;
+    parser::AstNode* root = nullptr;
+  };
+
   std::string text;
   std::uint32_t row = 0;
   std::uint32_t col = 0;
+  std::unique_ptr<Parsed> parsed;
+  bool parse_failed = false;
 };
 
 /// Budget charge for one newly stored coordinate: the cell plus its column key.
 constexpr std::uint64_t kCellChargeBytes = sizeof(Cell) + sizeof(std::uint16_t);
+
+/// Charges the cell budget for a coordinate that `ApplyParsedCell` is about to
+/// materialise; a truly empty cell (matching its no-op condition) or an
+/// already-stored coordinate is free. `context_prefix` ends just before `row=`.
+Expected<void, Error> ChargeNewCell(ResourceBudget& budget, const Sheet& sheet, const ParsedCell& cell,
+                                    std::string_view formula_text, std::uint32_t xf_index,
+                                    std::string_view context_prefix) {
+  const bool materializes = !formula_text.empty() || !cell.value.is_blank() || cell.is_sst_index || xf_index != 0U ||
+                            cell.has_explicit_xf || cell.show_phonetic;
+  if (!materializes || sheet.has_cell(cell.row, cell.col)) {
+    return Expected<void, Error>::Ok();
+  }
+  std::string ctxs(context_prefix);
+  ctxs.append(" row=");
+  ctxs.append(std::to_string(cell.row));
+  ctxs.append(" col=");
+  ctxs.append(std::to_string(cell.col));
+  auto charged = charge(budget, kCellChargeBytes, std::move(ctxs));
+  if (!charged) {
+    return std::move(charged.error());
+  }
+  return Expected<void, Error>::Ok();
+}
 
 /// Decodes a shared-formula `si` attribute under the shared XSD
 /// non-negative-integer lexer.
@@ -92,35 +127,43 @@ Expected<std::uint32_t, Error> ParseSharedFormulaSi(std::string_view raw) {
   return si;
 }
 
-std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint32_t target_row,
-                                   std::uint32_t target_col) {
+std::string ShiftSharedFormulaText(SharedFormulaMaster& master, std::uint32_t target_row, std::uint32_t target_col) {
   const std::int32_t row_delta = static_cast<std::int32_t>(target_row) - static_cast<std::int32_t>(master.row);
   const std::int32_t col_delta = static_cast<std::int32_t>(target_col) - static_cast<std::int32_t>(master.col);
   if (row_delta == 0 && col_delta == 0) {
     return master.text;
   }
 
-  // `master.text` is the raw `<f>` body, which may still carry Excel's
-  // `_xlfn.` / `_xlpm.` storage prefixes (the master cell's own text is
-  // canonicalised later, by `Workbook::set_cell_formula`). Strip them
-  // before parsing: the general Call-node path only recognises those
-  // prefixes for LET / LAMBDA specially, so an un-stripped future-function
-  // callee would shift and re-format with the prefix still glued to its
-  // name, and the prefix bytes also count against the tokenizer's
-  // formula-length cap even though Excel's own limit applies to the
-  // canonical (formula-bar) text this produces.
-  std::string source("=");
-  source.append(parser::strip_storage_prefixes(master.text, &has_storage_prefix));
-  Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
-  parser::Parser parser(source, arena);
-  parser::AstNode* root = parser.parse();
-  if (root == nullptr || !parser.errors().empty()) {
-    // Keep the workbook loadable for formula dialects this parser does not
-    // fully understand yet. Parseable formulas still get correct Excel-style
-    // shared-formula relative expansion.
+  if (master.parse_failed) {
     return master.text;
   }
-  const parser::AstNode* shifted = parser::shift_relative_refs(*root, arena, row_delta, col_delta);
+  if (master.parsed == nullptr) {
+    // `master.text` is the raw `<f>` body, which may still carry Excel's
+    // `_xlfn.` / `_xlpm.` storage prefixes (the master cell's own text is
+    // canonicalised later, by `Workbook::set_cell_formula`). Strip them
+    // before parsing: the general Call-node path only recognises those
+    // prefixes for LET / LAMBDA specially, so an un-stripped future-function
+    // callee would shift and re-format with the prefix still glued to its
+    // name, and the prefix bytes also count against the tokenizer's
+    // formula-length cap even though Excel's own limit applies to the
+    // canonical (formula-bar) text this produces.
+    auto parsed = std::make_unique<SharedFormulaMaster::Parsed>();
+    parsed->source.assign("=");
+    parsed->source.append(parser::strip_storage_prefixes(master.text, &has_storage_prefix));
+    parsed->parser = std::make_unique<parser::Parser>(parsed->source, parsed->arena);
+    parsed->root = parsed->parser->parse();
+    if (parsed->root == nullptr || !parsed->parser->errors().empty()) {
+      // Keep the workbook loadable for formula dialects this parser does not
+      // fully understand yet. Parseable formulas still get correct Excel-style
+      // shared-formula relative expansion.
+      master.parse_failed = true;
+      return master.text;
+    }
+    master.parsed = std::move(parsed);
+  }
+  // Shifted nodes go to a per-follower arena so the master's stays bounded.
+  Arena shift_arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
+  const parser::AstNode* shifted = parser::shift_relative_refs(*master.parsed->root, shift_arena, row_delta, col_delta);
   if (shifted == nullptr) {
     return master.text;
   }
@@ -236,7 +279,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   }
   if (!body.empty()) {
     // Master occurrence: register and use as formula text.
-    shared[si] = SharedFormulaMaster{body, row, col};
+    shared[si] = SharedFormulaMaster{body, row, col, nullptr, false};
     formula_out = std::move(body);
     return Expected<void, Error>::Ok();
   }
@@ -404,19 +447,11 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         }
       }
 
-      // Charge a new coordinate before `ApplyParsedCell` materialises it; a
-      // truly empty cell (matching its no-op condition) is never stored.
-      const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index ||
-                                parsed.xf_index != 0U || parsed.has_explicit_xf || parsed.show_phonetic;
-      if (materializes && !target_sheet.has_cell(parsed.row, parsed.col)) {
-        std::string ctxs("context=sheet_reader row=");
-        ctxs.append(std::to_string(parsed.row));
-        ctxs.append(" col=");
-        ctxs.append(std::to_string(parsed.col));
-        auto charged = charge(cell_budget, kCellChargeBytes, std::move(ctxs));
-        if (!charged) {
-          return std::move(charged.error());
-        }
+      // Charge a new coordinate before `ApplyParsedCell` materialises it.
+      if (auto charged =
+              ChargeNewCell(cell_budget, target_sheet, parsed, formula_text, parsed.xf_index, "context=sheet_reader");
+          !charged) {
+        return std::move(charged.error());
       }
 
       auto applied = ApplyParsedCell(parsed, formula_text, parsed.xf_index, &parsed.phonetic_runs,
@@ -510,7 +545,7 @@ Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
   std::string body(rec.formula);
   if (!body.empty()) {
     // Master occurrence: register and use its body verbatim.
-    shared[si] = SharedFormulaMaster{body, rec.row, rec.col};
+    shared[si] = SharedFormulaMaster{body, rec.row, rec.col, nullptr, false};
     return body;
   }
   // Follower occurrence: shift the registered master into this cell.
@@ -539,8 +574,7 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   const bool value_present = rec.is_inline_string || !rec.value.empty();
   ASSIGN_OR_RETURN(auto payload,
                    decode_cell_payload(rec.t, rec.value, value_present, rec.is_inline_string, text_storage));
-  const ParsedCell& parsed = payload;
-  ParsedCell cell = parsed;
+  ParsedCell& cell = payload;
   cell.row = rec.row;
   cell.col = rec.col;
   cell.has_explicit_xf = !rec.s.empty();
@@ -562,17 +596,10 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   const std::string& formula_text = formula;
 
   // Mirrors the DOM path's placement and no-op guard (see `read_sheet_data`).
-  const bool materializes = !formula_text.empty() || !parsed.value.is_blank() || parsed.is_sst_index || xf != 0U ||
-                            cell.has_explicit_xf || cell.show_phonetic;
-  if (materializes && !workbook.sheet(sheet_index).has_cell(rec.row, rec.col)) {
-    std::string ctxs("context=sheet_reader_sax row=");
-    ctxs.append(std::to_string(rec.row));
-    ctxs.append(" col=");
-    ctxs.append(std::to_string(rec.col));
-    auto charged = charge(cell_budget, kCellChargeBytes, std::move(ctxs));
-    if (!charged) {
-      return std::move(charged.error());
-    }
+  if (auto charged =
+          ChargeNewCell(cell_budget, workbook.sheet(sheet_index), cell, formula_text, xf, "context=sheet_reader_sax");
+      !charged) {
+    return std::move(charged.error());
   }
   // Inline-string cells with <rPh> annotations carry their kana on the
   // SAX record. SST-referenced cells (rec.phonetic stays null by
@@ -640,7 +667,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
     entry.hidden = parse_xsd_bool(rec.hidden, false);
   }
   if (!rec.outline_level.empty()) {
-    entry.outline_level = parse_outline_level(std::string(rec.outline_level).c_str());
+    entry.outline_level = parse_outline_level(rec.outline_level);
   }
   if (custom_format) {
     entry.has_style = true;

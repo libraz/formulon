@@ -196,14 +196,6 @@ TEST(CommentsRoundTrip, MissingRootRejected) {
   EXPECT_EQ(out_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
 }
 
-TEST(CommentsRoundTrip, VmlStubIsValidXml) {
-  const std::string vml = write_vml_drawing_stub();
-  EXPECT_FALSE(vml.empty());
-  // Must contain the canonical VML namespace declaration so legacy
-  // parsers recognise the document.
-  EXPECT_NE(vml.find("urn:schemas-microsoft-com:vml"), std::string::npos);
-}
-
 TEST(CommentsRoundTrip, KeptShapeOutsideDrawingIdBlockIsRenumbered) {
   const auto shape_with = [](const char* id, std::uint32_t row) {
     CommentShape shape;

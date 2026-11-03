@@ -478,10 +478,16 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                   const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
                   const parser::ExternalBookIndexer* indexer) {
-  // Buffer the row body separately so we can tell whether anything ended
-  // up inside the <row> wrapper before we commit to writing it.
-  std::string body;
-  body.reserve(row_cells.stored_count() * 24U);
+  // Write straight into `out`; a row that ends up with no content is truncated away.
+  const std::size_t row_start = out.size();
+  out.append("<row r=\"");
+  out.append(std::to_string(row + 1U));
+  out.push_back('"');
+  if (!override_attrs.empty()) {
+    out.append(override_attrs);
+  }
+  out.push_back('>');
+  const std::size_t body_start = out.size();
   auto emit_phantom = [&](std::uint32_t col, const Cell* stored) {
     const SpillRegion* region = sheet.spill_region_covering(row, col);
     if (region == nullptr) {
@@ -500,7 +506,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
     const bool force_style =
         stored != nullptr && ForcesDefaultStyle(*stored) && InheritsNonDefaultStyle(sheet, row, col);
-    AppendPhantomCellXml(body, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second);
+    AppendPhantomCellXml(out, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second);
   };
   auto entry = row_cells.begin();
   const auto entries_end = row_cells.end();
@@ -517,24 +523,18 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
       continue;
     }
     const RowCells::Entry e = *entry;
-    (void)AppendCellXml(body, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
+    (void)AppendCellXml(out, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
     ++entry;
   }
-  if (body.empty() && override_attrs.empty()) {
-    return false;
-  }
-  out.append("<row r=\"");
-  out.append(std::to_string(row + 1U));
-  out.push_back('"');
-  if (!override_attrs.empty()) {
-    out.append(override_attrs);
-  }
-  if (body.empty()) {
+  if (out.size() == body_start) {
+    if (override_attrs.empty()) {
+      out.resize(row_start);
+      return false;
+    }
+    out.pop_back();
     out.append("/>");
     return true;
   }
-  out.push_back('>');
-  out.append(body);
   out.append("</row>");
   return true;
 }
@@ -546,9 +546,9 @@ bool CellIsEmitted(const Cell& cell) {
          cell.show_phonetic;
 }
 
-std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings,
-                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-                              const parser::ExternalBookIndexer* indexer) {
+void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings,
+                        std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
+                        const parser::ExternalBookIndexer* indexer) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -593,8 +593,9 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
   sort_ascending(row_indices);
   row_indices.erase(std::unique(row_indices.begin(), row_indices.end()), row_indices.end());
 
-  std::string body;
-  body.reserve((rows_map.size() + row_overrides.size()) * 64U);
+  const std::size_t sheet_data_start = out.size();
+  out.append("<sheetData>");
+  const std::size_t rows_start = out.size();
   // Sentinel empty span used when a row has no override; avoids a
   // per-row default-construction of std::string.
   static const RowCells kEmptyRow;
@@ -609,21 +610,18 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
     const auto phantoms_it = phantom_cols.find(row);
-    AppendRowXml(body, sheet, row, row_cells, phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms,
+    AppendRowXml(out, sheet, row, row_cells, phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms,
                  override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer);
   }
 
-  if (body.empty()) {
+  if (out.size() == rows_start) {
     // Self-closing form keeps the empty-sheet output identical to the
     // pre-cell-writer skeleton, which downstream tests already pin.
-    return "<sheetData/>";
+    out.resize(sheet_data_start);
+    out.append("<sheetData/>");
+    return;
   }
-  std::string out;
-  out.reserve(body.size() + 24U);
-  out.append("<sheetData>");
-  out.append(body);
   out.append("</sheetData>");
-  return out;
 }
 
 }  // namespace io

@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 
+#include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "pivot/pivot_cache.h"
@@ -17,9 +18,6 @@
 
 namespace formulon::io {
 namespace {
-
-constexpr std::string_view kPivotNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-constexpr std::string_view kRelsNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 /// Emits one of `<s>`, `<n>`, `<b>`, `<m/>`, `<e>` for the given value.
 /// Mirrors `DecodeTypedValue` in `pivot_cache_reader.cpp`. Anything other
@@ -142,8 +140,8 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
 
   out.append(kXmlDecl);
   out.append("<pivotCacheDefinition");
-  append_xml_attr(out, "xmlns", kPivotNs);
-  append_xml_attr(out, "xmlns:r", kRelsNs);
+  append_xml_attr(out, "xmlns", kNsSpreadsheetMl);
+  append_xml_attr(out, "xmlns:r", kNsOfficeRelationships);
   append_xml_attr(out, "r:id", "rId1");
   append_xml_attr_uint(out, "recordCount", cache.records().size());
   // A cache built in memory has no rendered pivot cells behind it, so ask
@@ -253,7 +251,7 @@ std::string write_pivot_cache_records(const pivot::PivotCache& cache) {
 
   out.append(kXmlDecl);
   out.append("<pivotCacheRecords");
-  append_xml_attr(out, "xmlns", kPivotNs);
+  append_xml_attr(out, "xmlns", kNsSpreadsheetMl);
   append_xml_attr_uint(out, "count", cache.records().size());
   out.append(">");
 

@@ -16,6 +16,7 @@
 #include <variant>
 #include <vector>
 
+#include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -27,8 +28,6 @@
 
 namespace formulon::io {
 namespace {
-
-constexpr std::string_view kPivotNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
 /// Emits an A1 range string `"<topLeft>:<bottomRight>"` for the pivot's
 /// rectangular anchor. The reader accepts both single-cell and range
@@ -633,7 +632,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table,
 
   out.append(kXmlDecl);
   out.append("<pivotTableDefinition xmlns=\"");
-  out.append(kPivotNs);
+  out.append(kNsSpreadsheetMl);
   out.append("\" name=\"");
   AppendXmlAttrEscaped(out, table.name());
   out.append("\" cacheId=\"");

@@ -111,7 +111,7 @@ Workbook MakeStylelessHost(bool date1904 = false) {
 
 std::string SerializeSheet(const Sheet& sheet) {
   std::string out = "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">";
-  out.append(BuildSheetDataXml(sheet));
+  AppendSheetDataXml(out, sheet);
   out.append("</worksheet>");
   return out;
 }

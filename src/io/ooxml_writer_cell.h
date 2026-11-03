@@ -1,7 +1,7 @@
 //
 // Internal header for the OOXML cell/row/sheetData builder. Lives inside
 // src/io/; not part of the public API. The unit-test friend is the only
-// reason these helpers are exposed at all -- BuildSheetDataXml is the
+// reason these helpers are exposed at all -- AppendSheetDataXml is the
 // single function the zip-orchestration TU (ooxml_writer.cpp) calls.
 //
 // Cells are emitted with first-class dynamic-array spill awareness: spill
@@ -38,9 +38,8 @@ class SharedStrings;
 /// makes a package's declared used range contradict its own cells.
 bool CellIsEmitted(const Cell& cell);
 
-/// Returns the <sheetData>...</sheetData> markup for a single sheet. The
-/// caller wraps it in <worksheet>. Pure function: no I/O, no allocation
-/// outside the returned string.
+/// Appends the <sheetData>...</sheetData> markup for a single sheet to `out`.
+/// The caller wraps it in <worksheet>. Pure function: no I/O.
 ///
 /// `dynamic_array_cm_index` is the 1-based `<cellMetadata>/<bk>` index a
 /// spill anchor's `<c cm="N">` names; 0 (the default) omits `cm=`
@@ -48,10 +47,10 @@ bool CellIsEmitted(const Cell& cell);
 /// XLDAPR-typed `xl/metadata.xml` for it to reference. `name_shapes`
 /// feeds a legacy formula's `xlsb::legacy_intersections`. `indexer` numbers
 /// the external books formulas name; null spells them by name.
-std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
-                              std::uint32_t dynamic_array_cm_index = 0U,
-                              const xlsb::NameShapes& name_shapes = xlsb::NameShapes(),
-                              const parser::ExternalBookIndexer* indexer = nullptr);
+void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
+                        std::uint32_t dynamic_array_cm_index = 0U,
+                        const xlsb::NameShapes& name_shapes = xlsb::NameShapes(),
+                        const parser::ExternalBookIndexer* indexer = nullptr);
 
 }  // namespace io
 }  // namespace formulon

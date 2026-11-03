@@ -146,119 +146,26 @@ Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base
 
 }  // namespace internal
 
-// Shared implementation behind the public `read_ooxml` and the test-only
-// threshold-injection seam. `sax_threshold` is the byte size at or above
-// which a sheet routes through the streaming SAX scanner instead of the
-// pugixml DOM; production passes `kSaxThresholdBytes`, tests pass a tiny
-// value to force the SAX branch on ordinary-size sheets.
-static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, std::size_t sax_threshold) {
-  ReadDiagnostics diagnostics;
-  // Surface a precise "encrypted" diagnostic before the ZIP layer reports the
-  // CDFV2 container as a corrupt archive.
-  if (IsCdfv2Container(bytes)) {
-    return make_error(FormulonErrorCode::kIoZipEncrypted,
-                      "package is an encrypted OLE/CDFV2 container; decrypt before loading", "context=ooxml_reader");
+/// Reads `path` from `zip`, failing with `code` / `message` and a context of
+/// `<context_head> <path_key>=<path>` when the archive has no such entry.
+static Expected<std::vector<std::uint8_t>, Error> ReadRequiredPart(const ZipReader& zip, std::string_view path,
+                                                                   FormulonErrorCode code, const char* message,
+                                                                   std::string_view context_head,
+                                                                   std::string_view path_key) {
+  if (!zip.has_entry(path)) {
+    std::string ctx(context_head);
+    ctx.append(" ").append(path_key).append("=").append(path);
+    return make_error(code, message, std::move(ctx));
   }
-  ZipReader zip;
-  {
-    auto open_result = zip.open(bytes);
-    if (!open_result) {
-      return std::move(open_result.error());
-    }
-  }
+  return zip.read_entry(path);
+}
 
-  // 1. [Content_Types].xml — sanity check + listing for unknown_parts.
-  if (!zip.has_entry("[Content_Types].xml")) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing from package",
-                      "context=ooxml_reader");
-  }
-  auto ct_bytes_or = zip.read_entry("[Content_Types].xml");
-  if (!ct_bytes_or) {
-    return std::move(ct_bytes_or.error());
-  }
-  const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
-  auto content_types_or = ooxml::parse_content_types(ct_bytes, &diagnostics);
-  if (!content_types_or) {
-    return std::move(content_types_or.error());
-  }
-  ooxml::ContentTypesInfo content_types = std::move(content_types_or.value());
-  const WorkbookKind workbook_kind = content_types.workbook_kind;
-  std::vector<ooxml::OverrideEntry> override_part_entries = std::move(content_types.overrides);
-  std::vector<DefaultContentType> default_content_types = std::move(content_types.defaults);
-
-  // 2. _rels/.rels — locate the workbook part path.
-  if (!zip.has_entry("_rels/.rels")) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package",
-                      "context=ooxml_reader");
-  }
-  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
-  ASSIGN_OR_RETURN(auto wb_path, ooxml::resolve_office_document_path(root_rels));
-  const std::string workbook_path = wb_path;
-  ASSIGN_OR_RETURN(auto package_rels, ReadUnknownPackageRels(root_rels));
-
-  // 3. xl/_rels/workbook.xml.rels — load and validate. We need both the
-  // sheet rId -> part-path map (for the per-sheet read loop below) and
-  // the resolved paths for the sharedStrings / styles parts so we can
-  // load them at the right point in the pipeline.
-  auto wb_rels_or = ooxml::load_workbook_rels(zip, workbook_path);
-  if (!wb_rels_or) {
-    return std::move(wb_rels_or.error());
-  }
-  ooxml::WorkbookRels& wb_rels = wb_rels_or.value();
-
-  // 4. xl/workbook.xml — the <sheets> list (in document order).
-  if (!zip.has_entry(workbook_path)) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: part not found at relationship target",
-                      "context=ooxml_reader workbook_path=" + workbook_path);
-  }
-  auto wb_bytes_or = zip.read_entry(workbook_path);
-  if (!wb_bytes_or) {
-    return std::move(wb_bytes_or.error());
-  }
-  const std::vector<std::uint8_t>& wb_bytes = wb_bytes_or.value();
-
-  pugi::xml_document wb_doc;
-  RETURN_IF_ERROR(load_xml_buffer(wb_doc, wb_bytes, "ooxml_reader", "workbook.xml"));
-  pugi::xml_node wb_root = wb_doc.child("workbook");
-  if (!wb_root) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: missing <workbook> root",
-                      "context=ooxml_reader part=" + workbook_path);
-  }
-  pugi::xml_node sheets_node = wb_root.child("sheets");
-  if (!sheets_node) {
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: missing <sheets>",
-                      "context=ooxml_reader part=" + workbook_path);
-  }
-
-  // Build the workbook bottom-up: empty container, then append sheets in
-  // document order. `create_empty()` keeps this loop simple — no implicit
-  // Sheet1 to overwrite or remove. The workbook kind is set up-front so
-  // any subsequent error path (e.g. corrupt sheet) still returns metadata
-  // consistent with the `[Content_Types].xml` declaration we observed.
-  Workbook wb = Workbook::create_empty();
-  wb.set_kind(workbook_kind);
-  // The package's style table is authoritative, including when the package
-  // has none: back-filling the factory's seeded defaults would invent style
-  // records the file never carried and change how a dangling `s=` resolves.
-  wb.set_styles(StylesTable{});
-
-  // Capture the `<workbook>` root's extra namespace declarations (and
-  // `mc:Ignorable`) so the writer can re-emit them. The raw `<bookViews>`
-  // capture below can carry namespaced attributes (e.g. `xr2:uid`) whose
-  // prefixes are declared only on this root; without re-declaring them the
-  // re-emitted fragment is malformed XML and Excel refuses the file. The
-  // same helper handles the `<worksheet>` root (see `ooxml::apply_worksheet_metadata`).
-  wb.set_workbook_root_extra_attrs(capture_root_extra_ns_attrs(wb_root));
-
-  // Track which sheet relationships were consumed, so the unknown-parts
-  // computation can subtract them.
-  std::unordered_set<std::string> consumed_parts;
-  consumed_parts.insert("[Content_Types].xml");
-  consumed_parts.insert("_rels/.rels");
-  consumed_parts.insert(workbook_path);
-  consumed_parts.insert(ooxml::rels_path_for_part(workbook_path));
-  std::vector<PassthroughPart> extra_passthrough_parts;
-
+/// Adds every `<sheet>` of the workbook to `wb` in document order and returns
+/// each sheet's resolved part path (index-aligned with the workbook's sheets).
+static Expected<std::vector<std::string>, Error> ReadSheetList(const pugi::xml_node& sheets_node,
+                                                               const ooxml::WorkbookRels& wb_rels,
+                                                               const std::string& workbook_path, Workbook& wb,
+                                                               std::unordered_set<std::string>& consumed_parts) {
   // Collect (display_name, part_path) per sheet in document order. The
   // sheet's `r:id` attribute resolves to a part path through
   // `sheet_rels`. We need both pieces in sync so the sheet at workbook
@@ -344,14 +251,14 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
                       "context=ooxml_reader part=" + workbook_path);
   }
 
-  ooxml::apply_workbook_part_settings(wb_root, wb);
+  return sheet_part_paths;
+}
 
-  // The workbook owns the text-storage deque; readers append directly
-  // into `wb.mutable_text_storage()`. This keeps `Value::text` views
-  // valid for the full workbook lifetime — including after the caller
-  // moves `wb` out of the read result and discards the result. A
-  // `std::deque` (pointer-stable across appends) is required so the
-  // views handed to cells remain valid as later strings are appended.
+/// Loads the shared strings, persons, styles and external-link parts, marking
+/// each consumed. Returns the shared-string table for the later reference pass.
+static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, const pugi::xml_node& wb_root,
+                                                               ooxml::WorkbookRels& wb_rels, Workbook& wb,
+                                                               std::unordered_set<std::string>& consumed_parts) {
   std::deque<std::string>& result_text_storage = wb.mutable_text_storage();
 
   // 4a. Shared strings — must load BEFORE the sheet read loop because
@@ -360,13 +267,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // with no text-via-SST cells legally omits it.
   SharedStringTable sst;
   if (!wb_rels.sst_path.empty()) {
-    if (!zip.has_entry(wb_rels.sst_path)) {
-      std::string ctx("context=ooxml_reader sst_path=");
-      ctx.append(wb_rels.sst_path);
-      return make_error(FormulonErrorCode::kIoRelationshipBroken, "sharedStrings: rel target missing from package",
-                        std::move(ctx));
-    }
-    ASSIGN_OR_RETURN(auto sst_bytes, zip.read_entry(wb_rels.sst_path));
+    ASSIGN_OR_RETURN(auto sst_bytes, ReadRequiredPart(zip, wb_rels.sst_path, FormulonErrorCode::kIoRelationshipBroken,
+                                                      "sharedStrings: rel target missing from package",
+                                                      "context=ooxml_reader", "sst_path"));
     auto sst_or = read_shared_strings(std::move(sst_bytes), result_text_storage);
     if (!sst_or) {
       return std::move(sst_or.error());
@@ -412,13 +315,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // pipeline begins consuming it. Mark consumed regardless of whether
   // the rel was present, mirroring the SST treatment above.
   if (!wb_rels.styles_path.empty()) {
-    if (!zip.has_entry(wb_rels.styles_path)) {
-      std::string ctx("context=ooxml_reader styles_path=");
-      ctx.append(wb_rels.styles_path);
-      return make_error(FormulonErrorCode::kIoRelationshipBroken, "styles: rel target missing from package",
-                        std::move(ctx));
-    }
-    ASSIGN_OR_RETURN(auto styles_bytes, zip.read_entry(wb_rels.styles_path));
+    ASSIGN_OR_RETURN(
+        auto styles_bytes,
+        ReadRequiredPart(zip, wb_rels.styles_path, FormulonErrorCode::kIoRelationshipBroken,
+                         "styles: rel target missing from package", "context=ooxml_reader", "styles_path"));
     ASSIGN_OR_RETURN(auto styles, read_styles(styles_bytes));
     wb.set_styles(std::move(styles));
     consumed_parts.insert(wb_rels.styles_path);
@@ -447,6 +347,442 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     }
     wb.set_external_links(std::move(ext.records));
   }
+
+  return sst;
+}
+
+/// Loads the parts a worksheet's own rels file points at (tables, pivot tables,
+/// printer settings, threaded comments, comments / VML, drawing). Table and pivot
+/// resolution run before the auxiliary pass so error precedence is stable.
+static Expected<void, Error> ReadSheetRelParts(ZipReader& zip, Workbook& wb, std::size_t i,
+                                               const std::string& sheet_path, const pugi::xml_document& sheet_doc,
+                                               std::unordered_set<std::string>& consumed_parts,
+                                               std::vector<PassthroughPart>& extra_passthrough_parts,
+                                               std::vector<TableMetadata>& tables_metadata) {
+  const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
+  if (!zip.has_entry(sheet_rels_path)) {
+    return Expected<void, Error>::Ok();
+  }
+  const std::string sheet_dir = ooxml::dir_of(sheet_path);
+  const std::string sheet_head = "context=ooxml_reader sheet_index=" + std::to_string(i);
+  pugi::xml_document sheet_rels_doc;
+  RETURN_IF_ERROR(
+      ooxml::load_relationship_document(zip, sheet_rels_path, "sheet rels", "ooxml_reader", &sheet_rels_doc));
+  ASSIGN_OR_RETURN(auto targets, ooxml::collect_sheet_table_targets(sheet_rels_doc, sheet_dir));
+  consumed_parts.insert(sheet_rels_path);
+  for (const std::string& table_path : targets) {
+    ASSIGN_OR_RETURN(auto table_bytes,
+                     ReadRequiredPart(zip, table_path, FormulonErrorCode::kIoRelationshipBroken,
+                                      "table: rel target missing from package", sheet_head, "table_path"));
+    ASSIGN_OR_RETURN(auto table, read_table(table_bytes, i));
+    tables_metadata.push_back(std::move(table));
+    consumed_parts.insert(table_path);
+  }
+
+  // Pivot tables anchored on this sheet. Each part feeds into the
+  // pivot-table reader and is attached to the owning sheet; the
+  // workbook-level pivot caches are loaded after the sheet loop.
+  ASSIGN_OR_RETURN(auto pivot_targets, ooxml::collect_sheet_pivot_table_targets(sheet_rels_doc, sheet_dir));
+  for (const std::string& pivot_table_path : pivot_targets) {
+    ASSIGN_OR_RETURN(auto pt_bytes,
+                     ReadRequiredPart(zip, pivot_table_path, FormulonErrorCode::kIoRelationshipBroken,
+                                      "pivotTable: rel target missing from package", sheet_head, "pivot_table_path"));
+    ASSIGN_OR_RETURN(auto pt, read_pivot_table_definition(pt_bytes));
+    wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(pt)));
+    consumed_parts.insert(pivot_table_path);
+    // The pivot-table part may carry its own rels file pointing back
+    // at the parent cache definition. We do not need to re-resolve
+    // it (the table already carries `pivot_cache_id`), but we mark
+    // the rels file as consumed so it does not surface as an
+    // unknown part.
+    const std::string pt_rels_path = ooxml::rels_path_for_part(pivot_table_path);
+    if (zip.has_entry(pt_rels_path)) {
+      consumed_parts.insert(pt_rels_path);
+    }
+  }
+
+  // Hyperlink / comments / VML auxiliary parts. Missing entries are
+  // simply empty in the result. The worksheet body's own `<legacyDrawing>`
+  // element (comment geometry) names which `kRelVmlDrawing`
+  // relationship is the modelled comment-VML slot, distinguishing it
+  // from a second `<legacyDrawingHF>` (header/footer image)
+  // relationship the sheet may also carry.
+  const std::string legacy_drawing_body_rid =
+      ooxml::relationship_ref_id(sheet_doc.child("worksheet").child("legacyDrawing"));
+  auto aux_or = ooxml::collect_sheet_aux_rels(sheet_rels_doc, sheet_dir, legacy_drawing_body_rid);
+  if (!aux_or) {
+    return std::move(aux_or.error());
+  }
+  const ooxml::SheetAuxRels& aux = aux_or.value();
+  wb.sheet(i).set_unknown_relationships(aux.unknown_rels);
+  // Stitch each hyperlink's `target` from the rels lookup.
+  apply_hyperlink_rels(wb.sheet(i).mutable_hyperlinks(), aux.hyperlink_rid_to_target);
+
+  if (!aux.printer_settings_path.empty()) {
+    SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
+    if (print.printer_settings_rid.empty()) {
+      print.printer_settings_rid = aux.printer_settings_rid;
+    }
+    print.printer_settings_path = aux.printer_settings_path;
+    if (zip.has_entry(aux.printer_settings_path)) {
+      ASSIGN_OR_RETURN(auto pb, zip.read_entry(aux.printer_settings_path));
+      PassthroughPart part;
+      part.path = aux.printer_settings_path;
+      part.content_type = std::string(kCtPrinterSettings);
+      part.bytes = std::move(pb);
+      extra_passthrough_parts.push_back(std::move(part));
+      consumed_parts.insert(aux.printer_settings_path);
+    }
+  }
+
+  // Threaded comments load before the legacy comments part so the
+  // thread stubs in it can be told apart from notes.
+  if (!aux.threaded_comments_path.empty() && zip.has_entry(aux.threaded_comments_path)) {
+    ASSIGN_OR_RETURN(auto tb, zip.read_entry(aux.threaded_comments_path));
+    ASSIGN_OR_RETURN(auto threads, read_threaded_comments(tb));
+    wb.sheet(i).mutable_threaded_comments() = std::move(threads);
+    consumed_parts.insert(aux.threaded_comments_path);
+  }
+
+  // Comments part: load + attach. The VML drawing companion is
+  // intentionally NOT consumed here so the bytes flow through the
+  // unknown-parts passthrough mechanism unchanged; the anchors it was
+  // read with let the writer tell whether those bytes are still current.
+  // The drawing's other shapes (form controls) are kept even on a sheet
+  // without notes, so a note added later regenerates the drawing with them.
+  std::vector<std::uint8_t> vml_bytes;
+  if (!aux.vml_path.empty() && zip.has_entry(aux.vml_path)) {
+    ASSIGN_OR_RETURN(vml_bytes, zip.read_entry(aux.vml_path));
+    wb.sheet(i).set_comment_vml_extra_xml(
+        vml_non_note_shapes(std::string_view(reinterpret_cast<const char*>(vml_bytes.data()), vml_bytes.size())));
+  }
+  if (!aux.comments_path.empty() && zip.has_entry(aux.comments_path)) {
+    ASSIGN_OR_RETURN(auto cb, zip.read_entry(aux.comments_path));
+    std::vector<std::string> authors;
+    ASSIGN_OR_RETURN(auto comments, read_comments(cb, &authors));
+    drop_thread_stubs(comments, wb.sheet(i).threaded_comments());
+    if (!vml_bytes.empty()) {
+      apply_vml_note_shapes(std::string_view(reinterpret_cast<const char*>(vml_bytes.data()), vml_bytes.size()),
+                            comments);
+    }
+    wb.sheet(i).mutable_comments() = std::move(comments);
+    authors.erase(
+        std::remove_if(authors.begin(), authors.end(), [](const std::string& a) { return is_thread_stub_author(a); }),
+        authors.end());
+    wb.sheet(i).set_comment_authors(std::move(authors));
+    wb.sheet(i).set_comment_vml_path(aux.vml_path);
+    wb.sheet(i).set_comment_vml_shapes(wb.sheet(i).comment_shapes());
+    consumed_parts.insert(aux.comments_path);
+  } else if (!wb.sheet(i).comment_vml_extra_xml().empty()) {
+    // Form controls without notes: the drawing is still the sheet's
+    // legacy drawing, and its bytes stay current until a note is added.
+    wb.sheet(i).set_comment_vml_path(aux.vml_path);
+  }
+
+  // Drawing (DrawingML) reference. The reader does not model the
+  // drawing part; it records the target path so the writer can
+  // re-emit the `<drawing>` element and its sheet-rels relationship.
+  // The part body, its own rels, and any anchored media round-trip
+  // through the Default-typed passthrough capture below.
+  if (!aux.drawing_path.empty()) {
+    wb.sheet(i).set_drawing_rel_target(aux.drawing_path);
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// Loads the workbook's `<pivotCaches>` (definition and records parts) into `wb`
+/// and queues caches named only from an extension as plain unknown relationships.
+static Expected<void, Error> ReadPivotCaches(ZipReader& zip, const pugi::xml_node& wb_root,
+                                             ooxml::WorkbookRels& wb_rels, const std::string& workbook_path,
+                                             Workbook& wb, std::unordered_set<std::string>& consumed_parts) {
+  pugi::xml_node pivot_caches_node = wb_root.child("pivotCaches");
+  std::unordered_set<std::string> listed_cache_rids;
+  for (pugi::xml_node pc = pivot_caches_node.child("pivotCache"); pc; pc = pc.next_sibling("pivotCache")) {
+    const std::uint32_t cache_id = pc.attribute("cacheId").as_uint(0U);
+    // Accept both "r:id" (Office-namespaced) and bare "id" — same
+    // forgiveness as the sheet relationship walk above.
+    std::string rid = ooxml::relationship_ref_id(pc);
+    if (rid.empty()) {
+      return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook.xml: <pivotCache> missing r:id attribute",
+                        "context=ooxml_reader part=" + workbook_path);
+    }
+    auto def_it = wb_rels.pivot_cache_definition_paths_by_rid.find(rid);
+    if (def_it == wb_rels.pivot_cache_definition_paths_by_rid.end()) {
+      std::string ctx("context=ooxml_reader part=");
+      ctx.append(workbook_path);
+      ctx.append(" rid=");
+      ctx.append(rid);
+      return make_error(FormulonErrorCode::kIoRelationshipBroken,
+                        "workbook.xml: <pivotCache> r:id has no matching workbook relationship", std::move(ctx));
+    }
+    listed_cache_rids.insert(rid);
+    const std::string& definition_path = def_it->second;
+    const std::string cache_head = "context=ooxml_reader cache_id=" + std::to_string(cache_id);
+    ASSIGN_OR_RETURN(auto def_bytes, ReadRequiredPart(zip, definition_path, FormulonErrorCode::kIoRelationshipBroken,
+                                                      "pivotCacheDefinition: rel target missing from package",
+                                                      cache_head, "definition_path"));
+    auto cache_or = read_pivot_cache_definition(def_bytes);
+    if (!cache_or) {
+      return std::move(cache_or.error());
+    }
+    pivot::PivotCache cache = std::move(cache_or.value());
+    cache.set_cache_id(cache_id);
+    consumed_parts.insert(definition_path);
+
+    ASSIGN_OR_RETURN(auto records_target, ooxml::load_pivot_cache_records_target(zip, definition_path));
+    const std::string& records_path = records_target;
+    if (!records_path.empty()) {
+      ASSIGN_OR_RETURN(auto rec_bytes, ReadRequiredPart(zip, records_path, FormulonErrorCode::kIoRelationshipBroken,
+                                                        "pivotCacheRecords: rel target missing from package",
+                                                        cache_head, "records_path"));
+      auto rec_status = read_pivot_cache_records(std::move(rec_bytes), cache);
+      if (!rec_status) {
+        return std::move(rec_status.error());
+      }
+      consumed_parts.insert(records_path);
+    }
+
+    // The cache definition may carry its own rels file (it does when
+    // there's a records part); mark it consumed so it does not surface
+    // as an unknown part.
+    const std::string def_rels_path = ooxml::rels_path_for_part(definition_path);
+    if (zip.has_entry(def_rels_path)) {
+      consumed_parts.insert(def_rels_path);
+    }
+
+    wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
+  }
+  // A cache named only from an extension (a timeline's cache, say) is not
+  // modelled: its parts pass through, and its relationship stays a plain
+  // one so the extension's `r:id` is remapped to it on save.
+  {
+    std::vector<UnknownRelationship> unlisted;
+    for (const auto& [rid, definition_path] : wb_rels.pivot_cache_definition_paths_by_rid) {
+      if (listed_cache_rids.count(rid) != 0U) {
+        continue;
+      }
+      UnknownRelationship entry;
+      entry.id = rid;
+      entry.type.assign(kRelPivotCacheDefinition);
+      entry.target = definition_path;
+      unlisted.push_back(std::move(entry));
+    }
+    // The map is unordered; the relationship order on save must not be.
+    sort_by_index(unlisted, [](const UnknownRelationship& a, const UnknownRelationship& b) { return a.id < b.id; });
+    for (UnknownRelationship& entry : unlisted) {
+      wb_rels.unknown_rels.push_back(std::move(entry));
+    }
+  }
+
+  return Expected<void, Error>::Ok();
+}
+
+/// Captures every part the reader did not consume so the writer can re-emit it:
+/// unmodelled `<Override>` parts with their content type, then the remaining
+/// archive entries (Default-typed) with an empty one.
+static Expected<std::vector<PassthroughPart>, Error> CollectUnknownParts(
+    ZipReader& zip, const std::vector<ooxml::OverrideEntry>& override_part_entries,
+    std::vector<PassthroughPart>& extra_passthrough_parts, const std::unordered_set<std::string>& consumed_parts) {
+  std::vector<PassthroughPart> unknown_parts;
+  unknown_parts.reserve(override_part_entries.size() + extra_passthrough_parts.size());
+  std::unordered_set<std::string> captured;
+  captured.reserve(override_part_entries.size() + extra_passthrough_parts.size());
+  for (const ooxml::OverrideEntry& entry : override_part_entries) {
+    if (consumed_parts.find(entry.part_name) != consumed_parts.end()) {
+      continue;
+    }
+    // Refuse to carry a hostile part name through passthrough: re-emitting
+    // a `../` or absolute-shaped name would hand a downstream extractor a
+    // zip-slip primitive on the round-tripped package.
+    if (!ooxml::is_safe_part_name(entry.part_name)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "Override part name escapes package root; refusing to load",
+                        "context=ooxml_reader part=" + entry.part_name);
+    }
+    // Read the bytes once. Failures here are propagated as ZIP errors;
+    // the part was advertised in `[Content_Types].xml`, so if miniz
+    // cannot extract it the package itself is corrupt.
+    if (!zip.has_entry(entry.part_name)) {
+      // Override referenced a part that does not exist in the archive.
+      // We treat this as "nothing to passthrough" rather than fail: the
+      // part is missing and there's no way to round-trip it. A future
+      // bundle may surface a structured warning.
+      continue;
+    }
+    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(entry.part_name));
+    PassthroughPart part;
+    part.path = entry.part_name;
+    part.content_type = entry.content_type;
+    part.bytes = std::move(part_bytes);
+    unknown_parts.push_back(std::move(part));
+    captured.insert(entry.part_name);
+  }
+  for (PassthroughPart& part : extra_passthrough_parts) {
+    if (captured.insert(part.path).second) {
+      unknown_parts.push_back(std::move(part));
+    }
+  }
+
+  // Sweep every remaining archive entry the reader neither modelled nor
+  // already captured as an Override passthrough. These are Default-typed
+  // parts declared only via `<Default Extension>` — vbaProject.bin,
+  // xl/media/* images, xl/drawings/* (bodies + their rels), VML
+  // companions, and so on. Without this, real Excel-authored .xlsm /
+  // .xlsx packages silently lose macros, images, shapes, and note
+  // geometry on the first round-trip. Captured with an empty content
+  // type; the writer relies on the round-tripped `<Default>` entries.
+  for (const std::string& name : zip.list_entries()) {
+    // Directory markers and empty names are not parts.
+    if (name.empty() || name.back() == '/') {
+      continue;
+    }
+    // Same zip-slip guard as the Override sweep: a Default-typed archive
+    // entry with a traversal-shaped name must not be round-tripped.
+    if (!ooxml::is_safe_part_name(name)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "archive entry name escapes package root; refusing to load",
+                        "context=ooxml_reader part=" + name);
+    }
+    if (consumed_parts.find(name) != consumed_parts.end()) {
+      continue;
+    }
+    if (!captured.insert(name).second) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(name));
+    PassthroughPart part;
+    part.path = name;
+    // Empty content type: the part is Default-typed, so the writer
+    // must not emit a per-part `<Override>` for it.
+    part.bytes = std::move(part_bytes);
+    unknown_parts.push_back(std::move(part));
+  }
+
+  return unknown_parts;
+}
+
+// Shared implementation behind the public `read_ooxml` and the test-only
+// threshold-injection seam. `sax_threshold` is the byte size at or above
+// which a sheet routes through the streaming SAX scanner instead of the
+// pugixml DOM; production passes `kSaxThresholdBytes`, tests pass a tiny
+// value to force the SAX branch on ordinary-size sheets.
+static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, std::size_t sax_threshold) {
+  ReadDiagnostics diagnostics;
+  // Surface a precise "encrypted" diagnostic before the ZIP layer reports the
+  // CDFV2 container as a corrupt archive.
+  if (IsCdfv2Container(bytes)) {
+    return make_error(FormulonErrorCode::kIoZipEncrypted,
+                      "package is an encrypted OLE/CDFV2 container; decrypt before loading", "context=ooxml_reader");
+  }
+  ZipReader zip;
+  {
+    auto open_result = zip.open(bytes);
+    if (!open_result) {
+      return std::move(open_result.error());
+    }
+  }
+
+  // 1. [Content_Types].xml — sanity check + listing for unknown_parts.
+  if (!zip.has_entry("[Content_Types].xml")) {
+    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing from package",
+                      "context=ooxml_reader");
+  }
+  auto ct_bytes_or = zip.read_entry("[Content_Types].xml");
+  if (!ct_bytes_or) {
+    return std::move(ct_bytes_or.error());
+  }
+  const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
+  auto content_types_or = ooxml::parse_content_types(ct_bytes, &diagnostics);
+  if (!content_types_or) {
+    return std::move(content_types_or.error());
+  }
+  ooxml::ContentTypesInfo content_types = std::move(content_types_or.value());
+  const WorkbookKind workbook_kind = content_types.workbook_kind;
+  std::vector<ooxml::OverrideEntry> override_part_entries = std::move(content_types.overrides);
+  std::vector<DefaultContentType> default_content_types = std::move(content_types.defaults);
+
+  // 2. _rels/.rels — locate the workbook part path.
+  if (!zip.has_entry("_rels/.rels")) {
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "_rels/.rels: missing from package",
+                      "context=ooxml_reader");
+  }
+  ASSIGN_OR_RETURN(auto root_rels, zip.read_entry("_rels/.rels"));
+  ASSIGN_OR_RETURN(auto wb_path, ooxml::resolve_office_document_path(root_rels));
+  const std::string workbook_path = wb_path;
+  ASSIGN_OR_RETURN(auto package_rels, ReadUnknownPackageRels(root_rels));
+
+  // 3. xl/_rels/workbook.xml.rels — load and validate. We need both the
+  // sheet rId -> part-path map (for the per-sheet read loop below) and
+  // the resolved paths for the sharedStrings / styles parts so we can
+  // load them at the right point in the pipeline.
+  auto wb_rels_or = ooxml::load_workbook_rels(zip, workbook_path);
+  if (!wb_rels_or) {
+    return std::move(wb_rels_or.error());
+  }
+  ooxml::WorkbookRels& wb_rels = wb_rels_or.value();
+
+  // 4. xl/workbook.xml — the <sheets> list (in document order).
+  auto wb_bytes_or =
+      ReadRequiredPart(zip, workbook_path, FormulonErrorCode::kIoSheetCorrupt,
+                       "workbook.xml: part not found at relationship target", "context=ooxml_reader", "workbook_path");
+  if (!wb_bytes_or) {
+    return std::move(wb_bytes_or.error());
+  }
+  const std::vector<std::uint8_t>& wb_bytes = wb_bytes_or.value();
+
+  pugi::xml_document wb_doc;
+  RETURN_IF_ERROR(load_xml_buffer(wb_doc, wb_bytes, "ooxml_reader", "workbook.xml"));
+  pugi::xml_node wb_root = wb_doc.child("workbook");
+  if (!wb_root) {
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: missing <workbook> root",
+                      "context=ooxml_reader part=" + workbook_path);
+  }
+  pugi::xml_node sheets_node = wb_root.child("sheets");
+  if (!sheets_node) {
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: missing <sheets>",
+                      "context=ooxml_reader part=" + workbook_path);
+  }
+
+  // Build the workbook bottom-up: empty container, then append sheets in
+  // document order. `create_empty()` keeps this loop simple — no implicit
+  // Sheet1 to overwrite or remove. The workbook kind is set up-front so
+  // any subsequent error path (e.g. corrupt sheet) still returns metadata
+  // consistent with the `[Content_Types].xml` declaration we observed.
+  Workbook wb = Workbook::create_empty();
+  wb.set_kind(workbook_kind);
+  // The package's style table is authoritative, including when the package
+  // has none: back-filling the factory's seeded defaults would invent style
+  // records the file never carried and change how a dangling `s=` resolves.
+  wb.set_styles(StylesTable{});
+
+  // Capture the `<workbook>` root's extra namespace declarations (and
+  // `mc:Ignorable`) so the writer can re-emit them. The raw `<bookViews>`
+  // capture below can carry namespaced attributes (e.g. `xr2:uid`) whose
+  // prefixes are declared only on this root; without re-declaring them the
+  // re-emitted fragment is malformed XML and Excel refuses the file. The
+  // same helper handles the `<worksheet>` root (see `ooxml::apply_worksheet_metadata`).
+  wb.set_workbook_root_extra_attrs(capture_root_extra_ns_attrs(wb_root));
+
+  // Track which sheet relationships were consumed, so the unknown-parts
+  // computation can subtract them.
+  std::unordered_set<std::string> consumed_parts;
+  consumed_parts.insert("[Content_Types].xml");
+  consumed_parts.insert("_rels/.rels");
+  consumed_parts.insert(workbook_path);
+  consumed_parts.insert(ooxml::rels_path_for_part(workbook_path));
+  std::vector<PassthroughPart> extra_passthrough_parts;
+
+  ASSIGN_OR_RETURN(auto sheet_part_paths, ReadSheetList(sheets_node, wb_rels, workbook_path, wb, consumed_parts));
+
+  ooxml::apply_workbook_part_settings(wb_root, wb);
+
+  // The workbook owns the text-storage deque; readers append directly
+  // into `wb.mutable_text_storage()`. This keeps `Value::text` views
+  // valid for the full workbook lifetime — including after the caller
+  // moves `wb` out of the read result and discards the result. A
+  // `std::deque` (pointer-stable across appends) is required so the
+  // views handed to cells remain valid as later strings are appended.
+  std::deque<std::string>& result_text_storage = wb.mutable_text_storage();
+
+  ASSIGN_OR_RETURN(SharedStringTable sst, ReadWorkbookAuxParts(zip, wb_root, wb_rels, wb, consumed_parts));
 
   // 5. Read each sheet's <sheetData> via the cell-aware sheet reader.
   // The sheet reader appends every inline-string payload directly into
@@ -480,15 +816,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       }
       continue;
     }
-    if (!zip.has_entry(sheet_path)) {
-      // The relationship resolved to a path the package does not
-      // contain. Treat as a structural error rather than silently
-      // skipping: a missing sheet part is data loss.
-      std::string ctx("context=ooxml_reader sheet_path=");
-      ctx.append(sheet_path);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "sheet part missing from package", std::move(ctx));
-    }
-    auto sheet_bytes_or = zip.read_entry(sheet_path);
+    // A relationship resolving to a path the package does not contain is a
+    // structural error, not a skip: a missing sheet part is data loss.
+    auto sheet_bytes_or = ReadRequiredPart(zip, sheet_path, FormulonErrorCode::kIoSheetCorrupt,
+                                           "sheet part missing from package", "context=ooxml_reader", "sheet_path");
     if (!sheet_bytes_or) {
       return std::move(sheet_bytes_or.error());
     }
@@ -551,146 +882,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     }
     RETURN_IF_ERROR(ooxml::apply_worksheet_metadata(sheet_doc, i, wb, &diagnostics));
 
-    // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — load and
-    // validate once, then traverse the retained document at each pipeline
-    // phase. Keeping these passes separate preserves error precedence:
-    // table resolution and reads, pivot resolution and reads, then aux.
-    const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
-    if (zip.has_entry(sheet_rels_path)) {
-      const std::string sheet_dir = ooxml::dir_of(sheet_path);
-      pugi::xml_document sheet_rels_doc;
-      RETURN_IF_ERROR(
-          ooxml::load_relationship_document(zip, sheet_rels_path, "sheet rels", "ooxml_reader", &sheet_rels_doc));
-      ASSIGN_OR_RETURN(auto targets, ooxml::collect_sheet_table_targets(sheet_rels_doc, sheet_dir));
-      consumed_parts.insert(sheet_rels_path);
-      for (const std::string& table_path : targets) {
-        if (!zip.has_entry(table_path)) {
-          std::string ctx("context=ooxml_reader sheet_index=");
-          ctx.append(std::to_string(i));
-          ctx.append(" table_path=").append(table_path);
-          return make_error(FormulonErrorCode::kIoRelationshipBroken, "table: rel target missing from package",
-                            std::move(ctx));
-        }
-        ASSIGN_OR_RETURN(auto table_bytes, zip.read_entry(table_path));
-        ASSIGN_OR_RETURN(auto table, read_table(table_bytes, i));
-        tables_metadata.push_back(std::move(table));
-        consumed_parts.insert(table_path);
-      }
-
-      // Pivot tables anchored on this sheet. Each part feeds into the
-      // pivot-table reader and is attached to the owning sheet; the
-      // workbook-level pivot caches are loaded after the sheet loop.
-      ASSIGN_OR_RETURN(auto pivot_targets, ooxml::collect_sheet_pivot_table_targets(sheet_rels_doc, sheet_dir));
-      for (const std::string& pivot_table_path : pivot_targets) {
-        if (!zip.has_entry(pivot_table_path)) {
-          std::string ctx("context=ooxml_reader sheet_index=");
-          ctx.append(std::to_string(i));
-          ctx.append(" pivot_table_path=").append(pivot_table_path);
-          return make_error(FormulonErrorCode::kIoRelationshipBroken, "pivotTable: rel target missing from package",
-                            std::move(ctx));
-        }
-        ASSIGN_OR_RETURN(auto pt_bytes, zip.read_entry(pivot_table_path));
-        ASSIGN_OR_RETURN(auto pt, read_pivot_table_definition(pt_bytes));
-        wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(pt)));
-        consumed_parts.insert(pivot_table_path);
-        // The pivot-table part may carry its own rels file pointing back
-        // at the parent cache definition. We do not need to re-resolve
-        // it (the table already carries `pivot_cache_id`), but we mark
-        // the rels file as consumed so it does not surface as an
-        // unknown part.
-        const std::string pt_rels_path = ooxml::rels_path_for_part(pivot_table_path);
-        if (zip.has_entry(pt_rels_path)) {
-          consumed_parts.insert(pt_rels_path);
-        }
-      }
-
-      // Hyperlink / comments / VML auxiliary parts. Missing entries are
-      // simply empty in the result. The worksheet body's own `<legacyDrawing>`
-      // element (comment geometry) names which `kRelVmlDrawing`
-      // relationship is the modelled comment-VML slot, distinguishing it
-      // from a second `<legacyDrawingHF>` (header/footer image)
-      // relationship the sheet may also carry.
-      const std::string legacy_drawing_body_rid =
-          ooxml::relationship_ref_id(sheet_doc.child("worksheet").child("legacyDrawing"));
-      auto aux_or = ooxml::collect_sheet_aux_rels(sheet_rels_doc, sheet_dir, legacy_drawing_body_rid);
-      if (!aux_or) {
-        return std::move(aux_or.error());
-      }
-      const ooxml::SheetAuxRels& aux = aux_or.value();
-      wb.sheet(i).set_unknown_relationships(aux.unknown_rels);
-      // Stitch each hyperlink's `target` from the rels lookup.
-      apply_hyperlink_rels(wb.sheet(i).mutable_hyperlinks(), aux.hyperlink_rid_to_target);
-
-      if (!aux.printer_settings_path.empty()) {
-        SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
-        if (print.printer_settings_rid.empty()) {
-          print.printer_settings_rid = aux.printer_settings_rid;
-        }
-        print.printer_settings_path = aux.printer_settings_path;
-        if (zip.has_entry(aux.printer_settings_path)) {
-          ASSIGN_OR_RETURN(auto pb, zip.read_entry(aux.printer_settings_path));
-          PassthroughPart part;
-          part.path = aux.printer_settings_path;
-          part.content_type = std::string(kCtPrinterSettings);
-          part.bytes = std::move(pb);
-          extra_passthrough_parts.push_back(std::move(part));
-          consumed_parts.insert(aux.printer_settings_path);
-        }
-      }
-
-      // Threaded comments load before the legacy comments part so the
-      // thread stubs in it can be told apart from notes.
-      if (!aux.threaded_comments_path.empty() && zip.has_entry(aux.threaded_comments_path)) {
-        ASSIGN_OR_RETURN(auto tb, zip.read_entry(aux.threaded_comments_path));
-        ASSIGN_OR_RETURN(auto threads, read_threaded_comments(tb));
-        wb.sheet(i).mutable_threaded_comments() = std::move(threads);
-        consumed_parts.insert(aux.threaded_comments_path);
-      }
-
-      // Comments part: load + attach. The VML drawing companion is
-      // intentionally NOT consumed here so the bytes flow through the
-      // unknown-parts passthrough mechanism unchanged; the anchors it was
-      // read with let the writer tell whether those bytes are still current.
-      // The drawing's other shapes (form controls) are kept even on a sheet
-      // without notes, so a note added later regenerates the drawing with them.
-      std::vector<std::uint8_t> vml_bytes;
-      if (!aux.vml_path.empty() && zip.has_entry(aux.vml_path)) {
-        ASSIGN_OR_RETURN(vml_bytes, zip.read_entry(aux.vml_path));
-        wb.sheet(i).set_comment_vml_extra_xml(
-            vml_non_note_shapes(std::string_view(reinterpret_cast<const char*>(vml_bytes.data()), vml_bytes.size())));
-      }
-      if (!aux.comments_path.empty() && zip.has_entry(aux.comments_path)) {
-        ASSIGN_OR_RETURN(auto cb, zip.read_entry(aux.comments_path));
-        std::vector<std::string> authors;
-        ASSIGN_OR_RETURN(auto comments, read_comments(cb, &authors));
-        drop_thread_stubs(comments, wb.sheet(i).threaded_comments());
-        if (!vml_bytes.empty()) {
-          apply_vml_note_shapes(std::string_view(reinterpret_cast<const char*>(vml_bytes.data()), vml_bytes.size()),
-                                comments);
-        }
-        wb.sheet(i).mutable_comments() = std::move(comments);
-        authors.erase(std::remove_if(authors.begin(), authors.end(),
-                                     [](const std::string& a) { return is_thread_stub_author(a); }),
-                      authors.end());
-        wb.sheet(i).set_comment_authors(std::move(authors));
-        wb.sheet(i).set_comment_vml_path(aux.vml_path);
-        wb.sheet(i).set_comment_vml_shapes(wb.sheet(i).comment_shapes());
-        consumed_parts.insert(aux.comments_path);
-      } else if (!wb.sheet(i).comment_vml_extra_xml().empty()) {
-        // Form controls without notes: the drawing is still the sheet's
-        // legacy drawing, and its bytes stay current until a note is added.
-        wb.sheet(i).set_comment_vml_path(aux.vml_path);
-      }
-
-      // Drawing (DrawingML) reference. The reader does not model the
-      // drawing part; it records the target path so the writer can
-      // re-emit the `<drawing>` element and its sheet-rels relationship.
-      // The part body, its own rels, and any anchored media round-trip
-      // through the Default-typed passthrough capture below.
-      if (!aux.drawing_path.empty()) {
-        wb.sheet(i).set_drawing_rel_target(aux.drawing_path);
-      }
-    }
+    RETURN_IF_ERROR(
+        ReadSheetRelParts(zip, wb, i, sheet_path, sheet_doc, consumed_parts, extra_passthrough_parts, tables_metadata));
   }
 
   // 5b. Conditional-format and data-validation formulas name other books
@@ -806,95 +999,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // `pivot::PivotCache` ready for evaluation; the per-sheet pivot-table
   // loading above attaches `PivotTable`s that reference these caches by
   // id.
-  pugi::xml_node pivot_caches_node = wb_root.child("pivotCaches");
-  std::unordered_set<std::string> listed_cache_rids;
-  for (pugi::xml_node pc = pivot_caches_node.child("pivotCache"); pc; pc = pc.next_sibling("pivotCache")) {
-    const std::uint32_t cache_id = pc.attribute("cacheId").as_uint(0U);
-    // Accept both "r:id" (Office-namespaced) and bare "id" — same
-    // forgiveness as the sheet relationship walk above.
-    std::string rid = ooxml::relationship_ref_id(pc);
-    if (rid.empty()) {
-      return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook.xml: <pivotCache> missing r:id attribute",
-                        "context=ooxml_reader part=" + workbook_path);
-    }
-    auto def_it = wb_rels.pivot_cache_definition_paths_by_rid.find(rid);
-    if (def_it == wb_rels.pivot_cache_definition_paths_by_rid.end()) {
-      std::string ctx("context=ooxml_reader part=");
-      ctx.append(workbook_path);
-      ctx.append(" rid=");
-      ctx.append(rid);
-      return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                        "workbook.xml: <pivotCache> r:id has no matching workbook relationship", std::move(ctx));
-    }
-    listed_cache_rids.insert(rid);
-    const std::string& definition_path = def_it->second;
-    if (!zip.has_entry(definition_path)) {
-      std::string ctx("context=ooxml_reader cache_id=");
-      ctx.append(std::to_string(cache_id));
-      ctx.append(" definition_path=");
-      ctx.append(definition_path);
-      return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                        "pivotCacheDefinition: rel target missing from package", std::move(ctx));
-    }
-    ASSIGN_OR_RETURN(auto def_bytes, zip.read_entry(definition_path));
-    auto cache_or = read_pivot_cache_definition(def_bytes);
-    if (!cache_or) {
-      return std::move(cache_or.error());
-    }
-    pivot::PivotCache cache = std::move(cache_or.value());
-    cache.set_cache_id(cache_id);
-    consumed_parts.insert(definition_path);
-
-    ASSIGN_OR_RETURN(auto records_target, ooxml::load_pivot_cache_records_target(zip, definition_path));
-    const std::string& records_path = records_target;
-    if (!records_path.empty()) {
-      if (!zip.has_entry(records_path)) {
-        std::string ctx("context=ooxml_reader cache_id=");
-        ctx.append(std::to_string(cache_id));
-        ctx.append(" records_path=");
-        ctx.append(records_path);
-        return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                          "pivotCacheRecords: rel target missing from package", std::move(ctx));
-      }
-      ASSIGN_OR_RETURN(auto rec_bytes, zip.read_entry(records_path));
-      auto rec_status = read_pivot_cache_records(std::move(rec_bytes), cache);
-      if (!rec_status) {
-        return std::move(rec_status.error());
-      }
-      consumed_parts.insert(records_path);
-    }
-
-    // The cache definition may carry its own rels file (it does when
-    // there's a records part); mark it consumed so it does not surface
-    // as an unknown part.
-    const std::string def_rels_path = ooxml::rels_path_for_part(definition_path);
-    if (zip.has_entry(def_rels_path)) {
-      consumed_parts.insert(def_rels_path);
-    }
-
-    wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
-  }
-  // A cache named only from an extension (a timeline's cache, say) is not
-  // modelled: its parts pass through, and its relationship stays a plain
-  // one so the extension's `r:id` is remapped to it on save.
-  {
-    std::vector<UnknownRelationship> unlisted;
-    for (const auto& [rid, definition_path] : wb_rels.pivot_cache_definition_paths_by_rid) {
-      if (listed_cache_rids.count(rid) != 0U) {
-        continue;
-      }
-      UnknownRelationship entry;
-      entry.id = rid;
-      entry.type.assign(kRelPivotCacheDefinition);
-      entry.target = definition_path;
-      unlisted.push_back(std::move(entry));
-    }
-    // The map is unordered; the relationship order on save must not be.
-    sort_by_index(unlisted, [](const UnknownRelationship& a, const UnknownRelationship& b) { return a.id < b.id; });
-    for (UnknownRelationship& entry : unlisted) {
-      wb_rels.unknown_rels.push_back(std::move(entry));
-    }
-  }
+  RETURN_IF_ERROR(ReadPivotCaches(zip, wb_root, wb_rels, workbook_path, wb, consumed_parts));
 
   // Both pivot tables (per sheet) and their caches (workbook-level) are
   // now in memory. Resolve each table's field / item names against its
@@ -912,78 +1017,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   //       VML, their rels, ...) declared only via `<Default Extension>`
   //       — captured with an empty content type; the writer relies on
   //       the round-tripped `<Default>` registration.
-  std::vector<PassthroughPart> unknown_parts;
-  unknown_parts.reserve(override_part_entries.size() + extra_passthrough_parts.size());
-  std::unordered_set<std::string> captured;
-  captured.reserve(override_part_entries.size() + extra_passthrough_parts.size());
-  for (const ooxml::OverrideEntry& entry : override_part_entries) {
-    if (consumed_parts.find(entry.part_name) != consumed_parts.end()) {
-      continue;
-    }
-    // Refuse to carry a hostile part name through passthrough: re-emitting
-    // a `../` or absolute-shaped name would hand a downstream extractor a
-    // zip-slip primitive on the round-tripped package.
-    if (!ooxml::is_safe_part_name(entry.part_name)) {
-      return make_error(FormulonErrorCode::kIoZipSlip, "Override part name escapes package root; refusing to load",
-                        "context=ooxml_reader part=" + entry.part_name);
-    }
-    // Read the bytes once. Failures here are propagated as ZIP errors;
-    // the part was advertised in `[Content_Types].xml`, so if miniz
-    // cannot extract it the package itself is corrupt.
-    if (!zip.has_entry(entry.part_name)) {
-      // Override referenced a part that does not exist in the archive.
-      // We treat this as "nothing to passthrough" rather than fail: the
-      // part is missing and there's no way to round-trip it. A future
-      // bundle may surface a structured warning.
-      continue;
-    }
-    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(entry.part_name));
-    PassthroughPart part;
-    part.path = entry.part_name;
-    part.content_type = entry.content_type;
-    part.bytes = std::move(part_bytes);
-    unknown_parts.push_back(std::move(part));
-    captured.insert(entry.part_name);
-  }
-  for (PassthroughPart& part : extra_passthrough_parts) {
-    if (captured.insert(part.path).second) {
-      unknown_parts.push_back(std::move(part));
-    }
-  }
-
-  // Sweep every remaining archive entry the reader neither modelled nor
-  // already captured as an Override passthrough. These are Default-typed
-  // parts declared only via `<Default Extension>` — vbaProject.bin,
-  // xl/media/* images, xl/drawings/* (bodies + their rels), VML
-  // companions, and so on. Without this, real Excel-authored .xlsm /
-  // .xlsx packages silently lose macros, images, shapes, and note
-  // geometry on the first round-trip. Captured with an empty content
-  // type; the writer relies on the round-tripped `<Default>` entries.
-  for (const std::string& name : zip.list_entries()) {
-    // Directory markers and empty names are not parts.
-    if (name.empty() || name.back() == '/') {
-      continue;
-    }
-    // Same zip-slip guard as the Override sweep: a Default-typed archive
-    // entry with a traversal-shaped name must not be round-tripped.
-    if (!ooxml::is_safe_part_name(name)) {
-      return make_error(FormulonErrorCode::kIoZipSlip, "archive entry name escapes package root; refusing to load",
-                        "context=ooxml_reader part=" + name);
-    }
-    if (consumed_parts.find(name) != consumed_parts.end()) {
-      continue;
-    }
-    if (!captured.insert(name).second) {
-      continue;
-    }
-    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(name));
-    PassthroughPart part;
-    part.path = name;
-    // Empty content type: the part is Default-typed, so the writer
-    // must not emit a per-part `<Override>` for it.
-    part.bytes = std::move(part_bytes);
-    unknown_parts.push_back(std::move(part));
-  }
+  ASSIGN_OR_RETURN(auto unknown_parts,
+                   CollectUnknownParts(zip, override_part_entries, extra_passthrough_parts, consumed_parts));
 
   // Stable order so callers / tests can compare deterministically.
   sort_passthrough_parts(unknown_parts);

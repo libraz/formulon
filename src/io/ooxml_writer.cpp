@@ -80,9 +80,9 @@ std::string BuildSingleRelationshipRels(std::string_view type, std::string_view 
   std::string out;
   out.reserve(256 + target.size());
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  BeginRelationships(out);
   AppendRelationship(out, 1, type, target);
-  out.append("</Relationships>\n");
+  EndRelationships(out);
   return out;
 }
 

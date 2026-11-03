@@ -61,6 +61,31 @@ struct ZipReader::Impl {
 
   ~Impl() { close(); }
 
+  enum class NameStatus { kOk, kNoName, kLookupFailed };
+
+  /// Loads entry `index`'s name into `name_buf`; `*len` excludes miniz's trailing NUL.
+  NameStatus load_name(mz_uint index, std::size_t* len) {
+    // Passing a zero-size buffer is miniz's documented way to query the length.
+    const mz_uint needed = mz_zip_reader_get_filename(&archive, index, nullptr, 0);
+    if (needed == 0U) {
+      return NameStatus::kNoName;
+    }
+    if (name_buf.size() < needed) {
+      name_buf.resize(needed);
+    }
+    const mz_uint written =
+        mz_zip_reader_get_filename(&archive, index, name_buf.data(), static_cast<mz_uint>(name_buf.size()));
+    if (written == 0U) {
+      return NameStatus::kLookupFailed;
+    }
+    std::size_t name_len = written;
+    if (name_buf[name_len - 1U] == '\0') {
+      --name_len;
+    }
+    *len = name_len;
+    return NameStatus::kOk;
+  }
+
   void close() noexcept {
     if (open) {
       // best-effort: the destructor never returns a failure
@@ -137,25 +162,17 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
       ctx.append(std::to_string(static_cast<int>(err)));
       return make_error(ErrorCodeForMiniz(err), "ZipReader::open: central-directory preflight failed", std::move(ctx));
     }
-    const mz_uint needed = mz_zip_reader_get_filename(&impl_->archive, i, nullptr, 0);
-    if (needed == 0U) {
+    std::size_t name_len = 0;
+    const Impl::NameStatus name_status = impl_->load_name(i, &name_len);
+    if (name_status == Impl::NameStatus::kNoName) {
       mz_zip_reader_end(&impl_->archive);
       return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: central-directory entry has no filename",
                         "context=zip_reader preflight");
     }
-    if (impl_->name_buf.size() < needed) {
-      impl_->name_buf.resize(needed);
-    }
-    const mz_uint written = mz_zip_reader_get_filename(&impl_->archive, i, impl_->name_buf.data(),
-                                                       static_cast<mz_uint>(impl_->name_buf.size()));
-    if (written == 0U) {
+    if (name_status == Impl::NameStatus::kLookupFailed) {
       mz_zip_reader_end(&impl_->archive);
       return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: central-directory filename lookup failed",
                         "context=zip_reader preflight");
-    }
-    std::size_t name_len = written;
-    if (name_len > 0U && impl_->name_buf[name_len - 1U] == '\0') {
-      --name_len;
     }
     if (std::memchr(impl_->name_buf.data(), '\0', name_len) != nullptr) {
       mz_zip_reader_end(&impl_->archive);
@@ -194,28 +211,9 @@ std::string_view ZipReader::entry_name(std::size_t index) const noexcept {
   if (index >= static_cast<std::size_t>(count)) {
     return {};
   }
-  const auto idx = static_cast<mz_uint>(index);
-
-  // Probe the filename length first. miniz returns the byte length
-  // including the NUL terminator; passing 0 as the buffer size is the
-  // documented way to query length without writing anything.
-  const mz_uint needed = mz_zip_reader_get_filename(&impl_->archive, idx, nullptr, 0);
-  if (needed == 0) {
+  std::size_t len = 0;
+  if (impl_->load_name(static_cast<mz_uint>(index), &len) != Impl::NameStatus::kOk) {
     return {};
-  }
-  if (impl_->name_buf.size() < needed) {
-    impl_->name_buf.resize(needed);
-  }
-  const mz_uint written = mz_zip_reader_get_filename(&impl_->archive, idx, impl_->name_buf.data(),
-                                                     static_cast<mz_uint>(impl_->name_buf.size()));
-  if (written == 0) {
-    return {};
-  }
-  // miniz includes the terminating NUL in the returned length; trim it for
-  // the string_view we hand back.
-  std::size_t len = written;
-  if (len > 0 && impl_->name_buf[len - 1] == '\0') {
-    --len;
   }
   return std::string_view{impl_->name_buf.data(), len};
 }

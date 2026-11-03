@@ -96,23 +96,23 @@ TEST(OoxmlContentTypes, CombinedParseMatchesStandaloneViewsForEveryWorkbookKind)
     auto combined = ooxml::parse_content_types(bytes);
     ASSERT_TRUE(static_cast<bool>(combined)) << c.content_type;
     auto kind = ooxml::verify_content_types(bytes);
-    auto overrides = ooxml::list_override_part_entries(bytes);
-    auto defaults = ooxml::list_default_content_types(bytes);
+    auto declared = ooxml::list_content_type_declarations(bytes);
     ASSERT_TRUE(static_cast<bool>(kind));
-    ASSERT_TRUE(static_cast<bool>(overrides));
-    ASSERT_TRUE(static_cast<bool>(defaults));
+    ASSERT_TRUE(static_cast<bool>(declared));
+    const auto& overrides = declared.value().overrides;
+    const auto& defaults = declared.value().defaults;
 
     EXPECT_EQ(combined.value().workbook_kind, c.kind);
     EXPECT_EQ(combined.value().workbook_kind, kind.value());
-    ASSERT_EQ(combined.value().overrides.size(), overrides.value().size());
-    ASSERT_EQ(combined.value().defaults.size(), defaults.value().size());
-    for (std::size_t i = 0; i < overrides.value().size(); ++i) {
-      EXPECT_EQ(combined.value().overrides[i].part_name, overrides.value()[i].part_name);
-      EXPECT_EQ(combined.value().overrides[i].content_type, overrides.value()[i].content_type);
+    ASSERT_EQ(combined.value().overrides.size(), overrides.size());
+    ASSERT_EQ(combined.value().defaults.size(), defaults.size());
+    for (std::size_t i = 0; i < overrides.size(); ++i) {
+      EXPECT_EQ(combined.value().overrides[i].part_name, overrides[i].part_name);
+      EXPECT_EQ(combined.value().overrides[i].content_type, overrides[i].content_type);
     }
-    for (std::size_t i = 0; i < defaults.value().size(); ++i) {
-      EXPECT_EQ(combined.value().defaults[i].extension, defaults.value()[i].extension);
-      EXPECT_EQ(combined.value().defaults[i].content_type, defaults.value()[i].content_type);
+    for (std::size_t i = 0; i < defaults.size(); ++i) {
+      EXPECT_EQ(combined.value().defaults[i].extension, defaults[i].extension);
+      EXPECT_EQ(combined.value().defaults[i].content_type, defaults[i].content_type);
     }
   }
 }
@@ -204,14 +204,12 @@ TEST(OoxmlContentTypes, StandaloneListsAcceptDeclarationsWithoutWorkbookOverride
   const auto bytes = ContentTypesBytes(
       "<Types><Default Extension=\"XML\" ContentType=\"application/xml\"/>"
       "<Override PartName=\"/xl/extra.xml\" ContentType=\"application/extra\"/></Types>");
-  auto overrides = ooxml::list_override_part_entries(bytes);
-  auto defaults = ooxml::list_default_content_types(bytes);
-  ASSERT_TRUE(overrides);
-  ASSERT_TRUE(defaults);
-  ASSERT_EQ(overrides.value().size(), 1U);
-  EXPECT_EQ(overrides.value()[0].part_name, "xl/extra.xml");
-  ASSERT_EQ(defaults.value().size(), 1U);
-  EXPECT_EQ(defaults.value()[0].extension, "xml");
+  auto declared = ooxml::list_content_type_declarations(bytes);
+  ASSERT_TRUE(declared);
+  ASSERT_EQ(declared.value().overrides.size(), 1U);
+  EXPECT_EQ(declared.value().overrides[0].part_name, "xl/extra.xml");
+  ASSERT_EQ(declared.value().defaults.size(), 1U);
+  EXPECT_EQ(declared.value().defaults[0].extension, "xml");
 }
 
 TEST(OoxmlReader, RoundTripsSingleSheetName) {

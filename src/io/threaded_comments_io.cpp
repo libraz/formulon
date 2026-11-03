@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "io/cell_parser.h"
+#include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
@@ -24,7 +25,6 @@ namespace formulon::io {
 namespace {
 
 constexpr std::string_view kThreadedNs = "http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments";
-constexpr std::string_view kMainNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 constexpr std::string_view kStubAuthorPrefix = "tc=";
 
 void AppendRootOpen(std::string& out, std::string_view root) {
@@ -32,7 +32,7 @@ void AppendRootOpen(std::string& out, std::string_view root) {
   out.push_back('<');
   out.append(root);
   append_xml_attr(out, "xmlns", kThreadedNs);
-  append_xml_attr(out, "xmlns:x", kMainNs);
+  append_xml_attr(out, "xmlns:x", kNsSpreadsheetMl);
   out.append(">\n");
 }
 

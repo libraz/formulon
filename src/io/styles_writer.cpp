@@ -10,6 +10,7 @@
 
 #include "color_resolve.h"
 #include "io/color_spec_xml.h"
+#include "io/ooxml_defs.h"
 #include "io/styles_vocab.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -22,7 +23,6 @@ namespace {
 
 // The XML declaration comes from `xml_utils.h`, which every part writer
 // shares so the prologue stays byte-identical across the package.
-constexpr std::string_view kXmlNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
 void AppendArgb(std::string& out, std::uint32_t argb) {
   char buf[12];
@@ -683,7 +683,7 @@ std::string write_styles(const StylesTable& table) {
   out.reserve(1024);
   out.append(kXmlDecl);
   out.append("<styleSheet xmlns=\"");
-  out.append(kXmlNs);
+  out.append(kNsSpreadsheetMl);
   out.append("\"");
   out.append(table.root_extra_attrs);
   out.append(">\n");

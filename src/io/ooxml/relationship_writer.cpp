@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 
+#include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 
@@ -35,6 +36,16 @@ std::string TargetRelativeToWorksheet(std::string_view package_path) {
   out.assign("../../");
   out.append(package_path);
   return out;
+}
+
+void BeginRelationships(std::string& out) {
+  out.append("<Relationships xmlns=\"");
+  out.append(kNsPackageRelationships);
+  out.append("\">\n");
+}
+
+void EndRelationships(std::string& out) {
+  out.append("</Relationships>\n");
 }
 
 void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path,

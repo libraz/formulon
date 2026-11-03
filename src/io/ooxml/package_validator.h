@@ -71,22 +71,16 @@ Expected<ContentTypesInfo, Error> parse_content_types(const std::vector<std::uin
 Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes,
                                                    ReadDiagnostics* diagnostics = nullptr);
 
-/// Lists every part name advertised by `[Content_Types].xml`'s
-/// `<Override>` elements together with its content type. `<Default>`
-/// entries are ignored: they describe extensions rather than specific
-/// parts, and the passthrough flow only carries Override-registered
-/// parts.
-Expected<std::vector<OverrideEntry>, Error> list_override_part_entries(const std::vector<std::uint8_t>& ct_bytes);
-
-/// Lists every `<Default>` entry declared in `[Content_Types].xml`,
-/// pairing each file extension with its content type. Excel registers
-/// binary and media parts (vbaProject.bin, images, VML, printer
-/// settings) by extension here rather than through per-part
-/// `<Override>` elements. The reader captures these so the writer can
-/// re-emit the `<Default>` registration for any Default-typed part it
-/// round-trips through passthrough. Extensions are lower-cased so
-/// comparison against archive entry suffixes is case-insensitive.
-Expected<std::vector<DefaultContentType>, Error> list_default_content_types(const std::vector<std::uint8_t>& ct_bytes);
+/// Every `<Override>` part name (leading slash stripped) with its content type,
+/// and every `<Default>` extension (lower-cased, so comparison against archive
+/// entry suffixes is case-insensitive) with its content type, from one parse of
+/// `[Content_Types].xml`. Excel registers binary and media parts by extension
+/// through `<Default>`; the reader captures these so the writer can re-emit them.
+struct ContentTypeDeclarations {
+  std::vector<OverrideEntry> overrides;
+  std::vector<DefaultContentType> defaults;
+};
+Expected<ContentTypeDeclarations, Error> list_content_type_declarations(const std::vector<std::uint8_t>& ct_bytes);
 
 /// Returns the part path the package-level rels file points at for
 /// `OfficeDocument`. The OOXML spec allows arbitrary placement (Excel
@@ -131,11 +125,6 @@ std::string rels_path_for_part(std::string_view part_path);
 /// Returns the Office relationship id from nodes that may spell it as
 /// either `r:id` or bare `id`.
 std::string relationship_ref_id(const pugi::xml_node& node);
-
-/// Lowercases an ASCII part extension. `[Content_Types].xml` matches
-/// `Default Extension=` case-insensitively, so both the reader and the
-/// writer normalise before comparing.
-std::string lowercase_extension(std::string_view extension);
 
 /// Returns the lowercased extension of a part path, without the dot.
 /// Empty when the path has no extension, ends in a dot, or the only dot

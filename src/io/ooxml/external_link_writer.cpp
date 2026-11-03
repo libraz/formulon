@@ -285,7 +285,7 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
   std::string out;
   out.reserve(384);
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  BeginRelationships(out);
   // Absolute path first, the order Excel writes.
   if (!rec.absolute_target.empty()) {
     AppendRelationship(out, AbsoluteRelId(rec), kRelExternalLinkPath, rec.absolute_target, /*target_external=*/true,
@@ -294,7 +294,7 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
   if (!rec.target.empty()) {
     AppendRelationship(out, TargetRelId(rec), type, rec.target, rec.target_external, /*escape_target=*/true);
   }
-  out.append("</Relationships>\n");
+  EndRelationships(out);
   return out;
 }
 

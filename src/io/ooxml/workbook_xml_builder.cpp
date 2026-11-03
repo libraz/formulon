@@ -346,7 +346,7 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
   std::string out;
   out.reserve(384);
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  BeginRelationships(out);
   AppendRelationship(out, 1, kRelOfficeDocument, workbook_target);
   std::uint32_t next_rid = 2;
   // docProps parts ride the passthrough path but need package-level rels or
@@ -374,7 +374,7 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
     }
     AppendRelationship(out, next_rid++, r.type, r.target, r.target_external, /*escape_target=*/true);
   }
-  out.append("</Relationships>\n");
+  EndRelationships(out);
   return out;
 }
 
@@ -644,7 +644,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   std::string out;
   out.reserve(256 + sheet_count * 192 + plan.pivot_caches.size() * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  BeginRelationships(out);
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const Sheet& sheet = wb.sheet(i);
     if (sheet.is_opaque_ooxml_sheet()) {
@@ -745,7 +745,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
     AppendRelationship(out, next_rid++, std::string_view(r.type), target, r.target_external,
                        /*escape_target=*/true);
   }
-  out.append("</Relationships>\n");
+  EndRelationships(out);
   return out;
 }
 

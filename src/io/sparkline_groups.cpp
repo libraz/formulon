@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "io/color_spec_xml.h"
+#include "io/ooxml_defs.h"
 #include "io/sqref_text.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
@@ -15,8 +16,6 @@ namespace formulon::io {
 namespace {
 
 constexpr const char* kSparklineUri = "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}";
-constexpr const char* kNsX14 = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
-constexpr const char* kNsXm = "http://schemas.microsoft.com/office/excel/2006/main";
 constexpr const char* kNsXr2 = "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2";
 constexpr std::size_t kMaxItems = 1U << 16;
 
@@ -341,9 +340,9 @@ pugi::xml_node ensure_groups_list(pugi::xml_document& doc) {
   }
   pugi::xml_node ext = root.append_child("ext");
   ext.append_attribute("uri").set_value(kSparklineUri);
-  ext.append_attribute("xmlns:x14").set_value(kNsX14);
+  ext.append_attribute("xmlns:x14").set_value(kNsX14.data());
   pugi::xml_node list = ext.append_child("x14:sparklineGroups");
-  list.append_attribute("xmlns:xm").set_value(kNsXm);
+  list.append_attribute("xmlns:xm").set_value(kNsExcelMain.data());
   return list;
 }
 

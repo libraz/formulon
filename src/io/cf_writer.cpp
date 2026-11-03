@@ -15,6 +15,7 @@
 #include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/ooxml/external_link_writer.h"
+#include "io/ooxml_defs.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -189,8 +190,6 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i, const parser::Ext
 /// counterpart, and the two namespaces the extension content lives in.
 /// All three are fixed constants Excel matches literally.
 constexpr std::string_view kX14CfRuleExtUri = "{B025F937-C7B1-47D3-B67F-A62EFF666E3E}";
-constexpr std::string_view kX14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
-constexpr std::string_view kXmNs = "http://schemas.microsoft.com/office/excel/2006/main";
 
 /// The axis colour a data bar has when the x14 extension says nothing —
 /// mirrors `DataBarSpec::axis_color`'s in-class initializer.
@@ -243,7 +242,7 @@ void AppendRuleExtLst(std::string& out, const cf::CFRule& r) {
   std::string link("<ext uri=\"");
   link.append(kX14CfRuleExtUri);
   link.append("\" xmlns:x14=\"");
-  link.append(kX14Ns);
+  link.append(kNsX14);
   link.append("\"><x14:id>");
   AppendXmlEscaped(link, r.id);
   link.append("</x14:id></ext>");
@@ -380,7 +379,7 @@ void AppendX14IconSet(std::string& out, const cf::IconSetSpec& i, const parser::
 void AppendX14CfRuleEntry(std::string& out, const cf::CFRule& r, const std::vector<cf::CFCellRange>& sqref,
                           const parser::ExternalBookIndexer* indexer) {
   out.append("<x14:conditionalFormatting xmlns:xm=\"");
-  out.append(kXmNs);
+  out.append(kNsExcelMain);
   const bool icon_set = r.icon_set.has_value() && !r.icon_set->custom_icons.empty();
   out.append(icon_set ? "\"><x14:cfRule type=\"iconSet\" priority=\"" : "\"><x14:cfRule type=\"dataBar\" id=\"");
   if (icon_set) {

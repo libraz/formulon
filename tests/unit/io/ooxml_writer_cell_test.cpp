@@ -1,6 +1,6 @@
 //
 // Unit tests for the OOXML cell/row/sheetData builder. These exercise the
-// pure helper surface (`EncodeA1`, `BuildSheetDataXml`) directly and pin
+// pure helper surface (`EncodeA1`, `AppendSheetDataXml`) directly and pin
 // the substring-level shape of the emitted markup. Higher-level integration
 // of the builder with the zip orchestration is covered by
 // tests/integration/ooxml_minimal_writer_test.cpp.
@@ -23,6 +23,13 @@
 namespace formulon {
 namespace io {
 namespace {
+
+std::string SheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
+                         std::uint32_t dynamic_array_cm_index = 0U) {
+  std::string out;
+  AppendSheetDataXml(out, sheet, shared_strings, dynamic_array_cm_index);
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // EncodeA1
@@ -53,7 +60,7 @@ TEST(EncodeA1, RejectsColumnOutsideExcelGrid) {
 }
 
 // ---------------------------------------------------------------------------
-// BuildSheetDataXml: scalar cell shapes
+// AppendSheetDataXml: scalar cell shapes
 // ---------------------------------------------------------------------------
 
 // An empty sheet collapses to the self-closing form. Documented choice;
@@ -61,20 +68,20 @@ TEST(EncodeA1, RejectsColumnOutsideExcelGrid) {
 // would be a deliberate, intentional change.
 TEST(BuildSheetDataXml, EmptySheet) {
   Sheet s("Sheet1");
-  EXPECT_EQ(BuildSheetDataXml(s), "<sheetData/>");
+  EXPECT_EQ(SheetDataXml(s), "<sheetData/>");
 }
 
 TEST(BuildSheetDataXml, NumberCell) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(42.5));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<c r=\"A1\"><v>42.5</v></c>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, IntegerNumberCell) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(42.0));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   // %.17g elides the trailing ".0" for whole-number doubles, so the wire
   // form is "42" not "42.0".
   EXPECT_NE(xml.find("<v>42</v>"), std::string::npos) << xml;
@@ -84,21 +91,21 @@ TEST(BuildSheetDataXml, IntegerNumberCell) {
 TEST(BuildSheetDataXml, BoolTrueCell) {
   Sheet s("Sheet1");
   s.set_cell_value(1U, 1U, Value::boolean(true));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<c r=\"B2\" t=\"b\"><v>1</v></c>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, BoolFalseCell) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::boolean(false));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<c r=\"A1\" t=\"b\"><v>0</v></c>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, TextCell) {
   Sheet s("Sheet1");
   s.set_cell_value(2U, 2U, Value::text("hello"));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<c r=\"C3\" t=\"inlineStr\"><is><t xml:space=\"preserve\">hello</t></is></c>"), std::string::npos)
       << xml;
 }
@@ -110,21 +117,21 @@ TEST(BuildSheetDataXml, TextCell) {
 TEST(BuildSheetDataXml, TextCellPreservesWhitespace) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::text(" 100"));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<t xml:space=\"preserve\"> 100</t>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, WhitespaceOnlyTextCellPreservesBody) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::text("   "));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<t xml:space=\"preserve\">   </t>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, EscapedText) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::text("a&b<c>"));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("a&amp;b&lt;c&gt;"), std::string::npos) << xml;
 }
 
@@ -132,14 +139,14 @@ TEST(BuildSheetDataXml, UnicodeText) {
   Sheet s("Sheet1");
   // "日本" in UTF-8: E6 97 A5 E6 9C AC.
   s.set_cell_value(0U, 0U, Value::text("\xE6\x97\xA5\xE6\x9C\xAC"));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("\xE6\x97\xA5\xE6\x9C\xAC"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, ErrorCell) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::error(ErrorCode::Div0));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<c r=\"A1\" t=\"e\"><v>#DIV/0!</v></c>"), std::string::npos) << xml;
 }
 
@@ -147,7 +154,7 @@ TEST(BuildSheetDataXml, BlankCellOmitted) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::blank());
   // The cell exists in storage but holds Blank; no <c> should be emitted.
-  EXPECT_EQ(BuildSheetDataXml(s), "<sheetData/>");
+  EXPECT_EQ(SheetDataXml(s), "<sheetData/>");
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +164,7 @@ TEST(BuildSheetDataXml, BlankCellOmitted) {
 TEST(BuildSheetDataXml, NaNDowngradesToNum) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(std::numeric_limits<double>::quiet_NaN()));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("#NUM!"), std::string::npos) << xml;
 }
@@ -165,7 +172,7 @@ TEST(BuildSheetDataXml, NaNDowngradesToNum) {
 TEST(BuildSheetDataXml, InfDowngradesToNum) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(std::numeric_limits<double>::infinity()));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("#NUM!"), std::string::npos) << xml;
 }
@@ -178,7 +185,7 @@ TEST(BuildSheetDataXml, StyledNaNDowngradesToNum) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(std::numeric_limits<double>::quiet_NaN()));
   s.set_cell_xf_index(0U, 0U, 7U);
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("#NUM!"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("nan"), std::string::npos) << xml;
@@ -189,7 +196,7 @@ TEST(BuildSheetDataXml, StyledInfDowngradesToNum) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(-std::numeric_limits<double>::infinity()));
   s.set_cell_xf_index(0U, 0U, 4U);
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("#NUM!"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("inf"), std::string::npos) << xml;
@@ -205,7 +212,7 @@ TEST(BuildSheetDataXml, ControlCharacterEscapedInText) {
                   "ab\x01"
                   "cd\x0B"
                   "ef");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_EQ(xml.find('\x01'), std::string::npos) << xml;
   EXPECT_EQ(xml.find('\x0B'), std::string::npos) << xml;
   EXPECT_NE(xml.find("ab_x0001_cd_x000B_ef"), std::string::npos) << xml;
@@ -219,7 +226,7 @@ TEST(BuildSheetDataXml, ControlCharacterEscapedInText) {
 TEST(BuildSheetDataXml, NegZeroNormalized) {
   Sheet s("Sheet1");
   s.set_cell_value(0U, 0U, Value::number(-0.0));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<v>0</v>"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("<v>-0</v>"), std::string::npos) << xml;
 }
@@ -234,7 +241,7 @@ TEST(BuildSheetDataXml, RowsSortedAscending) {
   s.set_cell_value(4U, 0U, Value::number(50.0));
   s.set_cell_value(0U, 0U, Value::number(10.0));
   s.set_cell_value(2U, 0U, Value::number(30.0));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
 
   const std::size_t r1 = xml.find("r=\"1\"");
   const std::size_t r3 = xml.find("r=\"3\"");
@@ -253,7 +260,7 @@ TEST(BuildSheetDataXml, RowsSortedAscending) {
 TEST(BuildSheetDataXml, FormulaCell) {
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=SUM(A1:B2)");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   // The leading '=' must be stripped; the formula body follows. The Sheet
   // API only exposes formula cells with blank cached_value, so the
   // <v>-shape variant is covered by the spill-anchor tests below (where
@@ -264,7 +271,7 @@ TEST(BuildSheetDataXml, FormulaCell) {
 TEST(BuildSheetDataXml, FormulaCellBlankCachedValueOmitsV) {
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=1+2");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<f>1+2</f>"), std::string::npos) << xml;
   // The cell tag must NOT contain <v> when cached_value is blank.
   const std::size_t cell_start = xml.find("<c r=\"A1\"");
@@ -285,7 +292,7 @@ TEST(BuildSheetDataXml, FormulaCellTextResultPreservesWhitespace) {
   s.set_cell_formula(0U, 0U, "=A2");
   std::vector<Value> cells = {Value::text(" abc ")};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 1U, std::move(cells)));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<v xml:space=\"preserve\"> abc </v>"), std::string::npos) << xml;
 }
 
@@ -295,7 +302,7 @@ TEST(BuildSheetDataXml, FormulaCellSpillRefStoresAsAnchorarrayCall) {
   // formula bar shows -- see eval/dynamic_array/anchor.h.
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=SUM(A1#)");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<f>SUM(_xlfn.ANCHORARRAY(A1))</f>"), std::string::npos) << xml;
 }
 
@@ -303,7 +310,7 @@ TEST(BuildSheetDataXml, FormulaCellWrittenAtStoresAsSingleCall) {
   // Excel stores a written `@` as a call to `_xlfn.SINGLE`.
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=@A2+1");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<f>_xlfn.SINGLE(A2)+1</f>"), std::string::npos) << xml;
 }
 
@@ -313,7 +320,7 @@ TEST(BuildSheetDataXml, WrittenParenthesesAreStoredAsWritten) {
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=(A2)+1");
   s.set_cell_formula(1U, 0U, "=(SEQUENCE(2))+1");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<f>(A2)+1</f>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<f>(_xlfn.SEQUENCE(2))+1</f>"), std::string::npos) << xml;
 }
@@ -324,7 +331,7 @@ TEST(BuildSheetDataXml, FormulaCellLetParameterPrefixedCaseInsensitively) {
   // the `_xlpm.` storage prefix, not be written as a free name.
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=LET(x,1,X+1)");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<f>_xlfn.LET(_xlpm.x,1,_xlpm.X+1)</f>"), std::string::npos) << xml;
 }
 
@@ -332,7 +339,7 @@ TEST(BuildSheetDataXml, FormulaXmlEscaped) {
   Sheet s("Sheet1");
   // Both '&' and '<' must be XML-escaped inside <f>.
   s.set_cell_formula(0U, 0U, "=SUM(A1) & \"<x>\"");
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("&amp;"), std::string::npos) << xml;
   EXPECT_NE(xml.find("&lt;x&gt;"), std::string::npos) << xml;
 }
@@ -347,7 +354,7 @@ TEST(BuildSheetDataXml, SpillAnchorHasArrayType) {
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   // Anchor at A1 carries t="array" plus a ref covering the spill footprint
   // (A1:A3). Modern Excel needs the ref to recognise the dynamic array and
   // re-spill on open; a bare t="array" reads back as a legacy single-cell
@@ -367,7 +374,7 @@ TEST(BuildSheetDataXml, SpillAnchorOmitsCmWithNoResolvedMetadataIndex) {
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_EQ(xml.find("cm="), std::string::npos) << xml;
 }
 
@@ -381,7 +388,7 @@ TEST(BuildSheetDataXml, SpillAnchorCarriesCmWhenAMetadataIndexIsResolved) {
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
-  const std::string xml = BuildSheetDataXml(s, /*shared_strings=*/nullptr, /*dynamic_array_cm_index=*/1U);
+  const std::string xml = SheetDataXml(s, /*shared_strings=*/nullptr, /*dynamic_array_cm_index=*/1U);
   EXPECT_NE(xml.find("<c r=\"A1\" cm=\"1\""), std::string::npos) << xml;
 }
 
@@ -395,7 +402,7 @@ TEST(BuildSheetDataXml, SpillPhantomsCarryTheirValues) {
   std::vector<Value> cells = {Value::number(1.0), Value::text("x"), Value::boolean(true), Value::number(4.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 2U, 2U, std::move(cells)));
 
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<c r=\"A1\"><f t=\"array\" ref=\"A1:B2\">"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<c r=\"B1\" t=\"str\"><v xml:space=\"preserve\">x</v></c>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<c r=\"A2\" t=\"b\"><v>1</v></c>"), std::string::npos) << xml;
@@ -412,7 +419,7 @@ TEST(BuildSheetDataXml, SpillCollisionStoresTheLegacyFallback) {
 
   // The anchor's cached value is now #SPILL!, which a cell value cannot
   // hold; Excel stores it as #VALUE! (see `io::stored_cell_error`).
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   const std::size_t a1_start = xml.find("<c r=\"A1\"");
   ASSERT_NE(a1_start, std::string::npos);
   const std::size_t a1_end = xml.find("</c>", a1_start);
@@ -435,7 +442,7 @@ TEST(BuildSheetDataXml, LegacyErrorStillEmitsCachedValue) {
   Sheet s("Sheet1");
   s.set_cell_formula(0U, 0U, "=1/0");
   s.set_cell_cached_value(0U, 0U, Value::error(ErrorCode::Div0));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("#DIV/0!"), std::string::npos) << xml;
 }
@@ -452,7 +459,7 @@ TEST(BuildSheetDataXml, DynamicArrayFormulaKeepsItsFormWithoutSpilling) {
   s.set_cell_dynamic_array(2U, 0U, true);
   // Unmarked, a loaded implicit-intersection formula stays plain.
   s.set_cell_formula(3U, 0U, "=SUM(A5:A6*2)");
-  const std::string xml = BuildSheetDataXml(s, nullptr, /*dynamic_array_cm_index=*/1U);
+  const std::string xml = SheetDataXml(s, nullptr, /*dynamic_array_cm_index=*/1U);
   EXPECT_NE(xml.find("<c r=\"A1\" cm=\"1\"><f t=\"array\" ref=\"A1\">SUM(A5:A6*2)</f>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<c r=\"A2\"><f>A5+1</f>"), std::string::npos) << xml;
   // MyFn is neither built in nor defined here, so Excel recalculates it always.
@@ -461,7 +468,7 @@ TEST(BuildSheetDataXml, DynamicArrayFormulaKeepsItsFormWithoutSpilling) {
       << xml;
   EXPECT_NE(xml.find("<c r=\"A4\"><f>SUM(A5:A6*2)</f>"), std::string::npos) << xml;
   // Without an XLDAPR entry to name, the plain form stays.
-  EXPECT_NE(BuildSheetDataXml(s).find("<c r=\"A1\"><f>SUM(A5:A6*2)</f>"), std::string::npos);
+  EXPECT_NE(SheetDataXml(s).find("<c r=\"A1\"><f>SUM(A5:A6*2)</f>"), std::string::npos);
 }
 
 TEST(BuildSheetDataXml, NewerErrorsAreStoredAsTheirLegacyFallback) {
@@ -473,7 +480,7 @@ TEST(BuildSheetDataXml, NewerErrorsAreStoredAsTheirLegacyFallback) {
   s.set_cell_formula(1U, 0U, "=A1:A2");
   s.set_cell_cached_value(1U, 0U, Value::error(ErrorCode::Spill));
   s.set_cell_value(2U, 0U, Value::error(ErrorCode::GettingData));
-  const std::string xml = BuildSheetDataXml(s);
+  const std::string xml = SheetDataXml(s);
   EXPECT_NE(xml.find("<c r=\"A1\" t=\"e\"><v>#VALUE!</v></c>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<c r=\"A2\" t=\"e\"><f>A1:A2</f><v>#VALUE!</v></c>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<c r=\"A3\" t=\"e\"><v>#N/A</v></c>"), std::string::npos) << xml;
@@ -511,8 +518,8 @@ TEST(BuildSheetDataXml, StyledLiteralCellDiffersFromUnstyledOnlyByTheStyleAttrib
       styled.set_cell_phonetic(0U, 0U, c.phonetic);
     }
 
-    const std::string plain_xml = BuildSheetDataXml(plain);
-    const std::string styled_xml = BuildSheetDataXml(styled);
+    const std::string plain_xml = SheetDataXml(plain);
+    const std::string styled_xml = SheetDataXml(styled);
     const std::size_t at = plain_xml.find("<c r=\"A1\"");
     ASSERT_NE(at, std::string::npos) << c.label << ": " << plain_xml;
     std::string expected = plain_xml;

@@ -14,6 +14,7 @@
 #ifndef FORMULON_IO_XSD_INT_H_
 #define FORMULON_IO_XSD_INT_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <string_view>
@@ -75,6 +76,30 @@ inline std::uint8_t parse_outline_level(const char* text) noexcept {
     return 255U;
   }
   return static_cast<std::uint8_t>(n);
+}
+
+/// `string_view` form of `parse_outline_level(const char*)` with the same
+/// result for every input: optional leading whitespace and sign, then digits.
+inline std::uint8_t parse_outline_level(std::string_view text) noexcept {
+  std::size_t i = 0;
+  while (i < text.size() && (text[i] == ' ' || (text[i] >= '\t' && text[i] <= '\r'))) {
+    ++i;
+  }
+  bool negative = false;
+  if (i < text.size() && (text[i] == '+' || text[i] == '-')) {
+    negative = text[i] == '-';
+    ++i;
+  }
+  std::uint32_t n = 0;
+  for (; i < text.size() && text[i] >= '0' && text[i] <= '9'; ++i) {
+    if (n < 255U) {
+      n = (n * 10U) + static_cast<std::uint32_t>(text[i] - '0');
+    }
+  }
+  if (negative || n == 0U) {
+    return 0U;
+  }
+  return n >= 255U ? 255U : static_cast<std::uint8_t>(n);
 }
 
 }  // namespace io

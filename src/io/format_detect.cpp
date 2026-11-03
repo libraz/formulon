@@ -48,16 +48,14 @@ WorkbookFormat detect_workbook_format(ByteSpan bytes) {
   if (zip.has_entry("[Content_Types].xml")) {
     if (auto ct = zip.read_entry("[Content_Types].xml"); ct) {
       // Only parsed Override / Default declarations count, never stray text in the part.
-      if (auto overrides = ooxml::list_override_part_entries(ct.value()); overrides) {
-        for (const ooxml::OverrideEntry& entry : overrides.value()) {
+      if (auto declared = ooxml::list_content_type_declarations(ct.value()); declared) {
+        for (const ooxml::OverrideEntry& entry : declared.value().overrides) {
           if (is_xlsb_workbook_content_type(entry.content_type)) {
             return WorkbookFormat::Xlsb;
           }
         }
-      }
-      // An XLSB package may declare the workbook through the `bin` Default instead of an Override.
-      if (auto defaults = ooxml::list_default_content_types(ct.value()); defaults) {
-        for (const DefaultContentType& entry : defaults.value()) {
+        // An XLSB package may declare the workbook through the `bin` Default instead of an Override.
+        for (const DefaultContentType& entry : declared.value().defaults) {
           if (entry.extension == "bin" && is_xlsb_workbook_content_type(entry.content_type)) {
             return WorkbookFormat::Xlsb;
           }

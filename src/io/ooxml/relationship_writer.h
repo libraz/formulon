@@ -45,6 +45,12 @@ std::string TargetRelativeToWorksheet(std::string_view package_path);
 // Relationship / Override XML emitters
 // ---------------------------------------------------------------------------
 
+/// Appends the `<Relationships xmlns=...>` start tag plus its trailing newline.
+void BeginRelationships(std::string& out);
+
+/// Appends the `</Relationships>` end tag plus its trailing newline.
+void EndRelationships(std::string& out);
+
 /// Appends a single `<Override PartName="/<path>" ContentType="<ct>"/>`
 /// entry plus its trailing newline. Used by the package-level Content
 /// Types builder for the per-table / per-pivot / per-comments /

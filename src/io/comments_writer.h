@@ -46,9 +46,6 @@ std::string write_comments(const std::vector<CellComment>& comments,
 std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint32_t drawing_id,
                               std::string_view other_shapes = {});
 
-/// A VML drawing with no shapes (`write_vml_drawing({}, 1)`).
-std::string write_vml_drawing_stub();
-
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_COMMENTS_WRITER_H_

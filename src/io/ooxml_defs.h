@@ -1,6 +1,6 @@
 //
 // Shared OOXML schema constants used by the reader and writer.
-// Only the relationship type URIs that more than one reader / writer
+// Only the namespace and relationship type URIs that more than one reader / writer
 // (OOXML or XLSB) needs are hoisted here; content-type strings that are needed by exactly one side
 // (e.g. the `kCtWorkbook*` family the reader uses for kind detection,
 // or the writer-only `kCtPackageRels` / `kCtComments`) stay in the
@@ -24,6 +24,17 @@
 
 namespace formulon {
 namespace io {
+
+// XML namespace URIs shared by several readers / writers.
+
+inline constexpr std::string_view kNsSpreadsheetMl = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+inline constexpr std::string_view kNsOfficeRelationships =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+inline constexpr std::string_view kNsPackageRelationships =
+    "http://schemas.openxmlformats.org/package/2006/relationships";
+inline constexpr std::string_view kNsMarkupCompat = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+inline constexpr std::string_view kNsX14 = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+inline constexpr std::string_view kNsExcelMain = "http://schemas.microsoft.com/office/excel/2006/main";
 
 // Relationship type URIs used by Excel-produced packages. The values
 // are the canonical ECMA-376 strings; comparison is case-sensitive and

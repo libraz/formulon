@@ -17,6 +17,7 @@
 
 #include "io/cf_reader.h"
 #include "io/cf_writer.h"
+#include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 
@@ -44,7 +45,6 @@ bool RemoveMatchingChildren(pugi::xml_node parent, const char* name, Pred doomed
 /// conditional-formatting overlay, and the x14 namespace, both fixed
 /// constants Excel matches literally.
 constexpr const char* kWorksheetCfExtUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
-constexpr const char* kX14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 
 /// Collects every id already claimed by an `<x14:cfRule>` anywhere under
 /// `ext_lst`, at any nesting depth, so a rebuilt entry can be recognised
@@ -251,7 +251,7 @@ std::string merge_x14_cf_entries(const std::string& ext_lst_xml, const std::vect
     if (!formattings) {
       pugi::xml_node ext = ext_lst.append_child("ext");
       ext.append_attribute("uri") = kWorksheetCfExtUri;
-      ext.append_attribute("xmlns:x14") = kX14Ns;
+      ext.append_attribute("xmlns:x14") = kNsX14.data();
       formattings = ext.append_child("x14:conditionalFormattings");
     }
     formattings.append_copy(entry);

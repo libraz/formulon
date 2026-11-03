@@ -236,7 +236,7 @@ std::string_view EffectiveContentType(const Workbook& wb, const PassthroughPart&
     return {};
   }
   for (const DefaultContentType& def : wb.default_content_types()) {
-    if (ooxml::lowercase_extension(def.extension) == extension) {
+    if (strings::to_ascii_lower(def.extension) == extension) {
       return def.content_type;
     }
   }

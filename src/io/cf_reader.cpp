@@ -25,6 +25,7 @@
 #include "parser/formula_prefix.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
@@ -81,18 +82,10 @@ std::string_view StripAbsoluteMarkers(std::string_view ref, std::string& buf) {
 // lower-case column letter. Both halves of `ParseA1Range` therefore apply
 // one case rule.
 std::uint32_t DecodeColumnRun(std::string_view s) {
-  if (s.empty() || s.size() > 3) {
-    return 0;
-  }
+  std::size_t pos = 0;
   std::uint32_t col = 0;
-  for (char ch : s) {
-    if (ch < 'A' || ch > 'Z') {
-      return 0;
-    }
-    col = col * 26U + static_cast<std::uint32_t>(ch - 'A' + 1);
-    if (col > Sheet::kMaxCols) {
-      return 0;
-    }
+  if (!a1::parse_column_letters(s, &pos, &col) || pos != s.size() || col > Sheet::kMaxCols) {
+    return 0;
   }
   return col;
 }

@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 
+#include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 
@@ -11,7 +12,7 @@ namespace formulon::io::ooxml {
 
 namespace relationship_xml_detail {
 
-inline constexpr std::string_view kNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+inline constexpr std::string_view kNamespace = kNsPackageRelationships;
 
 inline bool matches(const pugi::xml_node& node, std::string_view local, bool allow_legacy) {
   if (node.type() != pugi::node_element) {

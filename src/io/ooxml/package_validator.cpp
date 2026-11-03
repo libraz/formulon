@@ -16,6 +16,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 
 namespace formulon {
@@ -23,18 +24,9 @@ namespace io {
 namespace ooxml {
 namespace {
 
-// Content types we expect to see referenced from `[Content_Types].xml`.
-// We only look up the workbook content type to verify the package is
-// well-formed and to discriminate between `.xlsx` / `.xlsm` / `.xltx` /
-// `.xltm` packages; the full content-type registry is built in a later
-// bundle (which will recognise the worksheet, styles, sharedStrings,
-// etc. content types as well).
-constexpr std::string_view kCtWorkbookXlsx =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
-constexpr std::string_view kCtWorkbookXlsm = "application/vnd.ms-excel.sheet.macroEnabled.main+xml";
-constexpr std::string_view kCtWorkbookXltx =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml";
-constexpr std::string_view kCtWorkbookXltm = "application/vnd.ms-excel.template.macroEnabled.main+xml";
+// The four workbook content types, spelled by `workbook_kind_content_type`.
+constexpr WorkbookKind kWorkbookKinds[] = {WorkbookKind::kXlsx, WorkbookKind::kXlsm, WorkbookKind::kXltx,
+                                           WorkbookKind::kXltm};
 
 /// Returns the matching `WorkbookKind` for `content_type`, or
 /// `std::nullopt` when the string does not match any of the four
@@ -46,17 +38,10 @@ struct DetectedKind {
   bool recognised;
 };
 DetectedKind DetectWorkbookKind(std::string_view content_type) {
-  if (content_type == kCtWorkbookXlsx) {
-    return {WorkbookKind::kXlsx, true};
-  }
-  if (content_type == kCtWorkbookXlsm) {
-    return {WorkbookKind::kXlsm, true};
-  }
-  if (content_type == kCtWorkbookXltx) {
-    return {WorkbookKind::kXltx, true};
-  }
-  if (content_type == kCtWorkbookXltm) {
-    return {WorkbookKind::kXltm, true};
+  for (const WorkbookKind kind : kWorkbookKinds) {
+    if (content_type == std::string_view(workbook_kind_content_type(kind))) {
+      return {kind, true};
+    }
   }
   return {WorkbookKind::kXlsx, false};
 }
@@ -65,8 +50,7 @@ DetectedKind DetectWorkbookKind(std::string_view content_type) {
 /// workbook variants. Used to gate "looks like a spreadsheet package"
 /// without committing to the kind discriminator yet.
 bool IsKnownWorkbookContentType(std::string_view content_type) {
-  return content_type == kCtWorkbookXlsx || content_type == kCtWorkbookXlsm || content_type == kCtWorkbookXltx ||
-         content_type == kCtWorkbookXltm;
+  return DetectWorkbookKind(content_type).recognised;
 }
 
 /// Parses `[Content_Types].xml` into `doc` and returns its `<Types>` root.
@@ -155,7 +139,7 @@ std::vector<DefaultContentType> ListDefaultContentTypesFromRoot(const pugi::xml_
     }
     // Lower case so lookups against archive entry suffixes stay
     // case-insensitive (OPC treats extensions case-insensitively).
-    out.push_back(DefaultContentType{lowercase_extension(extension), std::string(attr_str(node, "ContentType"))});
+    out.push_back(DefaultContentType{strings::to_ascii_lower(extension), std::string(attr_str(node, "ContentType"))});
   }
   return out;
 }
@@ -222,16 +206,10 @@ Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_
   return VerifyContentTypesRoot(root, diagnostics);
 }
 
-Expected<std::vector<OverrideEntry>, Error> list_override_part_entries(const std::vector<std::uint8_t>& ct_bytes) {
+Expected<ContentTypeDeclarations, Error> list_content_type_declarations(const std::vector<std::uint8_t>& ct_bytes) {
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
-  return ListOverridePartEntriesFromRoot(root);
-}
-
-Expected<std::vector<DefaultContentType>, Error> list_default_content_types(const std::vector<std::uint8_t>& ct_bytes) {
-  pugi::xml_document doc;
-  ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
-  return ListDefaultContentTypesFromRoot(root);
+  return ContentTypeDeclarations{ListOverridePartEntriesFromRoot(root), ListDefaultContentTypesFromRoot(root)};
 }
 
 Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, std::string_view target) {
@@ -363,23 +341,13 @@ std::string relationship_ref_id(const pugi::xml_node& node) {
   return rid;
 }
 
-std::string lowercase_extension(std::string_view extension) {
-  std::string out(extension);
-  for (char& c : out) {
-    if (c >= 'A' && c <= 'Z') {
-      c = static_cast<char>(c - 'A' + 'a');
-    }
-  }
-  return out;
-}
-
 std::string extension_of_part(std::string_view path) {
   const std::size_t slash = path.find_last_of('/');
   const std::size_t dot = path.find_last_of('.');
   if (dot == std::string_view::npos || dot == path.size() - 1U || (slash != std::string_view::npos && dot < slash)) {
     return {};
   }
-  return lowercase_extension(path.substr(dot + 1U));
+  return strings::to_ascii_lower(path.substr(dot + 1U));
 }
 
 }  // namespace ooxml

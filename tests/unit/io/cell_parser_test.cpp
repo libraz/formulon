@@ -275,7 +275,9 @@ TEST(CellParser, ExplicitZeroStyleMaterializesThroughDomAndSax) {
   ASSERT_NE(dom_cell, nullptr);
   EXPECT_EQ(dom_cell->xf_index, 0U);
   EXPECT_TRUE(dom_cell->has_explicit_xf);
-  EXPECT_NE(BuildSheetDataXml(dom_workbook.sheet(0)).find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
+  std::string dom_xml;
+  AppendSheetDataXml(dom_xml, dom_workbook.sheet(0));
+  EXPECT_NE(dom_xml.find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
 
   Workbook sax_workbook = Workbook::create();
   SheetReadContext sax_ctx;
@@ -286,7 +288,9 @@ TEST(CellParser, ExplicitZeroStyleMaterializesThroughDomAndSax) {
   ASSERT_NE(sax_cell, nullptr);
   EXPECT_EQ(sax_cell->xf_index, 0U);
   EXPECT_TRUE(sax_cell->has_explicit_xf);
-  EXPECT_NE(BuildSheetDataXml(sax_workbook.sheet(0)).find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
+  std::string sax_xml;
+  AppendSheetDataXml(sax_xml, sax_workbook.sheet(0));
+  EXPECT_NE(sax_xml.find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
 }
 
 TEST(CellParser, RejectsMissingRefAttribute) {

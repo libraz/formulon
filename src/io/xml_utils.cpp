@@ -24,6 +24,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -241,8 +242,7 @@ bool attr_bool(const pugi::xml_node& n, const char* name, bool def) {
   // "yes", garbage) maps to false — matches the lenient legacy
   // `parse_xml_bool_attr` lexicon.
   if (v[0] != '\0' && v[1] != '\0' && v[2] != '\0' && v[3] != '\0' && v[4] == '\0') {
-    const auto lower = [](char c) -> char { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c; };
-    if (lower(v[0]) == 't' && lower(v[1]) == 'r' && lower(v[2]) == 'u' && lower(v[3]) == 'e') {
+    if (strings::case_insensitive_eq(std::string_view(v, 4), "true")) {
       return true;
     }
   }
@@ -281,7 +281,7 @@ void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std
     const std::string_view name = attr.name();
     // The writer emits the declarations for the elements it generates;
     // re-emitting the source's copies would duplicate them.
-    if (name == "xmlns" || name.rfind("xmlns:", 0) == 0) {
+    if (name == "xmlns" || strings::starts_with(name, "xmlns:")) {
       continue;
     }
     bool is_known = false;
@@ -605,17 +605,11 @@ std::uint32_t parse_rgb_hex(std::string_view hex, std::uint32_t fallback) noexce
   }
   std::uint32_t out = 0;
   for (char c : hex) {
-    std::uint32_t digit = 0;
-    if (c >= '0' && c <= '9') {
-      digit = static_cast<std::uint32_t>(c - '0');
-    } else if (c >= 'a' && c <= 'f') {
-      digit = static_cast<std::uint32_t>(c - 'a' + 10);
-    } else if (c >= 'A' && c <= 'F') {
-      digit = static_cast<std::uint32_t>(c - 'A' + 10);
-    } else {
+    const int digit = strings::hex_digit_value(c);
+    if (digit < 0) {
       return fallback;
     }
-    out = (out << 4U) | digit;
+    out = (out << 4U) | static_cast<std::uint32_t>(digit);
   }
   if (hex.size() == 6) {
     out |= 0xFF000000U;

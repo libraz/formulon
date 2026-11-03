@@ -5,6 +5,9 @@
 #include <string>
 #include <string_view>
 
+#include "utils/strings.h"
+#include "utils/text_ops.h"
+
 namespace formulon {
 namespace io {
 namespace {
@@ -16,17 +19,11 @@ bool IsOoxmlEscape(std::string_view in, std::size_t pos, std::uint16_t* code) {
   std::uint16_t value = 0;
   for (std::size_t i = pos + 2U; i < pos + 6U; ++i) {
     const char c = in[i];
-    std::uint16_t digit = 0;
-    if (c >= '0' && c <= '9') {
-      digit = static_cast<std::uint16_t>(c - '0');
-    } else if (c >= 'A' && c <= 'F') {
-      digit = static_cast<std::uint16_t>(c - 'A' + 10);
-    } else if (c >= 'a' && c <= 'f') {
-      digit = static_cast<std::uint16_t>(c - 'a' + 10);
-    } else {
+    const int digit = strings::hex_digit_value(c);
+    if (digit < 0) {
       return false;
     }
-    value = static_cast<std::uint16_t>((value << 4U) | digit);
+    value = static_cast<std::uint16_t>((value << 4U) | static_cast<std::uint16_t>(digit));
   }
   *code = value;
   return true;
@@ -38,24 +35,6 @@ void AppendOoxmlEscape(std::string& out, unsigned char byte) {
   out.push_back(kHex[(byte >> 4U) & 0x0FU]);
   out.push_back(kHex[byte & 0x0FU]);
   out.push_back('_');
-}
-
-void AppendUtf8(std::string& out, std::uint32_t code_point) {
-  if (code_point <= 0x7FU) {
-    out.push_back(static_cast<char>(code_point));
-  } else if (code_point <= 0x7FFU) {
-    out.push_back(static_cast<char>(0xC0U | (code_point >> 6U)));
-    out.push_back(static_cast<char>(0x80U | (code_point & 0x3FU)));
-  } else if (code_point <= 0xFFFFU) {
-    out.push_back(static_cast<char>(0xE0U | (code_point >> 12U)));
-    out.push_back(static_cast<char>(0x80U | ((code_point >> 6U) & 0x3FU)));
-    out.push_back(static_cast<char>(0x80U | (code_point & 0x3FU)));
-  } else {
-    out.push_back(static_cast<char>(0xF0U | (code_point >> 18U)));
-    out.push_back(static_cast<char>(0x80U | ((code_point >> 12U) & 0x3FU)));
-    out.push_back(static_cast<char>(0x80U | ((code_point >> 6U) & 0x3FU)));
-    out.push_back(static_cast<char>(0x80U | (code_point & 0x3FU)));
-  }
 }
 
 std::size_t ValidUtf8SequenceLength(std::string_view in, std::size_t pos) {
@@ -230,13 +209,13 @@ void AppendOoxmlTextUnescaped(std::string& out, std::string_view in) {
       std::uint16_t low = 0;
       if (IsOoxmlEscape(in, i, &low) && low >= 0xDC00U && low <= 0xDFFFU) {
         i += 7U;
-        AppendUtf8(out, 0x10000U + ((static_cast<std::uint32_t>(code) - 0xD800U) << 10U) +
-                            (static_cast<std::uint32_t>(low) - 0xDC00U));
+        out.append(encode_utf8_codepoint(0x10000U + ((static_cast<std::uint32_t>(code) - 0xD800U) << 10U) +
+                                         (static_cast<std::uint32_t>(low) - 0xDC00U)));
         continue;
       }
     }
     // An unpaired surrogate has no UTF-8 form; the writer stores U+FFFD for it too.
-    AppendUtf8(out, code >= 0xD800U && code <= 0xDFFFU ? 0xFFFDU : code);
+    out.append(encode_utf8_codepoint(code >= 0xD800U && code <= 0xDFFFU ? 0xFFFDU : code));
   }
 }
 

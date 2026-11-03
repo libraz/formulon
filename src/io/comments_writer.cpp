@@ -291,8 +291,4 @@ std::string write_vml_drawing(const std::vector<CommentShape>& shapes, std::uint
   return out;
 }
 
-std::string write_vml_drawing_stub() {
-  return write_vml_drawing({}, 1U);
-}
-
 }  // namespace formulon::io

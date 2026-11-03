@@ -619,25 +619,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
   const std::string cols_xml = BuildColsXml(sheet.layout());
-  const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
-  // Conditional-format blocks live between <sheetData> and <tableParts>
-  // in ECMA-376 document order. Empty list => empty string, no
-  // wrapper.
-  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_count, indexer);
-  // Data-bar settings with no legacy attribute live in the worksheet
-  // `<extLst>`, which is emitted much further down; build them here so
-  // the CF model is read once.
-  const std::string ext_lst_xml = merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer);
-  const std::string merges_xml = BuildMergeCellsBlock(sheet);
-  const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer);
-  const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
   const SheetPrintSettings& print = sheet.print_settings();
   const WorksheetRawExtensions& raw_extensions = sheet.raw_extensions();
   const std::string page_setup_xml = PageSetupWithRelationshipId(print.page_setup_xml, printer_settings_rid);
   const std::string sheet_pr_xml = BuildNormalizedSheetPrXml(print.sheet_pr_xml);
   std::string out;
-  out.reserve(192U + sheet_view_xml.size() + sheet_format_xml.size() + cols_xml.size() + sheet_data.size() +
-              cf_xml.size() + merges_xml.size() + dv_xml.size() + hl_xml.size() + sheet_pr_xml.size() +
+  out.reserve(192U + sheet_view_xml.size() + sheet_format_xml.size() + cols_xml.size() + sheet_pr_xml.size() +
               print.page_margins_xml.size() + page_setup_xml.size() + sheet_tables.size() * 96);
   out.append(kXmlDecl);
   out.append(
@@ -683,7 +670,22 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   if (!cols_xml.empty()) {
     emit_line(cols_xml);
   }
-  emit_line(sheet_data);
+  // Built after the preceding parts and before the blocks below; external
+  // book numbering depends on that order.
+  out.append("  ");
+  AppendSheetDataXml(out, sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer);
+  out.push_back('\n');
+  // Conditional-format blocks live between <sheetData> and <tableParts>
+  // in ECMA-376 document order. Empty list => empty string, no
+  // wrapper.
+  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_count, indexer);
+  // Data-bar settings with no legacy attribute live in the worksheet
+  // `<extLst>`, which is emitted much further down; build them here so
+  // the CF model is read once.
+  const std::string ext_lst_xml = merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer);
+  const std::string merges_xml = BuildMergeCellsBlock(sheet);
+  const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer);
+  const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
   // <sheetProtection> sits between <sheetData> and <mergeCells> per
   // ECMA-376 document order. Helper returns "" when protection is
   // disabled, leaving no trailing whitespace in that case.
@@ -818,7 +820,7 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   std::string& out = res.xml;
   out.reserve(256 + (sheet_tables.size() + sheet_pivot_tables.size() + sheet.hyperlinks().size()) * 192);
   out.append(kXmlDecl);
-  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  BeginRelationships(out);
   std::uint32_t next_rid = 1;
   std::unordered_set<std::string> used_rids;
   // Preserve unmodelled relationship ids exactly: raw worksheet XML can
@@ -963,7 +965,7 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
         relationship.target_external ? relationship.target : TargetRelativeToWorksheet(relationship.target);
     add_rel(relationship.id, relationship.type, target, relationship.target_external, /*escape_target=*/true);
   }
-  out.append("</Relationships>\n");
+  EndRelationships(out);
   return res;
 }
 

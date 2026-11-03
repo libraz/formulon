@@ -48,6 +48,8 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
+#include "utils/strings.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace io {
@@ -530,41 +532,6 @@ void DecodeOoxmlTextIfPresent(std::string_view* text, std::string* decoded) {
   *text = std::string_view(*decoded);
 }
 
-/// Encodes a Unicode code point into UTF-8 bytes and appends them to
-/// `out`. Returns false when `cp` is outside the legal Unicode range
-/// (> 0x10FFFF) or falls inside the surrogate band — the caller leaves
-/// the original `&...;` text in place when this happens. The branchy
-/// shape mirrors the canonical UTF-8 encoder; an encoding-table fallback
-/// would not be cheaper at this size and would cost rodata.
-bool AppendUtf8(std::uint32_t cp, std::string* out) {
-  if (cp <= 0x7FU) {
-    out->push_back(static_cast<char>(cp));
-    return true;
-  }
-  if (cp <= 0x7FFU) {
-    out->push_back(static_cast<char>(0xC0U | (cp >> 6U)));
-    out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-    return true;
-  }
-  if (cp <= 0xFFFFU) {
-    if (cp >= 0xD800U && cp <= 0xDFFFU) {
-      return false;  // Surrogate halves are not legal in UTF-8.
-    }
-    out->push_back(static_cast<char>(0xE0U | (cp >> 12U)));
-    out->push_back(static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
-    out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-    return true;
-  }
-  if (cp <= 0x10FFFFU) {
-    out->push_back(static_cast<char>(0xF0U | (cp >> 18U)));
-    out->push_back(static_cast<char>(0x80U | ((cp >> 12U) & 0x3FU)));
-    out->push_back(static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
-    out->push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
-    return true;
-  }
-  return false;
-}
-
 /// Decodes the five predefined XML entity references (`&amp; &lt; &gt;
 /// &quot; &apos;`) plus decimal (`&#N;`) and hex (`&#xN;`) numeric
 /// character references into `out`. Unknown / malformed `&...;` forms
@@ -657,17 +624,12 @@ void DecodeXmlInto(std::string_view src, std::string* out, XmlNormalization norm
         ok = ent.size() > 2;
         for (std::size_t j = 2; j < ent.size() && ok; ++j) {
           const char d = ent[j];
-          std::uint32_t v = 0;
-          if (d >= '0' && d <= '9') {
-            v = static_cast<std::uint32_t>(d - '0');
-          } else if (d >= 'a' && d <= 'f') {
-            v = static_cast<std::uint32_t>(d - 'a' + 10);
-          } else if (d >= 'A' && d <= 'F') {
-            v = static_cast<std::uint32_t>(d - 'A' + 10);
-          } else {
+          const int digit = strings::hex_digit_value(d);
+          if (digit < 0) {
             ok = false;
             break;
           }
+          const std::uint32_t v = static_cast<std::uint32_t>(digit);
           if (cp > (0x10FFFFU >> 4U) || (cp == (0x10FFFFU >> 4U) && v > (0x10FFFFU & 0xFU))) {
             ok = false;
             break;
@@ -691,7 +653,10 @@ void DecodeXmlInto(std::string_view src, std::string* out, XmlNormalization norm
           cp = cp * 10U + v;
         }
       }
-      if (ok && AppendUtf8(cp, out)) {
+      // Empty for a surrogate or out-of-range value: the reference stays verbatim.
+      const std::string encoded = ok ? encode_utf8_codepoint(cp) : std::string();
+      if (!encoded.empty()) {
+        out->append(encoded);
         i = semi + 1;
         continue;
       }

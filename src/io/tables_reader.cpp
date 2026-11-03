@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "io/auto_filter_xml.h"
+#include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
@@ -72,13 +73,11 @@ std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
   }
 
   // Carry each `mc:Ignorable` prefix's in-scope binding; the writer drops the column's ancestors.
-  constexpr std::string_view kMarkupCompatibilityNamespace =
-      "http://schemas.openxmlformats.org/markup-compatibility/2006";
   for (pugi::xml_attribute ignorable : node.attributes()) {
     const std::string_view attr_name(ignorable.name());
     const std::size_t colon = attr_name.find(':');
     if (colon == std::string_view::npos || attr_name.substr(colon + 1U) != "Ignorable" ||
-        find_namespace_binding(node, attr_name.substr(0U, colon)) != kMarkupCompatibilityNamespace) {
+        find_namespace_binding(node, attr_name.substr(0U, colon)) != kNsMarkupCompat) {
       continue;
     }
     const std::string_view prefixes(ignorable.value());
