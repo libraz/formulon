@@ -398,6 +398,22 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   return &sheets_.back();
 }
 
+Expected<void, Error> Workbook::check_entered_new_sheet_name(std::string_view name) const {
+  RETURN_IF_ERROR(validate_sheet_name(name));
+  RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
+  for (const Sheet& existing : sheets_) {
+    if (sheet_names::equal(existing.name(), name)) {
+      return make_error(FormulonErrorCode::kInvalidSheetName, "copy_sheet: name collides with an existing sheet",
+                        "name=\"" + std::string(name) + "\"");
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::check_sheet_capacity() const {
+  return check_sheet_headroom(sheets_.size());
+}
+
 Expected<Sheet*, Error> Workbook::add_sheet_entered(std::string name) {
   RETURN_IF_ERROR(validate_entered_sheet_name(name, excel_profile_.host));
   return add_sheet_validated(std::move(name));
@@ -675,7 +691,10 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
     return make_error(FormulonErrorCode::kCannotRemoveLastSheet, "remove_sheet: cannot remove the only sheet",
                       "sheet_count=" + std::to_string(sheets_.size()));
   }
+  return remove_sheet_locked(index);
+}
 
+Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   const std::string removed_name = sheets_[index].name();
   erase_slicer_cache_names(defined_names_, remove_sheet_slicers(*this, index));
 
@@ -781,8 +800,13 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
                       "from=" + std::to_string(from_index) + " to=" + std::to_string(to_index) +
                           " sheet_count=" + std::to_string(sheets_.size()));
   }
+  move_sheet_locked(from_index, to_index);
+  return Expected<void, Error>::Ok();
+}
+
+void Workbook::move_sheet_locked(std::uint32_t from_index, std::uint32_t to_index) {
   if (from_index == to_index) {
-    return Expected<void, Error>::Ok();
+    return;
   }
 
   std::vector<std::uint32_t> old_to_new(sheets_.size());
@@ -790,6 +814,12 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
     old_to_new[old_index] = moved_index(old_index, from_index, to_index);
   }
   remap_book_views_xml(book_views_xml_, old_to_new);
+  for (PassthroughPart& part : passthrough_parts_) {
+    if (part.retained_origin == PassthroughPart::RetainedOrigin::kPivotTable &&
+        part.origin_sheet_index < old_to_new.size()) {
+      part.origin_sheet_index = old_to_new[part.origin_sheet_index];
+    }
+  }
 
   // `to_index` is the destination in the *post-removal* sheet list, which
   // matches Excel's UI semantics. Implementation: lift the sheet out,
@@ -825,7 +855,6 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
   // mirrors Excel's post-rearrange behaviour where downstream formulas
   // re-evaluate.
   reindex_all_formulas(sheets_, mutator, *this);
-  return Expected<void, Error>::Ok();
 }
 
 void Workbook::set_defined_names(std::vector<DefinedName> names) {

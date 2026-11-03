@@ -271,6 +271,33 @@ class Workbook {
   ///     sheet_count()` or `to_index >= sheet_count()`.
   Expected<void, Error> move_sheet(std::uint32_t from_index, std::uint32_t to_index);
 
+  /// Copies the worksheet at `source` into this workbook, placed before the
+  /// sheet now at `insert_before` (`sheet_count()` appends), and returns the
+  /// copy's index.
+  ///
+  /// `new_name` is validated like `add_sheet_entered`; without one the copy is
+  /// named as Excel names it (`Src (2)`). References qualified with the source
+  /// sheet are re-pointed at the copy in its formulas, conditional formats,
+  /// validations and charts; a 3-D span ending on the source becomes `#REF!`.
+  /// The copy's tables are renamed and rebound, the source's sheet-scoped
+  /// names, and workbook names referring to the source, gain a copy scoped to
+  /// the new sheet. Pivot tables share the source's cache. Other sheets and
+  /// hyperlink locations are untouched; the copy keeps a hidden source's
+  /// visibility, is not tab-selected, and the active sheet does not change.
+  ///
+  /// Errors (the workbook is left unchanged):
+  ///   * `kSheetIndexOutOfRange` when `source >= sheet_count()` or
+  ///     `insert_before > sheet_count()`.
+  ///   * `kSheetCountLimitExceeded` when the workbook is full.
+  ///   * `kPreconditionFailed` for a very hidden source.
+  ///   * `kNotImplemented` when the source is not a worksheet or carries
+  ///     content the copy cannot model: unrecognised relationships, slicers,
+  ///     drawing objects other than pictures and charts, pivot charts, or a
+  ///     drawing retained from an `.xlsb` package.
+  ///   * `kInvalidSheetName` when `new_name` fails validation or collides.
+  Expected<std::size_t, Error> copy_sheet(std::size_t source, std::size_t insert_before,
+                                          std::optional<std::string> new_name);
+
   /// Unicode-simple-fold lookup by display name. `"SHEET2"` and
   /// `"Sheet2"` locate the same sheet, as do Unicode simple-fold pairs such
   /// as `Ä` and `ä`. This is locale-independent simple folding only; it does
@@ -1262,6 +1289,14 @@ class Workbook {
   // The data-table step of `recalc()` / `recalc_parallel()`.
   Expected<void, Error> recalc_data_tables_after_pass(bool evaluated_any, const eval::FunctionRegistry& registry);
   Expected<void, Error> compute_data_tables(const eval::FunctionRegistry& registry);
+
+  // `move_sheet` and `remove_sheet` past their argument checks, for a caller
+  // already holding the engine mutex.
+  void move_sheet_locked(std::uint32_t from_index, std::uint32_t to_index);
+  Expected<void, Error> remove_sheet_locked(std::uint32_t index);
+  // The name and capacity checks `add_sheet_entered` applies to a new sheet.
+  Expected<void, Error> check_entered_new_sheet_name(std::string_view name) const;
+  Expected<void, Error> check_sheet_capacity() const;
 
   // `bind_external_books` for a caller already holding the engine mutex.
   void bind_external_books_unlocked(const parser::AstNode& root);
