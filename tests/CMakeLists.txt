@@ -54,6 +54,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/utils/double_format_test.cpp
   unit/utils/double_parse_test.cpp
   unit/utils/index_sort_test.cpp
+  unit/utils/iso_date_test.cpp
   unit/utils/number_text_test.cpp
   unit/utils/rect_iterator_test.cpp
   unit/utils/resource_budget_test.cpp
@@ -70,7 +71,6 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/defined_names_test.cpp
   unit/io/future_functions_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
-  unit/io/iso_date_test.cpp
   unit/io/merge_roundtrip_test.cpp
   unit/io/ooxml_feature_defaults_test.cpp
   unit/io/ooxml_reader_test.cpp

@@ -30,7 +30,6 @@
 #include <utility>
 #include <vector>
 
-#include "io/iso_date.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -42,6 +41,7 @@
 #include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/iso_date.h"
 #include "value.h"
 
 namespace formulon {
@@ -256,7 +256,7 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
       return out;
     }
     double serial = 0.0;
-    if (parse_iso_date_serial(v_text, &serial)) {
+    if (date_time::parse_iso_date_serial(v_text, &serial)) {
       out.value = Value::number(serial);
       out.is_iso_date = true;
     } else {

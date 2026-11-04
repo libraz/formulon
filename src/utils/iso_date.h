@@ -8,12 +8,12 @@
 // the engine's serial-number helpers rather than routed through the
 // ja-JP-aware text parser.
 
-#ifndef FORMULON_IO_ISO_DATE_H_
-#define FORMULON_IO_ISO_DATE_H_
+#ifndef FORMULON_UTILS_ISO_DATE_H_
+#define FORMULON_UTILS_ISO_DATE_H_
 
 #include <string_view>
 
-namespace formulon::io {
+namespace formulon::date_time {
 
 /// Parses a strict ISO 8601 date / date-time body into an Excel serial
 /// number (1900 date system, the convention the rest of the engine uses).
@@ -30,6 +30,6 @@ namespace formulon::io {
 /// the caller can fall back to surfacing the raw text.
 bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept;
 
-}  // namespace formulon::io
+}  // namespace formulon::date_time
 
-#endif  // FORMULON_IO_ISO_DATE_H_
+#endif  // FORMULON_UTILS_ISO_DATE_H_

@@ -1,11 +1,11 @@
 //
 // Unit tests for the strict ISO 8601 date-time parser.
 
-#include "io/iso_date.h"
+#include "utils/iso_date.h"
 
 #include "gtest/gtest.h"
 
-namespace formulon::io {
+namespace formulon::date_time {
 namespace {
 
 TEST(IsoDate, PlainDateParses) {
@@ -128,4 +128,4 @@ TEST(IsoDate, TrailingZDesignatorIsAccepted) {
 }
 
 }  // namespace
-}  // namespace formulon::io
+}  // namespace formulon::date_time

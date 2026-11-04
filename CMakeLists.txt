@@ -115,6 +115,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/double_parse.cpp
   src/utils/error.cpp
   src/utils/index_sort.cpp
+  src/utils/iso_date.cpp
   src/utils/japanese_era.cpp
   src/utils/number_text.cpp
   src/utils/structured_log.cpp
@@ -166,7 +167,6 @@ set(FORMULON_CORE_SOURCES
   src/io/protection_xml.cpp
   src/io/worksheet_child_refs.cpp
   src/io/future_functions.cpp
-  src/io/iso_date.cpp
   src/io/ooxml_reader.cpp
   src/io/ooxml/external_link_reader.cpp
   src/io/ooxml/package_rels_reader.cpp

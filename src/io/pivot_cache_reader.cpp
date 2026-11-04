@@ -14,7 +14,6 @@
 #include <utility>
 #include <vector>
 
-#include "io/iso_date.h"
 #include "io/pivot_attr_names.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
@@ -22,6 +21,7 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/iso_date.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -91,7 +91,7 @@ Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<s
     // aligned.
     std::string_view raw = node.attribute("v").as_string();
     double serial = 0.0;
-    if (parse_iso_date_serial(raw, &serial)) {
+    if (date_time::parse_iso_date_serial(raw, &serial)) {
       *is_date = true;
       return Value::number(serial);
     }

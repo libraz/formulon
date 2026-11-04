@@ -1,7 +1,7 @@
 //
 // Implementation of the strict ISO 8601 date parser. See iso_date.h.
 
-#include "io/iso_date.h"
+#include "utils/iso_date.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +9,7 @@
 
 #include "utils/date_time.h"
 
-namespace formulon::io {
+namespace formulon::date_time {
 namespace {
 
 // Fractional-second digits kept: below 2^53, so the integer and its power of
@@ -150,4 +150,4 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
   return true;
 }
 
-}  // namespace formulon::io
+}  // namespace formulon::date_time
