@@ -10938,7 +10938,8 @@ class Workbook:
     def pivot_cache_field_shared_item_value(self, cache_id: int, field_idx: int, item_idx: int) -> Value:
         """Return shared item ``item_idx`` of cache field ``field_idx``.
 
-        Date items are stored as serial numbers and read back as numbers.
+        Date items are stored as serial numbers and read back as numbers; use
+        :meth:`pivot_cache_field_shared_item_is_date` to tell them from plain numbers.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -10952,6 +10953,37 @@ class Workbook:
             )
             _check(status, "fm_workbook_pivot_cache_field_shared_item_value")
             return Value._from_wasm(value_ptr)
+
+    def pivot_cache_field_shared_item_is_date(self, cache_id: int, field_idx: int, item_idx: int) -> bool:
+        """Return whether shared item ``item_idx`` of cache field ``field_idx`` is a date item."""
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_pivot_cache_field_shared_item_is_date(
+                    h,
+                    _uint(cache_id, "cache_id"),
+                    _uint(field_idx, "field_idx"),
+                    _uint(item_idx, "item_idx"),
+                    out,
+                ),
+                "fm_workbook_pivot_cache_field_shared_item_is_date",
+            )
+            return LIB.read_i32(out) != 0
+
+    def pivot_cache_field_add_shared_item_date(self, cache_id: int, field_idx: int, serial: float) -> None:
+        """Append a date shared item to a cache field.
+
+        ``serial`` is a date serial in the workbook's date system, as a cell holds
+        it; it is saved to the second.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_date(
+                h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), float(serial)
+            ),
+            "fm_workbook_pivot_cache_field_add_shared_item_date",
+        )
 
     def pivot_cache_field_add_shared_item_number(self, cache_id: int, field_idx: int, value: float) -> None:
         """Append a numeric shared item to a cache field."""
@@ -11051,6 +11083,24 @@ class Workbook:
                 float(value),
             ),
             "fm_workbook_pivot_cache_record_set_number",
+        )
+
+    def pivot_cache_record_set_date(self, cache_id: int, record_idx: int, field_idx: int, serial: float) -> None:
+        """Set cache cell ``(record_idx, field_idx)`` to a date.
+
+        ``serial`` is a date serial in the workbook's date system, as a cell holds
+        it; it is saved to the second.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_cache_record_set_date(
+                h,
+                _uint(cache_id, "cache_id"),
+                _uint(record_idx, "record_idx"),
+                _uint(field_idx, "field_idx"),
+                float(serial),
+            ),
+            "fm_workbook_pivot_cache_record_set_date",
         )
 
     def pivot_cache_record_set_text(self, cache_id: int, record_idx: int, field_idx: int, value: str) -> None:

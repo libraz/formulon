@@ -81,6 +81,30 @@ class PivotTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.pivot_cache_field_shared_item_value(cache_id, 0, 5)
 
+    def test_cache_date_shared_items(self) -> None:
+        with Workbook.create_default() as wb:
+            cache_id = wb.pivot_cache_create()
+            wb.pivot_cache_field_add(cache_id, "When")
+            wb.pivot_cache_field_add_shared_item_date(cache_id, 0, 45292.0)
+            wb.pivot_cache_field_add_shared_item_number(cache_id, 0, 45292.0)
+            wb.pivot_cache_field_add_shared_item_date(cache_id, 0, 45292.5)
+            self.assertIs(wb.pivot_cache_field_shared_item_is_date(cache_id, 0, 0), True)
+            self.assertIs(wb.pivot_cache_field_shared_item_is_date(cache_id, 0, 1), False)
+            self.assertIs(wb.pivot_cache_field_shared_item_is_date(cache_id, 0, 2), True)
+            value = wb.pivot_cache_field_shared_item_value(cache_id, 0, 0)
+            self.assertEqual(value.kind, ValueKind.NUMBER)
+            self.assertEqual(value.number, 45292.0)
+            with self.assertRaises(FormulonError):
+                wb.pivot_cache_field_shared_item_is_date(cache_id, 0, 3)
+            for bad in (-1.0, float("nan")):
+                with self.assertRaises(FormulonError) as caught:
+                    wb.pivot_cache_field_add_shared_item_date(cache_id, 0, bad)
+                self.assertEqual(caught.exception.status, 2)
+            wb.pivot_cache_record_add(cache_id)
+            wb.pivot_cache_record_set_date(cache_id, 0, 0, 45292.0)
+            with self.assertRaises(FormulonError):
+                wb.pivot_cache_record_set_date(cache_id, 0, 0, float("nan"))
+
     def test_cache_source_and_report_layout_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             cache = wb.pivot_cache_create()
@@ -191,6 +215,7 @@ _PIVOT_READERS = {
     "pivot_cache_field_name",
     "pivot_cache_field_shared_item_count",
     "pivot_cache_field_shared_item_value",
+    "pivot_cache_field_shared_item_is_date",
     "pivot_cache_record_count",
     "pivot_field_count",
     "pivot_data_field_count",
@@ -610,6 +635,12 @@ class PivotMutatorTableTests(unittest.TestCase):
                 _point_at_new_item,
                 grid_is(["行ラベル|Sum of Amount", "42.5|10", "East|5", "West|37", "総計|52"]),
             ),
+            "pivot_cache_field_add_shared_item_date": (
+                None,
+                lambda f: f.wb.pivot_cache_field_add_shared_item_date(f.cache, 0, 45292.0),
+                None,
+                lambda t, f, r: eq(f.wb.pivot_cache_field_shared_item_is_date(f.cache, 0, 2), True),
+            ),
             "pivot_cache_field_add_shared_item_text": (
                 None,
                 lambda f: f.wb.pivot_cache_field_add_shared_item_text(f.cache, 0, "North"),
@@ -653,6 +684,12 @@ class PivotMutatorTableTests(unittest.TestCase):
                 lambda f: f.wb.pivot_cache_record_set_number(f.cache, 0, 2, 1000),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "East|1005", "West|37", "総計|1042"]),
+            ),
+            "pivot_cache_record_set_date": (
+                None,
+                lambda f: f.wb.pivot_cache_record_set_date(f.cache, 0, 2, 45292.0),
+                None,
+                lambda t, f, r: eq(r, None),
             ),
             "pivot_cache_record_set_text": (
                 None,

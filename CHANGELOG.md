@@ -80,6 +80,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`pivotCacheFieldSharedItemValue`, `pivot_cache_field_shared_item_value`)
   reads one shared item of a pivot cache field, so a refresh can keep the
   existing item order.
+- Pivot cache dates: `fm_workbook_pivot_cache_field_add_shared_item_date`
+  and `fm_workbook_pivot_cache_record_set_date` store a serial as a date
+  (`<d>`) rather than a number, and
+  `fm_workbook_pivot_cache_field_shared_item_is_date` reads the mark back
+  (`pivotCacheFieldAddSharedItemDate`, `pivotCacheRecordSetDate`,
+  `pivotCacheFieldSharedItemIsDate`; `pivot_cache_field_add_shared_item_date`,
+  and so on). A serial outside the workbook's date system is refused. Date
+  filters, date grouping and the saved field hints treat these values as
+  they treat dates loaded from a file.
 - `fm_sheet_set_row_auto_height` (`setRowAutoHeight`, `set_row_auto_height`)
   stores a row's automatic height without marking it custom, so a refreshed
   height is saved as `ht` alone and the row keeps following its content and
