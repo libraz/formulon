@@ -30,6 +30,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_named_styles_test.cpp
   formulon_c_pivot_authoring_test.cpp
   formulon_c_pivot_options_test.cpp
+  formulon_c_pivot_calc_test.cpp
   formulon_c_pivot_definition_test.cpp
   formulon_c_pivot_filters_test.cpp
   formulon_c_pivot_filter_persistence_test.cpp

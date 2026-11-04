@@ -263,6 +263,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/info_lazy_test.cpp
   unit/eval/phonetic_lazy_test.cpp
   unit/eval/getpivotdata_lazy_test.cpp
+  unit/eval/pivot_formula_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
   unit/eval/array_alloc_test.cpp
@@ -419,6 +420,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/field_grouping_test.cpp
   unit/pivot/pivot_layout_options_test.cpp
   unit/pivot/pivot_show_details_test.cpp
+  unit/pivot/pivot_calculated_test.cpp
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_authoring_test.cpp

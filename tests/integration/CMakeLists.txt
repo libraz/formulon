@@ -33,10 +33,13 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_writer_pivot_test.cpp
   pivot_aggregation_fixture_test.cpp
   pivot_blank_item_fixture_test.cpp
+  pivot_calc_fixture_test.cpp
   pivot_caption_filter_fixture_test.cpp
   pivot_date_group_fixture_test.cpp
+  pivot_filter_types_fixture_test.cpp
   pivot_layout_fixture_test.cpp
   pivot_options_fixture_test.cpp
+  pivot_projection_fixture_test.cpp
   pivot_recurring_period_filter_fixture_test.cpp
   pivot_show_as_fixture_test.cpp
   pivot_show_details_fixture_test.cpp

@@ -959,6 +959,15 @@ class Workbook {
   Expected<std::size_t, Error> show_pivot_details(std::size_t sheet, std::size_t pivot, std::uint32_t row,
                                                   std::uint32_t col);
 
+  /// Evaluates a pivot and writes its report range into the sheet cells.
+  ///
+  /// Errors: `kInvalidArgument` for an index out of range;
+  /// `kPreconditionFailed` when the range overlaps another object.
+  Expected<void, Error> project_pivot(std::size_t sheet_index, std::size_t pivot_index);
+
+  /// Projects every pivot whose cache changed since its last projection.
+  void project_pending_pivots();
+
   /// Returns the OOXML workbook variant this instance round-trips as.
   /// Defaults to `WorkbookKind::kXlsx`; the reader updates it from the
   /// workbook part's content type, and the writer consults it when

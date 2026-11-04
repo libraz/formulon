@@ -144,6 +144,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook.cpp
   src/workbook_copy_sheet.cpp
   src/workbook_pivot_details.cpp
+  src/workbook_pivot_projection.cpp
   src/workbook_tables.cpp
   src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
@@ -280,6 +281,7 @@ set(FORMULON_CORE_SOURCES
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
   src/pivot/field_grouping.cpp
+  src/pivot/calculated.cpp
   src/pivot/pivot_layout.cpp
   src/pivot/pivot_locale.cpp
   src/print/page_setup.cpp
@@ -455,6 +457,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/ets_series.cpp
   src/eval/holt_winters.cpp
   src/eval/getpivotdata_lazy.cpp
+  src/eval/pivot_formula.cpp
   src/eval/linest_lazy.cpp
   src/eval/textjoin_lazy.cpp
   src/eval/textsplit_lazy.cpp

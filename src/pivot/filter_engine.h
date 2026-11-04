@@ -38,6 +38,7 @@ struct StylesTable;
 }  // namespace formulon
 
 namespace formulon::pivot {
+class PivotFormulaHost;
 
 /// True for the types ranked on an aggregate after aggregation (Top-N and the
 /// value comparisons), as opposed to label / date types applied per record.
@@ -75,6 +76,9 @@ struct PivotFilterEnv {
   /// The workbook styles, resolving a custom `numFmtId` an axis item is
   /// labelled with. Null renders custom ids as General.
   const StylesTable* styles = nullptr;
+  /// Evaluates calculated-field and calculated-item formulas. Null leaves
+  /// calculated cells empty.
+  PivotFormulaHost* formulas = nullptr;
 };
 
 /// An inclusive date window, in Excel serials under the workbook epoch.
