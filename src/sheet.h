@@ -1114,6 +1114,11 @@ class Sheet {
   /// or recalc interaction.
   void set_drawing_rel_target(std::string target) { drawing_rel_target_ = std::move(target); }
 
+  /// Next drawing object id this session hands out on the sheet; Excel numbers
+  /// from 2. Not saved: a loaded sheet starts over at 2.
+  std::uint32_t next_drawing_id() const noexcept { return next_drawing_id_; }
+  void set_next_drawing_id(std::uint32_t id) noexcept { next_drawing_id_ = id; }
+
   /// Package-relative path of this sheet's legacy comment VML drawing, or
   /// empty for a newly-created comment collection. It is distinct from the
   /// DrawingML target above and lets comment shapes survive sheet reordering.
@@ -1393,6 +1398,7 @@ class Sheet {
   // `<drawing r:id>`, or empty. The part itself round-trips via the
   // workbook's passthrough parts.
   std::string drawing_rel_target_;
+  std::uint32_t next_drawing_id_ = 2;
   // Package-relative VML drawing paired with this sheet's comments. The
   // writer may assign a new output filename, but uses this path to find the
   // original bytes in passthrough storage.

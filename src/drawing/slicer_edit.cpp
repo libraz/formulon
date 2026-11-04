@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
 
 #include "chart/chart_ns.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml/part_graph.h"
@@ -521,15 +521,7 @@ Expected<std::uint32_t, Error> add_slicer(Workbook& wb, std::size_t sheet, std::
   } else {
     RETURN_IF_ERROR(load_drawing(wb, sheet, drawing));
   }
-  std::uint32_t frame_id = 1;
-  drawing.find_node([&frame_id](const pugi::xml_node& node) {
-    frame_id = is_element(node, "cNvPr") ? std::max(frame_id, node.attribute("id").as_uint()) : frame_id;
-    return false;
-  });
-  if (frame_id == std::numeric_limits<std::uint32_t>::max()) {
-    return invalid("slicer: drawing object id space exhausted");
-  }
-  ++frame_id;
+  ASSIGN_OR_RETURN(const std::uint32_t frame_id, drawing_edit::allocate_drawing_id(wb.sheet(sheet), drawing));
   pugi::xml_node drawing_root = drawing.document_element();
   io::ensure_attr(drawing_root, "xmlns:xdr", chart_ns::kNsXdr);
   io::ensure_attr(drawing_root, "xmlns:a", chart_ns::kNsA);

@@ -176,6 +176,7 @@ Sheet Sheet::clone_as(std::string name) const {
   // These name the source's package identity and parts.
   copy.source_sheet_id_ = 0;
   copy.drawing_rel_target_.clear();
+  copy.next_drawing_id_ = 2;
   copy.comment_vml_path_.clear();
 
   for (Hyperlink& link : copy.hyperlinks_) {

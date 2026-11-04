@@ -592,12 +592,16 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
 
   pugi::xml_node replaced;
   if (new_id) {
-    ASSIGN_OR_RETURN(const std::uint32_t next, next_object_id(doc));
+    ASSIGN_OR_RETURN(const std::uint32_t next, allocate_drawing_id(wb.sheet(sheet), doc));
     const std::uint32_t old_id = id;
-    for_each_element(fragment, [old_id, next](const pugi::xml_node& node) {
+    const DrawingObjectKind kind = read_drawing_object(object, {}).kind;
+    for_each_element(fragment, [&wb, kind, old_id, next](const pugi::xml_node& node) {
       if (local_name(node) == "cNvPr" && node.attribute("id").as_uint() == old_id) {
         node.attribute("id").set_value(next);
         drop_creation_id(node);
+        if (is_default_drawing_name(wb, kind, node.attribute("name").value())) {
+          io::set_attr(node, "name", default_drawing_name(wb, kind, next));
+        }
       }
     });
     id = next;

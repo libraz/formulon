@@ -45,6 +45,9 @@ struct NewWorkbookDefaults {
   std::uint8_t mac_row_height;  ///< Mac `defaultRowHeight`, points.
   const char* sheet_name;
   const NewSheetMargins* margins;
+  const char* chart_word;    ///< Default chart name word ("Chart 1").
+  const char* picture_word;  ///< Default picture name word.
+  const char* table_word;    ///< Default table name word.
 };
 
 /// The table row for `locale`.

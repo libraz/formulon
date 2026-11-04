@@ -18,6 +18,7 @@
 
 namespace formulon {
 
+class Sheet;
 class Workbook;
 
 namespace drawing_edit {
@@ -46,10 +47,18 @@ inline constexpr const char* kNoObject = "drawing: no picture or chart with that
 // sheet with no drawing holds no object.
 Expected<std::string, Error> load_object_drawing(const Workbook& wb, std::size_t sheet, pugi::xml_document& doc);
 
-// The id for a new object: one past the largest `cNvPr/@id` in `doc`, and at
-// least 2 (Excel numbers drawing objects from 2). `kPreconditionFailed` once
-// the largest id is UINT32_MAX.
-Expected<std::uint32_t, Error> next_object_id(const pugi::xml_document& doc);
+// The id for a new object on `sheet`: the first id not used by a `cNvPr` in
+// `doc` at or above the sheet's drawing counter, which then moves past it.
+// `kPreconditionFailed` once the id space is exhausted.
+Expected<std::uint32_t, Error> allocate_drawing_id(Sheet& sheet, const pugi::xml_document& doc);
+
+// "<word> <id - 1>" with the workbook locale's word for `kind` (chart or
+// picture); empty for any other kind.
+std::string default_drawing_name(const Workbook& wb, DrawingObjectKind kind, std::uint32_t id);
+
+// Whether `name` is "<word> <digits>" with `kind`'s word in the workbook's
+// locale or in English.
+bool is_default_drawing_name(const Workbook& wb, DrawingObjectKind kind, std::string_view name);
 
 // Values of the prefixed, non-`xmlns:` attributes of `node` and its subtree:
 // the relationship ids it may name.

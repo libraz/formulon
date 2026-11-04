@@ -17,6 +17,7 @@
 #include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
+#include "new_workbook_defaults.h"
 #include "passthrough_part.h"
 #include "sheet.h"
 #include "utils/status_macros.h"
@@ -48,17 +49,50 @@ Expected<std::string, Error> load_object_drawing(const Workbook& wb, std::size_t
   return path;
 }
 
-Expected<std::uint32_t, Error> next_object_id(const pugi::xml_document& doc) {
-  std::uint32_t id = 0;
-  for_each_element(doc, [&id](const pugi::xml_node& node) {
+Expected<std::uint32_t, Error> allocate_drawing_id(Sheet& sheet, const pugi::xml_document& doc) {
+  std::vector<std::uint32_t> used;
+  for_each_element(doc, [&used](const pugi::xml_node& node) {
     if (local_name(node) == "cNvPr") {
-      id = std::max(id, node.attribute("id").as_uint());
+      used.push_back(node.attribute("id").as_uint());
     }
   });
+  std::uint32_t id = std::max(sheet.next_drawing_id(), 2U);
+  while (id != std::numeric_limits<std::uint32_t>::max() && std::find(used.begin(), used.end(), id) != used.end()) {
+    ++id;
+  }
   if (id == std::numeric_limits<std::uint32_t>::max()) {
     return make_error(FormulonErrorCode::kPreconditionFailed, "drawing: object id space exhausted");
   }
-  return std::max(id, 1U) + 1U;
+  sheet.set_next_drawing_id(id + 1U);
+  return id;
+}
+
+namespace {
+
+const char* kind_word(const NewWorkbookDefaults& row, DrawingObjectKind kind) {
+  return kind == DrawingObjectKind::kChart     ? row.chart_word
+         : kind == DrawingObjectKind::kPicture ? row.picture_word
+                                               : nullptr;
+}
+
+}  // namespace
+
+std::string default_drawing_name(const Workbook& wb, DrawingObjectKind kind, std::uint32_t id) {
+  const char* word = kind_word(new_workbook_defaults(wb.excel_profile().locale), kind);
+  return word == nullptr ? std::string() : std::string(word) + " " + std::to_string(id - 1U);
+}
+
+bool is_default_drawing_name(const Workbook& wb, DrawingObjectKind kind, std::string_view name) {
+  const auto matches = [&](const char* word) {
+    const std::string_view w = word == nullptr ? std::string_view() : std::string_view(word);
+    if (w.empty() || name.size() <= w.size() + 1U || name.substr(0, w.size()) != w || name[w.size()] != ' ') {
+      return false;
+    }
+    const std::string_view digits = name.substr(w.size() + 1U);
+    return std::all_of(digits.begin(), digits.end(), [](char c) { return c >= '0' && c <= '9'; });
+  };
+  return matches(kind_word(new_workbook_defaults(wb.excel_profile().locale), kind)) ||
+         matches(kind_word(new_workbook_defaults(ExcelLocale::kEnUS), kind));
 }
 
 std::vector<std::string> relationship_refs(const pugi::xml_node& node) {
@@ -491,7 +525,7 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
   pugi::xml_document doc;
   RETURN_IF_ERROR(prepare_drawing(wb, path, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
-  ASSIGN_OR_RETURN(const std::uint32_t id, next_object_id(doc));
+  ASSIGN_OR_RETURN(const std::uint32_t id, allocate_drawing_id(wb.sheet(sheet), doc));
   const std::string rid = next_rel_id(rels);
   const std::string media_path = unused_part_path(wb, "xl/media/image", image_extension(info.format));
   const std::string xml =
@@ -501,8 +535,9 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
       std::string(io::kNsOfficeRelationships) + "\" r:embed=\"" + rid +
       "\"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr>" + xfrm_xml("a:xfrm", box, cx, cy) +
       "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic>" + anchor_close_xml(options);
-  RETURN_IF_ERROR(
-      append_anchor(doc, xml, options.name.empty() ? "Picture " + std::to_string(id) : options.name, options.descr));
+  RETURN_IF_ERROR(append_anchor(
+      doc, xml, options.name.empty() ? default_drawing_name(wb, DrawingObjectKind::kPicture, id) : options.name,
+      options.descr));
   RETURN_IF_ERROR(wb.add_passthrough_part(
       PassthroughPart(media_path, std::string(), std::vector<std::uint8_t>(bytes, bytes + len))));
   ensure_default_content_type(wb, image_extension(info.format), image_content_type(info.format));
@@ -529,7 +564,7 @@ Expected<std::uint32_t, Error> insert_graphic_frame(Workbook& wb, std::size_t sh
   pugi::xml_document doc;
   RETURN_IF_ERROR(prepare_drawing(wb, path, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
-  ASSIGN_OR_RETURN(const std::uint32_t id, next_object_id(doc));
+  ASSIGN_OR_RETURN(const std::uint32_t id, allocate_drawing_id(wb.sheet(sheet), doc));
   const std::string rid = next_rel_id(rels);
   std::string data(graphic_data_xml);
   for (std::size_t at = data.find("{rId}"); at != std::string::npos; at = data.find("{rId}", at + rid.size())) {
@@ -539,8 +574,9 @@ Expected<std::uint32_t, Error> insert_graphic_frame(Workbook& wb, std::size_t sh
                           "<xdr:graphicFrame macro=\"\"><xdr:nvGraphicFramePr><xdr:cNvPr id=\"" + std::to_string(id) +
                           "\"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>" + xfrm_xml("xdr:xfrm", box, cx, cy) +
                           "<a:graphic>" + data + "</a:graphic></xdr:graphicFrame>" + anchor_close_xml(placement);
-  RETURN_IF_ERROR(append_anchor(doc, xml, placement.name.empty() ? "Chart " + std::to_string(id) : placement.name,
-                                placement.descr));
+  RETURN_IF_ERROR(append_anchor(
+      doc, xml, placement.name.empty() ? default_drawing_name(wb, DrawingObjectKind::kChart, id) : placement.name,
+      placement.descr));
   RETURN_IF_ERROR(commit_drawing(wb, sheet, path, fresh, doc, rid, rel_type, std::string(target_part_path)));
   return id;
 }
@@ -616,6 +652,28 @@ void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
 
 std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_axis, std::uint32_t line) {
   return Geometry(wb, wb.sheet(sheet)).offset(row_axis, line);
+}
+
+Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                       std::string_view name) {
+  if (name.empty()) {
+    return invalid("drawing: an object name cannot be empty");
+  }
+  pugi::xml_document doc;
+  ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
+  const pugi::xml_node target = find_object(doc.document_element(), object_id);
+  if (!target) {
+    return invalid(kNoObject);
+  }
+  pugi::xml_node cnvpr = anchor_cnvpr(target);
+  if (!cnvpr) {
+    return invalid(kNoObject);
+  }
+  if (std::string_view(cnvpr.attribute("name").value()) == name) {
+    return Expected<void, Error>::Ok();
+  }
+  io::set_attr(cnvpr, "name", name);
+  return io::ooxml::store_part_dom(wb, path, doc);
 }
 
 Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id,

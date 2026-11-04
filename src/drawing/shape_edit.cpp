@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -12,6 +11,7 @@
 
 #include "chart/chart_ns.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml_defs.h"
@@ -468,17 +468,7 @@ Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, con
   pugi::xml_node root = doc.document_element();
   const std::string xp = xdr_prefix(root);
   const std::string ap = a_prefix(root);
-  std::uint32_t id = 1;
-  doc.find_node([&id](pugi::xml_node n) {
-    if (n.type() == pugi::node_element && local_name(n) == "cNvPr") {
-      id = std::max(id, n.attribute("id").as_uint());
-    }
-    return false;
-  });
-  if (id == std::numeric_limits<std::uint32_t>::max()) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "drawing: object id space exhausted");
-  }
-  ++id;
+  ASSIGN_OR_RETURN(const std::uint32_t id, drawing_edit::allocate_drawing_id(wb.sheet(sheet), doc));
 
   const char* anchor_tag = spec.anchor_kind == AnchorKind::kOneCell   ? "oneCellAnchor"
                            : spec.anchor_kind == AnchorKind::kTwoCell ? "twoCellAnchor"

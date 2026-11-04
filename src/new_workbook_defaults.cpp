@@ -29,20 +29,20 @@ constexpr NewSheetMargins kPtBrMargins = {
 // @size-budget: 2 KB
 // Indexed by `ExcelLocale`; values from Mac Excel 365 16.113 new workbooks.
 constexpr NewWorkbookDefaults kDefaults[] = {
-    {"游ゴシック", 128, 6, false, "標準", 20, "Sheet1", &kDefaultMargins},      // ja_JP
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Sheet1", &kDefaultMargins},    // en_US
-    {"Aptos Narrow", 0, 0, false, "Standard", 16, "Tabelle1", &kDeMargins},     // de_DE
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Feuil1", &kDefaultMargins},    // fr_FR
-    {"等线", 134, 9, true, "常规", 16, "Sheet1", &kDefaultMargins},             // zh_CN
-    {"맑은 고딕", 129, 8, true, "표준", 18, "Sheet1", &kDefaultMargins},        // ko_KR
-    {"Tahoma", 222, 0, false, "ปกติ", 15, "Sheet1", &kDefaultMargins},           // th_TH
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins},     // es_ES
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins},     // es_MX
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Planilha1", &kPtBrMargins},    // pt_BR
-    {"Aptos Narrow", 204, 0, false, "Обычный", 16, "Лист1", &kDefaultMargins},  // ru_RU
-    {"新細明體", 136, 9, true, "一般", 15, "工作表1", &kDefaultMargins},        // zh_TW
-    {"Aptos Narrow", 0, 0, false, "Normale", 16, "Foglio1", &kDefaultMargins},  // it_IT
-    {"Aptos Narrow", 0, 0, false, "Standaard", 16, "Blad1", &kDefaultMargins},  // nl_NL
+    {"游ゴシック", 128, 6, false, "標準", 20, "Sheet1", &kDefaultMargins, "グラフ", "図", "テーブル"},       // ja_JP
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table"},    // en_US
+    {"Aptos Narrow", 0, 0, false, "Standard", 16, "Tabelle1", &kDeMargins, "Chart", "Picture", "Table"},     // de_DE
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Feuil1", &kDefaultMargins, "Chart", "Picture", "Table"},    // fr_FR
+    {"等线", 134, 9, true, "常规", 16, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table"},             // zh_CN
+    {"맑은 고딕", 129, 8, true, "표준", 18, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table"},        // ko_KR
+    {"Tahoma", 222, 0, false, "ปกติ", 15, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table"},           // th_TH
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Chart", "Picture", "Table"},     // es_ES
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Chart", "Picture", "Table"},     // es_MX
+    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Planilha1", &kPtBrMargins, "Chart", "Picture", "Table"},    // pt_BR
+    {"Aptos Narrow", 204, 0, false, "Обычный", 16, "Лист1", &kDefaultMargins, "Chart", "Picture", "Table"},  // ru_RU
+    {"新細明體", 136, 9, true, "一般", 15, "工作表1", &kDefaultMargins, "Chart", "Picture", "Table"},        // zh_TW
+    {"Aptos Narrow", 0, 0, false, "Normale", 16, "Foglio1", &kDefaultMargins, "Chart", "Picture", "Table"},  // it_IT
+    {"Aptos Narrow", 0, 0, false, "Standaard", 16, "Blad1", &kDefaultMargins, "Chart", "Picture", "Table"},  // nl_NL
 };
 static_assert(sizeof(kDefaults) / sizeof(kDefaults[0]) == static_cast<std::size_t>(ExcelLocale::kNlNL) + 1U,
               "one row per ExcelLocale");

@@ -634,6 +634,8 @@ TEST(DrawingSnapshot, ChartWhosePathWasReusedTakesAFreshOne) {
   const Bytes colors = Part(wb, kColorsPath)->bytes;
   const Bytes snap = Snapshot(wb, 3);
   ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 3)));
+  // The session has already handed out ids up to 4, so the next one is 5.
+  wb.sheet(0).set_next_drawing_id(5);
 
   // Another chart takes the freed chart and style paths.
   ImageInsertOptions placement;

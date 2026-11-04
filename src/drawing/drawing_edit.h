@@ -43,8 +43,8 @@ class Workbook;
 
 /// Placement of an inserted image or graphic frame.
 struct ImageInsertOptions {
-  std::string name;                               ///< `cNvPr/@name`; empty yields `Picture <id>`.
-  std::string descr;                              ///< Alternative text; omitted when empty.
+  std::string name;   ///< `cNvPr/@name`; empty yields the locale default (see `insert_graphic_frame`).
+  std::string descr;  ///< Alternative text; omitted when empty.
   AnchorKind anchor_kind = AnchorKind::kOneCell;  ///< `kOneCell` or `kTwoCell`.
   EditAs edit_as = EditAs::kTwoCell;              ///< Honoured for `kTwoCell` only.
   std::uint32_t row = 0;                          ///< 0-based top-left cell.
@@ -93,7 +93,7 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
 /// sheet `sheet`'s drawing, with a new relationship of `rel_type` to the part
 /// at `target_part_path`; each `{rId}` in the fragment becomes its id. The
 /// caller adds the target part. Returns the frame's `cNvPr` id; an empty
-/// `name` yields `Chart <id>`. Fails like `insert_image`, and with
+/// `name` yields "<chart word> <id - 1>" in the workbook's locale. Fails like `insert_image`, and with
 /// `kInvalidArgument` for a zero size or a fragment that does not parse.
 Expected<std::uint32_t, Error> insert_graphic_frame(Workbook& wb, std::size_t sheet,
                                                     const ImageInsertOptions& placement,
@@ -116,6 +116,11 @@ std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_ax
 /// that id.
 Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                          const DrawingAnchor& anchor);
+
+/// Renames the first picture or chart with `object_id`. Duplicate names are
+/// allowed. Fails with `kInvalidArgument` for an empty `name` or when the
+/// sheet has no picture or chart with that id.
+Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::string_view name);
 
 /// Moves the first picture or chart with `object_id` so it becomes item
 /// `index` of `list_drawing_objects`, whose order is the z-order (0 is the
