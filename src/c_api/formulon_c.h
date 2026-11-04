@@ -4656,6 +4656,16 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_clear(fm_workbook_t* wb, uint32
 FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_workbook_t* wb, uint32_t cache_id,
                                                                    size_t field_idx, size_t* out_count);
 
+/**
+ * @brief Reads shared item `item_idx` of cache field `field_idx` into `out`.
+ *        Date items are stored as serial numbers and read back as
+ *        `FM_VAL_NUMBER`. Text is read-scratch backed: the pointer remains
+ *        valid until the next scratch-backed read, any mutation, or handle
+ *        destruction. `item_idx >= count` is `kInvalidArgument`.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_value(const fm_workbook_t* wb, uint32_t cache_id,
+                                                                   size_t field_idx, size_t item_idx, fm_value_t* out);
+
 /** @brief Appends a numeric shared item to cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_workbook_t* wb, uint32_t cache_id,
                                                                         size_t field_idx, double value);

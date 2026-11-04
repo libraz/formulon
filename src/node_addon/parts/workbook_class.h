@@ -237,6 +237,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldClear(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldSharedItemValue(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info);

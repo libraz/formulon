@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fm_workbook_pivot_cache_field_shared_item_value`
+  (`pivotCacheFieldSharedItemValue`, `pivot_cache_field_shared_item_value`)
+  reads one shared item of a pivot cache field, so a refresh can keep the
+  existing item order.
 - `fm_sheet_set_row_auto_height` (`setRowAutoHeight`, `set_row_auto_height`)
   stores a row's automatic height without marking it custom, so a refreshed
   height is saved as `ht` alone and the row keeps following its content and

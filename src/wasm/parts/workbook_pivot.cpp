@@ -173,6 +173,18 @@ JsNumberResult JsWorkbook::pivotCacheFieldSharedItemCount(uint32_t cacheId, uint
   return number_result(rc, static_cast<double>(count));
 }
 
+JsCellResult JsWorkbook::pivotCacheFieldSharedItemValue(uint32_t cacheId, uint32_t fieldIdx, uint32_t itemIdx) const {
+  JsCellResult r;
+  if (handle_ == nullptr) {
+    r.status = invalid_handle_status();
+    return r;
+  }
+  fm_value_t v{};
+  const fm_status_t rc = fm_workbook_pivot_cache_field_shared_item_value(handle_, cacheId, fieldIdx, itemIdx, &v);
+  adopt_value(rc, v, r.status, r.value);
+  return r;
+}
+
 JsStatus JsWorkbook::pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIdx, double value) {
   return status_from_rc(handle_ != nullptr
                             ? fm_workbook_pivot_cache_field_add_shared_item_number(handle_, cacheId, fieldIdx, value)

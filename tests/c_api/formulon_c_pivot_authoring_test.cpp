@@ -290,6 +290,55 @@ TEST(FormulonCApiPivot, PivotCacheSharedItemsAcceptErrorValues) {
   EXPECT_EQ(count, 3U);
 }
 
+TEST(FormulonCApiPivot, PivotCacheSharedItemValueReadsEachKind) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, 0, 45292.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_bool(wb.handle, cache_id, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_blank(wb.handle, cache_id, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_error(wb.handle, cache_id, 0, 1), 0);  // ErrorCode::Div0
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 0, &v), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_STREQ(v.u.text, "North");
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 1, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_TEXT);
+  EXPECT_STREQ(v.u.text, "South");
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 2, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.u.number, 45292.0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 3, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_BOOL);
+  EXPECT_EQ(v.u.boolean, 1);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 4, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_BLANK);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 5, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_ERROR);
+  EXPECT_EQ(v.u.error_code, 1);
+}
+
+TEST(FormulonCApiPivot, PivotCacheSharedItemValueRejectsBadArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  const auto null_ptr = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  fm_value_t v{};
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 2, &v), invalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 99, 0, &v), invalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 0, nullptr), null_ptr);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_value(nullptr, cache_id, 0, 0, &v), null_ptr);
+}
+
 TEST(FormulonCApiPivot, PivotCacheSharedItemIndexToleratesOutOfDomainNumbers) {
   // `BuildScratchPivot` leaves `cell_is_index` empty, so "Region" (field 0)
   // reads its numeric cells as indices into its two shared items. The record

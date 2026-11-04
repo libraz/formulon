@@ -592,6 +592,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotCacheFieldCount, 0x1ULL>("pivotCacheFieldCount"),
           GuardedInstanceMethod<&Workbook::PivotCacheFieldName, 0x3ULL>("pivotCacheFieldName"),
           GuardedInstanceMethod<&Workbook::PivotCacheFieldSharedItemCount, 0x3ULL>("pivotCacheFieldSharedItemCount"),
+          GuardedInstanceMethod<&Workbook::PivotCacheFieldSharedItemValue, 0x7ULL>("pivotCacheFieldSharedItemValue"),
           GuardedInstanceMethod<&Workbook::PivotCacheGetWorksheetSource, 0x1ULL>("pivotCacheGetWorksheetSource"),
           GuardedInstanceMethod<&Workbook::PivotCacheId, 0x3ULL>("pivotCacheId"),
           GuardedInstanceMethod<&Workbook::PivotCacheIdAt, 0x1ULL>("pivotCacheIdAt"),

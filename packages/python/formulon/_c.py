@@ -548,6 +548,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_pivot_cache_field_count",
     "fm_workbook_pivot_cache_field_name",
     "fm_workbook_pivot_cache_field_shared_item_count",
+    "fm_workbook_pivot_cache_field_shared_item_value",
     "fm_workbook_pivot_cache_get_worksheet_source",
     "fm_workbook_pivot_cache_id_at",
     "fm_workbook_pivot_cache_record_add",

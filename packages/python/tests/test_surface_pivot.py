@@ -58,6 +58,26 @@ class PivotTests(unittest.TestCase):
             # The single grand total of 10 + 20 + 30 must appear.
             self.assertIn(60.0, numbers)
 
+    def test_cache_shared_item_value_reads_each_kind(self) -> None:
+        with Workbook.create_default() as wb:
+            cache_id = wb.pivot_cache_create()
+            wb.pivot_cache_field_add(cache_id, "Region")
+            wb.pivot_cache_field_add_shared_item_text(cache_id, 0, "East")
+            wb.pivot_cache_field_add_shared_item_number(cache_id, 0, 45292.0)
+            wb.pivot_cache_field_add_shared_item_bool(cache_id, 0, True)
+            wb.pivot_cache_field_add_shared_item_blank(cache_id, 0)
+            wb.pivot_cache_field_add_shared_item_error(cache_id, 0, 1)
+            kinds = [wb.pivot_cache_field_shared_item_value(cache_id, 0, i).kind for i in range(5)]
+            self.assertEqual(
+                kinds, [ValueKind.TEXT, ValueKind.NUMBER, ValueKind.BOOL, ValueKind.BLANK, ValueKind.ERROR]
+            )
+            self.assertEqual(wb.pivot_cache_field_shared_item_value(cache_id, 0, 0).text, "East")
+            self.assertEqual(wb.pivot_cache_field_shared_item_value(cache_id, 0, 1).number, 45292.0)
+            self.assertIs(wb.pivot_cache_field_shared_item_value(cache_id, 0, 2).boolean, True)
+            self.assertEqual(wb.pivot_cache_field_shared_item_value(cache_id, 0, 4).error_code, 1)
+            with self.assertRaises(FormulonError):
+                wb.pivot_cache_field_shared_item_value(cache_id, 0, 5)
+
     def test_cache_source_and_report_layout_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             cache = wb.pivot_cache_create()
@@ -167,6 +187,7 @@ _PIVOT_READERS = {
     "pivot_cache_field_count",
     "pivot_cache_field_name",
     "pivot_cache_field_shared_item_count",
+    "pivot_cache_field_shared_item_value",
     "pivot_cache_record_count",
     "pivot_field_count",
     "pivot_data_field_count",

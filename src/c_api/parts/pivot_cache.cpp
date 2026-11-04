@@ -28,11 +28,13 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::find_cache_mut;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::grow_record_cells;
 using formulon::c_api::parts::intern_cache_text;
 using formulon::c_api::parts::invalidate_pivot_results_for_cache;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::value_to_fm;
 
 namespace {
 
@@ -324,6 +326,29 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_
     return status;
   }
   *out_count = field->shared_items.size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_value(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                       std::size_t field_idx, std::size_t item_idx,
+                                                                       fm_value_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_field_shared_item_value: NULL argument");
+  }
+  fm_status_t status = 0;
+  const auto* field =
+      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_shared_item_value", &status);
+  if (field == nullptr) {
+    return status;
+  }
+  if (fm_status_t rc = check_index(item_idx, field->shared_items.size(),
+                                   "fm_workbook_pivot_cache_field_shared_item_value", "item_idx");
+      rc != 0) {
+    return rc;
+  }
+  value_to_fm(field->shared_items[item_idx], fresh_read_scratch(wb), out);
   return 0;
 }
 

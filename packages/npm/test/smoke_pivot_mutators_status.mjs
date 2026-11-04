@@ -925,6 +925,22 @@ test('pivotFieldSetDateGroup defaults its trailing three arguments', async () =>
   }
 });
 
+test('a pivot cache shared item reads back by index', async () => {
+  const mod = await getModule();
+  const b = buildPivot(mod);
+  try {
+    const east = b.wb.pivotCacheFieldSharedItemValue(b.cacheId, 0, 0);
+    assert.ok(east.status.ok, JSON.stringify(east.status));
+    assert.equal(east.value.text, 'East');
+    assert.equal(b.wb.pivotCacheFieldSharedItemValue(b.cacheId, 0, 1).value.text, 'West');
+    const count = b.wb.pivotCacheFieldSharedItemCount(b.cacheId, 0).value;
+    const past = b.wb.pivotCacheFieldSharedItemValue(b.cacheId, 0, count);
+    assert.equal(past.status.ok, false);
+  } finally {
+    b.wb.delete();
+  }
+});
+
 test('a pivot cache error setter without errorCode throws and changes nothing', async () => {
   const mod = await getModule();
   const b = buildPivot(mod);

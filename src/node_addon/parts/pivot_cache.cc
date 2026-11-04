@@ -175,6 +175,19 @@ Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& i
   return MakeNumberResult(env, rc, static_cast<double>(count));
 }
 
+Napi::Value Workbook::PivotCacheFieldSharedItemValue(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeEmptyValueResult(env, NullHandleError(env));
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t item_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_value_t v{};
+  const fm_status_t rc = fm_workbook_pivot_cache_field_shared_item_value(handle_, cache_id, field_idx, item_idx, &v);
+  return MakeValueResult(env, rc, v);
+}
+
 Napi::Value Workbook::PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_workbook_pivot_cache_field_add_shared_item_number);
 }

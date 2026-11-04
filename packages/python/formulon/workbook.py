@@ -10603,6 +10603,24 @@ class Workbook:
             _uint(field_idx, "field_idx"),
         )
 
+    def pivot_cache_field_shared_item_value(self, cache_id: int, field_idx: int, item_idx: int) -> Value:
+        """Return shared item ``item_idx`` of cache field ``field_idx``.
+
+        Date items are stored as serial numbers and read back as numbers.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            value_ptr = scope.alloc(fm_value_t_size)
+            status = LIB.fm_workbook_pivot_cache_field_shared_item_value(
+                h,
+                _uint(cache_id, "cache_id"),
+                _uint(field_idx, "field_idx"),
+                _uint(item_idx, "item_idx"),
+                value_ptr,
+            )
+            _check(status, "fm_workbook_pivot_cache_field_shared_item_value")
+            return Value._from_wasm(value_ptr)
+
     def pivot_cache_field_add_shared_item_number(self, cache_id: int, field_idx: int, value: float) -> None:
         """Append a numeric shared item to a cache field."""
         h = self._require()

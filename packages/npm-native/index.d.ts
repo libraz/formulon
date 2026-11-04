@@ -4086,6 +4086,9 @@ export interface Workbook {
 
   /** Number of shared items configured on cache field `fieldIdx`. */
   pivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): NumberResult;
+  /** Reads shared item `itemIdx` of cache field `fieldIdx`; date items read back as serial numbers.
+   *  Fails with `kInvalidArgument` when `itemIdx` is not below the shared item count. */
+  pivotCacheFieldSharedItemValue(cacheId: number, fieldIdx: number, itemIdx: number): CellResult;
   /** Appends a numeric shared item to cache field `fieldIdx`. */
   pivotCacheFieldAddSharedItemNumber(cacheId: number, fieldIdx: number, value: number): Status;
   /** Appends a text shared item to cache field `fieldIdx`. */

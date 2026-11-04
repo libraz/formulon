@@ -69,6 +69,7 @@ function envelopeProbes(wb) {
   return [
     ['ParallelRecalcResult', true, () => wb.recalcParallel(9)],
     ['CellResult', true, () => wb.getValue(99, 0, 0)],
+    ['CellResult', true, () => wb.pivotCacheFieldSharedItemValue(9999, 0, 0)],
     ['EvalResult', true, () => wb.evaluateFormulaText(99, 0, 0, '=1')],
     ['EvalArrayResult', true, () => wb.evaluateFormulaArray(99, 0, 0, '=1')],
     ['SaveResult', true, () => wb.saveAs(99)],
