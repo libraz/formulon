@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -188,6 +189,20 @@ parser::AstNode* make_area(Arena& arena, parser::Reference first, parser::Refere
   parser::AstNode* lhs = parser::make_ref(arena, first);
   parser::AstNode* rhs = parser::make_ref(arena, last);
   return lhs == nullptr || rhs == nullptr ? nullptr : parser::make_range_op(arena, lhs, rhs, /*spliced=*/full);
+}
+
+// The deleted-sheet `#REF!` of the area `first`:`last` (`#REF!A1:B2`,
+// `#REF!A:A`), spelled as `make_area` spells the area.
+parser::AstNode* make_dead_sheet_area(Arena& arena, parser::Reference first, parser::Reference last) {
+  const FullAxis axis = classify_full_axis(first, last);
+  if (axis.cols || axis.rows) {
+    first.is_full_col = last.is_full_col = axis.cols;
+    first.is_full_row = last.is_full_row = axis.rows;
+    if (axis.one) {
+      return parser::make_dead_sheet_ref_error(arena, &first, nullptr);
+    }
+  }
+  return parser::make_dead_sheet_ref_error(arena, &first, &last);
 }
 
 // The external counterpart of `make_area`: whole columns and rows read back
@@ -379,6 +394,11 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       return sheet_names[ixti];
     }
     return {};
+  };
+
+  // True when `ixti` names this workbook's deleted-sheet entry (itab -1).
+  auto ixti_is_dead_sheet = [&sheet_ranges](std::uint32_t ixti) -> bool {
+    return ixti < sheet_ranges.size() && sheet_ranges[ixti].external_book == 0U && sheet_ranges[ixti].itab_first == -1;
   };
 
   // Multi-sheet (genuine 3-D) resolution for `ixti`: returns `true` and
@@ -987,6 +1007,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d external"));
           break;
         }
+        if (ixti_is_dead_sheet(ixti)) {
+          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d"));
+          parser::AstNode* n = parser::make_dead_sheet_ref_error(arena, &loc, nullptr);
+          RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d deleted sheet"));
+          break;
+        }
         std::string_view begin_sheet;
         std::string_view end_sheet;
         if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
@@ -1023,6 +1049,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d external"));
           break;
         }
+        if (ixti_is_dead_sheet(ixti)) {
+          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d"));
+          parser::AstNode* n = make_dead_sheet_area(arena, area.first, area.second);
+          RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d deleted sheet"));
+          break;
+        }
         std::string_view begin_sheet;
         std::string_view end_sheet;
         if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
@@ -1046,15 +1078,27 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       case PtgKind::AreaErr:
       case PtgKind::AreaErr3d: {
         // Consume the payload (ixti for the 3d forms, then one loc, or two
-        // for the area forms) and emit a `#REF!` literal.
+        // for the area forms; the locations are unused) and emit a `#REF!`
+        // literal. A 3d form keeps the sheet its XTI names: `Sheet3!#REF!`,
+        // or `#REF!#REF!` for a deleted sheet; an external one stays bare.
         const bool area = info->kind == PtgKind::AreaErr || info->kind == PtgKind::AreaErr3d;
+        std::optional<std::uint32_t> ixti;
         if (info->kind == PtgKind::RefErr3d || info->kind == PtgKind::AreaErr3d) {
-          RETURN_IF_ERROR(read_u16(cursor));
+          ASSIGN_OR_RETURN(ixti, read_u16(cursor));
         }
         for (int i = area ? 2 : 1; i > 0; --i) {
           RETURN_IF_ERROR(read_loc(cursor, {}));
         }
-        parser::AstNode* n = parser::make_error_literal(arena, ErrorCode::Ref);
+        parser::AstNode* n = nullptr;
+        if (!ixti || ixti_is_external(*ixti)) {
+          n = parser::make_error_literal(arena, ErrorCode::Ref);
+        } else if (ixti_is_dead_sheet(*ixti)) {
+          n = parser::make_dead_sheet_ref_error(arena, nullptr, nullptr);
+        } else if (const std::string_view sheet = sheet_for_ixti(*ixti); !sheet.empty()) {
+          n = parser::make_qualified_ref_error(arena, sheet, parser::local_sheet_needs_quoting_a1(sheet));
+        } else {
+          n = parser::make_error_literal(arena, ErrorCode::Ref);
+        }
         RETURN_IF_ERROR(push_node(stack, n, area ? "PtgAreaErr" : "PtgRefErr"));
         break;
       }

@@ -24,6 +24,10 @@ namespace xlsb {
 /// entry names no sheet, the record's own scope does.
 inline constexpr std::int32_t kXtiNoSheet = -2;
 
+/// `itabFirst` / `itabLast` of the `BrtExternSheet` entry a reference into
+/// a deleted sheet resolves through (`#REF!A1`, `#REF!#REF!`).
+inline constexpr std::int32_t kXtiDeletedSheet = -1;
+
 /// True when Excel stores a call to `name` under a hidden `_xlfn.*`
 /// BrtName rather than a function id. Classified by
 /// `io::classify_storage_prefix`, the same enumeration the OOXML writer

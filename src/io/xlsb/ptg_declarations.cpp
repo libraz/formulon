@@ -36,7 +36,7 @@ void AddName(std::string_view name, std::vector<std::string>& names, std::unorde
 }
 
 /// Packs an XTI into a single dedupe key. Sheet indices stay below 2^19,
-/// so 20 bits each keep `kXtiNoSheet` distinct.
+/// so 20 bits each keep `kXtiNoSheet` and `kXtiDeletedSheet` distinct.
 std::uint64_t PackRangeKey(std::uint32_t book, std::int32_t itab_first, std::int32_t itab_last) {
   constexpr std::uint64_t kMask = (std::uint64_t{1} << 20) - 1U;
   return (static_cast<std::uint64_t>(book) << 40) |
@@ -344,6 +344,28 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       AddSheetRange(0U, itab_begin, itab_end, ranges, seen);
       return;
     }
+    case parser::NodeKind::ErrorLiteral: {
+      // A sited `#REF!` is stored through its sheet's XTI, or the deleted-sheet one.
+      const parser::RefErrorSite* site = node.as_ref_error_site();
+      if (site == nullptr) {
+        return;
+      }
+      if (site->form == parser::RefErrorSite::Form::kDeadSheet) {
+        AddXti(0U, kXtiDeletedSheet, kXtiDeletedSheet, ranges, seen);
+        return;
+      }
+      const int itab = resolve_ixti(sheet_names, site->sheet);
+      AddSheetRange(0U, itab, itab, ranges, seen);
+      return;
+    }
+    case parser::NodeKind::SpillRef:
+      if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
+        collect_ptg_sheet_ranges(*anchor, sheet_names, ranges, seen);
+      } else if (const parser::Reference& r = node.as_spill_ref(); !r.sheet.empty()) {
+        const int itab = resolve_ixti(sheet_names, r.sheet);
+        AddSheetRange(0U, itab, itab, ranges, seen);
+      }
+      return;
     case parser::NodeKind::StructuredRef: {
       // PtgList names its table's sheet through an XTI.
       if (const std::optional<std::int32_t> itab = structured_ref_sheet(node, ranges)) {

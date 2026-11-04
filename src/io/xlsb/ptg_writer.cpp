@@ -655,17 +655,19 @@ class Encoder {
     switch (node.kind()) {
       case parser::NodeKind::Literal:
         return emit_literal(node.as_literal());
-      case parser::NodeKind::ErrorLiteral:
+      case parser::NodeKind::ErrorLiteral: {
+        const parser::RefErrorSite* site = node.as_ref_error_site();
+        if (site != nullptr && site->form == parser::RefErrorSite::Form::kDeadSheet && site->has_address) {
+          return emit_dead_sheet_ref(*site, cls(site->is_range || site->first.is_full_col || site->first.is_full_row));
+        }
         if (measured_calls_ && node.as_error_literal() == ErrorCode::Ref) {
           // Excel stores a written #REF! as a reference error with its slot's class.
-          emit_u8(out_, ClassedPtg(kPtgRefErr, cls(false)));  // PtgRefErr
-          emit_u32(out_, 0);
-          emit_u16(out_, 0);
-          return Expected<void, Error>::Ok();
+          return emit_ref_error(site, cls(false));
         }
         emit_u8(out_, kPtgErr);  // PtgErr
         emit_u8(out_, error_wire_code(node.as_error_literal()));
         return Expected<void, Error>::Ok();
+      }
       case parser::NodeKind::Ref:
         return emit_ref(node.as_ref(), cls(node.as_ref().is_full_col || node.as_ref().is_full_row));
       case parser::NodeKind::Ref3D:
@@ -1038,9 +1040,7 @@ class Encoder {
       return Expected<void, Error>::Ok();
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
-    emit_u8(out_, ClassedPtg(kPtgRef3d, cls));  // PtgRef3d
-    emit_u16(out_, ixti);
-    emit_loc(out_, ref);
+    emit_ref3d_at(ixti, ref, cls);
     return Expected<void, Error>::Ok();
   }
 
@@ -1053,9 +1053,57 @@ class Encoder {
       return Expected<void, Error>::Ok();
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(sheet));
+    emit_area3d_at(ixti, first, last, cls);
+    return Expected<void, Error>::Ok();
+  }
+
+  /// `PtgRef3d` of the cell `ref` through the XTI `ixti`.
+  void emit_ref3d_at(std::uint16_t ixti, const parser::Reference& ref, std::uint8_t cls) {
+    emit_u8(out_, ClassedPtg(kPtgRef3d, cls));  // PtgRef3d
+    emit_u16(out_, ixti);
+    emit_loc(out_, ref);
+  }
+
+  /// `PtgArea3d` of the rectangle `first`:`last` through the XTI `ixti`.
+  void emit_area3d_at(std::uint16_t ixti, const parser::Reference& first, const parser::Reference& last,
+                      std::uint8_t cls) {
     emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
     emit_u16(out_, ixti);
     emit_area(out_, first, last);
+  }
+
+  /// A deleted sheet's address (`#REF!A1`, `#REF!A1:B2`, `#REF!A:A`): the
+  /// reference token through the deleted-sheet XTI.
+  Expected<void, Error> emit_dead_sheet_ref(const parser::RefErrorSite& site, std::uint8_t cls) {
+    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(kXtiDeletedSheet, kXtiDeletedSheet));
+    parser::Reference first = site.first;
+    parser::Reference last = site.is_range ? site.last : site.first;
+    if (!site.is_range && !first.is_full_col && !first.is_full_row) {
+      emit_ref3d_at(ixti, first, cls);
+      return Expected<void, Error>::Ok();
+    }
+    SpanGrid(first, last);
+    emit_area3d_at(ixti, first, last, cls);
+    return Expected<void, Error>::Ok();
+  }
+
+  /// A written `#REF!` with a zero location: `PtgRefErr3d` through the XTI
+  /// of the sheet it names (the deleted-sheet XTI for `#REF!#REF!`), else
+  /// `PtgRefErr`, also for a sheet the workbook lacks.
+  Expected<void, Error> emit_ref_error(const parser::RefErrorSite* site, std::uint8_t cls) {
+    const bool dead = site != nullptr && site->form == parser::RefErrorSite::Form::kDeadSheet;
+    const int itab = dead ? kXtiDeletedSheet : site != nullptr ? resolve_ixti(sheet_names_, site->sheet) : -1;
+    if (!dead && itab < 0) {
+      emit_u8(out_, ClassedPtg(kPtgRefErr, cls));  // PtgRefErr
+      emit_u32(out_, 0);
+      emit_u16(out_, 0);
+      return Expected<void, Error>::Ok();
+    }
+    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(itab, itab));
+    emit_u8(out_, ClassedPtg(kPtgRefErr3d, cls));  // PtgRefErr3d
+    emit_u16(out_, ixti);
+    emit_u32(out_, 0);
+    emit_u16(out_, 0);
     return Expected<void, Error>::Ok();
   }
 

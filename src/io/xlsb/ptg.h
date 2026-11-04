@@ -206,6 +206,7 @@ inline constexpr std::uint8_t kPtgAreaN = 0x2D;
 inline constexpr std::uint8_t kPtgNameX = 0x39;
 inline constexpr std::uint8_t kPtgRef3d = 0x3A;
 inline constexpr std::uint8_t kPtgArea3d = 0x3B;
+inline constexpr std::uint8_t kPtgRefErr3d = 0x3C;
 
 /// `PtgAttrSpace` whitespace types ([MS-XLSB] PtgAttrSpaceType) the reader
 /// and writer carry. The attr precedes the token it applies to.
@@ -310,11 +311,12 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::Full},
     {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Full},
     // `RefErr` / `AreaErr` / `RefErr3d` / `AreaErr3d`: the reader decodes
-    // all four to a `#REF!` `ErrorLiteral` (`ptg_reader.cpp`'s combined
-    // error-reference case). The writer emits a `#REF!` literal as `RefErr`
-    // (slot class, zero payload) in a formula without a base cell evaluated
-    // as dynamic-array, as Excel stores a typed `#REF!`, else as `PtgErr`
-    // (0x1C); it never emits the other three.
+    // all four to a `#REF!` `ErrorLiteral`; the 3d forms keep the sheet
+    // their XTI names (`Sheet3!#REF!`, or `#REF!#REF!` for itab -1). In a
+    // formula without a base cell evaluated as dynamic-array, the writer
+    // emits a bare `#REF!` as `RefErr` and a sheet-qualified one as
+    // `RefErr3d` (slot class, zero payload), else `PtgErr` (0x1C); it never
+    // emits `AreaErr` / `AreaErr3d`.
     {PtgKind::RefErr, 0x2A, "RefErr", PtgStatus::Full},
     {PtgKind::AreaErr, 0x2B, "AreaErr", PtgStatus::Full},
     // Offsets from the formula's base cell (`PtgBaseCell`); read and written

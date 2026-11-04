@@ -170,6 +170,30 @@ TEST(XlsbPtgCodec, ErrorReferenceFormsConsumeTheirPayloads) {
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
 }
+TEST(XlsbPtgCodec, ErrorReferenceFormsKeepTheSheetTheirXtiNames) {
+  const std::vector<std::string> sheets = {"Sheet1", "Sheet3"};
+  // ixti 0: deleted sheet; 1: Sheet3; 2: an external book; 3: book scope.
+  const std::vector<XlsbSheetRange> ranges = {XlsbSheetRange{-1, -1, 0U}, XlsbSheetRange{1, 1, 0U},
+                                              XlsbSheetRange{0, 0, 1U}, XlsbSheetRange{-2, -2, 0U}};
+  const auto decode = [&](const std::vector<std::uint8_t>& rgce) -> std::string {
+    Arena arena;
+    auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, sheets, {}, ranges, {});
+    EXPECT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+    return decoded ? parser::format_formula(*decoded.value()) : std::string();
+  };
+  // PtgRef3d / PtgArea3d through the deleted-sheet XTI keep their address.
+  EXPECT_EQ(decode({0x3A, 0, 0, 0, 0, 0, 0, 0x00, 0xC0}), "#REF!A1");
+  EXPECT_EQ(decode({0x3A, 0, 0, 0, 0, 0, 0, 0x00, 0x00}), "#REF!$A$1");
+  EXPECT_EQ(decode({0x3B, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x00, 0x00, 0x01, 0x00}), "#REF!$A$1:$B$2");
+  EXPECT_EQ(decode({0x3B, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0x0F, 0, 0x00, 0x40, 0x00, 0x40}), "#REF!A:A");
+  EXPECT_EQ(decode({0x3B, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0x00, 0x00, 0xFF, 0x3F}), "#REF!$1:$3");
+  // PtgRefErr3d: the sheet, the deleted sheet, or bare.
+  EXPECT_EQ(decode({0x3C, 1, 0, 0, 0, 0, 0, 0, 0}), "Sheet3!#REF!");
+  EXPECT_EQ(decode({0x3C, 0, 0, 0, 0, 0, 0, 0, 0}), "#REF!#REF!");
+  EXPECT_EQ(decode({0x3C, 2, 0, 0, 0, 0, 0, 0, 0}), "#REF!");
+  EXPECT_EQ(decode({0x3C, 3, 0, 0, 0, 0, 0, 0, 0}), "#REF!");
+  EXPECT_EQ(decode({0x3D, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0}), "#REF!#REF!");
+}
 TEST(XlsbPtgCodec, DecoderKeepsParenTokenInTheText) {
   // PtgInt(1), PtgInt(2), PtgAdd, PtgParen: the written parentheses Excel
   // shows, which leave the value stack unchanged.

@@ -836,6 +836,189 @@ TEST(XlsbWriter, WholeColumnFormulaSavesWithoutDowngrade) {
   EXPECT_EQ(cell->formula_text, "=SUM(A:A)");
 }
 
+namespace {
+
+// One `BrtExternSheet` entry as written: iSupBook, itabFirst, itabLast.
+struct WrittenXti {
+  std::uint32_t book = 0;
+  std::uint32_t first = 0;
+  std::uint32_t last = 0;
+};
+
+// Returns the entries of `xl/workbook.bin`'s `BrtExternSheet`, or an empty
+// vector when the record is missing or truncated.
+std::vector<WrittenXti> FindExternSheet(const std::vector<std::uint8_t>& workbook_bin) {
+  ByteSpan cursor = SpanOf(workbook_bin);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return {};
+    }
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtExternSheet)) {
+      continue;
+    }
+    ByteSpan p = record_or.value().payload;
+    auto count_or = read_u32(p);
+    if (!count_or) {
+      return {};
+    }
+    std::vector<WrittenXti> out;
+    for (std::uint32_t i = 0; i < count_or.value(); ++i) {
+      auto book_or = read_u32(p);
+      auto first_or = read_u32(p);
+      auto last_or = read_u32(p);
+      if (!book_or || !first_or || !last_or) {
+        return {};
+      }
+      out.push_back(WrittenXti{book_or.value(), first_or.value(), last_or.value()});
+    }
+    return out;
+  }
+  return {};
+}
+
+std::uint16_t U16At(const std::vector<std::uint8_t>& bytes, std::size_t at) {
+  return static_cast<std::uint16_t>(bytes[at] | (bytes[at + 1U] << 8U));
+}
+
+std::uint32_t U32At(const std::vector<std::uint8_t>& bytes, std::size_t at) {
+  return static_cast<std::uint32_t>(bytes[at]) | (static_cast<std::uint32_t>(bytes[at + 1U]) << 8U) |
+         (static_cast<std::uint32_t>(bytes[at + 2U]) << 16U) | (static_cast<std::uint32_t>(bytes[at + 3U]) << 24U);
+}
+
+// The XTI the ixti at `rgce[at]` names, or {~0, ~0, ~0} when out of range.
+WrittenXti XtiAt(const std::vector<WrittenXti>& xti, const std::vector<std::uint8_t>& rgce, std::size_t at) {
+  const std::uint16_t ixti = U16At(rgce, at);
+  return ixti < xti.size() ? xti[ixti] : WrittenXti{0xFFFFFFFFU, 0xFFFFFFFFU, 0xFFFFFFFFU};
+}
+
+constexpr std::uint8_t kClassStrip = 0x9FU;  // clears the two class bits of a Ptg byte
+
+}  // namespace
+
+TEST(XlsbWriter, SitedRefErrorsUseTheirSheetsXti) {
+  Workbook wb = Workbook::create_empty();
+  const std::size_t first = wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  Sheet& sheet1 = wb.sheet(first);
+  sheet1.set_cell_formula(0U, 0U, "=Sheet3!#REF!*2");   // A1
+  sheet1.set_cell_formula(0U, 1U, "=#REF!A1");          // B1
+  sheet1.set_cell_formula(0U, 2U, "=SUM(#REF!A1:B2)");  // C1
+  sheet1.set_cell_formula(0U, 3U, "=SUM(#REF!A:A)");    // D1
+  sheet1.set_cell_formula(0U, 4U, "=#REF!#REF!");       // E1
+  sheet1.set_cell_formula(0U, 5U, "=Nope!#REF!");       // F1
+  sheet1.set_cell_formula(0U, 6U, "=#REF!");            // G1
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  auto wb_bin_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(wb_bin_or));
+  const std::vector<WrittenXti> xti = FindExternSheet(wb_bin_or.value());
+
+  // Sheet3!#REF!: PtgRefErr3d through Sheet3's XTI, zero location.
+  const std::vector<std::uint8_t> qualified = FindFmlaNumRgce(sheet_or.value(), 0U);
+  ASSERT_GE(qualified.size(), 9U);
+  EXPECT_EQ(qualified[0] & kClassStrip, 0x3CU & kClassStrip);
+  const WrittenXti sheet3 = XtiAt(xti, qualified, 1U);
+  EXPECT_EQ(sheet3.book, 0U);
+  EXPECT_EQ(sheet3.first, 2U);
+  EXPECT_EQ(sheet3.last, 2U);
+  EXPECT_EQ(U32At(qualified, 3U), 0U);
+  EXPECT_EQ(U16At(qualified, 7U), 0U);
+
+  // #REF!A1: PtgRef3d through the deleted-sheet XTI {0, -1, -1}.
+  const std::vector<std::uint8_t> cell = FindFmlaNumRgce(sheet_or.value(), 1U);
+  ASSERT_GE(cell.size(), 9U);
+  EXPECT_EQ(cell[0] & kClassStrip, 0x3AU & kClassStrip);
+  const WrittenXti dead = XtiAt(xti, cell, 1U);
+  EXPECT_EQ(dead.book, 0U);
+  EXPECT_EQ(dead.first, 0xFFFFFFFFU);
+  EXPECT_EQ(dead.last, 0xFFFFFFFFU);
+  EXPECT_EQ(U32At(cell, 3U), 0U);            // row 1
+  EXPECT_EQ(U16At(cell, 7U) & 0x3FFFU, 0U);  // column A
+
+  // SUM(#REF!A1:B2): PtgArea3d through the same XTI.
+  const std::vector<std::uint8_t> area = FindFmlaNumRgce(sheet_or.value(), 2U);
+  ASSERT_GE(area.size(), 15U);
+  EXPECT_EQ(area[0] & kClassStrip, 0x3BU & kClassStrip);
+  EXPECT_EQ(U16At(area, 1U), U16At(cell, 1U));
+  EXPECT_EQ(U32At(area, 3U), 0U);
+  EXPECT_EQ(U32At(area, 7U), 1U);
+  EXPECT_EQ(U16At(area, 11U) & 0x3FFFU, 0U);
+  EXPECT_EQ(U16At(area, 13U) & 0x3FFFU, 1U);
+
+  // SUM(#REF!A:A): PtgArea3d over every row.
+  const std::vector<std::uint8_t> column = FindFmlaNumRgce(sheet_or.value(), 3U);
+  ASSERT_GE(column.size(), 15U);
+  EXPECT_EQ(column[0] & kClassStrip, 0x3BU & kClassStrip);
+  EXPECT_EQ(U16At(column, 1U), U16At(cell, 1U));
+  EXPECT_EQ(U32At(column, 3U), 0U);
+  EXPECT_EQ(U32At(column, 7U), 1048575U);
+  EXPECT_EQ(U16At(column, 11U) & 0x3FFFU, 0U);
+  EXPECT_EQ(U16At(column, 13U) & 0x3FFFU, 0U);
+
+  // #REF!#REF!: PtgRefErr3d through the deleted-sheet XTI.
+  const std::vector<std::uint8_t> no_address = FindFmlaNumRgce(sheet_or.value(), 4U);
+  ASSERT_GE(no_address.size(), 9U);
+  EXPECT_EQ(no_address[0] & kClassStrip, 0x3CU & kClassStrip);
+  EXPECT_EQ(U16At(no_address, 1U), U16At(cell, 1U));
+  EXPECT_EQ(U32At(no_address, 3U), 0U);
+  EXPECT_EQ(U16At(no_address, 7U), 0U);
+
+  // A sheet the workbook lacks, and an unsited #REF!: PtgRefErr.
+  const std::vector<std::uint8_t> missing = FindFmlaNumRgce(sheet_or.value(), 5U);
+  ASSERT_FALSE(missing.empty());
+  EXPECT_EQ(missing[0] & kClassStrip, 0x2AU & kClassStrip);
+  const std::vector<std::uint8_t> bare = FindFmlaNumRgce(sheet_or.value(), 6U);
+  ASSERT_FALSE(bare.empty());
+  EXPECT_EQ(bare[0] & kClassStrip, 0x2AU & kClassStrip);
+}
+
+TEST(XlsbWriter, DeletedSheetXtiStaysDistinctFromTheBookScopeXti) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet1 = wb.sheet(wb.add_sheet("Sheet1"));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("G", "5")));
+  sheet1.set_cell_formula(0U, 0U, "=[0]!G");    // A1
+  sheet1.set_cell_formula(0U, 1U, "=#REF!A1");  // B1
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto wb_bin_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(wb_bin_or));
+  const std::vector<WrittenXti> xti = FindExternSheet(wb_bin_or.value());
+  const auto has = [&xti](std::uint32_t itab) {
+    return std::any_of(xti.begin(), xti.end(),
+                       [itab](const WrittenXti& e) { return e.book == 0U && e.first == itab && e.last == itab; });
+  };
+  EXPECT_TRUE(has(0xFFFFFFFEU));
+  EXPECT_TRUE(has(0xFFFFFFFFU));
+}
+
+TEST(XlsbWriter, SpillOfAnotherSheetsAnchorRegistersItsXti) {
+  Workbook wb = Workbook::create_empty();
+  const std::size_t first = wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(first, 0U, 0U, "=Sheet3!D5#")));
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->formula_text, "=Sheet3!D5#");
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

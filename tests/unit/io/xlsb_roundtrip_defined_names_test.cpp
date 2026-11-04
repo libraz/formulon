@@ -385,6 +385,86 @@ TEST(XlsbWriteReadSymmetry, SheetQualifiedWorkbookNameReadsBackAsSelfBook) {
   EXPECT_EQ(after.sheet(0).resolve_cell_value(0U, 0U).as_number(), 5.0);
 }
 
+// Each `#REF!` site form, its xlsb text, and its xlsx (storage) text.
+struct RefErrorSiteCase {
+  const char* xlsb;
+  const char* xlsx;
+};
+
+constexpr RefErrorSiteCase kRefErrorSiteCells[] = {
+    {"=Sheet3!#REF!*2", "=Sheet3!#REF!*2"},
+    {"=SUM(Sheet3!#REF!)", "=SUM(Sheet3!#REF!)"},
+    {"=Sheet3!#REF!", "=Sheet3!#REF!"},
+    {"=#REF!A1", "=#REF!"},
+    {"=SUM(#REF!A1:B2)", "=SUM(#REF!)"},
+    {"=SUM(#REF!A:A)", "=SUM(#REF!)"},
+    {"=SUM(#REF!1:3)", "=SUM(#REF!)"},
+    {"=#REF!$A$1+Sheet3!#REF!", "=#REF!+Sheet3!#REF!"},
+    {"=#REF!#REF!", "=#REF!"},
+    {"=SUM(#REF!#REF!)+1", "=SUM(#REF!)+1"},
+    {"=#REF!", "=#REF!"},
+};
+
+struct RefErrorSiteName {
+  const char* name;
+  const char* xlsb;
+  const char* xlsx;
+};
+
+constexpr RefErrorSiteName kRefErrorSiteNames[] = {
+    {"Nm", "Sheet3!#REF!", "Sheet3!#REF!"},
+    {"Nm2", "#REF!$A$1", "#REF!"},
+    {"Nm3", "#REF!$A$1:$B$2", "#REF!"},
+    {"Nm4", "#REF!#REF!", "#REF!"},
+};
+
+void ExpectRefErrorSites(const Workbook& wb, bool storage, const char* label) {
+  SCOPED_TRACE(label);
+  std::uint32_t row = 0;
+  for (const RefErrorSiteCase& c : kRefErrorSiteCells) {
+    const Cell* cell = wb.sheet(0).cell_at(row, 3U);
+    ASSERT_NE(cell, nullptr) << row;
+    EXPECT_EQ(cell->formula_text, storage ? c.xlsx : c.xlsb) << row;
+    ++row;
+  }
+  for (const RefErrorSiteName& n : kRefErrorSiteNames) {
+    const auto it = std::find_if(wb.defined_names().begin(), wb.defined_names().end(),
+                                 [&n](const DefinedName& dn) { return dn.name == n.name; });
+    ASSERT_NE(it, wb.defined_names().end()) << n.name;
+    EXPECT_EQ(it->formula, storage ? n.xlsx : n.xlsb) << n.name;
+  }
+}
+
+TEST(XlsbWriteReadSymmetry, RefErrorSitesRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet3");
+  std::uint32_t row = 0;
+  for (const RefErrorSiteCase& c : kRefErrorSiteCells) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 3U, c.xlsb))) << c.xlsb;
+    ++row;
+  }
+  for (const RefErrorSiteName& n : kRefErrorSiteNames) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_defined_name(n.name, n.xlsb))) << n.name;
+  }
+
+  auto saved = io::xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(saved.value().diagnostics.downgraded_formula_count, 0U);
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  EXPECT_EQ(reloaded.value().undecoded_formula_count, 0U);
+  const Workbook after = std::move(reloaded.value().workbook);
+  ExpectRefErrorSites(after, /*storage=*/false, "xlsb round trip");
+
+  // A deleted sheet's address does not survive xlsx: its text is bare `#REF!`.
+  auto saved_xlsx = io::write_ooxml(after);
+  ASSERT_TRUE(static_cast<bool>(saved_xlsx)) << saved_xlsx.error().message;
+  auto reread_xlsx = io::read_ooxml(test::span_of(saved_xlsx.value()));
+  ASSERT_TRUE(static_cast<bool>(reread_xlsx)) << reread_xlsx.error().message;
+  ExpectRefErrorSites(reread_xlsx.value().workbook, /*storage=*/true, "xlsx re-save");
+}
+
 // `[Book]Sheet` with no `!` is a name with no definition: #NAME?, no link,
 // and the same text after either format's round trip.
 void ExpectBracketNames(Workbook& wb, const char* label) {
