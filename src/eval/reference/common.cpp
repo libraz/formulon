@@ -113,7 +113,7 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
     out->left_col = std::min(parsed.col, parsed.col2);
     out->bottom_row = std::max(parsed.row, parsed.row2);
     out->right_col = std::max(parsed.col, parsed.col2);
-    out->is_range = (out->top_row != out->bottom_row) || (out->left_col != out->right_col);
+    out->is_range = rect_is_range(out->top_row, out->left_col, out->bottom_row, out->right_col);
   } else {
     out->top_row = parsed.row;
     out->left_col = parsed.col;

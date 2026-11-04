@@ -56,7 +56,7 @@ bool resolve_picked_reference(const parser::AstNode& picked, Arena& arena, const
                               out_right_col, out_err)) {
     return false;
   }
-  *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
+  *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
   return true;
 }
 
@@ -108,7 +108,7 @@ bool resolve_offset_call(const parser::AstNode& node, Arena& arena, const Functi
   *out_left_col = left_col;
   *out_bottom_row = top_row + height - 1U;
   *out_right_col = left_col + width - 1U;
-  *out_is_range = (height > 1U) || (width > 1U);
+  *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
   return true;
 }
 
@@ -199,7 +199,7 @@ bool resolve_lookup_call(const parser::AstNode& node, Arena& arena, const Functi
                 out_err)) {
     return false;
   }
-  *out_is_range = (*out_top_row != *out_bottom_row) || (*out_left_col != *out_right_col);
+  *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
   return true;
 }
 

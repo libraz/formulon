@@ -24,6 +24,7 @@
 #include <string_view>
 
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -75,6 +76,12 @@ struct IndirectReference {
   bool is_full_col = false;
   bool is_full_row = false;
 };
+
+// True when the 0-based inclusive corners span more than one cell.
+inline bool rect_is_range(std::uint32_t top_row, std::uint32_t left_col, std::uint32_t bottom_row,
+                          std::uint32_t right_col) {
+  return !DeclaredRect{top_row, bottom_row, left_col, right_col, /*whole_axis=*/false}.single_cell();
+}
 
 // Converts a signed offset plus a non-negative base (both measured in
 // row / column units) into a 0-based grid coordinate, returning `false`
