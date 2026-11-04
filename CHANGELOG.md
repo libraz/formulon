@@ -70,6 +70,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaving out given cells, for hosts that resolve those cells' style
   themselves.
 
+### Changed
+
+- The WASM size report's Brotli ceilings moved to 1280 KiB soft / 1344 KiB
+  hard, to take in the pivot layout, date grouping and drawing-name API.
+
 ### Fixed
 
 - Writing a number, text or blank into a pivot cache record, or clearing a
