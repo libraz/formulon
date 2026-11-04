@@ -66,7 +66,7 @@ enum class PivotCellKind : std::uint8_t {
 /// per-locale values come from `pivot_layout_options_for`; do not
 /// hard-code them at a use site.
 struct PivotLayoutOptions {
-  std::string grand_total_label = "Grand Total";
+  std::string grand_total_label = "Grand Total";  ///< A table's `grand_total_caption` overrides it.
   std::string values_label = "Values";
   std::string blank_item_label = "(blank)";               ///< Label of an axis item with no value.
   std::string all_pages_label = "(All)";                  ///< Page field showing every item.
@@ -103,6 +103,28 @@ struct PivotCells {
   std::deque<std::string> text_storage;
 };
 
+/// One axis item on the path to a value cell.
+struct PivotItemRef {
+  std::uint32_t field_index = 0;  ///< Index into `PivotTable::fields()`.
+  /// The node's `AxisHierarchyNode::identity`: the record value, or the group
+  /// item number when `is_group_item`.
+  Value identity = Value::blank();
+  bool is_group_item = false;
+};
+
+/// The axis items a value cell of the projected grid aggregates over.
+///
+/// Each list runs from the outermost field down to the cell's level: a leaf
+/// lists every field of its axis, a subtotal stops at the field it totals, and
+/// a grand total lists none. The Values pseudo-level is never listed.
+struct CellItemPath {
+  PivotCellKind kind = PivotCellKind::Data;  ///< Data, RowSubtotal, ColSubtotal or GrandTotal.
+  std::vector<PivotItemRef> row_items;
+  std::vector<PivotItemRef> col_items;
+  /// Backing storage for Text identities, so the path outlives the result.
+  std::deque<std::string> text_storage;
+};
+
 /// Projects an evaluated pivot result into absolute sheet coordinates.
 ///
 /// The report body starts at `table.anchor_row()` / `anchor_col()`; the
@@ -110,6 +132,13 @@ struct PivotCells {
 /// implicit leaf so the data area remains rectangular.
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
                                    const PivotLayoutOptions& options = PivotLayoutOptions{});
+
+/// The axis items behind the value cell `layout` places at absolute (`row`,
+/// `col`). Fails with `kInvalidArgument` for a cell outside the report and for
+/// a header, label or blank cell, and with `kEvalPivotInvalid` when an item on
+/// the path carries no identity.
+Expected<CellItemPath, Error> cell_item_path(const PivotTable& table, const PivotResult& result,
+                                             const PivotLayoutOptions& options, std::uint32_t row, std::uint32_t col);
 
 }  // namespace formulon::pivot
 

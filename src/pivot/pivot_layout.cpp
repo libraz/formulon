@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -17,6 +18,7 @@
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/value_order.h"
 #include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -115,6 +117,7 @@ enum class EntryKind : std::uint8_t {
   Leaf,      ///< An evaluated leaf (one data field of it when Values sits on this axis).
   Subtotal,  ///< A group's subtotal.
   Group,     ///< A label-only row opening a group whose values sit on the rows below.
+  Blank,     ///< An empty row closing an item block of an `insert_blank_row` field.
 };
 
 /// One row or column of the projected grid.
@@ -122,6 +125,8 @@ struct AxisEntry {
   /// Display path, outermost first. The Values level, when it sits on this
   /// axis, contributes the data-field name at its position.
   std::vector<std::string> labels;
+  /// The node behind each of `labels`; null at the Values level.
+  std::vector<const AxisHierarchyNode*> nodes;
   EntryKind kind = EntryKind::Leaf;
   std::size_t leaf_index = 0;      ///< Leaf: index into the evaluated leaves.
   std::size_t subtotal_index = 0;  ///< Subtotal: index into the result's subtotals.
@@ -130,7 +135,9 @@ struct AxisEntry {
   /// Subtotal over a group that contains the Values level: Excel names it
   /// "<group> <data field>" in place of the localized subtotal wording.
   std::string subtotal_label;
-  /// Subtotal that doubles as its group's heading row, labelled bare.
+  /// Subtotal that doubles as its group's heading row, labelled bare. A
+  /// collapsed item's subtotals are such entries in every layout and on
+  /// either axis.
   bool heads_group = false;
   /// Custom subtotal function of a labelled subtotal: Excel names the row
   /// "<group> <function>" in place of the localized subtotal wording.
@@ -150,6 +157,17 @@ std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
     counts[depth] = custom > 0 ? custom : (field.default_subtotal ? 1U : 0U);
   }
   return counts;
+}
+
+/// Per depth, the field the axis places there.
+std::vector<const PivotField*> fields_for_axis(const PivotTable& table, const std::vector<std::uint32_t>& field_order) {
+  std::vector<const PivotField*> fields(field_order.size(), nullptr);
+  for (std::size_t depth = 0; depth < field_order.size(); ++depth) {
+    if (field_order[depth] < table.fields().size()) {
+      fields[depth] = &table.fields()[field_order[depth]];
+    }
+  }
+  return fields;
 }
 
 /// Per depth, the field's custom subtotal functions in Excel's fixed order.
@@ -222,7 +240,34 @@ struct AxisShape {
   std::vector<bool> subtotal_first;                   ///< Per depth: the subtotal leads its group.
   std::vector<std::size_t> subtotal_counts;           ///< Per depth: subtotals the evaluator emitted.
   std::vector<std::vector<SubtotalFn>> subtotal_fns;  ///< Per depth: custom functions, in row order.
+  std::vector<const PivotField*> fields;              ///< Per depth: the field, or null when out of range.
+  std::vector<bool> blank_after;                      ///< Per depth: a blank row closes each item block.
 };
+
+// The `<item>` a node renders: by group item number, else by the cache label
+// `PivotItem::name` resolves to.
+const PivotItem* item_for_node(const PivotField& field, const AxisHierarchyNode& node) {
+  if (!node.identity.has_value()) {
+    return nullptr;
+  }
+  const Value& identity = *node.identity;
+  if (node.identity_is_group_item) {
+    for (const PivotItem& item : field.items) {
+      if (identity.is_number() && item.has_cache_index &&
+          static_cast<double>(item.cache_index) == identity.as_number()) {
+        return &item;
+      }
+    }
+    return nullptr;
+  }
+  const std::string label = display_string(identity);
+  for (const PivotItem& item : field.items) {
+    if (item.name == label) {
+      return &item;
+    }
+  }
+  return nullptr;
+}
 
 class AxisWalk {
  public:
@@ -237,6 +282,7 @@ class AxisWalk {
   void push(EntryKind kind, std::optional<std::size_t> data_field, std::size_t index = 0) {
     AxisEntry entry;
     entry.labels = path_;
+    entry.nodes = node_path_;
     entry.kind = kind;
     entry.data_field = data_field;
     if (kind == EntryKind::Leaf) {
@@ -261,6 +307,7 @@ class AxisWalk {
         leaf_cursor_ = leaf_start;
         subtotal_cursor_ = subtotal_start;
         path_.push_back(table_.data_fields()[df].name);
+        node_path_.push_back(nullptr);
         if (depth == shape_.depth) {
           push(EntryKind::Leaf, df, leaf);
         } else {
@@ -270,6 +317,7 @@ class AxisWalk {
           level(nodes, depth, df, leaf);
         }
         path_.pop_back();
+        node_path_.pop_back();
       }
       return;
     }
@@ -282,18 +330,53 @@ class AxisWalk {
     }
   }
 
+  // Whether `node` hides its children: its item's `show_detail`, else the
+  // field's `default` marker. The innermost field has nothing to hide.
+  bool is_collapsed(const AxisHierarchyNode& node, std::size_t depth) const {
+    if (node.children.empty() || depth + 1 >= shape_.depth || depth >= shape_.fields.size() ||
+        shape_.fields[depth] == nullptr) {
+      return false;
+    }
+    const PivotField& field = *shape_.fields[depth];
+    if (const PivotItem* item = item_for_node(field, node); item != nullptr) {
+      return !item->show_detail;
+    }
+    for (const PivotMarkerItem& marker : field.marker_items) {
+      if (marker.type == "default") {
+        return !marker.show_detail;
+      }
+    }
+    return false;
+  }
+
+  // Advances the cursors past `node`'s descendants without projecting them.
+  void skip_descendants(const AxisHierarchyNode& node, std::size_t depth) {
+    for (const AxisHierarchyNode& child : node.children) {
+      if (child.children.empty()) {
+        ++leaf_cursor_;
+        continue;
+      }
+      skip_descendants(child, depth + 1);
+      subtotal_cursor_ += depth + 1 < shape_.subtotal_counts.size() ? shape_.subtotal_counts[depth + 1] : 0;
+    }
+  }
+
   void node(const AxisHierarchyNode& node, std::size_t depth, std::optional<std::size_t> data_field) {
     path_.push_back(node.label);
+    node_path_.push_back(&node);
     // A group holding the Values level has no single value to show on its
     // own row, so Excel opens it with a label-only row and moves its
     // subtotals below it, one per data field.
     const bool values_below = !data_field && shape_.values_at.has_value() && *shape_.values_at > depth;
     const std::size_t count =
         !node.children.empty() && depth < shape_.subtotal_counts.size() ? shape_.subtotal_counts[depth] : 0;
+    // A collapsed item shows its subtotal in place of its children, so one
+    // without a subtotal stays expanded.
+    const bool collapsed = count > 0 && is_collapsed(node, depth);
     // Excel ignores `subtotal_top` once a field carries several functions:
     // the header row stays blank and every function gets a row below.
-    const bool first =
-        count == 1 && !values_below && depth < shape_.subtotal_first.size() && shape_.subtotal_first[depth];
+    const bool first = count == 1 && !values_below &&
+                       (collapsed || (depth < shape_.subtotal_first.size() && shape_.subtotal_first[depth]));
     const std::vector<SubtotalFn>* fns = depth < shape_.subtotal_fns.size() ? &shape_.subtotal_fns[depth] : nullptr;
     // Any other group shows its label on a row of its own: a subtotal at the
     // bottom, or none, cannot stand in for it.
@@ -303,10 +386,22 @@ class AxisWalk {
     if (node.children.empty()) {
       level({}, depth + 1, data_field, leaf_cursor_++);
       path_.pop_back();
+      node_path_.pop_back();
+      return;
+    }
+    if (collapsed && values_below) {
+      skip_descendants(node, depth);
+      push_collapsed_values(depth, subtotal_cursor_);
+      subtotal_cursor_ += count;
+      close_node(depth);
       return;
     }
     const std::size_t group_begin = entries_.size();
-    level(node.children, depth + 1, data_field, 0);
+    if (collapsed) {
+      skip_descendants(node, depth);
+    } else {
+      level(node.children, depth + 1, data_field, 0);
+    }
     const std::size_t subtotal_begin = entries_.size();
     const std::size_t subtotal_index = subtotal_cursor_;
     subtotal_cursor_ += count;
@@ -328,7 +423,37 @@ class AxisWalk {
       std::rotate(entries_.begin() + static_cast<std::ptrdiff_t>(group_begin),
                   entries_.begin() + static_cast<std::ptrdiff_t>(subtotal_begin), entries_.end());
     }
+    close_node(depth);
+  }
+
+  // A collapsed item with the Values level below it stands in for its
+  // subtree: the skipped levels stay empty and each data field still gets
+  // its own entry, carrying the item's subtotal.
+  void push_collapsed_values(std::size_t depth, std::size_t subtotal_index) {
+    const std::size_t skipped = *shape_.values_at - depth - 1;
+    for (std::size_t i = 0; i < skipped; ++i) {
+      path_.emplace_back();
+      node_path_.push_back(nullptr);
+    }
+    for (std::size_t df = 0; df < table_.data_fields().size(); ++df) {
+      path_.push_back(table_.data_fields()[df].name);
+      node_path_.push_back(nullptr);
+      push(EntryKind::Subtotal, df, subtotal_index);
+      entries_.back().heads_group = true;
+      path_.pop_back();
+      node_path_.pop_back();
+    }
+    path_.resize(path_.size() - skipped);
+    node_path_.resize(node_path_.size() - skipped);
+  }
+
+  // Leaves the node at `depth`, closing its block with a blank row when its field asks for one.
+  void close_node(std::size_t depth) {
     path_.pop_back();
+    node_path_.pop_back();
+    if (depth < shape_.blank_after.size() && shape_.blank_after[depth]) {
+      push(EntryKind::Blank, std::nullopt);
+    }
   }
 
   const PivotTable& table_;
@@ -336,6 +461,7 @@ class AxisWalk {
   std::size_t leaf_cursor_ = 0;
   std::size_t subtotal_cursor_ = 0;
   std::vector<std::string> path_;
+  std::vector<const AxisHierarchyNode*> node_path_;
   std::vector<AxisEntry> entries_;
 };
 
@@ -425,6 +551,7 @@ struct LayoutPlan {
   bool compact = false;
   bool legacy = false;
   std::string subtotal_suffix;
+  std::string grand_total_label;  ///< The table's caption, else the locale's word.
 
   bool values_on_rows = false;
   bool values_on_cols = false;
@@ -484,6 +611,9 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   plan.subtotal_suffix = options.subtotal_suffix.empty() && options.subtotal_prefix.empty()
                              ? std::string(" ") + options.grand_total_label
                              : options.subtotal_suffix;
+  // The caption renames only the grand total; subtotals keep the locale's word.
+  const std::optional<std::string>& caption = table.grand_total_caption();
+  plan.grand_total_label = caption.has_value() && !caption->empty() ? *caption : options.grand_total_label;
 
   // With several data fields the Values pseudo-field is one level of the
   // row or column axis, at the position its `x="-2"` marker holds; a pivot
@@ -510,6 +640,12 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   }
   row_shape.subtotal_counts = subtotal_counts_for_axis(table, table.row_field_order());
   row_shape.subtotal_fns = subtotal_fns_for_axis(table, table.row_field_order());
+  row_shape.fields = fields_for_axis(table, table.row_field_order());
+  // Blank rows follow only the blocks of an outer row field.
+  row_shape.blank_after.assign(row_depth, false);
+  for (std::size_t depth = 0; depth + 1 < row_depth; ++depth) {
+    row_shape.blank_after[depth] = row_shape.fields[depth] != nullptr && row_shape.fields[depth]->insert_blank_row;
+  }
   AxisShape col_shape;
   col_shape.depth = col_depth;
   if (values_on_cols) {
@@ -517,6 +653,7 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   }
   col_shape.subtotal_counts = subtotal_counts_for_axis(table, table.col_field_order());
   col_shape.subtotal_fns = subtotal_fns_for_axis(table, table.col_field_order());
+  col_shape.fields = fields_for_axis(table, table.col_field_order());
   const std::size_t row_levels = row_depth + (values_on_rows ? 1 : 0);
   const std::size_t col_levels = col_depth + (values_on_cols ? 1 : 0);
 
@@ -688,6 +825,25 @@ std::string col_level_name(const LayoutPlan& plan, std::size_t level) {
                                  : std::string();
 }
 
+// The field at `shape`'s level `level`, or null at the Values level.
+const PivotField* axis_level_field(const AxisShape& shape, std::size_t level) {
+  if (shape.values_at.has_value()) {
+    if (level == *shape.values_at) {
+      return nullptr;
+    }
+    if (level > *shape.values_at) {
+      --level;
+    }
+  }
+  return level < shape.fields.size() ? shape.fields[level] : nullptr;
+}
+
+// Number format of the item at `entry.labels[level]`, for a cell drawing that label bare.
+std::string label_format(const AxisEntry& entry, std::size_t level) {
+  return level < entry.nodes.size() && entry.nodes[level] != nullptr ? entry.nodes[level]->number_format
+                                                                     : std::string();
+}
+
 void emit_text_or_blank(PivotCells& cells, std::uint32_t row, std::uint32_t col, const std::string& text,
                         PivotCellKind kind, std::uint32_t depth, std::string field_name = {},
                         std::string number_format = {}) {
@@ -756,14 +912,17 @@ void emit_col_hierarchy_row(const LayoutPlan& plan, PivotCells& cells, std::uint
   const bool leaf_depth = depth + 1 >= plan.col_levels;
   for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
     const AxisEntry& entry = col_entries[c_entry];
-    const bool subtotal_here = entry.kind == EntryKind::Subtotal && depth + 1 == entry.labels.size();
+    // A collapsed item's columns are labelled like a leaf's.
+    const bool subtotal_here =
+        entry.kind == EntryKind::Subtotal && !entry.heads_group && depth + 1 == entry.labels.size();
     std::string label;
     if (depth < entry.labels.size()) {
       label = entry.labels[depth];
     }
+    const PivotField* field = axis_level_field(plan.col_shape, depth);
     if (subtotal_here) {
       label = entry_subtotal_label(plan, entry, label);
-    } else if (blank_repeats && !leaf_depth && c_entry > 0) {
+    } else if (blank_repeats && !leaf_depth && c_entry > 0 && (field == nullptr || !field->fill_down_labels)) {
       const std::vector<std::string>& prev = col_entries[c_entry - 1].labels;
       if (prev.size() > depth && entry.labels.size() > depth &&
           std::equal(prev.begin(), prev.begin() + static_cast<std::ptrdiff_t>(depth + 1), entry.labels.begin())) {
@@ -779,7 +938,8 @@ void emit_col_hierarchy_row(const LayoutPlan& plan, PivotCells& cells, std::uint
     }
     emit_text_or_blank(cells, row, col, label,
                        entry.kind == EntryKind::Subtotal ? PivotCellKind::ColSubtotal : PivotCellKind::ColLabel,
-                       static_cast<std::uint32_t>(depth), col_level_name(plan, depth));
+                       static_cast<std::uint32_t>(depth), col_level_name(plan, depth),
+                       subtotal_here ? std::string() : label_format(entry, depth));
   }
   if (row != plan.total_header_row) {
     for (std::size_t s = 0; s < plan.total_strip_cols; ++s) {
@@ -921,7 +1081,8 @@ void emit_header_block(const LayoutPlan& plan, PivotCells& cells) {
 }
 
 // Row labels and data cells. Tabular tracks the previous leaf row's label
-// per column so a parent shared with the row above is blanked.
+// so a parent path shared with the leaf row above is blanked, unless the
+// parent's field fills its label down.
 void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
   const PivotTable& table = plan.table;
   const PivotResult& result = plan.result;
@@ -940,28 +1101,53 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
   for (std::size_t r_entry = 0; r_entry < row_entries.size(); ++r_entry) {
     const AxisEntry& entry = row_entries[r_entry];
     const std::uint32_t row = data_top + static_cast<std::uint32_t>(r_entry);
+    if (entry.kind == EntryKind::Blank) {
+      for (std::size_t c = 0; c < row_header_cols + col_entries.size(); ++c) {
+        append_cell(cells, row, left + static_cast<std::uint32_t>(c), Value::blank(), PivotCellKind::Blank, 0);
+      }
+      continue;
+    }
     const std::vector<std::string>& labels = entry.labels;
     const bool subtotal = entry.kind == EntryKind::Subtotal;
     const std::size_t last_depth = labels.empty() ? 0 : labels.size() - 1;
+    // Leading levels this row shares with the previous leaf row; a level
+    // under a changed outer item starts a new block and shows its label.
+    std::size_t shared = 0;
+    while (shared < labels.size() && shared < row_header_cols && prev_row_labels_filled[shared] &&
+           prev_row_labels[shared] == labels[shared]) {
+      ++shared;
+    }
     for (std::size_t depth = 0; depth < row_header_cols; ++depth) {
       std::string label;
+      // The level whose item `label` shows as is, for its number format.
+      std::optional<std::size_t> bare_level;
       if (multi_col_layout) {
+        const PivotField* field = axis_level_field(plan.row_shape, depth);
+        const bool fill_down = field != nullptr && field->fill_down_labels && depth < last_depth;
         if (subtotal || entry.kind == EntryKind::Group || outline) {
           // Subtotal and group rows, and every outline row, label only
-          // their own level. A subtotal takes the localized wording unless
-          // it doubles as the group's heading row.
+          // their own level and the fill-down levels above it. A subtotal
+          // takes the localized wording unless it doubles as the group's
+          // heading row.
           if (depth == last_depth && depth < labels.size()) {
             label = labels[depth];
             if (subtotal && !entry.heads_group) {
               label = entry_subtotal_label(plan, entry, label);
+            } else {
+              bare_level = depth;
             }
+          } else if (fill_down) {
+            label = labels[depth];
+            bare_level = depth;
           }
         } else if (depth < labels.size()) {
-          // Tabular leaf rows repeat the path but blank a parent equal to
-          // the previous row's; the leaf-most level always shows.
+          // Tabular leaf rows repeat the path but blank a parent whose
+          // whole path matches the previous leaf row's; the leaf-most level
+          // always shows.
           const std::string& candidate = labels[depth];
-          if (depth + 1 == labels.size() || !prev_row_labels_filled[depth] || prev_row_labels[depth] != candidate) {
+          if (fill_down || depth + 1 == labels.size() || depth >= shared) {
             label = candidate;
+            bare_level = depth;
           }
         }
       } else if (compact) {
@@ -973,6 +1159,7 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
           label = entry_subtotal_label(plan, entry, labels.back());
         } else if (!labels.empty()) {
           label = labels.back();
+          bare_level = last_depth;
         } else if (plan.row_levels == 0 && plan.col_depth > 0 && r_entry == 0) {
           // No-row-fields pivot: the data field's name heads the single
           // data row.
@@ -980,8 +1167,10 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
         }
       } else if (depth < labels.size()) {
         label = labels[depth];
-        if (subtotal && depth == last_depth) {
+        if (subtotal && depth == last_depth && !entry.heads_group) {
           label = entry_subtotal_label(plan, entry, label);
+        } else {
+          bare_level = depth;
         }
       }
       const PivotCellKind kind = subtotal ? PivotCellKind::RowSubtotal : PivotCellKind::RowLabel;
@@ -993,7 +1182,8 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
                     static_cast<std::uint32_t>(level), row_level_name(plan, level));
       } else {
         append_cell(cells, row, left + static_cast<std::uint32_t>(depth), text_value(cells, label), kind,
-                    static_cast<std::uint32_t>(level), row_level_name(plan, level));
+                    static_cast<std::uint32_t>(level), row_level_name(plan, level),
+                    bare_level.has_value() ? label_format(entry, *bare_level) : std::string());
       }
       if (tabular && entry.kind == EntryKind::Leaf && depth < labels.size()) {
         prev_row_labels[depth] = labels[depth];
@@ -1063,6 +1253,12 @@ void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
       continue;
     }
     const std::uint32_t row = data_top + static_cast<std::uint32_t>(r_entry);
+    if (entry.kind == EntryKind::Blank) {
+      for (std::size_t s = 0; s < total_strip_cols; ++s) {
+        append_cell(cells, row, total_left + static_cast<std::uint32_t>(s), Value::blank(), PivotCellKind::Blank, 0);
+      }
+      continue;
+    }
     for (std::size_t s = 0; s < total_strip_cols; ++s) {
       const std::size_t df = entry.data_field.value_or(values_on_cols ? s : 0);
       const std::uint32_t col = total_left + static_cast<std::uint32_t>(s);
@@ -1120,7 +1316,7 @@ void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
   for (std::size_t s = 0; s < total_strip_cols; ++s) {
     const std::size_t df = values_on_cols ? s : 0;
     append_df_cell(cells, plan.total_header_row, total_left + static_cast<std::uint32_t>(s),
-                   text_value(cells, values_on_cols ? data_total_label(plan, s) : plan.options.grand_total_label),
+                   text_value(cells, values_on_cols ? data_total_label(plan, s) : plan.grand_total_label),
                    PivotCellKind::Header, table, df);
   }
 }
@@ -1142,8 +1338,7 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
   for (std::size_t b = 0; b < plan.total_strip_rows; ++b) {
     const std::optional<std::size_t> row_df = plan.values_on_rows ? std::optional<std::size_t>(b) : std::nullopt;
     const std::uint32_t total_row = data_top + static_cast<std::uint32_t>(row_entries.size() + b);
-    append_cell(cells, total_row, left,
-                text_value(cells, row_df ? data_total_label(plan, b) : plan.options.grand_total_label),
+    append_cell(cells, total_row, left, text_value(cells, row_df ? data_total_label(plan, b) : plan.grand_total_label),
                 PivotCellKind::GrandTotal, 0);
     // Tabular / Outline leave the remaining row-label columns blank so the
     // rendered grid is rectangular.
@@ -1256,6 +1451,31 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
   }
 }
 
+// Appends the items on `entry`'s path, outermost first, skipping the Values level.
+Expected<void, Error> append_item_refs(const AxisEntry& entry, const std::vector<std::uint32_t>& field_order,
+                                       std::vector<PivotItemRef>& out, std::deque<std::string>& text_storage) {
+  std::size_t depth = 0;
+  for (const AxisHierarchyNode* node : entry.nodes) {
+    if (node == nullptr) {
+      continue;
+    }
+    if (!node->identity.has_value()) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid, "pivot cell item path: item has no identity",
+                        "label=" + node->label);
+    }
+    PivotItemRef ref;
+    ref.field_index = field_order[depth++];
+    ref.identity = *node->identity;
+    if (ref.identity.is_text()) {
+      text_storage.emplace_back(ref.identity.as_text());
+      ref.identity = Value::text(text_storage.back());
+    }
+    ref.is_group_item = node->identity_is_group_item;
+    out.push_back(std::move(ref));
+  }
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
@@ -1279,6 +1499,58 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   emit_row_totals_strip(plan, cells);
   emit_col_totals_strip(plan, cells);
   return cells;
+}
+
+Expected<CellItemPath, Error> cell_item_path(const PivotTable& table, const PivotResult& result,
+                                             const PivotLayoutOptions& options, std::uint32_t row, std::uint32_t col) {
+  auto plan_or = build_layout_plan(table, result, options);
+  if (!plan_or) {
+    return std::move(plan_or.error());
+  }
+  const LayoutPlan plan = plan_or.take();
+  const auto not_a_value_cell = [&]() {
+    return make_error(FormulonErrorCode::kInvalidArgument, "pivot cell item path: not a value cell of the report",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  };
+  if (row < plan.data_top || col < plan.data_left) {
+    return not_a_value_cell();
+  }
+  const std::size_t r = row - plan.data_top;
+  const std::size_t c = col - plan.data_left;
+  if (r >= plan.row_entries.size() + plan.total_strip_rows || c >= plan.data_cols + plan.total_strip_cols) {
+    return not_a_value_cell();
+  }
+  // Outside the body the cell sits in a grand-total strip, which lists no items on that axis.
+  const AxisEntry* row_entry = r < plan.row_entries.size() ? &plan.row_entries[r] : nullptr;
+  const AxisEntry* col_entry = c < plan.data_cols ? &plan.col_entries[c] : nullptr;
+  if (row_entry != nullptr && (row_entry->kind == EntryKind::Group || row_entry->kind == EntryKind::Blank)) {
+    return not_a_value_cell();
+  }
+  const bool row_subtotal = row_entry != nullptr && row_entry->kind == EntryKind::Subtotal;
+  const bool col_subtotal = col_entry != nullptr && col_entry->kind == EntryKind::Subtotal;
+  CellItemPath path;
+  if (row_subtotal) {
+    path.kind = PivotCellKind::RowSubtotal;
+  } else if (col_subtotal) {
+    path.kind = PivotCellKind::ColSubtotal;
+  } else if (row_entry != nullptr && col_entry != nullptr) {
+    path.kind = PivotCellKind::Data;
+  } else {
+    path.kind = PivotCellKind::GrandTotal;
+  }
+  if (row_entry != nullptr) {
+    auto rows_or = append_item_refs(*row_entry, table.row_field_order(), path.row_items, path.text_storage);
+    if (!rows_or) {
+      return std::move(rows_or.error());
+    }
+  }
+  if (col_entry != nullptr) {
+    auto cols_or = append_item_refs(*col_entry, table.col_field_order(), path.col_items, path.text_storage);
+    if (!cols_or) {
+      return std::move(cols_or.error());
+    }
+  }
+  return path;
 }
 
 }  // namespace formulon::pivot
