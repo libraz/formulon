@@ -42,6 +42,8 @@ namespace formulon::io {
 ///   * `<sharedItems>` children are walked in document order. Recognised
 ///     children:
 ///       - `<s v="...">` -> `Value::text(...)`
+///       - `<d v="...">` -> `Value::number(serial)` in the workbook's date
+///         system (`date1904`), the cell flagged in `cell_is_date`
 ///       - `<n v="...">` -> `Value::number(strtod)`; non-numeric is
 ///         `kIoSheetCorrupt`.
 ///       - `<b v="0|1">` -> `Value::boolean(...)`
@@ -64,7 +66,8 @@ namespace formulon::io {
 ///   * `kIoContentTypeInvalid` — root not `<pivotCacheDefinition>`, or
 ///     external cache source.
 ///   * `kIoSheetCorrupt` — `<n v="...">` failed to parse as a double.
-Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector<std::uint8_t>& definition_bytes);
+Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector<std::uint8_t>& definition_bytes,
+                                                               bool date1904 = false);
 
 /// Populates the records of `cache` from one
 /// `xl/pivotCache/pivotCacheRecords*.xml` part. The `cache` argument
@@ -84,6 +87,8 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 ///       - `<n v="...">` -> `Value::number(strtod)`; non-numeric is
 ///         `kIoSheetCorrupt`.
 ///       - `<s v="...">` -> `Value::text(...)`
+///       - `<d v="...">` -> `Value::number(serial)` in the workbook's date
+///         system (`date1904`), the cell flagged in `cell_is_date`
 ///       - `<b v="0|1">` -> `Value::boolean(...)`
 ///       - `<m/>`        -> `Value::blank()`
 ///       - `<e v="...">` -> `Value::error(...)`
@@ -106,7 +111,8 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 ///   * `kIoXmlParse`, `kIoContentTypeInvalid`, `kIoSheetCorrupt`,
 ///     `kIoFileTooLarge`.
 Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache,
-                                               std::uint64_t max_record_cells = kMaxPivotCacheRecordCells);
+                                               std::uint64_t max_record_cells = kMaxPivotCacheRecordCells,
+                                               bool date1904 = false);
 
 }  // namespace formulon::io
 

@@ -1068,5 +1068,54 @@ TEST(FieldGrouping, RegroupingReplacesTheGroupFields) {
   EXPECT_EQ(cache.fields().size(), 5U);
 }
 
+TEST(FieldGrouping, GroupDateIsoSaturatesAtTheLastInstant) {
+  EXPECT_EQ(group_date_iso(2958465.99999, false), "9999-12-31T23:59:59");
+  EXPECT_EQ(group_date_iso(2958465.0, false), "9999-12-31T00:00:00");
+  EXPECT_EQ(group_date_iso(2957003.99999, true), "9999-12-31T23:59:59");
+}
+
+// A date mark declares the field typed, so a plain number beside it refuses
+// the grouping whether or not hints were captured; an unmarked field groups.
+TEST(FieldGrouping, MarkedDateBesideAPlainNumberRefusesGrouping) {
+  const std::vector<double> dates = {Day(2024, 1U, 15U), Day(2024, 2U, 1U), Day(2024, 3U, 10U)};
+  PivotCache plain = DateCache(dates, /*as_saved=*/false);
+  EXPECT_TRUE(static_cast<bool>(
+      group_cache_by_date(plain, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile())));
+
+  PivotCache mixed = DateCache(dates, /*as_saved=*/false);
+  mixed.mutable_records()[0].cell_is_date = {false, false, true, false};
+  const Expected<std::size_t, Error> refused =
+      group_cache_by_date(mixed, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile());
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
+
+  PivotCache marked = DateCache(dates, /*as_saved=*/false);
+  for (PivotCacheRecord& record : marked.mutable_records()) {
+    record.cell_is_date = {false, false, true, false};
+  }
+  EXPECT_TRUE(static_cast<bool>(
+      group_cache_by_date(marked, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile())));
+
+  PivotCache shared = DateCache(dates, /*as_saved=*/false);
+  shared.mutable_fields()[kDateField].shared_items = {Value::number(dates[0]), Value::number(dates[1])};
+  shared.mutable_fields()[kDateField].shared_item_is_date = {true, false};
+  EXPECT_FALSE(static_cast<bool>(
+      group_cache_by_date(shared, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile())));
+}
+
+TEST(FieldGrouping, CellIsSharedIndexInfersFromTheFieldAndTheDateMark) {
+  PivotCacheField shared{"S", {Value::number(7)}};
+  const PivotCacheField inline_field{"I", {}};
+  PivotCacheRecord record;
+  record.cells = {Value::number(0), Value::text("x")};
+  EXPECT_TRUE(cell_is_shared_index(record, shared, 0U));
+  EXPECT_FALSE(cell_is_shared_index(record, shared, 1U));
+  EXPECT_FALSE(cell_is_shared_index(record, inline_field, 0U));
+  record.cell_is_date = {true};
+  EXPECT_FALSE(cell_is_shared_index(record, shared, 0U));
+  record.cell_is_index = {true, false};
+  EXPECT_TRUE(cell_is_shared_index(record, inline_field, 0U));
+}
+
 }  // namespace
 }  // namespace formulon::pivot

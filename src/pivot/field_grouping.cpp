@@ -94,9 +94,7 @@ std::optional<std::size_t> base_item_index(const PivotCache& cache, const PivotC
   }
   if (base < record.cells.size()) {
     const Value& cell = record.cells[base];
-    const bool is_index = base < record.cell_is_index.size() ? record.cell_is_index[base]
-                                                             : (!base_field.shared_items.empty() && cell.is_number());
-    if (is_index) {
+    if (cell_is_shared_index(record, base_field, base)) {
       return cell.is_number() ? index_from_double(cell.as_number(), base_field.shared_items.size()) : std::nullopt;
     }
   }
@@ -389,9 +387,15 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
     }
   }
   const PivotCacheField& field = cache.fields()[base];
-  // A field read from a file states its types; a value it did not spell as a
-  // date is a number.
-  const bool typed = field.shared_items_hints.present;
+  // A field read from a file states its types, and a date mark declares one;
+  // a value not spelled as a date is then a number.
+  bool typed = field.shared_items_hints.present;
+  for (std::size_t i = 0; i < field.shared_item_is_date.size() && !typed; ++i) {
+    typed = field.shared_item_is_date[i];
+  }
+  for (const PivotCacheRecord& record : cache.records()) {
+    typed = typed || flag_at(record.cell_is_date, base);
+  }
   bool have_value = false;
   double lo = 0.0;
   double hi = 0.0;
@@ -803,6 +807,11 @@ std::string group_date_iso(double serial, bool date1904) {
   if (seconds >= date_time::kSecondsPerDay) {
     day += 1.0;
     seconds -= date_time::kSecondsPerDay;
+  }
+  // The last representable instant is 9999-12-31T23:59:59.
+  if (day > last_valid_date_serial(date1904)) {
+    day = last_valid_date_serial(date1904);
+    seconds = date_time::kSecondsPerDay - 1;
   }
   // The inverse of `group_date_serial`: serials through 60 name the day before.
   const bool before_phantom = !date1904 && day < kFirstSerialAfterPhantomDay;

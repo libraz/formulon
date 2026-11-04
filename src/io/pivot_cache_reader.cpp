@@ -18,11 +18,11 @@
 #include "io/pivot_attr_names.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/iso_date.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -54,7 +54,7 @@ bool ParseBoolFlag(std::string_view text, bool* ok) {
 /// entry. Returns `kIoSheetCorrupt` for malformed numeric / boolean
 /// bodies. `*is_date` is set when a `<d>` decoded to a serial.
 Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<std::string>& text_storage,
-                                        bool* is_date) {
+                                        bool* is_date, bool date1904) {
   *is_date = false;
   const std::string_view name = node.name();
   if (name == "s") {
@@ -91,10 +91,9 @@ Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<s
     // slot (see `IsTypedValueElement`) so record/field columns stay
     // aligned.
     std::string_view raw = node.attribute("v").as_string();
-    double serial = 0.0;
-    if (date_time::parse_iso_date_serial(raw, &serial)) {
+    if (const std::optional<double> serial = pivot::group_date_serial(raw, date1904); serial.has_value()) {
       *is_date = true;
-      return Value::number(serial);
+      return Value::number(*serial);
     }
     text_storage.emplace_back(raw);
     return Value::text(text_storage.back());
@@ -164,7 +163,8 @@ void ReadSharedItemsHints(const pugi::xml_node& items, pivot::SharedItemsHints* 
 }
 
 /// Decodes `<fieldGroup>`. Text group items are appended to `text_storage`.
-Expected<pivot::FieldGroup, Error> ReadFieldGroup(const pugi::xml_node& node, std::deque<std::string>& text_storage) {
+Expected<pivot::FieldGroup, Error> ReadFieldGroup(const pugi::xml_node& node, std::deque<std::string>& text_storage,
+                                                  bool date1904) {
   pivot::FieldGroup group;
   group.par = parse_xml_u32_attr_strict(node.attribute("par"));
   group.base = parse_xml_u32_attr_strict(node.attribute("base"));
@@ -194,7 +194,7 @@ Expected<pivot::FieldGroup, Error> ReadFieldGroup(const pugi::xml_node& node, st
       continue;
     }
     bool is_date = false;
-    auto val_or = DecodeTypedValue(child, text_storage, &is_date);
+    auto val_or = DecodeTypedValue(child, text_storage, &is_date, date1904);
     if (!val_or) {
       return std::move(val_or.error());
     }
@@ -248,7 +248,8 @@ pivot::PivotCalculatedItem ReadCalculatedItem(const pugi::xml_node& node) {
 
 }  // namespace
 
-Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector<std::uint8_t>& definition_bytes) {
+Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector<std::uint8_t>& definition_bytes,
+                                                               bool date1904) {
   pugi::xml_document doc;
   RETURN_IF_ERROR(load_xml_buffer(doc, definition_bytes, "pivot_cache_reader", "pivotCacheDefinition*.xml"));
   pugi::xml_node root = doc.child("pivotCacheDefinition");
@@ -321,7 +322,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       capture_unknown_attrs(f, {"name", "databaseField", "numFmtId", "formula"}, field.extra_attrs);
       capture_unknown_children(f, {"sharedItems", "fieldGroup"}, field.trailing_children_xml);
       if (pugi::xml_node group = f.child("fieldGroup"); group) {
-        auto group_or = ReadFieldGroup(group, cache.mutable_text_storage());
+        auto group_or = ReadFieldGroup(group, cache.mutable_text_storage(), date1904);
         if (!group_or) {
           return std::move(group_or.error());
         }
@@ -342,7 +343,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
             continue;
           }
           bool is_date = false;
-          auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date);
+          auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date, date1904);
           if (!val_or) {
             return std::move(val_or.error());
           }
@@ -386,7 +387,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 }
 
 Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache,
-                                               std::uint64_t max_record_cells) {
+                                               std::uint64_t max_record_cells, bool date1904) {
   // `doc` is a body local and `records_bytes` a parameter, so the buffer
   // the DOM aliases is destroyed after the DOM that points into it.
   pugi::xml_document doc;
@@ -450,7 +451,7 @@ Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records
       }
       if (IsTypedValueElement(child_name)) {
         bool is_date = false;
-        auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date);
+        auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date, date1904);
         if (!val_or) {
           return std::move(val_or.error());
         }

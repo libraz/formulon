@@ -15,6 +15,17 @@
 
 namespace formulon::pivot {
 
+/// True when cell `i` of `record` holds an index into `field.shared_items`.
+/// The captured per-cell flag decides when present; otherwise a numeric cell of
+/// a shared field is an index unless it is marked a date.
+inline bool cell_is_shared_index(const PivotCacheRecord& record, const PivotCacheField& field, std::size_t i) {
+  if (i < record.cell_is_index.size()) {
+    return record.cell_is_index[i];
+  }
+  return i < record.cells.size() && !field.shared_items.empty() && record.cells[i].is_number() &&
+         !(i < record.cell_is_date.size() && record.cell_is_date[i]);
+}
+
 /// Pulls the effective `Value` for `(record, field)`. When the field is
 /// shared (`shared_items` non-empty), the record stores a `Number` index
 /// into `shared_items`; otherwise the record stores the value inline.
@@ -27,15 +38,9 @@ inline Value cell_value(const PivotCache& cache, const PivotCacheRecord& record,
   }
   const auto& field = cache.fields()[field_index];
   const Value& cell = record.cells[field_index];
-  // Prefer the explicit per-cell encoding flag when the reader populated
-  // it: an inline cell (`cell_is_index == false`) is returned verbatim
-  // even inside a shared field, and an index cell is always resolved
-  // against `shared_items`. When the flag vector is empty (hand-built
-  // caches), fall back to inferring from the field being shared.
-  const bool have_flag = field_index < record.cell_is_index.size();
-  const bool is_index =
-      have_flag ? record.cell_is_index[field_index] : (!field.shared_items.empty() && cell.is_number());
-  if (!is_index) {
+  // An inline cell is returned verbatim even inside a shared field; an index
+  // cell is always resolved against `shared_items`.
+  if (!cell_is_shared_index(record, field, field_index)) {
     return cell;
   }
   if (!cell.is_number()) {

@@ -458,7 +458,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
           }
         }
       }
-      PivotCacheWritePlan cache_plan = build_pivot_cache_write_plan(*cache, users);
+      PivotCacheWritePlan cache_plan = build_pivot_cache_write_plan(*cache, users, wb.date1904());
       // An edited table is rebuilt only from a source Excel can re-read; any
       // other loaded cache keeps its attributes as read.
       if (!cache->passthrough_attrs().empty() && !CacheSourceInWorkbook(wb, *cache)) {

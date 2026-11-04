@@ -39,6 +39,9 @@ struct PivotCacheFieldWritePlan {
   /// any other field with neither shared items nor captured hints, the hints
   /// to emit in place of the range placeholder when `present`.
   pivot::SharedItemsHints hints;
+  /// Per item of `items`, whether it is a date serial; the mark of the first
+  /// record cell holding that value.
+  std::vector<bool> item_is_date;
   /// Write the field's numeric record values as `<d>` dates.
   bool dates = false;
   /// Per record, the index into `items` of its value.
@@ -57,6 +60,8 @@ struct PivotCacheWritePlan {
   std::vector<PivotCacheFieldWritePlan> fields;
   /// Emit `refreshOnLoad="1"`, replacing any captured value.
   bool refresh_on_load = false;
+  /// The workbook's date system, for every `<d>` and `minDate` / `maxDate`.
+  bool date1904 = false;
 };
 
 /// Builds the plan for `cache`; `tables` are the pivot tables drawing on it.
@@ -64,8 +69,10 @@ struct PivotCacheWritePlan {
 /// A field is derived only when it is a database field with no shared items,
 /// no captured hints and no grouping, and either some table puts it on the
 /// Row / Col / Page axis or authors items for it, or a record value is text,
-/// boolean, error or blank. A purely numeric, blank-free field off every axis
-/// keeps the range-typed placeholder.
+/// boolean, error or blank. Any other field stays range-typed and takes the
+/// hints derived from its record values and date marks (see
+/// `PivotCacheFieldWritePlan::hints`); with no records it keeps the
+/// `containsNumber="1"` placeholder.
 ///
 /// The base of a date group with neither shared items nor captured hints gets
 /// date hints (`minDate` at the earliest record date, `maxDate` at the day
@@ -74,10 +81,13 @@ struct PivotCacheWritePlan {
 /// `refresh_on_load` is set for a cache built in memory (no captured root
 /// attributes) and for one any of `tables` has edited since load.
 ///
+/// `date1904` is the workbook's date system.
+///
 /// The caller must hold an `eval::ScopedEvalProfile`: values are deduplicated
 /// and ordered with `pivot::value_less`.
 PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
-                                                 const std::vector<const pivot::PivotTable*>& tables);
+                                                 const std::vector<const pivot::PivotTable*>& tables,
+                                                 bool date1904 = false);
 
 /// Emits a complete `xl/pivotCache/pivotCacheDefinition*.xml` document.
 ///
@@ -88,11 +98,14 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
 ///     vector is non-empty. The encoding uses one child per item:
 ///     `<s>`, `<n>`, `<b>`, `<m/>`, `<e>` -- the same five elements the
 ///     reader recognises.
-///   * An empty `shared_items` vector is treated as a range-typed
-///     (numeric) field and emits a placeholder `<sharedItems
-///     containsNumber="1"/>`. The reader picks this up as "no per-item
-///     children" and leaves `shared_items` empty on the round-trip; the
-///     records part then carries inline values for that column.
+///   * An empty `shared_items` vector is treated as a range-typed field and
+///     emits its captured hints, else the plan's derived hints, else a
+///     placeholder `<sharedItems containsNumber="1"/>`. The reader picks this
+///     up as "no per-item children" and leaves `shared_items` empty on the
+///     round-trip; the records part then carries inline values for that
+///     column.
+///   * A shared field without captured hints gets the hints Excel writes for
+///     its item kinds, dates (`shared_item_is_date`) included.
 ///
 /// `cache.cache_id()` is intentionally NOT emitted: the cacheId attribute
 /// lives on the workbook-level `<pivotCache>` entry, not in the part

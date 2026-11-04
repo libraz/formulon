@@ -7,6 +7,7 @@
 
 #include "io/pivot_cache_writer.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -865,6 +866,159 @@ pivot::PivotCache ReadCache(std::string_view xml) {
 
 bool Has(const std::string& haystack, std::string_view needle) {
   return haystack.find(needle) != std::string::npos;
+}
+
+// ---------------------------------------------------------------------------
+// Date items: spelling in the workbook's date system and derived hints
+// ---------------------------------------------------------------------------
+
+struct Item {
+  Value value;
+  bool is_date;
+};
+
+Item D(double serial) {
+  return {Value::number(serial), true};
+}
+Item N(double v) {
+  return {Value::number(v), false};
+}
+Item T() {
+  return {Value::text("a"), false};
+}
+Item B() {
+  return {Value::blank(), false};
+}
+
+std::string SharedFieldDefinition(const std::vector<Item>& items, bool date1904 = false) {
+  pivot::PivotCache cache;
+  pivot::PivotCacheField field;
+  field.name = "F";
+  for (const Item& item : items) {
+    field.shared_items.push_back(item.value);
+    field.shared_item_is_date.push_back(item.is_date);
+  }
+  cache.mutable_fields().push_back(std::move(field));
+  PivotCacheWritePlan plan;
+  plan.date1904 = date1904;
+  return write_pivot_cache_definition(cache, &plan);
+}
+
+void ExpectSharedHints(const std::vector<Item>& items, const std::string& hints_and_count) {
+  const std::string xml = SharedFieldDefinition(items);
+  EXPECT_TRUE(Has(xml, "<cacheField name=\"F\"><sharedItems " + hints_and_count + ">")) << xml;
+}
+
+TEST(PivotCacheWriter, DateItemsAreSpelledFromTheNineteenHundredEpoch) {
+  const std::string xml = SharedFieldDefinition({D(0), D(0.5), D(1), D(59), D(60), D(61), D(45292.75), D(0.25)});
+  EXPECT_TRUE(Has(xml,
+                  "<d v=\"1899-12-30T00:00:00\"/><d v=\"1899-12-30T12:00:00\"/><d v=\"1899-12-31T00:00:00\"/>"
+                  "<d v=\"1900-02-27T00:00:00\"/><d v=\"1900-02-28T00:00:00\"/><d v=\"1900-03-01T00:00:00\"/>"
+                  "<d v=\"2024-01-01T18:00:00\"/><d v=\"1899-12-30T06:00:00\"/></sharedItems>"))
+      << xml;
+}
+
+TEST(PivotCacheWriter, DateItemsAreSpelledFromTheNineteenFourEpoch) {
+  const std::string xml = SharedFieldDefinition({D(0), D(0.5), D(1), D(43830)}, /*date1904=*/true);
+  EXPECT_TRUE(Has(xml,
+                  "minDate=\"1904-01-01T00:00:00\" maxDate=\"2024-01-02T00:00:00\" count=\"4\">"
+                  "<d v=\"1904-01-01T00:00:00\"/><d v=\"1904-01-01T12:00:00\"/><d v=\"1904-01-02T00:00:00\"/>"
+                  "<d v=\"2024-01-01T00:00:00\"/></sharedItems>"))
+      << xml;
+}
+
+TEST(PivotCacheWriter, RecordDatesFollowTheDateSystemAndStayInlineInASharedField) {
+  pivot::PivotCache cache;
+  pivot::PivotCacheField field;
+  field.name = "F";
+  field.shared_items.push_back(Value::number(7));
+  cache.mutable_fields().push_back(std::move(field));
+  pivot::PivotCacheRecord date;
+  date.cells = {Value::number(0.5)};
+  date.cell_is_date = {true};
+  cache.mutable_records().push_back(std::move(date));
+  pivot::PivotCacheRecord index;
+  index.cells = {Value::number(0)};
+  cache.mutable_records().push_back(std::move(index));
+
+  EXPECT_TRUE(Has(write_pivot_cache_records(cache), "<r><d v=\"1899-12-30T12:00:00\"/></r><r><x v=\"0\"/></r>"));
+  PivotCacheWritePlan plan;
+  plan.date1904 = true;
+  EXPECT_TRUE(Has(write_pivot_cache_records(cache, &plan), "<r><d v=\"1904-01-01T12:00:00\"/></r><r><x v=\"0\"/></r>"));
+}
+
+TEST(PivotCacheWriter, GroupItemDatesRoundTripInTheNineteenFourSystem) {
+  const std::string_view def =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<pivotCacheDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<cacheSource type=\"worksheet\"/><cacheFields count=\"2\">"
+      "<cacheField name=\"D\"><sharedItems containsDate=\"1\"/></cacheField>"
+      "<cacheField name=\"G\" databaseField=\"0\"><fieldGroup base=\"0\"><discretePr count=\"1\"><x v=\"0\"/>"
+      "</discretePr><groupItems count=\"1\"><d v=\"1904-01-02T00:00:00\"/></groupItems></fieldGroup></cacheField>"
+      "</cacheFields></pivotCacheDefinition>";
+  auto cache_or = read_pivot_cache_definition(Bytes(def), /*date1904=*/true);
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  PivotCacheWritePlan plan;
+  plan.date1904 = true;
+  const std::string xml = write_pivot_cache_definition(cache_or.value(), &plan);
+  EXPECT_TRUE(Has(xml, "<groupItems count=\"1\"><d v=\"1904-01-02T00:00:00\"/></groupItems>")) << xml;
+}
+
+TEST(PivotCacheWriter, LastInstantSaturatesAndInvalidMarkedSerialIsANumber) {
+  std::string xml = SharedFieldDefinition({D(2958465.99999)});
+  EXPECT_TRUE(Has(xml, "maxDate=\"9999-12-31T23:59:59\"")) << xml;
+  EXPECT_TRUE(Has(xml, "<d v=\"9999-12-31T23:59:59\"/>")) << xml;
+  xml = SharedFieldDefinition({D(3000000)});
+  EXPECT_TRUE(Has(xml,
+                  "<sharedItems containsSemiMixedTypes=\"0\" containsString=\"0\" containsNumber=\"1\" "
+                  "containsInteger=\"1\" minValue=\"3000000\" maxValue=\"3000000\" count=\"1\"><n v=\"3000000\"/>"))
+      << xml;
+}
+
+TEST(PivotCacheWriter, SharedHintsDatesOnly) {
+  ExpectSharedHints({D(45292), D(45300)},
+                    "containsSemiMixedTypes=\"0\" containsNonDate=\"0\" containsDate=\"1\" containsString=\"0\" "
+                    "minDate=\"2024-01-01T00:00:00\" maxDate=\"2024-01-10T00:00:00\" count=\"2\"");
+  ExpectSharedHints({D(45292), D(45300.5)},
+                    "containsSemiMixedTypes=\"0\" containsNonDate=\"0\" containsDate=\"1\" containsString=\"0\" "
+                    "minDate=\"2024-01-01T00:00:00\" maxDate=\"2024-01-09T12:00:00\" count=\"2\"");
+}
+
+TEST(PivotCacheWriter, SharedHintsDatesAndBlank) {
+  ExpectSharedHints({D(45292), D(45300), B()},
+                    "containsNonDate=\"0\" containsDate=\"1\" containsString=\"0\" containsBlank=\"1\" "
+                    "minDate=\"2024-01-01T00:00:00\" maxDate=\"2024-01-10T00:00:00\" count=\"3\"");
+}
+
+TEST(PivotCacheWriter, SharedHintsDatesAndText) {
+  ExpectSharedHints({D(45292), D(45300), T()},
+                    "containsDate=\"1\" containsMixedTypes=\"1\" minDate=\"2024-01-01T00:00:00\" "
+                    "maxDate=\"2024-01-10T00:00:00\" count=\"3\"");
+}
+
+TEST(PivotCacheWriter, SharedHintsDatesAndNumbersCarryNoDateBounds) {
+  ExpectSharedHints({D(45292), N(5)},
+                    "containsSemiMixedTypes=\"0\" containsDate=\"1\" containsString=\"0\" "
+                    "containsMixedTypes=\"1\" count=\"2\"");
+  ExpectSharedHints({D(45292), N(5), T(), B()},
+                    "containsDate=\"1\" containsBlank=\"1\" containsMixedTypes=\"1\" count=\"4\"");
+}
+
+TEST(PivotCacheWriter, SharedHintsNumbersWithTextOrBlank) {
+  ExpectSharedHints({N(1.5), N(2), T()},
+                    "containsMixedTypes=\"1\" containsNumber=\"1\" minValue=\"1.5\" maxValue=\"2\" count=\"3\"");
+  ExpectSharedHints({N(1), N(3), T()},
+                    "containsMixedTypes=\"1\" containsNumber=\"1\" containsInteger=\"1\" minValue=\"1\" "
+                    "maxValue=\"3\" count=\"3\"");
+  ExpectSharedHints({N(1.5), B()},
+                    "containsString=\"0\" containsBlank=\"1\" containsNumber=\"1\" minValue=\"1.5\" "
+                    "maxValue=\"1.5\" count=\"2\"");
+  ExpectSharedHints({N(1), B()},
+                    "containsString=\"0\" containsBlank=\"1\" containsNumber=\"1\" containsInteger=\"1\" "
+                    "minValue=\"1\" maxValue=\"1\" count=\"2\"");
+  ExpectSharedHints({N(1), T(), B()},
+                    "containsBlank=\"1\" containsMixedTypes=\"1\" containsNumber=\"1\" containsInteger=\"1\" "
+                    "minValue=\"1\" maxValue=\"1\" count=\"3\"");
 }
 
 // The measured shape of a calculated field.

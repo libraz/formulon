@@ -19,59 +19,29 @@
 #include "io/pivot_attr_names.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "pivot/date_serial.h"
 #include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
-#include "utils/date_time.h"
 #include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon::io {
 namespace {
 
-/// `serial` (1900 system) as the ISO body `<d>` and `minDate` use, to the
-/// second: `2024-01-15T13:30:00`.
-std::string IsoDateTime(double serial) {
-  double day = std::floor(serial);
-  long long seconds = std::llround((serial - day) * 86400.0);
-  if (seconds >= 86400) {
-    day += 1.0;
-    seconds -= 86400;
-  }
-  const date_time::YMD ymd = date_time::ymd_from_serial(day);
-  const auto two = [](std::string& out, long long v) {
-    out.push_back(static_cast<char>('0' + (v / 10) % 10));
-    out.push_back(static_cast<char>('0' + v % 10));
-  };
-  std::string text = std::to_string(ymd.y);
-  while (text.size() < 4) {
-    text.insert(text.begin(), '0');
-  }
-  text.push_back('-');
-  two(text, ymd.m);
-  text.push_back('-');
-  two(text, ymd.d);
-  text.push_back('T');
-  two(text, seconds / 3600);
-  text.push_back(':');
-  two(text, seconds / 60 % 60);
-  text.push_back(':');
-  two(text, seconds % 60);
-  return text;
-}
-
 /// Emits one of `<s>`, `<n>`, `<b>`, `<m/>`, `<e>` for the given value, or
-/// `<d>` for a number `as_date` marks as a date serial.
+/// `<d>` for a number `as_date` marks as a valid date serial of the workbook's
+/// date system.
 /// Mirrors `DecodeTypedValue` in `pivot_cache_reader.cpp`. Anything other
 /// than the five recognised kinds falls through to a `<m/>` so a
 /// malformed cache cannot escape as malformed XML; this is a defensive
 /// fallback that should not fire on a well-formed `PivotCache`.
-void AppendInlineTypedValue(std::string& out, const Value& v, bool as_date = false) {
-  if (as_date && v.is_number() && std::isfinite(v.as_number()) && v.as_number() >= 0.0) {
+void AppendInlineTypedValue(std::string& out, const Value& v, bool as_date, bool date1904) {
+  if (as_date && v.is_number() && pivot::is_valid_date_serial(v.as_number(), date1904)) {
     out.append("<d");
-    append_xml_attr(out, "v", IsoDateTime(v.as_number()));
+    append_xml_attr(out, "v", pivot::group_date_iso(v.as_number(), date1904));
     out.append("/>");
     return;
   }
@@ -119,8 +89,8 @@ void AppendInlineTypedValue(std::string& out, const Value& v, bool as_date = fal
 
 /// `AppendInlineTypedValue` for a shared item, adding `f="1"` to a calculated
 /// one.
-void AppendSharedItem(std::string& out, const Value& v, bool as_date, bool calculated) {
-  AppendInlineTypedValue(out, v, as_date);
+void AppendSharedItem(std::string& out, const Value& v, bool as_date, bool calculated, bool date1904) {
+  AppendInlineTypedValue(out, v, as_date, date1904);
   if (calculated && out.size() >= 2U && out.compare(out.size() - 2U, 2U, "/>") == 0) {
     out.insert(out.size() - 2U, " f=\"1\"");
   }
@@ -196,20 +166,37 @@ std::string NumberText(double v) {
   return text;
 }
 
-/// The `<sharedItems>` hints Excel writes for the kinds `items` holds.
-pivot::SharedItemsHints DeriveHints(const std::vector<Value>& items) {
+/// True when bit `i` of `flags` is set; a shorter vector reads as unset.
+bool FlagAt(const std::vector<bool>& flags, std::size_t i) {
+  return i < flags.size() && flags[i];
+}
+
+/// The `<sharedItems>` hints Excel writes for the kinds `values` holds;
+/// `is_date[i]` marks value `i` as a date serial (a shorter vector reads as
+/// unset). Not `present` when `values` is empty or holds a boolean or error.
+pivot::SharedItemsHints DeriveHints(const std::vector<Value>& values, const std::vector<bool>& is_date, bool date1904) {
+  std::size_t dates = 0;
   std::size_t numbers = 0;
   std::size_t texts = 0;
   std::size_t blanks = 0;
   std::size_t others = 0;
   bool integral = true;
-  double lo = 0.0;
-  double hi = 0.0;
-  for (const Value& v : items) {
+  double num_lo = 0.0;
+  double num_hi = 0.0;
+  double date_lo = 0.0;
+  double date_hi = 0.0;
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    const Value& v = values[i];
     if (v.is_number()) {
       const double d = v.as_number();
-      lo = numbers == 0 ? d : std::min(lo, d);
-      hi = numbers == 0 ? d : std::max(hi, d);
+      if (FlagAt(is_date, i) && pivot::is_valid_date_serial(d, date1904)) {
+        date_lo = dates == 0 ? d : std::min(date_lo, d);
+        date_hi = dates == 0 ? d : std::max(date_hi, d);
+        ++dates;
+        continue;
+      }
+      num_lo = numbers == 0 ? d : std::min(num_lo, d);
+      num_hi = numbers == 0 ? d : std::max(num_hi, d);
       integral = integral && std::isfinite(d) && d == std::floor(d);
       ++numbers;
     } else if (v.is_text()) {
@@ -221,38 +208,43 @@ pivot::SharedItemsHints DeriveHints(const std::vector<Value>& items) {
     }
   }
   pivot::SharedItemsHints h;
-  if (others > 0 || items.empty()) {
+  if (others > 0 || values.empty()) {
     return h;
   }
-  if (numbers == 0) {
-    if (texts == 0) {
-      SetHint(h.contains_string, h.has_contains_string, false);
-    }
-    if (blanks > 0) {
-      SetHint(h.contains_blank, h.has_contains_blank, true);
-    }
-  } else if (texts == 0) {
-    if (blanks == 0) {
-      SetHint(h.contains_semi_mixed, h.has_contains_semi_mixed, false);
-    }
+  if (texts == 0 && blanks == 0) {
+    SetHint(h.contains_semi_mixed, h.has_contains_semi_mixed, false);
+  }
+  if (dates > 0 && numbers == 0 && texts == 0) {
+    SetHint(h.contains_non_date, h.has_contains_non_date, false);
+  }
+  if (dates > 0) {
+    SetHint(h.contains_date, h.has_contains_date, true);
+  }
+  if (texts == 0) {
     SetHint(h.contains_string, h.has_contains_string, false);
-    if (blanks > 0) {
-      SetHint(h.contains_blank, h.has_contains_blank, true);
-    }
+  }
+  if (blanks > 0) {
+    SetHint(h.contains_blank, h.has_contains_blank, true);
+  }
+  if ((dates > 0 ? 1 : 0) + (numbers > 0 ? 1 : 0) + (texts > 0 ? 1 : 0) >= 2) {
+    SetHint(h.contains_mixed_types, h.has_contains_mixed_types, true);
+  }
+  if (numbers > 0 && dates == 0) {
     SetHint(h.contains_number, h.has_contains_number, true);
     if (integral) {
       SetHint(h.contains_integer, h.has_contains_integer, true);
     }
     h.has_min_value = true;
-    h.min_value = NumberText(lo);
+    h.min_value = NumberText(num_lo);
     h.has_max_value = true;
-    h.max_value = NumberText(hi);
-  } else {
-    SetHint(h.contains_mixed_types, h.has_contains_mixed_types, true);
-    SetHint(h.contains_number, h.has_contains_number, true);
-    if (blanks > 0) {
-      SetHint(h.contains_blank, h.has_contains_blank, true);
-    }
+    h.max_value = NumberText(num_hi);
+  }
+  if (dates > 0 && numbers == 0) {
+    const pivot::GroupBounds bounds = pivot::auto_date_group_bounds(date_lo, date_hi, date1904);
+    h.has_min_date = true;
+    h.min_date = pivot::group_date_iso(bounds.start, date1904);
+    h.has_max_date = true;
+    h.max_date = pivot::group_date_iso(bounds.end, date1904);
   }
   h.present = true;
   return h;
@@ -278,14 +270,9 @@ bool IsDateGroupBase(const pivot::PivotCache& cache, std::size_t fi) {
   return false;
 }
 
-/// True when bit `i` of `flags` is set; a shorter vector reads as unset.
-bool FlagAt(const std::vector<bool>& flags, std::size_t i) {
-  return i < flags.size() && flags[i];
-}
-
 /// The hints Excel writes for an all-date field; not `present` when a record
 /// holds anything but a non-negative number.
-pivot::SharedItemsHints DateHints(const pivot::PivotCache& cache, std::size_t fi) {
+pivot::SharedItemsHints DateHints(const pivot::PivotCache& cache, std::size_t fi, bool date1904) {
   pivot::SharedItemsHints h;
   double lo = 0.0;
   double hi = 0.0;
@@ -306,11 +293,11 @@ pivot::SharedItemsHints DateHints(const pivot::PivotCache& cache, std::size_t fi
   SetHint(h.contains_non_date, h.has_contains_non_date, false);
   SetHint(h.contains_date, h.has_contains_date, true);
   SetHint(h.contains_string, h.has_contains_string, false);
-  const pivot::GroupBounds bounds = pivot::auto_date_group_bounds(lo, hi, /*date1904=*/false);
+  const pivot::GroupBounds bounds = pivot::auto_date_group_bounds(lo, hi, date1904);
   h.has_min_date = true;
-  h.min_date = IsoDateTime(bounds.start);
+  h.min_date = pivot::group_date_iso(bounds.start, date1904);
   h.has_max_date = true;
-  h.max_date = IsoDateTime(bounds.end);
+  h.max_date = pivot::group_date_iso(bounds.end, date1904);
   h.present = true;
   return h;
 }
@@ -318,7 +305,8 @@ pivot::SharedItemsHints DateHints(const pivot::PivotCache& cache, std::size_t fi
 /// Emits `<fieldGroup>`. `base_hints` are the hints written for the base
 /// field; a date range with no bounds of its own takes theirs, as Excel's
 /// `startDate` / `endDate` repeat the base's `minDate` / `maxDate`.
-void AppendFieldGroup(std::string& out, const pivot::FieldGroup& group, const pivot::SharedItemsHints* base_hints) {
+void AppendFieldGroup(std::string& out, const pivot::FieldGroup& group, const pivot::SharedItemsHints* base_hints,
+                      bool date1904) {
   out.append("<fieldGroup");
   if (group.par.has_value()) {
     append_xml_attr_uint(out, "par", *group.par);
@@ -378,7 +366,7 @@ void AppendFieldGroup(std::string& out, const pivot::FieldGroup& group, const pi
     append_xml_attr_uint(out, "count", group.group_items.size());
     out.push_back('>');
     for (std::size_t i = 0; i < group.group_items.size(); ++i) {
-      AppendInlineTypedValue(out, group.group_items[i], FlagAt(group.group_item_is_date, i));
+      AppendInlineTypedValue(out, group.group_items[i], FlagAt(group.group_item_is_date, i), date1904);
     }
     out.append("</groupItems>");
   }
@@ -456,8 +444,9 @@ void AppendCalculatedItems(std::string& out, const std::vector<pivot::PivotCalcu
 }  // namespace
 
 PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
-                                                 const std::vector<const pivot::PivotTable*>& tables) {
+                                                 const std::vector<const pivot::PivotTable*>& tables, bool date1904) {
   PivotCacheWritePlan plan;
+  plan.date1904 = date1904;
   plan.refresh_on_load = cache.passthrough_attrs().empty();
   for (const pivot::PivotTable* table : tables) {
     plan.refresh_on_load = plan.refresh_on_load || (table != nullptr && table->layout_dirty());
@@ -470,7 +459,7 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
     }
     if (field.field_group.has_value()) {
       if (IsDateGroupBase(cache, fi)) {
-        plan.fields[fi].hints = DateHints(cache, fi);
+        plan.fields[fi].hints = DateHints(cache, fi, date1904);
         plan.fields[fi].dates = plan.fields[fi].hints.present;
       }
       continue;
@@ -486,10 +475,18 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
       const Value v = pivot::cell_value(cache, cache.records()[r], fi);
       wanted = v.is_text() || v.is_boolean() || v.is_error() || v.is_blank();
     }
+    PivotCacheFieldWritePlan& fp = plan.fields[fi];
     if (!wanted) {
+      std::vector<Value> values;
+      std::vector<bool> marks;
+      values.reserve(cache.records().size());
+      for (const pivot::PivotCacheRecord& record : cache.records()) {
+        values.push_back(pivot::cell_value(cache, record, fi));
+        marks.push_back(FlagAt(record.cell_is_date, fi));
+      }
+      fp.hints = DeriveHints(values, marks, date1904);
       continue;
     }
-    PivotCacheFieldWritePlan& fp = plan.fields[fi];
     std::map<Value, std::uint32_t, pivot::ValueLess> seen;
     fp.record_index.reserve(cache.records().size());
     for (const pivot::PivotCacheRecord& record : cache.records()) {
@@ -497,11 +494,12 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
       const auto inserted = seen.emplace(v, static_cast<std::uint32_t>(fp.items.size()));
       if (inserted.second) {
         fp.items.push_back(v);
+        fp.item_is_date.push_back(FlagAt(record.cell_is_date, fi));
       }
       fp.record_index.push_back(inserted.first->second);
     }
     fp.derived = true;
-    fp.hints = DeriveHints(fp.items);
+    fp.hints = DeriveHints(fp.items, fp.item_is_date, date1904);
     const auto item_less = [&fp](std::uint32_t a, std::uint32_t b) {
       return pivot::value_less(fp.items[a], fp.items[b]);
     };
@@ -511,6 +509,7 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
 }
 
 std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const PivotCacheWritePlan* plan) {
+  const bool date1904 = plan != nullptr && plan->date1904;
   std::string out;
   // Pre-reserve a rough lower bound: declaration + root attrs + per-field
   // cost. Empirically ~80B per shared item, ~120B per field; this trims
@@ -635,15 +634,15 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
       AppendSharedItemsHints(out, derived->hints);
       append_xml_attr_uint(out, "count", derived->items.size());
       out.append(">");
-      for (const Value& item : derived->items) {
-        AppendInlineTypedValue(out, item);
+      for (std::size_t i = 0; i < derived->items.size(); ++i) {
+        AppendInlineTypedValue(out, derived->items[i], FlagAt(derived->item_is_date, i), date1904);
       }
       out.append("</sharedItems>");
     } else if (field.shared_items.empty()) {
       // Range-typed field: re-emit the captured numeric / date range +
       // grouping hints so Excel's Refresh keeps its grouping boundaries.
       // Falls back to a minimal `containsNumber="1"` placeholder when the
-      // field was built from scratch (no hints captured).
+      // field was built from scratch with no records to derive hints from.
       out.append("<sharedItems");
       if (field.shared_items_hints.present) {
         AppendSharedItemsHints(out, field.shared_items_hints);
@@ -661,19 +660,18 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
       const auto any_set = [](const std::vector<bool>& flags) {
         return std::find(flags.begin(), flags.end(), true) != flags.end();
       };
-      if (field.shared_items_hints.present || any_set(field.shared_item_is_date) ||
-          any_set(field.shared_item_is_calculated)) {
+      if (field.shared_items_hints.present || any_set(field.shared_item_is_calculated)) {
         AppendSharedItemsHints(out, field.shared_items_hints);
       } else {
-        // A field built without captured hints: Excel asks to repair numeric
-        // shared items that carry no content hints.
-        AppendSharedItemsHints(out, DeriveHints(field.shared_items));
+        // A field built without captured hints: Excel asks to repair shared
+        // items that carry no content hints.
+        AppendSharedItemsHints(out, DeriveHints(field.shared_items, field.shared_item_is_date, date1904));
       }
       append_xml_attr_uint(out, "count", field.shared_items.size());
       out.append(">");
       for (std::size_t i = 0; i < field.shared_items.size(); ++i) {
         AppendSharedItem(out, field.shared_items[i], FlagAt(field.shared_item_is_date, i),
-                         FlagAt(field.shared_item_is_calculated, i));
+                         FlagAt(field.shared_item_is_calculated, i), date1904);
       }
       out.append("</sharedItems>");
     }
@@ -686,7 +684,7 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
           base_hints = &plan->fields[*base].hints;
         }
       }
-      AppendFieldGroup(out, *field.field_group, base_hints);
+      AppendFieldGroup(out, *field.field_group, base_hints, date1904);
     }
     out.append(field.trailing_children_xml);
     out.append("</cacheField>");
@@ -701,6 +699,7 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
 }
 
 std::string write_pivot_cache_records(const pivot::PivotCache& cache, const PivotCacheWritePlan* plan) {
+  const bool date1904 = plan != nullptr && plan->date1904;
   std::string out;
   // Per-record cost is roughly 7B (`<r></r>`) + per-cell cost. `<x v="N"/>`
   // is ~10B for small N, inline-typed cells run ~12B for blanks up to
@@ -740,21 +739,13 @@ std::string write_pivot_cache_records(const pivot::PivotCache& cache, const Pivo
         continue;
       }
       const Value& cell = record.cells[i];
-      // Prefer the per-cell encoding flag captured on read; fall back to
-      // inferring "shared field + numeric cell = index" for hand-built
-      // caches that leave `cell_is_index` empty.
-      bool emit_index;
-      if (i < record.cell_is_index.size()) {
-        emit_index = record.cell_is_index[i] && cell.is_number();
-      } else {
-        emit_index = !cache.fields()[i].shared_items.empty() && cell.is_number();
-      }
+      const bool emit_index = pivot::cell_is_shared_index(record, cache.fields()[i], i) && cell.is_number();
       const bool as_date =
           FlagAt(record.cell_is_date, i) || (plan != nullptr && i < plan->fields.size() && plan->fields[i].dates);
       if (emit_index) {
         AppendSharedIndex(out, cell.as_number());
       } else {
-        AppendInlineTypedValue(out, cell, as_date);
+        AppendInlineTypedValue(out, cell, as_date, date1904);
       }
     }
     out.append("</r>");

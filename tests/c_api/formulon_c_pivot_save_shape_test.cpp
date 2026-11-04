@@ -154,7 +154,15 @@ TEST(FormulonCApiPivotSaveShape, HostBuiltPivotSavesWithItemsAndSharedItems) {
   EXPECT_NE(def.find("<cacheField name=\"Product\"><sharedItems count=\"2\"><s v=\"Pen\"/><s v=\"Ink\"/>"),
             std::string::npos)
       << def;
-  EXPECT_EQ(CountOccurrences(def, "containsNumber=\"1\"/>"), 2U) << def;  // Qty and Amt keep the range form.
+  // Qty (1..7) and Amt (10..100) are range-typed fields with derived numeric hints.
+  EXPECT_NE(def.find("<cacheField name=\"Qty\"><sharedItems containsSemiMixedTypes=\"0\" containsString=\"0\" "
+                     "containsNumber=\"1\" containsInteger=\"1\" minValue=\"1\" maxValue=\"7\"/>"),
+            std::string::npos)
+      << def;
+  EXPECT_NE(def.find("<cacheField name=\"Amt\"><sharedItems containsSemiMixedTypes=\"0\" containsString=\"0\" "
+                     "containsNumber=\"1\" containsInteger=\"1\" minValue=\"10\" maxValue=\"100\"/>"),
+            std::string::npos)
+      << def;
 
   // Records reference the derived fields by index and hold no inline text for them.
   EXPECT_EQ(rec.find("<s v="), std::string::npos) << rec;

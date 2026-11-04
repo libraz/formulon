@@ -482,7 +482,7 @@ static Expected<void, Error> ReadPivotCaches(ZipReader& zip, const pugi::xml_nod
     ASSIGN_OR_RETURN(auto def_bytes, ReadRequiredPart(zip, definition_path, FormulonErrorCode::kIoRelationshipBroken,
                                                       "pivotCacheDefinition: rel target missing from package",
                                                       cache_head, "definition_path"));
-    auto cache_or = read_pivot_cache_definition(def_bytes);
+    auto cache_or = read_pivot_cache_definition(def_bytes, wb.date1904());
     if (!cache_or) {
       return std::move(cache_or.error());
     }
@@ -496,7 +496,7 @@ static Expected<void, Error> ReadPivotCaches(ZipReader& zip, const pugi::xml_nod
       ASSIGN_OR_RETURN(auto rec_bytes, ReadRequiredPart(zip, records_path, FormulonErrorCode::kIoRelationshipBroken,
                                                         "pivotCacheRecords: rel target missing from package",
                                                         cache_head, "records_path"));
-      auto rec_status = read_pivot_cache_records(std::move(rec_bytes), cache);
+      auto rec_status = read_pivot_cache_records(std::move(rec_bytes), cache, kMaxPivotCacheRecordCells, wb.date1904());
       if (!rec_status) {
         return std::move(rec_status.error());
       }

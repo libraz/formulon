@@ -629,5 +629,80 @@ TEST(PivotCacheOptions, MissingItemsLimitZeroIsDistinctFromAbsent) {
   EXPECT_EQ(cache_or.value().missing_items_limit(), std::optional<std::uint32_t>(0U));
 }
 
+// ---------------------------------------------------------------------------
+// `<d>` bodies in the workbook's date system
+// ---------------------------------------------------------------------------
+
+struct DateSpelling {
+  const char* iso;
+  double serial;
+};
+
+std::string DateItemsDefinition(const std::vector<DateSpelling>& spellings) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotCacheDefinition").append(kPivotNs).append("><cacheFields count=\"1\">");
+  xml.append("<cacheField name=\"D\"><sharedItems count=\"").append(std::to_string(spellings.size())).append("\">");
+  for (const DateSpelling& spelling : spellings) {
+    xml.append("<d v=\"").append(spelling.iso).append("\"/>");
+  }
+  xml.append("</sharedItems></cacheField></cacheFields></pivotCacheDefinition>");
+  return xml;
+}
+
+void ExpectDateItems(const std::vector<DateSpelling>& spellings, bool date1904) {
+  auto cache_or = read_pivot_cache_definition(Bytes(DateItemsDefinition(spellings)), date1904);
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCacheField& field = cache_or.value().fields()[0];
+  ASSERT_EQ(field.shared_items.size(), spellings.size());
+  for (std::size_t i = 0; i < spellings.size(); ++i) {
+    ASSERT_TRUE(field.shared_items[i].is_number()) << spellings[i].iso;
+    EXPECT_EQ(field.shared_items[i].as_number(), spellings[i].serial) << spellings[i].iso << " date1904=" << date1904;
+    EXPECT_TRUE(i < field.shared_item_is_date.size() && field.shared_item_is_date[i]) << spellings[i].iso;
+  }
+}
+
+TEST(PivotCacheReader, DateItemsReadBackAsTheExcelSerialsIn1900System) {
+  ExpectDateItems({{"1899-12-30T00:00:00", 0.0},
+                   {"1899-12-30T12:00:00", 0.5},
+                   {"1899-12-31T00:00:00", 1.0},
+                   {"1900-02-27T00:00:00", 59.0},
+                   {"1900-02-28T00:00:00", 60.0},
+                   {"1900-03-01T00:00:00", 61.0},
+                   {"2024-01-01T18:00:00", 45292.75}},
+                  /*date1904=*/false);
+}
+
+TEST(PivotCacheReader, DateItemsReadBackAsTheExcelSerialsIn1904System) {
+  ExpectDateItems({{"1904-01-01T00:00:00", 0.0},
+                   {"1904-01-01T12:00:00", 0.5},
+                   {"1904-01-02T00:00:00", 1.0},
+                   {"2024-01-01T00:00:00", 43830.0}},
+                  /*date1904=*/true);
+}
+
+TEST(PivotCacheReader, RecordAndGroupItemDatesFollowTheDateSystem) {
+  std::string def(kXmlDecl);
+  def.append("<pivotCacheDefinition").append(kPivotNs).append("><cacheFields count=\"2\">");
+  def.append("<cacheField name=\"D\"><sharedItems containsDate=\"1\"/></cacheField>");
+  def.append("<cacheField name=\"G\" databaseField=\"0\"><fieldGroup base=\"0\"><discretePr count=\"1\">");
+  def.append("<x v=\"0\"/></discretePr><groupItems count=\"1\"><d v=\"1904-01-02T00:00:00\"/></groupItems>");
+  def.append("</fieldGroup></cacheField></cacheFields></pivotCacheDefinition>");
+  std::string rec(kXmlDecl);
+  rec.append("<pivotCacheRecords").append(kPivotNs).append(" count=\"1\"><r><d v=\"2024-01-01T00:00:00\"/></r>");
+  rec.append("</pivotCacheRecords>");
+
+  auto cache_or = read_pivot_cache_definition(Bytes(def), /*date1904=*/true);
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  pivot::PivotCache cache = std::move(cache_or.value());
+  const pivot::FieldGroup& group = *cache.fields()[1].field_group;
+  ASSERT_EQ(group.group_items.size(), 1U);
+  EXPECT_EQ(group.group_items[0].as_number(), 1.0);
+  EXPECT_EQ(group.group_item_is_date, (std::vector<bool>{true}));
+  const auto status = read_pivot_cache_records(Bytes(rec), cache, kMaxPivotCacheRecordCells, /*date1904=*/true);
+  ASSERT_TRUE(static_cast<bool>(status)) << status.error().message;
+  EXPECT_EQ(cache.records()[0].cells[0].as_number(), 43830.0);
+  EXPECT_EQ(cache.records()[0].cell_is_date, (std::vector<bool>{true, false}));
+}
+
 }  // namespace
 }  // namespace formulon::io

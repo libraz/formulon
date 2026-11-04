@@ -167,6 +167,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- PivotTable cache dates are read and written as Excel spells them: a serial
+  counts days from 1899-12-30 in the 1900 date system (so serials 1 to 60
+  name the day before their cell display) and from 1904-01-01 in the 1904
+  system. Dates before 1900-03-01 and every date in a 1904 workbook were off
+  before.
+- A PivotTable cache built in memory saves the `<sharedItems>` content hints
+  Excel writes for its values, so Excel opens it without a repair prompt:
+  date fields get `containsDate` and `minDate` / `maxDate` (omitted when dates
+  mix with numbers), number fields mixed with text get `minValue` /
+  `maxValue`, and numeric fields off every axis get their full numeric hints
+  in place of a bare `containsNumber`.
 - A PivotTable label filter on numeric items orders numbers before a text
   bound, as Excel does: `less than "abc"` keeps every number, and `not
   between "2" and "abc"` keeps only the items below 2.

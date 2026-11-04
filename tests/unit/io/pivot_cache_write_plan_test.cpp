@@ -104,7 +104,7 @@ TEST(PivotCacheWritePlan, CaseVariantsCollapseUnderTheProfile) {
   EXPECT_EQ(plan.fields[0].record_index, (std::vector<std::uint32_t>{0, 0, 1}));
 }
 
-TEST(PivotCacheWritePlan, NumericOffAxisFieldKeepsThePlaceholder) {
+TEST(PivotCacheWritePlan, NumericOffAxisFieldStaysRangeTypedWithDerivedHints) {
   const eval::ScopedEvalProfile scope(default_excel_profile());
   pivot::PivotCache cache;
   AddField(cache, "Amt");
@@ -113,9 +113,12 @@ TEST(PivotCacheWritePlan, NumericOffAxisFieldKeepsThePlaceholder) {
   const pivot::PivotTable table = TableWithAxes({pivot::PivotAxis::Value});
   const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {&table});
   EXPECT_FALSE(plan.fields[0].derived);
-  EXPECT_EQ(write_pivot_cache_definition(cache, &plan), write_pivot_cache_definition(cache));
   EXPECT_EQ(write_pivot_cache_records(cache, &plan), write_pivot_cache_records(cache));
-  EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &plan), "<sharedItems containsNumber=\"1\"/>"));
+  const std::string def = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(def,
+                       "<sharedItems containsSemiMixedTypes=\"0\" containsString=\"0\" containsNumber=\"1\" "
+                       "containsInteger=\"1\" minValue=\"30\" maxValue=\"100\"/>"))
+      << def;
 }
 
 TEST(PivotCacheWritePlan, NumericFieldOnAnAxisBecomesDiscrete) {
@@ -159,8 +162,9 @@ TEST(PivotCacheWritePlan, MixedNumberAndTextHint) {
   AddRecord(cache, {Value::blank()});
   const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
   const std::string def = write_pivot_cache_definition(cache, &plan);
-  EXPECT_TRUE(
-      Contains(def, "<sharedItems containsBlank=\"1\" containsMixedTypes=\"1\" containsNumber=\"1\" count=\"3\">"))
+  EXPECT_TRUE(Contains(def,
+                       "<sharedItems containsBlank=\"1\" containsMixedTypes=\"1\" containsNumber=\"1\" "
+                       "containsInteger=\"1\" minValue=\"1\" maxValue=\"1\" count=\"3\">"))
       << def;
 }
 
@@ -365,6 +369,113 @@ TEST(PivotCacheWritePlan, DateHintsNeedEveryRecordToBeADate) {
   EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &plan),
                        "<cacheField name=\"Date\"><sharedItems "
                        "containsNumber=\"1\"/>"));
+}
+
+// ---------------------------------------------------------------------------
+// Date marks and the workbook's date system
+// ---------------------------------------------------------------------------
+
+void AddMarkedRecord(pivot::PivotCache& cache, Value cell, bool is_date) {
+  pivot::PivotCacheRecord record;
+  record.cells = {cell};
+  record.cell_is_date = {is_date};
+  cache.mutable_records().push_back(std::move(record));
+}
+
+TEST(PivotCacheWritePlan, DerivedItemTakesTheDateMarkOfItsFirstCell) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "When");
+  AddMarkedRecord(cache, Value::number(45292), true);
+  AddMarkedRecord(cache, Value::number(45292), false);
+  AddMarkedRecord(cache, Value::number(45300), true);
+  const pivot::PivotTable table = TableWithAxes({pivot::PivotAxis::Row});
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {&table});
+  ASSERT_TRUE(plan.fields[0].derived);
+  EXPECT_EQ(plan.fields[0].record_index, (std::vector<std::uint32_t>{0, 0, 1}));
+  EXPECT_EQ(plan.fields[0].item_is_date, (std::vector<bool>{true, true}));
+  const std::string def = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(def,
+                       "<sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" containsDate=\"1\" "
+                       "containsString=\"0\" minDate=\"2024-01-01T00:00:00\" maxDate=\"2024-01-10T00:00:00\" "
+                       "count=\"2\"><d v=\"2024-01-01T00:00:00\"/><d v=\"2024-01-09T00:00:00\"/>"))
+      << def;
+}
+
+TEST(PivotCacheWritePlan, DerivedItemFirstSeenAsANumberStaysANumber) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "When");
+  AddMarkedRecord(cache, Value::number(45292), false);
+  AddMarkedRecord(cache, Value::number(45292), true);
+  AddMarkedRecord(cache, Value::number(45300), true);
+  const pivot::PivotTable table = TableWithAxes({pivot::PivotAxis::Row});
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {&table});
+  EXPECT_EQ(plan.fields[0].item_is_date, (std::vector<bool>{false, true}));
+  const std::string def = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(def,
+                       "<sharedItems containsSemiMixedTypes=\"0\" containsDate=\"1\" containsString=\"0\" "
+                       "containsMixedTypes=\"1\" count=\"2\"><n v=\"45292\"/><d v=\"2024-01-09T00:00:00\"/>"))
+      << def;
+}
+
+TEST(PivotCacheWritePlan, RangeTypedDateFieldGetsDateHintsAndDateRecords) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "When");
+  AddMarkedRecord(cache, Value::number(45292), true);
+  AddMarkedRecord(cache, Value::number(45300), true);
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  EXPECT_FALSE(plan.fields[0].derived);
+  const std::string def = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(def,
+                       "<sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" containsDate=\"1\" "
+                       "containsString=\"0\" minDate=\"2024-01-01T00:00:00\" maxDate=\"2024-01-10T00:00:00\"/>"))
+      << def;
+  EXPECT_TRUE(Contains(write_pivot_cache_records(cache, &plan),
+                       "<r><d v=\"2024-01-01T00:00:00\"/></r><r><d v=\"2024-01-09T00:00:00\"/></r>"));
+}
+
+TEST(PivotCacheWritePlan, RangeTypedDatesWithNumbersCarryNoDateBounds) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "When");
+  AddMarkedRecord(cache, Value::number(45292), true);
+  AddMarkedRecord(cache, Value::number(5), false);
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  const std::string def = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(def,
+                       "<sharedItems containsSemiMixedTypes=\"0\" containsDate=\"1\" containsString=\"0\" "
+                       "containsMixedTypes=\"1\"/>"))
+      << def;
+}
+
+TEST(PivotCacheWritePlan, RangeTypedFieldWithoutRecordsKeepsThePlaceholder) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "Amt");
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  EXPECT_FALSE(plan.fields[0].hints.present);
+  EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &plan), "<sharedItems containsNumber=\"1\"/>"));
+}
+
+TEST(PivotCacheWritePlan, DateSystemReachesEveryDateSite) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "When");
+  AddMarkedRecord(cache, Value::number(0), true);
+  AddMarkedRecord(cache, Value::number(43830), true);
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {}, /*date1904=*/true);
+  EXPECT_TRUE(plan.date1904);
+  const std::string def = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(def, "minDate=\"1904-01-01T00:00:00\" maxDate=\"2024-01-02T00:00:00\"/>")) << def;
+  EXPECT_TRUE(Contains(write_pivot_cache_records(cache, &plan),
+                       "<r><d v=\"1904-01-01T00:00:00\"/></r><r><d v=\"2024-01-01T00:00:00\"/></r>"));
+
+  const pivot::PivotTable table = TableWithAxes({pivot::PivotAxis::Row});
+  const PivotCacheWritePlan derived = build_pivot_cache_write_plan(cache, {&table}, /*date1904=*/true);
+  EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &derived),
+                       "<d v=\"1904-01-01T00:00:00\"/><d v=\"2024-01-01T00:00:00\"/></sharedItems>"));
 }
 
 }  // namespace
