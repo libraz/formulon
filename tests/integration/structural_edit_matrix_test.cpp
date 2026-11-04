@@ -1146,5 +1146,33 @@ TEST(StructuralEditMatrix, RemoveSheetDropsItsTables) {
   EXPECT_TRUE(wb.tables().empty()) << "a table left behind would be written against a sheet that no longer exists";
 }
 
+TEST(StructuralEditMatrix, RemovingATablesSheetSendsStructuredReferencesToRef) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  TableMetadata table;
+  table.id = 1;
+  table.name = "Tbl";
+  table.display_name = "Tbl";
+  table.ref = "A1:C3";
+  table.sheet_index = 2;
+  for (const char* name : {"Key", "Val", "Other"}) {
+    TableColumn column;
+    column.id = static_cast<std::uint32_t>(table.columns.size() + 1U);
+    column.name = name;
+    table.columns.push_back(column);
+  }
+  wb.mutable_tables().push_back(table);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SUM(Tbl[Val])")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 0, "=ROWS(Tbl)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 2, 0, "=SUM(Tbl[[Val]:[Other]])")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(2)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=SUM(#REF!)");
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 0)->formula_text, "=ROWS(Tbl)");
+  EXPECT_EQ(wb.sheet(0).cell_at(2, 0)->formula_text, "=SUM(#REF!)");
+}
+
 }  // namespace
 }  // namespace formulon

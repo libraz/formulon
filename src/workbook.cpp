@@ -70,6 +70,7 @@
 #include "workbook_formula_index.h"
 #include "workbook_ref_rewrite.h"
 #include "workbook_sheet_mutation.h"
+#include "workbook_table_loss.h"
 
 namespace formulon {
 namespace {
@@ -722,7 +723,14 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
     drawing_candidates.push_back(drawing.value());
   }
 
-  const parser::SheetRemovalTransform transform(pre_removal_sheet_order, index);
+  const parser::SheetRemovalTransform removal(pre_removal_sheet_order, index);
+  std::vector<TableLoss> table_losses;
+  for (const TableMetadata& table : tables_) {
+    if (table.sheet_index == index) {
+      table_losses.push_back(TableLoss{table.name, table.display_name, true, {}});
+    }
+  }
+  const TableLossTransform transform(removal, table_losses);
   std::vector<std::uint32_t> dropped_cache_ids;
   bool defined_names_changed = false;
   rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, removed_name,

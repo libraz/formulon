@@ -22,7 +22,6 @@
 #include "drawing/slicer_edit.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
-#include "eval/structured_ref.h"
 #include "io/auto_filter_xml.h"
 #include "io/worksheet_child_refs.h"
 #include "parser/ast.h"
@@ -44,6 +43,7 @@
 #include "workbook_formula_index.h"
 #include "workbook_ref_rewrite.h"
 #include "workbook_sheet_mutation.h"
+#include "workbook_table_loss.h"
 
 namespace formulon {
 
@@ -89,15 +89,6 @@ CellShift shift_cell_coords_for_row_col_edit(parser::RowColAxis axis, parser::Ro
 }
 
 // @size-budget: 11 KB
-// What a row/column delete takes from the tables on the edited sheet: a
-// table whose whole extent it deletes, or the columns a column delete removes.
-struct TableLoss {
-  std::string name;
-  std::string display_name;
-  bool whole = false;
-  std::vector<std::string> columns;
-};
-
 std::vector<TableLoss> table_losses(const std::vector<TableMetadata>& tables, std::size_t sheet_index,
                                     const StructuralEdit& edit) {
   std::vector<TableLoss> losses;
@@ -132,59 +123,6 @@ std::vector<TableLoss> table_losses(const std::vector<TableMetadata>& tables, st
   }
   return losses;
 }
-
-// A row/column edit's reference transform that also sends a structured
-// reference to a table the edit deletes, or to a column it deletes, to
-// `#REF!`, as Excel rewrites them.
-class TableLossTransform final : public parser::RefTransform {
- public:
-  TableLossTransform(const parser::RefTransform& inner, const std::vector<TableLoss>& losses)
-      : inner_(inner), losses_(losses) {}
-
-  std::optional<parser::Reference> apply(const parser::Reference& ref) const override { return inner_.apply(ref); }
-  std::optional<std::pair<parser::Reference, parser::Reference>> apply_range(
-      const parser::Reference& lhs, const parser::Reference& rhs) const override {
-    return inner_.apply_range(lhs, rhs);
-  }
-  bool preserves_ref3d_coordinates() const noexcept override { return inner_.preserves_ref3d_coordinates(); }
-  parser::RefCollapse collapse_form() const noexcept override { return inner_.collapse_form(); }
-  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override {
-    return inner_.apply_ref3d_span(begin, end);
-  }
-  std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override {
-    return inner_.apply_name_sheet(sheet);
-  }
-
-  std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override {
-    for (const TableLoss& loss : losses_) {
-      if (!strings::case_insensitive_eq(table, loss.name) && !strings::case_insensitive_eq(table, loss.display_name)) {
-        continue;
-      }
-      if (loss.whole) {
-        return std::nullopt;
-      }
-      const auto selector = eval::parse_structured_ref_payload(column);
-      if (!selector) {
-        break;
-      }
-      const auto deleted = [&loss](std::string_view written) {
-        const std::string name = eval::unescape_structured_ref_name(written);
-        return std::any_of(loss.columns.begin(), loss.columns.end(),
-                           [&name](const std::string& gone) { return strings::case_insensitive_eq(gone, name); });
-      };
-      if ((selector.value().column_first_set && deleted(selector.value().column_first)) ||
-          (selector.value().column_last_set && deleted(selector.value().column_last))) {
-        return std::nullopt;
-      }
-      break;
-    }
-    return inner_.apply_structured_ref(table, column);
-  }
-
- private:
-  const parser::RefTransform& inner_;
-  const std::vector<TableLoss>& losses_;
-};
 
 // Walks every formula cell in `sheets`, applying a row/col shift
 // transform. The transform is rebuilt per sheet so its

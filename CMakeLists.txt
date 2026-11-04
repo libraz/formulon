@@ -150,6 +150,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_ref_rewrite.cpp
   src/workbook_data_table.cpp
   src/workbook_row_col_edit.cpp
+  src/workbook_table_loss.cpp
   src/io/auto_filter_xml.cpp
   src/io/cell_parser.cpp
   src/io/cf_overlay.cpp
