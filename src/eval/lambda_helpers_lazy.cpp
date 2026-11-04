@@ -34,7 +34,7 @@ namespace {
 // Returns `nullptr` when the shape is rejected or the arena is exhausted
 // (caller surfaces `#NUM!`).
 ArrayValue* alloc_cells(Arena& arena, std::uint32_t rows, std::uint32_t cols, Value*& out_cells) {
-  return allocate_array_value(rows, cols, arena, out_cells, kMaxDerivedArrayCells);
+  return allocate_derived_array_value(rows, cols, arena, out_cells);
 }
 
 // If `v` is a 1x1 Array, returns its single cell unchanged. Otherwise

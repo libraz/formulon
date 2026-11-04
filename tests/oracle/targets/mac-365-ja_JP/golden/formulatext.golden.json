@@ -2,11 +2,11 @@
   "suite": "formulatext",
   "description": "FORMULATEXT returns the formula source string from a referenced cell. Setup writes a formula into a cell with the `=` shorthand (case_schema normalises strings starting with `=` to `{kind: formula}`). The probe cell `=FORMULATEXT(B1)` then reads back the source. If the target cell holds a literal value or is empty, FORMULATEXT returns #N/A.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-11-04T02:03:06Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -76,6 +76,76 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "lambda_parameter_prefix_hidden",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=LAMBDA(x,x+1)(2)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=LAMBDA(x,x+1)(2)"
+      }
+    },
+    {
+      "id": "map_lambda_prefixes_hidden",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=MAP({1,2},LAMBDA(v,v*2))"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=MAP({1,2},LAMBDA(v,v*2))"
+      }
+    },
+    {
+      "id": "eta_lambda_prefix_hidden",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=BYROW({1,2;3,4},SUM)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=BYROW({1,2;3,4},SUM)"
+      }
+    },
+    {
+      "id": "worksheet_function_prefix_hidden",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=FILTER({1,2,3},{1,0,1})"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=FILTER({1,2,3},{1,0,1})"
+      }
+    },
+    {
+      "id": "let_name_prefix_hidden",
+      "formula": "=FORMULATEXT(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=LET(a,1,a+1)"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "=LET(a,1,a+1)"
       }
     }
   ]

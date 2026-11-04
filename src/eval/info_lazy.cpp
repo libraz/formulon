@@ -36,6 +36,7 @@
 #include "eval/range_resolvers.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
@@ -144,7 +145,7 @@ Value eval_first_cell_coercion(const parser::AstNode& call, Arena& arena, const 
   const std::uint32_t rows = v.as_array_rows();
   const std::uint32_t cols = v.as_array_cols();
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -292,46 +293,9 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     // slot). Excel 365 answers `#N/A`.
     return Value::error(ErrorCode::NA);
   }
-  // Copy the formula source into the evaluation arena, stripping the
-  // xlsx-only `_xlfn.` / `_xlfn._xlws.` storage prefixes so the returned
-  // text matches what the user typed (and what Excel 365 displays).
-  //
-  // Only strip when the prefix stands at a token-start position — i.e.
-  // preceded by nothing, by an ASCII non-identifier byte, or by a quote
-  // boundary — and not while we are inside a `"..."` string literal.
-  // This avoids corrupting user text that happens to contain `_xlfn.`.
-  const std::string_view src(cell->formula_text);
-  std::string stripped;
-  stripped.reserve(src.size());
-  constexpr std::string_view kXlws = "_xlfn._xlws.";
-  constexpr std::string_view kXlfn = "_xlfn.";
-  bool in_string = false;
-  for (std::size_t i = 0; i < src.size();) {
-    const char c = src[i];
-    if (c == '"') {
-      in_string = !in_string;
-      stripped.push_back(c);
-      ++i;
-      continue;
-    }
-    if (!in_string) {
-      const char prev = stripped.empty() ? '\0' : stripped.back();
-      const bool at_token_start = prev == '\0' || !((prev >= 'A' && prev <= 'Z') || (prev >= 'a' && prev <= 'z') ||
-                                                    (prev >= '0' && prev <= '9') || prev == '_' || prev == '.');
-      if (at_token_start) {
-        if (i + kXlws.size() <= src.size() && strings::case_insensitive_eq(src.substr(i, kXlws.size()), kXlws)) {
-          i += kXlws.size();
-          continue;
-        }
-        if (i + kXlfn.size() <= src.size() && strings::case_insensitive_eq(src.substr(i, kXlfn.size()), kXlfn)) {
-          i += kXlfn.size();
-          continue;
-        }
-      }
-    }
-    stripped.push_back(c);
-    ++i;
-  }
+  // Show the formula as typed: storage prefixes are stripped outside string
+  // literals and only at identifier boundaries.
+  const std::string stripped = parser::strip_storage_prefixes(cell->formula_text);
   std::string shown = localize_formula_text(stripped, current_eval_profile());
   // A legacy array formula shows in braces.
   if (cell->array_block_rows != 0U) {
@@ -679,7 +643,7 @@ Value backslash_as_yen(const Value& fmt, Arena& arena) {
   if (fmt.is_array()) {
     const ArrayValue* src = fmt.as_array();
     Value* cells = nullptr;
-    ArrayValue* out = allocate_array_value(src->rows, src->cols, arena, cells, kMaxDerivedArrayCells);
+    ArrayValue* out = allocate_derived_array_value(src->rows, src->cols, arena, cells);
     if (out == nullptr) {
       return Value::error(ErrorCode::Num);
     }

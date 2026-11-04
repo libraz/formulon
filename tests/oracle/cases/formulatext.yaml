@@ -32,3 +32,20 @@ cases:
     description: "FORMULATEXT on a literal-value cell (no formula) -> #N/A"
     setup: { B1: 42 }
     formula: "=FORMULATEXT(B1)"
+  - id: lambda_parameter_prefix_hidden
+    description: "LAMBDA parameters are stored with _xlpm. and shown bare"
+    setup: { B1: "=LAMBDA(x,x+1)(2)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: map_lambda_prefixes_hidden
+    setup: { B1: "=MAP({1,2},LAMBDA(v,v*2))" }
+    formula: "=FORMULATEXT(B1)"
+  - id: eta_lambda_prefix_hidden
+    description: "An eta-reduced function argument is stored with _xleta. and shown bare"
+    setup: { B1: "=BYROW({1,2;3,4},SUM)" }
+    formula: "=FORMULATEXT(B1)"
+  - id: worksheet_function_prefix_hidden
+    setup: { B1: "=FILTER({1,2,3},{1,0,1})" }
+    formula: "=FORMULATEXT(B1)"
+  - id: let_name_prefix_hidden
+    setup: { B1: "=LET(a,1,a+1)" }
+    formula: "=FORMULATEXT(B1)"

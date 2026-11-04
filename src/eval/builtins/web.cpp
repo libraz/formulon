@@ -288,7 +288,7 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::Num);
   }
   Value* cells = nullptr;
-  ArrayValue* arr = allocate_array_value(static_cast<std::uint32_t>(n), 1U, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(static_cast<std::uint32_t>(n), 1U, arena, cells);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

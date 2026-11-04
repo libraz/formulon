@@ -1378,3 +1378,20 @@ cases:
     description: "DATEDIF YD: the MD days plus the YM months walked from the start month"
     formula: '=DATEDIF(43466,45290,"YD")'
     tolerance: { abs: 0, rel: 0 }
+  # -- DATEDIF across February 1900 (29 days in the workbook calendar) ----
+  - id: datedif_md_1900_jan31_mar1
+    description: "DATEDIF MD borrows February 1900 as 29 days -> -1"
+    formula: '=DATEDIF(DATE(1900,1,31),DATE(1900,3,1),"MD")'
+  - id: datedif_md_1900_jan30_mar1
+    formula: '=DATEDIF(DATE(1900,1,30),DATE(1900,3,1),"MD")'
+  - id: datedif_md_1900_jan31_mar2
+    formula: '=DATEDIF(DATE(1900,1,31),DATE(1900,3,2),"MD")'
+  - id: datedif_md_1900_feb29_mar1
+    description: "Serial 60 is the phantom 1900-02-29 -> 1"
+    formula: '=DATEDIF(60,DATE(1900,3,1),"MD")'
+  - id: datedif_yd_1900_jan31_mar1
+    formula: '=DATEDIF(DATE(1900,1,31),DATE(1900,3,1),"YD")'
+  - id: datedif_md_1901_jan31_mar1
+    formula: '=DATEDIF(DATE(1901,1,31),DATE(1901,3,1),"MD")'
+  - id: datedif_md_1904_jan31_mar1
+    formula: '=DATEDIF(DATE(1904,1,31),DATE(1904,3,1),"MD")'

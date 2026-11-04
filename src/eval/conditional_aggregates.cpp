@@ -211,7 +211,7 @@ Value lift_criteria(const std::vector<Value>& criteria, Arena& arena, Aggregate&
     views.push_back(as_array_view(criteria[k], &scalar_slots[k]));
   }
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

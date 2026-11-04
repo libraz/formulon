@@ -325,8 +325,8 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
   const std::size_t out_rows = grid.size();
 
   Value* buffer = nullptr;
-  ArrayValue* out = allocate_array_value(static_cast<std::uint32_t>(out_rows), static_cast<std::uint32_t>(out_cols),
-                                         arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(static_cast<std::uint32_t>(out_rows),
+                                                 static_cast<std::uint32_t>(out_cols), arena, buffer);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

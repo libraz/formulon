@@ -768,7 +768,7 @@ unsigned workbook_days_in_month(int y, unsigned m) noexcept {
 }
 
 // DATEDIF "MD": the day-of-month difference, borrowing the length of the
-// month before end's month when it is negative.
+// month before end's month (in the workbook calendar) when it is negative.
 long long datedif_md_days(const date_time::YMD& a, const date_time::YMD& b) noexcept {
   long long diff = static_cast<long long>(b.d) - static_cast<long long>(a.d);
   if (diff < 0) {
@@ -778,7 +778,7 @@ long long datedif_md_days(const date_time::YMD& a, const date_time::YMD& b) noex
       prev_m = 12;
       prev_y -= 1;
     }
-    diff += static_cast<long long>(days_in_month(prev_y, static_cast<unsigned>(prev_m)));
+    diff += static_cast<long long>(workbook_days_in_month(prev_y, static_cast<unsigned>(prev_m)));
   }
   return diff;
 }
@@ -1072,16 +1072,6 @@ Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }  // namespace
 
 const DateEntry* find_date_entry(std::string_view name) noexcept {
-  // Strip a leading future-function prefix (ISOWEEKNUM ships as
-  // `_xlfn.ISOWEEKNUM`) so both the tree-walker and the VM can pass the raw
-  // call name. Comparison is ASCII case-insensitive.
-  for (const std::string_view prefix :
-       {std::string_view("_xlfn."), std::string_view("_xlpm."), std::string_view("_xlws.")}) {
-    if (name.size() >= prefix.size() && strings::case_insensitive_eq(name.substr(0, prefix.size()), prefix)) {
-      name.remove_prefix(prefix.size());
-      break;
-    }
-  }
   // The date1904-sensitive calendar family. The impls live in this TU's
   // anonymous namespace (visible here via internal linkage) and take the
   // trailing `date1904` flag.

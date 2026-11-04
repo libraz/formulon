@@ -548,7 +548,7 @@ Value eval_node_plain(const parser::AstNode& node, Arena& arena, const FunctionR
       const std::uint32_t rows = node.as_array_rows();
       const std::uint32_t cols = node.as_array_cols();
       Value* cells = nullptr;
-      ArrayValue* array = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+      ArrayValue* array = allocate_derived_array_value(rows, cols, arena, cells);
       if (array == nullptr) {
         return Value::error(ErrorCode::Num);
       }
@@ -615,7 +615,7 @@ std::optional<double> broadcast_operand_number(const Value& v, std::uint32_t r, 
 Value snap_array_result(const Value& out, const Value& lhs, const Value& rhs, Arena& arena) {
   const ArrayValue* src = out.as_array();
   Value* cells = nullptr;
-  ArrayValue* snapped = allocate_array_value(src->rows, src->cols, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* snapped = allocate_derived_array_value(src->rows, src->cols, arena, cells);
   if (snapped == nullptr) {
     return out;
   }
@@ -1144,7 +1144,7 @@ Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const Functio
     }
     if (any_projection) {
       Value* buffer = nullptr;
-      ArrayValue* promoted = allocate_array_value(arr->rows, arr->cols, arena, buffer, kMaxDerivedArrayCells);
+      ArrayValue* promoted = allocate_derived_array_value(arr->rows, arr->cols, arena, buffer);
       if (promoted == nullptr) {
         return arena.exhausted() ? out_of_memory() : Value::error(ErrorCode::Num);
       }

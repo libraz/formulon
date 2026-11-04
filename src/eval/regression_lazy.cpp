@@ -421,7 +421,7 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // a 1x1 array; otherwise (n_bins + 1) x 1.
   const std::uint32_t out_rows = static_cast<std::uint32_t>(n_bins + 1U);
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(out_rows, 1U, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(out_rows, 1U, arena, buffer);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

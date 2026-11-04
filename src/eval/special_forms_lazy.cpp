@@ -244,7 +244,7 @@ Value eval_if_array_cond_lazy(const parser::AstNode& call, const Value& cond, Ar
   out_cols = out_cols > ev.cols ? out_cols : ev.cols;
 
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -367,7 +367,7 @@ Value replace_array_errors(const parser::AstNode& call, const Value& primary, bo
   const std::uint32_t out_rows = pv.rows > fv.rows ? pv.rows : fv.rows;
   const std::uint32_t out_cols = pv.cols > fv.cols ? pv.cols : fv.cols;
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -548,7 +548,7 @@ Value eval_ifs_array_cond(const parser::AstNode& call, std::uint32_t first, cons
   const std::vector<ArrayView> arms = view_arms(arm_values, &arm_slots, &out_rows, &out_cols);
 
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -714,7 +714,7 @@ Value eval_switch_array_subject(const parser::AstNode& call, const Value& subjec
   const std::vector<ArrayView> arms = view_arms(arm_values, &arm_slots, &out_rows, &out_cols);
 
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

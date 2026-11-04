@@ -73,7 +73,7 @@ ArrayValue* make_double_array(const std::vector<double>& data, std::uint32_t row
   // an attacker-controlled `rows * cols >= 2^32` would wrap and request a
   // truncated arena buffer. Bail to nullptr; callers map that to `#NUM!`.
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(rows, cols, arena, buffer);
   if (arr == nullptr) {
     return nullptr;
   }

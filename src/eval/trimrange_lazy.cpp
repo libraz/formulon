@@ -185,7 +185,7 @@ Value trim_array_value(const parser::AstNode& source, const parser::AstNode& cal
   const std::uint32_t kept_rows = row_end - row_start;
   const std::uint32_t kept_cols = col_end - col_start;
   Value* buffer = nullptr;
-  ArrayValue* out = allocate_array_value(kept_rows, kept_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(kept_rows, kept_cols, arena, buffer);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

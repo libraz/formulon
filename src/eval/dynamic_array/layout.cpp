@@ -192,7 +192,7 @@ Value eval_wrap(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   const std::uint32_t out_rows = by_row ? wrapped : effective_wrap;
   const std::uint32_t out_cols = by_row ? effective_wrap : wrapped;
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buffer);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

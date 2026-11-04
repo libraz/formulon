@@ -496,7 +496,7 @@ Value extract_mode1(const KernelResult& kr, std::string_view subject, Arena& are
   }
   const std::uint32_t n = static_cast<std::uint32_t>(kr.matches.size());
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(1U, n, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(1U, n, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -519,7 +519,7 @@ Value extract_mode2(const KernelResult& kr, std::string_view subject, Arena& are
     return Value::error(ErrorCode::Value);
   }
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(1U, kr.capture_count, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(1U, kr.capture_count, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -1096,7 +1096,7 @@ Value substitute_nth(const CompiledPattern& program, std::string_view subject, c
 template <typename PerCell>
 Value broadcast_over_text(const ArrayValue* in, Arena& arena, PerCell&& per_cell) {
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(in->rows, in->cols, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

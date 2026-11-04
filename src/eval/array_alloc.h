@@ -92,6 +92,9 @@ inline bool abandons_formula(std::uint64_t rows, std::uint64_t cols) noexcept {
 ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer,
                                  std::uint64_t max_cells = kMaxDynamicArrayCells);
 
+/// `allocate_array_value` under `kMaxDerivedArrayCells`.
+ArrayValue* allocate_derived_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer);
+
 /// Allocates a `(rows, cols)` array under `kMaxDerivedArrayCells` and fills it
 /// row-major from the first `count` entries of `values`, padding the rest with
 /// Blank (a clamped range expansion can return fewer cells than its rectangle).

@@ -795,7 +795,7 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
     const ArrayValue* in_arr = inner.as_array();
     const std::size_t n = static_cast<std::size_t>(in_arr->rows) * static_cast<std::size_t>(in_arr->cols);
     Value* buf = nullptr;
-    ArrayValue* out = allocate_array_value(in_arr->rows, in_arr->cols, arena, buf, kMaxDerivedArrayCells);
+    ArrayValue* out = allocate_derived_array_value(in_arr->rows, in_arr->cols, arena, buf);
     if (out == nullptr) {
       return Value::error(ErrorCode::Num);
     }
@@ -832,7 +832,7 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
     return v;
   }
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(1U, 1U, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(1U, 1U, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -887,7 +887,7 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
     const std::uint32_t out_rows = in_cols;
     const std::uint32_t out_cols = in_rows;
     Value* buffer = nullptr;
-    ArrayValue* arr = allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+    ArrayValue* arr = allocate_derived_array_value(out_rows, out_cols, arena, buffer);
     if (arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
@@ -923,7 +923,7 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
     // Treat any other shape as a 1x1 fall-through so TRANSPOSE remains
     // total over its input domain.
     Value* one = nullptr;
-    ArrayValue* arr = allocate_array_value(1U, 1U, arena, one, kMaxDerivedArrayCells);
+    ArrayValue* arr = allocate_derived_array_value(1U, 1U, arena, one);
     if (arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
@@ -934,7 +934,7 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
   const std::uint32_t out_rows = src->cols;
   const std::uint32_t out_cols = src->rows;
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(out_rows, out_cols, arena, buffer);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

@@ -225,7 +225,7 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
     views.push_back(v.is_array() ? array_broadcast_arg(*v.as_array()) : scalar_broadcast_arg(v));
   }
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -329,7 +329,7 @@ Shaped broadcast_scalar_call_shaped(const FunctionDef& def, const std::vector<Va
   std::vector<Value> cell_args(views.size(), Value::blank());
   if (mixed) {
     Value* cells = nullptr;
-    ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, cells, kMaxDerivedArrayCells);
+    ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, cells);
     if (out == nullptr) {
       return Shaped{Value::error(ErrorCode::Num), nullptr};
     }

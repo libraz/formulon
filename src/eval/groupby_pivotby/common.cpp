@@ -516,7 +516,7 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
     return nullptr;
   }
   Value* cells = nullptr;
-  ArrayValue* arr = allocate_array_value(n, 1U, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(n, 1U, arena, cells);
   if (arr == nullptr) {
     return nullptr;
   }
@@ -580,7 +580,7 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
   }
   const std::uint32_t out_rows_n = static_cast<std::uint32_t>(rows.size());
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(out_rows_n, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(out_rows_n, out_cols, arena, buffer);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

@@ -81,7 +81,7 @@ ArrayValue* materialise_selected_lanes(const ArrayValue& src, const std::vector<
   const std::uint32_t out_rows = by_col ? src.rows : static_cast<std::uint32_t>(indices.size());
   const std::uint32_t out_cols = by_col ? static_cast<std::uint32_t>(indices.size()) : src.cols;
   Value* buffer = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buffer);
   if (out == nullptr) {
     return nullptr;
   }
@@ -111,7 +111,7 @@ ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::
   const std::uint32_t out_rows = row_hi - row_lo;
   const std::uint32_t out_cols = col_hi - col_lo;
   Value* buffer = nullptr;
-  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buffer);
   if (out == nullptr) {
     return nullptr;
   }
@@ -130,7 +130,7 @@ ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena
   const std::uint32_t rows = as_column ? n : 1U;
   const std::uint32_t cols = as_column ? 1U : n;
   Value* buffer = nullptr;
-  ArrayValue* out = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, buffer);
   if (out == nullptr) {
     return nullptr;
   }

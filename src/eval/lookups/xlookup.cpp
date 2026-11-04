@@ -589,8 +589,8 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::size_t start = horizontal_lookup ? off : off * r_cols;
   const std::size_t stride = horizontal_lookup ? r_cols : 1U;
   Value* buffer = nullptr;
-  ArrayValue* out = horizontal_lookup ? allocate_array_value(count, 1U, arena, buffer, kMaxDerivedArrayCells)
-                                      : allocate_array_value(1U, count, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = horizontal_lookup ? allocate_derived_array_value(count, 1U, arena, buffer)
+                                      : allocate_derived_array_value(1U, count, arena, buffer);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

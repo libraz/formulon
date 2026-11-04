@@ -47,7 +47,7 @@ bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena&
       continue;
     }
     Value* buffer = nullptr;
-    ArrayValue* cell = dynamic_array::allocate_array_value(1U, 1U, arena, buffer, kMaxDerivedArrayCells);
+    ArrayValue* cell = allocate_derived_array_value(1U, 1U, arena, buffer);
     if (cell == nullptr) {
       error_out = Value::error(ErrorCode::Num);
       return false;
@@ -79,7 +79,7 @@ Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, b
   const auto out_rows = static_cast<std::uint32_t>(out_rows_sz);
   const auto out_cols = static_cast<std::uint32_t>(out_cols_sz);
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(out_rows, out_cols, arena, buffer);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

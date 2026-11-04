@@ -332,7 +332,7 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   const std::uint32_t rows = std::max(xv.rows, sv.rows);
   const std::uint32_t cols = std::max(xv.cols, sv.cols);
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

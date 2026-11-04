@@ -71,7 +71,7 @@ Value map_query_lanes(const Value& lookup, Arena& arena, const PerLane& per_lane
   const std::uint32_t query_cols = lookup.as_array_cols();
   const Value* query_cells = lookup.as_array_cells();
   Value* output_cells = nullptr;
-  ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
+  ArrayValue* output = allocate_derived_array_value(query_rows, query_cols, arena, output_cells);
   if (output == nullptr) {
     return Value::error(ErrorCode::Num);
   }

@@ -15,6 +15,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/scalar_args.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -53,7 +54,7 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
     return invoke_impl(args, arity);
   }
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, cells);
   if (out == nullptr)
     return Value::error(ErrorCode::Num);
   std::vector<Value> cell_args;
@@ -96,7 +97,7 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
 
 Value eval_datetime_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  const DateEntry* entry = find_date_entry(call.as_call_name());
+  const DateEntry* entry = find_date_entry(strip_future_prefix(call.as_call_name()));
   if (entry == nullptr) {
     // Registered names always resolve; a miss can only mean a table drift.
     return Value::error(ErrorCode::Name);

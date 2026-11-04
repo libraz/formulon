@@ -132,7 +132,7 @@ Value broadcast_binop_cell(parser::BinOp op, const ArrayView& la, const ArrayVie
 template <class F>
 Value build_dense_result(std::uint32_t rows, std::uint32_t cols, Arena& arena, F&& f) {
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -166,7 +166,7 @@ Value broadcast_unary(parser::UnaryOp op, const Value& operand, Arena& arena) {
   }
   const ArrayValue* in = operand.as_array();
   Value* buf = nullptr;
-  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, buf, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(in->rows, in->cols, arena, buf);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

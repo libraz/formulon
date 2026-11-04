@@ -98,7 +98,7 @@ Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   const auto rows = static_cast<std::uint32_t>(modes.size());
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, 1u, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(rows, 1u, arena, buffer);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

@@ -45,7 +45,7 @@ namespace {
 Value index_whole_column(const std::vector<Value>& cells, std::uint32_t rows, std::uint32_t cols, std::uint32_t col,
                          Arena& arena) {
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(rows, 1U, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(rows, 1U, arena, buffer);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -73,7 +73,7 @@ Value index_whole_array(const std::vector<Value>& cells, std::uint32_t rows, std
 // `#NUM!` on arena exhaustion.
 Value index_whole_row(const std::vector<Value>& cells, std::uint32_t cols, std::uint32_t row, Arena& arena) {
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(1U, cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(1U, cols, arena, buffer);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -575,8 +575,7 @@ Value eval_index_array_selector(const IndexSource& source, bool source_ok, Error
   }
 
   Value* output_cells = nullptr;
-  ArrayValue* output =
-      dynamic_array::allocate_array_value(out_rows, out_cols, arena, output_cells, kMaxDerivedArrayCells);
+  ArrayValue* output = allocate_derived_array_value(out_rows, out_cols, arena, output_cells);
   if (output == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -712,8 +711,7 @@ Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& ind
   }
 
   Value* output_cells = nullptr;
-  ArrayValue* output =
-      dynamic_array::allocate_array_value(out_rows, out_cols, arena, output_cells, kMaxDerivedArrayCells);
+  ArrayValue* output = allocate_derived_array_value(out_rows, out_cols, arena, output_cells);
   if (output == nullptr) {
     return Value::error(ErrorCode::Num);
   }

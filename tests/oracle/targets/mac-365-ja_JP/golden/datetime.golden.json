@@ -2,11 +2,11 @@
   "suite": "datetime",
   "description": "DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / DAYS360 / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / NETWORKDAYS.INTL / WORKDAY / WORKDAY.INTL",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T08:57:56Z"
+    "generated_at": "2026-11-04T01:58:56Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -363,10 +363,7 @@
       "id": "weeknum_invalid_type_is_num",
       "formula": "=WEEKNUM(DATE(2024,1,1),99)",
       "setup": {},
-      "expect": {
-        "kind": "number",
-        "value": 1.0
-      }
+      "skipped": "WEEKNUM(DATE(2024,1,1),99), WEEKNUM(10,-2), WEEKNUM(DATE(2025,3,1),-2): Mac Excel 365 returns #NUM! or the type-1 week number for the same formula, flipping between cells and runs (about 20-35% #NUM! for return_type 22 and above, and for negative types). The documented types 1, 2, 11-17 and 21 are stable, as are the always-#NUM! types 0, 3-10 and 18-20. Formulon returns #NUM! for every unsupported type on every host."
     },
     {
       "id": "isoweeknum_mid_year",
@@ -1546,10 +1543,7 @@
       "id": "weeknum_return_type_negative",
       "formula": "=WEEKNUM(10,-2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#NUM!"
-      }
+      "skipped": "WEEKNUM(DATE(2024,1,1),99), WEEKNUM(10,-2), WEEKNUM(DATE(2025,3,1),-2): Mac Excel 365 returns #NUM! or the type-1 week number for the same formula, flipping between cells and runs (about 20-35% #NUM! for return_type 22 and above, and for negative types). The documented types 1, 2, 11-17 and 21 are stable, as are the always-#NUM! types 0, 3-10 and 18-20. Formulon returns #NUM! for every unsupported type on every host."
     },
     {
       "id": "eomonth_blank_cell",
@@ -2277,10 +2271,7 @@
       "id": "weeknum_neg2",
       "formula": "=WEEKNUM(DATE(2025,3,1),-2)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#NUM!"
-      }
+      "skipped": "WEEKNUM(DATE(2024,1,1),99), WEEKNUM(10,-2), WEEKNUM(DATE(2025,3,1),-2): Mac Excel 365 returns #NUM! or the type-1 week number for the same formula, flipping between cells and runs (about 20-35% #NUM! for return_type 22 and above, and for negative types). The documented types 1, 2, 11-17 and 21 are stable, as are the always-#NUM! types 0, 3-10 and 18-20. Formulon returns #NUM! for every unsupported type on every host."
     },
     {
       "id": "yearfrac_bool_basis_m",
@@ -3291,6 +3282,69 @@
       "tolerance": {
         "abs": 0.0,
         "rel": 0.0
+      }
+    },
+    {
+      "id": "datedif_md_1900_jan31_mar1",
+      "formula": "=DATEDIF(DATE(1900,1,31),DATE(1900,3,1),\"MD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "datedif_md_1900_jan30_mar1",
+      "formula": "=DATEDIF(DATE(1900,1,30),DATE(1900,3,1),\"MD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "datedif_md_1900_jan31_mar2",
+      "formula": "=DATEDIF(DATE(1900,1,31),DATE(1900,3,2),\"MD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "datedif_md_1900_feb29_mar1",
+      "formula": "=DATEDIF(60,DATE(1900,3,1),\"MD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "datedif_yd_1900_jan31_mar1",
+      "formula": "=DATEDIF(DATE(1900,1,31),DATE(1900,3,1),\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "datedif_md_1901_jan31_mar1",
+      "formula": "=DATEDIF(DATE(1901,1,31),DATE(1901,3,1),\"MD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.0
+      }
+    },
+    {
+      "id": "datedif_md_1904_jan31_mar1",
+      "formula": "=DATEDIF(DATE(1904,1,31),DATE(1904,3,1),\"MD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
       }
     }
   ]

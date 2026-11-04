@@ -41,10 +41,14 @@ ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& 
   return out;
 }
 
+ArrayValue* allocate_derived_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer) {
+  return allocate_array_value(rows, cols, arena, out_buffer, kMaxDerivedArrayCells);
+}
+
 ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Value* values, std::size_t count,
                               Arena& arena) {
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(rows, cols, arena, buffer);
   if (arr == nullptr) {
     return nullptr;
   }
@@ -57,7 +61,7 @@ ArrayValue* array_from_values(std::uint32_t rows, std::uint32_t cols, const Valu
 
 Value map_array_cells(const ArrayValue& in, Value (*fn)(const Value& cell, void* ctx), void* ctx, Arena& arena) {
   Value* cells = nullptr;
-  ArrayValue* out = allocate_array_value(in.rows, in.cols, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* out = allocate_derived_array_value(in.rows, in.cols, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -111,7 +115,7 @@ Value densify(const Shaped& s, Arena& arena) {
     return Value::error(ErrorCode::Calc);
   }
   Value* buffer = nullptr;
-  ArrayValue* arr = allocate_array_value(ta.rows, ta.cols, arena, buffer, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(ta.rows, ta.cols, arena, buffer);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

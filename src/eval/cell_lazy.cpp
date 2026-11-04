@@ -336,7 +336,7 @@ Value build_width_result(const Sheet& sheet, std::uint32_t col, const ColumnWidt
     }
   }
   Value* cells = nullptr;
-  ArrayValue* arr = allocate_array_value(1U, 2U, arena, cells, kMaxDerivedArrayCells);
+  ArrayValue* arr = allocate_derived_array_value(1U, 2U, arena, cells);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Value);
   }

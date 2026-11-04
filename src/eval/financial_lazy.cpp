@@ -33,6 +33,7 @@
 #include "eval/range_args.h"
 #include "eval/rate_secant.h"
 #include "eval/scalar_args.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -683,16 +684,6 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 }
 
 const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexcept {
-  // Strip a leading future-function prefix, mirroring `find_date_entry` --
-  // none of these names ship `_xlfn.`-prefixed in practice, but a caller
-  // that already stripped or didn't strip a prefix must not matter here.
-  for (const std::string_view prefix :
-       {std::string_view("_xlfn."), std::string_view("_xlpm."), std::string_view("_xlws.")}) {
-    if (name.size() >= prefix.size() && strings::case_insensitive_eq(name.substr(0, prefix.size()), prefix)) {
-      name.remove_prefix(prefix.size());
-      break;
-    }
-  }
   struct NamedEntry {
     std::string_view name;
     FinancialDateEntry entry;
@@ -737,7 +728,7 @@ const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexc
 
 Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx) {
-  const FinancialDateEntry* entry = find_financial_date_entry(call.as_call_name());
+  const FinancialDateEntry* entry = find_financial_date_entry(strip_future_prefix(call.as_call_name()));
   if (entry == nullptr) {
     // Registered names always resolve; a miss can only mean a table drift.
     return Value::error(ErrorCode::Name);
