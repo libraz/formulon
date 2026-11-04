@@ -190,6 +190,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole column, a whole row or a large range across the edited band, such as
   `=SUM(Sheet3!A:A)` after a row of Sheet3 is deleted; they kept their old
   value before.
+- A spill reference whose anchor a structural edit deletes keeps its `#`, as
+  in Excel: `=SUM(Sheet3!#REF!#)` and `=SUM(#REF!#)` after a row deletion,
+  `=SUM(#REF!D5#)` after a sheet deletion, saved as
+  `_xlfn.ANCHORARRAY(#REF!)`. It evaluates to `#REF!` (it gave `#VALUE!`),
+  and `#REF!#` can be typed and read back.
+- Deleting a sheet keeps its sheet-scoped names that other sheets still use:
+  a name referenced as `Sheet2!Rate` becomes workbook-scoped and the
+  reference becomes `[0]!Rate`, or binds to an existing workbook-scoped name
+  of the same name. Names nothing else references are dropped as before.
+- Deleting a sheet sends structured references to the tables on it to
+  `#REF!` (`=SUM(#REF!)`); they kept naming the deleted table before.
+- Conditional formatting formulas read from a file drop a qualifier naming
+  their own sheet (`Sheet3!$A$1>0` on Sheet3 is `$A$1>0`), as Excel does on
+  load, so a later row deletion gives `#REF!>0`.
+- XLSB stores a qualified or deleted-sheet `#REF!` the way Excel does (a
+  sheet-bound reference error, or the address through a deleted-sheet
+  entry), and reads those forms back with their sheet or address: an Excel
+  `.xlsb` shows `=Sheet3!#REF!*2` and `=#REF!A1` again. A reference to a
+  deleted sheet in an Excel `.xlsb` no longer reads back as a plain `A1` on
+  the formula's own sheet.
 - PivotTable cache dates are read and written as Excel spells them: a serial
   counts days from 1899-12-30 in the 1900 date system (so serials 1 to 60
   name the day before their cell display) and from 1904-01-01 in the 1904
