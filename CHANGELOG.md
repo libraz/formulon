@@ -176,6 +176,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A reference deleted by a structural edit is spelled as Excel spells it. A
+  row or column deletion keeps the qualifier the reference was written with
+  (`=Sheet3!#REF!*2`, `='Data 1'!#REF!`, a defined name `Sheet3!#REF!`), and
+  that qualifier follows a later sheet rename. A sheet deletion keeps the
+  address in the formula bar (`=#REF!A1`, `=SUM(#REF!A:A)`, `#REF!#REF!` for
+  an already-deleted reference) while the saved formula stays bare `#REF!`;
+  copying a sheet that one end of a 3-D reference names spells it the same
+  way. Removing an end sheet of a 3-D span that leaves one sheet gives the
+  single-sheet reference (`=SUM(Sheet2!A1:B2)`). The parser accepts all of
+  these spellings, including `#REF!A:A` and `#REF!1:3`.
+- Inserting or deleting rows or columns recalculates formulas that read a
+  whole column, a whole row or a large range across the edited band, such as
+  `=SUM(Sheet3!A:A)` after a row of Sheet3 is deleted; they kept their old
+  value before.
 - PivotTable cache dates are read and written as Excel spells them: a serial
   counts days from 1899-12-30 in the 1900 date system (so serials 1 to 60
   name the day before their cell display) and from 1904-01-01 in the 1904

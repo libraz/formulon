@@ -232,10 +232,9 @@ TEST(WorkbookCopySheet, MeasuredFormulas) {
   for (const auto& [cell, number] : values) {
     EXPECT_EQ(NumberAt(wb, 2, cell), number) << cell;
   }
-  // Known gap: Excel keeps the tail (`=SUM(#REF!A1)`); the engine collapses a
-  // dead 3-D reference to `#REF!` everywhere, as sheet removal does. Excel
-  // shows 1012 until a full recalculation, then #REF!.
-  EXPECT_EQ(FormulaAt(wb, 2, "B11").rfind("=SUM(#REF!", 0), 0U) << FormulaAt(wb, 2, "B11");
+  // A dead 3-D reference keeps its address. Excel shows 1012 until a full
+  // recalculation, then #REF!.
+  EXPECT_EQ(FormulaAt(wb, 2, "B11"), "=SUM(#REF!A1)");
   EXPECT_TRUE(IsError(ValueAt(wb, 2, "B11"), ErrorCode::Ref));
   // Excel answers `$A$1`; the copy must at least answer as its source does.
   ASSERT_TRUE(ValueAt(wb, 2, "B13").is_text());
@@ -260,10 +259,9 @@ TEST(WorkbookCopySheet, ThreeDEndpoints) {
   ASSERT_TRUE(static_cast<bool>(copy));
   ASSERT_EQ(wb.sheet(2).name(), "S (2)");
   Recalc(wb);
-  // Known gap: Excel spells both `=SUM(#REF!A1)`; the engine collapses a dead
-  // 3-D reference to `#REF!` everywhere, as sheet removal does.
-  EXPECT_EQ(FormulaAt(wb, 2, "B1").rfind("=SUM(#REF!", 0), 0U) << FormulaAt(wb, 2, "B1");
-  EXPECT_EQ(FormulaAt(wb, 2, "B2").rfind("=SUM(#REF!", 0), 0U) << FormulaAt(wb, 2, "B2");
+  // A span with one endpoint on the source loses that sheet and keeps its address.
+  EXPECT_EQ(FormulaAt(wb, 2, "B1"), "=SUM(#REF!A1)");
+  EXPECT_EQ(FormulaAt(wb, 2, "B2"), "=SUM(#REF!A1)");
   EXPECT_EQ(FormulaAt(wb, 2, "B3"), "=SUM(A:Z!A1)");
   EXPECT_EQ(FormulaAt(wb, 2, "B4"), "=SUM('S (2)'!A1)");
   EXPECT_TRUE(IsError(ValueAt(wb, 2, "B1"), ErrorCode::Ref));

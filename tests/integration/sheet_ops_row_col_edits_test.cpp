@@ -302,6 +302,57 @@ TEST(WorkbookRowColEdits, DeleteRowsCollapsesFullyDeletedMultiCellRange) {
   EXPECT_EQ(wb.sheet(0).cell_at(7, 0)->formula_text, "=SUM(#REF!)");
 }
 
+TEST(WorkbookRowColEdits, DeletedQualifiedReferenceKeepsItsSheet) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet3");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=Sheet3!A5")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 0, "=Sheet3!$A$5*2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 2, 0, "=SUM(Sheet3!A5:A5)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 0, 2, "=Sheet3!A5")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 1, 2, "=A5")));
+  wb.set_defined_names({DefinedName{"Nm", "Sheet3!$A$5", -1, false, ""}});
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(1, /*row=*/4, /*count=*/1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=Sheet3!#REF!");
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 0)->formula_text, "=Sheet3!#REF!*2");
+  EXPECT_EQ(wb.sheet(0).cell_at(2, 0)->formula_text, "=SUM(Sheet3!#REF!)");
+  EXPECT_EQ(wb.sheet(1).cell_at(0, 2)->formula_text, "=Sheet3!#REF!") << "a self-sheet qualifier is kept too";
+  EXPECT_EQ(wb.sheet(1).cell_at(1, 2)->formula_text, "=#REF!") << "an unqualified reference collapses bare";
+  EXPECT_EQ(wb.defined_names()[0].formula, "Sheet3!#REF!");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_TRUE(wb.sheet(0).cell_at(1, 0)->cached_value.is_error());
+}
+
+TEST(WorkbookRowColEdits, DeletedQuotedQualifierKeepsItsQuotes) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Data 1");
+  wb.add_sheet("Q1");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "='Data 1'!A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 0, "='Q1'!A1")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(1, /*row=*/0, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(2, /*row=*/0, /*count=*/1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "='Data 1'!#REF!");
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 0)->formula_text, "='Q1'!#REF!");
+}
+
+TEST(WorkbookRowColEdits, DeletedQualifiedColumnKeepsItsSheet) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet3");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=Sheet3!B5")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 0, "=SUM(Sheet3!B1:B3)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(1, /*col=*/1, /*count=*/1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=Sheet3!#REF!");
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 0)->formula_text, "=SUM(Sheet3!#REF!)");
+}
+
 TEST(WorkbookRowColEdits, DeleteRowsShrunkRangeRecalculatesAfterSurvivorChange) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(10.0))));

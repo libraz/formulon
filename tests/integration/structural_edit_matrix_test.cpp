@@ -868,7 +868,7 @@ TEST(StructuralEditMatrix, CrossSheetConditionalFormatFormulaBecomesRefWhenTarge
   Workbook wb = MakeCrossSheetWorkbook();
   // Both anchor rows: the pivot there moves or goes whole.
   ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, kAnchorRow, 2U)));
-  EXPECT_EQ(CrossSheetCfFormula(wb), "#REF!>0");
+  EXPECT_EQ(CrossSheetCfFormula(wb), "Sheet1!#REF!>0");
 }
 
 TEST(StructuralEditMatrix, LocalConditionalFormatOnOtherSheetIsNotShifted) {
@@ -1006,7 +1006,7 @@ TEST(StructuralEditMatrix, DefinedNamesUseTheirOwningSheetTransform) {
     }
 
     const std::string local_formula = deletion ? "#REF!" : (rows ? "$A$2" : "$B$1");
-    const std::string qualified_formula = deletion ? "#REF!" : (rows ? "Sheet1!$A$2" : "Sheet1!$B$1");
+    const std::string qualified_formula = deletion ? "Sheet1!#REF!" : (rows ? "Sheet1!$A$2" : "Sheet1!$B$1");
     const std::string unchanged_formula = "$A$1";
     ASSERT_EQ(wb.defined_names().size(), 7U);
     EXPECT_EQ(wb.defined_names()[0].formula, local_formula);

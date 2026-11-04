@@ -147,6 +147,7 @@ class TableLossTransform final : public parser::RefTransform {
     return inner_.apply_range(lhs, rhs);
   }
   bool preserves_ref3d_coordinates() const noexcept override { return inner_.preserves_ref3d_coordinates(); }
+  parser::RefCollapse collapse_form() const noexcept override { return inner_.collapse_form(); }
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override {
     return inner_.apply_ref3d_span(begin, end);
   }
