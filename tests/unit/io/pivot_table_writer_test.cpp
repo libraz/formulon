@@ -1513,6 +1513,34 @@ TEST(PivotTableWriter, X14FieldExtensionKeepsItsOtherContentAndTheOtherExtension
   EXPECT_EQ(written.find("fillDownLabels"), std::string::npos) << written;
 }
 
+// An x14 field extension the reader keeps verbatim (here: a second element
+// beside `<pivotField>`) still follows the model's fillDownLabels.
+TEST(PivotTableWriter, FillDownLabelsIsPatchedIntoAVerbatimX14FieldExtension) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A3:B6\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  xml.append("<pivotFields count=\"1\"><pivotField axis=\"axisRow\" showAll=\"0\"><extLst>");
+  xml.append("<ext uri=\"{2946ED86-A175-432a-8AC1-64E0C546D7DE}\" xmlns:y=\"").append(kX14Ns);
+  xml.append("\"><y:pivotField ignore=\"1\"/><y:other/></ext>");
+  xml.append("</extLst></pivotField></pivotFields></pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  pivot::PivotTable table = std::move(table_or.value());
+  ASSERT_FALSE(table.fields()[0].fill_down_labels);
+
+  table.mutable_fields()[0].fill_down_labels = true;
+  std::string written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("<y:pivotField ignore=\"1\" fillDownLabels=\"1\"/><y:other/></ext>"), std::string::npos)
+      << written;
+  auto again_or = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(again_or)) << again_or.error().message;
+  EXPECT_TRUE(again_or.value().fields()[0].fill_down_labels);
+
+  table.mutable_fields()[0].fill_down_labels = false;
+  written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("<y:pivotField ignore=\"1\"/><y:other/></ext>"), std::string::npos) << written;
+}
+
 TEST(PivotTableWriter, ItemCaptionAndCollapseAreWrittenAsNAndSd) {
   pivot::PivotTable table = TableWithTwoItemRowField();
   table.mutable_fields()[0].items[0].caption = "zz";

@@ -128,26 +128,26 @@ bool HasFormOverride(const std::vector<std::pair<std::string, std::string>>& att
          HasRawAttr(attrs, "outlineData");
 }
 
-/// Where a captured `<item>` element spells `sd`.
-struct MarkerSd {
+/// Where the start tag at the head of an XML fragment spells one attribute.
+struct StartTagAttr {
   /// The attribute with its leading whitespace, `[begin, end)`; `begin` is
   /// npos when absent.
   std::size_t begin = std::string_view::npos;
   std::size_t end = 0;
   /// Position of the `/` or `>` closing the start tag.
   std::size_t tag_end = std::string_view::npos;
-  bool shows_detail = true;
+  std::string_view value;
 };
 
 /// Scans the attributes of the start tag in `xml`, quoted either way.
-MarkerSd FindMarkerSd(std::string_view xml) {
+StartTagAttr FindStartTagAttr(std::string_view xml, std::string_view attr) {
   constexpr std::string_view kSpace = " \t\r\n";
-  MarkerSd sd;
+  StartTagAttr found;
   std::size_t pos = xml.find_first_of(kSpace);
   while (pos < xml.size()) {
     const std::size_t name_begin = xml.find_first_not_of(kSpace, pos);
     if (name_begin == std::string_view::npos || xml[name_begin] == '/' || xml[name_begin] == '>') {
-      sd.tag_end = name_begin;
+      found.tag_end = name_begin;
       break;
     }
     const std::size_t eq = xml.find('=', name_begin);
@@ -161,29 +161,80 @@ MarkerSd FindMarkerSd(std::string_view xml) {
     }
     std::string_view name = xml.substr(name_begin, eq - name_begin);
     name = name.substr(0, name.find_last_not_of(kSpace) + 1);
-    if (name == "sd") {
-      const std::string_view value = xml.substr(open + 1, close - open - 1);
-      sd.begin = pos;
-      sd.end = close + 1;
-      sd.shows_detail = value != "0" && value != "false";
+    if (name == attr) {
+      found.begin = pos;
+      found.end = close + 1;
+      found.value = xml.substr(open + 1, close - open - 1);
     }
     pos = close + 1;
   }
-  return sd;
+  return found;
 }
 
-/// `xml` with its `sd` attribute set to `shows_detail`: `sd="0"` added or
-/// rewritten when collapsed, removed when expanded. Every other attribute
-/// stays as captured.
-std::string WithMarkerShowDetail(std::string_view xml, bool shows_detail) {
-  const MarkerSd sd = FindMarkerSd(xml);
+/// The boolean an xsd:boolean attribute spells, `fallback` when absent.
+bool StartTagFlag(std::string_view xml, std::string_view attr, bool fallback) {
+  const StartTagAttr found = FindStartTagAttr(xml, attr);
+  if (found.begin == std::string_view::npos) {
+    return fallback;
+  }
+  return found.value != "0" && found.value != "false";
+}
+
+/// `xml` with the boolean attribute `attr` of its head start tag set to
+/// `value`: written when it differs from the schema default, removed when it
+/// equals it. Every other attribute stays as captured.
+std::string WithStartTagFlag(std::string_view xml, std::string_view attr, bool value, bool schema_default) {
+  const StartTagAttr found = FindStartTagAttr(xml, attr);
+  std::string spelled;
+  if (value != schema_default) {
+    spelled.push_back(' ');
+    spelled.append(attr);
+    spelled.append(value ? "=\"1\"" : "=\"0\"");
+  }
   std::string out(xml);
-  if (sd.begin != std::string_view::npos) {
-    out.replace(sd.begin, sd.end - sd.begin, shows_detail ? "" : " sd=\"0\"");
-  } else if (!shows_detail && sd.tag_end != std::string_view::npos) {
-    out.insert(sd.tag_end, " sd=\"0\"");
+  if (found.begin != std::string_view::npos) {
+    out.replace(found.begin, found.end - found.begin, spelled);
+  } else if (!spelled.empty() && found.tag_end != std::string_view::npos) {
+    out.insert(found.tag_end, spelled);
   }
   return out;
+}
+
+/// `raw_ext_xml` with `fillDownLabels` on the `<pivotField>` element of the
+/// x14 field extension set to `fill_down`; unchanged when that extension or
+/// element is absent.
+std::string WithVerbatimFillDownLabels(const std::string& raw_ext_xml, bool fill_down) {
+  const std::string_view ext_uri(kPivotFieldExtUri);
+  std::size_t uri = std::string::npos;
+  for (std::size_t at = 0; at + ext_uri.size() <= raw_ext_xml.size(); ++at) {
+    if (strings::case_insensitive_eq(std::string_view(raw_ext_xml).substr(at, ext_uri.size()), ext_uri)) {
+      uri = at;
+      break;
+    }
+  }
+  if (uri == std::string::npos) {
+    return raw_ext_xml;
+  }
+  for (std::size_t lt = raw_ext_xml.find('<', uri); lt != std::string::npos; lt = raw_ext_xml.find('<', lt + 1)) {
+    const std::size_t name_end = raw_ext_xml.find_first_of(" \t\r\n/>", lt + 1);
+    if (name_end == std::string::npos) {
+      break;
+    }
+    const std::string_view name(raw_ext_xml.data() + lt + 1, name_end - lt - 1);
+    if (name == "/ext" || (!name.empty() && name.front() == '/' && strings::ends_with(name, ":ext"))) {
+      break;
+    }
+    const std::size_t colon = name.find(':');
+    if ((colon == std::string_view::npos ? name : name.substr(colon + 1)) != "pivotField") {
+      continue;
+    }
+    const std::string_view tail(raw_ext_xml.data() + lt, raw_ext_xml.size() - lt);
+    if (StartTagFlag(tail, "fillDownLabels", false) == fill_down) {
+      return raw_ext_xml;
+    }
+    return raw_ext_xml.substr(0, lt) + WithStartTagFlag(tail, "fillDownLabels", fill_down, false);
+  }
+  return raw_ext_xml;
 }
 
 /// True when the field's x14 `<pivotField>` extension is generated from the
@@ -221,7 +272,7 @@ void AppendFieldExtLst(std::string& out, const pivot::PivotField& field) {
       out.append("</x14:pivotField></ext>");
     }
   }
-  out.append(field.raw_ext_xml);
+  out.append(WithVerbatimFillDownLabels(field.raw_ext_xml, field.fill_down_labels));
   out.append("</extLst>");
 }
 
@@ -411,8 +462,8 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
       if (!is_subtotal(marker.type)) {
         continue;
       }
-      if (marker.type == "default" && marker.show_detail != FindMarkerSd(marker.xml).shows_detail) {
-        out.append(WithMarkerShowDetail(marker.xml, marker.show_detail));
+      if (marker.type == "default" && marker.show_detail != StartTagFlag(marker.xml, "sd", true)) {
+        out.append(WithStartTagFlag(marker.xml, "sd", marker.show_detail, true));
       } else {
         out.append(marker.xml);
       }
