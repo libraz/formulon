@@ -30,6 +30,7 @@ from enum import IntEnum, IntFlag
 from functools import wraps
 from inspect import isgeneratorfunction
 from typing import (
+    Any,
     Dict,
     Iterator,
     List,
@@ -150,6 +151,8 @@ __all__ = [
     "PassthroughPart",
     "PivotAggregation",
     "PivotAxis",
+    "PivotCacheOptions",
+    "PivotCalculatedItem",
     "PivotCalendar",
     "PivotCell",
     "PivotCellKind",
@@ -164,6 +167,7 @@ __all__ = [
     "PivotItemInfo",
     "PivotStyleInfo",
     "PivotLayout",
+    "PivotOptions",
     "PivotReportLayout",
     "PivotShowValuesAs",
     "PivotSortOrder",
@@ -942,7 +946,10 @@ class PivotShowValuesAs(IntEnum):
 
 
 class PivotFilterType(IntEnum):
-    """Filter type for an active (slicer-applied) pivot filter."""
+    """Filter type of a pivot filter (``fm_pivot_filter_type_t``): every OOXML pivot filter type.
+
+    Values 0-5 are the original six; the rest follow the header's ordinals.
+    """
 
     VALUE_TOP_10 = 0
     VALUE_GREATER_THAN = 1
@@ -950,6 +957,68 @@ class PivotFilterType(IntEnum):
     LABEL_CONTAINS = 3
     LABEL_BEGINS_WITH = 4
     LABEL_DATE = 5
+    VALUE_EQUAL = 6
+    VALUE_NOT_EQUAL = 7
+    VALUE_GREATER_THAN_OR_EQUAL = 8
+    VALUE_LESS_THAN = 9
+    VALUE_LESS_THAN_OR_EQUAL = 10
+    VALUE_NOT_BETWEEN = 11
+    LABEL_EQUAL = 12
+    LABEL_NOT_EQUAL = 13
+    LABEL_NOT_BEGINS_WITH = 14
+    LABEL_ENDS_WITH = 15
+    LABEL_NOT_ENDS_WITH = 16
+    LABEL_NOT_CONTAINS = 17
+    LABEL_GREATER_THAN = 18
+    LABEL_GREATER_THAN_OR_EQUAL = 19
+    LABEL_LESS_THAN = 20
+    LABEL_LESS_THAN_OR_EQUAL = 21
+    LABEL_BETWEEN = 22
+    LABEL_NOT_BETWEEN = 23
+    VALUE_BOTTOM_COUNT = 24
+    VALUE_TOP_PERCENT = 25
+    VALUE_BOTTOM_PERCENT = 26
+    VALUE_TOP_SUM = 27
+    VALUE_BOTTOM_SUM = 28
+    DATE_EQUAL = 29
+    DATE_NOT_EQUAL = 30
+    DATE_OLDER_THAN = 31
+    DATE_OLDER_THAN_OR_EQUAL = 32
+    DATE_NEWER_THAN = 33
+    DATE_NEWER_THAN_OR_EQUAL = 34
+    DATE_NOT_BETWEEN = 35
+    DATE_TOMORROW = 36
+    DATE_TODAY = 37
+    DATE_YESTERDAY = 38
+    DATE_NEXT_WEEK = 39
+    DATE_THIS_WEEK = 40
+    DATE_LAST_WEEK = 41
+    DATE_NEXT_MONTH = 42
+    DATE_THIS_MONTH = 43
+    DATE_LAST_MONTH = 44
+    DATE_NEXT_QUARTER = 45
+    DATE_THIS_QUARTER = 46
+    DATE_LAST_QUARTER = 47
+    DATE_NEXT_YEAR = 48
+    DATE_THIS_YEAR = 49
+    DATE_LAST_YEAR = 50
+    DATE_YEAR_TO_DATE = 51
+    DATE_Q1 = 52
+    DATE_Q2 = 53
+    DATE_Q3 = 54
+    DATE_Q4 = 55
+    DATE_M1 = 56
+    DATE_M2 = 57
+    DATE_M3 = 58
+    DATE_M4 = 59
+    DATE_M5 = 60
+    DATE_M6 = 61
+    DATE_M7 = 62
+    DATE_M8 = 63
+    DATE_M9 = 64
+    DATE_M10 = 65
+    DATE_M11 = 66
+    DATE_M12 = 67
 
 
 class PivotFilterValueKind(IntEnum):
@@ -1024,6 +1093,7 @@ PIVOT_SHOW_AS_BASE_NEXT = 1048829
 # matching setters (``FM_PIVOT_VALUES_FIELD`` reinterpreted as a signed value).
 PIVOT_VALUES_FIELD = -2
 _PIVOT_VALUES_FIELD_C = 0xFFFFFFFE
+_PIVOT_NO_DATA_FIELD = 0xFFFFFFFF
 
 # Sentinel for ``CellStyle.builtin_id`` meaning "custom (no builtinId)".
 CELL_STYLE_BUILTIN_ID_NONE = S.CELL_STYLE_BUILTIN_ID_NONE
@@ -3197,6 +3267,7 @@ class PivotFieldInfo:
     subtotal_fns: Tuple[PivotAggregation, ...]
     insert_blank_row: bool = False
     fill_down_labels: bool = False
+    show_all: bool = False
 
 
 @dataclass(frozen=True)
@@ -3234,6 +3305,71 @@ class PivotStyleInfo:
     show_last_column: bool
 
 
+@dataclass(frozen=True)
+class PivotOptions:
+    """The PivotTable Options of one pivot table, as read by :meth:`Workbook.pivot_get_options`.
+
+    :meth:`Workbook.pivot_set_options` changes only the members that are not
+    ``None``; a read always fills every member. A string option reads ``""``
+    when unset and is cleared by setting ``""``. A ``missing_caption`` of
+    exactly ``-`` is written as the number 0.
+    ``indent`` runs 0-126 and ``page_wrap`` 0-255 (0 does not wrap).
+    """
+
+    show_error: Optional[bool] = None
+    error_caption: Optional[str] = None
+    show_missing: Optional[bool] = None
+    missing_caption: Optional[str] = None
+    show_headers: Optional[bool] = None
+    show_drill: Optional[bool] = None
+    show_data_tips: Optional[bool] = None
+    grid_drop_zones: Optional[bool] = None
+    show_empty_row: Optional[bool] = None
+    show_empty_col: Optional[bool] = None
+    show_data_drop_down: Optional[bool] = None
+    print_drill: Optional[bool] = None
+    field_print_titles: Optional[bool] = None
+    item_print_titles: Optional[bool] = None
+    merge_item: Optional[bool] = None
+    indent: Optional[int] = None
+    page_over_then_down: Optional[bool] = None
+    page_wrap: Optional[int] = None
+    multiple_field_filters: Optional[bool] = None
+    preserve_formatting: Optional[bool] = None
+    custom_list_sort: Optional[bool] = None
+    alt_text: Optional[str] = None
+    alt_text_summary: Optional[str] = None
+    grand_total_caption: Optional[str] = None
+    auto_formatting: Optional[bool] = None
+    enable_drill: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class PivotCacheOptions:
+    """The options of one pivot cache, as read by :meth:`Workbook.pivot_cache_get_options`.
+
+    ``missing_items_limit`` is ``-1`` for automatic, ``0`` for none, or up to 1048576.
+    """
+
+    save_data: bool
+    missing_items_limit: int
+    refresh_on_load: bool
+
+
+@dataclass(frozen=True)
+class PivotCalculatedItem:
+    """One calculated item, as read by :meth:`Workbook.pivot_cache_calculated_item_at`.
+
+    ``formula`` has no leading ``=``; ``scoped`` is true for an entry read from
+    a file that applies the formula only where the item meets items of other fields.
+    """
+
+    field_index: int
+    name: str
+    formula: str
+    scoped: bool
+
+
 @dataclass
 class PivotDataFieldSpec:
     """Argument shape for ``pivot_data_field_add`` / ``pivot_data_field_set``.
@@ -3268,6 +3404,7 @@ class PivotFilterSpec:
     value_high_int: int = 0
     value_high_double: float = 0.0
     data_field_index: int = 0
+    value_high_text: str = ""
 
 
 def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
@@ -10563,6 +10700,164 @@ class Workbook:
                 "fm_workbook_pivot_cache_set_worksheet_source",
             )
 
+    def pivot_cache_get_options(self, cache_id: int) -> PivotCacheOptions:
+        """Read the options of the pivot cache; see :class:`PivotCacheOptions`."""
+        h = self._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.PIVOT_CACHE_OPTIONS)
+            _check(
+                LIB.fm_workbook_pivot_cache_get_options(h, _uint(cache_id, "cache_id"), ptr),
+                "fm_workbook_pivot_cache_get_options",
+            )
+            d = S.PIVOT_CACHE_OPTIONS.unpack(LIB, ptr)
+            return PivotCacheOptions(
+                save_data=d["save_data"] != 0,
+                missing_items_limit=d["missing_items_limit"],
+                refresh_on_load=d["refresh_on_load"] != 0,
+            )
+
+    def pivot_cache_set_options(self, cache_id: int, options: PivotCacheOptions) -> None:
+        """Write every member of ``options`` to the pivot cache; see :class:`PivotCacheOptions`."""
+        h = self._require()
+        if not isinstance(options, PivotCacheOptions):
+            raise TypeError(f"expected PivotCacheOptions, got {type(options).__name__}")
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.PIVOT_CACHE_OPTIONS)
+            S.PIVOT_CACHE_OPTIONS.pack(
+                LIB,
+                ptr,
+                {
+                    "save_data": 1 if options.save_data else 0,
+                    "missing_items_limit": _sint(options.missing_items_limit, "missing_items_limit"),
+                    "refresh_on_load": 1 if options.refresh_on_load else 0,
+                },
+            )
+            _check(
+                LIB.fm_workbook_pivot_cache_set_options(h, _uint(cache_id, "cache_id"), ptr),
+                "fm_workbook_pivot_cache_set_options",
+            )
+
+    def pivot_cache_calculated_field_add(self, cache_id: int, name: str, formula: str) -> int:
+        """Add calculated field ``name`` as the last cache field; return its index.
+
+        The formula is in English canonical form and names cache fields only,
+        quoting a name with spaces as ``'Amt Net'``. A leading ``=`` is optional.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            formula_ptr = scope.cstr(formula)
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_pivot_cache_calculated_field_add(
+                    h, _uint(cache_id, "cache_id"), name_ptr, formula_ptr, out
+                ),
+                "fm_workbook_pivot_cache_calculated_field_add",
+            )
+            return LIB.read_u32(out)
+
+    def pivot_cache_calculated_field_set_formula(self, cache_id: int, field_index: int, formula: str) -> None:
+        """Replace the formula of calculated field ``field_index``."""
+        h = self._require()
+        with _ArgScope() as scope:
+            formula_ptr = scope.cstr(formula)
+            _check(
+                LIB.fm_workbook_pivot_cache_calculated_field_set_formula(
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), formula_ptr
+                ),
+                "fm_workbook_pivot_cache_calculated_field_set_formula",
+            )
+
+    def pivot_cache_calculated_field_remove(self, cache_id: int, field_index: int) -> None:
+        """Remove calculated field ``field_index`` and its data fields in every pivot table."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_cache_calculated_field_remove(
+                h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index")
+            ),
+            "fm_workbook_pivot_cache_calculated_field_remove",
+        )
+
+    def pivot_cache_field_formula(self, cache_id: int, field_idx: int) -> str:
+        """Return the formula of cache field ``field_idx`` without a leading ``=``; ``""`` when not calculated."""
+        h = self._require()
+        return _read_cstr_out(
+            LIB.fm_workbook_pivot_cache_field_formula,
+            h,
+            _uint(cache_id, "cache_id"),
+            _uint(field_idx, "field_idx"),
+            default_op="fm_workbook_pivot_cache_field_formula",
+        )
+
+    def pivot_cache_calculated_item_add(self, cache_id: int, field_index: int, name: str, formula: str) -> None:
+        """Add calculated item ``name`` to cache field ``field_index``; it is last in solve order.
+
+        The formula names items of the same field, as ``North``, ``'North East'``,
+        ``Region[North]``, ``Region[2]`` or ``Region[-1]``.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            formula_ptr = scope.cstr(formula)
+            _check(
+                LIB.fm_workbook_pivot_cache_calculated_item_add(
+                    h, _uint(cache_id, "cache_id"), _uint(field_index, "field_index"), name_ptr, formula_ptr
+                ),
+                "fm_workbook_pivot_cache_calculated_item_add",
+            )
+
+    def pivot_cache_calculated_item_count(self, cache_id: int) -> int:
+        """Return the number of calculated items in the cache, in solve order."""
+        h = self._require()
+        return _read_count(LIB.fm_workbook_pivot_cache_calculated_item_count, h, _uint(cache_id, "cache_id"))
+
+    def pivot_cache_calculated_item_at(self, cache_id: int, idx: int) -> PivotCalculatedItem:
+        """Read calculated item ``idx`` (in solve order)."""
+        h = self._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.PIVOT_CALCULATED_ITEM)
+            _check(
+                LIB.fm_workbook_pivot_cache_calculated_item_at(h, _uint(cache_id, "cache_id"), _uint(idx, "idx"), ptr),
+                "fm_workbook_pivot_cache_calculated_item_at",
+            )
+            d = S.PIVOT_CALCULATED_ITEM.unpack(LIB, ptr)
+            return PivotCalculatedItem(
+                field_index=d["field_index"],
+                name=LIB.read_cstr(d["name"]),
+                formula=LIB.read_cstr(d["formula"]),
+                scoped=d["scoped"] != 0,
+            )
+
+    def pivot_cache_calculated_item_set_formula(self, cache_id: int, idx: int, formula: str) -> None:
+        """Replace the formula of calculated item ``idx``."""
+        h = self._require()
+        with _ArgScope() as scope:
+            formula_ptr = scope.cstr(formula)
+            _check(
+                LIB.fm_workbook_pivot_cache_calculated_item_set_formula(
+                    h, _uint(cache_id, "cache_id"), _uint(idx, "idx"), formula_ptr
+                ),
+                "fm_workbook_pivot_cache_calculated_item_set_formula",
+            )
+
+    def pivot_cache_calculated_item_move(self, cache_id: int, idx: int, new_idx: int) -> None:
+        """Move calculated item ``idx`` to position ``new_idx`` in solve order."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_cache_calculated_item_move(
+                h, _uint(cache_id, "cache_id"), _uint(idx, "idx"), _uint(new_idx, "new_idx")
+            ),
+            "fm_workbook_pivot_cache_calculated_item_move",
+        )
+
+    def pivot_cache_calculated_item_remove(self, cache_id: int, idx: int) -> None:
+        """Remove calculated item ``idx``, its item in the cache field and in every pivot table."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_cache_calculated_item_remove(h, _uint(cache_id, "cache_id"), _uint(idx, "idx")),
+            "fm_workbook_pivot_cache_calculated_item_remove",
+        )
+
     def pivot_cache_remove(self, cache_id: int) -> None:
         """Remove the pivot cache with id ``cache_id``."""
         h = self._require()
@@ -11026,6 +11321,7 @@ class Workbook:
                 subtotal_fns=tuple(agg for agg in PivotAggregation if d["subtotal_fns"] & (1 << int(agg))),
                 insert_blank_row=d["insert_blank_row"] != 0,
                 fill_down_labels=d["fill_down_labels"] != 0,
+                show_all=d["show_all"] != 0,
             )
 
     def pivot_field_item_count(self, sheet: int, pivot_index: int, field_idx: int) -> int:
@@ -11280,54 +11576,169 @@ class Workbook:
                 "fm_workbook_pivot_field_set_item_caption",
             )
 
-    def pivot_set_grand_total_caption(self, sheet: int, pivot_index: int, caption: Optional[str]) -> None:
-        """Rename the grand total row / column label; ``None`` or ``""`` restores the locale's word."""
+    def pivot_get_options(self, sheet: int, pivot_index: int) -> PivotOptions:
+        """Read the PivotTable Options of the pivot; see :class:`PivotOptions`."""
         h = self._require()
         with _ArgScope() as scope:
-            cap_ptr = scope.nonempty_cstr(caption)
+            ptr = scope.struct(S.PIVOT_OPTIONS)
             _check(
-                LIB.fm_workbook_pivot_set_grand_total_caption(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), cap_ptr
+                LIB.fm_workbook_pivot_get_options(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
                 ),
-                "fm_workbook_pivot_set_grand_total_caption",
+                "fm_workbook_pivot_get_options",
+            )
+            d = S.PIVOT_OPTIONS.unpack(LIB, ptr)
+
+            return PivotOptions(
+                show_error=d["show_error"] != 0,
+                error_caption=LIB.read_cstr(d["error_caption"]),
+                show_missing=d["show_missing"] != 0,
+                missing_caption=LIB.read_cstr(d["missing_caption"]),
+                show_headers=d["show_headers"] != 0,
+                show_drill=d["show_drill"] != 0,
+                show_data_tips=d["show_data_tips"] != 0,
+                grid_drop_zones=d["grid_drop_zones"] != 0,
+                show_empty_row=d["show_empty_row"] != 0,
+                show_empty_col=d["show_empty_col"] != 0,
+                show_data_drop_down=d["show_data_drop_down"] != 0,
+                print_drill=d["print_drill"] != 0,
+                field_print_titles=d["field_print_titles"] != 0,
+                item_print_titles=d["item_print_titles"] != 0,
+                merge_item=d["merge_item"] != 0,
+                indent=d["indent"],
+                page_over_then_down=d["page_over_then_down"] != 0,
+                page_wrap=d["page_wrap"],
+                multiple_field_filters=d["multiple_field_filters"] != 0,
+                preserve_formatting=d["preserve_formatting"] != 0,
+                custom_list_sort=d["custom_list_sort"] != 0,
+                alt_text=LIB.read_cstr(d["alt_text"]),
+                alt_text_summary=LIB.read_cstr(d["alt_text_summary"]),
+                grand_total_caption=LIB.read_cstr(d["grand_total_caption"]),
+                auto_formatting=d["auto_formatting"] != 0,
+                enable_drill=d["enable_drill"] != 0,
             )
 
-    def pivot_get_grand_total_caption(self, sheet: int, pivot_index: int) -> Optional[str]:
-        """Return the grand total caption, ``None`` when none is set."""
+    def pivot_set_options(self, sheet: int, pivot_index: int, options: PivotOptions) -> None:
+        """Change the PivotTable Options named by ``options``; members left ``None`` keep their value.
+
+        See :class:`PivotOptions`.
+        """
         h = self._require()
-        with _ArgScope() as scope:
-            out = scope.out_ptr()
-            _check(
-                LIB.fm_workbook_pivot_get_grand_total_caption(
-                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
-                ),
-                "fm_workbook_pivot_get_grand_total_caption",
-            )
-            ptr = LIB.read_u32(out)
-            return LIB.read_cstr(ptr) if ptr else None
+        if not isinstance(options, PivotOptions):
+            raise TypeError(f"expected PivotOptions, got {type(options).__name__}")
+        current = self.pivot_get_options(sheet, pivot_index)
 
-    def pivot_set_auto_formatting(self, sheet: int, pivot_index: int, on: bool) -> None:
-        """Set the "autofit column widths on update" flag."""
+        def pick(name: str) -> Any:
+            value = getattr(options, name)
+            return getattr(current, name) if value is None else value
+
+        flags = (
+            "show_error",
+            "show_missing",
+            "show_headers",
+            "show_drill",
+            "show_data_tips",
+            "grid_drop_zones",
+            "show_empty_row",
+            "show_empty_col",
+            "show_data_drop_down",
+            "print_drill",
+            "field_print_titles",
+            "item_print_titles",
+            "merge_item",
+            "page_over_then_down",
+            "multiple_field_filters",
+            "preserve_formatting",
+            "custom_list_sort",
+            "auto_formatting",
+            "enable_drill",
+        )
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.PIVOT_OPTIONS)
+            values: Dict[str, object] = {name: 1 if pick(name) else 0 for name in flags}
+            values["indent"] = _uint(pick("indent"), "indent")
+            values["page_wrap"] = _uint(pick("page_wrap"), "page_wrap")
+            S.PIVOT_OPTIONS.pack(LIB, ptr, values)
+            for name in ("error_caption", "missing_caption", "alt_text", "alt_text_summary", "grand_total_caption"):
+                S.write_str_field(LIB, ptr, S.PIVOT_OPTIONS, name, pick(name), scope)
+            _check(
+                LIB.fm_workbook_pivot_set_options(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                ),
+                "fm_workbook_pivot_set_options",
+            )
+
+    def pivot_project(self, sheet: int, pivot_index: int) -> None:
+        """Write the pivot's report into its sheet cells now and clear its pending flag.
+
+        Raises when the report would overlap another structure; the pivot stays pending.
+        """
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_set_auto_formatting(
-                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), 1 if on else 0
-            ),
-            "fm_workbook_pivot_set_auto_formatting",
+            LIB.fm_workbook_pivot_project(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
+            "fm_workbook_pivot_project",
         )
 
-    def pivot_get_auto_formatting(self, sheet: int, pivot_index: int) -> bool:
-        """Return the "autofit column widths on update" flag."""
+    def pivot_projection_pending(self, sheet: int, pivot_index: int) -> bool:
+        """Return whether a cache change left the pivot's sheet cells stale."""
         h = self._require()
         with _ArgScope() as scope:
             out = scope.out_ptr()
             _check(
-                LIB.fm_workbook_pivot_get_auto_formatting(
+                LIB.fm_workbook_pivot_projection_pending(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
                 ),
-                "fm_workbook_pivot_get_auto_formatting",
+                "fm_workbook_pivot_projection_pending",
             )
             return LIB.read_i32(out) != 0
+
+    def pivot_field_set_custom_name(self, sheet: int, pivot_index: int, field_idx: int, name: Optional[str]) -> None:
+        """Rename pivot field ``field_idx`` in the report; ``None`` or ``""`` restores its source name."""
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.nonempty_cstr(name)
+            _check(
+                LIB.fm_workbook_pivot_field_set_custom_name(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
+                    name_ptr,
+                ),
+                "fm_workbook_pivot_field_set_custom_name",
+            )
+
+    def pivot_field_set_show_all(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+        """Set whether pivot field ``field_idx`` lists items without data."""
+        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_show_all, sheet, pivot_index, field_idx, on)
+
+    def pivot_data_field_default_name(
+        self,
+        sheet: int,
+        pivot_index: int,
+        field_index: int,
+        aggregation: "PivotAggregation | int",
+        exclude_data_field: Optional[int] = None,
+    ) -> str:
+        """Return the name a data field over ``field_index`` would get from an empty name.
+
+        Nothing changes. ``exclude_data_field`` is the entry :meth:`pivot_data_field_set`
+        would replace, whose name is not counted as taken; ``None`` for the add case.
+        """
+        h = self._require()
+        exclude = (
+            _PIVOT_NO_DATA_FIELD if exclude_data_field is None else _uint(exclude_data_field, "exclude_data_field")
+        )
+        return _read_cstr_out(
+            LIB.fm_workbook_pivot_data_field_default_name,
+            h,
+            _uint(sheet, "sheet_index"),
+            _uint(pivot_index, "pivot_index"),
+            _uint(field_index, "field_index"),
+            _sint(aggregation, "aggregation"),
+            exclude,
+            default_op="fm_workbook_pivot_data_field_default_name",
+        )
 
     def pivot_show_details(self, sheet: int, pivot_index: int, row: int, col: int) -> int:
         """Write the source records behind pivot cell (``row``, ``col``) onto a new sheet.
@@ -11694,6 +12105,7 @@ class Workbook:
                 value_high_int=d["value_high_int"],
                 value_high_double=d["value_high_double"],
                 data_field_index=d["data_field_index"],
+                value_high_text=LIB.read_cstr(d["value_high_text"]),
             )
 
     def pivot_filter_add(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None:
@@ -11718,6 +12130,7 @@ class Workbook:
             )
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "field_name", spec.field_name, scope)
             S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, scope)
+            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_high_text", spec.value_high_text, scope)
             _check(
                 LIB.fm_workbook_pivot_filter_add(
                     h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr

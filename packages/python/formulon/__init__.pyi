@@ -584,6 +584,68 @@ class PivotFilterType(IntEnum):
     LABEL_CONTAINS = 3
     LABEL_BEGINS_WITH = 4
     LABEL_DATE = 5
+    VALUE_EQUAL = 6
+    VALUE_NOT_EQUAL = 7
+    VALUE_GREATER_THAN_OR_EQUAL = 8
+    VALUE_LESS_THAN = 9
+    VALUE_LESS_THAN_OR_EQUAL = 10
+    VALUE_NOT_BETWEEN = 11
+    LABEL_EQUAL = 12
+    LABEL_NOT_EQUAL = 13
+    LABEL_NOT_BEGINS_WITH = 14
+    LABEL_ENDS_WITH = 15
+    LABEL_NOT_ENDS_WITH = 16
+    LABEL_NOT_CONTAINS = 17
+    LABEL_GREATER_THAN = 18
+    LABEL_GREATER_THAN_OR_EQUAL = 19
+    LABEL_LESS_THAN = 20
+    LABEL_LESS_THAN_OR_EQUAL = 21
+    LABEL_BETWEEN = 22
+    LABEL_NOT_BETWEEN = 23
+    VALUE_BOTTOM_COUNT = 24
+    VALUE_TOP_PERCENT = 25
+    VALUE_BOTTOM_PERCENT = 26
+    VALUE_TOP_SUM = 27
+    VALUE_BOTTOM_SUM = 28
+    DATE_EQUAL = 29
+    DATE_NOT_EQUAL = 30
+    DATE_OLDER_THAN = 31
+    DATE_OLDER_THAN_OR_EQUAL = 32
+    DATE_NEWER_THAN = 33
+    DATE_NEWER_THAN_OR_EQUAL = 34
+    DATE_NOT_BETWEEN = 35
+    DATE_TOMORROW = 36
+    DATE_TODAY = 37
+    DATE_YESTERDAY = 38
+    DATE_NEXT_WEEK = 39
+    DATE_THIS_WEEK = 40
+    DATE_LAST_WEEK = 41
+    DATE_NEXT_MONTH = 42
+    DATE_THIS_MONTH = 43
+    DATE_LAST_MONTH = 44
+    DATE_NEXT_QUARTER = 45
+    DATE_THIS_QUARTER = 46
+    DATE_LAST_QUARTER = 47
+    DATE_NEXT_YEAR = 48
+    DATE_THIS_YEAR = 49
+    DATE_LAST_YEAR = 50
+    DATE_YEAR_TO_DATE = 51
+    DATE_Q1 = 52
+    DATE_Q2 = 53
+    DATE_Q3 = 54
+    DATE_Q4 = 55
+    DATE_M1 = 56
+    DATE_M2 = 57
+    DATE_M3 = 58
+    DATE_M4 = 59
+    DATE_M5 = 60
+    DATE_M6 = 61
+    DATE_M7 = 62
+    DATE_M8 = 63
+    DATE_M9 = 64
+    DATE_M10 = 65
+    DATE_M11 = 66
+    DATE_M12 = 67
 
 class PivotFilterValueKind(IntEnum):
     NONE = -1
@@ -2296,6 +2358,7 @@ class PivotFieldInfo:
     subtotal_fns: Tuple[PivotAggregation, ...]
     insert_blank_row: bool = False
     fill_down_labels: bool = False
+    show_all: bool = False
 
 @dataclass(frozen=True)
 class PivotItemInfo:
@@ -2314,6 +2377,48 @@ class PivotStyleInfo:
     show_row_stripes: bool
     show_col_stripes: bool
     show_last_column: bool
+
+@dataclass(frozen=True)
+class PivotOptions:
+    show_error: Optional[bool] = None
+    error_caption: Optional[str] = None
+    show_missing: Optional[bool] = None
+    missing_caption: Optional[str] = None
+    show_headers: Optional[bool] = None
+    show_drill: Optional[bool] = None
+    show_data_tips: Optional[bool] = None
+    grid_drop_zones: Optional[bool] = None
+    show_empty_row: Optional[bool] = None
+    show_empty_col: Optional[bool] = None
+    show_data_drop_down: Optional[bool] = None
+    print_drill: Optional[bool] = None
+    field_print_titles: Optional[bool] = None
+    item_print_titles: Optional[bool] = None
+    merge_item: Optional[bool] = None
+    indent: Optional[int] = None
+    page_over_then_down: Optional[bool] = None
+    page_wrap: Optional[int] = None
+    multiple_field_filters: Optional[bool] = None
+    preserve_formatting: Optional[bool] = None
+    custom_list_sort: Optional[bool] = None
+    alt_text: Optional[str] = None
+    alt_text_summary: Optional[str] = None
+    grand_total_caption: Optional[str] = None
+    auto_formatting: Optional[bool] = None
+    enable_drill: Optional[bool] = None
+
+@dataclass(frozen=True)
+class PivotCacheOptions:
+    save_data: bool
+    missing_items_limit: int
+    refresh_on_load: bool
+
+@dataclass(frozen=True)
+class PivotCalculatedItem:
+    field_index: int
+    name: str
+    formula: str
+    scoped: bool
 
 class PivotDataFieldSpec:
     name: Optional[str]
@@ -2346,6 +2451,7 @@ class PivotFilterSpec:
     value_high_int: int
     value_high_double: float
     data_field_index: int
+    value_high_text: str
     def __init__(
         self,
         axis: Union[PivotAxis, int],
@@ -2359,6 +2465,7 @@ class PivotFilterSpec:
         value_high_int: int = ...,
         value_high_double: float = ...,
         data_field_index: int = ...,
+        value_high_text: str = ...,
     ) -> None: ...
 
 # ---------------------------------------------------------------------------
@@ -3172,10 +3279,34 @@ class Workbook:
     def pivot_field_set_item_caption(
         self, sheet: int, pivot_index: int, field_idx: int, item_idx: int, caption: Optional[str]
     ) -> None: ...
-    def pivot_set_grand_total_caption(self, sheet: int, pivot_index: int, caption: Optional[str]) -> None: ...
-    def pivot_get_grand_total_caption(self, sheet: int, pivot_index: int) -> Optional[str]: ...
-    def pivot_set_auto_formatting(self, sheet: int, pivot_index: int, on: bool) -> None: ...
-    def pivot_get_auto_formatting(self, sheet: int, pivot_index: int) -> bool: ...
+    def pivot_get_options(self, sheet: int, pivot_index: int) -> PivotOptions: ...
+    def pivot_set_options(self, sheet: int, pivot_index: int, options: PivotOptions) -> None: ...
+    def pivot_project(self, sheet: int, pivot_index: int) -> None: ...
+    def pivot_projection_pending(self, sheet: int, pivot_index: int) -> bool: ...
+    def pivot_field_set_custom_name(
+        self, sheet: int, pivot_index: int, field_idx: int, name: Optional[str]
+    ) -> None: ...
+    def pivot_field_set_show_all(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None: ...
+    def pivot_data_field_default_name(
+        self,
+        sheet: int,
+        pivot_index: int,
+        field_index: int,
+        aggregation: Union[PivotAggregation, int],
+        exclude_data_field: Optional[int] = None,
+    ) -> str: ...
+    def pivot_cache_get_options(self, cache_id: int) -> PivotCacheOptions: ...
+    def pivot_cache_set_options(self, cache_id: int, options: PivotCacheOptions) -> None: ...
+    def pivot_cache_calculated_field_add(self, cache_id: int, name: str, formula: str) -> int: ...
+    def pivot_cache_calculated_field_set_formula(self, cache_id: int, field_index: int, formula: str) -> None: ...
+    def pivot_cache_calculated_field_remove(self, cache_id: int, field_index: int) -> None: ...
+    def pivot_cache_field_formula(self, cache_id: int, field_idx: int) -> str: ...
+    def pivot_cache_calculated_item_add(self, cache_id: int, field_index: int, name: str, formula: str) -> None: ...
+    def pivot_cache_calculated_item_count(self, cache_id: int) -> int: ...
+    def pivot_cache_calculated_item_at(self, cache_id: int, idx: int) -> PivotCalculatedItem: ...
+    def pivot_cache_calculated_item_set_formula(self, cache_id: int, idx: int, formula: str) -> None: ...
+    def pivot_cache_calculated_item_move(self, cache_id: int, idx: int, new_idx: int) -> None: ...
+    def pivot_cache_calculated_item_remove(self, cache_id: int, idx: int) -> None: ...
     def pivot_show_details(self, sheet: int, pivot_index: int, row: int, col: int) -> int: ...
     def pivot_field_add_item(
         self,

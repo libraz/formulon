@@ -525,6 +525,48 @@ PIVOT_FILTER_SPEC = Struct(
     ],
 )
 
+PIVOT_OPTIONS = Struct(
+    "fm_pivot_options_t",
+    [
+        ("show_error", I32),
+        ("error_caption", PTR),
+        ("show_missing", I32),
+        ("missing_caption", PTR),
+        ("show_headers", I32),
+        ("show_drill", I32),
+        ("show_data_tips", I32),
+        ("grid_drop_zones", I32),
+        ("show_empty_row", I32),
+        ("show_empty_col", I32),
+        ("show_data_drop_down", I32),
+        ("print_drill", I32),
+        ("field_print_titles", I32),
+        ("item_print_titles", I32),
+        ("merge_item", I32),
+        ("indent", U32),
+        ("page_over_then_down", I32),
+        ("page_wrap", U32),
+        ("multiple_field_filters", I32),
+        ("preserve_formatting", I32),
+        ("custom_list_sort", I32),
+        ("alt_text", PTR),
+        ("alt_text_summary", PTR),
+        ("grand_total_caption", PTR),
+        ("auto_formatting", I32),
+        ("enable_drill", I32),
+    ],
+)
+
+PIVOT_CACHE_OPTIONS = Struct(
+    "fm_pivot_cache_options_t",
+    [("save_data", I32), ("missing_items_limit", I32), ("refresh_on_load", I32)],
+)
+
+PIVOT_CALCULATED_ITEM = Struct(
+    "fm_pivot_calculated_item_t",
+    [("field_index", U32), ("name", PTR), ("formula", PTR), ("scoped", I32)],
+)
+
 READ_DIAGNOSTICS = Struct(
     "fm_read_diagnostics_t",
     [

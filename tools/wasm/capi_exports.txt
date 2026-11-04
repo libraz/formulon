@@ -410,6 +410,25 @@ fm_workbook_pivot_filter_at
 fm_workbook_pivot_filter_add
 fm_workbook_pivot_filter_clear
 fm_workbook_pivot_filter_remove_at
+fm_workbook_pivot_cache_get_options
+fm_workbook_pivot_cache_set_options
+fm_workbook_pivot_cache_calculated_field_add
+fm_workbook_pivot_cache_calculated_field_set_formula
+fm_workbook_pivot_cache_calculated_field_remove
+fm_workbook_pivot_cache_field_formula
+fm_workbook_pivot_cache_calculated_item_add
+fm_workbook_pivot_cache_calculated_item_count
+fm_workbook_pivot_cache_calculated_item_at
+fm_workbook_pivot_cache_calculated_item_set_formula
+fm_workbook_pivot_cache_calculated_item_move
+fm_workbook_pivot_cache_calculated_item_remove
+fm_workbook_pivot_get_options
+fm_workbook_pivot_set_options
+fm_workbook_pivot_project
+fm_workbook_pivot_projection_pending
+fm_workbook_pivot_field_set_custom_name
+fm_workbook_pivot_field_set_show_all
+fm_workbook_pivot_data_field_default_name
 
 # -- Function catalog ------------------------------------------------------------
 fm_function_metadata
