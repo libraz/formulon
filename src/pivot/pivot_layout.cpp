@@ -587,6 +587,8 @@ struct LayoutPlan {
   std::size_t row_depth = 0;
   std::size_t col_depth = 0;
   std::size_t data_field_count = 0;
+  /// Column fields without a data field: items and totals lay out over empty value cells.
+  bool valueless = false;
 
   bool tabular = false;
   bool outline = false;
@@ -723,8 +725,11 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   if (!col_entries_or) {
     return std::move(col_entries_or.error());
   }
-  // An axis leaf without a data field is a label-only pivot, not a value column.
-  std::vector<AxisEntry> col_entries = data_field_count == 0 ? std::vector<AxisEntry>{} : col_entries_or.take();
+  // Column fields without a data field still lay out their items and total
+  // column, over empty value cells; without column fields there is nothing to lay out.
+  const bool valueless = data_field_count == 0 && col_depth > 0;
+  std::vector<AxisEntry> col_entries =
+      data_field_count == 0 && !valueless ? std::vector<AxisEntry>{} : col_entries_or.take();
   const std::size_t data_cols = col_entries.size();
 
   // Compact form merges every row level into one physical column (Excel
@@ -760,7 +765,7 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   // pivot's per-column total. Tabular / Outline share that rule; the
   // English projection keeps emitting both strips.
   const bool emit_grand_totals_rows_strip =
-      data_field_count > 0 && table.grand_totals_rows() && (legacy || col_depth > 0);
+      (data_field_count > 0 || valueless) && table.grand_totals_rows() && (legacy || col_depth > 0);
   const bool emit_grand_totals_cols_strip = table.grand_totals_cols() && (legacy || row_depth > 0);
   // The Values axis totals each data field on its own: one strip column
   // (or row) per field, named after it.
@@ -819,6 +824,7 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   plan.row_depth = row_depth;
   plan.col_depth = col_depth;
   plan.data_field_count = data_field_count;
+  plan.valueless = valueless;
   plan.tabular = tabular;
   plan.outline = outline;
   plan.multi_col_layout = multi_col_layout;
@@ -1347,8 +1353,8 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
         prev_row_labels_filled[depth] = true;
       }
     }
-    if (entry.kind == EntryKind::Group) {
-      // A heading row without its subtotal still spans the data area as blanks.
+    if (entry.kind == EntryKind::Group || plan.valueless) {
+      // A heading row without its subtotal, or a report without data fields, spans the data area as blanks.
       for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
         append_empty_value_cell(cells, row, data_left + static_cast<std::uint32_t>(c_entry));
       }
@@ -1404,7 +1410,7 @@ void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
   for (std::size_t r_entry = 0; r_entry < row_entries.size(); ++r_entry) {
     const AxisEntry& entry = row_entries[r_entry];
     const std::uint32_t row = data_top + static_cast<std::uint32_t>(r_entry);
-    if (entry.kind == EntryKind::Group || entry.kind == EntryKind::Blank) {
+    if (entry.kind == EntryKind::Group || entry.kind == EntryKind::Blank || plan.valueless) {
       for (std::size_t s = 0; s < total_strip_cols; ++s) {
         append_empty_value_cell(cells, row, total_left + static_cast<std::uint32_t>(s));
       }
@@ -1500,6 +1506,12 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
         append_cell(cells, total_row, left + static_cast<std::uint32_t>(d), Value::blank(), PivotCellKind::GrandTotal,
                     PivotCellRole::None, static_cast<std::uint32_t>(d));
       }
+    }
+    if (plan.valueless) {
+      for (std::size_t c = 0; c < col_entries.size() + total_strip_cols; ++c) {
+        append_empty_value_cell(cells, total_row, data_left + static_cast<std::uint32_t>(c));
+      }
+      continue;
     }
     for (std::size_t c_entry = 0; c_entry < col_entries.size(); ++c_entry) {
       const AxisEntry& col_entry = col_entries[c_entry];

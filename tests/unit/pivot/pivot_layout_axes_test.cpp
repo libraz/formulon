@@ -484,6 +484,90 @@ TEST(PivotLayout, TabularLayoutTwoColumnFieldsNamesOneColumnPerDepth) {
   EXPECT_TRUE(is_blank_at(2, 8));
 }
 
+TEST(PivotLayout, ColumnFieldWithoutDataFieldsLaysOutItemsAndTotalColumn) {
+  // Excel: rows [Region], cols [Amt], no data fields, compact form (A3:E8).
+  PivotCache cache;
+  cache.set_cache_id(7);
+  for (const char* name : {"Region", "Product", "Amt", "Qty"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  auto add = [&](const char* region, const char* product, double amt, double qty) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(owned_text(cache, product));
+    rec.cells.push_back(Value::number(amt));
+    rec.cells.push_back(Value::number(qty));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("North", "A", 10.5, 1);
+  add("North", "B", 20.25, 2);
+  add("South", "A", 10.5, 3);
+  add("South", "B", 20.25, 4);
+  add("East", "A", 30, 5);
+
+  PivotTable table;
+  table.set_pivot_cache_id(7);
+  table.set_anchor(2, 0, 1, 1);
+  const char* names[] = {"Region", "Product", "Amt", "Qty"};
+  const PivotAxis axes[] = {PivotAxis::Row, PivotAxis::None, PivotAxis::Col, PivotAxis::None};
+  for (int i = 0; i < 4; ++i) {
+    PivotField field;
+    field.source_name = names[i];
+    field.axis = axes[i];
+    table.mutable_fields().push_back(std::move(field));
+  }
+  table.mutable_row_field_order() = {0};
+  table.mutable_col_field_order() = {2};
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  auto cells_or = layout(table, result_or.value(), ja_jp_layout_options());
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message << " " << cells_or.error().context;
+  const PivotCells& cells = cells_or.value();
+
+  EXPECT_EQ(cells.top, 2U);
+  EXPECT_EQ(cells.left, 0U);
+  EXPECT_EQ(cells.rows, 6U);
+  EXPECT_EQ(cells.cols, 5U);
+
+  auto expect_text = [&](std::uint32_t r, std::uint32_t c, const char* text) {
+    const PivotCell* cell = find_cell(cells, r, c);
+    ASSERT_NE(cell, nullptr) << r << "," << c;
+    ASSERT_TRUE(cell->value.is_text()) << r << "," << c;
+    EXPECT_EQ(cell->value.as_text(), text) << r << "," << c;
+  };
+  auto expect_number = [&](std::uint32_t r, std::uint32_t c, double v) {
+    const PivotCell* cell = find_cell(cells, r, c);
+    ASSERT_NE(cell, nullptr) << r << "," << c;
+    // A numeric item label keeps its number in `item_value`; the projection writes that.
+    ASSERT_TRUE(cell->item_value.has_value()) << r << "," << c;
+    ASSERT_TRUE(cell->item_value->is_number()) << r << "," << c;
+    EXPECT_DOUBLE_EQ(cell->item_value->as_number(), v) << r << "," << c;
+  };
+  auto expect_empty = [&](std::uint32_t r, std::uint32_t c) {
+    const PivotCell* cell = find_cell(cells, r, c);
+    if (cell != nullptr) {
+      EXPECT_TRUE(cell->value.is_blank()) << r << "," << c;
+    }
+  };
+
+  expect_text(2, 1, "列ラベル");
+  expect_text(3, 0, "行ラベル");
+  expect_number(3, 1, 10.5);
+  expect_number(3, 2, 20.25);
+  expect_number(3, 3, 30.0);
+  expect_text(3, 4, "総計");
+  expect_text(4, 0, "East");
+  expect_text(5, 0, "North");
+  expect_text(6, 0, "South");
+  expect_text(7, 0, "総計");
+  for (std::uint32_t r = 4; r <= 7; ++r) {
+    for (std::uint32_t c = 1; c <= 4; ++c) {
+      expect_empty(r, c);
+    }
+  }
+}
+
 TEST(PivotLayout, RejectsMismatchedResultShape) {
   PivotTable table = build_table(/*row=*/{0}, /*col=*/{});
   PivotResult result;
