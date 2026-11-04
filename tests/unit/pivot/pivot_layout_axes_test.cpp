@@ -1,5 +1,6 @@
 // Pivot layout axes, headers, and column-field projection shapes.
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -566,6 +567,89 @@ TEST(PivotLayout, ColumnFieldWithoutDataFieldsLaysOutItemsAndTotalColumn) {
       expect_empty(r, c);
     }
   }
+}
+
+/// Excel: cols [Product], no row or data fields, anchored at I3. The report is
+/// I3:K4 in every layout: the caption at I3, then A, B and the total column.
+PivotCells project_column_field_only(PivotLayout layout_mode) {
+  PivotCache cache;
+  cache.set_cache_id(8);
+  for (const char* name : {"Region", "Product", "Amt Net"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  auto add = [&](const char* region, const char* product, double amt) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(owned_text(cache, product));
+    rec.cells.push_back(Value::number(amt));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("North", "A", 100);
+  add("North", "B", 200);
+  add("South", "A", 300);
+  add("South", "B", 50);
+
+  PivotTable table;
+  table.set_pivot_cache_id(8);
+  table.set_anchor(2, 8, 1, 1);
+  table.set_layout(layout_mode);
+  const char* names[] = {"Region", "Product", "Amt Net"};
+  const PivotAxis axes[] = {PivotAxis::None, PivotAxis::Col, PivotAxis::None};
+  for (int i = 0; i < 3; ++i) {
+    PivotField field;
+    field.source_name = names[i];
+    field.axis = axes[i];
+    table.mutable_fields().push_back(std::move(field));
+  }
+  table.mutable_col_field_order() = {1};
+
+  auto result_or = evaluate(table, cache);
+  EXPECT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  if (!result_or) {
+    return {};
+  }
+  auto cells_or = layout(table, result_or.value(), ja_jp_layout_options());
+  EXPECT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message << " " << cells_or.error().context;
+  return cells_or ? std::move(cells_or.value()) : PivotCells{};
+}
+
+void expect_column_field_only_grid(const PivotCells& cells, const char* caption) {
+  EXPECT_EQ(cells.top, 2U);
+  EXPECT_EQ(cells.left, 8U);
+  EXPECT_EQ(cells.rows, 2U);
+  EXPECT_EQ(cells.cols, 3U);
+  auto expect_text = [&](std::uint32_t r, std::uint32_t c, const char* text, PivotCellRole role) {
+    const PivotCell* cell = find_cell(cells, r, c);
+    ASSERT_NE(cell, nullptr) << r << "," << c;
+    ASSERT_TRUE(cell->value.is_text()) << r << "," << c;
+    EXPECT_EQ(cell->value.as_text(), text) << r << "," << c;
+    EXPECT_EQ(cell->role, role) << r << "," << c;
+  };
+  expect_text(2, 8, caption, PivotCellRole::FieldHeader);
+  expect_text(3, 8, "A", PivotCellRole::ColItem);
+  expect_text(3, 9, "B", PivotCellRole::ColItem);
+  expect_text(3, 10, "総計", PivotCellRole::GrandTotalLabel);
+  std::size_t non_blank = 0;
+  for (const PivotCell& cell : cells.cells) {
+    EXPECT_GE(cell.row, 2U);
+    EXPECT_LE(cell.row, 3U);
+    EXPECT_GE(cell.col, 8U);
+    EXPECT_LE(cell.col, 10U);
+    non_blank += cell.value.is_blank() ? 0U : 1U;
+  }
+  EXPECT_EQ(non_blank, 4U);
+}
+
+TEST(PivotLayout, CompactColumnFieldWithoutRowOrDataFieldsStartsAtTheAnchor) {
+  expect_column_field_only_grid(project_column_field_only(PivotLayout::Compact), "列ラベル");
+}
+
+TEST(PivotLayout, OutlineColumnFieldWithoutRowOrDataFieldsNamesTheField) {
+  expect_column_field_only_grid(project_column_field_only(PivotLayout::Outline), "Product");
+}
+
+TEST(PivotLayout, TabularColumnFieldWithoutRowOrDataFieldsNamesTheField) {
+  expect_column_field_only_grid(project_column_field_only(PivotLayout::Tabular), "Product");
 }
 
 TEST(PivotLayout, RejectsMismatchedResultShape) {

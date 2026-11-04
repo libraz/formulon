@@ -167,6 +167,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PivotTable label filter on numeric items orders numbers before a text
+  bound, as Excel does: `less than "abc"` keeps every number, and `not
+  between "2" and "abc"` keeps only the items below 2.
+- A PivotTable with column fields but no row or data fields starts at its
+  anchor column and is two rows tall. Outline and tabular forms caption the
+  column area with the field name.
+- With the classic drag-and-drop layout (`gridDropZones`) and no row fields,
+  a PivotTable keeps its row-label column. It labels the value row with the
+  locale's total word, puts a lone data field's name in the top-left corner,
+  and writes the matching `firstDataCol` / `firstHeaderRow` offsets.
 - `INDIRECT` reads an unquoted sheet name with non-ASCII characters or a dot
   (`INDIRECT("売上!A1")`, `INDIRECT("Sheet.1!A1")`) instead of returning
   `#REF!`, following the rule formulas use for sheet names.

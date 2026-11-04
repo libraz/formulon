@@ -1220,6 +1220,60 @@ TEST(PivotTableWriter, TabularTwoRowFieldsDeriveFirstDataCol) {
   EXPECT_NE(xml.find("firstHeaderRow=\"0\" firstDataRow=\"1\" firstDataCol=\"2\""), std::string::npos) << xml;
 }
 
+namespace {
+
+/// No row fields: `data_field_count` data fields, plus a column field when
+/// `with_col_field`. Excel's location offsets for these shapes are measured.
+pivot::PivotTable TableWithoutRowFields(std::size_t data_field_count, bool with_col_field) {
+  pivot::PivotTable table;
+  table.set_name("PT");
+  table.set_anchor(2U, 8U, 3U, 3U);
+  if (with_col_field) {
+    pivot::PivotField product;
+    product.axis = pivot::PivotAxis::Col;
+    table.mutable_fields().push_back(std::move(product));
+    table.mutable_col_field_order().push_back(0U);
+  }
+  for (std::size_t i = 0; i < data_field_count; ++i) {
+    pivot::PivotField amount;
+    amount.axis = pivot::PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(amount));
+    pivot::PivotDataField df;
+    df.name = "Sum of F" + std::to_string(i);
+    df.field_index = static_cast<std::uint32_t>(table.fields().size() - 1U);
+    table.mutable_data_fields().push_back(std::move(df));
+  }
+  return table;
+}
+
+}  // namespace
+
+TEST(PivotTableWriter, ColumnFieldWithoutRowOrDataFieldsStartsDataAtTheAnchorColumn) {
+  const std::string xml = write_pivot_table_definition(TableWithoutRowFields(0U, true));
+  EXPECT_NE(xml.find("firstHeaderRow=\"1\" firstDataRow=\"2\" firstDataCol=\"0\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, GridDropZonesKeepTheRowLabelColumnOfAColumnFieldReport) {
+  pivot::PivotTable table = TableWithoutRowFields(1U, true);
+  table.set_grid_drop_zones(true);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("firstHeaderRow=\"1\" firstDataRow=\"2\" firstDataCol=\"1\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, GridDropZonesLoneDataFieldHasNoDropZoneRow) {
+  pivot::PivotTable table = TableWithoutRowFields(1U, false);
+  table.set_grid_drop_zones(true);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, GridDropZonesTwoDataFieldsWithoutRowFieldsKeepTheRowLabelColumn) {
+  pivot::PivotTable table = TableWithoutRowFields(2U, false);
+  table.set_grid_drop_zones(true);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("firstHeaderRow=\"1\" firstDataRow=\"2\" firstDataCol=\"1\""), std::string::npos) << xml;
+}
+
 TEST(PivotTableWriter, AuthoredFieldsCarryShowAllZeroAndUpdatedVersion) {
   const std::string xml = write_pivot_table_definition(TableWithRowAndDataFields(1U));
   EXPECT_NE(xml.find("<pivotField axis=\"axisRow\" showAll=\"0\" sortType=\"ascending\"/>"), std::string::npos) << xml;

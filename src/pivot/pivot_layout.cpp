@@ -618,6 +618,8 @@ struct LayoutPlan {
   bool caption_row = false;
   /// `gridDropZones` row above the header block.
   std::size_t drop_zone_rows = 0;
+  /// `gridDropZones` over a report with data fields and an empty row axis.
+  bool grid_without_rows = false;
   bool emit_grand_totals_rows_strip = false;
   bool emit_grand_totals_cols_strip = false;
   std::size_t total_strip_cols = 0;
@@ -732,14 +734,25 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   std::vector<AxisEntry> col_entries =
       data_field_count == 0 && !valueless ? std::vector<AxisEntry>{} : col_entries_or.take();
   const std::size_t data_cols = col_entries.size();
+  // Without row fields either, such a report is its caption and column-item rows alone.
+  if (valueless && !legacy && row_levels == 0) {
+    row_entries.clear();
+  }
+  // `gridDropZones` keeps the row-label column of a report without row fields.
+  const bool grid_without_rows = !legacy && table.grid_drop_zones() && row_levels == 0 && data_field_count > 0;
 
   // Compact form merges every row level into one physical column (Excel
   // indents nested keys); Tabular / Outline give each level its own column,
   // the Values level included. A compact pivot with no row levels whose
-  // data fields head the columns has no row-label column at all.
+  // data fields head the columns has no row-label column at all, nor has a
+  // report without row or data fields.
   std::size_t row_header_cols = row_levels;
   if (row_levels == 0) {
-    row_header_cols = compact && values_on_cols ? 0 : 1;
+    if (grid_without_rows) {
+      row_header_cols = 1;
+    } else {
+      row_header_cols = (compact && values_on_cols) || (valueless && !legacy) ? 0 : 1;
+    }
   } else if (compact) {
     row_header_cols = 1;
   }
@@ -757,8 +770,10 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
     caption_row = false;
     --header_rows;
   }
-  // The classic layout adds a drop-zone row over a report without column fields.
-  const std::size_t drop_zone_rows = !legacy && col_depth == 0 && table.grid_drop_zones() ? 1 : 0;
+  // The classic layout adds a drop-zone row over a report without column
+  // fields, except one holding a lone data field and nothing else.
+  const std::size_t drop_zone_rows =
+      !legacy && col_depth == 0 && table.grid_drop_zones() && !(grid_without_rows && data_field_count == 1) ? 1 : 0;
   header_rows += drop_zone_rows;
   // Compact form folds the grand-totals strip in axes that have no
   // hierarchy of their own: a no-column-fields pivot's per-row total
@@ -846,6 +861,7 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   plan.header_rows = header_rows;
   plan.caption_row = caption_row;
   plan.drop_zone_rows = drop_zone_rows;
+  plan.grid_without_rows = grid_without_rows;
   plan.emit_grand_totals_rows_strip = emit_grand_totals_rows_strip;
   plan.emit_grand_totals_cols_strip = emit_grand_totals_cols_strip;
   plan.total_strip_cols = total_strip_cols;
@@ -971,11 +987,12 @@ std::size_t cell_data_field(const AxisEntry& row_entry, const AxisEntry& col_ent
   return col_entry.data_field.value_or(0);
 }
 
-// Under `gridDropZones` a lone data field with row fields and no column fields
-// moves its name to the drop-zone row; its value column reads the locale's
-// standalone total word instead.
+// Under `gridDropZones` a lone data field without column fields, or without
+// row fields, moves its name to the report's top-left corner; its value
+// column reads the locale's standalone total word instead.
 bool lone_data_field_in_drop_zone(const LayoutPlan& plan) {
-  return plan.drop_zone_rows > 0 && plan.data_field_count == 1 && plan.row_depth > 0;
+  return plan.table.grid_drop_zones() && !plan.legacy && plan.data_field_count == 1 &&
+         (plan.col_depth == 0 || plan.row_depth == 0);
 }
 
 // The locale's bare "total" word: the subtotal affix without its separator.
@@ -1090,7 +1107,7 @@ void emit_col_hierarchy_row(const LayoutPlan& plan, PivotCells& cells, std::uint
 // The corner of a pivot with column fields names its data field; with
 // several, the Values level names them instead and the corner is blank.
 void emit_corner(const LayoutPlan& plan, PivotCells& cells) {
-  if (plan.data_field_count == 1 && plan.row_depth > 0) {
+  if (plan.data_field_count == 1 && (plan.row_depth > 0 || lone_data_field_in_drop_zone(plan))) {
     append_df_cell(cells, plan.header_top, plan.left, text_value(cells, data_field_name(plan.table, 0)),
                    PivotCellKind::Header, PivotCellRole::FieldHeader, plan.table, 0);
   } else {
@@ -1180,8 +1197,11 @@ void emit_header_compact(const LayoutPlan& plan, PivotCells& cells) {
   const std::size_t col_levels = plan.col_levels;
   if (plan.col_depth == 0) {
     // One header row: the "Row Labels" placeholder, then the data field
-    // names (blank when the data fields sit on the rows).
-    if (row_header_cols > 0) {
+    // names (blank when the data fields sit on the rows). Without row
+    // fields under `gridDropZones` the placeholder gives way to the corner.
+    if (plan.grid_without_rows) {
+      emit_corner(plan, cells);
+    } else if (row_header_cols > 0) {
       emit_text_or_blank(cells, top, left, field_caption(plan, options.row_labels_label), PivotCellKind::Header,
                          PivotCellRole::FieldHeader, 0);
     }
@@ -1194,15 +1214,19 @@ void emit_header_compact(const LayoutPlan& plan, PivotCells& cells) {
   } else {
     // Caption row: the corner, then the "Column Labels" placeholder over
     // the first column. Without row fields the single data field's name
-    // moves down to the data row instead (see the row loop below).
+    // moves down to the data row instead (see the row loop below). Without
+    // row or data fields, Outline and Tabular name the column field there.
     if (plan.caption_row) {
       if (row_header_cols > 0) {
         emit_corner(plan, cells);
       }
+      const std::string caption = plan.valueless && plan.row_levels == 0 && table.layout() != PivotLayout::Compact
+                                      ? col_level_name(plan, 0)
+                                      : options.column_labels_label;
       for (std::size_t i = 0; i < plan.corner_extent; ++i) {
         emit_text_or_blank(cells, top, data_left + static_cast<std::uint32_t>(i),
-                           i == 0 ? field_caption(plan, options.column_labels_label) : std::string(),
-                           PivotCellKind::Header, PivotCellRole::FieldHeader, 0);
+                           i == 0 ? field_caption(plan, caption) : std::string(), PivotCellKind::Header,
+                           PivotCellRole::FieldHeader, 0);
       }
     }
     for (std::size_t depth = 0; depth < col_levels; ++depth) {
@@ -1339,6 +1363,10 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
         } else if (!labels.empty()) {
           label = labels.back();
           bare_level = last_depth;
+        } else if (r_entry == 0 && plan.grid_without_rows) {
+          // Under `gridDropZones` the single data row reads the locale's total word.
+          label = total_word(plan);
+          role = PivotCellRole::FieldHeader;
         } else if (plan.row_levels == 0 && plan.col_depth > 0 && r_entry == 0) {
           // No-row-fields pivot: the data field's name heads the single
           // data row.

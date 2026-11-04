@@ -1035,6 +1035,136 @@ TEST(PivotLayoutOptions, GridDropZonesKeepALoneDataFieldCaptionWithHiddenHeaders
   EXPECT_EQ(RenderGrid(table, cache), expected);
 }
 
+// gridDropZones without row fields: Excel keeps the row-label column, labels
+// the data row with the bare total word, and puts a lone data field's name in
+// the top-left corner. Grids are Excel's, from the same source data.
+
+PivotCache build_amt_net_cache() {
+  PivotCache cache;
+  cache.set_cache_id(kCacheId);
+  for (const char* name : {"Region", "Product", "Amt Net", "Qty"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  auto add = [&](const char* region, const char* product, double amt, double qty) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(owned_text(cache, product));
+    rec.cells.push_back(Value::number(amt));
+    rec.cells.push_back(Value::number(qty));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("North", "A", 100.0, 1.0);
+  add("North", "B", 200.0, 2.0);
+  add("South", "A", 300.0, 3.0);
+  add("South", "B", 50.0, 4.0);
+  add("North East", "A", 70.0, 5.0);
+  add("North East", "B", 80.0, 1.0);
+  add("East", "A", 10.0, 2.0);
+  add("East", "B", 20.0, 3.0);
+  add("North", "A", 5.0, 4.0);
+  add("South", "B", 15.0, 5.0);
+  return cache;
+}
+
+/// No row fields, `gridDropZones` on, anchored at I3: Sum of Amt Net (and of
+/// Qty when `with_qty`), Product on the columns when `product_on_cols`.
+PivotTable build_grid_drop_zones_without_rows(bool product_on_cols, bool with_qty) {
+  PivotTable table;
+  table.set_name("PT");
+  table.set_pivot_cache_id(kCacheId);
+  table.set_anchor(2, 8, 1, 1);
+  for (const char* name : {"Region", "Product", "Amt Net", "Qty"}) {
+    PivotField field;
+    field.source_name = name;
+    field.axis = PivotAxis::None;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  if (product_on_cols) {
+    table.mutable_fields()[1].axis = PivotAxis::Col;
+    table.mutable_col_field_order() = {1};
+  }
+  table.mutable_fields()[2].axis = PivotAxis::Value;
+  PivotDataField amt;
+  amt.name = "合計 / Amt Net";
+  amt.field_index = 2;
+  amt.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(amt));
+  if (with_qty) {
+    table.mutable_fields()[3].axis = PivotAxis::Value;
+    PivotDataField qty;
+    qty.name = "合計 / Qty";
+    qty.field_index = 3;
+    qty.aggregation = Aggregation::Sum;
+    table.mutable_data_fields().push_back(std::move(qty));
+  }
+  table.set_data_caption("値");
+  table.set_grid_drop_zones(true);
+  return table;
+}
+
+void ExpectRole(const PivotCells& cells, std::uint32_t row, std::uint32_t col, PivotCellRole role) {
+  const PivotCell* cell = layout_test::find_cell(cells, row, col);
+  ASSERT_NE(cell, nullptr) << row << "," << col;
+  EXPECT_EQ(cell->role, role) << row << "," << col;
+}
+
+TEST(PivotLayoutOptions, GridDropZonesKeepTheRowLabelColumnOfAColumnFieldReportWithoutRowFields) {
+  const PivotCache cache = build_amt_net_cache();
+  const PivotTable table = build_grid_drop_zones_without_rows(true, false);
+  const PivotCells cells = ProjectCells(table, cache);
+  EXPECT_EQ(cells.top, 2U);
+  EXPECT_EQ(cells.left, 8U);
+  EXPECT_EQ(cells.rows, 3U);
+  EXPECT_EQ(cells.cols, 4U);
+  const std::vector<std::string> expected = {
+      "合計 / Amt Net|" COL_LABELS "||",
+      "|A|B|" TOTAL,
+      TOTAL_WORD "|485|365|850",
+  };
+  EXPECT_EQ(Grid(cells), expected);
+  ExpectRole(cells, 2, 8, PivotCellRole::FieldHeader);
+  ExpectRole(cells, 2, 9, PivotCellRole::FieldHeader);
+  ExpectRole(cells, 4, 8, PivotCellRole::FieldHeader);
+}
+
+TEST(PivotLayoutOptions, GridDropZonesLoneDataFieldWithoutRowOrColumnFieldsHasNoDropZoneRow) {
+  const PivotCache cache = build_amt_net_cache();
+  const PivotTable table = build_grid_drop_zones_without_rows(false, false);
+  const PivotCells cells = ProjectCells(table, cache);
+  EXPECT_EQ(cells.top, 2U);
+  EXPECT_EQ(cells.left, 8U);
+  EXPECT_EQ(cells.rows, 2U);
+  EXPECT_EQ(cells.cols, 2U);
+  const std::vector<std::string> expected = {
+      "合計 / Amt Net|" TOTAL_WORD,
+      TOTAL_WORD "|850",
+  };
+  EXPECT_EQ(Grid(cells), expected);
+  ExpectRole(cells, 2, 8, PivotCellRole::FieldHeader);
+  ExpectRole(cells, 2, 9, PivotCellRole::DataHeader);
+  ExpectRole(cells, 3, 8, PivotCellRole::FieldHeader);
+}
+
+TEST(PivotLayoutOptions, GridDropZonesTwoDataFieldsWithoutRowFieldsKeepTheRowLabelColumn) {
+  const PivotCache cache = build_amt_net_cache();
+  const PivotTable table = build_grid_drop_zones_without_rows(false, true);
+  const PivotCells cells = ProjectCells(table, cache);
+  EXPECT_EQ(cells.top, 2U);
+  EXPECT_EQ(cells.left, 8U);
+  EXPECT_EQ(cells.rows, 3U);
+  EXPECT_EQ(cells.cols, 3U);
+  const std::vector<std::string> expected = {
+      "|値|",
+      "|合計 / Amt Net|合計 / Qty",
+      TOTAL_WORD "|850|30",
+  };
+  EXPECT_EQ(Grid(cells), expected);
+  ExpectRole(cells, 2, 9, PivotCellRole::FieldHeader);
+  ExpectRole(cells, 3, 9, PivotCellRole::DataHeader);
+  ExpectRole(cells, 3, 10, PivotCellRole::DataHeader);
+  ExpectRole(cells, 4, 8, PivotCellRole::FieldHeader);
+}
+
 /// Region on the rows, Amt summed, and `page_count` page fields (P1..P3).
 PivotCache build_paged_cache() {
   PivotCache cache;

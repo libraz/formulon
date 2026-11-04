@@ -1151,18 +1151,23 @@ LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table, std::si
     d.first_data_row = static_cast<std::uint32_t>(1U + col_entries);
   }
   const bool col_fields = !table.col_field_order().empty();
+  // `gridDropZones` keeps a row-label column even with an empty row axis.
+  const bool grid_without_rows = table.grid_drop_zones() && row_entries == 0 && !table.data_fields().empty();
   if (col_fields && !table.show_headers() && !(table.data_fields().size() == 1U && !table.row_field_order().empty())) {
     // Hidden field captions drop the "Column Labels" row, unless a lone data
     // field's caption holds its corner.
     d.first_header_row -= 1U;
     d.first_data_row -= 1U;
-  } else if (!col_fields && table.grid_drop_zones()) {
-    // The classic layout's drop-zone row sits above the header.
+  } else if (!col_fields && table.grid_drop_zones() && !(grid_without_rows && table.data_fields().size() == 1U)) {
+    // The classic layout's drop-zone row sits above the header, except over
+    // a report holding a lone data field and nothing else.
     d.first_header_row += 1U;
     d.first_data_row += 1U;
   }
   if (row_entries > 0) {
     d.first_data_col = table.layout() == pivot::PivotLayout::Compact ? 1U : static_cast<std::uint32_t>(row_entries);
+  } else if (grid_without_rows) {
+    d.first_data_col = 1U;
   } else if (col_entries > 0) {
     d.first_data_col = 0;
   }
