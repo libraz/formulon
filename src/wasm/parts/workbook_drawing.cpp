@@ -163,6 +163,11 @@ JsStatus JsWorkbook::removeDrawing(uint32_t sheet, uint32_t objectId) {
   return status_from_rc(handle_ != nullptr ? fm_sheet_remove_drawing(handle_, sheet, objectId) : kBindingInvalidHandle);
 }
 
+JsStatus JsWorkbook::setDrawingName(uint32_t sheet, uint32_t objectId, const std::string& name) {
+  return status_from_rc(handle_ != nullptr ? fm_sheet_set_drawing_name(handle_, sheet, objectId, name.c_str())
+                                           : kBindingInvalidHandle);
+}
+
 JsStatus JsWorkbook::setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement) {
   if (handle_ == nullptr) {
     return invalid_handle_status();

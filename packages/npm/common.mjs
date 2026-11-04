@@ -56,6 +56,7 @@ export const PivotShowValuesAs = Object.freeze({
 });
 export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
 export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
+export const PIVOT_VALUES_FIELD = -2;
 export const PivotFilterType = Object.freeze({
   ValueTop10: 0,
   ValueGreaterThan: 1,

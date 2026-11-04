@@ -440,6 +440,87 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
+    'pivotFieldSetDefaultSubtotal',
+    {
+      act: (b) => b.wb.pivotFieldSetDefaultSubtotal(0, b.pivot, b.region, false),
+      expect: (b) => assert.equal(b.wb.pivotFieldAt(0, b.pivot, b.region).defaultSubtotal, false),
+    },
+  ],
+  [
+    'pivotFieldSetInsertBlankRow',
+    {
+      act: (b) => b.wb.pivotFieldSetInsertBlankRow(0, b.pivot, b.region, true),
+      expect: (b) => assert.equal(b.wb.pivotFieldAt(0, b.pivot, b.region).insertBlankRow, true),
+    },
+  ],
+  [
+    'pivotFieldSetFillDownLabels',
+    {
+      act: (b) => b.wb.pivotFieldSetFillDownLabels(0, b.pivot, b.region, true),
+      expect: (b) => assert.equal(b.wb.pivotFieldAt(0, b.pivot, b.region).fillDownLabels, true),
+    },
+  ],
+  [
+    'pivotFieldSetShowDetail',
+    {
+      setup: twoLevels,
+      act: (b) => b.wb.pivotFieldSetShowDetail(0, b.pivot, b.region, false),
+      expect: (b) => assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 0).showDetail, false),
+    },
+  ],
+  [
+    'pivotFieldSetItemShowDetail',
+    {
+      setup: twoLevels,
+      act: (b) => b.wb.pivotFieldSetItemShowDetail(0, b.pivot, b.region, 1, false),
+      expect: (b) => {
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 1).showDetail, false);
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 0).showDetail, true);
+      },
+    },
+  ],
+  [
+    'pivotFieldSetItemCaption',
+    {
+      act: (b) => b.wb.pivotFieldSetItemCaption(0, b.pivot, b.region, 0, 'Eastern'),
+      expect: (b) => {
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 0).caption, 'Eastern');
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 1).caption, null);
+        assert.equal(b.wb.pivotFieldSetItemCaption(0, b.pivot, b.region, 0, '').ok, true);
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 0).caption, null);
+      },
+    },
+  ],
+  [
+    'pivotSetGrandTotalCaption',
+    {
+      act: (b) => b.wb.pivotSetGrandTotalCaption(0, b.pivot, 'All'),
+      expect: (b) => {
+        assert.equal(b.wb.pivotGetGrandTotalCaption(0, b.pivot).value, 'All');
+        assert.equal(pivotGrid(b.wb).at(-1), 'All|52');
+      },
+    },
+  ],
+  [
+    'pivotSetAutoFormatting',
+    {
+      act: (b) => b.wb.pivotSetAutoFormatting(0, b.pivot, false),
+      expect: (b) => assert.equal(b.wb.pivotGetAutoFormatting(0, b.pivot).value, false),
+    },
+  ],
+  [
+    'pivotShowDetails',
+    {
+      // The grand total cell is a data cell, so the drill-down lands on a new
+      // sheet inserted before the pivot's sheet.
+      act: (b) => b.wb.pivotShowDetails(0, b.pivot, 3, 7),
+      expect: (b, r) => {
+        assert.equal(r.index, 0);
+        assert.equal(b.wb.sheetCount().value, 2);
+      },
+    },
+  ],
+  [
     'pivotFieldSetSubtotalTop',
     {
       setup: twoLevels,
@@ -949,6 +1030,39 @@ test('a pivot cache error setter without errorCode throws and changes nothing', 
     assert.equal(b.wb.pivotCacheFieldSharedItemCount(b.cacheId, 0).value, items);
     assert.throws(() => b.wb.pivotCacheRecordSetError(b.cacheId, 0, 2), TypeError);
     assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
+  } finally {
+    b.wb.delete();
+  }
+});
+
+test('new pivot calls reject bad arguments and map the Values level', async () => {
+  const mod = await getModule();
+  const { PIVOT_VALUES_FIELD } = await loadStagedModule();
+  assert.equal(PIVOT_VALUES_FIELD, -2);
+  const b = buildPivot(mod);
+  try {
+    const { wb, pivot, region, product } = b;
+    for (const r of [
+      wb.pivotFieldSetDefaultSubtotal(0, pivot, 99, true),
+      wb.pivotFieldSetInsertBlankRow(0, pivot, 99, true),
+      wb.pivotFieldSetFillDownLabels(0, pivot, 99, true),
+      wb.pivotFieldSetShowDetail(0, pivot, 99, true),
+      wb.pivotFieldSetItemShowDetail(0, pivot, region, 99, true),
+      wb.pivotFieldSetItemCaption(0, pivot, region, 99, 'x'),
+      wb.pivotSetGrandTotalCaption(0, 9, 'x'),
+      wb.pivotSetAutoFormatting(0, 9, true),
+      wb.pivotShowDetails(0, pivot, 99, 99).status,
+      wb.pivotGetGrandTotalCaption(0, 9).status,
+      wb.pivotGetAutoFormatting(0, 9).status,
+      wb.setDrawingName(0, 12345, 'x'),
+    ]) {
+      assert.equal(r.ok, false, JSON.stringify(r));
+    }
+    // The Values level needs at least two data fields.
+    assert.ok(wb.pivotDataFieldAdd(0, pivot, { name: 'Count of Date', fieldIndex: b.date, aggregation: 1 }).status.ok);
+    assert.ok(wb.pivotSetRowFieldOrder(0, pivot, [region, PIVOT_VALUES_FIELD, product]).ok);
+    assert.deepEqual(wb.pivotRowFieldOrder(0, pivot).indices, [region, PIVOT_VALUES_FIELD, product]);
+    assert.equal(wb.pivotSetColFieldOrder(0, pivot, [-3]).ok, false);
   } finally {
     b.wb.delete();
   }

@@ -485,6 +485,8 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint
   o.set("dateCalendar", info.date_calendar);
   o.set("groupBaseIndex", info.group_base_index);
   o.set("defaultSubtotal", info.default_subtotal != 0);
+  o.set("insertBlankRow", info.insert_blank_row != 0);
+  o.set("fillDownLabels", info.fill_down_labels != 0);
   emscripten::val fns = emscripten::val::array();
   for (std::uint32_t agg = 0; agg < 32U; ++agg) {
     if ((info.subtotal_fns & (1U << agg)) != 0U) {
@@ -519,6 +521,12 @@ emscripten::val JsWorkbook::pivotFieldItemAt(uint32_t sheet, uint32_t pivotIdx, 
   js_set_cstr(o, "name", info.name);
   o.set("cacheIndex", info.cache_index);
   o.set("visible", info.visible != 0);
+  if (info.caption != nullptr) {
+    js_set_cstr(o, "caption", info.caption);
+  } else {
+    o.set("caption", emscripten::val::null());
+  }
+  o.set("showDetail", info.show_detail != 0);
   return o;
 }
 
@@ -551,6 +559,82 @@ JsStatus JsWorkbook::pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx,
   return status_from_rc(handle_ != nullptr
                             ? fm_workbook_pivot_field_set_subtotal_top(handle_, sheet, pivotIdx, fieldIdx, top ? 1 : 0)
                             : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on) {
+  return status_from_rc(
+      handle_ != nullptr ? fm_workbook_pivot_field_set_default_subtotal(handle_, sheet, pivotIdx, fieldIdx, on ? 1 : 0)
+                         : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on) {
+  return status_from_rc(
+      handle_ != nullptr ? fm_workbook_pivot_field_set_insert_blank_row(handle_, sheet, pivotIdx, fieldIdx, on ? 1 : 0)
+                         : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on) {
+  return status_from_rc(
+      handle_ != nullptr ? fm_workbook_pivot_field_set_fill_down_labels(handle_, sheet, pivotIdx, fieldIdx, on ? 1 : 0)
+                         : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on) {
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_pivot_field_set_show_detail(handle_, sheet, pivotIdx, fieldIdx, on ? 1 : 0)
+                            : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
+                                                 bool on) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_field_set_item_show_detail(handle_, sheet, pivotIdx,
+                                                                                          fieldIdx, itemIdx, on ? 1 : 0)
+                                           : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
+                                              const std::string& caption) {
+  const char* text = caption.empty() ? nullptr : caption.c_str();
+  return status_from_rc(
+      handle_ != nullptr ? fm_workbook_pivot_field_set_item_caption(handle_, sheet, pivotIdx, fieldIdx, itemIdx, text)
+                         : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotSetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx, const std::string& caption) {
+  const char* text = caption.empty() ? nullptr : caption.c_str();
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_set_grand_total_caption(handle_, sheet, pivotIdx, text)
+                                           : kBindingInvalidHandle);
+}
+
+JsStringResult JsWorkbook::pivotGetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx) const {
+  const char* caption = nullptr;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_pivot_get_grand_total_caption(handle_, sheet, pivotIdx, &caption)
+                             : kBindingInvalidHandle;
+  return string_result(rc, rc == 0 ? caption : nullptr);
+}
+
+JsStatus JsWorkbook::pivotSetAutoFormatting(uint32_t sheet, uint32_t pivotIdx, bool on) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_set_auto_formatting(handle_, sheet, pivotIdx, on ? 1 : 0)
+                                           : kBindingInvalidHandle);
+}
+
+emscripten::val JsWorkbook::pivotGetAutoFormatting(uint32_t sheet, uint32_t pivotIdx) const {
+  emscripten::val o = emscripten::val::object();
+  int32_t on = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_pivot_get_auto_formatting(handle_, sheet, pivotIdx, &on) : kBindingInvalidHandle;
+  o.set("status", status_from_rc(rc));
+  o.set("value", rc == 0 && on != 0);
+  return o;
+}
+
+JsAddStyleResult JsWorkbook::pivotShowDetails(uint32_t sheet, uint32_t pivotIdx, uint32_t row, uint32_t col) {
+  std::size_t newSheet = 0;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_pivot_show_details(handle_, sheet, pivotIdx, row, col, &newSheet)
+                             : kBindingInvalidHandle;
+  return index_result(rc, newSheet);
 }
 
 JsStatus JsWorkbook::pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
@@ -626,6 +710,9 @@ JsStatus JsWorkbook::pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIdx
 
 namespace {
 
+// The JS spelling of `FM_PIVOT_VALUES_FIELD` (`PIVOT_VALUES_FIELD`).
+constexpr int32_t kPivotValuesFieldJs = -2;
+
 // Shared body of `pivotSetRowFieldOrder` / `pivotSetColFieldOrder`.
 using PivotFieldOrderFn = fm_status_t (*)(fm_workbook_t*, size_t, size_t, const uint32_t*, size_t);
 
@@ -650,7 +737,15 @@ JsStatus set_pivot_field_order(fm_workbook_t* wb, uint32_t sheet, uint32_t pivot
     // or uint32 overflow. No subsequent JS reads occur after failure.
     const std::string key = std::to_string(i);
     const emscripten::val value = reader.value(indices, key.c_str(), "pivotFieldOrder.indices");
-    v.push_back(reader.u32_value(value, 0U, "pivotFieldOrder.indices"));
+    // -2 is the Values level; the checked i32 read still rejects other negatives.
+    const int32_t index = reader.i32_value(value, 0, "pivotFieldOrder.indices");
+    if (index == kPivotValuesFieldJs) {
+      v.push_back(FM_PIVOT_VALUES_FIELD);
+    } else if (index < 0) {
+      return binding_error_status(kInvalidArgument, "pivot field order index must be >= 0 or PIVOT_VALUES_FIELD");
+    } else {
+      v.push_back(static_cast<uint32_t>(index));
+    }
   }
   if (!reader.ok()) {
     return reader.failure();
@@ -681,7 +776,7 @@ emscripten::val get_pivot_field_order(const fm_workbook_t* wb, uint32_t sheet, u
   std::size_t count = 0;
   const fm_status_t rc = wb != nullptr ? fn(wb, sheet, pivotIdx, &data, &count) : kBindingInvalidHandle;
   for (std::size_t i = 0; rc == 0 && i < count; ++i) {
-    indices.call<void>("push", data[i]);
+    indices.call<void>("push", data[i] == FM_PIVOT_VALUES_FIELD ? kPivotValuesFieldJs : static_cast<int32_t>(data[i]));
   }
   o.set("status", status_from_rc(rc));
   o.set("indices", indices);

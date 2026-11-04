@@ -475,6 +475,9 @@ export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
 /** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning
  *  "(next)". */
 export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
+/** The Σ Values level in the lists `pivotRowFieldOrder` / `pivotColFieldOrder`
+ *  report and `pivotSetRowFieldOrder` / `pivotSetColFieldOrder` take. */
+export const PIVOT_VALUES_FIELD = -2;
 
 /** Filter type for an active (slicer-applied) filter. Mirrors
  *  `fm_pivot_filter_type_t`. */
@@ -617,6 +620,12 @@ export interface PivotGrandTotalsResult {
   cols: boolean;
 }
 
+/** Return type of `Workbook.pivotGetAutoFormatting(...)`. */
+export interface PivotAutoFormattingResult {
+  status: Status;
+  value: boolean;
+}
+
 /** Return type of `Workbook.pivotRowFieldOrder` / `pivotColFieldOrder`:
  *  the indices `pivotSetRowFieldOrder` / `pivotSetColFieldOrder` take. */
 export interface PivotFieldOrderResult {
@@ -650,6 +659,10 @@ export interface PivotFieldResult {
   /** Whether the automatic subtotal shows; `false` whenever `subtotalFns`
    *  is non-empty, since custom functions replace it. */
   defaultSubtotal: boolean;
+  /** Whether a blank row follows each item (`pivotFieldSetInsertBlankRow`). */
+  insertBlankRow: boolean;
+  /** Whether item labels repeat on every row (`pivotFieldSetFillDownLabels`). */
+  fillDownLabels: boolean;
   /** Custom subtotal functions (`pivotFieldAddSubtotalFn`), in ascending
    *  `PivotAggregation` order. */
   subtotalFns: PivotAggregation[];
@@ -664,6 +677,10 @@ export interface PivotItemResult {
    *  bound by label only. */
   cacheIndex: number;
   visible: boolean;
+  /** Caption shown instead of the item's value; `null` when none. */
+  caption: string | null;
+  /** Whether the item is expanded. */
+  showDetail: boolean;
 }
 
 /** Return type of `Workbook.pivotDataFieldAt(...)`. Same shape as
@@ -4017,6 +4034,8 @@ export interface Workbook {
   insertImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertOptions): InsertImageResult;
   /** Removes the picture or chart `objectId` and the parts only it reaches; other drawing content is kept. */
   removeDrawing(sheet: number, objectId: number): Status;
+  /** Renames the picture or chart `objectId`; duplicate names are allowed. */
+  setDrawingName(sheet: number, objectId: number, name: string): Status;
   /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
   setDrawingAnchor(sheet: number, objectId: number, placement: ImagePlacement): Status;
   /** Makes the picture or chart `objectId` item `index` of `listDrawingObjects`, whose order is the stacking order (0 is the back). */
@@ -4232,6 +4251,10 @@ export interface Workbook {
   pivotName(sheet: number, pivotIdx: number): StringResult;
   /** Reads the row / column grand total flags `pivotSetGrandTotals` writes. */
   pivotGetGrandTotals(sheet: number, pivotIdx: number): PivotGrandTotalsResult;
+  /** Reads the grand total caption `pivotSetGrandTotalCaption` writes; empty when none is set. */
+  pivotGetGrandTotalCaption(sheet: number, pivotIdx: number): StringResult;
+  /** Reads the autofit-on-update flag `pivotSetAutoFormatting` writes. */
+  pivotGetAutoFormatting(sheet: number, pivotIdx: number): PivotAutoFormattingResult;
   /** Reads the table style `pivotSetStyleInfo` writes. */
   pivotGetStyleInfo(sheet: number, pivotIdx: number): PivotStyleInfoResult;
   /** Reads the row-axis field order (the list `pivotSetRowFieldOrder` takes). */
@@ -4258,6 +4281,25 @@ export interface Workbook {
   /** Reads item `itemIdx` of the field; the index `pivotFieldSetItemVisible`
    *  takes. */
   pivotFieldItemAt(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number): PivotItemResult;
+  /** Turns the automatic subtotal of the field on or off. */
+  pivotFieldSetDefaultSubtotal(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Inserts a blank row after each item of the field. */
+  pivotFieldSetInsertBlankRow(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Repeats the item labels of the field on every row. */
+  pivotFieldSetFillDownLabels(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Expands or collapses the whole field. */
+  pivotFieldSetShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Expands or collapses one item of the field. */
+  pivotFieldSetItemShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, on: boolean): Status;
+  /** Shows `caption` instead of the item's value; `""` clears it. */
+  pivotFieldSetItemCaption(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, caption: string): Status;
+  /** Renames the grand total row / column label; `""` restores the locale's word. */
+  pivotSetGrandTotalCaption(sheet: number, pivotIdx: number, caption: string): Status;
+  /** Sets the autofit-column-widths-on-update flag. */
+  pivotSetAutoFormatting(sheet: number, pivotIdx: number, on: boolean): Status;
+  /** Writes the records behind data cell (`row`, `col`) onto a new sheet and activates it. Returns
+   *  `{ status, index }` with the new sheet's index; sheets at or after the pivot's sheet shift by one. */
+  pivotShowDetails(sheet: number, pivotIdx: number, row: number, col: number): AddStyleResult;
   /** Drops every field from the pivot, emptying the row and column orders. */
   pivotFieldClear(sheet: number, pivotIdx: number): Status;
   /** Sets the axis of pivot field `fieldIdx`. Moving onto the row or column

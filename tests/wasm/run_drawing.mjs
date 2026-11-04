@@ -139,7 +139,8 @@ export function registerDrawing(Module, test) {
       assert.equal(o.editAs, AnchorEditAs.OneCell);
       assert.equal(o.cx, 2 * EMU_PER_PX * 10);
       assert.equal(o.cy, EMU_PER_PX * 20);
-      assert.equal(o.name, `Picture ${ins.objectId}`);
+      // Default names count from 1 (the id is one ahead) with the profile's word.
+      assert.equal(o.name, `Picture ${ins.objectId - 1}`);
     });
   });
 

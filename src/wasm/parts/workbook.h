@@ -498,6 +498,7 @@ class JsWorkbook {
   emscripten::val insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
   JsStatus removeDrawing(uint32_t sheet, uint32_t objectId);
   JsStatus setDrawingAnchor(uint32_t sheet, uint32_t objectId, emscripten::val placement);
+  JsStatus setDrawingName(uint32_t sheet, uint32_t objectId, const std::string& name);
   JsStatus setDrawingZOrder(uint32_t sheet, uint32_t objectId, uint32_t index);
   emscripten::val snapshotDrawing(uint32_t sheet, uint32_t objectId) const;
   emscripten::val restoreDrawing(uint32_t sheet, emscripten::val bytes, emscripten::val opts);
@@ -637,6 +638,18 @@ class JsWorkbook {
   JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t order,
                              const std::string& byField);
   JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool top);
+  JsStatus pivotFieldSetDefaultSubtotal(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
+  JsStatus pivotFieldSetInsertBlankRow(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
+  JsStatus pivotFieldSetFillDownLabels(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
+  JsStatus pivotFieldSetShowDetail(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
+  JsStatus pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx, bool on);
+  JsStatus pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
+                                    const std::string& caption);
+  JsStatus pivotSetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx, const std::string& caption);
+  JsStringResult pivotGetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx) const;
+  JsStatus pivotSetAutoFormatting(uint32_t sheet, uint32_t pivotIdx, bool on);
+  emscripten::val pivotGetAutoFormatting(uint32_t sheet, uint32_t pivotIdx) const;
+  JsAddStyleResult pivotShowDetails(uint32_t sheet, uint32_t pivotIdx, uint32_t row, uint32_t col);
   JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
                              bool visible);
   /// Appends a manual-filter item addressed by its position in the bound
