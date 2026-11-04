@@ -4947,7 +4947,8 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_work
 /**
  * @brief Reads shared item `item_idx` of cache field `field_idx` into `out`.
  *        Date items are stored as serial numbers and read back as
- *        `FM_VAL_NUMBER`. Text is read-scratch backed: the pointer remains
+ *        `FM_VAL_NUMBER`; query `fm_workbook_pivot_cache_field_shared_item_is_date`
+ *        to tell them from plain numbers. Text is read-scratch backed: the pointer remains
  *        valid until the next scratch-backed read, any mutation, or handle
  *        destruction. `item_idx >= count` is `kInvalidArgument`.
  */
@@ -4957,6 +4958,24 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_value(const fm_work
 /** @brief Appends a numeric shared item to cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_workbook_t* wb, uint32_t cache_id,
                                                                         size_t field_idx, double value);
+
+/**
+ * @brief Appends a date shared item to cache field `field_idx`. `serial` is a
+ *        date serial in the workbook's date system, as a cell holds it; it must
+ *        be finite, non-negative and not past 9999-12-31, else
+ *        `kInvalidArgument`. Saved with seconds precision.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_date(fm_workbook_t* wb, uint32_t cache_id,
+                                                                      size_t field_idx, double serial);
+
+/**
+ * @brief Reports whether shared item `item_idx` of cache field `field_idx` is
+ *        a date (`*out_is_date` is 1) or not (0). `item_idx >= count` is
+ *        `kInvalidArgument`.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_is_date(const fm_workbook_t* wb, uint32_t cache_id,
+                                                                     size_t field_idx, size_t item_idx,
+                                                                     int32_t* out_is_date);
 
 /** @brief Appends a text shared item to cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_text(fm_workbook_t* wb, uint32_t cache_id,
@@ -4998,6 +5017,16 @@ FM_API fm_status_t fm_workbook_pivot_cache_record_clear(fm_workbook_t* wb, uint3
  */
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_number(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
                                                              size_t field_idx, double value);
+
+/**
+ * @brief Sets cell `(record_idx, field_idx)` to an inline date. `serial` is a
+ *        date serial in the workbook's date system and is validated as in
+ *        `fm_workbook_pivot_cache_field_add_shared_item_date`. The cell is
+ *        written as a date value even on a field with shared items; saved
+ *        with seconds precision.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_record_set_date(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
+                                                           size_t field_idx, double serial);
 
 /** @brief Sets cell `(record_idx, field_idx)` to a UTF-8 text value. */
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,

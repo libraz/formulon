@@ -21,6 +21,7 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/pivot_formula.h"
 #include "pivot/calculated.h"
+#include "pivot/date_serial.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -364,6 +365,30 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_value(const fm_
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_pivot_cache_field_shared_item_is_date(const fm_workbook_t* wb,
+                                                                         std::uint32_t cache_id, std::size_t field_idx,
+                                                                         std::size_t item_idx,
+                                                                         std::int32_t* out_is_date) {
+  clear_last_error();
+  if (wb == nullptr || out_is_date == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_field_shared_item_is_date: NULL argument");
+  }
+  fm_status_t status = 0;
+  const auto* field =
+      lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_shared_item_is_date", &status);
+  if (field == nullptr) {
+    return status;
+  }
+  if (fm_status_t rc = check_index(item_idx, field->shared_items.size(),
+                                   "fm_workbook_pivot_cache_field_shared_item_is_date", "item_idx");
+      rc != 0) {
+    return rc;
+  }
+  *out_is_date = item_idx < field->shared_item_is_date.size() && field->shared_item_is_date[item_idx] ? 1 : 0;
+  return 0;
+}
+
 namespace {
 
 // Common front-half for the four `add_shared_item_*` entry points: NULL
@@ -402,6 +427,32 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_w
     return status;
   }
   field->shared_items.push_back(formulon::Value::number(value));
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_date(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                          std::size_t field_idx, double serial) {
+  clear_last_error();
+  if (const fm_status_t st = check_finite(serial, "fm_workbook_pivot_cache_field_add_shared_item_date", "serial")) {
+    return st;
+  }
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_field_add_shared_item_date: wb is NULL");
+  }
+  if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_cache_field_add_shared_item_date: serial is not a valid date");
+  }
+  fm_status_t status = 0;
+  auto* field =
+      lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_date", &status);
+  if (field == nullptr) {
+    return status;
+  }
+  field->shared_item_is_date.resize(field->shared_items.size(), false);
+  field->shared_items.push_back(formulon::Value::number(serial));
+  field->shared_item_is_date.push_back(true);
   return 0;
 }
 
@@ -615,6 +666,36 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_number(fm_workbook_t* 
   }
   return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_number",
                          formulon::Value::number(value));
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_record_set_date(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                               std::size_t record_idx, std::size_t field_idx,
+                                                               double serial) {
+  clear_last_error();
+  if (const fm_status_t st = check_finite(serial, "fm_workbook_pivot_cache_record_set_date", "serial")) {
+    return st;
+  }
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_record_set_date: wb is NULL");
+  }
+  if (!formulon::pivot::is_valid_date_serial(serial, wb->workbook().date1904())) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_cache_record_set_date: serial is not a valid date");
+  }
+  fm_status_t status = 0;
+  auto* rec = lookup_record_mut(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_date", nullptr,
+                                &status);
+  if (rec == nullptr) {
+    return status;
+  }
+  rec->cells[field_idx] = formulon::Value::number(serial);
+  rec->cell_is_date.resize(rec->cells.size(), false);
+  rec->cell_is_date[field_idx] = true;
+  if (field_idx < rec->cell_is_index.size()) {
+    rec->cell_is_index[field_idx] = false;
+  }
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb, std::uint32_t cache_id,

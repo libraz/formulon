@@ -60,6 +60,9 @@ TEST(CApiPivotCacheNumbers, RejectNonFiniteValues) {
               kInvalidArgument);
     EXPECT_EQ(fm_workbook_pivot_cache_record_set_number(g.handle, cache_id, record_idx, field_idx, bad),
               kInvalidArgument);
+    EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(g.handle, cache_id, field_idx, bad), kInvalidArgument);
+    EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(g.handle, cache_id, record_idx, field_idx, bad),
+              kInvalidArgument);
   }
   size_t count = 99;
   ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(g.handle, cache_id, field_idx, &count), 0);

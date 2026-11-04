@@ -938,3 +938,228 @@ TEST(FormulonCApiPivot, FieldAxisKeepsRowAndColumnOrdersInStep) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(SavedPivotXml(wb.handle).find("<rowFields"), std::string::npos);
 }
+
+// ---------------------------------------------------------------------------
+// Date cache items
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr fm_status_t kInvalidArgumentStatus = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+constexpr fm_status_t kNullPointerStatus = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+
+// A cache of "When" (row axis) and "Amt" (value axis) with one pivot, so it saves.
+void BuildDatePivot(fm_workbook_t* wb, std::uint32_t* out_cache_id) {
+  ASSERT_EQ(fm_workbook_pivot_cache_create(wb, 0, out_cache_id), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb, *out_cache_id, 1, "A1:B5", "Sheet1", nullptr), 0);
+  for (const char* name : {"When", "Amt"}) {
+    std::size_t idx = 99;
+    ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb, *out_cache_id, name, &idx), 0) << fm_last_error_message();
+  }
+  std::size_t pivot = 99;
+  ASSERT_EQ(fm_workbook_pivot_create(wb, 0, "PT", *out_cache_id, 0U, 3U, &pivot), 0) << fm_last_error_message();
+  const char* const names[] = {"When", "Amt"};
+  const fm_pivot_axis_t axes[] = {FM_PIVOT_AXIS_ROW, FM_PIVOT_AXIS_VALUE};
+  for (std::size_t i = 0; i < 2; ++i) {
+    fm_pivot_field_spec_t spec{};
+    spec.source_name = names[i];
+    spec.custom_name = "";
+    spec.axis = axes[i];
+    spec.number_format = "";
+    std::size_t field = 99;
+    ASSERT_EQ(fm_workbook_pivot_field_add(wb, 0, pivot, &spec, &field), 0) << fm_last_error_message();
+  }
+  const std::uint32_t rows[] = {0U};
+  ASSERT_EQ(fm_workbook_pivot_set_row_field_order(wb, 0, pivot, rows, 1U), 0);
+  fm_pivot_data_field_spec_t df{};
+  df.name = "Sum of Amt";
+  df.field_index = 1U;
+  df.aggregation = FM_PIVOT_AGG_SUM;
+  df.number_format = "";
+  df.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  df.show_as_base_field = -1;
+  df.show_as_base_item = -1;
+  std::size_t df_idx = 99;
+  ASSERT_EQ(fm_workbook_pivot_data_field_add(wb, 0, pivot, &df, &df_idx), 0) << fm_last_error_message();
+}
+
+std::string SavedCachePart(fm_workbook_t* wb, const char* path) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_last_error_message();
+  return ExtractZipEntry(std::vector<std::uint8_t>(saved.data, saved.data + saved.len), path);
+}
+
+}  // namespace
+
+TEST(FormulonCApiPivot, PivotCacheDateSharedItemsReadBackAsDates) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  BuildDatePivot(wb.handle, &cache_id);
+
+  // A plain number before the date, one after it, and a text item.
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, 0, 45292.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(wb.handle, cache_id, 0, 45292.5), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, 0, 45293.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_text(wb.handle, cache_id, 0, "x"), 0);
+
+  const std::int32_t expected[] = {0, 1, 0, 0};
+  for (std::size_t i = 0; i < 4; ++i) {
+    std::int32_t is_date = -1;
+    ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_is_date(wb.handle, cache_id, 0, i, &is_date), 0)
+        << fm_last_error_message();
+    EXPECT_EQ(is_date, expected[i]) << i;
+  }
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_value(wb.handle, cache_id, 0, 1, &v), 0);
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_EQ(v.u.number, 45292.5);
+
+  std::int32_t is_date = -1;
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_is_date(wb.handle, cache_id, 0, 4, &is_date),
+            kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_is_date(wb.handle, cache_id, 9, 0, &is_date),
+            kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_is_date(wb.handle, 9999U, 0, 0, &is_date),
+            kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_is_date(wb.handle, cache_id, 0, 0, nullptr), kNullPointerStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_shared_item_is_date(nullptr, cache_id, 0, 0, &is_date), kNullPointerStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(nullptr, cache_id, 0, 45292.0), kNullPointerStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(wb.handle, cache_id, 9, 45292.0),
+            kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(wb.handle, 9999U, 0, 45292.0), kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(nullptr, cache_id, 0, 0, 45292.0), kNullPointerStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(wb.handle, cache_id, 0, 0, 45292.0), kInvalidArgumentStatus);
+  size_t record = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &record), 0);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(wb.handle, cache_id, record, 9, 45292.0), kInvalidArgumentStatus);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(wb.handle, cache_id, record + 1, 0, 45292.0),
+            kInvalidArgumentStatus);
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &count), 0);
+  EXPECT_EQ(count, 4U);
+}
+
+TEST(FormulonCApiPivot, PivotCacheDateSerialBoundsAreValidated) {
+  struct System {
+    int32_t date1904;
+    double last_day;       // largest accepted floor
+    double just_past_end;  // smallest rejected value
+    bool has_sixty;
+  };
+  const System systems[] = {{0, 2958465.99, 2958466.0, true}, {1, 2957003.5, 2957004.0, false}};
+  for (const System& sys : systems) {
+    SCOPED_TRACE(sys.date1904);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    ASSERT_EQ(fm_workbook_set_date1904(wb.handle, sys.date1904), 0);
+    std::uint32_t cache_id = 0;
+    BuildDatePivot(wb.handle, &cache_id);
+    size_t record = 0;
+    ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &record), 0);
+    ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, record, 0, 7.0), 0);
+
+    const double bad[] = {std::numeric_limits<double>::quiet_NaN(),
+                          std::numeric_limits<double>::infinity(),
+                          -std::numeric_limits<double>::infinity(),
+                          -1.0,
+                          -0.5,
+                          sys.just_past_end,
+                          sys.just_past_end + 1.0};
+    for (const double serial : bad) {
+      SCOPED_TRACE(serial);
+      EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(wb.handle, cache_id, 0, serial),
+                kInvalidArgumentStatus);
+      EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(wb.handle, cache_id, record, 0, serial),
+                kInvalidArgumentStatus);
+    }
+    // Nothing was mutated by the rejections.
+    size_t count = 99;
+    ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &count), 0);
+    EXPECT_EQ(count, 0U);
+    // The axis field's items are derived at save, so the 7 shows up in the definition.
+    const std::string def = SavedCachePart(wb.handle, "xl/pivotCache/pivotCacheDefinition1.xml");
+    const std::string records = SavedCachePart(wb.handle, "xl/pivotCache/pivotCacheRecords1.xml");
+    EXPECT_NE(def.find("<n v=\"7\"/>"), std::string::npos) << def;
+    EXPECT_EQ(def.find("<d "), std::string::npos) << def;
+    EXPECT_EQ(records.find("<d "), std::string::npos) << records;
+
+    std::vector<double> good = {0.0, -0.0, 0.5, 1.0, 59.0, 61.0, sys.last_day};
+    if (sys.has_sixty) {
+      good.push_back(60.0);
+    }
+    for (const double serial : good) {
+      SCOPED_TRACE(serial);
+      EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(wb.handle, cache_id, 0, serial), 0)
+          << fm_last_error_message();
+      EXPECT_EQ(fm_workbook_pivot_cache_record_set_date(wb.handle, cache_id, record, 0, serial), 0)
+          << fm_last_error_message();
+    }
+    ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &count), 0);
+    EXPECT_EQ(count, good.size());
+  }
+}
+
+TEST(FormulonCApiPivot, PivotCacheRecordDateOnSharedFieldIsInline) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  BuildDatePivot(wb.handle, &cache_id);
+
+  // Record 0 carries the date before the field has any shared item.
+  size_t r0 = 0;
+  size_t r1 = 0;
+  size_t r2 = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &r0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_date(wb.handle, cache_id, r0, 0, 45292.0), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, r0, 1, 1.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, 0, 10.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, 0, 20.0), 0);
+  // Record 1 indexes a shared item; record 2 sets a date after the items exist.
+  ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &r1), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, r1, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, r1, 1, 2.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &r2), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, r2, 0, 0.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_date(wb.handle, cache_id, r2, 0, 45296.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, r2, 1, 3.0), 0);
+
+  const std::string records = SavedCachePart(wb.handle, "xl/pivotCache/pivotCacheRecords1.xml");
+  EXPECT_NE(records.find("<r><d v=\"2024-01-01T00:00:00\"/><n v=\"1\"/></r>"), std::string::npos) << records;
+  EXPECT_NE(records.find("<r><x v=\"1\"/><n v=\"2\"/></r>"), std::string::npos) << records;
+  EXPECT_NE(records.find("<r><d v=\"2024-01-05T00:00:00\"/><n v=\"3\"/></r>"), std::string::npos) << records;
+}
+
+TEST(FormulonCApiPivot, PivotCacheDateItemsSaveWithExcelHints) {
+  {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    std::uint32_t cache_id = 0;
+    BuildDatePivot(wb.handle, &cache_id);
+    for (const double serial : {45300.0, 45292.0, 45296.0}) {
+      ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(wb.handle, cache_id, 0, serial), 0);
+    }
+    const std::string def = SavedCachePart(wb.handle, "xl/pivotCache/pivotCacheDefinition1.xml");
+    EXPECT_NE(def.find("<sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" containsDate=\"1\" "
+                       "containsString=\"0\" minDate=\"2024-01-01T00:00:00\" maxDate=\"2024-01-10T00:00:00\" "
+                       "count=\"3\"><d v=\"2024-01-09T00:00:00\"/><d v=\"2024-01-01T00:00:00\"/>"
+                       "<d v=\"2024-01-05T00:00:00\"/></sharedItems>"),
+              std::string::npos)
+        << def;
+  }
+  {
+    // Dates beside plain numbers: no date bounds, and the field is mixed.
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    std::uint32_t cache_id = 0;
+    BuildDatePivot(wb.handle, &cache_id);
+    ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_date(wb.handle, cache_id, 0, 45292.0), 0);
+    ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, 0, 2.5), 0);
+    const std::string def = SavedCachePart(wb.handle, "xl/pivotCache/pivotCacheDefinition1.xml");
+    EXPECT_NE(def.find("<sharedItems containsSemiMixedTypes=\"0\" containsDate=\"1\" containsString=\"0\" "
+                       "containsMixedTypes=\"1\" count=\"2\"><d v=\"2024-01-01T00:00:00\"/><n v=\"2.5\"/>"),
+              std::string::npos)
+        << def;
+  }
+}
