@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `range_style_bases_excluding`) lists the XFs a selection resolves to while
   leaving out given cells, for hosts that resolve those cells' style
   themselves.
+- `fm_workbook_get_array_formula` / `fm_workbook_set_array_formula`
+  (`getArrayFormula` / `setArrayFormula`, `get_array_formula` /
+  `set_array_formula`) read and enter legacy (Ctrl+Shift+Enter) array
+  formulas. The getter reports the block's range and formula from any of its
+  cells. The setter refuses a rectangle that partly overlaps another block or
+  intersects a merge, a data table or a PivotTable.
 
 ### Changed
 
