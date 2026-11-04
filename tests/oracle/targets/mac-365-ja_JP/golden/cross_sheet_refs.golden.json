@@ -2,11 +2,11 @@
   "suite": "cross_sheet_refs",
   "description": "Cross-sheet and 3-D references. The case formula sits at Sheet1!Z1 (the oracle driver convention) and reaches into other sheets via direct Sheet2!A1 references, INDIRECT(\"Sheet2!A1\") runtime resolution, and Excel's 3-D-range syntax (Sheet1:Sheet3!A1). Setup keys carry the Sheet!Addr form; the driver creates the referenced sheet inside the per-case workbook on first use, and the C++ verifier mirrors that inside a single Workbook by adding sheets via add_sheet on first occurrence.\n",
   "environment": {
-    "excel_version": "16.113.3",
+    "excel_version": "16.114.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-08T04:37:32Z"
+    "generated_at": "2026-11-04T13:32:47Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -57,6 +57,34 @@
       "expect": {
         "kind": "number",
         "value": 7.0
+      }
+    },
+    {
+      "id": "indirect_unquoted_non_ascii_sheet",
+      "formula": "=INDIRECT(\"売上!A1\")",
+      "setup": {
+        "売上!A1": {
+          "kind": "number",
+          "value": 11.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "indirect_unquoted_dotted_sheet",
+      "formula": "=INDIRECT(\"Sheet.1!A1\")",
+      "setup": {
+        "Sheet.1!A1": {
+          "kind": "number",
+          "value": 13.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 13.0
       }
     },
     {
