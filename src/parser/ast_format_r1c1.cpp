@@ -53,18 +53,7 @@ void AppendCell(const Reference& r, const Host& host, std::string& out) {
 // A local sheet name under the R1C1 quoting rule. The source's quoting
 // hint is not consulted: `'S2'!A1` reads back as `S2!RC`.
 void AppendSheetName(std::string_view sheet, std::string& out) {
-  if (!local_sheet_needs_quoting_r1c1(sheet)) {
-    out.append(sheet);
-    return;
-  }
-  out.push_back('\'');
-  for (char c : sheet) {
-    if (c == '\'') {
-      out.push_back('\'');
-    }
-    out.push_back(c);
-  }
-  out.push_back('\'');
+  append_sheet_name_quoted_if(sheet, local_sheet_needs_quoting_r1c1(sheet), out);
 }
 
 void AppendSheetQualifier(std::string_view sheet, std::string& out) {

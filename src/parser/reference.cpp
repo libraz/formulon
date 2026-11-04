@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "excel_locale.h"
+#include "parser/ast_format.h"
 #include "parser/parser_detail.h"
 #include "utils/a1_column.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -172,19 +173,7 @@ std::string format_a1(const Reference& r) {
   FM_CHECK(!(r.is_full_col && r.is_full_row), "format_a1: is_full_col and is_full_row must not both be set");
   std::string out;
   if (!r.sheet.empty()) {
-    if (r.sheet_quoted || local_sheet_needs_quoting_a1(r.sheet)) {
-      out.push_back('\'');
-      // Escape any embedded single quotes by doubling them.
-      for (char c : r.sheet) {
-        if (c == '\'') {
-          out.push_back('\'');
-        }
-        out.push_back(c);
-      }
-      out.push_back('\'');
-    } else {
-      out.append(r.sheet);
-    }
+    append_sheet_name(r.sheet, r.sheet_quoted, out);
     out.push_back('!');
   }
   if (r.is_full_col) {

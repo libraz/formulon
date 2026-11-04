@@ -17,6 +17,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "print/print_area.h"
 #include "sheet.h"
@@ -48,19 +49,8 @@ constexpr std::string_view kPrintTitlesName = "_xlnm.Print_Titles";
 /// defined-name formula, quoting per Excel's rules.
 std::string sheet_qualifier(std::string_view sheet_name) {
   std::string out;
-  if (!formulon::parser::local_sheet_needs_quoting_a1(sheet_name)) {
-    out.append(sheet_name);
-    out.push_back('!');
-    return out;
-  }
-  out.push_back('\'');
-  for (const char c : sheet_name) {
-    if (c == '\'') {
-      out.push_back('\'');
-    }
-    out.push_back(c);
-  }
-  out.append("'!");
+  formulon::parser::append_sheet_name(sheet_name, /*force_quote=*/false, out);
+  out.push_back('!');
   return out;
 }
 

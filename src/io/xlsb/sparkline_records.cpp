@@ -17,6 +17,7 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "parser/ast_format.h"
 
 namespace formulon {
 namespace io {
@@ -282,14 +283,9 @@ std::uint32_t f_cce(const std::vector<std::uint8_t>& bytes) {
 
 /// Quotes `name` for a sheet-qualified reference.
 std::string QualifiedPrefix(std::string_view name) {
-  std::string out = "'";
-  for (const char c : name) {
-    out.push_back(c);
-    if (c == '\'') {
-      out.push_back('\'');
-    }
-  }
-  out.append("'!");
+  std::string out;
+  parser::append_sheet_name_quoted_if(name, /*quote=*/true, out);
+  out.push_back('!');
   return out;
 }
 

@@ -21,6 +21,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
+#include "parser/ast_format.h"
 #include "utils/a1_column.h"
 #include "utils/a1_ref.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -69,14 +70,9 @@ std::string RefersTo(const ExternalBook& book, const ExternalBookName& name) {
   if (!name.resolvable || name.sheet >= book.sheet_names.size()) {
     return "#REF!";
   }
-  std::string out("='");
-  for (const char c : book.sheet_names[name.sheet]) {
-    if (c == '\'') {
-      out.push_back('\'');
-    }
-    out.push_back(c);
-  }
-  out.append("'!");
+  std::string out("=");
+  parser::append_sheet_name_quoted_if(book.sheet_names[name.sheet], /*quote=*/true, out);
+  out.push_back('!');
   AppendAbsoluteCell(out, name.row, name.col);
   if (name.is_range) {
     out.push_back(':');
