@@ -2,6 +2,7 @@
 // C ABI - PivotTable filter surface. Shares helpers with `pivot_table.cpp`
 // via `pivot_internal.h`.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -14,6 +15,7 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
 #include "pivot/field_lookup.h"
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
 
@@ -29,34 +31,28 @@ using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate;
 
-namespace {
-
-std::optional<fm_pivot_filter_type_t> pivot_filter_type_to_fm(formulon::pivot::FilterType type) {
-  switch (type) {
-    case formulon::pivot::FilterType::ValueTop10:
-      return FM_PIVOT_FILTER_VALUE_TOP_10;
-    case formulon::pivot::FilterType::ValueGreaterThan:
-      return FM_PIVOT_FILTER_VALUE_GREATER_THAN;
-    case formulon::pivot::FilterType::ValueBetween:
-      return FM_PIVOT_FILTER_VALUE_BETWEEN;
-    case formulon::pivot::FilterType::LabelContains:
-      return FM_PIVOT_FILTER_LABEL_CONTAINS;
-    case formulon::pivot::FilterType::LabelBeginsWith:
-      return FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
-    case formulon::pivot::FilterType::LabelDate:
-      return FM_PIVOT_FILTER_LABEL_DATE;
-    default:
-      return std::nullopt;
-  }
-}
-
-}  // namespace
-
 // ---------------------------------------------------------------------------
 // PivotTable filters
 // ---------------------------------------------------------------------------
 
 namespace {
+
+// Stores one numeric payload slot. NaN and infinities have no spelling in a
+// saved filter, so they are refused.
+fm_status_t numeric_payload(fm_pivot_filter_value_kind_t kind, std::int32_t as_int, double as_double,
+                            std::variant<std::monostate, int, double, std::string>& out, const char* api,
+                            const char* field) {
+  if (kind == FM_PIVOT_FILTER_VALUE_INT) {
+    out = static_cast<int>(as_int);
+    return 0;
+  }
+  if (!std::isfinite(as_double)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": " + field + " is not finite").c_str());
+  }
+  out = as_double;
+  return 0;
+}
 
 fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                   const fm_pivot_filter_spec_t* spec, const char* api) {
@@ -75,10 +71,32 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  const bool is_value_filter = spec->type == FM_PIVOT_FILTER_VALUE_TOP_10 ||
-                               spec->type == FM_PIVOT_FILTER_VALUE_GREATER_THAN ||
-                               spec->type == FM_PIVOT_FILTER_VALUE_BETWEEN;
-  if (is_value_filter) {
+  const formulon::pivot::FilterType type = pivot_filter_type_from_fm(spec->type);
+  const bool caption = formulon::pivot::is_caption_filter_type(type);
+  const bool ranged = formulon::pivot::is_range_filter_type(type);
+  const auto invalid = [&](const char* what, const std::string& detail) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, (std::string(api) + ": " + what).c_str(),
+                             detail);
+  };
+  const std::string kind_detail = "type=" + std::to_string(static_cast<int>(spec->type)) +
+                                  " value_kind=" + std::to_string(static_cast<int>(spec->value_kind));
+  if (formulon::pivot::is_operandless_filter_type(type)) {
+    if (spec->value_kind != FM_PIVOT_FILTER_VALUE_NONE) {
+      return invalid("this filter type takes no value", kind_detail);
+    }
+  } else if (spec->value_kind == FM_PIVOT_FILTER_VALUE_NONE) {
+    return invalid("spec->value_kind is unset", kind_detail);
+  } else if (caption != (spec->value_kind == FM_PIVOT_FILTER_VALUE_TEXT)) {
+    return invalid(caption ? "a label filter takes a text value" : "this filter type takes a number", kind_detail);
+  }
+  const bool text_high = caption && ranged;
+  if (text_high != (spec->value_high_text != nullptr) ||
+      text_high != (spec->value_high_kind == FM_PIVOT_FILTER_VALUE_TEXT)) {
+    return invalid(text_high ? "a label range takes its upper bound in value_high_text"
+                             : "value_high_text is only taken by a label range",
+                   "type=" + std::to_string(static_cast<int>(spec->type)));
+  }
+  if (formulon::pivot::is_value_filter_type(type)) {
     if (auto rc = check_index(spec->data_field_index, table->data_fields().size(), api, "data_field_index"); rc != 0) {
       return rc;
     }
@@ -93,14 +111,15 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   formulon::pivot::PivotFilter filter;
   filter.axis = pivot_axis_from_fm(spec->axis);
   filter.field_name = spec->field_name;
-  filter.type = pivot_filter_type_from_fm(spec->type);
+  filter.type = type;
   filter.data_field_index = spec->data_field_index;
   switch (spec->value_kind) {
     case FM_PIVOT_FILTER_VALUE_INT:
-      filter.value = static_cast<int>(spec->value_int);
-      break;
     case FM_PIVOT_FILTER_VALUE_DOUBLE:
-      filter.value = spec->value_double;
+      if (auto rc = numeric_payload(spec->value_kind, spec->value_int, spec->value_double, filter.value, api, "value");
+          rc != 0) {
+        return rc;
+      }
       break;
     case FM_PIVOT_FILTER_VALUE_TEXT:
       if (spec->value_text == nullptr) {
@@ -110,26 +129,41 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       filter.value = std::string(spec->value_text);
       break;
     case FM_PIVOT_FILTER_VALUE_NONE:
+      break;
     default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               (std::string(api) + ": spec->value_kind is unset").c_str(),
-                               "value_kind=" + std::to_string(static_cast<int>(spec->value_kind)));
+      return invalid("spec->value_kind is out of range", kind_detail);
   }
   switch (spec->value_high_kind) {
     case FM_PIVOT_FILTER_VALUE_INT:
-      filter.value_high = static_cast<int>(spec->value_high_int);
-      break;
     case FM_PIVOT_FILTER_VALUE_DOUBLE:
-      filter.value_high = spec->value_high_double;
+      if (auto rc = numeric_payload(spec->value_high_kind, spec->value_high_int, spec->value_high_double,
+                                    filter.value_high, api, "value_high");
+          rc != 0) {
+        return rc;
+      }
+      break;
+    case FM_PIVOT_FILTER_VALUE_TEXT:
+      filter.value_high = std::string(spec->value_high_text);
       break;
     case FM_PIVOT_FILTER_VALUE_NONE:
       // Leave default monostate.
       break;
-    case FM_PIVOT_FILTER_VALUE_TEXT:
     default:
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                (std::string(api) + ": spec->value_high_kind not supported").c_str(),
                                "value_high_kind=" + std::to_string(static_cast<int>(spec->value_high_kind)));
+  }
+  // The top / bottom amounts: a percent within 0..100, a count or sum above 0.
+  if (formulon::pivot::is_value_filter_type(type)) {
+    const double amount = formulon::pivot::filter_number_value(filter);
+    const bool percent =
+        type == formulon::pivot::FilterType::ValueTopPercent || type == formulon::pivot::FilterType::ValueBottomPercent;
+    const bool count_or_sum =
+        type == formulon::pivot::FilterType::ValueTop10 || type == formulon::pivot::FilterType::ValueBottomCount ||
+        type == formulon::pivot::FilterType::ValueTopSum || type == formulon::pivot::FilterType::ValueBottomSum;
+    if ((percent && (amount < 0.0 || amount > 100.0)) || (count_or_sum && amount <= 0.0)) {
+      return invalid("value is out of range for this filter type", kind_detail);
+    }
   }
   table->mutable_active_filters().push_back(std::move(filter));
   invalidate_pivot_result(wb->workbook(), *table);
@@ -165,8 +199,7 @@ extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std:
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_pivot_filter_at: model axis is not representable");
   }
-  const auto type = pivot_filter_type_to_fm(filter.type);
-  if (!type.has_value()) {
+  if (filter.type > formulon::pivot::FilterType::DateM12) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_pivot_filter_at: model filter type is not representable");
   }
@@ -174,7 +207,7 @@ extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std:
   fm_pivot_filter_spec_t result{};
   result.axis = *axis;
   result.field_name = filter.field_name.c_str();
-  result.type = *type;
+  result.type = static_cast<fm_pivot_filter_type_t>(filter.type);
   result.value_kind = FM_PIVOT_FILTER_VALUE_NONE;
   result.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   result.data_field_index = filter.data_field_index;
@@ -196,6 +229,9 @@ extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std:
   } else if (const auto* double_value_high = std::get_if<double>(&filter.value_high); double_value_high != nullptr) {
     result.value_high_kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
     result.value_high_double = *double_value_high;
+  } else if (const auto* text_value_high = std::get_if<std::string>(&filter.value_high); text_value_high != nullptr) {
+    result.value_high_kind = FM_PIVOT_FILTER_VALUE_TEXT;
+    result.value_high_text = text_value_high->c_str();
   }
   *out = result;
   return 0;

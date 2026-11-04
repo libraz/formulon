@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -110,13 +111,14 @@ TEST(PivotCaptionFilterFixture, ExcelAuthoredFilterDecodesFromStringValue) {
   Workbook wb = LoadFixture();
   const pivot::PivotTable* table = FirstPivot(wb);
   ASSERT_NE(table, nullptr);
-  ASSERT_EQ(table->authored_caption_filters().size(), 1U);
-  const pivot::AuthoredCaptionFilter& filter = table->authored_caption_filters().front();
-  EXPECT_EQ(filter.field_index, 0U);  // Region
-  EXPECT_EQ(filter.predicate, pivot::CaptionPredicate::Equal);
-  EXPECT_EQ(filter.value, "North");
-  // A slicer selection is a different list and must stay empty.
-  EXPECT_TRUE(table->active_filters().empty());
+  ASSERT_EQ(table->active_filters().size(), 1U);
+  const pivot::PivotFilter& filter = table->active_filters().front();
+  ASSERT_TRUE(filter.source.has_value());
+  EXPECT_EQ(filter.source->field_index, 0U);  // Region
+  EXPECT_EQ(filter.field_name, "Region");
+  EXPECT_EQ(filter.type, pivot::FilterType::LabelEqual);
+  EXPECT_EQ(std::get<std::string>(filter.value), "North");
+  EXPECT_TRUE(table->retained_filters().empty());
 }
 
 // The rule is not mirrored into item visibility, so an engine that only

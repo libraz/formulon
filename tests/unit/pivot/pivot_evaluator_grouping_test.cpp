@@ -745,11 +745,11 @@ TEST(PivotEvaluator, LabelFilterOnAGroupFieldReadsTheGroupItemText) {
   f.type = FilterType::LabelBeginsWith;
   f.value = std::string("1\xE6\x9C\x88");
   table.mutable_active_filters().push_back(f);
-  AuthoredCaptionFilter caption;
-  caption.field_index = 2U;
-  caption.predicate = CaptionPredicate::Equal;
-  caption.value = "1\xE6\x9C\x88";
-  table.mutable_authored_caption_filters().push_back(caption);
+  PivotFilter caption;
+  caption.type = FilterType::LabelEqual;
+  caption.value = std::string("1\xE6\x9C\x88");
+  caption.source = PivotFilterSource{std::string{}, 2U, 0U, 0U};
+  table.mutable_active_filters().push_back(caption);
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;

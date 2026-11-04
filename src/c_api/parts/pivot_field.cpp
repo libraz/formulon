@@ -18,6 +18,7 @@
 #include "eval/collation.h"
 #include "pivot/field_grouping.h"
 #include "pivot/field_lookup.h"
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
@@ -117,10 +118,7 @@ void drop_field_aggregates(formulon::pivot::PivotTable& table, std::size_t field
     if (formulon::pivot::pivot_field_has_name(field, filter.field_name)) {
       return true;
     }
-    const bool is_value = filter.type == formulon::pivot::FilterType::ValueTop10 ||
-                          filter.type == formulon::pivot::FilterType::ValueGreaterThan ||
-                          filter.type == formulon::pivot::FilterType::ValueBetween;
-    if (!is_value || filter.data_field_index >= new_index.size()) {
+    if (!formulon::pivot::is_value_filter_type(filter.type) || filter.data_field_index >= new_index.size()) {
       return false;
     }
     const std::size_t moved = new_index[filter.data_field_index];

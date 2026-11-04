@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -72,11 +73,21 @@ enum class PivotLayout : std::uint8_t {
   Outline = 2,
 };
 
-/// Filter type applied to a pivot axis.
+/// Filter type applied to a pivot field: every `ST_PivotFilterType` member
+/// except `unknown`.
 ///
-/// Range-typed filters (`ValueBetween`, `LabelDate`) read both
-/// `PivotFilter::value` (low bound) and `PivotFilter::value_high`
-/// (high bound). The other filter types only consume `value`.
+/// Families and their payloads (`PivotFilter::value` / `value_high`):
+///   * Value (`ValueTop10`, `ValueGreaterThan`, `ValueBetween`, 6-11, 24-28):
+///     ranked on a data field's aggregate after aggregation; numeric payloads.
+///     The top / bottom families keep items while the count, percent of the
+///     field total or running sum is not yet reached.
+///   * Caption (`LabelContains`, `LabelBeginsWith`, 12-23): matched against
+///     the item label per record; text payloads as entered, `~` escapes kept.
+///   * Date (`LabelDate` = `dateBetween`, 29-35): compared against the
+///     record's date serial; numeric serial payloads.
+///   * Relative period and calendar position (36-67): no payload.
+///
+/// Range types (`*Between`, `*NotBetween`, `LabelDate`) read both bounds.
 enum class FilterType : std::uint8_t {
   ValueTop10 = 0,
   ValueGreaterThan = 1,
@@ -84,15 +95,144 @@ enum class FilterType : std::uint8_t {
   LabelContains = 3,
   LabelBeginsWith = 4,
   LabelDate = 5,
-  // Authored value comparisons (`<filter type="valueEqual">` and siblings);
-  // not part of the public active-filter vocabulary.
   ValueEqual = 6,
   ValueNotEqual = 7,
   ValueGreaterThanOrEqual = 8,
   ValueLessThan = 9,
   ValueLessThanOrEqual = 10,
   ValueNotBetween = 11,
+  LabelEqual = 12,
+  LabelNotEqual = 13,
+  LabelNotBeginsWith = 14,
+  LabelEndsWith = 15,
+  LabelNotEndsWith = 16,
+  LabelNotContains = 17,
+  LabelGreaterThan = 18,
+  LabelGreaterThanOrEqual = 19,
+  LabelLessThan = 20,
+  LabelLessThanOrEqual = 21,
+  LabelBetween = 22,
+  LabelNotBetween = 23,
+  ValueBottomCount = 24,
+  ValueTopPercent = 25,
+  ValueBottomPercent = 26,
+  ValueTopSum = 27,
+  ValueBottomSum = 28,
+  DateEqual = 29,
+  DateNotEqual = 30,
+  DateOlderThan = 31,
+  DateOlderThanOrEqual = 32,
+  DateNewerThan = 33,
+  DateNewerThanOrEqual = 34,
+  DateNotBetween = 35,
+  DateTomorrow = 36,
+  DateToday = 37,
+  DateYesterday = 38,
+  DateNextWeek = 39,
+  DateThisWeek = 40,
+  DateLastWeek = 41,
+  DateNextMonth = 42,
+  DateThisMonth = 43,
+  DateLastMonth = 44,
+  DateNextQuarter = 45,
+  DateThisQuarter = 46,
+  DateLastQuarter = 47,
+  DateNextYear = 48,
+  DateThisYear = 49,
+  DateLastYear = 50,
+  DateYearToDate = 51,
+  DateQ1 = 52,
+  DateQ2 = 53,
+  DateQ3 = 54,
+  DateQ4 = 55,
+  DateM1 = 56,
+  DateM2 = 57,
+  DateM3 = 58,
+  DateM4 = 59,
+  DateM5 = 60,
+  DateM6 = 61,
+  DateM7 = 62,
+  DateM8 = 63,
+  DateM9 = 64,
+  DateM10 = 65,
+  DateM11 = 66,
+  DateM12 = 67,
 };
+
+/// The `ST_PivotFilterType` spelling of each `FilterType`, by ordinal. The
+/// top / bottom pairs share one spelling; `<top10 top="0">` tells them apart.
+inline constexpr std::string_view kFilterTypeNames[] = {
+    "count",
+    "valueGreaterThan",
+    "valueBetween",
+    "captionContains",
+    "captionBeginsWith",
+    "dateBetween",
+    "valueEqual",
+    "valueNotEqual",
+    "valueGreaterThanOrEqual",
+    "valueLessThan",
+    "valueLessThanOrEqual",
+    "valueNotBetween",
+    "captionEqual",
+    "captionNotEqual",
+    "captionNotBeginsWith",
+    "captionEndsWith",
+    "captionNotEndsWith",
+    "captionNotContains",
+    "captionGreaterThan",
+    "captionGreaterThanOrEqual",
+    "captionLessThan",
+    "captionLessThanOrEqual",
+    "captionBetween",
+    "captionNotBetween",
+    "count",
+    "percent",
+    "percent",
+    "sum",
+    "sum",
+    "dateEqual",
+    "dateNotEqual",
+    "dateOlderThan",
+    "dateOlderThanOrEqual",
+    "dateNewerThan",
+    "dateNewerThanOrEqual",
+    "dateNotBetween",
+    "tomorrow",
+    "today",
+    "yesterday",
+    "nextWeek",
+    "thisWeek",
+    "lastWeek",
+    "nextMonth",
+    "thisMonth",
+    "lastMonth",
+    "nextQuarter",
+    "thisQuarter",
+    "lastQuarter",
+    "nextYear",
+    "thisYear",
+    "lastYear",
+    "yearToDate",
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4",
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6",
+    "M7",
+    "M8",
+    "M9",
+    "M10",
+    "M11",
+    "M12",
+};
+static_assert(sizeof(kFilterTypeNames) / sizeof(kFilterTypeNames[0]) ==
+              static_cast<std::size_t>(FilterType::DateM12) + 1U);
 
 /// Calendar a date field's years are grouped by: Gregorian years, or the
 /// Japanese era years.
@@ -200,39 +340,27 @@ struct PivotFilterSource {
 
 /// Single filter clause attached to a pivot field.
 ///
-/// The `value` payload covers the common Top-N, threshold, and label
-/// cases via an int / double / string variant. Range-typed filters
-/// (`ValueBetween`, `LabelDate`) additionally consume the optional
-/// `value_high` upper-bound payload; other filter types ignore it.
+/// `value` / `value_high` carry the payload the type's family takes (see
+/// `FilterType`); `std::monostate` is an unset slot. A range filter with no
+/// upper bound filters nothing.
 struct PivotFilter {
   PivotAxis axis = PivotAxis::Row;
   std::string field_name;
   FilterType type = FilterType::ValueTop10;
-  std::variant<int, double, std::string> value;
-  /// Upper-bound payload for range filters:
-  ///   * `ValueBetween` — `value` is the inclusive low bound, `value_high` is
-  ///     the inclusive high bound (both numeric).
-  ///   * `LabelDate` — `value` is the start date serial (numeric), `value_high`
-  ///     is the end date serial (inclusive).
-  /// Unused for the other filter types. The default `std::monostate`
-  /// signals "unbounded above"; range filters with no upper bound
-  /// degrade to a no-op.
-  std::variant<std::monostate, int, double> value_high;
+  std::variant<std::monostate, int, double, std::string> value;
+  std::variant<std::monostate, int, double, std::string> value_high;
   /// Index into `PivotTable::data_fields()` whose aggregate is scored by a
-  /// value filter. Label/date filters ignore this selector. Keeping the
-  /// default at zero preserves the original single-measure behaviour.
+  /// value filter. Caption and date filters ignore it.
   std::uint32_t data_field_index = 0;
   /// Set for an entry decoded from a file's `<filters>`; empty for one added
   /// through the API.
   std::optional<PivotFilterSource> source{};
 };
 
-/// A loaded `<filter>` the `PivotFilter` vocabulary cannot express (the
-/// caption comparisons beyond contains / begins-with, Bottom N, the percent
-/// and sum top-N flavours, the remaining value comparisons, the
-/// relative-period and recurring date families, and any type this version
-/// does not know). Kept verbatim so a save never drops it; the evaluable
-/// families are also decoded into the `PivotTable::authored_*` lists.
+/// A loaded `<filter>` the `PivotFilter` model cannot express: an unknown
+/// type, a member-property or OLAP measure filter (`mpFld`,
+/// `iMeasureHier`), or one whose criteria do not decode. Kept verbatim so a
+/// save never drops it; it filters nothing.
 struct RetainedPivotFilter {
   std::string xml;
   /// Number of `PivotTable::active_filters()` entries that preceded this one
@@ -240,191 +368,6 @@ struct RetainedPivotFilter {
   std::size_t active_before = 0;
   /// Source `id`, kept so generated siblings never reuse it.
   std::uint32_t id = 0;
-};
-
-/// Comparison an authored OOXML `<filters>` caption filter applies to a
-/// field's rendered labels.
-///
-/// This mirrors the caption half of `ST_PivotFilterType` one-to-one.
-/// It is deliberately separate from `FilterType`: `FilterType` is the
-/// embedder-facing surface exposed through the C ABI and the bindings,
-/// while these values only ever originate from a file the reader
-/// decodes, so widening them costs no ABI compatibility.
-///
-/// Ordering comparisons (`GreaterThan` .. `NotBetween`) compare labels
-/// as text, which is what Excel does for a caption filter even when the
-/// labels happen to look numeric.
-enum class CaptionPredicate : std::uint8_t {
-  Equal = 0,
-  NotEqual = 1,
-  BeginsWith = 2,
-  NotBeginsWith = 3,
-  EndsWith = 4,
-  NotEndsWith = 5,
-  Contains = 6,
-  NotContains = 7,
-  GreaterThan = 8,
-  GreaterThanOrEqual = 9,
-  LessThan = 10,
-  LessThanOrEqual = 11,
-  Between = 12,
-  NotBetween = 13,
-};
-
-/// One decoded `<filter>` entry from an authored `<filters>` block.
-///
-/// `field_index` is the source `fld` attribute: an index into
-/// `<pivotFields>`, which OOXML keeps parallel to the bound cache's
-/// fields. For the begins / ends / contains family (and negations) `value`
-/// is the autoFilter wildcard pattern matched against the whole label
-/// (`North*`, `*North`, `*North*`), not the bare operand. `value_high`
-/// carries the upper bound for `Between` / `NotBetween` and is unused
-/// otherwise.
-struct AuthoredCaptionFilter {
-  std::uint32_t field_index = 0;
-  CaptionPredicate predicate = CaptionPredicate::Equal;
-  std::string value;
-  std::string value_high;
-};
-
-/// Which quantity the top-N dialog counts out.
-///
-/// Excel's "Top 10" dialog offers three, and writes each as a different
-/// `<filter type>` over an identically shaped `<top10 val="N">`: `count`,
-/// `percent`, `sum`. Nothing inside `<top10>` distinguishes `count` from
-/// `sum` at all, so the type attribute is the only discriminator and
-/// reading one as the other silently returns different rows.
-///
-/// This is deliberately not folded into `FilterType`: that enum is the
-/// embedder-facing surface exposed through the C ABI, and these values
-/// only ever originate from a file the reader decodes.
-enum class TopNBasis : std::uint8_t {
-  /// `<filter type="count">` — keep the N highest-scoring leaves.
-  Items = 0,
-  /// `<filter type="percent">` — keep the highest-scoring leaves whose
-  /// running total first reaches N percent of the axis total.
-  Percent = 1,
-  /// `<filter type="sum">` — the same running-total rule against an
-  /// absolute target rather than a share.
-  Sum = 2,
-};
-
-/// One decoded value-or-date `<filter>` entry from an authored
-/// `<filters>` block.
-///
-/// Sibling of `AuthoredCaptionFilter`, and separate from `PivotFilter`
-/// for the same reason: `PivotFilter` is the embedder-facing slicer
-/// surface reached through the C ABI, and clearing a slicer selection
-/// must not clear a rule that came out of the file.
-///
-/// It reuses `FilterType` rather than introducing another enum because
-/// each decoded family already has an evaluation counterpart there, and
-/// the reader only produces a member it can evaluate:
-///
-///   * `ValueTop10` — `<filter type="count">`, `value` is the item count
-///     from the nested `<top10 val="N">`.
-///   * `ValueGreaterThan` — `<filter type="valueGreaterThan">`, `value`
-///     is the exclusive threshold.
-///   * `ValueBetween` / `ValueNotBetween` — `<filter type="valueBetween">`
-///     and `"valueNotBetween"`, inclusive bounds in `value` / `value_high`.
-///   * `ValueEqual`, `ValueNotEqual`, `ValueGreaterThanOrEqual`,
-///     `ValueLessThan`, `ValueLessThanOrEqual` — the single-threshold
-///     comparisons, `value` is the threshold.
-///   * `LabelDate` — `<filter type="dateBetween">`, inclusive date
-///     serials in `value` / `value_high`.
-///
-/// The axis is not stored: a file names only the field, and which axis
-/// the pruning applies to follows from that field's membership in
-/// `row_field_order()` / `col_field_order()`.
-struct AuthoredValueFilter {
-  /// Source `fld` attribute: an index into `<pivotFields>`, which OOXML
-  /// keeps parallel to the bound cache's fields.
-  std::uint32_t field_index = 0;
-  FilterType type = FilterType::ValueTop10;
-  double value = 0.0;
-  /// Upper bound for the range families; absent otherwise. A range entry
-  /// with no upper bound degrades to a no-op, matching `PivotFilter`.
-  std::optional<double> value_high;
-  /// Source `iMeasureFld`: which data field's aggregate is scored.
-  std::uint32_t data_field_index = 0;
-  /// Which quantity `value` counts out. Only meaningful when `type` is
-  /// `ValueTop10`, which is the one family the dialog offers a choice for.
-  TopNBasis top_n_basis = TopNBasis::Items;
-  /// Source `<top10 top="...">` attribute: `true` keeps the N
-  /// highest-scoring leaves, `false` keeps the N lowest-scoring ones
-  /// (Excel's "Bottom N" dialog option). Only meaningful when `type` is
-  /// `ValueTop10`; defaults to `true`, matching the schema default.
-  bool top = true;
-  /// Number of `PivotTable::active_filters()` entries that preceded this one
-  /// in the source block. Value filters prune in sequence, so the value pass
-  /// interleaves the two lists by it to keep document order.
-  std::size_t active_before = 0;
-};
-
-/// A date window named relative to when the pivot is computed.
-///
-/// The `<filters>` block spells these as a bare type with no criteria —
-/// `<filter type="dateThisMonth" fld="2"/>` — because the window is
-/// implied by the name. Resolving one therefore needs a clock reading,
-/// which is why they are held apart from `AuthoredValueFilter` (whose
-/// bounds are literals in the file) and why the workbook can pin the
-/// reading they resolve against.
-///
-/// Every family here spans one contiguous range. The recurring
-/// `M1`..`M12` / `Q1`..`Q4` selectors are not part of it: they pick every
-/// January rather than one January, so they are not a window at all and
-/// are modelled by `AuthoredRecurringFilter`.
-///
-/// The week group runs Sunday through Saturday, and the three windows
-/// tile without gap or overlap. Excel resolves them against the calendar
-/// week rather than a rolling seven days from today, so `ThisWeek` on a
-/// Friday still starts on the preceding Sunday.
-enum class RelativePeriod : std::uint8_t {
-  Today = 0,
-  Yesterday = 1,
-  Tomorrow = 2,
-  ThisMonth = 3,
-  LastMonth = 4,
-  NextMonth = 5,
-  ThisQuarter = 6,
-  LastQuarter = 7,
-  NextQuarter = 8,
-  ThisYear = 9,
-  LastYear = 10,
-  NextYear = 11,
-  YearToDate = 12,
-  ThisWeek = 13,
-  LastWeek = 14,
-  NextWeek = 15,
-};
-
-/// An authored relative-period date filter.
-///
-/// Sibling of `AuthoredValueFilter`, split off because its window is not
-/// in the file: it is resolved at evaluation time from the workbook's
-/// clock. Applied pre-aggregation, exactly like the absolute `dateBetween`
-/// family it degenerates to once resolved.
-struct AuthoredPeriodFilter {
-  /// Source `fld` attribute: an index into `<pivotFields>`.
-  std::uint32_t field_index = 0;
-  RelativePeriod period = RelativePeriod::Today;
-};
-
-/// An authored recurring-period date filter: the `M1`..`M12` and
-/// `Q1`..`Q4` families.
-///
-/// Held apart from `AuthoredPeriodFilter` because these select a calendar
-/// position rather than a range. `M1` keeps every January of every year,
-/// so no `DateWindow` can express it and no clock reading is needed to
-/// resolve it — the criterion is simply which month a record's date falls
-/// in. Both families reduce to one inclusive month range because a
-/// quarter is three adjacent months: `Q2` is months 4..6.
-struct AuthoredRecurringFilter {
-  /// Source `fld` attribute: an index into `<pivotFields>`.
-  std::uint32_t field_index = 0;
-  /// Inclusive 1-based calendar month bounds. `low == high` for `M<n>`.
-  unsigned month_low = 1;
-  unsigned month_high = 1;
 };
 
 /// Sort directive for a pivot field.

@@ -122,10 +122,9 @@ class PivotTable {
   //
   // Decoded from `<pageFields>` for rendering only. The block itself stays
   // in the pre-dataFields passthrough bin and the writer re-emits it from
-  // there, so this list is read-side state exactly like
-  // `authored_caption_filters()`: populating it changes not one byte of a
-  // round trip, and clearing it would not remove the page field from a
-  // saved file. The one thing the writer does own is the element's absence
+  // there, so this list is read-side state: populating it changes not one
+  // byte of a round trip, and clearing it would not remove the page field
+  // from a saved file. The one thing the writer does own is the element's absence
   // — see `write_pivot_table_definition`, which synthesises `<pageFields>`
   // only for a table that never carried one.
   //
@@ -260,12 +259,12 @@ class PivotTable {
   // filter state).
   //
   // `<filters>` is owned by two lists. `active_filters()` holds every entry
-  // the public `PivotFilter` vocabulary expresses: the ones added through
-  // the API and the ones the reader decoded (each carrying its
-  // `PivotFilterSource`). `retained_filters()` holds the rest of a loaded
-  // block verbatim. The writer serialises both, interleaved back into
-  // document order, so an API filter survives a save + reload and a loaded
-  // block is re-emitted byte-for-byte while nothing in it changed.
+  // the `PivotFilter` model expresses: the ones added through the API and
+  // the ones the reader decoded (each carrying its `PivotFilterSource`).
+  // `retained_filters()` holds the loaded entries it cannot express,
+  // verbatim. The writer serialises both, interleaved back into document
+  // order, so an API filter survives a save + reload and a loaded block is
+  // re-emitted byte-for-byte while nothing in it changed.
   const std::vector<PivotFilter>& active_filters() const { return active_filters_; }
   std::vector<PivotFilter>& mutable_active_filters() { return active_filters_; }
 
@@ -273,8 +272,8 @@ class PivotTable {
   std::vector<RetainedPivotFilter>& mutable_retained_filters() { return retained_filters_; }
 
   /// Removes every active filter `remove` returns true for (it may also edit
-  /// the ones it keeps), re-anchoring each retained and authored value entry
-  /// after the same surviving public entries so document order holds.
+  /// the ones it keeps), re-anchoring each retained entry after the same
+  /// surviving active entries so document order holds.
   /// Appending needs no such care and goes through `mutable_active_filters`.
   template <typename Remove>
   void erase_active_filters_if(Remove remove) {
@@ -292,48 +291,7 @@ class PivotTable {
     for (RetainedPivotFilter& entry : retained_filters_) {
       entry.active_before = kept_before[entry.active_before < n ? entry.active_before : n];
     }
-    for (AuthoredValueFilter& entry : authored_value_filters_) {
-      entry.active_before = kept_before[entry.active_before < n ? entry.active_before : n];
-    }
   }
-
-  // Authored `<filters>` entries outside the public vocabulary ---------------
-  //
-  // The evaluation-side decode of `retained_filters()`. Read-side state: the
-  // writer re-emits the retained XML, so populating these lists changes no
-  // byte of the round trip and clearing them would not remove a filter from
-  // a saved file.
-  //
-  // The caption and value lists split by when the rule can be decided. A caption or
-  // date criterion is a property of one source record, so it prunes
-  // before aggregation; a value criterion ranks an axis leaf by its
-  // aggregate, so it cannot be decided until the aggregates exist. That
-  // is the same split `active_filters()` already drives, and both lists
-  // feed the same two passes.
-  //
-  // The relative-period families (`thisMonth`, `yearToDate`, the week
-  // windows, ...) form a third list. They carry no criteria in the file —
-  // the window is implied by the type name — so they resolve against a
-  // clock reading supplied at evaluation time. Pinning that reading
-  // (`Workbook::pinned_now`) is what keeps a pivot that uses them
-  // reproducible rather than dependent on the day it happened to be
-  // computed.
-  //
-  // The recurring selectors (`M1`..`M12`, `Q1`..`Q4`) form a fourth. They
-  // carry no criteria either, but they name a position in the calendar
-  // rather than a window — `M1` keeps every January of every year — so
-  // they need no clock reading and cannot fold into the third list.
-  const std::vector<AuthoredCaptionFilter>& authored_caption_filters() const { return authored_caption_filters_; }
-  std::vector<AuthoredCaptionFilter>& mutable_authored_caption_filters() { return authored_caption_filters_; }
-
-  const std::vector<AuthoredValueFilter>& authored_value_filters() const { return authored_value_filters_; }
-  std::vector<AuthoredValueFilter>& mutable_authored_value_filters() { return authored_value_filters_; }
-
-  const std::vector<AuthoredPeriodFilter>& authored_period_filters() const { return authored_period_filters_; }
-  std::vector<AuthoredPeriodFilter>& mutable_authored_period_filters() { return authored_period_filters_; }
-
-  const std::vector<AuthoredRecurringFilter>& authored_recurring_filters() const { return authored_recurring_filters_; }
-  std::vector<AuthoredRecurringFilter>& mutable_authored_recurring_filters() { return authored_recurring_filters_; }
 
   // Most-recent evaluation result -------------------------------------------
   //
@@ -629,10 +587,6 @@ class PivotTable {
   bool projection_pending_ = false;
   std::vector<PivotFilter> active_filters_;
   std::vector<RetainedPivotFilter> retained_filters_;
-  std::vector<AuthoredCaptionFilter> authored_caption_filters_;
-  std::vector<AuthoredValueFilter> authored_value_filters_;
-  std::vector<AuthoredPeriodFilter> authored_period_filters_;
-  std::vector<AuthoredRecurringFilter> authored_recurring_filters_;
   std::optional<PivotStyleInfo> style_info_;
   std::string raw_passthrough_xml_;
   std::string raw_passthrough_before_style_info_;

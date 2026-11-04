@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -156,8 +157,8 @@ std::vector<std::pair<std::string, double>> EvaluateRows(const Workbook& wb, std
 // (a) The decode, against Excel's own attribute spelling.
 // ---------------------------------------------------------------------------
 
-// The public-vocabulary entries decode into `active_filters()`, where the
-// API reads and edits them, naming their field by source name.
+// The entries decode into `active_filters()`, where the API reads and edits
+// them, naming their field by source name.
 TEST(PivotValueDateFilterFixture, TopCountDecodesFromTheNestedTop10Element) {
   Workbook wb = LoadFixture();
   const pivot::PivotTable* table = PivotOn(wb, kTopCountSheet);
@@ -173,10 +174,8 @@ TEST(PivotValueDateFilterFixture, TopCountDecodesFromTheNestedTop10Element) {
   ASSERT_TRUE(filter.source.has_value());
   EXPECT_EQ(filter.source->field_index, 0U);
   EXPECT_EQ(filter.source->id, 2U);
-  // Nothing is left for the retained / authored lists to claim.
+  // Nothing is left for the retained list to claim.
   EXPECT_TRUE(table->retained_filters().empty());
-  EXPECT_TRUE(table->authored_value_filters().empty());
-  EXPECT_TRUE(table->authored_caption_filters().empty());
 }
 
 TEST(PivotValueDateFilterFixture, ThresholdAndRangeDecodeFromTheNestedCustomFilters) {
@@ -212,17 +211,17 @@ TEST(PivotValueDateFilterFixture, DateBoundsDecodeAsSerialsOnTheDateField) {
   EXPECT_EQ(filter.source->field_index, 2U);
 }
 
-// Percent and sum top-N have no public spelling: they stay retained and
-// decoded into the authored list, which still evaluates them.
-TEST(PivotValueDateFilterFixture, TopPercentAndSumStayRetained) {
+// Percent and sum top-N decode into the list as their own types.
+TEST(PivotValueDateFilterFixture, TopPercentAndSumDecodeAsTheirOwnTypes) {
   Workbook wb = LoadFixture();
-  for (const std::size_t sheet : {kTopPercentSheet, kTopSumSheet}) {
+  const std::pair<std::size_t, pivot::FilterType> cases[] = {{kTopPercentSheet, pivot::FilterType::ValueTopPercent},
+                                                             {kTopSumSheet, pivot::FilterType::ValueTopSum}};
+  for (const auto& [sheet, type] : cases) {
     const pivot::PivotTable* table = PivotOn(wb, sheet);
     ASSERT_NE(table, nullptr);
-    EXPECT_TRUE(table->active_filters().empty());
-    ASSERT_EQ(table->retained_filters().size(), 1U);
-    EXPECT_EQ(table->retained_filters()[0].active_before, 0U);
-    ASSERT_EQ(table->authored_value_filters().size(), 1U);
+    ASSERT_EQ(table->active_filters().size(), 1U);
+    EXPECT_EQ(table->active_filters()[0].type, type);
+    EXPECT_TRUE(table->retained_filters().empty());
   }
 }
 
@@ -302,13 +301,13 @@ TEST(PivotValueDateFilterFixture, TopPercentRanksAgainstTheTotalNotTheItemCount)
   const Workbook wb = LoadFixture();
   const pivot::PivotTable* table = PivotOn(wb, kTopPercent50Sheet);
   ASSERT_NE(table, nullptr);
-  ASSERT_EQ(table->authored_value_filters().size(), 1U);
-  const pivot::AuthoredValueFilter& filter = table->authored_value_filters().front();
-  EXPECT_EQ(filter.field_index, 0U);  // Region
-  EXPECT_EQ(filter.type, pivot::FilterType::ValueTop10);
-  EXPECT_EQ(filter.top_n_basis, pivot::TopNBasis::Percent);
-  EXPECT_DOUBLE_EQ(filter.value, 50.0);
-  EXPECT_FALSE(filter.value_high.has_value());
+  ASSERT_EQ(table->active_filters().size(), 1U);
+  const pivot::PivotFilter& filter = table->active_filters().front();
+  ASSERT_TRUE(filter.source.has_value());
+  EXPECT_EQ(filter.source->field_index, 0U);  // Region
+  EXPECT_EQ(filter.type, pivot::FilterType::ValueTopPercent);
+  EXPECT_EQ(std::get<int>(filter.value), 50);
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(filter.value_high));
 
   const std::vector<std::pair<std::string, double>> rows = EvaluateRows(wb, kTopPercent50Sheet);
   ASSERT_EQ(rows.size(), 1U);

@@ -7,8 +7,8 @@
 // in the calendar rather than a span of it. `Q2` keeps every April, May
 // and June of every year, so unlike the relative-period family it needs
 // no clock reading to resolve and unlike the absolute `dateBetween`
-// family it carries no serial bounds. That is why it is modelled apart
-// from both, as `PivotTable::authored_recurring_filters()`.
+// family it carries no serial bounds: it decodes to `FilterType::DateQ2`
+// with no operand.
 //
 // Source table (`Sheet1`, A1:D9) — Region / Product / Date / Amt:
 //   North Alpha 2024-01-15 100   East Alpha 2024-01-25  80
@@ -32,6 +32,7 @@
 #include <cstdio>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -145,17 +146,14 @@ TEST(PivotRecurringPeriodFilterFixture, QuarterSelectorDecodesToItsThreeCalendar
   Workbook wb = LoadFixture();
   const pivot::PivotTable* table = PivotOn(wb, kRecurringSheet);
   ASSERT_NE(table, nullptr);
-  ASSERT_EQ(table->authored_recurring_filters().size(), 1U);
-  const pivot::AuthoredRecurringFilter& filter = table->authored_recurring_filters().front();
-  EXPECT_EQ(filter.field_index, 2U);  // Date
-  EXPECT_EQ(filter.month_low, 4U);
-  EXPECT_EQ(filter.month_high, 6U);
-  // A recurring entry is neither a window nor a bounded criterion, so no
-  // sibling decoder may also claim it.
-  EXPECT_TRUE(table->authored_period_filters().empty());
-  EXPECT_TRUE(table->authored_value_filters().empty());
-  EXPECT_TRUE(table->authored_caption_filters().empty());
-  EXPECT_TRUE(table->active_filters().empty());
+  ASSERT_EQ(table->active_filters().size(), 1U);
+  const pivot::PivotFilter& filter = table->active_filters().front();
+  ASSERT_TRUE(filter.source.has_value());
+  EXPECT_EQ(filter.source->field_index, 2U);  // Date
+  EXPECT_EQ(filter.type, pivot::FilterType::DateQ2);
+  // A calendar position carries no operand.
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(filter.value));
+  EXPECT_TRUE(table->retained_filters().empty());
 }
 
 TEST(PivotRecurringPeriodFilterFixture, EvaluationKeepsTheSameRowsExcelCached) {

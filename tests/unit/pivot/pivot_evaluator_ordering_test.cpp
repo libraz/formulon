@@ -512,27 +512,27 @@ TEST(PivotEvaluatorCollation, WindowsJaJpMergesAtDynamicStrength) {
   EXPECT_EQ(evaluate_labels({"\xE3\x81\x82", "\xE3\x82\xA2"}, win).rows.size(), 2U);
 }
 
-PivotTable caption_filtered_table(CaptionPredicate predicate, std::string value) {
+PivotTable caption_filtered_table(FilterType type, std::string value) {
   PivotTable table = build_label_table();
-  AuthoredCaptionFilter f;
-  f.field_index = 0;
-  f.predicate = predicate;
+  PivotFilter f;
+  f.type = type;
   f.value = std::move(value);
-  table.mutable_authored_caption_filters().push_back(std::move(f));
+  f.source = PivotFilterSource{std::string{}, 0U, 0U, 0U};
+  table.mutable_active_filters().push_back(std::move(f));
   return table;
 }
 
 // A caption filter compares at the strength that merged the items.
 TEST(PivotEvaluatorCollation, CaptionEqualUsesItemIdentity) {
-  const std::vector<std::string> labels{"\xE3\x82\xA2", "\xE3\x82\xA4"};                          // ア, イ
-  const PivotTable equal_hira = caption_filtered_table(CaptionPredicate::Equal, "\xE3\x81\x82");  // あ
+  const std::vector<std::string> labels{"\xE3\x82\xA2", "\xE3\x82\xA4"};                         // ア, イ
+  const PivotTable equal_hira = caption_filtered_table(FilterType::LabelEqual, "\xE3\x81\x82");  // あ
   const PivotResult mac_r = evaluate_labels(labels, mac(ExcelLocale::kJaJP), equal_hira);
   ASSERT_EQ(mac_r.rows.size(), 1U);
   EXPECT_EQ(mac_r.rows[0].label, "\xE3\x82\xA2");
   EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kZhCN), equal_hira).rows.size(), 0U);
   EXPECT_EQ(evaluate_labels(labels, win_365_ja_jp_profile(), equal_hira).rows.size(), 0U);
 
-  const PivotTable not_equal_hira = caption_filtered_table(CaptionPredicate::NotEqual, "\xE3\x81\x82");
+  const PivotTable not_equal_hira = caption_filtered_table(FilterType::LabelNotEqual, "\xE3\x81\x82");
   const PivotResult mac_ne = evaluate_labels(labels, mac(ExcelLocale::kJaJP), not_equal_hira);
   ASSERT_EQ(mac_ne.rows.size(), 1U);
   EXPECT_EQ(mac_ne.rows[0].label, "\xE3\x82\xA4");
@@ -541,7 +541,7 @@ TEST(PivotEvaluatorCollation, CaptionEqualUsesItemIdentity) {
 TEST(PivotEvaluatorCollation, CaptionOrderingUsesItemOrder) {
   // かー sorts after かあ in zh_CN and before it in en_US.
   const std::vector<std::string> labels{"\xE3\x81\x8B\xE3\x83\xBC"};
-  const PivotTable greater = caption_filtered_table(CaptionPredicate::GreaterThan, "\xE3\x81\x8B\xE3\x81\x82");
+  const PivotTable greater = caption_filtered_table(FilterType::LabelGreaterThan, "\xE3\x81\x8B\xE3\x81\x82");
   EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kZhCN), greater).rows.size(), 1U);
   EXPECT_EQ(evaluate_labels(labels, mac(ExcelLocale::kEnUS), greater).rows.size(), 0U);
 }

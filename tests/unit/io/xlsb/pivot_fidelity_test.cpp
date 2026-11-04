@@ -158,16 +158,19 @@ TEST(XlsbPivotFidelity, CaptionFilterDecodesLikeTheXlsxElement) {
   Workbook wb = Load(WithFilters({SxFilter(4U, 1U, 0xFFFFFFFFU, "North", ValuesCriterion("North"))}));
   ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
   const pivot::PivotTable& table = *wb.sheet(0).pivot_tables()[0];
-  ASSERT_EQ(table.retained_filters().size(), 1U);
-  EXPECT_EQ(table.authored_caption_filters().size(), 1U);
+  ASSERT_EQ(table.active_filters().size(), 1U);
+  EXPECT_EQ(table.active_filters()[0].type, pivot::FilterType::LabelEqual);
+  EXPECT_TRUE(table.retained_filters().empty());
 
   // The same filter as Windows Excel 365 wrote it to `.xlsx`.
   const std::vector<std::uint8_t> xlsx =
       ReadFixtureFile(std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_caption_filter.xlsx");
   auto twin = read_pivot_table_definition(Entry(xlsx, "xl/pivotTables/pivotTable1.xml"));
   ASSERT_TRUE(static_cast<bool>(twin)) << twin.error().message;
-  ASSERT_EQ(twin.value().retained_filters().size(), 1U);
-  EXPECT_EQ(table.retained_filters()[0].xml, twin.value().retained_filters()[0].xml);
+  ASSERT_EQ(twin.value().active_filters().size(), 1U);
+  ASSERT_TRUE(table.active_filters()[0].source.has_value());
+  ASSERT_TRUE(twin.value().active_filters()[0].source.has_value());
+  EXPECT_EQ(table.active_filters()[0].source->xml, twin.value().active_filters()[0].source->xml);
 
   // The filter applies: only North is left under the grand total.
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
@@ -198,7 +201,7 @@ TEST(XlsbPivotFidelity, FilteredPivotStaysFreshOnAnXlsbSave) {
   EXPECT_EQ(Entry(xlsb.value(), kPivotPart), Entry(source, kPivotPart));
   const Workbook back = Load(xlsb.value());
   ASSERT_EQ(back.sheet(0).pivot_tables().size(), 1U);
-  EXPECT_EQ(back.sheet(0).pivot_tables()[0]->retained_filters().size(), 1U);
+  EXPECT_EQ(back.sheet(0).pivot_tables()[0]->active_filters().size(), 1U);
 }
 
 TEST(XlsbPivotFidelity, UnmodelledFilterLeavesThePivotAlone) {

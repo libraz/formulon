@@ -20,6 +20,7 @@
 #include "io/pivot_attr_names.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_double.h"
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_table.h"
@@ -285,8 +286,11 @@ void AppendFieldExtLst(std::string& out, const pivot::PivotField& field) {
 /// `used_as_data` says whether some `<dataField fld>` refers to this field.
 /// Excel refuses a `dataField="1"` field that no data field refers to, so the
 /// flag follows the data-field list rather than the field's axis.
+///
+/// `measure_filter` says whether a value filter is written against the field,
+/// which Excel marks with `measureFilter="1"`.
 void AppendPivotField(std::string& out, const pivot::PivotField& field, const std::vector<pivot::PivotItem>& items,
-                      pivot::PivotLayout layout, bool used_as_data) {
+                      pivot::PivotLayout layout, bool used_as_data, bool measure_filter) {
   // Attributes follow CT_PivotField order, as Excel writes them.
   out.append("<pivotField");
   if (!field.custom_name.empty()) {
@@ -323,6 +327,10 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
   }
   if (field.insert_blank_row) {
     out.append(" insertBlankRow=\"1\"");
+  }
+  if (measure_filter && std::none_of(field.passthrough_attrs.begin(), field.passthrough_attrs.end(),
+                                     [](const auto& attr) { return attr.first == "measureFilter"; })) {
+    out.append(" measureFilter=\"1\"");
   }
   // An absent `sortType` reads back as manual (`<items>` order), so a
   // label-sorted axis field spells its direction out, as does a field off
@@ -688,7 +696,8 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
 ///
 /// A value filter prunes the leaves of its axis: the named field when it sits
 /// on that axis, otherwise the axis's innermost field, which is how the value
-/// pass reads it. Label and date filters apply to the field they name.
+/// pass reads an entry added through the API. A decoded entry and the caption
+/// and date filters apply to the field they name.
 std::optional<std::uint32_t> FilterFieldIndex(const pivot::PivotTable& table, const pivot::PivotFilter& filter) {
   const std::optional<std::size_t> named = pivot::resolve_field_by_any_name(table, filter.field_name);
   if (!named.has_value()) {
@@ -702,36 +711,38 @@ std::optional<std::uint32_t> FilterFieldIndex(const pivot::PivotTable& table, co
   }
   const std::vector<std::uint32_t>& order =
       filter.axis == pivot::PivotAxis::Row ? table.row_field_order() : table.col_field_order();
-  if (order.empty()) {
+  if (order.empty() && !filter.source.has_value()) {
     return std::nullopt;
   }
-  if (std::find(order.begin(), order.end(), *named) != order.end()) {
+  if (filter.source.has_value() || std::find(order.begin(), order.end(), *named) != order.end()) {
     return static_cast<std::uint32_t>(*named);
   }
   return order.back();
 }
 
-/// A filter payload as the value pass reads it: `int` / `double` as-is,
-/// anything else as zero. Empty when the number is not finite, which no
-/// file can spell.
-std::optional<double> FilterNumber(const std::variant<int, double, std::string>& value) {
-  double number = 0.0;
-  if (const auto* d = std::get_if<double>(&value)) {
-    number = *d;
-  } else if (const auto* i = std::get_if<int>(&value)) {
-    number = static_cast<double>(*i);
-  }
-  return std::isfinite(number) ? std::optional<double>(number) : std::nullopt;
+/// True when a decoded filter is written back as its source bytes: it still
+/// designates the field and data field it was read with, or its name never
+/// resolved (the pivot had no cache to name it from).
+bool ReEmitsSource(const pivot::PivotTable& table, const pivot::PivotFilter& filter) {
+  return filter.source.has_value() &&
+         (filter.field_name.empty() || (FilterFieldIndex(table, filter) == filter.source->field_index &&
+                                        filter.data_field_index == filter.source->data_field_index));
 }
 
-/// The upper bound of a range filter; empty when unset or not finite.
-std::optional<double> FilterNumberHigh(const pivot::PivotFilter& filter) {
-  const std::optional<double> high = pivot::filter_number_value_high(filter);
-  return high && std::isfinite(*high) ? high : std::nullopt;
+/// A numeric filter payload; empty when unset, text, or not finite, which no
+/// file can spell.
+std::optional<double> FilterNumber(const std::variant<std::monostate, int, double, std::string>& value) {
+  if (const auto* d = std::get_if<double>(&value)) {
+    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
+  }
+  if (const auto* i = std::get_if<int>(&value)) {
+    return static_cast<double>(*i);
+  }
+  return std::nullopt;
 }
 
 /// Appends `<customFilter operator="..." val="..."/>`; an empty `op` is the
-/// schema's default `equal` and is omitted, as Excel does for a pattern.
+/// schema's default `equal` and is omitted, as Excel does.
 void AppendCustomFilter(std::string& out, std::string_view op, std::string_view text) {
   out.append("<customFilter");
   if (!op.empty()) {
@@ -743,91 +754,173 @@ void AppendCustomFilter(std::string& out, std::string_view op, std::string_view 
 
 void AppendCustomFilter(std::string& out, std::string_view op, double number) {
   out.append("<customFilter");
-  append_xml_attr(out, "operator", op);
+  if (!op.empty()) {
+    append_xml_attr(out, "operator", op);
+  }
   append_xml_attr_number(out, "val", number);
   out.append("/>");
 }
 
-/// Serialises one public filter as Excel writes it from the filter dialogs.
+/// `text` with its `~` escapes removed: the literal a plain `<filters>`
+/// value spells.
+std::string UnescapeWildcards(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    if (text[i] == '~' && i + 1U < text.size()) {
+      ++i;
+    }
+    out.push_back(text[i]);
+  }
+  return out;
+}
+
+/// True when `text` holds a `*` or `?` that is not escaped by `~`.
+bool HasLiveWildcard(std::string_view text) {
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    if (text[i] == '~') {
+      ++i;
+    } else if (text[i] == '*' || text[i] == '?') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// The `<customFilters>` comparison operator of a single-operand value,
+/// caption ordering or date comparison type; empty for `equal`.
+std::string_view ComparisonOperator(pivot::FilterType type) {
+  switch (type) {
+    case pivot::FilterType::ValueNotEqual:
+    case pivot::FilterType::LabelNotEqual:
+    case pivot::FilterType::LabelNotBeginsWith:
+    case pivot::FilterType::LabelNotEndsWith:
+    case pivot::FilterType::LabelNotContains:
+    case pivot::FilterType::DateNotEqual:
+      return "notEqual";
+    case pivot::FilterType::ValueGreaterThan:
+    case pivot::FilterType::LabelGreaterThan:
+    case pivot::FilterType::DateNewerThan:
+      return "greaterThan";
+    case pivot::FilterType::ValueGreaterThanOrEqual:
+    case pivot::FilterType::LabelGreaterThanOrEqual:
+    case pivot::FilterType::DateNewerThanOrEqual:
+      return "greaterThanOrEqual";
+    case pivot::FilterType::ValueLessThan:
+    case pivot::FilterType::LabelLessThan:
+    case pivot::FilterType::DateOlderThan:
+      return "lessThan";
+    case pivot::FilterType::ValueLessThanOrEqual:
+    case pivot::FilterType::LabelLessThanOrEqual:
+    case pivot::FilterType::DateOlderThanOrEqual:
+      return "lessThanOrEqual";
+    default:
+      return {};
+  }
+}
+
+/// True for the inclusive ranges, written `and="1"` with `>=` and `<=`; the
+/// exclusive ones are written without `and` as `<` low, `>` high.
+bool IsInclusiveRange(pivot::FilterType type) {
+  return type == pivot::FilterType::ValueBetween || type == pivot::FilterType::LabelBetween ||
+         type == pivot::FilterType::LabelDate;
+}
+
+/// Serialises one model filter as Excel writes it from the filter dialogs.
 /// Returns false, emitting nothing, for an entry that filters nothing and
-/// that the file has no spelling for: a range with no upper bound, a
-/// non-finite bound, a date bound given as text.
+/// that the file has no spelling for: a missing or non-finite operand, a
+/// range with no upper bound, a payload of the wrong kind.
 bool AppendGeneratedFilter(std::string& out, const pivot::PivotFilter& filter, std::uint32_t field_index,
                            std::uint32_t id) {
-  std::string_view type;
-  switch (filter.type) {
-    case pivot::FilterType::ValueTop10:
-      type = "count";
-      break;
-    case pivot::FilterType::ValueGreaterThan:
-      type = "valueGreaterThan";
-      break;
-    case pivot::FilterType::ValueBetween:
-      type = "valueBetween";
-      break;
-    case pivot::FilterType::LabelContains:
-      type = "captionContains";
-      break;
-    case pivot::FilterType::LabelBeginsWith:
-      type = "captionBeginsWith";
-      break;
-    case pivot::FilterType::LabelDate:
-      type = "dateBetween";
-      break;
-    default:
-      return false;  // Outside the public vocabulary; never added through the API.
-  }
-  const bool ranged = filter.type == pivot::FilterType::ValueBetween || filter.type == pivot::FilterType::LabelDate;
-  const bool caption =
-      filter.type == pivot::FilterType::LabelContains || filter.type == pivot::FilterType::LabelBeginsWith;
-  // A date bound has no zero fallback: a text payload leaves the date filter
-  // inert, and a written zero would not.
-  const bool text_payload = std::holds_alternative<std::string>(filter.value);
-  const std::optional<double> low = caption ? std::optional<double>(0.0)
-                                    : filter.type == pivot::FilterType::LabelDate && text_payload
-                                        ? std::nullopt
-                                        : FilterNumber(filter.value);
-  const std::optional<double> high = ranged ? FilterNumberHigh(filter) : std::optional<double>(0.0);
-  if (!low || !high) {
+  const pivot::FilterType type = filter.type;
+  const bool caption = pivot::is_caption_filter_type(type);
+  const bool ranged = pivot::is_range_filter_type(type);
+  const bool operandless = pivot::is_operandless_filter_type(type);
+  const std::string* low_text = std::get_if<std::string>(&filter.value);
+  const std::string* high_text = std::get_if<std::string>(&filter.value_high);
+  const std::optional<double> low = FilterNumber(filter.value);
+  const std::optional<double> high = FilterNumber(filter.value_high);
+  if (caption ? low_text == nullptr || (ranged && high_text == nullptr)
+              : !operandless && (!low.has_value() || (ranged && !high.has_value()))) {
     return false;
   }
   out.append("<filter");
   append_xml_attr_uint(out, "fld", field_index);
-  append_xml_attr(out, "type", type);
+  append_xml_attr(out, "type", pivot::kFilterTypeNames[static_cast<std::size_t>(type)]);
   out.append(" evalOrder=\"-1\"");
   append_xml_attr_uint(out, "id", id);
-  if (pivot::is_value_filter_type(filter.type)) {
+  if (pivot::is_value_filter_type(type)) {
     append_xml_attr_uint(out, "iMeasureFld", filter.data_field_index);
   }
-  std::string_view operand;
-  if (const auto* text = std::get_if<std::string>(&filter.value); text != nullptr && caption) {
-    operand = *text;
-  }
   if (caption) {
-    append_xml_attr(out, "stringValue1", operand);
+    append_xml_attr(out, "stringValue1", *low_text);
+    if (ranged) {
+      append_xml_attr(out, "stringValue2", *high_text);
+    }
   }
   out.append("><autoFilter ref=\"A1\"><filterColumn colId=\"0\">");
-  if (filter.type == pivot::FilterType::ValueTop10) {
-    out.append("<top10");
-    append_xml_attr_number(out, "val", *low);
-    append_xml_attr_number(out, "filterVal", *low);
-    out.append("/>");
-  } else if (caption) {
-    const pivot::CaptionPredicate predicate = filter.type == pivot::FilterType::LabelContains
-                                                  ? pivot::CaptionPredicate::Contains
-                                                  : pivot::CaptionPredicate::BeginsWith;
-    out.append("<customFilters>");
-    AppendCustomFilter(out, {}, *pivot::caption_wildcard_pattern(predicate, operand));
-    out.append("</customFilters>");
-  } else if (ranged) {
-    out.append("<customFilters and=\"1\">");
-    AppendCustomFilter(out, "greaterThanOrEqual", *low);
-    AppendCustomFilter(out, "lessThanOrEqual", *high);
-    out.append("</customFilters>");
-  } else {
-    out.append("<customFilters>");
-    AppendCustomFilter(out, "greaterThan", *low);
-    out.append("</customFilters>");
+  const auto append_operand = [&](std::string_view op, bool high_side) {
+    if (caption) {
+      AppendCustomFilter(out, op, high_side ? *high_text : *low_text);
+    } else {
+      AppendCustomFilter(out, op, high_side ? *high : *low);
+    }
+  };
+  switch (type) {
+    case pivot::FilterType::ValueTop10:
+    case pivot::FilterType::ValueBottomCount:
+    case pivot::FilterType::ValueTopPercent:
+    case pivot::FilterType::ValueBottomPercent:
+    case pivot::FilterType::ValueTopSum:
+    case pivot::FilterType::ValueBottomSum:
+      out.append("<top10");
+      if (type == pivot::FilterType::ValueBottomCount || type == pivot::FilterType::ValueBottomPercent ||
+          type == pivot::FilterType::ValueBottomSum) {
+        out.append(" top=\"0\"");
+      }
+      if (type == pivot::FilterType::ValueTopPercent || type == pivot::FilterType::ValueBottomPercent) {
+        out.append(" percent=\"1\"");
+      }
+      append_xml_attr_number(out, "val", *low);
+      append_xml_attr_number(out, "filterVal", *low);
+      out.append("/>");
+      break;
+    case pivot::FilterType::LabelEqual:
+      // A literal operand is written as a plain value list with its escapes
+      // removed; a pattern or a number as a criterion.
+      if (double number = 0.0; !HasLiveWildcard(*low_text) && !parse_xsd_double(*low_text, &number)) {
+        out.append("<filters><filter");
+        append_xml_attr(out, "val", UnescapeWildcards(*low_text));
+        out.append("/></filters>");
+        break;
+      }
+      out.append("<customFilters>");
+      append_operand({}, false);
+      out.append("</customFilters>");
+      break;
+    default:
+      if (operandless) {
+        out.append("<dynamicFilter");
+        append_xml_attr(out, "type", pivot::kFilterTypeNames[static_cast<std::size_t>(type)]);
+        out.append("/>");
+      } else if (const std::optional<std::string> pattern =
+                     caption ? pivot::caption_wildcard_pattern(type, *low_text) : std::nullopt;
+                 pattern.has_value()) {
+        out.append("<customFilters>");
+        AppendCustomFilter(out, ComparisonOperator(type), *pattern);
+        out.append("</customFilters>");
+      } else if (ranged) {
+        const bool inclusive = IsInclusiveRange(type);
+        out.append(inclusive ? "<customFilters and=\"1\">" : "<customFilters>");
+        append_operand(inclusive ? "greaterThanOrEqual" : "lessThan", false);
+        append_operand(inclusive ? "lessThanOrEqual" : "greaterThan", true);
+        out.append("</customFilters>");
+      } else {
+        out.append("<customFilters>");
+        append_operand(ComparisonOperator(type), false);
+        out.append("</customFilters>");
+      }
+      break;
   }
   out.append("</filterColumn></autoFilter></filter>");
   return true;
@@ -867,9 +960,7 @@ void AppendFilters(std::string& out, const pivot::PivotTable& table) {
     flush_retained(i);
     const pivot::PivotFilter& filter = active[i];
     const std::optional<std::uint32_t> field_index = FilterFieldIndex(table, filter);
-    if (filter.source.has_value() &&
-        (filter.field_name.empty() ||
-         (field_index == filter.source->field_index && filter.data_field_index == filter.source->data_field_index))) {
+    if (ReEmitsSource(table, filter)) {
       body.append(filter.source->xml);
       ++count;
       continue;
@@ -1127,7 +1218,13 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
     }
     const PivotCacheFieldWritePlan* field_plan =
         plan != nullptr && i < plan->fields.size() ? &plan->fields[i] : nullptr;
-    AppendPivotField(out, table.fields()[i], BoundItems(table.fields()[i], field_plan), table.layout(), used_as_data);
+    // A re-emitted filter leaves the field's `measureFilter` as it was read.
+    const bool measure_filter =
+        std::any_of(table.active_filters().begin(), table.active_filters().end(), [&](const pivot::PivotFilter& f) {
+          return pivot::is_value_filter_type(f.type) && !ReEmitsSource(table, f) && FilterFieldIndex(table, f) == i;
+        });
+    AppendPivotField(out, table.fields()[i], BoundItems(table.fields()[i], field_plan), table.layout(), used_as_data,
+                     measure_filter);
   }
   out.append("</pivotFields>");
 

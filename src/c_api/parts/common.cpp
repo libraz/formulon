@@ -502,13 +502,13 @@ fm_status_t validate(const fm_pivot_data_field_spec_t& spec, const char* api) {
 }
 
 fm_status_t validate(const fm_pivot_filter_spec_t& spec, const char* api) {
-  if (auto rc = check_utf8(api, {spec.field_name, spec.value_text}); rc != 0) {
+  if (auto rc = check_utf8(api, {spec.field_name, spec.value_text, spec.value_high_text}); rc != 0) {
     return rc;
   }
   if (auto rc = check_enum_domain(spec.axis, FM_PIVOT_AXIS_PAGE, api, "axis"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(spec.type, FM_PIVOT_FILTER_LABEL_DATE, api, "type");
+  return check_enum_domain(spec.type, FM_PIVOT_FILTER_DATE_M12, api, "type");
 }
 
 fm_status_t validate(const fm_viewport& viewport, const char* api) {

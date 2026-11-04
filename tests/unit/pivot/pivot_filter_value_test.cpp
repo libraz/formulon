@@ -14,11 +14,13 @@
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot_evaluator_fixtures.h"
+#include "pivot_filter_test_helpers.h"
 #include "value.h"
 
 namespace formulon::pivot {
 namespace {
 
+using filter_test::decoded_filter;
 using test::build_basic_cache;
 using test::build_sum_amount_table;
 using test::owned_text;
@@ -93,11 +95,7 @@ TEST(PivotEvaluator, AuthoredTopCountKeepsTheHighestScoringLeaf) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredValueFilter f;
-  f.field_index = 0;
-  f.type = FilterType::ValueTop10;
-  f.value = 1.0;
-  table.mutable_authored_value_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::ValueTop10, 1.0));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -105,16 +103,11 @@ TEST(PivotEvaluator, AuthoredTopCountKeepsTheHighestScoringLeaf) {
   EXPECT_EQ(r_or.value().rows[0].label, "South");
 }
 
-TEST(PivotEvaluator, AuthoredTopCountWithTopFalseKeepsTheLowestScoringLeaf) {
+TEST(PivotEvaluator, AuthoredBottomCountKeepsTheLowestScoringLeaf) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredValueFilter f;
-  f.field_index = 0;
-  f.type = FilterType::ValueTop10;
-  f.value = 1.0;
-  f.top = false;
-  table.mutable_authored_value_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::ValueBottomCount, 1.0));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -126,11 +119,8 @@ TEST(PivotEvaluator, AuthoredGreaterThanIsStrictOnTheThreshold) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredValueFilter f;
-  f.field_index = 0;
-  f.type = FilterType::ValueGreaterThan;
-  f.value = 175.0;  // exactly North's total
-  table.mutable_authored_value_filters().push_back(f);
+  // 175 is exactly North's total.
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::ValueGreaterThan, 175.0));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -142,12 +132,7 @@ TEST(PivotEvaluator, AuthoredBetweenIncludesBothBounds) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredValueFilter f;
-  f.field_index = 0;
-  f.type = FilterType::ValueBetween;
-  f.value = 175.0;
-  f.value_high = 500.0;
-  table.mutable_authored_value_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::ValueBetween, 175.0, 500.0));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -158,11 +143,8 @@ TEST(PivotEvaluator, AuthoredValueFilterOnAnOffAxisFieldIsInert) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredValueFilter f;
-  f.field_index = 2;  // Amount: a data field, on no axis
-  f.type = FilterType::ValueTop10;
-  f.value = 1.0;
-  table.mutable_authored_value_filters().push_back(f);
+  // Amount: a data field, on no axis.
+  table.mutable_active_filters().push_back(decoded_filter(2, FilterType::ValueTop10, 1.0));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -173,11 +155,7 @@ TEST(PivotEvaluator, AuthoredValueFilterPrunesTheColumnAxisToo) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{}, /*col=*/{0});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredValueFilter f;
-  f.field_index = 0;
-  f.type = FilterType::ValueTop10;
-  f.value = 1.0;
-  table.mutable_authored_value_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::ValueTop10, 1.0));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -645,11 +623,7 @@ TEST(PivotEvaluator, AuthoredTopCountOnInnerFieldRanksPerParent) {
   PivotCache cache = build_region_product_cache(
       {{"North", "A", 10.0}, {"North", "B", 50.0}, {"South", "A", 80.0}, {"South", "B", 30.0}});
   PivotTable table = build_region_product_table(Aggregation::Sum);
-  AuthoredValueFilter f;
-  f.field_index = 1;
-  f.type = FilterType::ValueTop10;
-  f.value = 1.0;
-  table.mutable_authored_value_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(1, FilterType::ValueTop10, 1.0));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -661,8 +635,7 @@ TEST(PivotEvaluator, AuthoredTopCountOnInnerFieldRanksPerParent) {
   EXPECT_EQ(r.rows[1].children[0].label, "A");
 }
 
-// Value filters prune in sequence, so an authored entry runs at the place
-// `active_before` gives it among the public ones. Bottom-1 product per region
+// Value filters prune in sequence, in list order. Bottom-1 product per region
 // first leaves North/A (40) against South/A (5); top-1 region first keeps
 // South (205) and then its bottom product.
 TEST(PivotEvaluator, AuthoredAndPublicValueFiltersRunInDocumentOrder) {
@@ -677,13 +650,9 @@ TEST(PivotEvaluator, AuthoredAndPublicValueFiltersRunInDocumentOrder) {
     top_region.type = FilterType::ValueTop10;
     top_region.value = 1;
     table.mutable_active_filters().push_back(std::move(top_region));
-    AuthoredValueFilter bottom_product;
-    bottom_product.field_index = 1;
-    bottom_product.type = FilterType::ValueTop10;
-    bottom_product.value = 1.0;
-    bottom_product.top = false;
-    bottom_product.active_before = active_before;
-    table.mutable_authored_value_filters().push_back(bottom_product);
+    std::vector<PivotFilter>& filters = table.mutable_active_filters();
+    filters.insert(filters.begin() + static_cast<std::ptrdiff_t>(active_before),
+                   decoded_filter(1, FilterType::ValueBottomCount, 1.0));
 
     auto r_or = evaluate(table, cache);
     ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;

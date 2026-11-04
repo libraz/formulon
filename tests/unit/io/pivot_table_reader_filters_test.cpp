@@ -2,8 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -17,33 +19,50 @@
 namespace formulon::io {
 namespace {
 using namespace pivot_table_reader_test_support;
-TEST(PivotTableReader, AuthoredFiltersDecodeForEvaluationAndRoundTripVerbatim) {
+
+using Payload = std::variant<std::monostate, int, double, std::string>;
+
+// A definition with six fields, field 0 on rows, and `filters` as its
+// `<filters>` children.
+std::string DefinitionWithFilters(std::string_view filters, std::size_t count) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
   xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<pivotFields count=\"0\"/>");
-  xml.append("<pivotTableStyleInfo name=\"PivotStyleLight16\"/>");
   xml.append(
-      "<filters count=\"1\"><filter fld=\"0\" type=\"captionEqual\" evalOrder=\"-1\" id=\"1\">"
+      "<pivotFields count=\"6\"><pivotField axis=\"axisRow\"/><pivotField/><pivotField/><pivotField/>"
+      "<pivotField/><pivotField/></pivotFields>");
+  xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields>");
+  xml.append("<pivotTableStyleInfo name=\"PivotStyleLight16\"/>");
+  xml.append("<filters count=\"").append(std::to_string(count)).append("\">");
+  xml.append(filters);
+  xml.append("</filters></pivotTableDefinition>");
+  return xml;
+}
+
+pivot::PivotTable Read(const std::string& xml) {
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  EXPECT_TRUE(static_cast<bool>(table_or)) << (table_or ? "" : table_or.error().message);
+  return table_or ? std::move(table_or.value()) : pivot::PivotTable{};
+}
+
+TEST(PivotTableReader, FiltersDecodeIntoTheListAndRoundTripVerbatim) {
+  const std::string xml = DefinitionWithFilters(
+      "<filter fld=\"0\" type=\"captionEqual\" evalOrder=\"-1\" id=\"1\">"
       "<autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
       "<customFilters><customFilter operator=\"equal\" val=\"North\"/></customFilters>"
-      "</filterColumn></autoFilter></filter></filters>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const pivot::PivotTable& table = table_or.value();
-  EXPECT_TRUE(table.active_filters().empty());
-  ASSERT_EQ(table.authored_caption_filters().size(), 1U);
-  EXPECT_EQ(table.authored_caption_filters()[0].field_index, 0U);
-  EXPECT_EQ(table.authored_caption_filters()[0].predicate, pivot::CaptionPredicate::Equal);
-  EXPECT_EQ(table.authored_caption_filters()[0].value, "North");
-  // `captionEqual` is outside the public vocabulary, so the entry is retained
-  // verbatim rather than left in the tail bin.
+      "</filterColumn></autoFilter></filter>",
+      1U);
+  const pivot::PivotTable table = Read(xml);
+  ASSERT_EQ(table.active_filters().size(), 1U);
+  const pivot::PivotFilter& filter = table.active_filters()[0];
+  EXPECT_EQ(filter.type, pivot::FilterType::LabelEqual);
+  EXPECT_EQ(filter.value, Payload(std::string("North")));
+  ASSERT_TRUE(filter.source.has_value());
+  EXPECT_EQ(filter.source->field_index, 0U);
+  EXPECT_EQ(filter.source->id, 1U);
+  EXPECT_TRUE(filter.field_name.empty());
+  EXPECT_TRUE(table.retained_filters().empty());
   EXPECT_EQ(table.raw_passthrough_xml().find("<filters"), std::string::npos);
-  ASSERT_EQ(table.retained_filters().size(), 1U);
-  EXPECT_NE(table.retained_filters()[0].xml.find("val=\"North\""), std::string::npos);
-  EXPECT_EQ(table.retained_filters()[0].id, 1U);
 
   const std::string round = write_pivot_table_definition(table);
   EXPECT_EQ(CountOccurrences(round, "<filters"), 1U) << round;
@@ -51,326 +70,171 @@ TEST(PivotTableReader, AuthoredFiltersDecodeForEvaluationAndRoundTripVerbatim) {
   // The style block is authored before `<filters>`; re-emission keeps that
   // order, which the schema requires.
   EXPECT_LT(round.find("<pivotTableStyleInfo"), round.find("<filters"));
-
-  auto reparsed_or = read_pivot_table_definition(Bytes(round));
-  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
-  EXPECT_TRUE(reparsed_or.value().active_filters().empty());
-  // The decode is stable across the round trip, and the writer emits the
-  // retained bytes rather than re-serialising the decoded view.
-  EXPECT_EQ(reparsed_or.value().authored_caption_filters().size(), 1U);
-  EXPECT_EQ(write_pivot_table_definition(reparsed_or.value()), round);
+  EXPECT_EQ(write_pivot_table_definition(Read(round)), round);
 }
-TEST(PivotTableReader, AuthoredCaptionFilterVariantsDecodeAndNonCaptionTypesAreSkipped) {
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"5\">");
-  xml.append(
+
+TEST(PivotTableReader, CaptionTypesDecodeTheirOperands) {
+  const pivot::PivotTable table = Read(DefinitionWithFilters(
       "<filter fld=\"1\" type=\"captionBeginsWith\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
       "<customFilters><customFilter operator=\"equal\" val=\"No*\"/></customFilters>"
-      "</filterColumn></autoFilter></filter>");
-  xml.append(
+      "</filterColumn></autoFilter></filter>"
       "<filter fld=\"2\" type=\"captionContains\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
       "<customFilters><customFilter operator=\"equal\" val=\"*or*\"/></customFilters>"
-      "</filterColumn></autoFilter></filter>");
-  xml.append(
+      "</filterColumn></autoFilter></filter>"
       "<filter fld=\"3\" type=\"captionEndsWith\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
       "<customFilters><customFilter operator=\"equal\" val=\"*th\"/></customFilters>"
-      "</filterColumn></autoFilter></filter>");
-  xml.append(
+      "</filterColumn></autoFilter></filter>"
       "<filter fld=\"4\" type=\"captionBetween\"><autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
       "<customFilters and=\"1\"><customFilter operator=\"greaterThanOrEqual\" val=\"B\"/>"
       "<customFilter operator=\"lessThanOrEqual\" val=\"M\"/></customFilters>"
-      "</filterColumn></autoFilter></filter>");
-  // Value family: outside the caption set, so not a caption decode.
-  xml.append(
-      "<filter fld=\"5\" type=\"valueGreaterThan\" iMeasureFld=\"0\"><autoFilter ref=\"A3:A9\">"
-      "<filterColumn colId=\"0\"><customFilters><customFilter operator=\"greaterThan\" val=\"100\"/>"
-      "</customFilters></filterColumn></autoFilter></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& decoded = table_or.value().authored_caption_filters();
-  ASSERT_EQ(decoded.size(), 4U);
-  EXPECT_EQ(decoded[0].field_index, 1U);
-  EXPECT_EQ(decoded[0].predicate, pivot::CaptionPredicate::BeginsWith);
-  EXPECT_EQ(decoded[0].value, "No*");
-  EXPECT_EQ(decoded[1].predicate, pivot::CaptionPredicate::Contains);
-  EXPECT_EQ(decoded[1].value, "*or*");
-  EXPECT_EQ(decoded[2].predicate, pivot::CaptionPredicate::EndsWith);
-  EXPECT_EQ(decoded[2].value, "*th");
-  EXPECT_EQ(decoded[3].predicate, pivot::CaptionPredicate::Between);
-  EXPECT_EQ(decoded[3].value, "B");
-  EXPECT_EQ(decoded[3].value_high, "M");
-  // Every entry, decoded or not, is still re-emitted.
-  const std::string round = write_pivot_table_definition(table_or.value());
-  EXPECT_NE(round.find("valueGreaterThan"), std::string::npos) << round;
-  EXPECT_EQ(CountOccurrences(round, "<filter "), 5U) << round;
+      "</filterColumn></autoFilter></filter>"
+      "<filter fld=\"5\" type=\"captionNotBetween\" stringValue1=\"Apricot\" stringValue2=\"Cherry\">"
+      "<autoFilter ref=\"A1\"><filterColumn colId=\"0\"><customFilters><customFilter operator=\"lessThan\" "
+      "val=\"Apricot\"/><customFilter operator=\"greaterThan\" val=\"Cherry\"/></customFilters></filterColumn>"
+      "</autoFilter></filter>",
+      5U));
+  const auto& decoded = table.active_filters();
+  ASSERT_EQ(decoded.size(), 5U);
+  EXPECT_EQ(decoded[0].source->field_index, 1U);
+  EXPECT_EQ(decoded[0].type, pivot::FilterType::LabelBeginsWith);
+  EXPECT_EQ(decoded[0].value, Payload(std::string("No")));
+  EXPECT_EQ(decoded[1].type, pivot::FilterType::LabelContains);
+  EXPECT_EQ(decoded[1].value, Payload(std::string("or")));
+  EXPECT_EQ(decoded[2].type, pivot::FilterType::LabelEndsWith);
+  EXPECT_EQ(decoded[2].value, Payload(std::string("th")));
+  EXPECT_EQ(decoded[3].type, pivot::FilterType::LabelBetween);
+  EXPECT_EQ(decoded[3].value, Payload(std::string("B")));
+  EXPECT_EQ(decoded[3].value_high, Payload(std::string("M")));
+  EXPECT_EQ(decoded[4].type, pivot::FilterType::LabelNotBetween);
+  EXPECT_EQ(decoded[4].value, Payload(std::string("Apricot")));
+  EXPECT_EQ(decoded[4].value_high, Payload(std::string("Cherry")));
 }
-TEST(PivotTableReader, AuthoredCaptionFilterAcceptsThePlainFilterListShape) {
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append(
-      "<filters count=\"1\"><filter fld=\"0\" type=\"captionEqual\"><autoFilter ref=\"A3:A9\">"
-      "<filterColumn colId=\"0\"><filters><filter val=\"South\"/></filters>"
-      "</filterColumn></autoFilter></filter></filters>");
-  xml.append("</pivotTableDefinition>");
 
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  ASSERT_EQ(table_or.value().authored_caption_filters().size(), 1U);
-  EXPECT_EQ(table_or.value().authored_caption_filters()[0].value, "South");
+TEST(PivotTableReader, CaptionEqualAcceptsThePlainFilterListShape) {
+  const pivot::PivotTable table =
+      Read(DefinitionWithFilters("<filter fld=\"0\" type=\"captionEqual\"><autoFilter ref=\"A3:A9\">"
+                                 "<filterColumn colId=\"0\"><filters><filter val=\"South\"/></filters>"
+                                 "</filterColumn></autoFilter></filter>",
+                                 1U));
+  ASSERT_EQ(table.active_filters().size(), 1U);
+  EXPECT_EQ(table.active_filters()[0].value, Payload(std::string("South")));
 }
+
 // Excel refreshes a begins / ends / contains filter from the nested pattern,
 // not from `stringValue1` (beginsWith, stringValue1 `xyz`, pattern `Hel*`
-// shows Hello). Without a nested criterion, `stringValue1` becomes the
-// pattern. The writer still re-emits `stringValue1` as read.
+// shows Hello). Without a nested criterion, `stringValue1` is the operand.
+// The writer still re-emits `stringValue1` as read.
 TEST(PivotTableReader, CaptionWildcardFilterPrefersTheNestedPattern) {
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"4\">");
-  xml.append(
+  const pivot::PivotTable table = Read(DefinitionWithFilters(
       "<filter fld=\"0\" type=\"captionBeginsWith\" id=\"1\" stringValue1=\"xyz\"><autoFilter ref=\"A1\">"
       "<filterColumn colId=\"0\"><customFilters><customFilter val=\"Hel*\"/></customFilters>"
-      "</filterColumn></autoFilter></filter>");
-  xml.append(
+      "</filterColumn></autoFilter></filter>"
       "<filter fld=\"0\" type=\"captionContains\" id=\"2\" stringValue1=\"*\"><autoFilter ref=\"A1\">"
       "<filterColumn colId=\"0\"><customFilters><customFilter val=\"*~**\"/></customFilters>"
-      "</filterColumn></autoFilter></filter>");
-  xml.append(
-      "<filter fld=\"0\" type=\"captionEndsWith\" id=\"3\" stringValue1=\"?b\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append(
+      "</filterColumn></autoFilter></filter>"
+      "<filter fld=\"0\" type=\"captionEndsWith\" id=\"3\" stringValue1=\"?b\"><autoFilter ref=\"A1\"/></filter>"
       "<filter fld=\"0\" type=\"captionEqual\" id=\"4\" stringValue1=\"abc\"><autoFilter ref=\"A1\">"
-      "<filterColumn colId=\"0\"><filters><filter val=\"zzz\"/></filters></filterColumn></autoFilter></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& decoded = table_or.value().authored_caption_filters();
+      "<filterColumn colId=\"0\"><filters><filter val=\"zzz\"/></filters></filterColumn></autoFilter></filter>",
+      4U));
+  const auto& decoded = table.active_filters();
   ASSERT_EQ(decoded.size(), 4U);
-  EXPECT_EQ(decoded[0].value, "Hel*");
-  EXPECT_EQ(decoded[1].value, "*~**");
-  EXPECT_EQ(decoded[2].value, "*?b");
+  EXPECT_EQ(decoded[0].value, Payload(std::string("Hel")));
+  EXPECT_EQ(decoded[1].value, Payload(std::string("~*")));
+  EXPECT_EQ(decoded[2].value, Payload(std::string("?b")));
   // Equality keeps preferring the direct attribute.
-  EXPECT_EQ(decoded[3].value, "abc");
+  EXPECT_EQ(decoded[3].value, Payload(std::string("abc")));
 
-  const std::string round = write_pivot_table_definition(table_or.value());
+  const std::string round = write_pivot_table_definition(table);
   EXPECT_NE(round.find("stringValue1=\"xyz\""), std::string::npos) << round;
   EXPECT_NE(round.find("val=\"Hel*\""), std::string::npos) << round;
   EXPECT_NE(round.find("stringValue1=\"?b\""), std::string::npos) << round;
 }
-TEST(PivotTableReader, UnevaluableFilterFamiliesAreSkippedButStillRoundTrip) {
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"3\">");
-  // A count filter with no nested `<top10>` names no quantity at all.
-  xml.append("<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"/></filter>");
-  // An unknown type is the forward-compatibility case: a family this
-  // version does not know must be passed through rather than guessed at.
-  xml.append("<filter fld=\"1\" type=\"someFutureFamily\"><autoFilter ref=\"A1\"/></filter>");
-  // A caption filter whose criterion element is missing entirely.
-  xml.append("<filter fld=\"2\" type=\"captionEqual\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
 
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
-  EXPECT_TRUE(table_or.value().authored_caption_filters().empty());
-  EXPECT_TRUE(table_or.value().authored_period_filters().empty());
-  EXPECT_TRUE(table_or.value().authored_recurring_filters().empty());
+TEST(PivotTableReader, UndecodableFiltersAreRetainedAndRoundTrip) {
+  const pivot::PivotTable table = Read(DefinitionWithFilters(
+      // A count filter with no nested `<top10>` names no quantity at all.
+      "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"/></filter>"
+      // An unknown type is the forward-compatibility case: a family this
+      // version does not know must be passed through rather than guessed at.
+      "<filter fld=\"1\" type=\"someFutureFamily\"><autoFilter ref=\"A1\"/></filter>"
+      // A caption filter whose criterion element is missing entirely.
+      "<filter fld=\"2\" type=\"captionEqual\"><autoFilter ref=\"A1\"/></filter>",
+      3U));
+  EXPECT_TRUE(table.active_filters().empty());
+  EXPECT_EQ(table.retained_filters().size(), 3U);
 
-  const std::string round = write_pivot_table_definition(table_or.value());
+  const std::string round = write_pivot_table_definition(table);
   EXPECT_EQ(CountOccurrences(round, "<filter "), 3U) << round;
   EXPECT_NE(round.find("someFutureFamily"), std::string::npos) << round;
 }
-TEST(PivotTableReader, DecodedFilterFamiliesStillRoundTripVerbatim) {
-  // Decoding is read-side only: the writer re-emits the `<filters>` block
-  // from the verbatim passthrough tail, so gaining a decoder must not
-  // change a single byte of what is written back.
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"2\">");
-  xml.append("<filter fld=\"2\" type=\"thisWeek\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"2\" type=\"M1\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
 
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  EXPECT_EQ(table_or.value().authored_period_filters().size(), 1U);
-  EXPECT_EQ(table_or.value().authored_recurring_filters().size(), 1U);
-
-  const std::string round = write_pivot_table_definition(table_or.value());
-  EXPECT_EQ(CountOccurrences(round, "<filter "), 2U) << round;
-  EXPECT_NE(round.find("thisWeek"), std::string::npos) << round;
-  EXPECT_NE(round.find("\"M1\""), std::string::npos) << round;
+TEST(PivotTableReader, TopNFlavoursAreDistinguishedByTheirTypeAndDirection) {
+  // The flavours share an identically shaped `<top10 val="N">`, so a decode
+  // that ignored the type attribute or `top` would silently conflate them.
+  const pivot::PivotTable table =
+      Read(DefinitionWithFilters("<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+                                 "<top10 val=\"2\"/></filterColumn></autoFilter></filter>"
+                                 "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+                                 "<top10 top=\"0\" val=\"2\"/></filterColumn></autoFilter></filter>"
+                                 "<filter fld=\"0\" type=\"percent\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+                                 "<top10 percent=\"1\" val=\"70\"/></filterColumn></autoFilter></filter>"
+                                 "<filter fld=\"0\" type=\"percent\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+                                 "<top10 top=\"0\" percent=\"1\" val=\"20\"/></filterColumn></autoFilter></filter>"
+                                 "<filter fld=\"0\" type=\"sum\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+                                 "<top10 val=\"100\"/></filterColumn></autoFilter></filter>"
+                                 "<filter fld=\"0\" type=\"sum\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
+                                 "<top10 top=\"0\" val=\"2.5\"/></filterColumn></autoFilter></filter>",
+                                 6U));
+  const auto& filters = table.active_filters();
+  ASSERT_EQ(filters.size(), 6U);
+  EXPECT_EQ(filters[0].type, pivot::FilterType::ValueTop10);
+  EXPECT_EQ(filters[0].value, Payload(2));
+  EXPECT_EQ(filters[1].type, pivot::FilterType::ValueBottomCount);
+  EXPECT_EQ(filters[2].type, pivot::FilterType::ValueTopPercent);
+  EXPECT_EQ(filters[2].value, Payload(70));
+  EXPECT_EQ(filters[3].type, pivot::FilterType::ValueBottomPercent);
+  EXPECT_EQ(filters[4].type, pivot::FilterType::ValueTopSum);
+  EXPECT_EQ(filters[4].value, Payload(100));
+  EXPECT_EQ(filters[5].type, pivot::FilterType::ValueBottomSum);
+  EXPECT_EQ(filters[5].value, Payload(2.5));
 }
-TEST(PivotTableReader, TopNFlavoursAreDistinguishedByTheirTypeAlone) {
-  // The three flavours share an identically shaped `<top10 val="N">`, so a
-  // decode that ignored the type attribute would silently conflate them.
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"3\">");
-  xml.append(
-      "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
-      "<top10 val=\"2\"/></filterColumn></autoFilter></filter>");
-  xml.append(
-      "<filter fld=\"0\" type=\"percent\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
-      "<top10 percent=\"1\" val=\"70\"/></filterColumn></autoFilter></filter>");
-  xml.append(
-      "<filter fld=\"0\" type=\"sum\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
-      "<top10 val=\"100\"/></filterColumn></autoFilter></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
 
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& filters = table_or.value().authored_value_filters();
-  ASSERT_EQ(filters.size(), 3U);
-  for (const auto& entry : filters) {
-    EXPECT_EQ(entry.type, pivot::FilterType::ValueTop10);
+TEST(PivotTableReader, RelativeAndCalendarFiltersDecodeFromTheTypeNameAlone) {
+  // These carry no criteria: the period is implied by the type.
+  const char* const names[] = {"thisMonth", "yearToDate", "lastQuarter", "thisWeek", "M1", "M12", "Q1", "Q4"};
+  const pivot::FilterType types[] = {pivot::FilterType::DateThisMonth,   pivot::FilterType::DateYearToDate,
+                                     pivot::FilterType::DateLastQuarter, pivot::FilterType::DateThisWeek,
+                                     pivot::FilterType::DateM1,          pivot::FilterType::DateM12,
+                                     pivot::FilterType::DateQ1,          pivot::FilterType::DateQ4};
+  std::string filters;
+  for (const char* name : names) {
+    filters.append("<filter fld=\"2\" type=\"").append(name).append("\"><autoFilter ref=\"A1\"/></filter>");
   }
-  EXPECT_EQ(filters[0].top_n_basis, pivot::TopNBasis::Items);
-  EXPECT_DOUBLE_EQ(filters[0].value, 2.0);
-  EXPECT_EQ(filters[1].top_n_basis, pivot::TopNBasis::Percent);
-  EXPECT_DOUBLE_EQ(filters[1].value, 70.0);
-  EXPECT_EQ(filters[2].top_n_basis, pivot::TopNBasis::Sum);
-  EXPECT_DOUBLE_EQ(filters[2].value, 100.0);
+  const pivot::PivotTable table = Read(DefinitionWithFilters(filters, std::size(names)));
+  ASSERT_EQ(table.active_filters().size(), std::size(names));
+  for (std::size_t i = 0; i < std::size(names); ++i) {
+    EXPECT_EQ(table.active_filters()[i].type, types[i]) << names[i];
+    EXPECT_EQ(table.active_filters()[i].source->field_index, 2U) << names[i];
+    EXPECT_TRUE(std::holds_alternative<std::monostate>(table.active_filters()[i].value)) << names[i];
+  }
+  const std::string round = write_pivot_table_definition(table);
+  EXPECT_EQ(CountOccurrences(round, "<filter "), std::size(names)) << round;
 }
-TEST(PivotTableReader, TopTenDirectionDecodesTopAttributeAndDefaultsToTop) {
-  // Excel's "Bottom N" dialog option writes `top="0"` on the same
-  // `<top10>` element as "Top N"; the attribute is absent for "Top N"
-  // itself, so a missing attribute must decode the same as `top="1"`.
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"2\">");
-  xml.append(
-      "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
-      "<top10 val=\"2\"/></filterColumn></autoFilter></filter>");
-  xml.append(
-      "<filter fld=\"0\" type=\"count\"><autoFilter ref=\"A1\"><filterColumn colId=\"0\">"
-      "<top10 top=\"0\" val=\"2\"/></filterColumn></autoFilter></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
 
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& filters = table_or.value().authored_value_filters();
-  ASSERT_EQ(filters.size(), 2U);
-  EXPECT_TRUE(filters[0].top);
-  EXPECT_FALSE(filters[1].top);
-}
-TEST(PivotTableReader, RelativePeriodFiltersDecodeFromTheTypeNameAlone) {
-  // These carry no criteria: the window is implied by the type, so the
-  // decode is the name mapping and nothing else.
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"3\">");
-  xml.append("<filter fld=\"2\" type=\"thisMonth\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"3\" type=\"yearToDate\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"1\" type=\"lastQuarter\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& periods = table_or.value().authored_period_filters();
-  ASSERT_EQ(periods.size(), 3U);
-  EXPECT_EQ(periods[0].field_index, 2U);
-  EXPECT_EQ(periods[0].period, pivot::RelativePeriod::ThisMonth);
-  EXPECT_EQ(periods[1].field_index, 3U);
-  EXPECT_EQ(periods[1].period, pivot::RelativePeriod::YearToDate);
-  EXPECT_EQ(periods[2].field_index, 1U);
-  EXPECT_EQ(periods[2].period, pivot::RelativePeriod::LastQuarter);
-  // A period entry carries no bounds, so it must not land in the list whose
-  // members all do.
-  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
-
-  const std::string round = write_pivot_table_definition(table_or.value());
-  EXPECT_EQ(CountOccurrences(round, "<filter "), 3U) << round;
-}
-TEST(PivotTableReader, RecurringPeriodFiltersDecodeToACalendarMonthRange) {
-  // `M<n>` is one month and `Q<n>` its three, both year-free -- so unlike
-  // the relative periods these need no clock to mean something.
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"4\">");
-  xml.append("<filter fld=\"2\" type=\"M1\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"2\" type=\"M12\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"3\" type=\"Q1\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"1\" type=\"Q4\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& recurring = table_or.value().authored_recurring_filters();
-  ASSERT_EQ(recurring.size(), 4U);
-  EXPECT_EQ(recurring[0].field_index, 2U);
-  EXPECT_EQ(recurring[0].month_low, 1U);
-  EXPECT_EQ(recurring[0].month_high, 1U);
-  EXPECT_EQ(recurring[1].month_low, 12U);
-  EXPECT_EQ(recurring[1].month_high, 12U);
-  EXPECT_EQ(recurring[2].field_index, 3U);
-  EXPECT_EQ(recurring[2].month_low, 1U);
-  EXPECT_EQ(recurring[2].month_high, 3U);
-  EXPECT_EQ(recurring[3].month_low, 10U);
-  EXPECT_EQ(recurring[3].month_high, 12U);
-  // A recurring entry is not a window and carries no bounds, so it must
-  // reach neither sibling list.
-  EXPECT_TRUE(table_or.value().authored_period_filters().empty());
-  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
-}
-TEST(PivotTableReader, MalformedRecurringSelectorsAreSkipped) {
+TEST(PivotTableReader, MalformedCalendarSelectorsAreRetained) {
   // `M0`, `M13` and `Q5` are outside their families, and a bare letter or
   // a non-digit tail names nothing at all. None may decode to a range that
   // silently filters the wrong months.
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"6\">");
+  std::string filters;
   for (const char* type : {"M0", "M13", "Q0", "Q5", "M", "Mx"}) {
-    xml.append("<filter fld=\"2\" type=\"").append(type).append("\"><autoFilter ref=\"A1\"/></filter>");
+    filters.append("<filter fld=\"2\" type=\"").append(type).append("\"><autoFilter ref=\"A1\"/></filter>");
   }
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  EXPECT_TRUE(table_or.value().authored_recurring_filters().empty());
+  const pivot::PivotTable table = Read(DefinitionWithFilters(filters, 6U));
+  EXPECT_TRUE(table.active_filters().empty());
+  EXPECT_EQ(table.retained_filters().size(), 6U);
 }
-TEST(PivotTableReader, WeekPeriodFiltersDecodeAlongsideTheOtherWindows) {
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append("<filters count=\"3\">");
-  xml.append("<filter fld=\"2\" type=\"thisWeek\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"2\" type=\"lastWeek\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("<filter fld=\"2\" type=\"nextWeek\"><autoFilter ref=\"A1\"/></filter>");
-  xml.append("</filters>");
-  xml.append("</pivotTableDefinition>");
 
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& periods = table_or.value().authored_period_filters();
-  ASSERT_EQ(periods.size(), 3U);
-  EXPECT_EQ(periods[0].period, pivot::RelativePeriod::ThisWeek);
-  EXPECT_EQ(periods[1].period, pivot::RelativePeriod::LastWeek);
-  EXPECT_EQ(periods[2].period, pivot::RelativePeriod::NextWeek);
-}
-TEST(PivotTableReader, EveryValueComparisonTypeIsDecodedAndRoundTrips) {
+TEST(PivotTableReader, EveryValueAndDateComparisonTypeIsDecodedAndRoundTrips) {
   struct Case {
     const char* type;
     pivot::FilterType expected;
@@ -385,65 +249,60 @@ TEST(PivotTableReader, EveryValueComparisonTypeIsDecodedAndRoundTrips) {
       {"valueLessThanOrEqual", pivot::FilterType::ValueLessThanOrEqual, false},
       {"valueBetween", pivot::FilterType::ValueBetween, true},
       {"valueNotBetween", pivot::FilterType::ValueNotBetween, true},
+      {"dateEqual", pivot::FilterType::DateEqual, false},
+      {"dateNotEqual", pivot::FilterType::DateNotEqual, false},
+      {"dateOlderThan", pivot::FilterType::DateOlderThan, false},
+      {"dateOlderThanOrEqual", pivot::FilterType::DateOlderThanOrEqual, false},
+      {"dateNewerThan", pivot::FilterType::DateNewerThan, false},
+      {"dateNewerThanOrEqual", pivot::FilterType::DateNewerThanOrEqual, false},
+      {"dateBetween", pivot::FilterType::LabelDate, true},
+      {"dateNotBetween", pivot::FilterType::DateNotBetween, true},
   };
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/><filters count=\"8\">");
+  std::string filters;
   for (const Case& c : cases) {
-    xml.append("<filter fld=\"0\" type=\"").append(c.type).append("\" iMeasureFld=\"0\"><autoFilter ref=\"A1\">");
-    xml.append("<filterColumn colId=\"0\"><customFilters><customFilter operator=\"equal\" val=\"4\"/>");
+    filters.append("<filter fld=\"0\" type=\"").append(c.type).append("\" iMeasureFld=\"0\"><autoFilter ref=\"A1\">");
+    filters.append("<filterColumn colId=\"0\"><customFilters><customFilter operator=\"equal\" val=\"4\"/>");
     if (c.ranged) {
-      xml.append("<customFilter operator=\"equal\" val=\"9\"/>");
+      filters.append("<customFilter operator=\"equal\" val=\"9\"/>");
     }
-    xml.append("</customFilters></filterColumn></autoFilter></filter>");
+    filters.append("</customFilters></filterColumn></autoFilter></filter>");
   }
-  xml.append("</filters></pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const auto& decoded = table_or.value().authored_value_filters();
-  ASSERT_EQ(decoded.size(), 8U);
+  const pivot::PivotTable table = Read(DefinitionWithFilters(filters, std::size(cases)));
+  const auto& decoded = table.active_filters();
+  ASSERT_EQ(decoded.size(), std::size(cases));
   for (std::size_t i = 0; i < decoded.size(); ++i) {
     EXPECT_EQ(decoded[i].type, cases[i].expected) << cases[i].type;
-    EXPECT_EQ(decoded[i].value, 4.0) << cases[i].type;
-    EXPECT_EQ(decoded[i].value_high.has_value(), cases[i].ranged) << cases[i].type;
+    EXPECT_EQ(decoded[i].value, Payload(4.0)) << cases[i].type;
+    EXPECT_EQ(decoded[i].value_high, cases[i].ranged ? Payload(9.0) : Payload()) << cases[i].type;
   }
-  const std::string round = write_pivot_table_definition(table_or.value());
+  const std::string round = write_pivot_table_definition(table);
   for (const Case& c : cases) {
     EXPECT_NE(round.find(std::string("type=\"") + c.type + "\""), std::string::npos) << c.type;
   }
 }
-TEST(PivotTableReader, ValueFilterCriteriaThatAreNotNumbersAreSkipped) {
+
+TEST(PivotTableReader, ValueFilterCriteriaThatAreNotNumbersAreRetained) {
   // The criterion shares the sheet path's number lexer, so a caption-ish
   // payload under a value type is refused instead of reaching the
   // comparison as zero.
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append(
-      "<filters count=\"1\"><filter fld=\"0\" type=\"valueGreaterThan\"><autoFilter ref=\"A1\">"
+  const pivot::PivotTable table = Read(DefinitionWithFilters(
+      "<filter fld=\"0\" type=\"valueGreaterThan\"><autoFilter ref=\"A1\">"
       "<filterColumn colId=\"0\"><customFilters><customFilter operator=\"greaterThan\" val=\"North\"/>"
-      "</customFilters></filterColumn></autoFilter></filter></filters>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
+      "</customFilters></filterColumn></autoFilter></filter>",
+      1U));
+  EXPECT_TRUE(table.active_filters().empty());
+  EXPECT_EQ(table.retained_filters().size(), 1U);
 }
-TEST(PivotTableReader, ValueBetweenWithOnlyOneBoundIsSkipped) {
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
-  xml.append("<location ref=\"A1:B2\"/>");
-  xml.append(
-      "<filters count=\"1\"><filter fld=\"0\" type=\"valueBetween\"><autoFilter ref=\"A1\">"
-      "<filterColumn colId=\"0\"><customFilters and=\"1\">"
-      "<customFilter operator=\"greaterThanOrEqual\" val=\"100\"/>"
-      "</customFilters></filterColumn></autoFilter></filter></filters>");
-  xml.append("</pivotTableDefinition>");
 
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  EXPECT_TRUE(table_or.value().authored_value_filters().empty());
+TEST(PivotTableReader, ValueBetweenWithOnlyOneBoundIsRetained) {
+  const pivot::PivotTable table =
+      Read(DefinitionWithFilters("<filter fld=\"0\" type=\"valueBetween\"><autoFilter ref=\"A1\">"
+                                 "<filterColumn colId=\"0\"><customFilters and=\"1\">"
+                                 "<customFilter operator=\"greaterThanOrEqual\" val=\"100\"/>"
+                                 "</customFilters></filterColumn></autoFilter></filter>",
+                                 1U));
+  EXPECT_TRUE(table.active_filters().empty());
+  EXPECT_EQ(table.retained_filters().size(), 1U);
 }
 
 }  // namespace

@@ -5,7 +5,7 @@
 //
 //   * Pre-aggregation, per-record: `PreparedRecordFilter` runs the manual
 //     `items[]` visibility check on every field that hides something, then
-//     applies axis-level label / date filters from `active_filters`.
+//     applies the caption and date filters from `active_filters`.
 //
 //   * Post-aggregation, per-item: `build_grouped_value_filter_keep` ranks
 //     the filtered field's items within each parent group and produces a
@@ -40,8 +40,9 @@ struct StylesTable;
 namespace formulon::pivot {
 class PivotFormulaHost;
 
-/// True for the types ranked on an aggregate after aggregation (Top-N and the
-/// value comparisons), as opposed to label / date types applied per record.
+/// True for the types ranked on an aggregate after aggregation (the top /
+/// bottom families and the value comparisons), as opposed to the caption and
+/// date types applied per record.
 inline bool is_value_filter_type(FilterType type) {
   switch (type) {
     case FilterType::ValueTop10:
@@ -53,6 +54,38 @@ inline bool is_value_filter_type(FilterType type) {
     case FilterType::ValueLessThan:
     case FilterType::ValueLessThanOrEqual:
     case FilterType::ValueNotBetween:
+    case FilterType::ValueBottomCount:
+    case FilterType::ValueTopPercent:
+    case FilterType::ValueBottomPercent:
+    case FilterType::ValueTopSum:
+    case FilterType::ValueBottomSum:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// True for the caption types, matched against an item's label.
+inline bool is_caption_filter_type(FilterType type) {
+  return type == FilterType::LabelContains || type == FilterType::LabelBeginsWith ||
+         (type >= FilterType::LabelEqual && type <= FilterType::LabelNotBetween);
+}
+
+/// True for the relative-period and calendar-position types, which carry no
+/// operand.
+inline bool is_operandless_filter_type(FilterType type) {
+  return type >= FilterType::DateTomorrow;
+}
+
+/// True for the types that read both `value` and `value_high`.
+inline bool is_range_filter_type(FilterType type) {
+  switch (type) {
+    case FilterType::ValueBetween:
+    case FilterType::ValueNotBetween:
+    case FilterType::LabelDate:
+    case FilterType::LabelBetween:
+    case FilterType::LabelNotBetween:
+    case FilterType::DateNotBetween:
       return true;
     default:
       return false;
@@ -87,19 +120,25 @@ struct DateWindow {
   double high = 0.0;
 };
 
-/// Resolves a relative period against a wall-clock reading.
+/// Resolves a relative-period type (`DateTomorrow` .. `DateYearToDate`)
+/// against a wall-clock reading.
 ///
 /// Exposed rather than kept internal because the calendar boundaries are
 /// the whole substance of the family — month lengths, quarter starts, the
 /// year-to-date half-open end — and they are worth asserting directly
 /// instead of only through a filtered pivot.
-DateWindow resolve_relative_period(RelativePeriod period, const date_time::CivilTime& now, bool date1904);
+DateWindow resolve_relative_period(FilterType type, const date_time::CivilTime& now, bool date1904);
 
-/// The wildcard pattern a begins / ends / contains caption predicate (or its
+/// The wildcard pattern a begins / ends / contains caption type (or its
 /// negation) matches the whole label against: `v*`, `*v` or `*v*`. Any
-/// `*` / `?` / `~` in `value` stays live. Empty for the other predicates,
-/// which do not match by pattern.
-std::optional<std::string> caption_wildcard_pattern(CaptionPredicate predicate, std::string_view value);
+/// `*` / `?` / `~` in `value` stays live. Empty for the other types, which
+/// do not match by an affixed pattern.
+std::optional<std::string> caption_wildcard_pattern(FilterType type, std::string_view value);
+
+/// The index into `table.fields()` a filter applies to: the field its name
+/// resolves to, or, for a decoded entry whose name is still empty, its
+/// source `fld`. Empty when neither designates a field.
+std::optional<std::size_t> filter_field_index(const PivotTable& table, const PivotFilter& f);
 
 /// The pre-aggregation filter pass with everything that depends only on the
 /// table hoisted out of the per-record decision.
@@ -116,8 +155,8 @@ std::optional<std::string> caption_wildcard_pattern(CaptionPredicate predicate, 
 /// Built once, a record costs one hash lookup per field that hides something,
 /// and renders its label at most once per such field.
 ///
-/// Borrows `table` and `cache`: neither may be destroyed while the filter is
-/// alive. The hidden-label set views labels the filter owns, so it is neither
+/// Borrows `cache`, which may not be destroyed while the filter is alive.
+/// The hidden-label set views labels the filter owns, so it is neither
 /// copyable nor movable.
 class PreparedRecordFilter {
  public:
@@ -128,11 +167,10 @@ class PreparedRecordFilter {
   PreparedRecordFilter& operator=(PreparedRecordFilter&&) = delete;
 
   /// True iff `record` survives the manual `items[]` filter on every field
-  /// that hides something, AND the axis-level label / date filters in
-  /// `active_filters`, AND the authored `<filters>` entries decided per
-  /// record. An `items[]` list with nothing hidden matches every value (Excel
-  /// authors the list for any field it places on an axis, hidden items or
-  /// not).
+  /// that hides something, AND every caption and date filter in
+  /// `active_filters`. An `items[]` list with nothing hidden matches every
+  /// value (Excel authors the list for any field it places on an axis,
+  /// hidden items or not).
   ///
   /// A hidden item normally matches records by its label (`pivot_item_label`,
   /// so an item built by cache index matches its bound value's rendering).
@@ -144,9 +182,9 @@ class PreparedRecordFilter {
   /// unlabelled *and* binds to nothing resolvable is malformed and filters
   /// nothing.
   ///
-  /// An axis filter names its field under the shared resolution rule
-  /// (`resolve_field_by_any_name`); a name that resolves to nothing filters
-  /// nothing, because the public mutators already reject one on entry.
+  /// A filter designates its field through `filter_field_index`; one that
+  /// designates nothing filters nothing, because the public mutators already
+  /// reject one on entry.
   bool passes(const PivotCacheRecord& record) const;
 
  private:
@@ -162,61 +200,47 @@ class PreparedRecordFilter {
     std::unordered_set<std::uint32_t> group_items;
   };
 
-  /// An `active_filters` entry whose field name already resolved. Entries
-  /// naming nothing are dropped at build time rather than re-resolved — and
-  /// re-failing — per record.
+  /// A caption or date entry of `active_filters` with its field resolved and
+  /// its payload decoded. Entries that designate nothing or carry an unusable
+  /// payload are dropped at build time rather than re-failing per record.
   struct ResolvedFilter {
     std::size_t field_index = 0;
-    const PivotFilter* filter = nullptr;
-    /// Caption matcher, built on the first label; `passes` is const, so the
-    /// cache mutates under it and the filter is single-threaded.
+    FilterType type = FilterType::LabelEqual;
+    /// Caption operands as matched: the affixed pattern for the begins / ends
+    /// / contains family, otherwise the operand as entered.
+    std::string low;
+    std::string high;
+    /// The caption operands read as numbers, compared with a numeric label.
+    std::optional<double> low_number;
+    std::optional<double> high_number;
+    /// Whether a caption operand carries `*`, `?` or `~` and so matches as a
+    /// pattern.
+    bool low_pattern = false;
+    bool high_pattern = false;
+    /// Date bounds: the operands of a comparison, the inclusive window of a
+    /// range or relative period, or the inclusive month range of a calendar
+    /// position.
+    double date_low = 0.0;
+    double date_high = 0.0;
+    /// Caption matchers, built on the first label; `passes` is const, so they
+    /// mutate under it and the filter is single-threaded.
     mutable std::optional<eval::CollatedWildcard> matcher;
+    mutable std::optional<eval::CollatedWildcard> matcher_high;
   };
 
-  /// A relative-period entry with its window already resolved against the
-  /// clock reading the pass was built with.
-  struct ResolvedPeriod {
-    std::size_t field_index = 0;
-    DateWindow window;
-  };
-
-  /// A recurring-period entry with its field index validated. Unlike
-  /// `ResolvedPeriod` there is nothing to resolve against a clock: the
-  /// criterion is which calendar month a record's date falls in, so the
-  /// bounds are carried through from the file as-is.
-  struct ResolvedRecurring {
-    std::size_t field_index = 0;
-    unsigned month_low = 1;
-    unsigned month_high = 1;
-  };
+  bool caption_passes(const ResolvedFilter& f, const Value& v) const;
+  bool date_passes(const ResolvedFilter& f, const Value& v) const;
 
   const PivotCache* cache_ = nullptr;
-  const PivotTable* table_ = nullptr;
-  /// The workbook epoch, kept because a recurring selector reads a
-  /// record's month back out of its serial at match time rather than
-  /// resolving to serials up front the way a window does.
+  /// The workbook epoch, kept because a calendar-position selector reads a
+  /// record's month back out of its serial at match time.
   bool date1904_ = false;
   /// Owns every hidden label `HiddenItems::labels` views. A deque, so a
   /// later label never relocates an earlier one.
   std::deque<std::string> hidden_labels_;
   std::vector<HiddenItems> hidden_items_;
-  std::vector<ResolvedFilter> label_filters_;
-  /// One lazily built matcher per authored caption entry, same index.
-  mutable std::vector<std::optional<eval::CollatedWildcard>> caption_matchers_;
-  std::vector<ResolvedPeriod> period_windows_;
-  std::vector<ResolvedRecurring> recurring_months_;
+  std::vector<ResolvedFilter> filters_;
 };
-
-/// Projects an authored `<filters>` value entry onto the `PivotFilter`
-/// shape the post-aggregation pass already consumes.
-///
-/// A file names only the field, so the axis is recovered here from that
-/// field's membership in `row_field_order()` / `col_field_order()`.
-/// Returns `nullopt` when the entry is not a value family (a date entry
-/// is applied pre-aggregation by `PreparedRecordFilter`) or when
-/// the field sits on neither axis, leaving nothing to prune.
-std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
-                                                                 const AuthoredValueFilter& authored);
 
 /// Per-item scoring intermediate used by `build_value_filter_keep`.
 /// `scores[i]` is the numeric aggregate of item `i`; `all_blank[i]` is
@@ -227,27 +251,16 @@ struct AxisScores {
   std::vector<bool> all_blank;
 };
 
-/// Builds a per-leaf keep mask for `f`. Returns `nullopt` for filter
-/// shapes that should degrade to a no-op (e.g. unbounded `ValueBetween`).
+/// Builds a per-leaf keep mask for the value filter `f`. Returns `nullopt`
+/// for filter shapes that should degrade to a no-op (e.g. an unbounded
+/// `ValueBetween`).
 ///
-/// `top` only affects `ValueTop10`: `true` keeps the N highest-scoring
-/// leaves, `false` keeps the N lowest-scoring ones (Excel's "Bottom N"
-/// dialog option). `PivotFilter` carries no direction of its own — like
-/// `TopNBasis`, it is an authored-file concept — so the caller supplies
-/// it alongside `f`.
-std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis, bool top = true);
-
-/// Keep mask for the two running-total flavours of the top-N dialog.
-///
-/// Both walk the scoring leaves in ranked order and stop once the
-/// running total first reaches the target, so the last kept leaf is the
-/// one that crosses it. `top` selects the ranking direction the same way
-/// it does for `build_value_filter_keep`. `Percent` reads `target` as a
-/// share of the axis total; `Sum` reads it as an absolute amount.
-/// Returns `nullopt` for `Items`, which counts leaves rather than
-/// accumulating them and is served by `build_value_filter_keep`.
-std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis,
-                                                          bool top = true);
+/// The count types keep the N highest (lowest) scoring leaves. The percent
+/// and sum types walk the leaves in ranked order and keep each one while the
+/// running total is still short of the target, so the last kept leaf is the
+/// one that reaches it; percent reads the target as a share of the total of
+/// the leaves scored.
+std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis);
 
 /// Leaf keep mask for a value filter on the field whose axis nodes are
 /// `groups` (see `axis_leaf_groups_at_depth`), with `group_scores[g]`
@@ -255,12 +268,10 @@ std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, doubl
 ///
 /// Each run of groups sharing a parent is ranked or thresholded on its own,
 /// so a Top-N on an inner field keeps N items under every outer item; a
-/// kept group keeps all `leaf_count` of its leaves. `basis`, `target` and
-/// `top` select between `build_value_filter_keep` (`Items`) and
-/// `build_running_total_keep`. Returns `nullopt` when the filter shape is a
-/// no-op.
-std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilter& f, TopNBasis basis, double target,
-                                                                 bool top, const std::vector<AxisLeafGroup>& groups,
+/// kept group keeps all `leaf_count` of its leaves. Returns `nullopt` when
+/// the filter shape is a no-op.
+std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilter& f,
+                                                                 const std::vector<AxisLeafGroup>& groups,
                                                                  const AxisScores& group_scores,
                                                                  std::size_t leaf_count);
 

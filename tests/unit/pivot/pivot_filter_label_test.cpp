@@ -26,6 +26,7 @@ namespace formulon::pivot {
 namespace {
 
 using filter_test::build_shared_north_south_cache;
+using filter_test::decoded_filter;
 using test::build_basic_cache;
 using test::build_sum_amount_table;
 using test::owned_text;
@@ -160,11 +161,7 @@ TEST(PivotEvaluator, AuthoredCaptionEqualFilterDropsRecords) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredCaptionFilter f;
-  f.field_index = 0;  // Region
-  f.predicate = CaptionPredicate::Equal;
-  f.value = "North";
-  table.mutable_authored_caption_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::LabelEqual, std::string("North")));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -179,11 +176,7 @@ TEST(PivotEvaluator, AuthoredCaptionFilterIgnoresCase) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredCaptionFilter f;
-  f.field_index = 0;
-  f.predicate = CaptionPredicate::Equal;
-  f.value = "nOrTh";
-  table.mutable_authored_caption_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::LabelEqual, std::string("nOrTh")));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -195,11 +188,7 @@ TEST(PivotEvaluator, AuthoredCaptionNotContainsFilterDropsMatchingRecords) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredCaptionFilter f;
-  f.field_index = 0;
-  f.predicate = CaptionPredicate::NotContains;
-  f.value = "*outh*";
-  table.mutable_authored_caption_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(0, FilterType::LabelNotContains, std::string("outh")));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -258,58 +247,62 @@ unsigned surviving_probe_mask(const PivotTable& table) {
 // the whole label one code point at a time under `=` (case, width and kana
 // type fold; diacritics count; no expansion or voicing composition).
 TEST(PivotEvaluatorCaptionFilter, MatchesTheExcelMacJaJpCaptionFilters) {
+  // `pattern` is the autoFilter criterion Excel saved; the filter's operand is
+  // that pattern without the `*` its type affixes.
   struct Case {
-    CaptionPredicate predicate;
-    const char* value;
+    FilterType type;
+    const char* pattern;
     unsigned mask;
   };
   const Case cases[] = {
-      {CaptionPredicate::Equal, "abc\xE5\x95\x86\xE4\xBA\x8B", 0x80U},                  // abc商事
-      {CaptionPredicate::Equal, "Strasse", 0x6U},                                       // Strasse
-      {CaptionPredicate::Equal, "\xC3\xA4pfel", 0x1U},                                  // äpfel
-      {CaptionPredicate::BeginsWith, "hEL*", 0x8U},                                     // hEL*
-      {CaptionPredicate::BeginsWith, "\xC3\xA4*", 0x1U},                                // ä*
-      {CaptionPredicate::BeginsWith, "\xC3\x84*", 0x1U},                                // Ä*
-      {CaptionPredicate::BeginsWith, "a*", 0x1A0U},                                     // a*
-      {CaptionPredicate::BeginsWith, "abc*", 0x180U},                                   // abc*
-      {CaptionPredicate::BeginsWith, "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3*", 0x180U},  // ＡＢＣ*
-      {CaptionPredicate::BeginsWith, "\xE3\x82\xA2\xE3\x82\xA4*", 0x200U},              // アイ*
-      {CaptionPredicate::BeginsWith, "\xE3\x81\x82\xE3\x81\x84*", 0x200U},              // あい*
-      {CaptionPredicate::BeginsWith, "\xE3\x81\x8B\xE3\x81\x8D*", 0x400U},              // かき*
-      {CaptionPredicate::BeginsWith, "\xEF\xBD\xB6\xEF\xBD\xB7*", 0x400U},              // ｶｷ*
-      {CaptionPredicate::BeginsWith, "\xEF\xBD\xB6\xEF\xBE\x9E*", 0x0U},                // ｶﾞ*
-      {CaptionPredicate::BeginsWith, "Strass*", 0x4U},                                  // Strass*
-      {CaptionPredicate::BeginsWith, "STRA\xC3\x9F*", 0x2U},                            // STRAß*
-      {CaptionPredicate::Contains, "*LL*", 0x8U},                                       // *LL*
-      {CaptionPredicate::Contains, "*\xC3\x89*", 0x40U},                                // *É*
-      {CaptionPredicate::Contains, "*e*", 0x3FU},                                       // *e*
-      {CaptionPredicate::Contains, "*\xCE\xB2*", 0x1000U},                              // *β*
-      {CaptionPredicate::Contains, "*ss*", 0x4U},                                       // *ss*
-      {CaptionPredicate::Contains, "*\xC3\x9F*", 0x2U},                                 // *ß*
-      {CaptionPredicate::Contains, "*\xE3\x81\x84\xE3\x81\x86*", 0x200U},               // *いう*
-      {CaptionPredicate::EndsWith, "*ef", 0x10U},                                       // *ef
-      {CaptionPredicate::EndsWith, "*SSE", 0x4U},                                       // *SSE
-      {CaptionPredicate::EndsWith,
+      {FilterType::LabelEqual, "abc\xE5\x95\x86\xE4\xBA\x8B", 0x80U},                  // abc商事
+      {FilterType::LabelEqual, "Strasse", 0x6U},                                       // Strasse
+      {FilterType::LabelEqual, "\xC3\xA4pfel", 0x1U},                                  // äpfel
+      {FilterType::LabelBeginsWith, "hEL*", 0x8U},                                     // hEL*
+      {FilterType::LabelBeginsWith, "\xC3\xA4*", 0x1U},                                // ä*
+      {FilterType::LabelBeginsWith, "\xC3\x84*", 0x1U},                                // Ä*
+      {FilterType::LabelBeginsWith, "a*", 0x1A0U},                                     // a*
+      {FilterType::LabelBeginsWith, "abc*", 0x180U},                                   // abc*
+      {FilterType::LabelBeginsWith, "\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3*", 0x180U},  // ＡＢＣ*
+      {FilterType::LabelBeginsWith, "\xE3\x82\xA2\xE3\x82\xA4*", 0x200U},              // アイ*
+      {FilterType::LabelBeginsWith, "\xE3\x81\x82\xE3\x81\x84*", 0x200U},              // あい*
+      {FilterType::LabelBeginsWith, "\xE3\x81\x8B\xE3\x81\x8D*", 0x400U},              // かき*
+      {FilterType::LabelBeginsWith, "\xEF\xBD\xB6\xEF\xBD\xB7*", 0x400U},              // ｶｷ*
+      {FilterType::LabelBeginsWith, "\xEF\xBD\xB6\xEF\xBE\x9E*", 0x0U},                // ｶﾞ*
+      {FilterType::LabelBeginsWith, "Strass*", 0x4U},                                  // Strass*
+      {FilterType::LabelBeginsWith, "STRA\xC3\x9F*", 0x2U},                            // STRAß*
+      {FilterType::LabelContains, "*LL*", 0x8U},                                       // *LL*
+      {FilterType::LabelContains, "*\xC3\x89*", 0x40U},                                // *É*
+      {FilterType::LabelContains, "*e*", 0x3FU},                                       // *e*
+      {FilterType::LabelContains, "*\xCE\xB2*", 0x1000U},                              // *β*
+      {FilterType::LabelContains, "*ss*", 0x4U},                                       // *ss*
+      {FilterType::LabelContains, "*\xC3\x9F*", 0x2U},                                 // *ß*
+      {FilterType::LabelContains, "*\xE3\x81\x84\xE3\x81\x86*", 0x200U},               // *いう*
+      {FilterType::LabelEndsWith, "*ef", 0x10U},                                       // *ef
+      {FilterType::LabelEndsWith, "*SSE", 0x4U},                                       // *SSE
+      {FilterType::LabelEndsWith,
        "*\xC3\x9F"
        "e",
-       0x2U},                                                             // *ße
-      {CaptionPredicate::EndsWith, "*\xE3\x81\x8D\xE3\x81\x8F", 0x400U},  // *きく
-      {CaptionPredicate::NotContains, "*\xC3\xA4*", 0x1FFEU},             // *ä*
-      {CaptionPredicate::NotBeginsWith, "abc*", 0x1E7FU},                 // abc*
-      {CaptionPredicate::Contains, "***", 0x1FFFU},                       // ***
-      {CaptionPredicate::BeginsWith, "?b*", 0x180U},                      // ?b*
-      {CaptionPredicate::BeginsWith, "Hel*", 0x8U},                       // Hel*
-      {CaptionPredicate::Contains, "*~**", 0x0U},                         // *~**
-      {CaptionPredicate::BeginsWith, "~?b*", 0x0U},                       // ~?b*
+       0x2U},                                                            // *ße
+      {FilterType::LabelEndsWith, "*\xE3\x81\x8D\xE3\x81\x8F", 0x400U},  // *きく
+      {FilterType::LabelNotContains, "*\xC3\xA4*", 0x1FFEU},             // *ä*
+      {FilterType::LabelNotBeginsWith, "abc*", 0x1E7FU},                 // abc*
+      {FilterType::LabelContains, "***", 0x1FFFU},                       // ***
+      {FilterType::LabelBeginsWith, "?b*", 0x180U},                      // ?b*
+      {FilterType::LabelBeginsWith, "Hel*", 0x8U},                       // Hel*
+      {FilterType::LabelContains, "*~**", 0x0U},                         // *~**
+      {FilterType::LabelBeginsWith, "~?b*", 0x0U},                       // ~?b*
   };
   for (const Case& c : cases) {
+    std::string operand(c.pattern);
+    if (c.type != FilterType::LabelEqual) {
+      const bool begins = c.type == FilterType::LabelBeginsWith || c.type == FilterType::LabelNotBeginsWith;
+      const bool ends = c.type == FilterType::LabelEndsWith;
+      operand = operand.substr(begins ? 0U : 1U, operand.size() - (ends || begins ? 1U : 2U));
+    }
     PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
-    AuthoredCaptionFilter f;
-    f.field_index = 0;
-    f.predicate = c.predicate;
-    f.value = c.value;
-    table.mutable_authored_caption_filters().push_back(std::move(f));
-    EXPECT_EQ(surviving_probe_mask(table), c.mask) << c.value;
+    table.mutable_active_filters().push_back(decoded_filter(0, c.type, operand));
+    EXPECT_EQ(surviving_probe_mask(table), c.mask) << c.pattern;
   }
 }
 
@@ -342,17 +335,112 @@ TEST(PivotEvaluatorCaptionFilter, LabelFilterUsesTheCaptionMatcher) {
   }
 }
 
+// The Apple / Apricot / Banana / Cherry / *star items of the Mac Excel 365
+// ja-JP caption ordering probes, with Excel's amounts.
+PivotCache build_fruit_cache() {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  const std::pair<const char*, double> items[] = {
+      {"Apple", 100.0}, {"Apricot", 300.0}, {"Banana", 400.0}, {"Cherry", 200.0}, {"*star", 50.0}};
+  for (const auto& [label, amount] : items) {
+    PivotCacheRecord rec;
+    rec.cells = {owned_text(cache, label), owned_text(cache, "P"), Value::number(amount)};
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  return cache;
+}
+
+// Grand total of the fruit items `filter` keeps under mac-365-ja_JP; 0 when
+// it keeps none.
+double surviving_fruit_total(PivotFilter filter) {
+  const PivotCache cache = build_fruit_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.mutable_active_filters().push_back(std::move(filter));
+  auto r_or = evaluate(table, cache, pivot_layout_options_for(mac_365_ja_jp_profile()));
+  EXPECT_TRUE(static_cast<bool>(r_or));
+  if (!r_or || !r_or.value().grand_total.is_number()) {
+    return 0.0;
+  }
+  return r_or.value().grand_total.as_number();
+}
+
+// A wildcard operand orders by the pattern match: a matching item counts as
+// equal and any other as greater.
+TEST(PivotEvaluatorCaptionFilter, WildcardOperandsOrderByTheMatch) {
+  struct Case {
+    FilterType type;
+    const char* operand;
+    double total;
+  };
+  const Case cases[] = {
+      {FilterType::LabelGreaterThan, "B*", 650.0},
+      {FilterType::LabelLessThan, "B*", 0.0},
+      {FilterType::LabelLessThanOrEqual, "B*", 400.0},
+      {FilterType::LabelGreaterThanOrEqual, "B*", 1050.0},
+      {FilterType::LabelGreaterThan, "Z*", 1050.0},
+      {FilterType::LabelGreaterThan, "A?ple", 950.0},
+      {FilterType::LabelGreaterThan, "~*star", 1000.0},
+      {FilterType::LabelGreaterThan, "B", 600.0},
+      {FilterType::LabelGreaterThan, "*", 0.0},
+      {FilterType::LabelGreaterThan, "Banana", 200.0},
+      {FilterType::LabelLessThan, "Banana", 450.0},
+      {FilterType::LabelLessThanOrEqual, "Banana", 850.0},
+      {FilterType::LabelEqual, "A*", 400.0},
+      {FilterType::LabelEqual, "~*star", 50.0},
+      {FilterType::LabelEqual, "*star", 50.0},
+      {FilterType::LabelEqual, "\xEF\xBC\xA1pple", 100.0},
+      {FilterType::LabelNotEqual, "Apple", 950.0},
+      {FilterType::LabelContains, "*", 1050.0},
+  };
+  for (const Case& c : cases) {
+    EXPECT_DOUBLE_EQ(surviving_fruit_total(decoded_filter(0, c.type, std::string(c.operand))), c.total) << c.operand;
+  }
+  EXPECT_DOUBLE_EQ(
+      surviving_fruit_total(decoded_filter(0, FilterType::LabelBetween, std::string("Apricot"), std::string("Cherry"))),
+      900.0);
+  EXPECT_DOUBLE_EQ(surviving_fruit_total(
+                       decoded_filter(0, FilterType::LabelNotBetween, std::string("Apricot"), std::string("Cherry"))),
+                   150.0);
+}
+
+// Numeric labels compare as numbers against a numeric operand.
+TEST(PivotEvaluatorCaptionFilter, NumericLabelsCompareAsNumbers) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  const std::pair<double, double> items[] = {{1.0, 100.0}, {2.0, 300.0}, {3.0, 400.0}, {4.0, 200.0}, {10.0, 50.0}};
+  for (const auto& [label, amount] : items) {
+    PivotCacheRecord rec;
+    rec.cells = {Value::number(label), owned_text(cache, "P"), Value::number(amount)};
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  const auto total = [&](PivotFilter filter) {
+    PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    table.mutable_active_filters().push_back(std::move(filter));
+    auto r_or = evaluate(table, cache, pivot_layout_options_for(mac_365_ja_jp_profile()));
+    EXPECT_TRUE(static_cast<bool>(r_or));
+    return r_or && r_or.value().grand_total.is_number() ? r_or.value().grand_total.as_number() : 0.0;
+  };
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelGreaterThan, std::string("3"))), 250.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelBetween, std::string("2"), std::string("4"))), 900.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelEqual, std::string("10"))), 50.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelLessThan, std::string("3"))), 400.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelGreaterThanOrEqual, std::string("10"))), 50.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelBeginsWith, std::string("1"))), 150.0);
+}
+
 TEST(PivotEvaluator, AuthoredCaptionBetweenFilterKeepsTheInclusiveRange) {
   PivotCache cache = build_basic_cache();
   // Row on Product so the range spans "Gadget" / "Widget".
   PivotTable table = build_sum_amount_table(/*row=*/{1}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredCaptionFilter f;
-  f.field_index = 1;  // Product
-  f.predicate = CaptionPredicate::Between;
-  f.value = "A";
-  f.value_high = "M";
-  table.mutable_authored_caption_filters().push_back(f);
+  table.mutable_active_filters().push_back(
+      decoded_filter(1, FilterType::LabelBetween, std::string("A"), std::string("M")));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -365,11 +453,7 @@ TEST(PivotEvaluator, AuthoredCaptionFilterWithOutOfRangeFieldIsInert) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
   table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  AuthoredCaptionFilter f;
-  f.field_index = 99;
-  f.predicate = CaptionPredicate::Equal;
-  f.value = "North";
-  table.mutable_authored_caption_filters().push_back(f);
+  table.mutable_active_filters().push_back(decoded_filter(99, FilterType::LabelEqual, std::string("North")));
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;

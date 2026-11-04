@@ -1,6 +1,6 @@
 //
-// Value-axis filter pass (Top-N, GreaterThan, Between) of the pivot
-// evaluator, run after grand totals are emitted.
+// Value-axis filter pass (top / bottom N, percent and sum, value
+// comparisons) of the pivot evaluator, run after grand totals are emitted.
 //
 
 #ifndef FORMULON_PIVOT_VALUE_FILTER_PASS_H_
@@ -31,9 +31,10 @@ namespace formulon::pivot {
 /// pre-filter set (verified against pivot_value_date_filters.xlsx /
 /// pivot_recurring_period_filter.xlsx).
 ///
-/// Both the active (slicer) filters and the authored `<filters>` entries feed
-/// this pass; the latter are projected onto the same shape. The subtotal
-/// leaf sets are recompacted in step with the pruned leaves.
+/// The value types of `active_filters()` run in document order, each pruning
+/// what the previous ones left; an item with no records scores the total its
+/// leaf shows, or 0. The subtotal leaf sets are recompacted in step with the
+/// pruned leaves.
 ///
 /// The leaf counts are passed explicitly because either may be 0 (an axis
 /// field with no surviving records), leaving `buckets` empty.

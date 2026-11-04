@@ -52,9 +52,8 @@ TEST(PivotTypes, PivotFilterDefault) {
   EXPECT_TRUE(f.field_name.empty());
   EXPECT_EQ(f.type, FilterType::ValueTop10);
   EXPECT_EQ(f.data_field_index, 0U);
-  // Variant default-constructs to its first alternative (int = 0).
-  ASSERT_EQ(f.value.index(), 0u);
-  EXPECT_EQ(std::get<int>(f.value), 0);
+  // An unset payload is `std::monostate`.
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(f.value));
 }
 
 TEST(PivotTypes, SortSpecDefault) {
@@ -248,7 +247,7 @@ TEST(PivotTable, MutableActiveFilters) {
   EXPECT_EQ(t.active_filters()[0].axis, PivotAxis::Col);
   EXPECT_EQ(t.active_filters()[0].field_name, "Region");
   EXPECT_EQ(t.active_filters()[0].type, FilterType::LabelContains);
-  ASSERT_EQ(t.active_filters()[0].value.index(), 2u);
+  ASSERT_TRUE(std::holds_alternative<std::string>(t.active_filters()[0].value));
   EXPECT_EQ(std::get<std::string>(t.active_filters()[0].value), "North");
 }
 

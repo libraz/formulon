@@ -241,10 +241,10 @@ std::unique_ptr<pivot::PivotTable> BuildClockPivotTable() {
   amount_data.aggregation = pivot::Aggregation::Sum;
   table->mutable_data_fields().push_back(std::move(amount_data));
 
-  pivot::AuthoredPeriodFilter period;
-  period.field_index = 0U;
-  period.period = pivot::RelativePeriod::ThisQuarter;
-  table->mutable_authored_period_filters().push_back(period);
+  pivot::PivotFilter period;
+  period.type = pivot::FilterType::DateThisQuarter;
+  period.source = pivot::PivotFilterSource{std::string{}, 0U, 0U, 0U};
+  table->mutable_active_filters().push_back(period);
   return table;
 }
 

@@ -29,21 +29,30 @@
 #include "pivot/value_order.h"
 #include "utils/checked_index.h"
 #include "utils/date_time.h"
+#include "utils/double_parse.h"
 #include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon::pivot {
 namespace {
 
-// Pulls the string payload of a filter when one is expected. Returns
-// an empty `string_view` when the variant carries a non-string value,
-// which effectively makes the filter a no-op rather than a runtime
-// error.
-std::string_view filter_string_value(const PivotFilter& f) {
-  if (const auto* s = std::get_if<std::string>(&f.value)) {
+// The text payload of `slot`; empty for any other alternative.
+std::string_view payload_text(const std::variant<std::monostate, int, double, std::string>& slot) {
+  if (const auto* s = std::get_if<std::string>(&slot)) {
     return *s;
   }
   return {};
+}
+
+// The numeric payload of `slot`; empty when unset, text, or not finite.
+std::optional<double> payload_number(const std::variant<std::monostate, int, double, std::string>& slot) {
+  if (const auto* d = std::get_if<double>(&slot)) {
+    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
+  }
+  if (const auto* i = std::get_if<int>(&slot)) {
+    return static_cast<double>(*i);
+  }
+  return std::nullopt;
 }
 
 // The value a label comparison reads for `cell` of field `field_index`: a group
@@ -55,65 +64,6 @@ Value label_value(const PivotCache& cache, std::size_t field_index, const Value&
   const std::vector<Value>& items = cache.fields()[field_index].field_group->group_items;
   const std::optional<std::size_t> item = index_from_double(cell.as_number(), items.size());
   return item.has_value() ? items[*item] : cell;
-}
-
-// Invokes `consume` with the display label for `v`.
-//
-// Rendering goes through the shared `display_string`, which is the single
-// place a cache `Value` is turned into a pivot label. A private renderer
-// here would let a record's label drift from the `PivotItem::name` /
-// hierarchy label produced elsewhere, and a filter can only ever match a
-// label that is spelled the same way on both sides.
-//
-// Text is the one kind whose label is the payload itself, so it is handed
-// to `consume` directly instead of through a copy.
-template <typename Consume>
-bool with_display_string(const Value& v, Consume&& consume) {
-  if (v.is_text()) {
-    return consume(v.as_text());
-  }
-  const std::string rendered = display_string(v);
-  return consume(std::string_view{rendered});
-}
-
-// Date bounds are a stricter numeric domain than ordinary value filters:
-// non-finite payloads are invalid dates and therefore leave the date filter
-// inert. Ordinary value filters keep their own coercion above, which does not
-// reject non-finite payloads.
-std::optional<double> date_filter_number_value(const PivotFilter& f) {
-  if (const auto* d = std::get_if<double>(&f.value)) {
-    return std::isfinite(*d) ? std::optional<double>(*d) : std::nullopt;
-  }
-  if (const auto* i = std::get_if<int>(&f.value)) {
-    return static_cast<double>(*i);
-  }
-  return std::nullopt;
-}
-
-std::optional<double> date_filter_number_value_high(const PivotFilter& f) {
-  const auto high = filter_number_value_high(f);
-  if (!high || !std::isfinite(*high)) {
-    return std::nullopt;
-  }
-  return high;
-}
-
-// Evaluates a `LabelDate` filter against the underlying numeric value
-// of a record's field. The `field_name` ostensibly identifies a date
-// column, so the cache value should be a date serial; non-numeric cells
-// (text labels, blanks, errors) are not in the date domain and skip the
-// filter rather than being dropped.
-bool label_date_filter_passes(const PivotFilter& f, const Value& v, bool date1904) {
-  if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904)) {
-    return true;  // Non-numeric cells skip the date filter.
-  }
-  const double serial = v.as_number();
-  const auto lo_or = date_filter_number_value(f);
-  const auto hi_or = date_filter_number_value_high(f);
-  if (!lo_or || !hi_or || !is_valid_date_serial(*lo_or, date1904) || !is_valid_date_serial(*hi_or, date1904)) {
-    return true;  // Missing, non-finite or out-of-domain bound: treat as no-op.
-  }
-  return serial >= *lo_or && serial <= *hi_or;
 }
 
 // Whole-label wildcard match under the profile's `=` character equivalence.
@@ -128,36 +78,6 @@ bool caption_wildcard_matches(std::optional<eval::CollatedWildcard>& matcher, st
   return matcher->match(label);
 }
 
-// Evaluates a single label-flavoured filter against `label`.
-// Value-filter types short-circuit to true: those are applied
-// post-aggregation.
-bool label_filter_passes(const PivotFilter& f, std::optional<eval::CollatedWildcard>& matcher, std::string_view label) {
-  switch (f.type) {
-    case FilterType::LabelContains:
-      return caption_wildcard_matches(
-          matcher, *caption_wildcard_pattern(CaptionPredicate::Contains, filter_string_value(f)), label);
-    case FilterType::LabelBeginsWith:
-      return caption_wildcard_matches(
-          matcher, *caption_wildcard_pattern(CaptionPredicate::BeginsWith, filter_string_value(f)), label);
-    case FilterType::ValueTop10:
-    case FilterType::ValueGreaterThan:
-    case FilterType::ValueBetween:
-    case FilterType::ValueEqual:
-    case FilterType::ValueNotEqual:
-    case FilterType::ValueGreaterThanOrEqual:
-    case FilterType::ValueLessThan:
-    case FilterType::ValueLessThanOrEqual:
-    case FilterType::ValueNotBetween:
-    case FilterType::LabelDate:
-      // Value-axis filters: handled later by the post-aggregation pass.
-      // `LabelDate` is dispatched through `label_date_filter_passes` above
-      // by `PreparedRecordFilter::passes`; this branch is unreachable for
-      // it but kept exhaustive for the switch.
-      return true;
-  }
-  return true;
-}
-
 // Equality and ordering of a caption filter use the strength that merged the
 // items, so which spelling of a merged item survives cannot change the result.
 int caption_collate(std::string_view lhs, std::string_view rhs) {
@@ -165,44 +85,42 @@ int caption_collate(std::string_view lhs, std::string_view rhs) {
   return eval::collate(lhs, rhs, eval::current_eval_profile(), eval::CollationStrength::kDynamic);
 }
 
-// Evaluates one decoded `<filters>` caption entry against `label`.
-//
-// The ordering comparisons treat the label as text even when it renders
-// as digits, which is what a caption filter means: it filters what the
-// grid draws, not the underlying cache value.
-bool caption_filter_passes(const AuthoredCaptionFilter& f, std::optional<eval::CollatedWildcard>& matcher,
-                           std::string_view label) {
-  const std::string_view value = f.value;
-  const auto between = [&]() {
-    return caption_collate(label, value) >= 0 && caption_collate(label, f.value_high) <= 0;
-  };
-  switch (f.predicate) {
-    case CaptionPredicate::Equal:
-      return caption_collate(label, value) == 0;
-    case CaptionPredicate::NotEqual:
-      return caption_collate(label, value) != 0;
-    case CaptionPredicate::BeginsWith:
-    case CaptionPredicate::EndsWith:
-    case CaptionPredicate::Contains:
-      return caption_wildcard_matches(matcher, value, label);
-    case CaptionPredicate::NotBeginsWith:
-    case CaptionPredicate::NotEndsWith:
-    case CaptionPredicate::NotContains:
-      return !caption_wildcard_matches(matcher, value, label);
-    case CaptionPredicate::GreaterThan:
-      return caption_collate(label, value) > 0;
-    case CaptionPredicate::GreaterThanOrEqual:
-      return caption_collate(label, value) >= 0;
-    case CaptionPredicate::LessThan:
-      return caption_collate(label, value) < 0;
-    case CaptionPredicate::LessThanOrEqual:
-      return caption_collate(label, value) <= 0;
-    case CaptionPredicate::Between:
-      return between();
-    case CaptionPredicate::NotBetween:
-      return !between();
+// An operand carrying a wildcard or an escape matches as a pattern.
+bool is_caption_pattern(std::string_view operand) {
+  return operand.find_first_of("*?~") != std::string_view::npos;
+}
+
+// The caption operand as a number, for comparison with a numeric label.
+std::optional<double> caption_number(std::string_view operand) {
+  double parsed = 0.0;
+  if (!parse_excel_decimal(operand, &parsed) || !std::isfinite(parsed)) {
+    return std::nullopt;
   }
-  return true;
+  return parsed;
+}
+
+// Orders a label against one caption operand: numerically when both are
+// numbers; a pattern operand counts a matching label as equal and any other
+// label as greater; otherwise by collation.
+int caption_order(std::string_view label, std::optional<double> label_number, std::string_view operand,
+                  std::optional<double> operand_number, bool pattern, std::optional<eval::CollatedWildcard>& matcher) {
+  if (label_number.has_value() && operand_number.has_value()) {
+    return *label_number < *operand_number ? -1 : (*label_number > *operand_number ? 1 : 0);
+  }
+  if (pattern) {
+    return caption_wildcard_matches(matcher, operand, label) ? 0 : 1;
+  }
+  return caption_collate(label, operand);
+}
+
+// The inclusive calendar-month range of a `DateQ*` / `DateM*` type.
+std::pair<unsigned, unsigned> calendar_month_range(FilterType type) {
+  if (type >= FilterType::DateM1) {
+    const unsigned month = static_cast<unsigned>(type) - static_cast<unsigned>(FilterType::DateM1) + 1U;
+    return {month, month};
+  }
+  const unsigned first = (static_cast<unsigned>(type) - static_cast<unsigned>(FilterType::DateQ1)) * 3U + 1U;
+  return {first, first + 2U};
 }
 
 // Rewrites each leaf set in `leaf_sets` from the pre-filter leaf index space
@@ -264,7 +182,7 @@ std::optional<double> filter_number_value_high(const PivotFilter& f) {
 }
 
 PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotCache& cache, const PivotFilterEnv& env)
-    : cache_(&cache), table_(&table), date1904_(env.date1904) {
+    : cache_(&cache), date1904_(env.date1904) {
   // A field with no hidden item filters nothing, so it never reaches the
   // record loop at all. Excel writes an `items[]` list for every field it
   // places on an axis, which is why presence of the list cannot stand in for
@@ -325,43 +243,161 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
     }
     hidden_items_.push_back(std::move(hidden));
   }
-  // An axis filter names its field under the shared resolution rule; one that
-  // resolves to nothing is dropped here instead of re-resolving — and
-  // re-failing — for every record.
+  // A relative period resolves against one clock reading, taken once: an
+  // evaluation spanning midnight would otherwise filter its early records
+  // against one day and its later ones against the next.
+  std::optional<date_time::CivilTime> now;
   for (const PivotFilter& f : table.active_filters()) {
-    const auto fi_or = resolve_field_by_any_name(table, f.field_name);
-    if (!fi_or) {
+    if (is_value_filter_type(f.type)) {
+      continue;  // Ranked after aggregation by `apply_value_filters`.
+    }
+    const std::optional<std::size_t> fi = filter_field_index(table, f);
+    if (!fi.has_value()) {
       continue;
     }
-    label_filters_.push_back(ResolvedFilter{*fi_or, &f, std::nullopt});
-  }
-  caption_matchers_.resize(table.authored_caption_filters().size());
-  // A relative period resolves to an ordinary inclusive window once it has a
-  // clock reading, and the reading is taken once: an evaluation spanning
-  // midnight would otherwise filter its early records against one day and its
-  // later ones against the next.
-  if (!table.authored_period_filters().empty()) {
-    const date_time::CivilTime now = env.pinned_now.has_value() ? *env.pinned_now : date_time::host_civil_time();
-    for (const AuthoredPeriodFilter& f : table.authored_period_filters()) {
-      if (f.field_index >= table.fields().size()) {
+    ResolvedFilter resolved;
+    resolved.field_index = *fi;
+    resolved.type = f.type;
+    if (is_caption_filter_type(f.type)) {
+      if (!std::holds_alternative<std::string>(f.value)) {
         continue;
       }
-      period_windows_.push_back(ResolvedPeriod{f.field_index, resolve_relative_period(f.period, now, env.date1904)});
-    }
-  }
-  // Recurring selectors need no clock reading, so they are hoisted only to
-  // drop entries naming a field that does not exist.
-  for (const AuthoredRecurringFilter& f : table.authored_recurring_filters()) {
-    if (f.field_index >= table.fields().size()) {
+      const std::string_view low = payload_text(f.value);
+      if (std::optional<std::string> pattern = caption_wildcard_pattern(f.type, low)) {
+        resolved.low = std::move(*pattern);
+      } else {
+        resolved.low.assign(low);
+        resolved.low_pattern = is_caption_pattern(low);
+        resolved.low_number = caption_number(low);
+      }
+      if (is_range_filter_type(f.type)) {
+        if (!std::holds_alternative<std::string>(f.value_high)) {
+          continue;  // Unbounded above: no-op.
+        }
+        const std::string_view high = payload_text(f.value_high);
+        resolved.high.assign(high);
+        resolved.high_pattern = is_caption_pattern(high);
+        resolved.high_number = caption_number(high);
+      }
+      filters_.push_back(std::move(resolved));
       continue;
     }
-    recurring_months_.push_back(ResolvedRecurring{f.field_index, f.month_low, f.month_high});
+    if (is_operandless_filter_type(f.type)) {
+      if (f.type >= FilterType::DateQ1) {
+        const auto [low, high] = calendar_month_range(f.type);
+        resolved.date_low = static_cast<double>(low);
+        resolved.date_high = static_cast<double>(high);
+      } else {
+        if (!now.has_value()) {
+          now = env.pinned_now.has_value() ? *env.pinned_now : date_time::host_civil_time();
+        }
+        const DateWindow window = resolve_relative_period(f.type, *now, env.date1904);
+        resolved.date_low = window.low;
+        resolved.date_high = window.high;
+      }
+      filters_.push_back(std::move(resolved));
+      continue;
+    }
+    // A date comparison or range: a missing, non-finite or out-of-domain bound
+    // leaves the filter inert.
+    const std::optional<double> low = payload_number(f.value);
+    if (!low.has_value() || !is_valid_date_serial(*low, env.date1904)) {
+      continue;
+    }
+    resolved.date_low = *low;
+    if (is_range_filter_type(f.type)) {
+      const std::optional<double> high = payload_number(f.value_high);
+      if (!high.has_value() || !is_valid_date_serial(*high, env.date1904)) {
+        continue;
+      }
+      resolved.date_high = *high;
+    }
+    filters_.push_back(std::move(resolved));
   }
+}
+
+bool PreparedRecordFilter::caption_passes(const ResolvedFilter& f, const Value& v) const {
+  const std::optional<double> number = v.is_number() ? std::optional<double>(v.as_number()) : std::nullopt;
+  std::string rendered;
+  std::string_view label;
+  if (v.is_text()) {
+    label = v.as_text();
+  } else {
+    rendered = display_string(v);
+    label = rendered;
+  }
+  const auto order_low = [&]() { return caption_order(label, number, f.low, f.low_number, f.low_pattern, f.matcher); };
+  const auto order_high = [&]() {
+    return caption_order(label, number, f.high, f.high_number, f.high_pattern, f.matcher_high);
+  };
+  const auto equal = [&]() {
+    return f.low_pattern ? caption_wildcard_matches(f.matcher, f.low, label) : caption_collate(label, f.low) == 0;
+  };
+  switch (f.type) {
+    case FilterType::LabelEqual:
+      return equal();
+    case FilterType::LabelNotEqual:
+      return !equal();
+    case FilterType::LabelBeginsWith:
+    case FilterType::LabelEndsWith:
+    case FilterType::LabelContains:
+      return caption_wildcard_matches(f.matcher, f.low, label);
+    case FilterType::LabelNotBeginsWith:
+    case FilterType::LabelNotEndsWith:
+    case FilterType::LabelNotContains:
+      return !caption_wildcard_matches(f.matcher, f.low, label);
+    case FilterType::LabelGreaterThan:
+      return order_low() > 0;
+    case FilterType::LabelGreaterThanOrEqual:
+      return order_low() >= 0;
+    case FilterType::LabelLessThan:
+      return order_low() < 0;
+    case FilterType::LabelLessThanOrEqual:
+      return order_low() <= 0;
+    case FilterType::LabelBetween:
+      return order_low() >= 0 && order_high() <= 0;
+    case FilterType::LabelNotBetween:
+      return !(order_low() >= 0 && order_high() <= 0);
+    default:
+      return true;
+  }
+}
+
+bool PreparedRecordFilter::date_passes(const ResolvedFilter& f, const Value& v) const {
+  // Cells outside the date domain (text, blanks, errors) skip a date filter
+  // rather than being dropped.
+  if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
+    return true;
+  }
+  const double serial = v.as_number();
+  switch (f.type) {
+    case FilterType::DateEqual:
+      return serial == f.date_low;
+    case FilterType::DateNotEqual:
+      return serial != f.date_low;
+    case FilterType::DateOlderThan:
+      return serial < f.date_low;
+    case FilterType::DateOlderThanOrEqual:
+      return serial <= f.date_low;
+    case FilterType::DateNewerThan:
+      return serial > f.date_low;
+    case FilterType::DateNewerThanOrEqual:
+      return serial >= f.date_low;
+    case FilterType::DateNotBetween:
+      return serial < f.date_low || serial > f.date_high;
+    default:
+      break;
+  }
+  if (f.type >= FilterType::DateQ1) {
+    const double month = static_cast<double>(date_time::ymd_from_serial(std::floor(serial), date1904_).m);
+    return month >= f.date_low && month <= f.date_high;
+  }
+  // `LabelDate` and the relative periods: an inclusive window.
+  return serial >= f.date_low && serial <= f.date_high;
 }
 
 bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   const PivotCache& cache = *cache_;
-  const PivotTable& table = *table_;
   for (const HiddenItems& hidden : hidden_items_) {
     const Value v = cell_value(cache, record, hidden.field_index);
     if (!hidden.group_items.empty()) {
@@ -397,93 +433,22 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
       return false;
     }
   }
-  for (const ResolvedFilter& resolved : label_filters_) {
-    const PivotFilter& f = *resolved.filter;
-    const Value v = cell_value(cache, record, resolved.field_index);
-    if (f.type == FilterType::LabelDate) {
-      // Date-range filters need the underlying numeric serial; the
-      // rendered label string would lose precision and locale.
-      if (!label_date_filter_passes(f, v, date1904_)) {
-        return false;
-      }
-      continue;
-    }
-    if (!with_display_string(label_value(cache, resolved.field_index, v),
-                             [&](std::string_view label) { return label_filter_passes(f, resolved.matcher, label); })) {
-      return false;
-    }
-  }
-  // Authored `<filters>` caption entries, decoded by the OOXML reader.
-  // `field_index` is the source `fld` attribute, and OOXML keeps
-  // `<pivotFields>` parallel to the bound cache's fields, so it indexes
-  // `table.fields()` directly instead of resolving through a name. An
-  // index past the end is a malformed definition and filters nothing.
-  const auto& caption_filters = table.authored_caption_filters();
-  for (std::size_t ci = 0; ci < caption_filters.size(); ++ci) {
-    const AuthoredCaptionFilter& f = caption_filters[ci];
-    if (f.field_index >= table.fields().size()) {
-      continue;
-    }
-    const Value v = label_value(cache, f.field_index, cell_value(cache, record, f.field_index));
-    if (!with_display_string(
-            v, [&](std::string_view label) { return caption_filter_passes(f, caption_matchers_[ci], label); })) {
-      return false;
-    }
-  }
-  // Authored date-range entries. Their siblings in the same list rank an
-  // axis leaf by its aggregate and so cannot be decided here; they are
-  // applied by the post-aggregation pass instead.
-  for (const AuthoredValueFilter& f : table.authored_value_filters()) {
-    if (f.type != FilterType::LabelDate || f.field_index >= table.fields().size()) {
-      continue;
-    }
-    if (!f.value_high) {
-      continue;  // Unbounded above: no-op, matching `PivotFilter`.
-    }
-    if (!is_valid_date_serial(f.value, date1904_) || !is_valid_date_serial(*f.value_high, date1904_)) {
-      continue;  // Invalid bounds are outside the date domain.
-    }
+  for (const ResolvedFilter& f : filters_) {
     const Value v = cell_value(cache, record, f.field_index);
-    if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
-      continue;  // Non-numeric cells are outside the date domain.
-    }
-    const double serial = v.as_number();
-    if (serial < f.value || serial > *f.value_high) {
-      return false;
-    }
-  }
-  // Authored relative-period entries. Once resolved against the clock they
-  // are ordinary inclusive date windows, so they prune here alongside the
-  // absolute `dateBetween` family above.
-  for (const ResolvedPeriod& resolved : period_windows_) {
-    const Value v = cell_value(cache, record, resolved.field_index);
-    if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
-      continue;  // Non-numeric cells are outside the date domain.
-    }
-    const double serial = v.as_number();
-    if (serial < resolved.window.low || serial > resolved.window.high) {
-      return false;
-    }
-  }
-  for (const ResolvedRecurring& resolved : recurring_months_) {
-    const Value v = cell_value(cache, record, resolved.field_index);
-    if (!v.is_number() || !is_valid_date_serial(v.as_number(), date1904_)) {
-      continue;  // Non-numeric cells are outside the date domain.
-    }
-    const double serial = v.as_number();
-    const unsigned month = date_time::ymd_from_serial(std::floor(serial), date1904_).m;
-    if (month < resolved.month_low || month > resolved.month_high) {
+    const bool kept =
+        is_caption_filter_type(f.type) ? caption_passes(f, label_value(cache, f.field_index, v)) : date_passes(f, v);
+    if (!kept) {
       return false;
     }
   }
   return true;
 }
 
-std::optional<std::string> caption_wildcard_pattern(CaptionPredicate predicate, std::string_view value) {
-  const bool leading = predicate == CaptionPredicate::EndsWith || predicate == CaptionPredicate::NotEndsWith ||
-                       predicate == CaptionPredicate::Contains || predicate == CaptionPredicate::NotContains;
-  const bool trailing = predicate == CaptionPredicate::BeginsWith || predicate == CaptionPredicate::NotBeginsWith ||
-                        predicate == CaptionPredicate::Contains || predicate == CaptionPredicate::NotContains;
+std::optional<std::string> caption_wildcard_pattern(FilterType type, std::string_view value) {
+  const bool leading = type == FilterType::LabelEndsWith || type == FilterType::LabelNotEndsWith ||
+                       type == FilterType::LabelContains || type == FilterType::LabelNotContains;
+  const bool trailing = type == FilterType::LabelBeginsWith || type == FilterType::LabelNotBeginsWith ||
+                        type == FilterType::LabelContains || type == FilterType::LabelNotContains;
   if (!leading && !trailing) {
     return std::nullopt;
   }
@@ -499,7 +464,17 @@ std::optional<std::string> caption_wildcard_pattern(CaptionPredicate predicate, 
   return pattern;
 }
 
-DateWindow resolve_relative_period(RelativePeriod period, const date_time::CivilTime& now, bool date1904) {
+std::optional<std::size_t> filter_field_index(const PivotTable& table, const PivotFilter& f) {
+  if (f.field_name.empty()) {
+    if (f.source.has_value() && f.source->field_index < table.fields().size()) {
+      return static_cast<std::size_t>(f.source->field_index);
+    }
+    return std::nullopt;
+  }
+  return resolve_field_by_any_name(table, f.field_name);
+}
+
+DateWindow resolve_relative_period(FilterType type, const date_time::CivilTime& now, bool date1904) {
   const auto serial = [date1904](int year, unsigned month, unsigned day) {
     return date_time::serial_from_ymd(year, month, day, date1904);
   };
@@ -530,122 +505,64 @@ DateWindow resolve_relative_period(RelativePeriod period, const date_time::Civil
     return DateWindow{start, start + 6.0};
   };
 
-  switch (period) {
-    case RelativePeriod::Today:
+  switch (type) {
+    case FilterType::DateToday:
       return DateWindow{today, today};
-    case RelativePeriod::Yesterday:
+    case FilterType::DateYesterday:
       return DateWindow{today - 1.0, today - 1.0};
-    case RelativePeriod::Tomorrow:
+    case FilterType::DateTomorrow:
       return DateWindow{today + 1.0, today + 1.0};
-    case RelativePeriod::ThisMonth:
+    case FilterType::DateThisMonth:
       return span(year, month, 1);
-    case RelativePeriod::LastMonth: {
+    case FilterType::DateLastMonth: {
       const auto [prev_year, prev_month] = add_months(year, month, -1);
       return span(prev_year, prev_month, 1);
     }
-    case RelativePeriod::NextMonth: {
+    case FilterType::DateNextMonth: {
       const auto [next_year, next_month] = add_months(year, month, 1);
       return span(next_year, next_month, 1);
     }
-    case RelativePeriod::ThisQuarter:
+    case FilterType::DateThisQuarter:
       return span(year, quarter_start, 3);
-    case RelativePeriod::LastQuarter: {
+    case FilterType::DateLastQuarter: {
       const auto [prev_year, prev_month] = add_months(year, quarter_start, -3);
       return span(prev_year, prev_month, 3);
     }
-    case RelativePeriod::NextQuarter: {
+    case FilterType::DateNextQuarter: {
       const auto [next_year, next_month] = add_months(year, quarter_start, 3);
       return span(next_year, next_month, 3);
     }
-    case RelativePeriod::ThisYear:
+    case FilterType::DateThisYear:
       return span(year, 1U, 12);
-    case RelativePeriod::LastYear:
+    case FilterType::DateLastYear:
       return span(year - 1, 1U, 12);
-    case RelativePeriod::NextYear:
+    case FilterType::DateNextYear:
       return span(year + 1, 1U, 12);
-    case RelativePeriod::YearToDate:
+    case FilterType::DateYearToDate:
       // Excel's "year to date" runs from January 1 through today inclusive,
       // not through the end of the year.
       return DateWindow{serial(year, 1U, 1U), today};
-    case RelativePeriod::ThisWeek:
+    case FilterType::DateThisWeek:
       return week_span(0);
-    case RelativePeriod::LastWeek:
+    case FilterType::DateLastWeek:
       return week_span(-1);
-    case RelativePeriod::NextWeek:
+    case FilterType::DateNextWeek:
       return week_span(1);
+    default:
+      break;
   }
   return DateWindow{today, today};
 }
 
-std::optional<PivotFilter> authored_value_filter_as_pivot_filter(const PivotTable& table,
-                                                                 const AuthoredValueFilter& authored) {
-  if (!is_value_filter_type(authored.type)) {
-    return std::nullopt;
-  }
-  const auto on_axis = [&](const std::vector<std::uint32_t>& order) {
-    return std::find(order.begin(), order.end(), authored.field_index) != order.end();
-  };
-  PivotFilter out;
-  if (on_axis(table.row_field_order())) {
-    out.axis = PivotAxis::Row;
-  } else if (on_axis(table.col_field_order())) {
-    out.axis = PivotAxis::Col;
-  } else {
-    return std::nullopt;  // Field is on neither axis: nothing to prune.
-  }
-  out.type = authored.type;
-  out.value = authored.value;
-  if (authored.value_high) {
-    out.value_high = *authored.value_high;
-  }
-  out.data_field_index = authored.data_field_index;
-  // `field_name` stays empty: the caller hands `authored.field_index` to the
-  // post-aggregation pass directly rather than re-resolving it by name.
-  return out;
-}
-
-std::optional<std::vector<bool>> build_running_total_keep(TopNBasis basis, double target, const AxisScores& axis,
-                                                          bool top) {
+std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis) {
   const std::size_t n = axis.scores.size();
   std::vector<bool> keep(n, false);
-  if (basis == TopNBasis::Items) {
-    return std::nullopt;  // Not a running-total flavour.
-  }
-  // Rank the scoring leaves in the requested direction; all-blank leaves
-  // never contribute and never survive, matching the item-count flavour.
-  std::vector<std::uint32_t> order;
-  order.reserve(n);
-  double total = 0.0;
-  for (std::size_t i = 0; i < n; ++i) {
-    if (!axis.all_blank[i]) {
-      order.push_back(static_cast<std::uint32_t>(i));
-      total += axis.scores[i];
-    }
-  }
+  const bool top =
+      f.type == FilterType::ValueTop10 || f.type == FilterType::ValueTopPercent || f.type == FilterType::ValueTopSum;
   const auto by_score = [&](std::uint32_t lhs, std::uint32_t rhs) {
     return top ? axis.scores[lhs] > axis.scores[rhs] : axis.scores[lhs] < axis.scores[rhs];
   };
-  sort_index_order(order, make_index_less(by_score));
-  // `percent` is the same rule expressed as a share of the axis total,
-  // not as a share of the leaf count. Only a threshold low enough for one
-  // leaf to clear it alone tells the two apart, which is what the 50 %
-  // pivot in `tests/fixtures/excel/pivot_value_date_filters.xlsx` is for.
-  const double threshold = basis == TopNBasis::Percent ? total * target / 100.0 : target;
-  double running = 0.0;
-  for (const std::uint32_t idx : order) {
-    if (running >= threshold) {
-      break;
-    }
-    keep[idx] = true;
-    running += axis.scores[idx];
-  }
-  return keep;
-}
-
-std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis, bool top) {
-  const std::size_t n = axis.scores.size();
-  std::vector<bool> keep(n, false);
-  if (f.type == FilterType::ValueTop10) {
+  if (f.type == FilterType::ValueTop10 || f.type == FilterType::ValueBottomCount) {
     // The filter value is embedder-supplied, so saturate it instead of
     // narrowing it blind: a request larger than the axis keeps every leaf,
     // while a negative one — and NaN, which loses every comparison — keeps
@@ -653,22 +570,49 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
     const double requested = filter_number_value(f);
     const std::size_t top_n =
         index_from_double(requested, n + 1U).value_or(requested > static_cast<double>(n) ? n : 0U);
-    // Sort indices by score in the requested direction; all-blank leaves
-    // sink to the bottom of the ranking regardless of N or direction, so
-    // a Bottom-N filter never picks a blank as one of its "lowest" items.
-    const auto by_score = [&](std::uint32_t lhs, std::uint32_t rhs) {
+    // All-blank leaves sink to the bottom of the ranking regardless of N or
+    // direction, so a Bottom-N filter never picks a blank as one of its
+    // "lowest" items.
+    const auto ranked = [&](std::uint32_t lhs, std::uint32_t rhs) {
       if (axis.all_blank[lhs] != axis.all_blank[rhs]) {
         return !axis.all_blank[lhs];
       }
-      return top ? axis.scores[lhs] > axis.scores[rhs] : axis.scores[lhs] < axis.scores[rhs];
+      return by_score(lhs, rhs);
     };
     std::vector<std::uint32_t> order;
-    sorted_index_order(order, static_cast<std::uint32_t>(n), make_index_less(by_score));
+    sorted_index_order(order, static_cast<std::uint32_t>(n), make_index_less(ranked));
     const std::size_t k = std::min(top_n, n);
     for (std::size_t i = 0; i < k; ++i) {
       if (!axis.all_blank[order[i]]) {
         keep[order[i]] = true;
       }
+    }
+    return keep;
+  }
+  if (f.type == FilterType::ValueTopPercent || f.type == FilterType::ValueBottomPercent ||
+      f.type == FilterType::ValueTopSum || f.type == FilterType::ValueBottomSum) {
+    // All-blank leaves never contribute and never survive, matching the
+    // count types.
+    std::vector<std::uint32_t> order;
+    order.reserve(n);
+    double total = 0.0;
+    for (std::size_t i = 0; i < n; ++i) {
+      if (!axis.all_blank[i]) {
+        order.push_back(static_cast<std::uint32_t>(i));
+        total += axis.scores[i];
+      }
+    }
+    sort_index_order(order, make_index_less(by_score));
+    const double target = filter_number_value(f);
+    const bool percent = f.type == FilterType::ValueTopPercent || f.type == FilterType::ValueBottomPercent;
+    const double threshold = percent ? total * target / 100.0 : target;
+    double running = 0.0;
+    for (const std::uint32_t idx : order) {
+      if (running >= threshold) {
+        break;
+      }
+      keep[idx] = true;
+      running += axis.scores[idx];
     }
     return keep;
   }
@@ -706,8 +650,8 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
   }
 }
 
-std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilter& f, TopNBasis basis, double target,
-                                                                 bool top, const std::vector<AxisLeafGroup>& groups,
+std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilter& f,
+                                                                 const std::vector<AxisLeafGroup>& groups,
                                                                  const AxisScores& group_scores,
                                                                  std::size_t leaf_count) {
   std::vector<bool> keep(leaf_count, false);
@@ -722,8 +666,7 @@ std::optional<std::vector<bool>> build_grouped_value_filter_keep(const PivotFilt
                       group_scores.scores.begin() + static_cast<std::ptrdiff_t>(run_end));
     run.all_blank.assign(group_scores.all_blank.begin() + static_cast<std::ptrdiff_t>(run_start),
                          group_scores.all_blank.begin() + static_cast<std::ptrdiff_t>(run_end));
-    const auto run_keep = basis == TopNBasis::Items ? build_value_filter_keep(f, run, top)
-                                                    : build_running_total_keep(basis, target, run, top);
+    const auto run_keep = build_value_filter_keep(f, run);
     if (!run_keep) {
       return std::nullopt;
     }

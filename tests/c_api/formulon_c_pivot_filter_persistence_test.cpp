@@ -267,21 +267,28 @@ constexpr std::string_view kMixedFilters =
 
 }  // namespace
 
-// Entries the C ABI cannot list are kept and evaluated, and the whole block
-// is saved byte for byte; editing the listed entry leaves them in place.
+// Every decodable entry is listed and evaluated, an unknown one is kept as
+// is, and the whole block is saved byte for byte; removing the listed
+// entries leaves the unknown one in place.
 TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim) {
   const std::vector<std::uint8_t> package = BuildFilterPackage("", kMixedFilters);
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_last_error_message();
   std::size_t count = 0;
   ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, 0, &count), 0);
-  ASSERT_EQ(count, 1U);
-  fm_pivot_filter_spec_t read{};
-  ASSERT_EQ(fm_workbook_pivot_filter_at(wb.handle, 0, 0, 0, &read), 0) << fm_last_error_message();
-  EXPECT_EQ(read.type, FM_PIVOT_FILTER_VALUE_TOP_10);
-  EXPECT_STREQ(read.field_name, "Region");
-  EXPECT_EQ(read.value_kind, FM_PIVOT_FILTER_VALUE_INT);
-  EXPECT_EQ(read.value_int, 2);
+  ASSERT_EQ(count, 3U);
+  const fm_pivot_filter_type_t types[] = {FM_PIVOT_FILTER_LABEL_NOT_EQUAL, FM_PIVOT_FILTER_VALUE_TOP_10,
+                                          FM_PIVOT_FILTER_VALUE_TOP_PERCENT};
+  for (std::size_t i = 0; i < 3U; ++i) {
+    fm_pivot_filter_spec_t read{};
+    ASSERT_EQ(fm_workbook_pivot_filter_at(wb.handle, 0, 0, i, &read), 0) << fm_last_error_message();
+    EXPECT_EQ(read.type, types[i]);
+    EXPECT_STREQ(read.field_name, "Region");
+  }
+  fm_pivot_filter_spec_t top{};
+  ASSERT_EQ(fm_workbook_pivot_filter_at(wb.handle, 0, 0, 1, &top), 0) << fm_last_error_message();
+  EXPECT_EQ(top.value_kind, FM_PIVOT_FILTER_VALUE_INT);
+  EXPECT_EQ(top.value_int, 2);
   // not-East, then top 2 of North 400 / South 200, then the top 50% of 600.
   const std::set<std::string> kept = {"North"};
   EXPECT_EQ(RowLabels(wb.handle), kept);
@@ -292,14 +299,17 @@ TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim
   ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_last_error_message();
   EXPECT_EQ(RowLabels(back.handle), kept);
 
-  ASSERT_EQ(fm_workbook_pivot_filter_remove_at(back.handle, 0, 0, 0), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_filter_remove_at(back.handle, 0, 0, 1), 0) << fm_last_error_message();
   const std::string edited = FiltersBlock(SavedPivotXml(back.handle));
   EXPECT_EQ(edited.rfind("<filters count=\"3\">", 0), 0U) << edited;
   EXPECT_EQ(edited.find("type=\"count\""), std::string::npos) << edited;
   EXPECT_LT(edited.find("captionNotEqual"), edited.find("percent"));
   EXPECT_LT(edited.find("percent"), edited.find("someFutureFamily"));
   ASSERT_EQ(fm_workbook_pivot_filter_clear(back.handle, 0, 0), 0);
-  EXPECT_EQ(FiltersBlock(SavedPivotXml(back.handle)), edited);
+  const std::string cleared = FiltersBlock(SavedPivotXml(back.handle));
+  EXPECT_EQ(cleared.rfind("<filters count=\"1\">", 0), 0U) << cleared;
+  EXPECT_NE(cleared.find("someFutureFamily"), std::string::npos) << cleared;
+  EXPECT_EQ(cleared.find("captionNotEqual"), std::string::npos) << cleared;
 }
 
 // The subtotal selection reads back before a save, after one, and from a

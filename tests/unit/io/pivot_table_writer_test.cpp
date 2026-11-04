@@ -512,7 +512,6 @@ TEST(PivotTableWriter, ActiveFiltersSerializeIntoFiltersBlock) {
   ASSERT_TRUE(back.source.has_value());
   EXPECT_EQ(back.source->field_index, 0U);
   EXPECT_TRUE(reparsed_or.value().retained_filters().empty());
-  EXPECT_TRUE(reparsed_or.value().authored_caption_filters().empty());
   const std::string rewritten = write_pivot_table_definition(reparsed_or.value());
   const auto block = [](const std::string& xml) {
     return xml.substr(xml.find("<filters"), xml.rfind("</filters>") - xml.find("<filters"));

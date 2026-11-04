@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "pivot/aggregator.h"
-#include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/hierarchy_builder.h"
 #include "pivot/pivot_cache.h"
@@ -207,26 +206,14 @@ struct ValueFilterState {
   bool any_applied = false;
 };
 
-// `basis` selects how a top-N entry counts: `Items` uses the
-// item-count rule, the other two accumulate a running total. `top`
-// selects the ranking direction: `true` for Top N, `false` for Bottom
-// N. Both are only ever non-default for an authored entry, since the
-// dialog choice has no embedder-facing counterpart on `PivotFilter`.
-// `field_index` names the filtered field; one that is absent from the
-// filter's axis falls back to that axis's innermost field.
-void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::optional<std::size_t> field_index,
-                      TopNBasis basis = TopNBasis::Items, bool top = true) {
+// Applies the value filter `f` to the leaves of `axis`, pruning the items of
+// the field at `depth` in that axis's order.
+void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, PivotAxis axis, std::size_t depth) {
   const PivotTable& table = state.table;
   const PivotCache& cache = state.cache;
   const RecordBuckets& buckets = state.buckets;
   PivotResult& result = state.result;
   const std::size_t data_field_count = table.data_fields().size();
-  if (!is_value_filter_type(f.type)) {
-    return;  // Label/Date filters handled pre-aggregation.
-  }
-  if (data_field_count == 0) {
-    return;
-  }
   // A value filter names the measure whose aggregate determines ranking.
   // Invalid selectors are deliberately a no-op for filters constructed
   // directly against the C++ model; public binding APIs reject them before
@@ -234,18 +221,7 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
   if (f.data_field_index >= data_field_count) {
     return;
   }
-  const bool row_axis = f.axis == PivotAxis::Row;
-  const std::vector<std::uint32_t>& order = row_axis ? table.row_field_order() : table.col_field_order();
-  if (order.empty()) {
-    return;  // An axis with no fields has nothing to prune.
-  }
-  std::size_t depth = order.size() - 1U;
-  if (field_index) {
-    const auto it = std::find(order.begin(), order.end(), *field_index);
-    if (it != order.end()) {
-      depth = static_cast<std::size_t>(it - order.begin());
-    }
-  }
+  const bool row_axis = axis == PivotAxis::Row;
   // `leaf_count` is the number of leaves currently standing on the
   // filtered axis, which is what `result.values` is indexed by along it.
   const std::vector<std::size_t>& axis_leaves = row_axis ? state.surviving_row_leaves : state.surviving_col_leaves;
@@ -259,6 +235,7 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
   // Each item's score is its own aggregate re-derived from the records,
   // so a non-additive aggregation ranks by the value the item displays.
   const PivotDataField& df = table.data_fields()[f.data_field_index];
+  const std::vector<std::vector<Value>>& leaf_totals = row_axis ? result.row_leaf_totals : result.col_leaf_totals;
   AxisScores scores;
   scores.scores.assign(groups.size(), 0.0);
   scores.all_blank.assign(groups.size(), true);
@@ -271,6 +248,15 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
     const RecordIndexView records = make_leaf_set_record_view(buckets, row_axis ? group_leaves : cross_leaves,
                                                               row_axis ? cross_leaves : group_leaves, spans);
     if (records.empty()) {
+      // An item without records (a calculated item, or one listed with no
+      // data) scores the total its own leaf shows, and 0 when it shows none.
+      scores.all_blank[g] = false;
+      const std::size_t first = groups[g].first_leaf;
+      if (groups[g].leaf_count == 1U && first < leaf_totals.size() && f.data_field_index < leaf_totals[first].size()) {
+        if (const auto n = numeric_aggregate_value(leaf_totals[first][f.data_field_index])) {
+          scores.scores[g] = *n;
+        }
+      }
       continue;
     }
     if (const auto n =
@@ -279,8 +265,7 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
       scores.all_blank[g] = false;
     }
   }
-  const auto keep_or =
-      build_grouped_value_filter_keep(f, basis, filter_number_value(f), top, groups, scores, leaf_count);
+  const auto keep_or = build_grouped_value_filter_keep(f, groups, scores, leaf_count);
   if (!keep_or) {
     return;
   }
@@ -301,6 +286,37 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, std::option
   state.any_applied = true;
 }
 
+// The axis and depth `f` prunes. The field's own position when it sits on a
+// report axis; otherwise an entry added through the API falls back to the
+// innermost field of its stated axis, while a decoded one filters nothing.
+std::optional<std::pair<PivotAxis, std::size_t>> ValueFilterTarget(const PivotTable& table, const PivotFilter& f,
+                                                                   std::size_t field_index) {
+  const auto depth_in = [&](const std::vector<std::uint32_t>& order) -> std::optional<std::size_t> {
+    const auto it = std::find(order.begin(), order.end(), field_index);
+    if (it == order.end()) {
+      return std::nullopt;
+    }
+    return static_cast<std::size_t>(it - order.begin());
+  };
+  const std::vector<std::uint32_t>& stated =
+      f.axis == PivotAxis::Col ? table.col_field_order() : table.row_field_order();
+  const PivotAxis stated_axis = f.axis == PivotAxis::Col ? PivotAxis::Col : PivotAxis::Row;
+  if (const auto depth = depth_in(stated)) {
+    return std::pair<PivotAxis, std::size_t>{stated_axis, *depth};
+  }
+  if (!f.source.has_value()) {
+    if (stated.empty()) {
+      return std::nullopt;  // An axis with no fields has nothing to prune.
+    }
+    return std::pair<PivotAxis, std::size_t>{stated_axis, stated.size() - 1U};
+  }
+  const PivotAxis other_axis = stated_axis == PivotAxis::Row ? PivotAxis::Col : PivotAxis::Row;
+  if (const auto depth = depth_in(other_axis == PivotAxis::Col ? table.col_field_order() : table.row_field_order())) {
+    return std::pair<PivotAxis, std::size_t>{other_axis, *depth};
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 void apply_value_filters(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
@@ -313,30 +329,23 @@ void apply_value_filters(const PivotTable& table, const PivotCache& cache, const
   state.surviving_col_leaves.resize(col_leaf_count);
   std::iota(state.surviving_col_leaves.begin(), state.surviving_col_leaves.end(), std::size_t{0});
 
-  // Each filter prunes what the previous ones left, so the two lists run
-  // interleaved in the document order `active_before` records.
-  const std::vector<PivotFilter>& active = table.active_filters();
-  std::size_t next_active = 0;
-  const auto apply_active_until = [&](std::size_t end) {
-    for (; next_active < end && next_active < active.size(); ++next_active) {
-      const PivotFilter& f = active[next_active];
-      const std::optional<std::size_t> field_index = resolve_field_by_any_name(table, f.field_name);
-      // An unresolved active filter has no field to act on. Treat it as the
-      // no-op promised by PreparedRecordFilter instead of allowing a value
-      // filter to fall back to the innermost axis field.
-      if (field_index.has_value()) {
-        ApplyValueFilter(state, f, field_index);
+  // Each filter prunes what the previous ones left, in document order.
+  if (!table.data_fields().empty()) {
+    for (const PivotFilter& f : table.active_filters()) {
+      if (!is_value_filter_type(f.type)) {
+        continue;  // Caption and date filters are applied per record.
+      }
+      // An unresolved filter has no field to act on: the no-op promised by
+      // `PreparedRecordFilter`, never a fallback to the innermost axis field.
+      const std::optional<std::size_t> field_index = filter_field_index(table, f);
+      if (!field_index.has_value()) {
+        continue;
+      }
+      if (const auto target = ValueFilterTarget(table, f, *field_index)) {
+        ApplyValueFilter(state, f, target->first, target->second);
       }
     }
-  };
-  for (const AuthoredValueFilter& authored : table.authored_value_filters()) {
-    apply_active_until(authored.active_before);
-    if (const auto projected = authored_value_filter_as_pivot_filter(table, authored)) {
-      ApplyValueFilter(state, *projected, static_cast<std::size_t>(authored.field_index), authored.top_n_basis,
-                       authored.top);
-    }
   }
-  apply_active_until(active.size());
   if (state.any_applied) {
     ReaggregateTotalsAfterValueFilter(table, cache, buckets, state.surviving_row_leaves, state.surviving_col_leaves,
                                       row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);

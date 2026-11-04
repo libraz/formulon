@@ -4315,8 +4315,20 @@ typedef enum {
 } fm_pivot_show_as_t;
 
 /**
- * @brief Filter type of a pivot label / value / date filter.
- *        Numbering mirrors `formulon::pivot::FilterType`.
+ * @brief Filter type of a pivot label / value / date filter: every
+ *        `ST_PivotFilterType` member but `unknown`. Numbering mirrors
+ *        `formulon::pivot::FilterType`.
+ *
+ *   * Value types (0-2, 6-11, 24-28) take a number and score
+ *     `data_field_index`. The top / bottom types keep items until the count,
+ *     the percent of the field total, or the running sum is reached.
+ *   * Label types (3, 4, 12-23) take text as entered; `*` and `?` are
+ *     wildcards and `~` escapes them. `LABEL_BETWEEN` / `LABEL_NOT_BETWEEN`
+ *     take their upper bound in `value_high_text`.
+ *   * Date types (5, 29-35) take Excel date serials; `LABEL_DATE` is the
+ *     inclusive date range.
+ *   * Relative periods (36-51) and calendar positions (52-67) take no
+ *     operand.
  */
 typedef enum {
   FM_PIVOT_FILTER_VALUE_TOP_10 = 0,
@@ -4324,7 +4336,69 @@ typedef enum {
   FM_PIVOT_FILTER_VALUE_BETWEEN = 2,
   FM_PIVOT_FILTER_LABEL_CONTAINS = 3,
   FM_PIVOT_FILTER_LABEL_BEGINS_WITH = 4,
-  FM_PIVOT_FILTER_LABEL_DATE = 5
+  FM_PIVOT_FILTER_LABEL_DATE = 5,
+  FM_PIVOT_FILTER_VALUE_EQUAL = 6,
+  FM_PIVOT_FILTER_VALUE_NOT_EQUAL = 7,
+  FM_PIVOT_FILTER_VALUE_GREATER_THAN_OR_EQUAL = 8,
+  FM_PIVOT_FILTER_VALUE_LESS_THAN = 9,
+  FM_PIVOT_FILTER_VALUE_LESS_THAN_OR_EQUAL = 10,
+  FM_PIVOT_FILTER_VALUE_NOT_BETWEEN = 11,
+  FM_PIVOT_FILTER_LABEL_EQUAL = 12,
+  FM_PIVOT_FILTER_LABEL_NOT_EQUAL = 13,
+  FM_PIVOT_FILTER_LABEL_NOT_BEGINS_WITH = 14,
+  FM_PIVOT_FILTER_LABEL_ENDS_WITH = 15,
+  FM_PIVOT_FILTER_LABEL_NOT_ENDS_WITH = 16,
+  FM_PIVOT_FILTER_LABEL_NOT_CONTAINS = 17,
+  FM_PIVOT_FILTER_LABEL_GREATER_THAN = 18,
+  FM_PIVOT_FILTER_LABEL_GREATER_THAN_OR_EQUAL = 19,
+  FM_PIVOT_FILTER_LABEL_LESS_THAN = 20,
+  FM_PIVOT_FILTER_LABEL_LESS_THAN_OR_EQUAL = 21,
+  FM_PIVOT_FILTER_LABEL_BETWEEN = 22,
+  FM_PIVOT_FILTER_LABEL_NOT_BETWEEN = 23,
+  FM_PIVOT_FILTER_VALUE_BOTTOM_COUNT = 24,
+  FM_PIVOT_FILTER_VALUE_TOP_PERCENT = 25,
+  FM_PIVOT_FILTER_VALUE_BOTTOM_PERCENT = 26,
+  FM_PIVOT_FILTER_VALUE_TOP_SUM = 27,
+  FM_PIVOT_FILTER_VALUE_BOTTOM_SUM = 28,
+  FM_PIVOT_FILTER_DATE_EQUAL = 29,
+  FM_PIVOT_FILTER_DATE_NOT_EQUAL = 30,
+  FM_PIVOT_FILTER_DATE_OLDER_THAN = 31,
+  FM_PIVOT_FILTER_DATE_OLDER_THAN_OR_EQUAL = 32,
+  FM_PIVOT_FILTER_DATE_NEWER_THAN = 33,
+  FM_PIVOT_FILTER_DATE_NEWER_THAN_OR_EQUAL = 34,
+  FM_PIVOT_FILTER_DATE_NOT_BETWEEN = 35,
+  FM_PIVOT_FILTER_DATE_TOMORROW = 36,
+  FM_PIVOT_FILTER_DATE_TODAY = 37,
+  FM_PIVOT_FILTER_DATE_YESTERDAY = 38,
+  FM_PIVOT_FILTER_DATE_NEXT_WEEK = 39,
+  FM_PIVOT_FILTER_DATE_THIS_WEEK = 40,
+  FM_PIVOT_FILTER_DATE_LAST_WEEK = 41,
+  FM_PIVOT_FILTER_DATE_NEXT_MONTH = 42,
+  FM_PIVOT_FILTER_DATE_THIS_MONTH = 43,
+  FM_PIVOT_FILTER_DATE_LAST_MONTH = 44,
+  FM_PIVOT_FILTER_DATE_NEXT_QUARTER = 45,
+  FM_PIVOT_FILTER_DATE_THIS_QUARTER = 46,
+  FM_PIVOT_FILTER_DATE_LAST_QUARTER = 47,
+  FM_PIVOT_FILTER_DATE_NEXT_YEAR = 48,
+  FM_PIVOT_FILTER_DATE_THIS_YEAR = 49,
+  FM_PIVOT_FILTER_DATE_LAST_YEAR = 50,
+  FM_PIVOT_FILTER_DATE_YEAR_TO_DATE = 51,
+  FM_PIVOT_FILTER_DATE_Q1 = 52,
+  FM_PIVOT_FILTER_DATE_Q2 = 53,
+  FM_PIVOT_FILTER_DATE_Q3 = 54,
+  FM_PIVOT_FILTER_DATE_Q4 = 55,
+  FM_PIVOT_FILTER_DATE_M1 = 56,
+  FM_PIVOT_FILTER_DATE_M2 = 57,
+  FM_PIVOT_FILTER_DATE_M3 = 58,
+  FM_PIVOT_FILTER_DATE_M4 = 59,
+  FM_PIVOT_FILTER_DATE_M5 = 60,
+  FM_PIVOT_FILTER_DATE_M6 = 61,
+  FM_PIVOT_FILTER_DATE_M7 = 62,
+  FM_PIVOT_FILTER_DATE_M8 = 63,
+  FM_PIVOT_FILTER_DATE_M9 = 64,
+  FM_PIVOT_FILTER_DATE_M10 = 65,
+  FM_PIVOT_FILTER_DATE_M11 = 66,
+  FM_PIVOT_FILTER_DATE_M12 = 67
 } fm_pivot_filter_type_t;
 
 /**
@@ -4366,10 +4440,10 @@ typedef enum {
 
 /**
  * @brief Discriminator for the variant payload carried by a pivot filter
- *        spec. `FM_PIVOT_FILTER_VALUE_NONE` (= -1) means the slot is unset
- *        (only meaningful for the optional upper-bound payload on range
- *        filters); the int / double / text variants mirror
- *        `std::variant<int, double, std::string>`.
+ *        spec. `FM_PIVOT_FILTER_VALUE_NONE` (= -1) means the slot is unset:
+ *        the payload of a relative-period or calendar-position type, or an
+ *        absent upper bound. The kinds mirror
+ *        `std::variant<std::monostate, int, double, std::string>`.
  */
 typedef enum {
   FM_PIVOT_FILTER_VALUE_NONE = -1,
@@ -4532,23 +4606,26 @@ typedef struct {
  *   * `axis`           — pivot axis the filter targets.
  *   * `field_name`     — required; the pivot field's name (or display name).
  *   * `type`           — filter type.
- *   * `value_kind`     — discriminator for the primary `value` payload.
- *                        For non-range filters this must be one of the
- *                        three concrete kinds (the `_NONE` sentinel is
- *                        rejected). For range filters (`VALUE_BETWEEN`,
- *                        `LABEL_DATE`) this is the lower bound.
+ *   * `value_kind`     — discriminator for the primary `value` payload, the
+ *                        lower bound of a range type. `_NONE` for the
+ *                        relative-period and calendar-position types and
+ *                        rejected for every other type; `TEXT` for a label
+ *                        type, `INT` or `DOUBLE` for a value or date type.
  *   * `value_int`      — int payload; consulted iff `value_kind == INT`.
  *   * `value_double`   — double payload; consulted iff `value_kind == DOUBLE`.
  *   * `value_text`     — UTF-8 payload; consulted iff `value_kind == TEXT`.
  *                        Must be non-NULL when `value_kind == TEXT`.
  *   * `value_high_kind` — discriminator for the upper-bound payload.
  *                        `FM_PIVOT_FILTER_VALUE_NONE` for non-range filters.
- *                        For range filters, must be `INT` or `DOUBLE`
- *                        (text upper bounds are not modelled).
+ *                        `TEXT` for `LABEL_BETWEEN` / `LABEL_NOT_BETWEEN`;
+ *                        `INT` or `DOUBLE` for the other range types.
  *   * `value_high_int` / `value_high_double` — upper bound payload.
  *   * `data_field_index` — which data-field aggregate a value filter scores.
  *                        Validated against the pivot's data fields for the
  *                        value filter types; label/date filters ignore it.
+ *   * `value_high_text` — UTF-8 upper bound of `LABEL_BETWEEN` /
+ *                        `LABEL_NOT_BETWEEN`; must be non-NULL for them and
+ *                        NULL for every other type.
  */
 typedef struct {
   fm_pivot_axis_t axis;
@@ -4562,6 +4639,7 @@ typedef struct {
   int32_t value_high_int;
   double value_high_double;
   uint32_t data_field_index;
+  const char* value_high_text;
 } fm_pivot_filter_spec_t;
 
 /* --- Pivot caches (workbook-owned) --------------------------------------- */
@@ -5268,15 +5346,14 @@ FM_API fm_status_t fm_workbook_pivot_get_col_field_order(const fm_workbook_t* wb
  * `_remove_at`):
  *
  * The list is the pivot's label / value / date filters and is saved as the
- * definition's `<filters>` block. A loaded file's entries that this
- * vocabulary expresses appear here: caption contains / begins-with, a top-N
- * item count from the top, value greater-than and between, and date between.
- * The rest of a loaded block (other caption and value comparisons, Bottom N,
- * percent / sum top-N, relative and recurring dates, unknown types) is not
- * listed, still filters, and is re-emitted verbatim on save; `_clear` and
- * `_remove_at` leave it in place. A loaded entry is saved byte-for-byte while
- * it still applies to the field and data field it was read with. An entry
- * whose field no longer resolves filters nothing and is not saved.
+ * definition's `<filters>` block. Every entry of a loaded block whose type
+ * this ABI enumerates appears here, and `_clear` / `_remove_at` remove it.
+ * Only entries the model cannot express (an unknown type, a member-property
+ * or OLAP measure filter, criteria that do not decode) are not listed; they
+ * filter nothing and are re-emitted verbatim on save in their original
+ * position. A loaded entry is saved byte-for-byte while it still applies to
+ * the field and data field it was read with. An entry whose field no longer
+ * resolves filters nothing and is not saved.
  */
 
 /** @brief Number of filters on the pivot; see the persistence contract
@@ -5312,9 +5389,9 @@ FM_API fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, size_t s
 /**
  * @brief Appends an active filter. `spec->field_name` must be non-NULL;
  *        `spec->value_text` must be non-NULL when
- *        `spec->value_kind == FM_PIVOT_FILTER_VALUE_TEXT`. The optional
- *        upper-bound payload is honoured only for range filter types
- *        (`VALUE_BETWEEN`, `LABEL_DATE`).
+ *        `spec->value_kind == FM_PIVOT_FILTER_VALUE_TEXT`. The upper-bound
+ *        payload is honoured only for the range types (`*_BETWEEN`,
+ *        `*_NOT_BETWEEN`, `LABEL_DATE`).
  *
  * The entry is saved with the pivot; see the persistence contract above.
  *

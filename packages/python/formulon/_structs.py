@@ -520,6 +520,7 @@ PIVOT_FILTER_SPEC = Struct(
         ("value_high_int", I32),
         ("value_high_double", F64),
         ("data_field_index", U32),
+        ("value_high_text", PTR),
     ],
 )
 
