@@ -426,37 +426,14 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // basis 0, European for basis 4), actual/365 (basis 3), or actual days over
 // 366 / 365 by whether the purchase year is a leap year (basis 1).
 double amordegrc_first_period_fraction(double purchased, double first_period, int basis, bool date1904) noexcept {
-  const date_time::YMD a = date_time::ymd_from_serial(purchased, date1904);
-  const date_time::YMD b = date_time::ymd_from_serial(first_period, date1904);
   if (basis == 3) {
     return (first_period - purchased) / 365.0;
   }
   if (basis == 1) {
+    const date_time::YMD a = date_time::ymd_from_serial(purchased, date1904);
     return (first_period - purchased) / (date_time::days_in_month(a.y, 2u) == 29u ? 366.0 : 365.0);
   }
-  unsigned d1 = a.d;
-  unsigned d2 = b.d;
-  if (basis == 0) {
-    if (is_feb_end(a) && is_feb_end(b)) {
-      d2 = 30u;
-    }
-    if (is_feb_end(a)) {
-      d1 = 30u;
-    }
-    if (d1 == 31u) {
-      d1 = 30u;
-    }
-    if (d2 == 31u && d1 >= 30u) {
-      d2 = 30u;
-    }
-  } else {
-    d1 = d1 == 31u ? 30u : d1;
-    d2 = d2 == 31u ? 30u : d2;
-  }
-  const double days = static_cast<double>(b.y - a.y) * 360.0 +
-                      (static_cast<double>(b.m) - static_cast<double>(a.m)) * 30.0 +
-                      (static_cast<double>(d2) - static_cast<double>(d1));
-  return days / 360.0;
+  return days_30_360(purchased, first_period, 2, basis == 0, date1904) / 360.0;
 }
 
 Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {

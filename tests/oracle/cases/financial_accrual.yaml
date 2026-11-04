@@ -409,3 +409,19 @@ cases:
   - id: amordegrc_cell_54
     formula: "=AMORDEGRC(1589.65,41877,42176,2103.28,0,0.266,4)"
     tolerance: { abs: 0, rel: 0 }
+  # -- AMORDEGRC basis 0 from a February-end purchase ---------------------
+  - id: amordegrc_feb_end_to_day31
+    description: "A day-31 period end stays 31 when the purchase day is below 30 -> 323"
+    formula: "=AMORDEGRC(10000,DATE(2023,2,28),DATE(2023,3,31),1000,0,0.15,0)"
+  - id: amordegrc_feb_end_to_day31_period1
+    formula: "=AMORDEGRC(10000,DATE(2023,2,28),DATE(2023,3,31),1000,1,0.15,0)"
+  - id: amordegrc_leap_feb_end_to_day31
+    formula: "=AMORDEGRC(10000,DATE(2024,2,29),DATE(2024,3,31),1000,0,0.15,0)"
+  - id: amordegrc_leap_feb28_to_day31
+    formula: "=AMORDEGRC(10000,DATE(2024,2,28),DATE(2024,3,31),1000,0,0.15,0)"
+  - id: amordegrc_feb_end_to_dec31
+    formula: "=AMORDEGRC(10000,DATE(2023,2,28),DATE(2023,12,31),1000,0,0.15,0)"
+  - id: amordegrc_jan31_to_day31
+    formula: "=AMORDEGRC(10000,DATE(2023,1,31),DATE(2023,3,31),1000,0,0.15,0)"
+  - id: amorlinc_feb_end_to_day31
+    formula: "=AMORLINC(10000,DATE(2023,2,28),DATE(2023,3,31),1000,0,0.15,0)"
