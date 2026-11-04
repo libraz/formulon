@@ -31,6 +31,20 @@ TEST(ParseA1Ref, SingleCellBasic) {
   EXPECT_EQ(p.col, 0U);
 }
 
+TEST(ParseA1Ref, BareQualifierAcceptsNonAsciiName) {
+  const A1Parse p = parse_a1_ref("\xE5\xA3\xB2\xE4\xB8\x8A!A1");
+  EXPECT_TRUE(p.valid);
+  EXPECT_EQ(p.sheet, "\xE5\xA3\xB2\xE4\xB8\x8A");
+  EXPECT_EQ(p.row, 0U);
+  EXPECT_EQ(p.col, 0U);
+}
+
+TEST(ParseA1Ref, BareQualifierAcceptsDot) {
+  const A1Parse p = parse_a1_ref("Sheet.1!A1");
+  EXPECT_TRUE(p.valid);
+  EXPECT_EQ(p.sheet, "Sheet.1");
+}
+
 TEST(ParseA1Ref, SingleCellRequiresRow) {
   // Bare column letter is not a valid single-cell ref.
   const A1Parse p = parse_a1_ref("D");

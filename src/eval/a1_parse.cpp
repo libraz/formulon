@@ -12,6 +12,7 @@
 
 #include "eval/eval_profile_scope.h"
 #include "excel_locale.h"
+#include "parser/parser_detail.h"
 #include "sheet.h"
 #include "utils/a1_column.h"
 #include "utils/strings.h"
@@ -228,13 +229,10 @@ SheetQualifier parse_sheet_qualifier(std::string_view text, std::size_t* i, std:
     *i = after + 1;
     return SheetQualifier::kParsed;
   }
-  // Bare sheet name: run of letters/digits/underscore followed by `!`.
+  // Bare sheet name: the formula parser's bare qualifier run followed by `!`.
   // We only commit to treating it as a sheet qualifier if we find the
   // `!` — otherwise the run is part of the reference itself.
-  std::size_t j = 0;
-  while (j < text.size() && (is_letter(text[j]) || is_digit(text[j]) || text[j] == '_')) {
-    ++j;
-  }
+  const std::size_t j = parser::detail::BareQualifierRunLength(text, 0);
   if (j > 0 && j < text.size() && text[j] == '!') {
     *sheet = text.substr(0, j);
     *i = j + 1;

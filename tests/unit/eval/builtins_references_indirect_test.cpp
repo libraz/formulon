@@ -53,6 +53,20 @@ TEST(BuiltinsIndirect, QualifiedSheetBare) {
   EXPECT_EQ(std::string(v.as_text()), "hit");
 }
 
+TEST(BuiltinsIndirect, QualifiedSheetBareNonAsciiAndDot) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("\xE5\xA3\xB2\xE4\xB8\x8A");
+  wb.add_sheet("Sheet.1");
+  wb.sheet(1).set_cell_value(0, 0, Value::number(11.0));
+  wb.sheet(2).set_cell_value(0, 0, Value::number(22.0));
+  const Value a = EvalSourceIn("=INDIRECT(\"\xE5\xA3\xB2\xE4\xB8\x8A!A1\")", wb, wb.sheet(0));
+  ASSERT_TRUE(a.is_number());
+  EXPECT_DOUBLE_EQ(a.as_number(), 11.0);
+  const Value b = EvalSourceIn("=INDIRECT(\"Sheet.1!A1\")", wb, wb.sheet(0));
+  ASSERT_TRUE(b.is_number());
+  EXPECT_DOUBLE_EQ(b.as_number(), 22.0);
+}
+
 TEST(BuiltinsIndirect, QualifiedSheetQuotedWithSpace) {
   Workbook wb = Workbook::create();
   wb.add_sheet("My Data");
