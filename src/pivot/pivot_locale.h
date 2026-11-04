@@ -11,12 +11,15 @@
 #ifndef FORMULON_PIVOT_PIVOT_LOCALE_H_
 #define FORMULON_PIVOT_PIVOT_LOCALE_H_
 
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 
 #include "excel_profile.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 
 namespace formulon::pivot {
@@ -52,6 +55,14 @@ std::string_view data_field_separator(ExcelProfile profile);
 /// or "求和项:Amount" (zh-CN): the aggregation label, the locale's
 /// separator, then the field name.
 std::string data_field_display_name(pivot::Aggregation agg, std::string_view field_name, ExcelProfile profile);
+
+/// Name Excel gives a new data field aggregating `field_index` with `agg`:
+/// `data_field_display_name` over the field's display name, followed by 2, 3,
+/// ... while it equals, under the profile's collation, another data field's
+/// name (`exclude_data_field` aside) or a cache field's display name.
+std::string data_field_default_name(const PivotTable& table, const PivotCache& cache, pivot::Aggregation agg,
+                                    std::size_t field_index, ExcelProfile profile,
+                                    std::optional<std::size_t> exclude_data_field = std::nullopt);
 
 /// Name Excel gives the group field of calendar period `period` over the base
 /// field `base_name` in the profile's locale, e.g. "月 (Date)" or "Months

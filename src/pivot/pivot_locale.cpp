@@ -8,13 +8,16 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "eval/collation.h"
 #include "excel_profile.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 
 namespace formulon::pivot {
@@ -555,6 +558,41 @@ std::string data_field_display_name(pivot::Aggregation agg, std::string_view fie
   out.append(sep.data(), sep.size());
   out.append(field_name.data(), field_name.size());
   return out;
+}
+
+std::string data_field_default_name(const PivotTable& table, const PivotCache& cache, pivot::Aggregation agg,
+                                    std::size_t field_index, ExcelProfile profile,
+                                    std::optional<std::size_t> exclude_data_field) {
+  std::string_view field_name;
+  if (field_index < table.fields().size()) {
+    const PivotField& field = table.fields()[field_index];
+    field_name = field.custom_name.empty() ? field.source_name : field.custom_name;
+  } else if (field_index < cache.fields().size()) {
+    field_name = cache.fields()[field_index].name;
+  }
+  const std::string base = data_field_display_name(agg, field_name, profile);
+  const auto taken = [&](std::string_view name) {
+    const auto same = [&](std::string_view other) {
+      return eval::collate(name, other, profile, eval::CollationStrength::kDynamic) == 0;
+    };
+    for (std::size_t i = 0; i < table.data_fields().size(); ++i) {
+      if (i != exclude_data_field && same(table.data_fields()[i].name)) {
+        return true;
+      }
+    }
+    for (std::size_t i = 0; i < cache.fields().size(); ++i) {
+      const bool renamed = i < table.fields().size() && !table.fields()[i].custom_name.empty();
+      if (same(renamed ? table.fields()[i].custom_name : cache.fields()[i].name)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  std::string name = base;
+  for (std::size_t n = 2; taken(name); ++n) {
+    name = base + std::to_string(n);
+  }
+  return name;
 }
 
 std::string date_group_field_name(GroupBy period, std::string_view base_name, ExcelProfile profile) {

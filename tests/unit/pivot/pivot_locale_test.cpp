@@ -1,17 +1,22 @@
 // Per-locale PivotTable labels against what Mac Excel 365 renders and names
-// in each UI locale.
+// in each UI locale, and the default names it gives a new data field.
 
 #include "pivot/pivot_locale.h"
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot_layout_test_helpers.h"
 
@@ -154,6 +159,87 @@ TEST(PivotLocale, TabularSubtotalRowIsLabelledPerLocale) {
     }
     EXPECT_TRUE(found) << m.profile_id << ": no subtotal label cell";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Default data-field names: Excel numbers a name that is already taken
+// ---------------------------------------------------------------------------
+
+/// A cache over `names` and a table listing the same fields, none placed.
+struct NamedFields {
+  PivotCache cache;
+  PivotTable table;
+};
+
+NamedFields fields_named(std::initializer_list<const char*> names) {
+  NamedFields out;
+  for (const char* name : names) {
+    out.cache.mutable_fields().push_back(PivotCacheField{name, {}});
+    PivotField field;
+    field.source_name = name;
+    field.axis = PivotAxis::None;
+    out.table.mutable_fields().push_back(std::move(field));
+  }
+  return out;
+}
+
+void add_data_field(PivotTable& table, std::string name, std::uint32_t field_index,
+                    Aggregation aggregation = Aggregation::Sum) {
+  PivotDataField data;
+  data.name = std::move(name);
+  data.field_index = field_index;
+  data.aggregation = aggregation;
+  table.mutable_data_fields().push_back(std::move(data));
+}
+
+constexpr std::uint32_t kAmt = 2;
+
+TEST(PivotLocale, DefaultNameIgnoresAnotherLocalesNameForTheSameField) {
+  NamedFields f = fields_named({"Region", "Product", "Amt", "Qty"});
+  add_data_field(f.table, "Summe von Amt", kAmt);
+  add_data_field(f.table, "Summe von Qty", 3);
+  EXPECT_EQ(data_field_default_name(f.table, f.cache, Aggregation::Sum, kAmt, mac_365_ja_jp_profile()), "合計 / Amt");
+}
+
+TEST(PivotLocale, DefaultNameOfAnUnnamedDataFieldFollowsItsFunction) {
+  NamedFields f = fields_named({"Region", "Product", "Amt", "Qty"});
+  add_data_field(f.table, "Summe von Amt", kAmt);
+  add_data_field(f.table, "Summe von Qty", 3);
+  add_data_field(f.table, "", kAmt);
+  EXPECT_EQ(data_field_default_name(f.table, f.cache, Aggregation::Count, kAmt, mac_365_ja_jp_profile(), 2),
+            "個数 / Amt");
+}
+
+TEST(PivotLocale, DefaultNameNumbersPastRenamedDataFields) {
+  NamedFields f = fields_named({"Region", "Product", "Amt", "Qty"});
+  add_data_field(f.table, "合計 / Amt", kAmt);
+  add_data_field(f.table, "Summe von Qty", 3);
+  const ExcelProfile ja = mac_365_ja_jp_profile();
+  const std::string second = data_field_default_name(f.table, f.cache, Aggregation::Sum, kAmt, ja);
+  EXPECT_EQ(second, "合計 / Amt2");
+  add_data_field(f.table, second, kAmt);
+  EXPECT_EQ(data_field_default_name(f.table, f.cache, Aggregation::Sum, kAmt, ja), "合計 / Amt3");
+  // A data field does not collide with itself.
+  EXPECT_EQ(data_field_default_name(f.table, f.cache, Aggregation::Sum, kAmt, ja, 2), "合計 / Amt2");
+}
+
+TEST(PivotLocale, DefaultNameNumbersPastAFieldNamedLikeIt) {
+  NamedFields f = fields_named({"Region", "Product", "Amt", "合計 / Amt"});
+  add_data_field(f.table, "Summe von Amt", kAmt);
+  const ExcelProfile ja = mac_365_ja_jp_profile();
+  const std::string amt = data_field_default_name(f.table, f.cache, Aggregation::Sum, kAmt, ja);
+  EXPECT_EQ(amt, "合計 / Amt2");
+  add_data_field(f.table, amt, kAmt);
+  EXPECT_EQ(data_field_default_name(f.table, f.cache, Aggregation::Sum, 3, ja), "合計 / 合計 / Amt");
+}
+
+TEST(PivotLocale, DefaultNameComparesUnderTheProfileCollation) {
+  NamedFields f = fields_named({"Region", "Product", "Amt", "Qty"});
+  f.table.mutable_fields()[3].custom_name = "SUM OF AMT";
+  EXPECT_EQ(data_field_default_name(f.table, f.cache, Aggregation::Sum, kAmt, win_365_en_us_profile()), "Sum of Amt2");
+  // The field's own caption names the data field.
+  EXPECT_EQ(data_field_default_name(f.table, f.cache, Aggregation::Sum, 3, win_365_en_us_profile()),
+            "Sum of SUM OF AMT");
 }
 
 }  // namespace

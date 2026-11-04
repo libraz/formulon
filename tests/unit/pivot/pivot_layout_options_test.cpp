@@ -1,6 +1,8 @@
 // Report options in the layout projection: the grand-total caption, blank
 // rows after item blocks, repeated (filled-down) labels, collapsed items,
-// number-formatted item labels, and the item path behind a value cell.
+// number-formatted item labels, the display options (headers, drop zones,
+// error and missing captions, indent, merged labels), cell roles, and the
+// item path behind a value cell.
 
 #include <cstddef>
 #include <cstdint>
@@ -141,6 +143,7 @@ std::vector<std::string> RenderGrid(const PivotTable& table, const PivotCache& c
 #define SUBTOTAL " \xE9\x9B\x86\xE8\xA8\x88"
 #define TOTAL "\xE7\xB7\x8F\xE8\xA8\x88"
 #define ROW_LABELS "\xE8\xA1\x8C\xE3\x83\xA9\xE3\x83\x99\xE3\x83\xAB"
+#define COL_LABELS "\xE5\x88\x97\xE3\x83\xA9\xE3\x83\x99\xE3\x83\xAB"
 
 const std::vector<std::string> kTabular = {
     "Region|Product|Sum of Amt|Sum of Qty",
@@ -484,6 +487,295 @@ TEST(PivotLayoutOptions, LabelCellCarriesTheItemNumberFormat) {
   const PivotCell* total = layout_test::find_cell(cells_or.value(), 5, 0);
   ASSERT_NE(total, nullptr);
   EXPECT_TRUE(total->number_format.empty());
+}
+
+// ---------------------------------------------------------------------------
+// Display options
+// ---------------------------------------------------------------------------
+
+PivotCells ProjectCells(const PivotTable& table, const PivotCache& cache) {
+  const PivotLayoutOptions options = ja_jp_layout_options();
+  auto result_or = evaluate(table, cache, options);
+  EXPECT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  if (!result_or) {
+    return {};
+  }
+  auto cells_or = layout(table, result_or.value(), options);
+  EXPECT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
+  return cells_or ? std::move(cells_or.value()) : PivotCells{};
+}
+
+/// Region on the rows with the data fields below each item, Product on the columns.
+PivotTable build_cross_table_values_on_rows() {
+  PivotTable table = build_region_product_table(PivotLayout::Compact, true);
+  table.mutable_fields()[1].axis = PivotAxis::Col;
+  table.mutable_col_field_order() = {1};
+  table.set_row_values_position(1);
+  return table;
+}
+
+TEST(PivotLayoutOptions, HiddenHeadersDropTheColumnLabelsRow) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_cross_table_values_on_rows();
+  const std::vector<std::string> shown = RenderGrid(table, cache);
+  ASSERT_GE(shown.size(), 3U);
+  EXPECT_EQ(shown[0], "|" COL_LABELS "||");
+  EXPECT_EQ(shown[1], ROW_LABELS "|A|B|" TOTAL);
+  table.set_show_headers(false);
+  std::vector<std::string> expected(shown.begin() + 1, shown.end());
+  expected[0] = "|A|B|" TOTAL;
+  EXPECT_EQ(RenderGrid(table, cache), expected);
+}
+
+TEST(PivotLayoutOptions, HiddenHeadersKeepALoneDataFieldCaption) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_cross_table_values_on_rows();
+  table.mutable_data_fields().pop_back();
+  table.set_show_headers(false);
+  const std::vector<std::string> grid = RenderGrid(table, cache);
+  ASSERT_GE(grid.size(), 2U);
+  EXPECT_EQ(grid[0], "Sum of Amt|||");
+  EXPECT_EQ(grid[1], "|A|B|" TOTAL);
+}
+
+TEST(PivotLayoutOptions, HiddenHeadersBlankTabularFieldNames) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Tabular);
+  table.set_show_headers(false);
+  std::vector<std::string> expected = kTabular;
+  expected[0] = "||Sum of Amt|Sum of Qty";
+  EXPECT_EQ(RenderGrid(table, cache), expected);
+}
+
+TEST(PivotLayoutOptions, GridDropZonesAddARowWithoutColumnFields) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Compact, true);
+  table.set_grid_drop_zones(true);
+  std::vector<std::string> expected = kCompactSingle;
+  expected.insert(expected.begin(), "|Values|");
+  EXPECT_EQ(RenderGrid(table, cache), expected);
+}
+
+TEST(PivotLayoutOptions, GridDropZonesLeaveAColumnFieldReportAlone) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_cross_table_values_on_rows();
+  const std::vector<std::string> base = RenderGrid(table, cache);
+  table.set_grid_drop_zones(true);
+  EXPECT_EQ(RenderGrid(table, cache), base);
+}
+
+TEST(PivotLayoutOptions, MissingCaptionDashIsWrittenAsZero) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_cross_table_values_on_rows();
+  table.set_missing_caption(std::string("-"));
+  const PivotCells cells = ProjectCells(table, cache);
+  // Rows: 2 caption, 3 column items, 4 East, 5 East Sum of Amt; East has no B.
+  const PivotCell* hole = layout_test::find_cell(cells, 5, 2);
+  ASSERT_NE(hole, nullptr);
+  ASSERT_TRUE(hole->value.is_number());
+  EXPECT_EQ(hole->value.as_number(), 0.0);
+  EXPECT_EQ(hole->role, PivotCellRole::DataValue);
+  // The heading row of an item stays empty.
+  for (std::uint32_t col = 1; col < 4; ++col) {
+    const PivotCell* heading = layout_test::find_cell(cells, 4, col);
+    ASSERT_NE(heading, nullptr) << col;
+    EXPECT_TRUE(heading->value.is_blank()) << col;
+    EXPECT_EQ(heading->role, PivotCellRole::DataValue) << col;
+  }
+}
+
+TEST(PivotLayoutOptions, MissingCaptionTextFillsEmptyCellsWhateverShowMissingSays) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_cross_table_values_on_rows();
+  table.set_missing_caption(std::string("N/A"));
+  table.set_show_missing(false);
+  const PivotCells cells = ProjectCells(table, cache);
+  for (const std::uint32_t row : {5U, 6U}) {
+    const PivotCell* hole = layout_test::find_cell(cells, row, 2);
+    ASSERT_NE(hole, nullptr) << row;
+    ASSERT_TRUE(hole->value.is_text()) << row;
+    EXPECT_EQ(hole->value.as_text(), "N/A") << row;
+  }
+  const PivotCell* filled = layout_test::find_cell(cells, 5, 1);
+  ASSERT_NE(filled, nullptr);
+  ASSERT_TRUE(filled->value.is_number());
+  EXPECT_EQ(filled->value.as_number(), 500.0);
+}
+
+/// Region rows, Product columns, sample variance of Amt: East's single record
+/// gives #DIV/0!.
+PivotTable build_variance_table() {
+  PivotTable table = build_cross_table_values_on_rows();
+  table.mutable_data_fields().pop_back();
+  table.mutable_data_fields()[0].aggregation = Aggregation::Var;
+  table.mutable_data_fields()[0].name = "Var of Amt";
+  return table;
+}
+
+TEST(PivotLayoutOptions, ErrorCaptionReplacesErrorCellsOnlyWhileShown) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_variance_table();
+  // Rows: 2 caption, 3 column items, 4 East; column 1 is item A.
+  const PivotCells plain = ProjectCells(table, cache);
+  const PivotCell* error = layout_test::find_cell(plain, 4, 1);
+  ASSERT_NE(error, nullptr);
+  ASSERT_TRUE(error->value.is_error());
+
+  table.set_error_caption(std::string("ERR"));
+  const PivotCells hidden = ProjectCells(table, cache);
+  ASSERT_NE(layout_test::find_cell(hidden, 4, 1), nullptr);
+  EXPECT_TRUE(layout_test::find_cell(hidden, 4, 1)->value.is_error());
+
+  table.set_show_error(true);
+  const PivotCells shown = ProjectCells(table, cache);
+  const PivotCell* caption = layout_test::find_cell(shown, 4, 1);
+  ASSERT_NE(caption, nullptr);
+  ASSERT_TRUE(caption->value.is_text());
+  EXPECT_EQ(caption->value.as_text(), "ERR");
+  for (const PivotCell& cell : shown.cells) {
+    EXPECT_FALSE(cell.value.is_error()) << cell.row << "," << cell.col;
+  }
+
+  table.set_error_caption(std::nullopt);
+  const PivotCells blank = ProjectCells(table, cache);
+  ASSERT_NE(layout_test::find_cell(blank, 4, 1), nullptr);
+  EXPECT_TRUE(layout_test::find_cell(blank, 4, 1)->value.is_blank());
+}
+
+TEST(PivotLayoutOptions, CompactLabelIndentGrowsWithTheIndentOption) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Compact);
+  // Rows: 2 header, 3 East, 4 A, ..., 11 grand total.
+  for (const std::uint32_t indent : {0U, 1U, 2U}) {
+    table.set_indent(indent);
+    const PivotCells cells = ProjectCells(table, cache);
+    const PivotCell* outer = layout_test::find_cell(cells, 3, 0);
+    const PivotCell* inner = layout_test::find_cell(cells, 4, 0);
+    const PivotCell* total = layout_test::find_cell(cells, 11, 0);
+    ASSERT_NE(outer, nullptr);
+    ASSERT_NE(inner, nullptr);
+    ASSERT_NE(total, nullptr);
+    EXPECT_EQ(outer->label_indent, std::optional<std::uint32_t>(0U)) << indent;
+    EXPECT_EQ(inner->label_indent, std::optional<std::uint32_t>(indent + 1U)) << indent;
+    EXPECT_EQ(total->label_indent, std::optional<std::uint32_t>(0U)) << indent;
+  }
+  const PivotCells tabular = ProjectCells(build_region_product_table(PivotLayout::Tabular), cache);
+  for (const PivotCell& cell : tabular.cells) {
+    EXPECT_FALSE(cell.label_indent.has_value()) << cell.row << "," << cell.col;
+  }
+}
+
+std::vector<PivotRect> Merges(const PivotTable& table, const PivotCache& cache) {
+  return ProjectCells(table, cache).merges;
+}
+
+TEST(PivotLayoutOptions, MergeItemInTabularMergesBlocksAndTotalLabels) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Tabular);
+  EXPECT_TRUE(Merges(table, cache).empty());
+  table.set_merge_item(true);
+  // Rows: 3 East|A, 4 East 集計, 5-6 North, 7 North 集計, 8-9 South,
+  // 10 South 集計, 11 総計.
+  const std::vector<PivotRect> expected = {{4, 0, 4, 1}, {5, 0, 6, 0},   {7, 0, 7, 1},
+                                           {8, 0, 9, 0}, {10, 0, 10, 1}, {11, 0, 11, 1}};
+  EXPECT_EQ(Merges(table, cache), expected);
+}
+
+TEST(PivotLayoutOptions, MergeItemOutsideTabularMergesNothing) {
+  const PivotCache cache = build_region_product_cache();
+  for (const PivotLayout form : {PivotLayout::Outline, PivotLayout::Compact}) {
+    PivotTable table = build_region_product_table(form);
+    table.set_merge_item(true);
+    EXPECT_TRUE(Merges(table, cache).empty());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cell roles
+// ---------------------------------------------------------------------------
+
+PivotCellRole RoleAt(const PivotCells& cells, std::uint32_t row, std::uint32_t col) {
+  const PivotCell* cell = layout_test::find_cell(cells, row, col);
+  EXPECT_NE(cell, nullptr) << row << "," << col;
+  return cell != nullptr ? cell->role : PivotCellRole::None;
+}
+
+TEST(PivotLayoutOptions, RolesOfACompactCrossTabWithAPageField) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_cross_table_values_on_rows();
+  table.set_row_values_position(std::nullopt);
+  table.mutable_data_fields().pop_back();
+  table.mutable_fields()[3].axis = PivotAxis::Page;
+  table.mutable_page_fields().push_back(PivotPageField{3, std::nullopt});
+  const PivotCells cells = ProjectCells(table, cache);
+  ASSERT_EQ(cells.top, 0U);
+  // Row 0 page field, row 1 gap, row 2 caption row, row 3 column items,
+  // rows 4-6 East / North / South, row 7 grand total.
+  EXPECT_EQ(RoleAt(cells, 0, 0), PivotCellRole::PageCaption);
+  EXPECT_EQ(RoleAt(cells, 0, 1), PivotCellRole::PageValue);
+  EXPECT_EQ(RoleAt(cells, 1, 0), PivotCellRole::None);
+  EXPECT_EQ(RoleAt(cells, 2, 0), PivotCellRole::FieldHeader);  // Sum of Amt
+  EXPECT_EQ(RoleAt(cells, 2, 1), PivotCellRole::FieldHeader);  // 列ラベル
+  EXPECT_EQ(RoleAt(cells, 2, 2), PivotCellRole::None);
+  EXPECT_EQ(RoleAt(cells, 3, 0), PivotCellRole::FieldHeader);  // 行ラベル
+  EXPECT_EQ(RoleAt(cells, 3, 1), PivotCellRole::ColItem);
+  EXPECT_EQ(RoleAt(cells, 3, 3), PivotCellRole::GrandTotalLabel);
+  EXPECT_EQ(RoleAt(cells, 4, 0), PivotCellRole::RowItem);
+  EXPECT_EQ(RoleAt(cells, 4, 1), PivotCellRole::DataValue);
+  EXPECT_EQ(RoleAt(cells, 4, 2), PivotCellRole::DataValue);  // East has no B
+  EXPECT_EQ(RoleAt(cells, 4, 3), PivotCellRole::GrandTotalValue);
+  EXPECT_EQ(RoleAt(cells, 7, 0), PivotCellRole::GrandTotalLabel);
+  EXPECT_EQ(RoleAt(cells, 7, 1), PivotCellRole::GrandTotalValue);
+}
+
+TEST(PivotLayoutOptions, RolesOfATabularReportWithBlankRows) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Tabular);
+  table.mutable_fields()[0].insert_blank_row = true;
+  const PivotCells cells = ProjectCells(table, cache);
+  // Rows: 2 header, 3 East|A, 4 East 集計, 5 blank, 6 North|A, 7 |B, ..., 14 総計.
+  EXPECT_EQ(RoleAt(cells, 2, 0), PivotCellRole::FieldHeader);
+  EXPECT_EQ(RoleAt(cells, 2, 1), PivotCellRole::FieldHeader);
+  EXPECT_EQ(RoleAt(cells, 2, 2), PivotCellRole::DataHeader);
+  EXPECT_EQ(RoleAt(cells, 3, 0), PivotCellRole::RowItem);
+  EXPECT_EQ(RoleAt(cells, 3, 1), PivotCellRole::RowItem);
+  EXPECT_EQ(RoleAt(cells, 3, 2), PivotCellRole::DataValue);
+  EXPECT_EQ(RoleAt(cells, 4, 0), PivotCellRole::SubtotalLabel);
+  EXPECT_EQ(RoleAt(cells, 4, 1), PivotCellRole::None);
+  EXPECT_EQ(RoleAt(cells, 4, 2), PivotCellRole::SubtotalValue);
+  EXPECT_EQ(RoleAt(cells, 5, 0), PivotCellRole::None);
+  EXPECT_EQ(RoleAt(cells, 5, 2), PivotCellRole::DataValue);
+  EXPECT_EQ(RoleAt(cells, 7, 0), PivotCellRole::None);  // North is not repeated
+  EXPECT_EQ(RoleAt(cells, 7, 1), PivotCellRole::RowItem);
+  EXPECT_EQ(RoleAt(cells, 14, 0), PivotCellRole::GrandTotalLabel);
+  EXPECT_EQ(RoleAt(cells, 14, 1), PivotCellRole::None);
+  EXPECT_EQ(RoleAt(cells, 14, 2), PivotCellRole::GrandTotalValue);
+}
+
+TEST(PivotLayoutOptions, RolesOfCompactRowsWithValuesAndBlankRows) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable values_on_rows = build_region_product_table(PivotLayout::Compact, true);
+  values_on_rows.set_row_values_position(1);
+  values_on_rows.set_indent(0);
+  const PivotCells cells = ProjectCells(values_on_rows, cache);
+  // Rows: 2 header, 3 East, 4 Sum of Amt, 5 Sum of Qty, ...
+  EXPECT_EQ(RoleAt(cells, 2, 1), PivotCellRole::None);
+  EXPECT_EQ(RoleAt(cells, 3, 0), PivotCellRole::RowItem);
+  EXPECT_EQ(RoleAt(cells, 3, 1), PivotCellRole::DataValue);
+  const PivotCell* data_label = layout_test::find_cell(cells, 4, 0);
+  ASSERT_NE(data_label, nullptr);
+  EXPECT_EQ(data_label->role, PivotCellRole::DataRowLabel);
+  EXPECT_EQ(data_label->label_indent, std::optional<std::uint32_t>(1U));
+
+  PivotTable blank_rows = build_region_product_table(PivotLayout::Compact);
+  blank_rows.mutable_fields()[0].insert_blank_row = true;
+  const PivotCells blanks = ProjectCells(blank_rows, cache);
+  // Rows: 2 header, 3 East, 4 A, 5 blank.
+  const PivotCell* blank_label = layout_test::find_cell(blanks, 5, 0);
+  ASSERT_NE(blank_label, nullptr);
+  EXPECT_EQ(blank_label->role, PivotCellRole::BlankRow);
+  EXPECT_EQ(blank_label->label_indent, std::optional<std::uint32_t>(0U));
+  EXPECT_EQ(RoleAt(blanks, 5, 1), PivotCellRole::DataValue);
 }
 
 // ---------------------------------------------------------------------------

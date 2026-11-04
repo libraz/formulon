@@ -1,13 +1,15 @@
 //
 // Pivot layout projection. This layer converts an evaluated `PivotResult`
 // into absolute grid cells that a UI can draw with the ordinary cell
-// renderer. It does not write into the owning Sheet's cell store.
+// renderer, each tagged with the role that decides its sheet format. It does
+// not write into the owning Sheet's cell store.
 
 #ifndef FORMULON_PIVOT_PIVOT_LAYOUT_H_
 #define FORMULON_PIVOT_PIVOT_LAYOUT_H_
 
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -80,12 +82,36 @@ struct PivotLayoutOptions {
   ExcelProfile profile = default_excel_profile();  ///< Collates item text while the pivot is evaluated.
 };
 
+/// What a projected cell is in the report Excel writes, which decides how its
+/// sheet cell is formatted. `PivotCellKind` stays the coarser vocabulary the
+/// bindings expose.
+enum class PivotCellRole : std::uint8_t {
+  None = 0,         ///< Structural blank: Excel writes no sheet cell.
+  PageCaption,      ///< A page field's name.
+  PageValue,        ///< The item a page field shows.
+  FieldHeader,      ///< A field button: the row / column labels caption, a tabular field
+                    ///< name, the Values caption, or a lone data field's caption.
+  DataHeader,       ///< A data field's caption heading a value column.
+  ColItem,          ///< A column item label.
+  RowItem,          ///< A row item label.
+  DataRowLabel,     ///< A data field's caption heading a row (Values on the rows).
+  SubtotalLabel,    ///< A subtotal label, on either axis.
+  GrandTotalLabel,  ///< A grand-total label, on either axis.
+  DataValue,        ///< A value cell, empty ones included.
+  SubtotalValue,    ///< A subtotal value cell.
+  GrandTotalValue,  ///< A grand-total value cell.
+  BlankRow,         ///< The label cell of an inserted blank row.
+};
+
 struct PivotCell {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
   Value value = Value::blank();
   PivotCellKind kind = PivotCellKind::Blank;
+  PivotCellRole role = PivotCellRole::None;
   std::uint32_t depth = 0;
+  /// Indent of a left-aligned compact-form row label; unset for every other cell.
+  std::optional<std::uint32_t> label_indent;
   std::string field_name;
   std::string number_format;
 };
@@ -96,6 +122,8 @@ struct PivotCells {
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   std::vector<PivotCell> cells;
+  /// Cell ranges Excel merges under `mergeItem`, in absolute sheet coordinates.
+  std::vector<PivotRect> merges;
 
   // Backing storage for Text values emitted by the layout layer. This
   // includes synthesized labels and Text values copied from `PivotResult`,
@@ -130,6 +158,11 @@ struct CellItemPath {
 /// The report body starts at `table.anchor_row()` / `anchor_col()`; the
 /// page-field block, when present, sits above it. Missing row or column axes are represented as one
 /// implicit leaf so the data area remains rectangular.
+///
+/// The table's display options shape the grid: `show_headers`,
+/// `grid_drop_zones`, `page_wrap` / `page_over_then_down`, the error and
+/// missing captions, `indent` (compact label indent) and `merge_item`
+/// (tabular label merges).
 Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& result,
                                    const PivotLayoutOptions& options = PivotLayoutOptions{});
 

@@ -50,8 +50,13 @@
 namespace formulon {
 namespace {
 
+/// `relative` under the Excel fixture directory, e.g. "pivot_options/x.xlsx".
+std::string ExcelFixturePath(const std::string& relative) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/" + relative;
+}
+
 std::string FixturePath(const char* file) {
-  return std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_options/" + file;
+  return ExcelFixturePath(std::string("pivot_options/") + file);
 }
 
 std::vector<std::uint8_t> ReadFileBytes(const std::string& path) {
@@ -362,43 +367,51 @@ std::string CellText(const Value& v) {
   return v.is_blank() ? std::string() : std::string("?");
 }
 
-/// The pivot named `table_name` on `sheet_name`, or the workbook's only pivot
-/// when both are null, projected under the ja-JP profile.
-std::optional<pivot::PivotCells> ProjectFixture(const char* file, const char* sheet_name = nullptr,
-                                                const char* table_name = nullptr) {
-  const std::vector<std::uint8_t> bytes = ReadFileBytes(FixturePath(file));
-  EXPECT_FALSE(bytes.empty()) << "could not read " << file;
+/// The workbook at `path`, read for its pivots.
+std::unique_ptr<io::OoxmlReadResult> ReadFixture(const std::string& path) {
+  const std::vector<std::uint8_t> bytes = ReadFileBytes(path);
+  EXPECT_FALSE(bytes.empty()) << "could not read " << path;
   auto read_or = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()});
   EXPECT_TRUE(static_cast<bool>(read_or)) << (read_or ? "" : read_or.error().message);
   if (!read_or) {
-    return std::nullopt;
+    return nullptr;
   }
-  const Workbook& wb = read_or.value().workbook;
-  const pivot::PivotTable* table = nullptr;
+  return std::make_unique<io::OoxmlReadResult>(std::move(read_or.value()));
+}
+
+/// The pivot named `table_name` on `sheet_name`, or the workbook's only pivot
+/// when both are null.
+pivot::PivotTable* FindPivot(Workbook& wb, const char* sheet_name = nullptr, const char* table_name = nullptr) {
+  pivot::PivotTable* table = nullptr;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (sheet_name != nullptr && wb.sheet(i).name() != sheet_name) {
       continue;
     }
-    for (const std::unique_ptr<pivot::PivotTable>& candidate : wb.sheet(i).pivot_tables()) {
+    for (const std::unique_ptr<pivot::PivotTable>& candidate : wb.sheet(i).mutable_pivot_tables()) {
       if (candidate != nullptr && (table_name == nullptr || candidate->name() == table_name)) {
-        EXPECT_EQ(table, nullptr) << file << ": more than one pivot matches";
+        EXPECT_EQ(table, nullptr) << "more than one pivot matches";
         table = candidate.get();
       }
     }
   }
-  EXPECT_NE(table, nullptr) << file;
-  const pivot::PivotCache* cache = table != nullptr ? wb.find_pivot_cache(table->pivot_cache_id()) : nullptr;
-  EXPECT_NE(cache, nullptr) << file;
+  EXPECT_NE(table, nullptr);
+  return table;
+}
+
+/// `table` of `wb` evaluated and projected under the ja-JP profile.
+std::optional<pivot::PivotCells> Project(const Workbook& wb, const pivot::PivotTable& table) {
+  const pivot::PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
+  EXPECT_NE(cache, nullptr);
   if (cache == nullptr) {
     return std::nullopt;
   }
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(mac_365_ja_jp_profile());
-  auto result_or = pivot::evaluate(*table, *cache, options, pivot::PivotFilterEnv{std::nullopt, wb.date1904()});
+  auto result_or = pivot::evaluate(table, *cache, options, pivot::PivotFilterEnv{std::nullopt, wb.date1904()});
   EXPECT_TRUE(static_cast<bool>(result_or)) << (result_or ? "" : result_or.error().message);
   if (!result_or) {
     return std::nullopt;
   }
-  auto cells_or = pivot::layout(*table, result_or.value(), options);
+  auto cells_or = pivot::layout(table, result_or.value(), options);
   EXPECT_TRUE(static_cast<bool>(cells_or)) << (cells_or ? "" : cells_or.error().message);
   if (!cells_or) {
     return std::nullopt;
@@ -406,8 +419,20 @@ std::optional<pivot::PivotCells> ProjectFixture(const char* file, const char* sh
   return std::move(cells_or.value());
 }
 
-/// The projected grid, one `|`-joined line per row.
-std::vector<std::string> Grid(const pivot::PivotCells& cells) {
+/// The pivot named `table_name` on `sheet_name`, or the workbook's only pivot
+/// when both are null, projected under the ja-JP profile.
+std::optional<pivot::PivotCells> ProjectFixture(const char* file, const char* sheet_name = nullptr,
+                                                const char* table_name = nullptr) {
+  const std::unique_ptr<io::OoxmlReadResult> read = ReadFixture(FixturePath(file));
+  if (read == nullptr) {
+    return std::nullopt;
+  }
+  const pivot::PivotTable* table = FindPivot(read->workbook, sheet_name, table_name);
+  return table != nullptr ? Project(read->workbook, *table) : std::nullopt;
+}
+
+/// The projected grid's cell texts, by row then column.
+std::vector<std::vector<std::string>> GridCells(const pivot::PivotCells& cells) {
   std::vector<std::vector<std::string>> grid(cells.rows, std::vector<std::string>(cells.cols));
   for (const pivot::PivotCell& cell : cells.cells) {
     const std::uint32_t r = cell.row - cells.top;
@@ -416,8 +441,13 @@ std::vector<std::string> Grid(const pivot::PivotCells& cells) {
       grid[r][c] = CellText(cell.value);
     }
   }
+  return grid;
+}
+
+/// The projected grid, one `|`-joined line per row.
+std::vector<std::string> Grid(const pivot::PivotCells& cells) {
   std::vector<std::string> lines;
-  for (const std::vector<std::string>& row : grid) {
+  for (const std::vector<std::string>& row : GridCells(cells)) {
     std::string line;
     for (std::size_t c = 0; c < row.size(); ++c) {
       line += (c == 0 ? "" : "|") + row[c];
@@ -445,6 +475,8 @@ std::string Line(std::initializer_list<const char*> cells) {
 }
 
 #define COL_LABELS "\xE5\x88\x97\xE3\x83\xA9\xE3\x83\x99\xE3\x83\xAB"
+// "(すべて)".
+#define ALL_PAGES "(\xE3\x81\x99\xE3\x81\xB9\xE3\x81\xA6)"
 
 /// The label rows of the two-column-field report: Region, Product and Values
 /// over the data row, under the "Column Labels" row.
@@ -621,7 +653,32 @@ INSTANTIATE_TEST_SUITE_P(
                   TOTAL "|||1500|15"}},
         GridCase{"blank_row_outer_compact.xlsx",
                  {ROW_LABELS "|Sum of Amt|Sum of Qty", "East|500|5", "A|500|5", "||", "North|300|3", "A|100|1",
-                  "B|200|2", "||", "South|700|7", "A|300|3", "B|400|4", "||", TOTAL "|1500|15"}}));
+                  "B|200|2", "||", "South|700|7", "A|300|3", "B|400|4", "||", TOTAL "|1500|15"}},
+        // Hidden field headers blank the row-labels caption and keep its row.
+        GridCase{"op_headers_off.xlsx",
+                 {"|Summe von Amt|Summe von Qty", "East|70|6", "North|210|7", "South|350|7", TOTAL "|630|20"}},
+        // The classic layout puts the Values caption in a row of its own.
+        GridCase{"op_griddz.xlsx",
+                 {"|Werte|", kCompactHeader, "East|70|6", "North|210|7", "South|350|7", TOTAL "|630|20"}},
+        GridCase{"op_pagewrap2_down_over.xlsx",
+                 {"Qty|" ALL_PAGES "||Region|" ALL_PAGES, "Product|" ALL_PAGES "|||", "||||",
+                  "Summe von Amt|Summe von Qty|||", "630|20|||"}},
+        GridCase{"op_pagewrap2_over_down.xlsx",
+                 {"Qty|" ALL_PAGES "||Product|" ALL_PAGES, "Region|" ALL_PAGES "|||", "||||",
+                  "Summe von Amt|Summe von Qty|||", "630|20|||"}},
+        GridCase{
+            "op_merge_tabular.xlsx",
+            {kTabularHeader, "East|A|70|6", "East" SUBTOTAL "||70|6", "North|A|120|4", "|B|90|3",
+             "North" SUBTOTAL "||210|7", "South|A|300|5", "|B|50|2", "South" SUBTOTAL "||350|7", TOTAL "||630|20"}},
+        GridCase{"op_merge_outline.xlsx",
+                 {kTabularHeader, "East||70|6", "|A|70|6", "North||210|7", "|A|120|4", "|B|90|3", "South||350|7",
+                  "|A|300|5", "|B|50|2", TOTAL "||630|20"}},
+        // A missing caption of "-" is written as 0; an item's heading row stays empty.
+        GridCase{
+            "op_missing_caption.xlsx",
+            {"|" COL_LABELS "||", ROW_LABELS "|A|B|" TOTAL, "East|||", "Summe von Amt|70|0|70", "Summe von Qty|6|0|6",
+             "North|||", "Summe von Amt|120|90|210", "Summe von Qty|4|3|7", "South|||", "Summe von Amt|300|50|350",
+             "Summe von Qty|5|2|7", ALL_OF "Summe von Amt|490|140|630", ALL_OF "Summe von Qty|15|5|20"}}));
 
 TEST(PivotOptionsFixtureGrid, DateLabelCellsCarryTheFieldNumberFormat) {
   const std::optional<pivot::PivotCells> cells = ProjectFixture("date_field_ungrouped.xlsx", kDateSheet, kDateTable);
@@ -637,6 +694,162 @@ TEST(PivotOptionsFixtureGrid, DateLabelCellsCarryTheFieldNumberFormat) {
   EXPECT_EQ(labels, (std::vector<std::string>{"2024/1/15", "2024/1/25", "2024/2/8", "2024/2/20", "2024/3/10"}));
   EXPECT_EQ(formats, std::vector<std::string>(5, "yyyy/m/d"));
 }
+
+// ---------------------------------------------------------------------------
+// Merged labels, error captions and cell roles against the saved sheet
+// ---------------------------------------------------------------------------
+
+/// Zero-based (row, col) of an A1 cell reference such as "AB12".
+std::pair<std::uint32_t, std::uint32_t> ParseA1(std::string_view ref) {
+  std::uint32_t col = 0;
+  std::size_t i = 0;
+  for (; i < ref.size() && ref[i] >= 'A' && ref[i] <= 'Z'; ++i) {
+    col = col * 26 + static_cast<std::uint32_t>(ref[i] - 'A' + 1);
+  }
+  std::uint32_t row = 0;
+  for (; i < ref.size(); ++i) {
+    row = row * 10 + static_cast<std::uint32_t>(ref[i] - '0');
+  }
+  return {row - 1, col - 1};
+}
+
+std::string A1(std::uint32_t row, std::uint32_t col) {
+  std::string letters;
+  for (std::uint32_t c = col + 1; c > 0; c = (c - 1) / 26) {
+    letters.insert(letters.begin(), static_cast<char>('A' + (c - 1) % 26));
+  }
+  return letters + std::to_string(row + 1);
+}
+
+/// The worksheet part of `archive` that hosts a pivot table.
+std::unique_ptr<pugi::xml_document> PivotSheet(const std::vector<std::uint8_t>& archive) {
+  constexpr std::string_view kRelsDir = "xl/worksheets/_rels/";
+  constexpr std::string_view kRelsSuffix = ".rels";
+  const std::map<std::string, std::string> sheets = EntriesWithPrefix(archive, "xl/worksheets/");
+  for (const auto& [name, body] : EntriesWithPrefix(archive, kRelsDir)) {
+    if (body.find("relationships/pivotTable") == std::string::npos) {
+      continue;
+    }
+    const std::string part =
+        "xl/worksheets/" + name.substr(kRelsDir.size(), name.size() - kRelsDir.size() - kRelsSuffix.size());
+    const auto it = sheets.find(part);
+    if (it != sheets.end()) {
+      auto doc = std::make_unique<pugi::xml_document>();
+      EXPECT_TRUE(doc->load_buffer(it->second.data(), it->second.size())) << part;
+      return doc;
+    }
+  }
+  ADD_FAILURE() << "no worksheet hosts a pivot table";
+  return nullptr;
+}
+
+TEST(PivotOptionsFixtureGrid, MergeItemMergesTheLabelsExcelMerged) {
+  const std::string path = FixturePath("op_merge_tabular.xlsx");
+  const std::unique_ptr<pugi::xml_document> sheet = PivotSheet(ReadFileBytes(path));
+  ASSERT_NE(sheet, nullptr);
+  std::vector<std::string> excel;
+  for (const pugi::xml_node merge : sheet->child("worksheet").child("mergeCells").children("mergeCell")) {
+    excel.emplace_back(merge.attribute("ref").value());
+  }
+  ASSERT_EQ(excel.size(), 6U);
+
+  const std::optional<pivot::PivotCells> cells = ProjectFixture("op_merge_tabular.xlsx");
+  ASSERT_TRUE(cells.has_value());
+  std::vector<std::string> projected;
+  for (const pivot::PivotRect& merge : cells->merges) {
+    projected.push_back(A1(merge.row0, merge.col0) + ":" + A1(merge.row1, merge.col1));
+  }
+  EXPECT_EQ(projected, excel);
+
+  const std::optional<pivot::PivotCells> outline = ProjectFixture("op_merge_outline.xlsx");
+  ASSERT_TRUE(outline.has_value());
+  EXPECT_TRUE(outline->merges.empty());
+}
+
+TEST(PivotOptionsFixtureGrid, ErrorCaptionReplacesTheErrorCellsExcelWrote) {
+  const std::unique_ptr<io::OoxmlReadResult> read = ReadFixture(ExcelFixturePath("pivot_aggregation/C9__sum.xlsx"));
+  ASSERT_NE(read, nullptr);
+  pivot::PivotTable* table = FindPivot(read->workbook);
+  ASSERT_NE(table, nullptr);
+  const std::optional<pivot::PivotCells> plain = Project(read->workbook, *table);
+  ASSERT_TRUE(plain.has_value());
+  // Excel wrote #DIV/0! at C10 and C15.
+  std::vector<std::string> errors;
+  for (const pivot::PivotCell& cell : plain->cells) {
+    if (cell.value.is_error()) {
+      errors.push_back(A1(cell.row, cell.col));
+    }
+  }
+  ASSERT_EQ(errors, (std::vector<std::string>{"C10", "C15"}));
+
+  table->set_show_error(true);
+  table->set_error_caption(std::string("ERR"));
+  const std::optional<pivot::PivotCells> shown = Project(read->workbook, *table);
+  ASSERT_TRUE(shown.has_value());
+  std::vector<std::vector<std::string>> expected = GridCells(*plain);
+  for (const std::string& ref : errors) {
+    const auto [row, col] = ParseA1(ref);
+    expected[row - plain->top][col - plain->left] = "ERR";
+  }
+  EXPECT_EQ(GridCells(*shown), expected);
+}
+
+struct RoleCase {
+  const char* path;  ///< Under the Excel fixture directory.
+};
+
+void PrintTo(const RoleCase& c, std::ostream* os) {
+  *os << c.path;
+}
+
+class PivotOptionsFixtureRoles : public ::testing::TestWithParam<RoleCase> {};
+
+// Excel writes a sheet cell for every report cell with a role and none for a
+// structural blank.
+TEST_P(PivotOptionsFixtureRoles, RolesMarkExactlyTheCellsExcelWrote) {
+  const std::string path = ExcelFixturePath(GetParam().path);
+  const std::unique_ptr<pugi::xml_document> sheet = PivotSheet(ReadFileBytes(path));
+  ASSERT_NE(sheet, nullptr);
+  std::map<std::string, bool> written;
+  for (const pugi::xml_node row : sheet->child("worksheet").child("sheetData").children("row")) {
+    for (const pugi::xml_node c : row.children("c")) {
+      written.emplace(c.attribute("r").value(), false);
+    }
+  }
+  const std::unique_ptr<io::OoxmlReadResult> read = ReadFixture(path);
+  ASSERT_NE(read, nullptr);
+  const pivot::PivotTable* table = FindPivot(read->workbook);
+  ASSERT_NE(table, nullptr);
+  const std::optional<pivot::PivotCells> cells = Project(read->workbook, *table);
+  ASSERT_TRUE(cells.has_value());
+  for (const pivot::PivotCell& cell : cells->cells) {
+    const auto it = written.find(A1(cell.row, cell.col));
+    const bool has_role = cell.role != pivot::PivotCellRole::None;
+    EXPECT_EQ(it != written.end(), has_role)
+        << A1(cell.row, cell.col) << " role " << static_cast<int>(cell.role) << " text " << CellText(cell.value);
+    if (it != written.end()) {
+      it->second = true;
+    }
+  }
+  for (const auto& [ref, projected] : written) {
+    const auto [row, col] = ParseA1(ref);
+    if (row >= cells->top && row < cells->top + cells->rows && col >= cells->left && col < cells->left + cells->cols) {
+      EXPECT_TRUE(projected) << ref << " written by Excel but not projected";
+    }
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ExcelSaved, PivotOptionsFixtureRoles,
+    ::testing::Values(
+        RoleCase{"pivot_options/op_headers_off.xlsx"}, RoleCase{"pivot_options/op_griddz.xlsx"},
+        RoleCase{"pivot_options/op_missing_caption.xlsx"}, RoleCase{"pivot_options/op_pagewrap2_down_over.xlsx"},
+        RoleCase{"pivot_options/op_pagewrap2_over_down.xlsx"}, RoleCase{"pivot_options/blank_row_outer_compact.xlsx"},
+        RoleCase{"pivot_options/blank_row_outer_tabular.xlsx"},
+        RoleCase{"pivot_options/grand_total_caption_tabular.xlsx"},
+        RoleCase{"pivot_options/repeat_labels_tabular.xlsx"}, RoleCase{"pivot_layout/ja_c1_values_on_rows.xlsx"},
+        RoleCase{"pivot_layout/ja_c3_cols_values_cols.xlsx"}, RoleCase{"pivot_layout/en_c4_tabular.xlsx"},
+        RoleCase{"pivot_aggregation/C9__sum.xlsx"}, RoleCase{"pivot_aggregation/D2__max.xlsx"}));
 
 }  // namespace
 }  // namespace formulon
