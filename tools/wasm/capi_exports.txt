@@ -71,6 +71,8 @@ fm_workbook_get_formula
 fm_workbook_get_formula_r1c1
 fm_workbook_get_display_text
 fm_workbook_format_value
+fm_workbook_parse_reference
+fm_workbook_format_reference
 
 # -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------
 fm_workbook_evaluate_cf_formula

@@ -1387,6 +1387,7 @@ class ChartInfo:
     axes: List[ChartAxisInfo]
     hidden_categories: List[int]
     source: Optional[ChartSourceInfo]
+    na_as_blank: Optional[bool]
 
 @dataclass
 class ChartSheetRange:
@@ -1523,6 +1524,12 @@ class ChartPreviewOverrides(TypedDict, total=False):
     header_column: bool
     blanks_as: Union[ChartBlanksAs, int]
     plot_visible_only: bool
+    na_as_blank: bool
+
+class ChartDisplayPatch(TypedDict, total=False):
+    blanks_as: Optional[Union[ChartBlanksAs, int]]
+    plot_visible_only: Optional[bool]
+    na_as_blank: Optional[bool]
 
 class Person:
     id: str
@@ -1917,6 +1924,15 @@ class SpillInfo:
     anchor_col: int
     rows: int
     cols: int
+    blocked: bool
+
+@dataclass(frozen=True)
+class ParsedReference:
+    sheet_name: Optional[str]
+    row0: int
+    col0: int
+    row1: int
+    col1: int
 
 @dataclass(frozen=True)
 class ArrayFormula:
@@ -3077,9 +3093,7 @@ class Workbook:
         hidden_series: Optional[Sequence[int]] = ...,
     ) -> None: ...
     def set_chart_axis(self, sheet: int, object_id: int, axis_id: int, patch: ChartAxisPatch) -> None: ...
-    def set_chart_display(
-        self, sheet: int, object_id: int, blanks_as: Union[ChartBlanksAs, int], plot_visible_only: Optional[bool]
-    ) -> None: ...
+    def set_chart_display(self, sheet: int, object_id: int, patch: ChartDisplayPatch) -> None: ...
     def set_chart_series(
         self, sheet: int, object_id: int, plot: int, series_idx: int, patch: ChartSeriesPatch
     ) -> None: ...
@@ -3372,6 +3386,24 @@ class Workbook:
     def precedents(self, sheet: int, row: int, col: int, depth: int = ...) -> List[CellNode]: ...
     def dependents(self, sheet: int, row: int, col: int, depth: int = ...) -> List[CellNode]: ...
     def spill_info(self, sheet: int, row: int, col: int) -> SpillInfo: ...
+    def parse_reference(
+        self,
+        text: str,
+        *,
+        r1c1: bool = ...,
+        base_row: Optional[int] = ...,
+        base_col: Optional[int] = ...,
+    ) -> Optional[ParsedReference]: ...
+    def format_reference(
+        self,
+        row0: int,
+        col0: int,
+        row1: int,
+        col1: int,
+        *,
+        sheet_name: Optional[str] = ...,
+        absolute: bool = ...,
+    ) -> str: ...
     def get_array_formula(self, sheet: int, row: int, col: int) -> Optional[ArrayFormula]: ...
     def set_array_formula(self, sheet: int, row: int, col: int, rows: int, cols: int, formula: str) -> None: ...
 

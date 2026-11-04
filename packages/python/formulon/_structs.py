@@ -601,6 +601,19 @@ SPILL_INFO = Struct(
     ],
 )
 
+REFERENCE = Struct(
+    "fm_reference_t",
+    [
+        ("valid", I32),
+        ("has_sheet", I32),
+        ("sheet_name", PTR),
+        ("row0", U32),
+        ("col0", U32),
+        ("row1", U32),
+        ("col1", U32),
+    ],
+)
+
 ARRAY_FORMULA = Struct(
     "fm_array_formula_t",
     [

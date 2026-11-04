@@ -148,6 +148,7 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_AXIS_PATCH": 136,
         "CHART_LEGEND_PATCH": 20,
         "CHART_DISPLAY_PATCH": 24,
+        "REFERENCE": 28,
     }
 
     def test_struct_sizes(self) -> None:
@@ -377,6 +378,18 @@ class SpillTests(unittest.TestCase):
             self.assertTrue(info.engaged)
             self.assertEqual(info.rows, 3)
             self.assertEqual((info.anchor_row, info.anchor_col), (0, 0))
+            self.assertFalse(info.blocked)
+
+    def test_blocked_spill_reports_the_attempted_footprint(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_formula(0, 0, 0, "=SEQUENCE(5)")
+            wb.set_number(0, 3, 0, 1.0)
+            wb.recalc()
+            info = wb.spill_info(0, 0, 0)
+            self.assertTrue(info.blocked)
+            self.assertFalse(info.engaged)
+            self.assertEqual((info.anchor_row, info.anchor_col, info.rows, info.cols), (0, 0, 5, 1))
+            self.assertFalse(wb.spill_info(0, 1, 0).blocked)
 
 
 class ArrayFormulaTests(unittest.TestCase):

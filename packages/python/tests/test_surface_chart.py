@@ -238,12 +238,56 @@ class ChartEditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 wb.set_chart_legend(0, oid, ChartLegendPosition.TOP, hidden_series=[-1])
 
-            wb.set_chart_display(0, oid, ChartBlanksAs.SPAN, False)
+            wb.set_chart_display(0, oid, {"blanks_as": ChartBlanksAs.SPAN, "plot_visible_only": False})
             info = wb.get_chart(0, oid)
             self.assertEqual((info.blanks_as, info.plot_visible_only), (ChartBlanksAs.SPAN, False))
-            wb.set_chart_display(0, oid, ChartBlanksAs.ABSENT, None)
+            wb.set_chart_display(0, oid, {"blanks_as": None, "plot_visible_only": None})
             info = wb.get_chart(0, oid)
             self.assertEqual((info.blanks_as, info.plot_visible_only), (ChartBlanksAs.ABSENT, None))
+
+    def test_display_patch_keeps_omitted_keys(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            wb.set_chart_display(0, oid, {"blanks_as": ChartBlanksAs.ZERO, "plot_visible_only": True})
+            wb.set_chart_display(0, oid, {"plot_visible_only": False})
+            info = wb.get_chart(0, oid)
+            self.assertEqual((info.blanks_as, info.plot_visible_only), (ChartBlanksAs.ZERO, False))
+            wb.set_chart_display(0, oid, {})
+            info = wb.get_chart(0, oid)
+            self.assertEqual((info.blanks_as, info.plot_visible_only), (ChartBlanksAs.ZERO, False))
+            with self.assertRaises(TypeError):
+                wb.set_chart_display(0, oid, {"nope": 1})  # type: ignore[typeddict-unknown-key]
+            with self.assertRaises(FormulonError):
+                wb.set_chart_display(0, oid, {"blanks_as": ChartBlanksAs.ABSENT})
+
+    def test_na_as_blank_patch(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            self.assertIs(wb.get_chart(0, oid).na_as_blank, True)
+            wb.set_chart_display(0, oid, {"na_as_blank": False})
+            self.assertIsNone(wb.get_chart(0, oid).na_as_blank)
+            wb.set_chart_display(0, oid, {"na_as_blank": True})
+            self.assertIs(wb.get_chart(0, oid).na_as_blank, True)
+            wb.set_chart_display(0, oid, {"blanks_as": ChartBlanksAs.GAP})
+            self.assertIs(wb.get_chart(0, oid).na_as_blank, True)
+            wb.set_chart_display(0, oid, {"na_as_blank": None})
+            self.assertIsNone(wb.get_chart(0, oid).na_as_blank)
+
+    def test_preview_na_as_blank_override(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            wb.set_formula(0, 1, 1, "=NA()")
+            wb.set_blank(0, 2, 1)
+            wb.recalc()
+            # Blanks plot as zero, so a #N/A shown as blank differs from one left as a gap.
+            wb.set_chart_display(0, oid, {"blanks_as": ChartBlanksAs.ZERO, "na_as_blank": False})
+            today = wb.get_chart_data(0, oid).series[0].states
+            on = wb.preview_chart_data(0, oid, {"na_as_blank": True}).series[0].states
+            off = wb.preview_chart_data(0, oid, {"na_as_blank": False}).series[0].states
+            self.assertEqual(on[0], on[1])
+            self.assertNotEqual(off[0], off[1])
+            self.assertEqual(off, today)
+            self.assertIsNone(wb.get_chart(0, oid).na_as_blank)
 
     def test_axis_patch(self) -> None:
         wb, oid = _chart()

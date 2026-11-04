@@ -100,6 +100,7 @@ __all__ = [
     "ChartPointInfo",
     "ChartPointPatch",
     "ChartPointState",
+    "ChartDisplayPatch",
     "ChartPreviewOverrides",
     "ChartSeriesDirection",
     "ChartSeriesInfo",
@@ -196,6 +197,7 @@ __all__ = [
     "SparklineGroup",
     "SparklineType",
     "SpillInfo",
+    "ParsedReference",
     "ArrayFormula",
     "EffectiveStyleSource",
     "Table",
@@ -1832,6 +1834,8 @@ class ChartInfo:
     axes: List[ChartAxisInfo]
     hidden_categories: List[int]
     source: Optional[ChartSourceInfo]
+    #: ``c16r3:dataDisplayOptions16/dispNaAsBlank``; ``None`` when the element is absent.
+    na_as_blank: Optional[bool]
 
 
 @dataclass
@@ -2038,6 +2042,15 @@ class ChartPreviewOverrides(TypedDict, total=False):
     header_column: bool
     blanks_as: Union[ChartBlanksAs, int]
     plot_visible_only: bool
+    na_as_blank: bool
+
+
+class ChartDisplayPatch(TypedDict, total=False):
+    """Display patch for :meth:`Workbook.set_chart_display`; an omitted key is kept, ``None`` removes the element."""
+
+    blanks_as: Optional[Union[ChartBlanksAs, int]]
+    plot_visible_only: Optional[bool]
+    na_as_blank: Optional[bool]
 
 
 @dataclass
@@ -2594,6 +2607,19 @@ class SpillInfo:
     anchor_col: int
     rows: int
     cols: int
+    #: ``True`` when the cell anchors a spill that could not fill its footprint.
+    blocked: bool
+
+
+@dataclass(frozen=True)
+class ParsedReference:
+    """A parsed reference: a 0-based, inclusive rectangle and its sheet qualifier (``None`` when unqualified)."""
+
+    sheet_name: Optional[str]
+    row0: int
+    col0: int
+    row1: int
+    col1: int
 
 
 @dataclass(frozen=True)
@@ -3888,6 +3914,12 @@ _PREVIEW_OVERRIDE_SPEC = (
     ("header_column", "header_column", "bool"),
     ("blanks_as", "blanks_as", "i32"),
     ("plot_visible_only", "plot_vis_only", "bool"),
+    ("na_as_blank", "na_as_blank", "bool"),
+)
+_DISPLAY_PATCH_SPEC = (
+    ("blanks_as", "blanks_as", "i32"),
+    ("plot_visible_only", "plot_vis_only", "bool"),
+    ("na_as_blank", "na_as_blank", "bool"),
 )
 _SERIES_REF_KEYS = ("name", "categories", "values", "x", "y", "size")
 
@@ -4080,6 +4112,7 @@ def _read_chart(chart: int) -> ChartInfo:
         ),
         blanks_as=_enum(ChartBlanksAs, d["blanks_as"]),
         plot_visible_only=_tri(d["plot_vis_only"]),
+        na_as_blank=_tri(d["na_as_blank"]),
         date1904=bool(d["date1904"]),
         style=d["style"] if d["has_style"] else None,
         plots=[_read_chart_plot(chart, i) for i in range(d["plot_count"])],
@@ -7989,22 +8022,14 @@ class Workbook:
                 "fm_sheet_set_chart_axis",
             )
 
-    def set_chart_display(
-        self,
-        sheet: int,
-        object_id: int,
-        blanks_as: Union[ChartBlanksAs, int],
-        plot_visible_only: Optional[bool],
-    ) -> None:
-        """Write how blanks plot and whether hidden cells are skipped; ``ABSENT`` / ``None`` remove the element."""
+    def set_chart_display(self, sheet: int, object_id: int, patch: ChartDisplayPatch) -> None:
+        """Patch how blanks plot, whether hidden cells are skipped and whether ``#N/A`` plots as blank.
+
+        An omitted key is kept, ``None`` removes the element.
+        """
         h = self._require()
-        fields: Dict[str, object] = {
-            "blanks_as_op": 1 if int(blanks_as) == 0 else 2,
-            "blanks_as": _sint(blanks_as, "blanks_as"),
-            "plot_vis_only_op": 1 if plot_visible_only is None else 2,
-            "plot_vis_only": 1 if plot_visible_only else 0,
-        }
         with _ArgScope() as scope:
+            fields = _encode_patch(_DISPLAY_PATCH_SPEC, patch, (), "display patch", scope)
             ptr = scope.struct(S.CHART_DISPLAY_PATCH)
             S.CHART_DISPLAY_PATCH.pack(LIB, ptr, fields)
             _check(
@@ -12217,7 +12242,82 @@ class Workbook:
                 anchor_col=d["anchor_col"],
                 rows=d["rows"],
                 cols=d["cols"],
+                blocked=bool(d["blocked"]),
             )
+
+    # -- Reference text ----------------------------------------------------
+    def parse_reference(
+        self,
+        text: str,
+        *,
+        r1c1: bool = False,
+        base_row: Optional[int] = None,
+        base_col: Optional[int] = None,
+    ) -> Optional[ParsedReference]:
+        """Parse ``text`` as ``INDIRECT`` reads a reference; ``None`` when it is not one.
+
+        ``base_row`` and ``base_col`` anchor R1C1 relative axes and are given together or not at all.
+        """
+        if (base_row is None) != (base_col is None):
+            raise ValueError("formulon: base_row and base_col must be given together")
+        h = self._require()
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.REFERENCE)
+            _check(
+                LIB.fm_workbook_parse_reference(
+                    h,
+                    scope.cstr(text),
+                    _sint(1 if r1c1 else 0, "r1c1"),
+                    _sint(0 if base_row is None else 1, "has_base"),
+                    _uint(base_row or 0, "base_row"),
+                    _uint(base_col or 0, "base_col"),
+                    ptr,
+                ),
+                "fm_workbook_parse_reference",
+            )
+            d = S.REFERENCE.unpack(LIB, ptr)
+            if not d["valid"]:
+                return None
+            return ParsedReference(
+                sheet_name=LIB.read_cstr(d["sheet_name"]) if d["has_sheet"] else None,
+                row0=d["row0"],
+                col0=d["col0"],
+                row1=d["row1"],
+                col1=d["col1"],
+            )
+
+    def format_reference(
+        self,
+        row0: int,
+        col0: int,
+        row1: int,
+        col1: int,
+        *,
+        sheet_name: Optional[str] = None,
+        absolute: bool = False,
+    ) -> str:
+        """Format the inclusive rectangle as A1 reference text (``B:D``, ``2:11``, ``'My Sheet'!A1``).
+
+        Raises:
+          FormulonError: with ``kInvalidArgument`` for a coordinate outside the grid or a reversed rectangle.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_format_reference(
+                    h,
+                    scope.cstr(sheet_name) if sheet_name else 0,
+                    _uint(row0, "row0"),
+                    _uint(col0, "col0"),
+                    _uint(row1, "row1"),
+                    _uint(col1, "col1"),
+                    _sint(1 if absolute else 0, "absolute"),
+                    out,
+                ),
+                "fm_workbook_format_reference",
+            )
+            return LIB.read_cstr(LIB.read_u32(out))
 
     # -- Legacy array (CSE) formulas ---------------------------------------
     def get_array_formula(self, sheet: int, row: int, col: int) -> Optional[ArrayFormula]:
