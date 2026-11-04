@@ -20,6 +20,13 @@ TEST(IsoDate, DateTimeWithFractionalSecondsParses) {
   EXPECT_GT(serial, 0.0);
 }
 
+TEST(IsoDate, FractionalSecondsAreOneExactQuotient) {
+  // Digit-by-digit accumulation drifts one ulp on this input.
+  double serial = 0.0;
+  ASSERT_TRUE(parse_iso_date_serial("1900-01-01T15:45:23.77631706", &serial));
+  EXPECT_EQ(serial, 1.0 + (56723.0 + 77631706.0 / 1e8) / 86400.0);
+}
+
 TEST(IsoDate, LeapDayInLeapYearIsAccepted) {
   // 2024 is a leap year (divisible by 4, not by 100).
   double serial = 0.0;

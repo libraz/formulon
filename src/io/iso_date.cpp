@@ -4,12 +4,17 @@
 #include "io/iso_date.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 #include "utils/date_time.h"
 
 namespace formulon::io {
 namespace {
+
+// Fractional-second digits kept: below 2^53, so the integer and its power of
+// ten are exact doubles. Later digits sit far below a serial's resolution.
+constexpr int kMaxFractionDigits = 15;
 
 /// Consumes exactly `count` ASCII digits from `s` starting at `*pos`,
 /// accumulating their decimal value into `*out`. Returns false (leaving
@@ -103,26 +108,32 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
     if (hour > 23 || minute > 59 || second > 59) {
       return false;
     }
-    double frac =
-        (static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 + static_cast<double>(second)) /
-        static_cast<double>(date_time::kSecondsPerDay);
+    double seconds =
+        static_cast<double>(hour) * 3600.0 + static_cast<double>(minute) * 60.0 + static_cast<double>(second);
 
-    // Optional fractional seconds: '.' followed by one or more digits.
+    // Optional fractional seconds: '.' followed by one or more digits, read as
+    // one exact integer over an exact power of ten.
     if (pos < text.size() && text[pos] == '.') {
       ++pos;
-      double scale = 0.1;
+      std::uint64_t digits = 0;
+      double scale = 1.0;
+      int kept = 0;
       bool any = false;
       while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
-        frac += (text[pos] - '0') * scale / static_cast<double>(date_time::kSecondsPerDay);
-        scale *= 0.1;
+        if (kept < kMaxFractionDigits) {
+          digits = digits * 10U + static_cast<std::uint64_t>(text[pos] - '0');
+          scale *= 10.0;
+          ++kept;
+        }
         ++pos;
         any = true;
       }
       if (!any) {
         return false;
       }
+      seconds += static_cast<double>(digits) / scale;
     }
-    serial += frac;
+    serial += seconds / static_cast<double>(date_time::kSecondsPerDay);
   }
 
   // Optional time-zone designator: 'Z' or '(+|-)hh:mm'. Excel stores a
