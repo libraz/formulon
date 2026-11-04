@@ -10,9 +10,12 @@
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
@@ -20,6 +23,7 @@
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
 #include "pivot_evaluator_fixtures.h"
+#include "styles.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
 #include "value.h"
@@ -817,22 +821,382 @@ FieldGroup YearsGroupOverFieldZero() {
   return group;
 }
 
-TEST(PivotEvaluator, GroupingDerivedAxisFieldWithNoDateGroupIsRefused) {
-  PivotCache cache = build_basic_cache();
-  cache.mutable_fields().push_back(PivotCacheField{"Region Years", {}});
+// Date / Amount with a months group field over Date, materialised as a load
+// leaves it.
+PivotCache build_month_grouped_cache() {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, date_time::serial_from_ymd(2024, 1U, 15U), 100.0);
+  push_record(cache, date_time::serial_from_ymd(2024, 3U, 10U), 200.0);
+  push_record(cache, date_time::serial_from_ymd(2024, 1U, 25U), 80.0);
+  FieldGroup months;
+  months.base = 0U;
+  months.kind = GroupKind::Range;
+  months.range.by = GroupBy::Months;
+  months.range.is_date = true;
+  months.range.start_date = "2024-01-15T00:00:00";
+  months.range.end_date = "2024-07-23T00:00:00";
+  months.group_items.push_back(owned_text(cache, "<2024/1/15"));
+  for (int m = 1; m <= 12; ++m) {
+    months.group_items.push_back(owned_text(cache, std::to_string(m) + "\xE6\x9C\x88"));
+  }
+  months.group_items.push_back(owned_text(cache, ">2024/7/23"));
+  cache.mutable_fields().push_back(PivotCacheField{"Months", {}});
   cache.mutable_fields().back().is_database_field = false;
-  cache.mutable_fields().back().field_group = YearsGroupOverFieldZero();
+  cache.mutable_fields().back().field_group = std::move(months);
+  materialize_group_fields(cache, /*date1904=*/false);
+  return cache;
+}
 
-  PivotTable table = build_sum_amount_table(/*row=*/{3}, /*col=*/{});
-  PivotField grouped_f;
-  grouped_f.source_name = "Region Years";
-  grouped_f.axis = PivotAxis::Row;
-  table.mutable_fields().push_back(std::move(grouped_f));
-  table.mutable_row_field_order() = {3};
+PivotTable build_month_grouped_table() {
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  table.mutable_fields()[0].date_group.reset();
+  table.mutable_fields()[0].axis = PivotAxis::None;
+  PivotField months_f;
+  months_f.source_name = "Months";
+  months_f.axis = PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(months_f));
+  table.mutable_row_field_order() = {2};
+  return table;
+}
+
+TEST(PivotEvaluator, GroupFieldLabelsItsNodesWithGroupItems) {
+  const PivotCache cache = build_month_grouped_cache();
+  const PivotTable table = build_month_grouped_table();
 
   auto r_or = evaluate(table, cache);
-  ASSERT_FALSE(static_cast<bool>(r_or));
-  EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "1\xE6\x9C\x88");
+  EXPECT_EQ(r.rows[1].label, "3\xE6\x9C\x88");
+  ASSERT_TRUE(r.rows[0].identity.has_value());
+  EXPECT_EQ(*r.rows[0].identity, Value::number(1.0));
+  EXPECT_EQ(*r.rows[1].identity, Value::number(3.0));
+  EXPECT_TRUE(r.rows[0].number_format.empty());
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 180.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 200.0);
+}
+
+TEST(PivotEvaluator, GroupFieldManualOrderFollowsItsItems) {
+  const PivotCache cache = build_month_grouped_cache();
+  PivotTable table = build_month_grouped_table();
+  PivotField& months_f = table.mutable_fields()[2];
+  months_f.sort.manual = true;
+  for (const std::uint32_t x : {3U, 1U}) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    months_f.items.push_back(item);
+  }
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "3\xE6\x9C\x88");
+  EXPECT_EQ(r.rows[1].label, "1\xE6\x9C\x88");
+}
+
+TEST(PivotEvaluator, HiddenGroupItemHidesItsRecords) {
+  const PivotCache cache = build_month_grouped_cache();
+  PivotTable table = build_month_grouped_table();
+  for (std::uint32_t x = 0; x < 14U; ++x) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    item.visible = x != 1U;  // January
+    table.mutable_fields()[2].items.push_back(item);
+  }
+  resolve_pivot_names(table, cache);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "3\xE6\x9C\x88");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 200.0);
+}
+
+TEST(PivotEvaluator, UngroupedDateItemsAreLabelledInTheFieldNumberFormat) {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, date_time::serial_from_ymd(2024, 2U, 8U), 150.0);
+  push_record(cache, date_time::serial_from_ymd(2024, 1U, 15U), 100.0);
+  cache.mutable_fields()[0].num_fmt_id = 14U;
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  table.mutable_fields()[0].date_group.reset();
+  PivotLayoutOptions options;
+  options.profile = mac_365_ja_jp_profile();
+
+  auto r_or = evaluate(table, cache, options);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "2024/1/15");
+  EXPECT_EQ(r.rows[1].label, "2024/2/8");
+  EXPECT_EQ(r.rows[0].number_format, "yyyy/m/d");
+  ASSERT_TRUE(r.rows[0].identity.has_value());
+  EXPECT_EQ(*r.rows[0].identity, Value::number(date_time::serial_from_ymd(2024, 1U, 15U)));
+
+  // The pivot field's own format wins over the cache field's.
+  table.mutable_fields()[0].number_format = "22";
+  auto r2_or = evaluate(table, cache, options);
+  ASSERT_TRUE(static_cast<bool>(r2_or)) << r2_or.error().message;
+  EXPECT_EQ(r2_or.value().rows[0].label, "2024/1/15 0:00");
+}
+
+TEST(PivotEvaluator, CustomItemNumberFormatResolvesThroughTheWorkbookStyles) {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, date_time::serial_from_ymd(2024, 1U, 15U), 100.0);
+  cache.mutable_fields()[0].num_fmt_id = 164U;
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  table.mutable_fields()[0].date_group.reset();
+  StylesTable styles;
+  styles.num_fmt_strings.push_back("yyyy-mm-dd");
+  styles.num_fmts.push_back(NumFmtRecord{164U, 0U});
+
+  PivotFilterEnv env;
+  env.styles = &styles;
+  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "2024-01-15");
+  EXPECT_EQ(r_or.value().rows[0].number_format, "yyyy-mm-dd");
+
+  // Without the styles the custom id has no code and the item stays General.
+  auto bare_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(bare_or)) << bare_or.error().message;
+  EXPECT_EQ(bare_or.value().rows[0].label, "45306");
+}
+
+TEST(PivotEvaluator, UnformattedNumericItemsKeepTheirGeneralLabel) {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, 45306.0, 1.0);
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  table.mutable_fields()[0].date_group.reset();
+  cache.mutable_fields()[0].num_fmt_id = 0U;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "45306");
+  EXPECT_TRUE(r_or.value().rows[0].number_format.empty());
+}
+
+TEST(PivotEvaluator, ItemCaptionRenamesTheLabelButNotTheOrderOrIdentity) {
+  PivotCache cache = build_basic_cache();
+  cache.mutable_fields()[0].shared_items = {owned_text(cache, "North"), owned_text(cache, "South")};
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  // South is renamed to sort first by label, which must not move it.
+  for (const std::uint32_t x : {0U, 1U}) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    item.caption = x == 1U ? "AAA" : "";
+    table.mutable_fields()[0].items.push_back(item);
+  }
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "North");
+  EXPECT_EQ(r.rows[1].label, "AAA");
+  ASSERT_TRUE(r.rows[1].identity.has_value());
+  ASSERT_TRUE(r.rows[1].identity->is_text());
+  EXPECT_EQ(r.rows[1].identity->as_text(), "South");
+}
+
+TEST(PivotEvaluator, PercentOfBaseItemFindsARenamedItem) {
+  PivotCache cache = build_basic_cache();
+  cache.mutable_fields()[0].shared_items = {owned_text(cache, "North"), owned_text(cache, "South")};
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  for (const std::uint32_t x : {0U, 1U}) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    item.caption = x == 1U ? "AAA" : "";
+    table.mutable_fields()[0].items.push_back(item);
+  }
+  resolve_pivot_names(table, cache);
+  PivotDataField& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::PercentOf;
+  df.show_as_base_field = 0U;
+  df.show_as_base_item = 1U;  // South, drawn as "AAA".
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.values.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 175.0 / 500.0);
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 1.0);
+}
+
+TEST(PivotEvaluator, PercentOfBaseItemFindsAFormattedDateAndAGroupItem) {
+  // A formatted date item: its label is "2024/1/15", its name the serial's General text.
+  PivotCache dates = build_two_field_cache();
+  const double jan15 = date_time::serial_from_ymd(2024, 1U, 15U);
+  const double feb8 = date_time::serial_from_ymd(2024, 2U, 8U);
+  dates.mutable_fields()[0].shared_items = {Value::number(jan15), Value::number(feb8)};
+  dates.mutable_fields()[0].num_fmt_id = 14U;
+  push_record(dates, 0.0, 100.0);  // Shared-item indices.
+  push_record(dates, 1.0, 150.0);
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  table.mutable_fields()[0].date_group.reset();
+  for (const std::uint32_t x : {0U, 1U}) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    table.mutable_fields()[0].items.push_back(item);
+  }
+  resolve_pivot_names(table, dates);
+  PivotDataField& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::PercentOf;
+  df.show_as_base_field = 0U;
+  df.show_as_base_item = 0U;
+  PivotLayoutOptions options;
+  options.profile = mac_365_ja_jp_profile();
+  auto r_or = evaluate(table, dates, options);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().values.size(), 2U);
+  EXPECT_EQ(r_or.value().rows[0].label, "2024/1/15");
+  EXPECT_DOUBLE_EQ(r_or.value().values[1][0][0].as_number(), 1.5);
+
+  // A group item: base item x=3 is March.
+  const PivotCache months = build_month_grouped_cache();
+  PivotTable grouped = build_month_grouped_table();
+  for (std::uint32_t x = 0; x < 14U; ++x) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    grouped.mutable_fields()[2].items.push_back(item);
+  }
+  resolve_pivot_names(grouped, months);
+  PivotDataField& gdf = grouped.mutable_data_fields()[0];
+  gdf.show_as = ShowValuesAs::PercentOf;
+  gdf.show_as_base_field = 2U;
+  gdf.show_as_base_item = 3U;
+  auto g_or = evaluate(grouped, months);
+  ASSERT_TRUE(static_cast<bool>(g_or)) << g_or.error().message;
+  ASSERT_EQ(g_or.value().values.size(), 2U);
+  EXPECT_DOUBLE_EQ(g_or.value().values[0][0][0].as_number(), 180.0 / 200.0);
+  EXPECT_DOUBLE_EQ(g_or.value().values[1][0][0].as_number(), 1.0);
+}
+
+TEST(PivotEvaluator, LabelFilterOnAGroupFieldReadsTheGroupItemText) {
+  const PivotCache cache = build_month_grouped_cache();
+  PivotTable table = build_month_grouped_table();
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Months";
+  f.type = FilterType::LabelBeginsWith;
+  f.value = std::string("1\xE6\x9C\x88");
+  table.mutable_active_filters().push_back(f);
+  AuthoredCaptionFilter caption;
+  caption.field_index = 2U;
+  caption.predicate = CaptionPredicate::Equal;
+  caption.value = "1\xE6\x9C\x88";
+  table.mutable_authored_caption_filters().push_back(caption);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "1\xE6\x9C\x88");
+  EXPECT_TRUE(r_or.value().rows[0].identity_is_group_item);
+}
+
+TEST(PivotEvaluator, CaptionedNumericItemCarriesNoNumberFormat) {
+  PivotCache cache = build_two_field_cache();
+  const double jan15 = date_time::serial_from_ymd(2024, 1U, 15U);
+  cache.mutable_fields()[0].shared_items = {Value::number(jan15)};
+  cache.mutable_fields()[0].num_fmt_id = 14U;
+  push_record(cache, 0.0, 100.0);
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  table.mutable_fields()[0].date_group.reset();
+  PivotItem item;
+  item.has_cache_index = true;
+  item.cache_index = 0U;
+  item.caption = "Start";
+  table.mutable_fields()[0].items.push_back(item);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "Start");
+  EXPECT_TRUE(r_or.value().rows[0].number_format.empty());
+}
+
+TEST(PivotEvaluator, ExplicitGeneralPivotFieldFormatWinsOverTheCacheField) {
+  PivotCache cache = build_two_field_cache();
+  push_record(cache, 45306.0, 1.0);
+  cache.mutable_fields()[0].num_fmt_id = 14U;
+  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  table.mutable_fields()[0].date_group.reset();
+  table.mutable_fields()[0].number_format = "0";
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "45306");
+  EXPECT_TRUE(r_or.value().rows[0].number_format.empty());
+}
+
+TEST(PivotEvaluator, PercentOfBaseItemMatchesByCollationAndFallsBackToItsLabel) {
+  // The bound shared item differs from the records' text only in case.
+  PivotCache cache = build_basic_cache();
+  cache.mutable_fields()[0].shared_items = {owned_text(cache, "NORTH"), owned_text(cache, "SOUTH")};
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  for (const std::uint32_t x : {0U, 1U}) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    table.mutable_fields()[0].items.push_back(item);
+  }
+  PivotDataField& df = table.mutable_data_fields()[0];
+  df.show_as = ShowValuesAs::PercentOf;
+  df.show_as_base_field = 0U;
+  df.show_as_base_item = 1U;
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().values.size(), 2U);
+  EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 175.0 / 500.0);
+
+  // A date-grouped level's keys are synthetic: its item is found by label.
+  PivotCache dates = build_date_cache();
+  PivotTable grouped = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
+  for (const char* name : {"2018", "2019"}) {
+    PivotItem item;
+    item.name = name;
+    grouped.mutable_fields()[0].items.push_back(item);
+  }
+  PivotDataField& gdf = grouped.mutable_data_fields()[0];
+  gdf.show_as = ShowValuesAs::PercentOf;
+  gdf.show_as_base_field = 0U;
+  gdf.show_as_base_item = 0U;  // "2018" = 10.
+  auto g_or = evaluate(grouped, dates);
+  ASSERT_TRUE(static_cast<bool>(g_or)) << g_or.error().message;
+  ASSERT_EQ(g_or.value().rows.size(), 3U);
+  EXPECT_EQ(g_or.value().rows[1].label, "2019");
+  EXPECT_DOUBLE_EQ(g_or.value().values[1][0][0].as_number(), 140.0 / 10.0);
+}
+
+TEST(PivotEvaluator, HiddenRenamedItemIsMatchedByItsSourceName) {
+  PivotCache cache = build_basic_cache();
+  cache.mutable_fields()[0].shared_items = {owned_text(cache, "North"), owned_text(cache, "South")};
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  for (const std::uint32_t x : {0U, 1U}) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    item.caption = x == 1U ? "AAA" : "";
+    item.visible = x != 1U;
+    table.mutable_fields()[0].items.push_back(item);
+  }
+  resolve_pivot_names(table, cache);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().rows.size(), 1U);
+  EXPECT_EQ(r_or.value().rows[0].label, "North");
 }
 
 TEST(PivotEvaluator, GroupingDerivedAxisFieldWithDateGroupSetEvaluatesNormally) {

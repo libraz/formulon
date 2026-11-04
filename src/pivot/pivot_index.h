@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -39,10 +40,15 @@ const PivotTable* find_pivot_at_anchor(const Workbook& wb, std::string_view shee
 
 /// Resolves the cache value item `item` of field `field_index` binds to:
 /// `shared_items[item.cache_index]` of the positionally-matching cache
-/// field. Returns `nullptr` when the cache does not cover the field or the
-/// index falls outside `shared_items`: such an item has no trustworthy
-/// binding.
+/// field, or `group_items[item.cache_index]` of a group field. Returns
+/// `nullptr` when the cache does not cover the field or the index falls
+/// outside those items: such an item has no trustworthy binding.
 const Value* pivot_item_cache_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item);
+
+/// The record value item `item` of field `field_index` stands for, which an
+/// axis node carries as its identity: the shared item it binds to, or a group
+/// field's group-item number. Empty for an item without a resolvable binding.
+std::optional<Value> pivot_item_record_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item);
 
 /// The label item `item` of field `field_index` is drawn and matched with:
 /// its own `name` when set, else the display string of the cache value it
@@ -71,12 +77,14 @@ std::string pivot_item_label(const PivotCache& cache, std::size_t field_index, c
 /// on a loaded workbook cannot match a field by its source-column name.
 void resolve_pivot_names(PivotTable& table, const PivotCache& cache);
 
-/// Runs `resolve_pivot_names` for every pivot table in the workbook,
-/// binding each to its cache via `Workbook::find_pivot_cache`. Intended
-/// to be called once by the OOXML reader after both the pivot tables and
-/// their caches are in memory, keeping the reader-side hook to a single
-/// line. Tables whose cache id is unknown are left unresolved (no crash),
-/// matching the reader's tolerant contract.
+/// Materialises every cache's group fields (`materialize_group_fields`)
+/// under the workbook's date epoch, then runs `resolve_pivot_names` for
+/// every pivot table in the workbook, binding each to its cache via
+/// `Workbook::find_pivot_cache`. Intended to be called once by the OOXML
+/// reader after both the pivot tables and their caches are in memory,
+/// keeping the reader-side hook to a single line. Tables whose cache id is
+/// unknown are left unresolved (no crash), matching the reader's tolerant
+/// contract.
 void resolve_all_pivot_names(Workbook& wb);
 
 }  // namespace pivot

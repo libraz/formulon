@@ -119,7 +119,8 @@ std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivo
     if (cache == nullptr) {
       return std::nullopt;
     }
-    auto eval_or = pivot::evaluate(table, *cache, options, pivot::PivotFilterEnv{wb.pinned_now(), wb.date1904()});
+    auto eval_or =
+        pivot::evaluate(table, *cache, options, pivot::PivotFilterEnv{wb.pinned_now(), wb.date1904(), &wb.styles()});
     if (!eval_or) {
       return std::nullopt;
     }

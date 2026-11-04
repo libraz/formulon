@@ -164,6 +164,9 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
     ("pivot/filter_engine.h", "eval/collated_wildcard.h"): "The record filter keeps one caption matcher per filter.",
     ("pivot/filter_engine.cpp", "eval/eval_profile_scope.h"): "Pivot collation reads the evaluating profile.",
     ("pivot/pivot_evaluator.cpp", "eval/eval_profile_scope.h"): "Pivot evaluation scopes the collation profile.",
+    ("pivot/hierarchy_builder.cpp", "eval/text_format/display_text.h"): (
+        "Numeric axis items are labelled in their field's number format, like the cells Excel draws."
+    ),
     ("io/ooxml_writer.cpp", "eval/eval_profile_scope.h"): "Pivot write plans collate shared items like evaluation.",
 }
 

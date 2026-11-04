@@ -7,10 +7,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -45,11 +47,27 @@ const Value* pivot_item_cache_value(const PivotCache& cache, std::size_t field_i
   if (field_index >= cache.fields().size()) {
     return nullptr;
   }
-  const std::vector<Value>& shared = cache.fields()[field_index].shared_items;
-  if (item.cache_index >= shared.size()) {
+  const PivotCacheField& field = cache.fields()[field_index];
+  // A group field's items index its `<groupItems>`; it has no shared items.
+  const std::vector<Value>& items = is_group_field(field) ? field.field_group->group_items : field.shared_items;
+  if (item.cache_index >= items.size()) {
     return nullptr;
   }
-  return &shared[item.cache_index];
+  return &items[item.cache_index];
+}
+
+std::optional<Value> pivot_item_record_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item) {
+  if (!item.has_cache_index) {
+    return std::nullopt;
+  }
+  const Value* bound = pivot_item_cache_value(cache, field_index, item);
+  if (bound == nullptr) {
+    return std::nullopt;
+  }
+  if (is_group_field(cache.fields()[field_index])) {
+    return Value::number(static_cast<double>(item.cache_index));
+  }
+  return *bound;
 }
 
 std::string pivot_item_label(const PivotCache& cache, std::size_t field_index, const PivotItem& item) {
@@ -87,6 +105,11 @@ void resolve_pivot_names(PivotTable& table, const PivotCache& cache) {
 }
 
 void resolve_all_pivot_names(Workbook& wb) {
+  for (std::unique_ptr<PivotCache>& cache : wb.mutable_pivot_caches()) {
+    if (cache != nullptr) {
+      materialize_group_fields(*cache, wb.date1904());
+    }
+  }
   for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
     for (std::unique_ptr<PivotTable>& pt : wb.sheet(si).mutable_pivot_tables()) {
       if (pt == nullptr) {

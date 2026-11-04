@@ -178,7 +178,8 @@ std::size_t axis_leaf_count(const pivot::AxisHierarchyNode& node) noexcept {
 // Walks an axis hierarchy tree following `path`. Each `path[i]` retains the
 // original typed item and its display label. Typed identity is tried first;
 // a label, collated at the dynamic strength, is a fallback only when it
-// identifies one child uniquely. Returns
+// identifies one child uniquely. A renamed text item's label is its caption,
+// and its source text matches as a label too. Returns
 // the leaf index assigned to the matching leaf, or
 // `static_cast<std::size_t>(-1)` on any mismatch or ambiguity.
 //
@@ -200,11 +201,17 @@ std::size_t walk_hierarchy(const std::vector<pivot::AxisHierarchyNode>& roots,
     const pivot::AxisHierarchyNode* label_match = nullptr;
     std::size_t label_matches = 0;
     for (const pivot::AxisHierarchyNode& node : *level) {
-      if (node.identity.has_value() && *node.identity == want.value) {
+      // A group item's identity is its internal number, so it answers to its label only.
+      if (node.identity.has_value() && !node.identity_is_group_item && *node.identity == want.value) {
         ++typed_matches;
         typed_match = &node;
       }
-      if (collate(node.label, want.label, current_eval_profile(), CollationStrength::kDynamic) == 0) {
+      // A renamed item answers to its caption and to the source text it renames.
+      const bool renamed_text = node.identity.has_value() && node.identity->is_text() &&
+                                node.identity->as_text() != std::string_view(node.label);
+      if (collate(node.label, want.label, current_eval_profile(), CollationStrength::kDynamic) == 0 ||
+          (renamed_text &&
+           collate(node.identity->as_text(), want.label, current_eval_profile(), CollationStrength::kDynamic) == 0)) {
         ++label_matches;
         label_match = &node;
       }
@@ -323,7 +330,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     // has to be resolved before the hierarchy is built.
     Expected<pivot::PivotResult, Error> evaluated =
         pivot::evaluate(*table, *cache, pivot::pivot_layout_options_for(ctx.workbook()->excel_profile()),
-                        pivot::PivotFilterEnv{ctx.pinned_now(), ctx.date1904()});
+                        pivot::PivotFilterEnv{ctx.pinned_now(), ctx.date1904(), &ctx.workbook()->styles()});
     if (!evaluated) {
       // Hide internal evaluator error codes behind the Mac-visible
       // GETPIVOTDATA surface.

@@ -18,6 +18,7 @@
 #include "eval/collation.h"
 #include "eval/eval_profile_scope.h"
 #include "pivot/date_serial.h"
+#include "pivot/field_grouping.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
@@ -43,6 +44,17 @@ std::string_view filter_string_value(const PivotFilter& f) {
     return *s;
   }
   return {};
+}
+
+// The value a label comparison reads for `cell` of field `field_index`: a group
+// field's materialised number stands for its group item's text.
+Value label_value(const PivotCache& cache, std::size_t field_index, const Value& cell) {
+  if (!cell.is_number() || field_index >= cache.fields().size() || !is_group_field(cache.fields()[field_index])) {
+    return cell;
+  }
+  const std::vector<Value>& items = cache.fields()[field_index].field_group->group_items;
+  const std::optional<std::size_t> item = index_from_double(cell.as_number(), items.size());
+  return item.has_value() ? items[*item] : cell;
 }
 
 // Invokes `consume` with the display label for `v`.
@@ -275,10 +287,17 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
       continue;
     }
     const std::vector<PivotItem>& field_items = table.fields()[fi].items;
+    const bool group_field = fi < cache.fields().size() && is_group_field(cache.fields()[fi]);
     for (std::size_t item_pos = 0; item_pos < field_items.size(); ++item_pos) {
       const PivotItem& item = field_items[item_pos];
       const bool selected_out = selected.has_value() && *selected < field_items.size() && *selected != item_pos;
       if (item.visible && !selected_out) {
+        continue;
+      }
+      if (group_field) {
+        if (item.has_cache_index && pivot_item_cache_value(cache, fi, item) != nullptr) {
+          hidden.group_items.insert(item.cache_index);
+        }
         continue;
       }
       if (item.name.empty()) {
@@ -301,7 +320,7 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
       }
       hidden.labels.insert(std::string_view{hidden_labels_.emplace_back(std::move(label))});
     }
-    if (hidden.labels.empty() && !hidden.hides_blank) {
+    if (hidden.labels.empty() && !hidden.hides_blank && hidden.group_items.empty()) {
       continue;
     }
     hidden_items_.push_back(std::move(hidden));
@@ -345,6 +364,14 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   const PivotTable& table = *table_;
   for (const HiddenItems& hidden : hidden_items_) {
     const Value v = cell_value(cache, record, hidden.field_index);
+    if (!hidden.group_items.empty()) {
+      const std::optional<std::size_t> number =
+          v.is_number() ? index_from_double(v.as_number(), std::size_t{0xFFFFFFFFU}) : std::nullopt;
+      if (number.has_value() && hidden.group_items.count(static_cast<std::uint32_t>(*number)) != 0) {
+        return false;
+      }
+      continue;
+    }
     if (v.is_blank()) {
       // A blank renders to the empty label, which no named item can spell:
       // the unlabelled item's rule is the only one that can hide it.
@@ -381,7 +408,7 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
       }
       continue;
     }
-    if (!with_display_string(v,
+    if (!with_display_string(label_value(cache, resolved.field_index, v),
                              [&](std::string_view label) { return label_filter_passes(f, resolved.matcher, label); })) {
       return false;
     }
@@ -397,7 +424,7 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
     if (f.field_index >= table.fields().size()) {
       continue;
     }
-    const Value v = cell_value(cache, record, f.field_index);
+    const Value v = label_value(cache, f.field_index, cell_value(cache, record, f.field_index));
     if (!with_display_string(
             v, [&](std::string_view label) { return caption_filter_passes(f, caption_matchers_[ci], label); })) {
       return false;

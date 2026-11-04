@@ -33,6 +33,10 @@
 #include "utils/date_time.h"
 #include "value.h"
 
+namespace formulon {
+struct StylesTable;
+}  // namespace formulon
+
 namespace formulon::pivot {
 
 /// True for the types ranked on an aggregate after aggregation (Top-N and the
@@ -56,8 +60,8 @@ inline bool is_value_filter_type(FilterType type) {
 
 /// Evaluation-time inputs a filter can need beyond the pivot model itself.
 ///
-/// Only the relative-period family reads any of this, but it travels with
-/// every filter pass so the two entry points keep one signature. The
+/// The filter's relative-period family reads the clock and epoch; the
+/// evaluator also reads the epoch and styles to label axis items. The
 /// default value reproduces the pre-seam behaviour exactly: follow the host
 /// clock, 1900 epoch.
 struct PivotFilterEnv {
@@ -68,6 +72,9 @@ struct PivotFilterEnv {
   /// The workbook date epoch, so a window resolved from the clock lands on
   /// the same serial scale as the dates stored in the cache.
   bool date1904 = false;
+  /// The workbook styles, resolving a custom `numFmtId` an axis item is
+  /// labelled with. Null renders custom ids as General.
+  const StylesTable* styles = nullptr;
 };
 
 /// An inclusive date window, in Excel serials under the workbook epoch.
@@ -125,7 +132,8 @@ class PreparedRecordFilter {
   ///
   /// A hidden item normally matches records by its label (`pivot_item_label`,
   /// so an item built by cache index matches its bound value's rendering).
-  /// The blank item is the exception: it has no label of its own, so it is
+  /// A group field's item is matched by its group-item number. The blank
+  /// item is the exception: it has no label of its own, so it is
   /// matched by the cache value it binds to (`pivot_item_cache_value`) being
   /// blank. Identifying it by the placeholder the grid draws instead would
   /// also hide any genuine text value spelled the same way. An item that is
@@ -141,11 +149,13 @@ class PreparedRecordFilter {
   /// The labels one field hides, keyed for O(1) membership. `hides_blank` is
   /// the unlabelled item's rule, resolved through its cache binding at build
   /// time; an unlabelled item that binds to nothing resolvable is malformed
-  /// and contributes neither.
+  /// and contributes neither. A group field hides by group-item number
+  /// instead, which is what its records carry.
   struct HiddenItems {
     std::size_t field_index = 0;
     std::unordered_set<std::string_view> labels;
     bool hides_blank = false;
+    std::unordered_set<std::uint32_t> group_items;
   };
 
   /// An `active_filters` entry whose field name already resolved. Entries

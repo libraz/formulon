@@ -12,6 +12,9 @@
 // `PivotDateGroup`, the raw cache value is bucketed first (year /
 // quarter / month / ...); the bucket's display label is stashed on the
 // inserted child for the renderer to surface in place of the raw value.
+// The same label override carries an item caption, a group field's group
+// item text, and a numeric item rendered in its field's number format; the
+// node's key, and so its order and identity, stays the cache value.
 
 #ifndef FORMULON_PIVOT_HIERARCHY_BUILDER_H_
 #define FORMULON_PIVOT_HIERARCHY_BUILDER_H_
@@ -27,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
@@ -96,6 +100,15 @@ struct HierLevel {
   /// `<items>` never enumerated) sorts after every mapped value, in the
   /// source first-appearance order.
   const std::map<Value, std::size_t, ValueLess>* manual_order;
+  /// Non-null for a group field: its `<groupItems>`, which label the
+  /// materialised group-item numbers the records carry.
+  const std::vector<Value>* group_items = nullptr;
+  /// Non-null when items of this field carry captions: the caption that
+  /// replaces the label of each cache value.
+  const std::map<Value, std::string, ValueLess>* captions = nullptr;
+  /// Number-format code a numeric item's label is rendered with; empty
+  /// renders General.
+  std::string number_format{};
 };
 
 struct OrderedHierarchyChild {
@@ -168,10 +181,13 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
 /// against the workbook's `date1904` epoch flag; the label is stashed on
 /// the inserted child for the renderer to surface. A blank cache value
 /// takes `blank_item_label` (the locale's placeholder) the same way, so
-/// no axis node is left unnamed.
+/// no axis node is left unnamed. A caption wins over every other label; a
+/// group field's node takes its group item's text, and a numeric node of a
+/// level with a `number_format` is rendered in it under `date1904` and
+/// `profile`.
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
                       std::size_t record_index, HierNode& root, std::string_view blank_item_label,
-                      bool date1904 = false);
+                      bool date1904 = false, ExcelProfile profile = default_excel_profile());
 
 /// Returns the display label for `(key, child)`: the override if set,
 /// otherwise the standard `display_string(key.value)`. Used by all hierarchy

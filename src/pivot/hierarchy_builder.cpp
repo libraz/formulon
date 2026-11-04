@@ -6,17 +6,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "eval/text_format/display_text.h"
 #include "pivot/date_serial.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
+#include "utils/checked_index.h"
 #include "utils/date_time.h"
 #include "utils/japanese_era.h"
 #include "value.h"
@@ -325,7 +328,8 @@ void collect_axis_leaf_groups(const AxisHierarchyNode& node, std::size_t depth, 
 }  // namespace
 
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
-                      std::size_t record_index, HierNode& root, std::string_view blank_item_label, bool date1904) {
+                      std::size_t record_index, HierNode& root, std::string_view blank_item_label, bool date1904,
+                      ExcelProfile profile) {
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
     const Value raw = cell_value(cache, record, level.field_index);
@@ -338,7 +342,20 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
     auto [it, inserted] = cursor->children.try_emplace(key);
     if (inserted) {
       std::string label_override;
-      if (date_bucketed) {
+      const std::string* caption = nullptr;
+      if (level.captions != nullptr && !date_bucketed) {
+        if (const auto it_caption = level.captions->find(raw); it_caption != level.captions->end()) {
+          caption = &it_caption->second;
+        }
+      }
+      if (caption != nullptr) {
+        label_override = *caption;
+      } else if (level.group_items != nullptr && raw.is_number()) {
+        const std::optional<std::size_t> item = index_from_double(raw.as_number(), level.group_items->size());
+        if (item.has_value()) {
+          label_override = display_string((*level.group_items)[*item]);
+        }
+      } else if (date_bucketed) {
         label_override = bucket_date(raw.as_number(), *level.date_group, date1904, /*with_label=*/true).label;
       } else if (raw.is_blank()) {
         // A source cell with no value still occupies a group on the axis, so
@@ -347,6 +364,8 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
         // lookup matches labels exactly. The placeholder text itself belongs
         // to the locale and arrives from the caller.
         label_override.assign(blank_item_label);
+      } else if (!level.number_format.empty() && raw.is_number()) {
+        label_override = text_format::format_value_for_display(raw, level.number_format, date1904, profile).text;
       }
       if (!label_override.empty()) {
         it->second.label_override = std::move(label_override);
@@ -388,6 +407,14 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
         node.identity = Value::text(text_storage.back());
       } else {
         node.identity = key.value;
+      }
+      if (depth < levels.size()) {
+        const HierLevel& level = levels[depth];
+        node.identity_is_group_item = level.group_items != nullptr;
+        const bool captioned = level.captions != nullptr && level.captions->count(key.value) != 0U;
+        if (key.value.is_number() && !captioned) {
+          node.number_format = level.number_format;
+        }
       }
     }
     if (child.children.empty()) {

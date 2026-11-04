@@ -24,12 +24,19 @@ namespace formulon::pivot {
 struct AxisHierarchyNode {
   std::string label;
   std::vector<AxisHierarchyNode> children;
-  /// Typed key for this rendered item. Every node of a date-grouped level
-  /// (its keys are synthetic sort keys, not source values) leaves this empty
-  /// and is addressed by label only. Other nodes retain their Value kind so
+  /// Typed key for this rendered item. A group field's node holds its group
+  /// item number. Every node of a level grouped through
+  /// `PivotField::date_group` (its keys are synthetic sort keys, not source
+  /// values) leaves this empty and is addressed by label only. Other nodes retain their Value kind so
   /// GETPIVOTDATA can distinguish, for example, number 1 from text "1" before
   /// falling back to a display-label match.
   std::optional<Value> identity = std::nullopt;
+  /// True when `identity` is a group item number: an internal key that
+  /// matches records and items but that a lookup by value must not address.
+  bool identity_is_group_item = false;
+  /// Number-format code the label was rendered with, for the label cell;
+  /// empty when the label is not a formatted number.
+  std::string number_format{};
 };
 
 /// One row-axis subtotal emitted after all descendant leaves for `labels`.

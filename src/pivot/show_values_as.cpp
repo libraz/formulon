@@ -15,6 +15,7 @@
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/value_order.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -232,6 +233,25 @@ Value* slot(PivotResult& res, std::size_t df, const Line& r, const Line& c) {
       break;
   }
   return nullptr;
+}
+
+// Label of the first node at `depth` whose identity is `key`: the base item as
+// drawn, whatever caption or number format renders it.
+std::optional<std::string> label_with_identity(const std::vector<AxisHierarchyNode>& nodes, std::size_t depth,
+                                               const Value& key) {
+  for (const AxisHierarchyNode& node : nodes) {
+    if (depth == 0) {
+      const ValueLess less;
+      if (node.identity.has_value() && !less(*node.identity, key) && !less(key, *node.identity)) {
+        return node.label;
+      }
+      continue;
+    }
+    if (std::optional<std::string> found = label_with_identity(node.children, depth - 1U, key)) {
+      return found;
+    }
+  }
+  return std::nullopt;
 }
 
 struct BaseRef {
@@ -591,7 +611,17 @@ static void apply_transforms(const PivotTable& table, const PivotCache& cache, P
           *df.show_as_base_field < table.fields().size()) {
         const auto& items = table.fields()[*df.show_as_base_field].items;
         if (*spec.item < items.size()) {
-          spec.item_label = pivot_item_label(cache, *df.show_as_base_field, items[*spec.item]);
+          // The node holding the item's record value names it as drawn. An item
+          // no node holds by value (built by name, or on a level whose keys are
+          // synthetic) is matched by its label.
+          const PivotItem& item = items[*spec.item];
+          if (const std::optional<Value> key = pivot_item_record_value(cache, *df.show_as_base_field, item)) {
+            spec.item_label = label_with_identity(ref->on_row ? result.rows : result.cols, ref->depth, *key);
+          }
+          if (!spec.item_label.has_value()) {
+            spec.item_label =
+                !item.caption.empty() ? item.caption : pivot_item_label(cache, *df.show_as_base_field, item);
+          }
         }
       }
       base = spec;

@@ -30,13 +30,16 @@
 #include <numeric>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "eval/eval_profile_scope.h"
+#include "num_fmt_locale.h"
 #include "pivot/aggregator.h"
 #include "pivot/date_serial.h"
+#include "pivot/field_grouping.h"
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/hierarchy_builder.h"
@@ -49,6 +52,7 @@
 #include "pivot/show_values_as.h"
 #include "pivot/value_filter_pass.h"
 #include "pivot/value_order.h"
+#include "styles.h"
 #include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -99,6 +103,9 @@ std::string page_item_label(const PivotCache& cache, std::size_t field_index, co
                             std::optional<std::uint32_t> selected, bool subtotal_hidden_items,
                             const PivotLayoutOptions& options) {
   const auto label_of = [&](const PivotItem& item) {
+    if (!item.caption.empty()) {
+      return item.caption;
+    }
     std::string label = pivot_item_label(cache, field_index, item);
     return label.empty() ? options.blank_item_label : label;
   };
@@ -143,6 +150,38 @@ void resolve_page_selections(const PivotTable& table, const PivotCache& cache, c
   }
 }
 
+/// Code of the number format a numeric item of field `field_index` is labelled
+/// with: the pivot field's `numFmtId` when present (`0` is General), else the
+/// cache field's, resolved against `styles` when given (custom record first)
+/// and otherwise as a built-in format shown in `profile`'s locale. Empty for
+/// General and for an id neither resolves.
+std::string item_number_format(const PivotTable& table, const PivotCache& cache, std::size_t field_index,
+                               ExcelProfile profile, const StylesTable* styles) {
+  std::optional<std::uint32_t> id;
+  if (field_index < table.fields().size() && !table.fields()[field_index].number_format.empty()) {
+    std::uint32_t parsed = 0;
+    for (const char c : table.fields()[field_index].number_format) {
+      if (c < '0' || c > '9' || parsed > 0xFFFFU) {
+        id.reset();
+        break;
+      }
+      parsed = parsed * 10U + static_cast<std::uint32_t>(c - '0');
+      id = parsed;
+    }
+  }
+  if (!id.has_value() && field_index < cache.fields().size()) {
+    id = cache.fields()[field_index].num_fmt_id;
+  }
+  if (!id.has_value() || *id == 0U || *id > 0xFFFFU) {
+    return {};
+  }
+  const auto id16 = static_cast<std::uint16_t>(*id);
+  if (styles != nullptr) {
+    return std::string(effective_num_fmt(*styles, id16, profile).value_or(std::string_view{}));
+  }
+  return std::string(localized_builtin_num_fmt(id16, profile));
+}
+
 // `SubtotalFn` and `Aggregation` share the same ordinal layout (Sum=0 ..
 // VarP=10), so a custom subtotal function maps to the matching aggregation
 // by ordinal.
@@ -168,30 +207,6 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       return make_error(FormulonErrorCode::kEvalPivotInvalid, "data field references out-of-range cache field",
                         "data_field=" + df.name + " field_index=" + std::to_string(df.field_index) +
                             " cache_fields=" + std::to_string(cache.fields().size()));
-    }
-  }
-  // Grouping-derived fields (`databaseField="0"`, backed by a
-  // `<fieldGroup>`) are not modelled by the reader: date grouping
-  // (Years/Quarters/Months/...) sets no `PivotField::date_group`, and
-  // number grouping has no representation in the model at all, so every
-  // record's value for such a field is the reader's `Value::blank()`
-  // placeholder. Evaluating a table that places one of these fields on
-  // an axis would silently collapse that axis to a single blank item
-  // instead of the groups Excel actually drew, so refuse outright
-  // rather than render a wrong answer.
-  for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
-    if (table.fields()[fi].axis == PivotAxis::None || fi >= cache.fields().size()) {
-      continue;
-    }
-    if (table.fields()[fi].date_group.has_value()) {
-      continue;  // The caller (C API) has already supplied a grouping.
-    }
-    const PivotCacheField& cache_field = cache.fields()[fi];
-    if (!cache_field.is_database_field && cache_field.field_group.has_value()) {
-      return make_error(FormulonErrorCode::kEvalPivotInvalid,
-                        "pivot field is Excel date/number grouping, which this reader does not decode; refusing "
-                        "rather than evaluating every record as blank",
-                        "field=" + pivot_field_display_name(table.fields()[fi]) + " field_index=" + std::to_string(fi));
     }
   }
   for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
@@ -265,16 +280,36 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       return &it->second;
     }
     std::map<Value, std::size_t, ValueLess> positions;
-    if (fi < table.fields().size() && fi < cache.fields().size()) {
+    if (fi < table.fields().size()) {
       const std::vector<PivotItem>& items = table.fields()[fi].items;
-      const std::vector<Value>& shared_items = cache.fields()[fi].shared_items;
       for (std::size_t i = 0; i < items.size(); ++i) {
-        if (items[i].has_cache_index && items[i].cache_index < shared_items.size()) {
-          positions.emplace(shared_items[items[i].cache_index], i);
+        if (const std::optional<Value> key = pivot_item_record_value(cache, fi, items[i])) {
+          positions.emplace(*key, i);
         }
       }
     }
     return &manual_order_cache.emplace(fi, std::move(positions)).first->second;
+  };
+  // Item captions, keyed like `manual_order_cache` by the record value each
+  // renames. Hidden-item matching and ordering keep the original value.
+  std::unordered_map<std::uint32_t, std::map<Value, std::string, ValueLess>> caption_cache;
+  auto captions_for = [&](std::uint32_t fi) -> const std::map<Value, std::string, ValueLess>* {
+    if (auto it = caption_cache.find(fi); it != caption_cache.end()) {
+      return it->second.empty() ? nullptr : &it->second;
+    }
+    std::map<Value, std::string, ValueLess> captions;
+    if (fi < table.fields().size()) {
+      for (const PivotItem& item : table.fields()[fi].items) {
+        if (item.caption.empty()) {
+          continue;
+        }
+        if (const std::optional<Value> key = pivot_item_record_value(cache, fi, item)) {
+          captions.emplace(*key, item.caption);
+        }
+      }
+    }
+    const auto& stored = caption_cache.emplace(fi, std::move(captions)).first->second;
+    return stored.empty() ? nullptr : &stored;
   };
   // A `Days` field's auto Start/End resolves once per field from the
   // whole cache (matching Excel's Group dialog, unaffected by report
@@ -327,12 +362,19 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     const bool manual = fi < table.fields().size() && table.fields()[fi].sort.manual;
     const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;
     const std::optional<ValueSortSpec> value_sort = resolve_value_sort(table, fi);
-    return HierLevel{fi,
-                     dg,
-                     ascending,
-                     value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
-                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
-                     manual ? manual_order_for(fi) : nullptr};
+    HierLevel level{fi,
+                    dg,
+                    ascending,
+                    value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
+                    value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
+                    manual ? manual_order_for(fi) : nullptr};
+    level.captions = captions_for(fi);
+    if (fi < cache.fields().size() && is_group_field(cache.fields()[fi])) {
+      level.group_items = &cache.fields()[fi].field_group->group_items;
+    } else if (dg == nullptr) {
+      level.number_format = item_number_format(table, cache, fi, options.profile, env.styles);
+    }
+    return level;
   };
   std::vector<HierLevel> row_levels;
   row_levels.reserve(table.row_field_order().size());
@@ -357,12 +399,12 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   for (std::size_t i = 0; i < surviving.size(); ++i) {
     const PivotCacheRecord& rec = cache.records()[surviving[i]];
     if (!row_levels.empty()) {
-      row_leaves_for_record[i] =
-          insert_path(cache, row_levels, rec, surviving[i], row_tree, options.blank_item_label, resolved_env.date1904);
+      row_leaves_for_record[i] = insert_path(cache, row_levels, rec, surviving[i], row_tree, options.blank_item_label,
+                                             resolved_env.date1904, options.profile);
     }
     if (!col_levels.empty()) {
-      col_leaves_for_record[i] =
-          insert_path(cache, col_levels, rec, surviving[i], col_tree, options.blank_item_label, resolved_env.date1904);
+      col_leaves_for_record[i] = insert_path(cache, col_levels, rec, surviving[i], col_tree, options.blank_item_label,
+                                             resolved_env.date1904, options.profile);
     }
   }
 

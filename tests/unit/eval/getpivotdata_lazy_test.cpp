@@ -29,10 +29,12 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_locale.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -640,6 +642,137 @@ TEST(GetPivotDataLazy, NonRefAnchorReturnsRef) {
   const Value v = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", \"PivotTable1\")", ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// ---------------------------------------------------------------------------
+// Item captions, group fields and formatted item labels
+// ---------------------------------------------------------------------------
+
+// The basic workbook with Region bound to shared items and North renamed "zz".
+Workbook BuildCaptionWorkbook() {
+  auto cache = BuildBasicCache();
+  auto table = BuildBasicTable();
+  for (std::uint32_t x = 0; x < 2U; ++x) {
+    pivot::PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    item.caption = x == 0U ? "zz" : "";
+    table->mutable_fields()[0].items.push_back(std::move(item));
+  }
+  Workbook wb = Workbook::create();
+  wb.add_pivot_cache(std::move(cache));
+  wb.sheet(0).add_pivot_table(std::move(table));
+  return wb;
+}
+
+TEST(GetPivotDataLazy, RenamedItemMatchesItsCaptionAndItsSourceName) {
+  Workbook wb = BuildCaptionWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  for (const char* item : {"zz", "North", "north"}) {
+    const Value v = EvalWith(std::string("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Region\", \"") + item + "\")", ctx);
+    ASSERT_TRUE(v.is_number()) << item;
+    EXPECT_EQ(v.as_number(), 300.0) << item;
+  }
+  const Value other = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Region\", \"South\")", ctx);
+  ASSERT_TRUE(other.is_number());
+  EXPECT_EQ(other.as_number(), 700.0);
+}
+
+// Date / Amount with a months group field over Date on the rows, loaded the
+// way a file that Excel grouped arrives.
+Workbook BuildMonthGroupWorkbook() {
+  auto cache = std::make_unique<pivot::PivotCache>();
+  cache->set_cache_id(1U);
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Date", {}});
+  cache->mutable_fields().push_back(pivot::PivotCacheField{"Amount", {}});
+  pivot::FieldGroup months;
+  months.base = 0U;
+  months.kind = pivot::GroupKind::Range;
+  months.range.by = pivot::GroupBy::Months;
+  months.range.is_date = true;
+  months.range.start_date = "2024-01-15T00:00:00";
+  months.range.end_date = "2024-03-11T00:00:00";
+  months.group_items.push_back(owned_text(*cache, "<2024/1/15"));
+  for (int m = 1; m <= 12; ++m) {
+    months.group_items.push_back(owned_text(*cache, std::to_string(m) + "\xE6\x9C\x88"));
+  }
+  months.group_items.push_back(owned_text(*cache, ">2024/3/11"));
+  pivot::PivotCacheField months_field{"Months", {}};
+  months_field.is_database_field = false;
+  months_field.field_group = std::move(months);
+  cache->mutable_fields().push_back(std::move(months_field));
+  auto add = [&](unsigned month, unsigned day, double amount) {
+    pivot::PivotCacheRecord record;
+    record.cells = {Value::number(date_time::serial_from_ymd(2024, month, day, false)), Value::number(amount)};
+    cache->mutable_records().push_back(std::move(record));
+  };
+  add(1U, 15U, 100.0);
+  add(1U, 25U, 80.0);
+  add(3U, 10U, 200.0);
+
+  auto table = std::make_unique<pivot::PivotTable>();
+  table->set_name("PivotTable1");
+  table->set_pivot_cache_id(1U);
+  for (const char* name : {"Date", "Amount", "Months"}) {
+    pivot::PivotField field;
+    field.source_name = name;
+    field.axis = std::string_view(name) == "Amount"   ? pivot::PivotAxis::Value
+                 : std::string_view(name) == "Months" ? pivot::PivotAxis::Row
+                                                      : pivot::PivotAxis::None;
+    table->mutable_fields().push_back(std::move(field));
+  }
+  pivot::PivotDataField sum_amount;
+  sum_amount.name = "Sum of Amount";
+  sum_amount.field_index = 1U;
+  sum_amount.aggregation = pivot::Aggregation::Sum;
+  table->mutable_data_fields().push_back(std::move(sum_amount));
+  table->mutable_row_field_order() = {2U};
+  table->set_anchor(2U, 0U, 5U, 2U);
+
+  Workbook wb = Workbook::create();
+  wb.add_pivot_cache(std::move(cache));
+  wb.sheet(0).add_pivot_table(std::move(table));
+  pivot::resolve_all_pivot_names(wb);
+  return wb;
+}
+
+TEST(GetPivotDataLazy, GroupFieldItemMatchesItsGroupLabel) {
+  Workbook wb = BuildMonthGroupWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value january = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Months\", \"1\xE6\x9C\x88\")", ctx);
+  ASSERT_TRUE(january.is_number());
+  EXPECT_EQ(january.as_number(), 180.0);
+  const Value march = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Months\", \"3\xE6\x9C\x88\")", ctx);
+  ASSERT_TRUE(march.is_number());
+  EXPECT_EQ(march.as_number(), 200.0);
+  // The group item number is internal: 3 does not address "3月".
+  const Value by_number = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Months\", 3)", ctx);
+  ASSERT_TRUE(by_number.is_error());
+  EXPECT_EQ(by_number.as_error(), ErrorCode::Ref);
+  // A month with no records has no item on the axis.
+  const Value february = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Months\", \"2\xE6\x9C\x88\")", ctx);
+  ASSERT_TRUE(february.is_error());
+  EXPECT_EQ(february.as_error(), ErrorCode::Ref);
+}
+
+TEST(GetPivotDataLazy, FormattedDateItemMatchesItsLabelAndItsSerial) {
+  Workbook wb = BuildMonthGroupWorkbook();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  auto& table = *wb.sheet(0).mutable_pivot_tables().front();
+  table.mutable_fields()[0].axis = pivot::PivotAxis::Row;
+  table.mutable_fields()[0].number_format = "14";
+  table.mutable_fields()[2].axis = pivot::PivotAxis::None;
+  table.mutable_row_field_order() = {0U};
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value by_label = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Date\", \"2024/1/25\")", ctx);
+  ASSERT_TRUE(by_label.is_number());
+  EXPECT_EQ(by_label.as_number(), 80.0);
+  const Value by_serial = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Date\", DATE(2024,3,10))", ctx);
+  ASSERT_TRUE(by_serial.is_number());
+  EXPECT_EQ(by_serial.as_number(), 200.0);
 }
 
 }  // namespace
