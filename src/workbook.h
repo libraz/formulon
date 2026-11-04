@@ -938,6 +938,27 @@ class Workbook {
   /// negligible. Returns `nullptr` when no cache matches.
   const pivot::PivotCache* find_pivot_cache(std::uint32_t cache_id) const noexcept;
 
+  /// Runs Excel's Show Details on the value cell at absolute (`row`, `col`)
+  /// of pivot `pivot` on sheet `sheet`, and returns the new sheet's index.
+  ///
+  /// The new sheet is inserted immediately before the pivot's sheet, which
+  /// therefore moves to `sheet + 1`, and becomes the active sheet. It is named
+  /// the locale's new-sheet word plus the smallest unused number from 1. Row 1
+  /// holds the cache's database field names in cache order; below it come the
+  /// records behind the cell, after the page, label, date and hidden-item
+  /// filters but not the value filters. Rows are ordered by the row fields
+  /// innermost first, then the column fields innermost first, each in its
+  /// displayed item order, ties in source order. Each column takes its cache
+  /// field's number format. The block becomes a `TableStyleMedium9` table
+  /// named the locale's table word plus the smallest unused number.
+  ///
+  /// Errors: `kInvalidArgument` for an index out of range or a cell that is
+  /// not a data, subtotal or grand-total cell; `kPreconditionFailed` when the
+  /// pivot disables drill-down; `kEvalPivotMissing` when its cache is absent;
+  /// the sheet-capacity error of `add_sheet_entered`.
+  Expected<std::size_t, Error> show_pivot_details(std::size_t sheet, std::size_t pivot, std::uint32_t row,
+                                                  std::uint32_t col);
+
   /// Returns the OOXML workbook variant this instance round-trips as.
   /// Defaults to `WorkbookKind::kXlsx`; the reader updates it from the
   /// workbook part's content type, and the writer consults it when

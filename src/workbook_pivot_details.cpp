@@ -1,1 +1,286 @@
+//
+// `Workbook::show_pivot_details`: Excel's Show Details on a pivot value cell.
+// The records are selected and ordered before anything is mutated; the new
+// sheet is then appended, filled, given its table, and moved in front of the
+// pivot's sheet.
+
+#include <cstddef>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "eval/eval_profile_scope.h"
+#include "new_workbook_defaults.h"
+#include "pivot/filter_engine.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_index.h"
+#include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
+#include "pivot/pivot_result.h"
+#include "pivot/pivot_table.h"
+#include "pivot/record_access.h"
+#include "pivot/value_order.h"
+#include "sheet.h"
+#include "sheet_name.h"
+#include "styles.h"
+#include "table.h"
+#include "utils/a1_column.h"
+#include "utils/date_time.h"
+#include "utils/error.h"
+#include "utils/expected.h"
+#include "utils/index_sort.h"
+#include "value.h"
 #include "workbook.h"
+
+namespace formulon {
+namespace {
+
+using ValueRank = std::map<Value, std::size_t, pivot::ValueLess>;
+
+constexpr std::string_view kDetailTableStyle = "TableStyleMedium9";
+
+/// The locale's first sheet name without its trailing number.
+std::string_view sheet_word(std::string_view first_sheet_name) {
+  while (!first_sheet_name.empty() && first_sheet_name.back() >= '0' && first_sheet_name.back() <= '9') {
+    first_sheet_name.remove_suffix(1);
+  }
+  return first_sheet_name;
+}
+
+bool same_item(const Value& lhs, const Value& rhs) {
+  return !pivot::value_less(lhs, rhs) && !pivot::value_less(rhs, lhs);
+}
+
+bool record_on_path(const pivot::PivotCache& cache, const pivot::PivotCacheRecord& record,
+                    const std::vector<pivot::PivotItemRef>& items) {
+  for (const pivot::PivotItemRef& item : items) {
+    if (!same_item(pivot::cell_value(cache, record, item.field_index), item.identity)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Identities of the axis nodes `depth` levels down, in display order.
+void collect_level(const std::vector<pivot::AxisHierarchyNode>& nodes, std::size_t depth, std::vector<Value>& out) {
+  for (const pivot::AxisHierarchyNode& node : nodes) {
+    if (depth > 0U) {
+      collect_level(node.children, depth - 1U, out);
+    } else if (node.identity.has_value()) {
+      out.push_back(*node.identity);
+    }
+  }
+}
+
+/// Display position of field `field`'s value in each record of `records`.
+/// `axis` is the evaluated axis the field sits on, at `depth`.
+std::vector<std::size_t> display_ranks(const pivot::PivotTable& table, const pivot::PivotCache& cache,
+                                       std::uint32_t field, const std::vector<pivot::AxisHierarchyNode>& axis,
+                                       std::size_t depth, const std::vector<std::size_t>& records) {
+  const pivot::PivotField* spec = field < table.fields().size() ? &table.fields()[field] : nullptr;
+  ValueRank rank;
+  if (spec != nullptr && spec->sort.manual) {
+    for (std::size_t i = 0; i < spec->items.size(); ++i) {
+      if (const std::optional<Value> key = pivot::pivot_item_record_value(cache, field, spec->items[i])) {
+        rank.emplace(*key, i);
+      }
+    }
+    // Values `items` never lists follow in source first-appearance order.
+    std::size_t next = spec->items.size();
+    for (const std::size_t r : records) {
+      if (rank.emplace(pivot::cell_value(cache, cache.records()[r], field), next).second) {
+        ++next;
+      }
+    }
+  } else {
+    ValueRank labels;
+    for (const std::size_t r : records) {
+      labels.emplace(pivot::cell_value(cache, cache.records()[r], field), 0U);
+    }
+    std::size_t position = 0;
+    for (auto& entry : labels) {
+      entry.second = position++;
+    }
+    if (spec != nullptr && !spec->sort.by_field.empty()) {
+      // A value-sorted field ranks as the evaluated axis shows it; items it no longer shows follow by label.
+      std::vector<Value> shown;
+      collect_level(axis, depth, shown);
+      for (const Value& value : shown) {
+        rank.emplace(value, rank.size());
+      }
+      const std::size_t base = rank.size();
+      for (const auto& entry : labels) {
+        rank.emplace(entry.first, base + entry.second);
+      }
+    } else {
+      const bool ascending = spec == nullptr || spec->sort.ascending;
+      for (const auto& entry : labels) {
+        rank.emplace(entry.first, ascending ? entry.second : labels.size() - 1U - entry.second);
+      }
+    }
+  }
+  std::vector<std::size_t> out;
+  out.reserve(records.size());
+  for (const std::size_t r : records) {
+    out.push_back(rank.find(pivot::cell_value(cache, cache.records()[r], field))->second);
+  }
+  return out;
+}
+
+}  // namespace
+
+Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std::size_t pivot, std::uint32_t row,
+                                                          std::uint32_t col) {
+  if (sheet >= sheet_count() || pivot >= sheets_[sheet].pivot_tables().size() ||
+      sheets_[sheet].pivot_tables()[pivot] == nullptr) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "show_pivot_details: sheet or pivot index out of range",
+                      "sheet=" + std::to_string(sheet) + " pivot=" + std::to_string(pivot));
+  }
+  const pivot::PivotTable& table = *sheets_[sheet].pivot_tables()[pivot];
+  if (!table.enable_drill()) {
+    return make_error(FormulonErrorCode::kPreconditionFailed, "show_pivot_details: the pivot disables drill-down");
+  }
+  const pivot::PivotCache* cache = find_pivot_cache(table.pivot_cache_id());
+  if (cache == nullptr) {
+    return make_error(FormulonErrorCode::kEvalPivotMissing, "show_pivot_details: pivot cache not found",
+                      "cache_id=" + std::to_string(table.pivot_cache_id()));
+  }
+
+  const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(excel_profile_);
+  pivot::PivotFilterEnv env{pinned_now_, date1904_, &styles_};
+  if (!env.pinned_now.has_value()) {
+    env.pinned_now = date_time::host_civil_time();
+  }
+  std::shared_ptr<const pivot::PivotResult> result = table.last_result();
+  if (!result) {
+    auto evaluated = pivot::evaluate(table, *cache, options, env);
+    if (!evaluated) {
+      return std::move(evaluated.error());
+    }
+    table.set_last_result(std::move(evaluated.value()));
+    result = table.last_result();
+  }
+  auto path = pivot::cell_item_path(table, *result, options, row, col);
+  if (!path) {
+    return std::move(path.error());
+  }
+
+  // Selection and order collate items under the workbook's profile, as evaluation does.
+  std::vector<std::size_t> records;
+  std::vector<std::vector<std::size_t>> keys;
+  {
+    const eval::ScopedEvalProfile profile_scope(excel_profile_);
+    const pivot::PreparedRecordFilter filter(table, *cache, env);
+    for (std::size_t r = 0; r < cache->records().size(); ++r) {
+      const pivot::PivotCacheRecord& record = cache->records()[r];
+      if (filter.passes(record) && record_on_path(*cache, record, path.value().row_items) &&
+          record_on_path(*cache, record, path.value().col_items)) {
+        records.push_back(r);
+      }
+    }
+    const auto add_axis_keys = [&](const std::vector<std::uint32_t>& order,
+                                   const std::vector<pivot::AxisHierarchyNode>& axis) {
+      for (std::size_t depth = order.size(); depth-- > 0U;) {
+        keys.push_back(display_ranks(table, *cache, order[depth], axis, depth, records));
+      }
+    };
+    add_axis_keys(table.row_field_order(), result->rows);
+    add_axis_keys(table.col_field_order(), result->cols);
+  }
+  const auto key_less = [&keys](std::uint32_t lhs, std::uint32_t rhs) {
+    for (const std::vector<std::size_t>& key : keys) {
+      if (key[lhs] != key[rhs]) {
+        return key[lhs] < key[rhs];
+      }
+    }
+    return false;
+  };
+  std::vector<std::uint32_t> order;
+  sorted_index_order(order, static_cast<std::uint32_t>(records.size()), make_index_less(key_less));
+
+  std::vector<std::size_t> columns;
+  for (std::size_t f = 0; f < cache->fields().size(); ++f) {
+    if (cache->fields()[f].is_database_field) {
+      columns.push_back(f);
+    }
+  }
+
+  const NewWorkbookDefaults& defaults = new_workbook_defaults(excel_profile_.locale);
+  const std::string_view word = sheet_word(defaults.sheet_name);
+  std::string name;
+  for (std::size_t n = 1;; ++n) {
+    name = std::string(word) + std::to_string(n);
+    bool taken = false;
+    for (const Sheet& existing : sheets_) {
+      taken = taken || sheet_names::equal(existing.name(), name);
+    }
+    if (!taken) {
+      break;
+    }
+  }
+
+  TableMetadata detail;
+  detail.name = next_default_table_name(defaults.table_word);
+  detail.display_name = detail.name;
+  detail.ref = "A1:";
+  a1::append_column_letters(detail.ref, static_cast<std::uint32_t>(columns.empty() ? 0U : columns.size() - 1U));
+  detail.ref += std::to_string(records.size() + 1U);
+  detail.totals_row_shown = false;
+  for (const std::size_t f : columns) {
+    TableColumn column;
+    column.name = cache->fields()[f].name;
+    detail.columns.push_back(std::move(column));
+  }
+  detail.style_info.present = true;
+  detail.style_info.name = std::string(kDetailTableStyle);
+  detail.style_info.show_row_stripes = true;
+
+  // Mutation starts here.
+  auto added = add_sheet_entered(name);
+  if (!added) {
+    return std::move(added.error());
+  }
+  const std::size_t appended = sheet_count() - 1U;
+  detail.sheet_index = appended;
+  if (auto made = add_table(std::move(detail)); !made) {
+    (void)remove_sheet(static_cast<std::uint32_t>(appended));
+    return std::move(made.error());
+  }
+
+  for (std::size_t c = 0; c < columns.size(); ++c) {
+    const pivot::PivotCacheField& field = cache->fields()[columns[c]];
+    const auto out_col = static_cast<std::uint32_t>(c);
+    (void)set_cell_text(appended, 0U, out_col, field.name);
+    std::optional<std::uint32_t> xf;
+    if (field.num_fmt_id.value_or(0U) != 0U && *field.num_fmt_id <= 0xFFFFU) {
+      CellXf format = styles_.cell_xfs.empty() ? CellXf{} : styles_.cell_xfs.front();
+      format.num_fmt_id = static_cast<std::uint16_t>(*field.num_fmt_id);
+      format.apply_number_format = true;
+      xf = intern_cell_xf(styles_, std::move(format));
+    }
+    for (std::size_t i = 0; i < order.size(); ++i) {
+      const auto out_row = static_cast<std::uint32_t>(i + 1U);
+      const Value value = pivot::cell_value(*cache, cache->records()[records[order[i]]], columns[c]);
+      if (value.is_text()) {
+        (void)set_cell_text(appended, out_row, out_col, value.as_text());
+      } else if (!value.is_blank()) {
+        (void)set_cell_value(appended, out_row, out_col, value);
+      }
+      if (xf.has_value()) {
+        (void)set_cell_xf_index(appended, out_row, out_col, *xf);
+      }
+    }
+  }
+
+  (void)move_sheet(static_cast<std::uint32_t>(appended), static_cast<std::uint32_t>(sheet));
+  set_active_sheet(static_cast<std::uint32_t>(sheet));
+  return sheet;
+}
+
+}  // namespace formulon
