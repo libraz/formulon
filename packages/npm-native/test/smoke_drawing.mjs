@@ -214,3 +214,19 @@ test('snapshotDrawing and restoreDrawing bring back a removed, moved or copied p
     wb.dispose();
   }
 });
+
+test('setDrawingName renames a picture and keeps its id', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  try {
+    const ins = must(wb.insertImage(0, makePng(4), { name: 'logo', row: 1, col: 1 }), 'insertImage');
+    must(wb.setDrawingName(0, ins.objectId, 'banner'), 'setDrawingName');
+    const o = wb.listDrawingObjects(0)[0];
+    assert.equal(o.objectId, ins.objectId);
+    assert.equal(o.name, 'banner');
+    assert.equal(wb.setDrawingName(0, ins.objectId, '').ok, false);
+    assert.equal(wb.setDrawingName(0, 9999, 'x').ok, false);
+  } finally {
+    wb.dispose();
+  }
+});

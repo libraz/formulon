@@ -286,6 +286,17 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotFieldAddItemAt(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearItems(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetItemVisible(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetDefaultSubtotal(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetInsertBlankRow(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetFillDownLabels(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetShowDetail(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetItemShowDetail(const Napi::CallbackInfo& info);
+  Napi::Value PivotFieldSetItemCaption(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetGrandTotalCaption(const Napi::CallbackInfo& info);
+  Napi::Value PivotGetGrandTotalCaption(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetAutoFormatting(const Napi::CallbackInfo& info);
+  Napi::Value PivotGetAutoFormatting(const Napi::CallbackInfo& info);
+  Napi::Value PivotShowDetails(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldSetDateGroup(const Napi::CallbackInfo& info);
@@ -495,6 +506,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value InsertImage(const Napi::CallbackInfo& info);
   Napi::Value RemoveDrawing(const Napi::CallbackInfo& info);
   Napi::Value SetDrawingAnchor(const Napi::CallbackInfo& info);
+  Napi::Value SetDrawingName(const Napi::CallbackInfo& info);
   Napi::Value SetDrawingZOrder(const Napi::CallbackInfo& info);
   Napi::Value SnapshotDrawing(const Napi::CallbackInfo& info);
   Napi::Value RestoreDrawing(const Napi::CallbackInfo& info);

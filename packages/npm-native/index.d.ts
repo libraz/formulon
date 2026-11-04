@@ -468,6 +468,11 @@ export const PivotShowValuesAs: Readonly<{
 /** Union of the {@link PivotShowValuesAs} ordinals. */
 export type PivotShowValuesAs = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 
+/** The Values pseudo-field (the "Σ Values" level) in a row / column field
+ *  order, as `pivotRowFieldOrder` / `pivotColFieldOrder` report it and
+ *  `pivotSetRowFieldOrder` / `pivotSetColFieldOrder` accept it. */
+export const PIVOT_VALUES_FIELD = -2;
+
 /** Sentinel value for `PivotDataFieldSpec.showAsBaseItem` meaning
  *  "(previous)". */
 export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
@@ -686,6 +691,10 @@ export interface PivotFieldResult {
   /** Whether the automatic subtotal shows; `false` whenever `subtotalFns`
    *  is non-empty, since custom functions replace it. */
   defaultSubtotal: boolean;
+  /** Whether a blank row follows each item block. */
+  insertBlankRow: boolean;
+  /** Whether the field's label repeats on every row of its block. */
+  fillDownLabels: boolean;
   /** Custom subtotal functions (`pivotFieldAddSubtotalFn`), as
    *  `PivotAggregation.*` ordinals in ascending order. */
   subtotalFns: PivotAggregation[];
@@ -700,6 +709,16 @@ export interface PivotItemResult {
    *  bound by label only. */
   cacheIndex: number;
   visible: boolean;
+  /** The caption shown instead of the item's value; `null` when none. */
+  caption: string | null;
+  /** `false` when the item is collapsed. */
+  showDetail: boolean;
+}
+
+/** Return type of `Workbook.pivotGetAutoFormatting(...)`. */
+export interface PivotAutoFormattingResult {
+  status: Status;
+  value: boolean;
 }
 
 /** Return type of `Workbook.pivotDataFieldAt(...)`. Same shape as
@@ -4152,6 +4171,20 @@ export interface Workbook {
   pivotRowFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
   /** Reads the column-axis field order. */
   pivotColFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
+  /** Renames the grand total row / column label; an empty string restores
+   *  the locale's word. */
+  pivotSetGrandTotalCaption(sheet: number, pivotIdx: number, caption: string): Status;
+  /** Reads the grand total caption; `value` is `""` when none is set. */
+  pivotGetGrandTotalCaption(sheet: number, pivotIdx: number): StringResult;
+  /** Sets the "autofit column widths on update" flag. */
+  pivotSetAutoFormatting(sheet: number, pivotIdx: number, on: boolean): Status;
+  /** Reads the autofit flag. */
+  pivotGetAutoFormatting(sheet: number, pivotIdx: number): PivotAutoFormattingResult;
+  /** Writes the source records behind the data or total cell (`row`, `col`)
+   *  onto a new sheet inserted before the pivot's sheet, as Show Details
+   *  does. Returns `{ status, index: newSheetIndex }`; sheets at and after
+   *  the pivot's sheet shift by one. */
+  pivotShowDetails(sheet: number, pivotIdx: number, row: number, col: number): AddStyleResult;
 
   /** Number of fields configured on the pivot. */
   pivotFieldCount(sheet: number, pivotIdx: number): NumberResult;
@@ -4188,6 +4221,22 @@ export interface Workbook {
   pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, order: PivotSortOrder, byField: string): Status;
   /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
   pivotFieldSetSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
+  /** Turns the automatic subtotal of pivot field `fieldIdx` on or off.
+   *  Custom subtotal functions replace it whatever this says. */
+  pivotFieldSetDefaultSubtotal(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Sets whether a blank row follows each item block of the field. */
+  pivotFieldSetInsertBlankRow(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Sets whether the field repeats its item labels on every row of a
+   *  block. */
+  pivotFieldSetFillDownLabels(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Expands or collapses every item of the field with its subtotal row. */
+  pivotFieldSetShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Expands or collapses item `itemIdx` of the field. */
+  pivotFieldSetItemShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, on: boolean): Status;
+  /** Shows `caption` instead of the value of item `itemIdx`. An empty
+   *  string, or a caption equal to the item's own value, clears it; a
+   *  caption another item of the field already shows is rejected. */
+  pivotFieldSetItemCaption(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, caption: string): Status;
   /** Appends a manual-filter item to pivot field `fieldIdx`, addressed by
    *  its label. The item binds to the first shared item of the cache field
    *  that renders as `name` (unbound when none does), and the filter engine
@@ -4847,6 +4896,9 @@ export interface Workbook {
   removeDrawing(sheet: number, objectId: number): Status;
   /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
   setDrawingAnchor(sheet: number, objectId: number, placement: ImagePlacement): Status;
+  /** Renames the picture or chart `objectId`. Duplicate names are allowed;
+   *  an empty name is rejected. */
+  setDrawingName(sheet: number, objectId: number, name: string): Status;
   /** Makes the picture or chart `objectId` item `index` of `listDrawingObjects`, whose order is the stacking order (0 is the back). */
   setDrawingZOrder(sheet: number, objectId: number, index: number): Status;
   /** Captures the picture or chart `objectId` with its list position, element and dependent parts as opaque bytes for `restoreDrawing`. */
@@ -5202,6 +5254,7 @@ declare const _default: {
   PivotAxis: typeof PivotAxis;
   PivotAggregation: typeof PivotAggregation;
   PivotShowValuesAs: typeof PivotShowValuesAs;
+  PIVOT_VALUES_FIELD: typeof PIVOT_VALUES_FIELD;
   PIVOT_SHOW_AS_BASE_PREVIOUS: typeof PIVOT_SHOW_AS_BASE_PREVIOUS;
   PIVOT_SHOW_AS_BASE_NEXT: typeof PIVOT_SHOW_AS_BASE_NEXT;
   PivotFilterType: typeof PivotFilterType;

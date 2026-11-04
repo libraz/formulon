@@ -82,6 +82,7 @@ function envelopeProbes(wb) {
     ['PivotFilterResult', true, () => wb.pivotFilterAt(99, 0, 0)],
     ['PivotGrandTotalsResult', true, () => wb.pivotGetGrandTotals(99, 0)],
     ['PivotStyleInfoResult', true, () => wb.pivotGetStyleInfo(99, 0)],
+    ['PivotAutoFormattingResult', true, () => wb.pivotGetAutoFormatting(99, 0)],
     ['PivotFieldOrderResult', true, () => wb.pivotRowFieldOrder(99, 0)],
     ['PivotFieldResult', true, () => wb.pivotFieldAt(99, 0, 0)],
     ['PivotItemResult', true, () => wb.pivotFieldItemAt(99, 0, 0, 0)],

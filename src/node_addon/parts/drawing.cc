@@ -192,6 +192,13 @@ Napi::Value Workbook::SetDrawingAnchor(const Napi::CallbackInfo& info) {
   return MakeStatus(env, fm_sheet_set_drawing_anchor(handle_, ArgU32(info, 0), ArgU32(info, 1), &anchor));
 }
 
+Napi::Value Workbook::SetDrawingName(const Napi::CallbackInfo& info) {
+  return StatusCall(info, [&](fm_workbook_t* handle) {
+    const std::string name = ArgString(info, 2);
+    return fm_sheet_set_drawing_name(handle, ArgU32(info, 0), ArgU32(info, 1), name.c_str());
+  });
+}
+
 Napi::Value Workbook::SetDrawingZOrder(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_drawing_z_order);
 }

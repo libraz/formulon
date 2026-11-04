@@ -640,6 +640,86 @@ const PIVOT_MUTATORS = [
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), WEST_ONLY),
     },
   ],
+  [
+    'pivotSetGrandTotalCaption',
+    {
+      act: (b) => b.wb.pivotSetGrandTotalCaption(0, b.pivot, 'Everything'),
+      expect: (b) => {
+        assert.equal(b.wb.pivotGetGrandTotalCaption(0, b.pivot).value, 'Everything');
+        assert.ok(b.wb.pivotSetGrandTotalCaption(0, b.pivot, '').ok);
+        assert.equal(b.wb.pivotGetGrandTotalCaption(0, b.pivot).value, '');
+      },
+    },
+  ],
+  [
+    'pivotSetAutoFormatting',
+    {
+      act: (b) => b.wb.pivotSetAutoFormatting(0, b.pivot, true),
+      expect: (b) => {
+        assert.equal(b.wb.pivotGetAutoFormatting(0, b.pivot).value, true);
+        assert.ok(b.wb.pivotSetAutoFormatting(0, b.pivot, false).ok);
+        assert.equal(b.wb.pivotGetAutoFormatting(0, b.pivot).value, false);
+      },
+    },
+  ],
+  [
+    'pivotFieldSetDefaultSubtotal',
+    {
+      act: (b) => b.wb.pivotFieldSetDefaultSubtotal(0, b.pivot, b.region, false),
+      expect: (b) => assert.equal(b.wb.pivotFieldAt(0, b.pivot, b.region).defaultSubtotal, false),
+    },
+  ],
+  [
+    'pivotFieldSetInsertBlankRow',
+    {
+      act: (b) => b.wb.pivotFieldSetInsertBlankRow(0, b.pivot, b.region, true),
+      expect: (b) => assert.equal(b.wb.pivotFieldAt(0, b.pivot, b.region).insertBlankRow, true),
+    },
+  ],
+  [
+    'pivotFieldSetFillDownLabels',
+    {
+      act: (b) => b.wb.pivotFieldSetFillDownLabels(0, b.pivot, b.region, true),
+      expect: (b) => assert.equal(b.wb.pivotFieldAt(0, b.pivot, b.region).fillDownLabels, true),
+    },
+  ],
+  [
+    'pivotFieldSetShowDetail',
+    {
+      act: (b) => b.wb.pivotFieldSetShowDetail(0, b.pivot, b.region, false),
+      expect: (b) => assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 0).showDetail, false),
+    },
+  ],
+  [
+    'pivotFieldSetItemShowDetail',
+    {
+      act: (b) => b.wb.pivotFieldSetItemShowDetail(0, b.pivot, b.region, 1, false),
+      expect: (b) => {
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 0).showDetail, true);
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 1).showDetail, false);
+      },
+    },
+  ],
+  [
+    'pivotFieldSetItemCaption',
+    {
+      act: (b) => b.wb.pivotFieldSetItemCaption(0, b.pivot, b.region, 0, 'Eastern'),
+      expect: (b) => {
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 0).caption, 'Eastern');
+        assert.equal(b.wb.pivotFieldItemAt(0, b.pivot, b.region, 1).caption, null);
+      },
+    },
+  ],
+  [
+    'pivotShowDetails',
+    {
+      act: (b) => b.wb.pivotShowDetails(0, b.pivot, 1, 7),
+      expect: (b, r) => {
+        assert.equal(r.index, 0);
+        assert.equal(b.wb.sheetCount().value, 2);
+      },
+    },
+  ],
 ];
 
 test('the pivot mutator table covers every declared pivot mutator', async () => {
@@ -939,6 +1019,33 @@ test('a pivot cache error setter without errorCode throws and changes nothing', 
     assert.equal(b.wb.pivotCacheFieldSharedItemCount(b.cacheId, 0).value, items);
     assert.throws(() => b.wb.pivotCacheRecordSetError(b.cacheId, 0, 2), TypeError);
     assert.deepEqual(pivotGrid(b.wb), BASE_GRID);
+  } finally {
+    b.wb.dispose();
+  }
+});
+
+test('pivot report options and the Values field order report bad arguments', async () => {
+  const mod = await getModule();
+  const b = buildPivot(mod);
+  try {
+    assert.equal(mod.PIVOT_VALUES_FIELD, -2);
+    // A single data field has no Values level to place.
+    assert.equal(b.wb.pivotSetRowFieldOrder(0, b.pivot, [b.region, mod.PIVOT_VALUES_FIELD]).ok, false);
+    assert.equal(b.wb.pivotSetGrandTotalCaption(99, 0, 'x').ok, false);
+    assert.equal(b.wb.pivotGetGrandTotalCaption(99, 0).status.ok, false);
+    assert.equal(b.wb.pivotSetAutoFormatting(99, 0, true).ok, false);
+    assert.equal(b.wb.pivotGetAutoFormatting(99, 0).status.ok, false);
+    assert.equal(b.wb.pivotFieldSetDefaultSubtotal(0, b.pivot, 99, true).ok, false);
+    assert.equal(b.wb.pivotFieldSetInsertBlankRow(0, b.pivot, 99, true).ok, false);
+    assert.equal(b.wb.pivotFieldSetFillDownLabels(0, b.pivot, 99, true).ok, false);
+    assert.equal(b.wb.pivotFieldSetShowDetail(0, b.pivot, 99, true).ok, false);
+    assert.equal(b.wb.pivotFieldSetItemShowDetail(0, b.pivot, b.region, 99, true).ok, false);
+    assert.equal(b.wb.pivotFieldSetItemCaption(0, b.pivot, b.region, 99, 'x').ok, false);
+    // Captions collide with another item's label.
+    assert.equal(b.wb.pivotFieldSetItemCaption(0, b.pivot, b.region, 0, 'West').ok, false);
+    assert.equal(b.wb.pivotShowDetails(99, 0, 0, 0).status.ok, false);
+    assert.equal(b.wb.setDrawingName(0, 9999, 'x').ok, false);
+    assert.equal(b.wb.setDrawingName(0, 9999, '').ok, false);
   } finally {
     b.wb.dispose();
   }
