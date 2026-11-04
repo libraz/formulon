@@ -7,7 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **C ABI:** `fm_workbook_pivot_field_set_date_group` (`pivotFieldSetDateGroup`,
+  `pivot_field_set_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
+  calendar, an interval in days and start and end serials (NaN for automatic)
+  in place of a granularity and year arguments. `fm_pivot_date_grouping_t` and
+  the `date_*` members of `fm_pivot_field_info_t` are gone; the struct now
+  reports `date_periods`, `date_calendar`, `group_base_index`,
+  `insert_blank_row` and `fill_down_labels`. The old "year and month" grouping
+  is not the same thing as Excel's months period, so it has no replacement.
+  `fm_pivot_item_info_t` gains `caption` and `show_detail` at its end. A caller
+  compiled against an earlier header must be recompiled.
+
 ### Added
+
+- Date grouping works the way Excel's Group command does. Seconds, minutes,
+  hours, days (with an interval), months, quarters and years each become a
+  group field in the pivot cache, so a grouped workbook loads, evaluates and
+  saves in Excel's own form. Labels and field names follow the 14 UI locales,
+  years can follow the Japanese calendar, and ungrouping removes the trailing
+  group fields.
+- Pivot field and item labels that hold dates or numbers are drawn in the
+  field's number format.
+- Pivot report options: `fm_workbook_pivot_set_grand_total_caption` /
+  `_get_grand_total_caption`, `fm_workbook_pivot_set_auto_formatting` /
+  `_get_auto_formatting`, and per field `fm_workbook_pivot_field_set_default_subtotal`,
+  `_set_insert_blank_row`, `_set_fill_down_labels` and `_set_show_detail`
+  (`pivotSetGrandTotalCaption`, `pivotFieldSetShowDetail`, and so on). The
+  layout draws the grand total caption, blank rows, repeated labels and
+  collapsed items as Excel does, and loaded files keep them.
+- `fm_workbook_pivot_field_set_item_caption` renames an item without changing
+  the value it stands for; `fm_workbook_pivot_field_set_item_show_detail`
+  expands or collapses one item. `fm_pivot_item_info_t` reports both. A
+  caption is at most 255 UTF-16 units and may not repeat another item's label
+  in the field.
+- The Values level ("Σ Values") appears in the row and column field orders as
+  `FM_PIVOT_VALUES_FIELD` (-2 in JavaScript and Python), at its position
+  among the fields. Listing it in `fm_workbook_pivot_set_row_field_order` or
+  `_set_col_field_order` moves it to that axis. It needs two or more data
+  fields, and the axis that holds it must keep listing it.
+- `fm_workbook_pivot_show_details` (`pivotShowDetails`, `pivot_show_details`)
+  runs Show Details on a data, subtotal or grand total cell: it adds a sheet
+  with the matching source rows in a table, before the pivot's sheet, and
+  makes it the active sheet. Sheets from the pivot's sheet onward move up by
+  one.
+- `fm_sheet_set_drawing_name` (`setDrawingName`, `set_drawing_name`) renames a
+  picture or chart. Default object ids now count per sheet from 2 and are
+  shared by pictures, charts, shapes and slicers, and default chart, picture
+  and table names use the workbook locale's word.
 
 - `fm_workbook_pivot_cache_field_shared_item_value`
   (`pivotCacheFieldSharedItemValue`, `pivot_cache_field_shared_item_value`)
@@ -24,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Writing a number, text or blank into a pivot cache record, or clearing a
+  field's shared items, no longer leaves the cell saved as a date or as a
+  shared-item index.
 - A data bar without an x14 extension (the Excel 2007 form) is drawn as Excel
   draws it: no axis, and every bar, negative ones included, grows from the
   left edge in proportion to the minimum-to-maximum span. A data bar with an

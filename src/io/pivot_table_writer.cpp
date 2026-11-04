@@ -857,6 +857,10 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (!table.grand_totals_rows()) {
     out.append(" colGrandTotals=\"0\"");
   }
+  // The Values level sitting among the row fields is what `dataOnRows` states.
+  if (table.data_fields().size() >= 2U && table.row_values_position().has_value()) {
+    out.append(" dataOnRows=\"1\"");
+  }
   if (table.subtotal_hidden_items()) {
     out.append(" subtotalHiddenItems=\"1\"");
   }
@@ -888,7 +892,14 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
     out.append(" updatedVersion=\"8\"");
   }
   // Re-emit any unmodelled root attributes captured on read.
-  append_raw_attrs(out, table.passthrough_attrs());
+  // The Values placement is written from the field orders above, never from a stored copy.
+  std::vector<std::pair<std::string, std::string>> carried;
+  for (const auto& attr : table.passthrough_attrs()) {
+    if (attr.first != "dataOnRows" && attr.first != "dataPosition") {
+      carried.push_back(attr);
+    }
+  }
+  append_raw_attrs(out, carried);
   out.append(">");
 
   // Excel refuses a definition with two or more data fields unless the

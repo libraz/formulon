@@ -136,6 +136,19 @@ class DrawingImageTests(unittest.TestCase):
             with self.assertRaises(FormulonError):
                 wb.set_drawing_anchor(0, 9999)
 
+    def test_set_drawing_name_renames_the_object(self) -> None:
+        wb = Workbook.create_default()
+        try:
+            oid = wb.insert_image(0, _png(2, 2), name="logo")
+            wb.set_drawing_name(0, oid, "renamed")
+            self.assertEqual(wb.list_drawing_objects(0)[0].name, "renamed")
+            with self.assertRaises(FormulonError):
+                wb.set_drawing_name(0, oid, "")
+            with self.assertRaises(FormulonError):
+                wb.set_drawing_name(0, 9999, "x")
+        finally:
+            wb.close()
+
     def test_set_drawing_z_order_reorders_the_list(self) -> None:
         with Workbook.create_default() as wb:
             a = wb.insert_image(0, _png(2, 2), row=0)

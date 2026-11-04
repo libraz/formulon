@@ -22,6 +22,7 @@
 #include "pivot/pivot_locale.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/utf8_length.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
@@ -31,6 +32,7 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalidate_pivot_result;
 using formulon::c_api::parts::pivot_agg_from_fm;
 using formulon::c_api::parts::pivot_count;
@@ -38,9 +40,13 @@ using formulon::c_api::parts::pivot_show_as_from_fm;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::validate;
 
 namespace {
+
+// Longest grand total caption, in UTF-16 code units.
+constexpr std::uint32_t kMaxGrandTotalCaptionUnits = 255U;
 
 fm_pivot_layout_t pivot_layout_to_fm(formulon::pivot::PivotLayout layout) {
   switch (layout) {
@@ -200,6 +206,61 @@ extern "C" fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, std
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_pivot_set_grand_total_caption(fm_workbook_t* wb, std::size_t sheet_index,
+                                                                 std::size_t pivot_index, const char* caption) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_workbook_pivot_set_grand_total_caption";
+  formulon::pivot::PivotTable* table = nullptr;
+  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, kApi, &table); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8(kApi, {caption}); rc != 0) {
+    return rc;
+  }
+  if (caption == nullptr || caption[0] == '\0') {
+    table->set_grand_total_caption(std::nullopt);
+  } else {
+    if (formulon::utf16_units_in(caption) > kMaxGrandTotalCaptionUnits) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               (std::string(kApi) + ": caption longer than 255 UTF-16 code units").c_str());
+    }
+    table->set_grand_total_caption(std::string(caption));
+  }
+  invalidate_pivot_result(wb->workbook(), *table);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_set_auto_formatting(fm_workbook_t* wb, std::size_t sheet_index,
+                                                             std::size_t pivot_index, std::int32_t on) {
+  clear_last_error();
+  formulon::pivot::PivotTable* table = nullptr;
+  if (fm_status_t rc =
+          resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_auto_formatting", &table);
+      rc != 0) {
+    return rc;
+  }
+  table->set_auto_formatting(on != 0);
+  invalidate_pivot_result(wb->workbook(), *table);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, std::size_t sheet_index,
+                                                      std::size_t pivot_index, std::uint32_t row, std::uint32_t col,
+                                                      std::size_t* out_sheet_index) {
+  clear_last_error();
+  if (wb == nullptr || out_sheet_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_show_details: NULL argument");
+  }
+  formulon::Expected<std::size_t, formulon::Error> created =
+      wb->workbook().show_pivot_details(sheet_index, pivot_index, row, col);
+  if (!created) {
+    return set_last_error(created.error());
+  }
+  *out_sheet_index = created.value();
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_pivot_set_style_info(fm_workbook_t* wb, std::size_t sheet_index,
                                                         std::size_t pivot_index, const char* utf8_style_name,
                                                         std::int32_t show_row_headers, std::int32_t show_col_headers,
@@ -267,6 +328,17 @@ extern "C" fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, std::size
 
 namespace {
 
+// The axis the Values level sits on, as the layout resolves it: the rows when
+// they record a position, else the columns. Meaningful only with two or more
+// data fields; fewer leave no Values level at all.
+bool values_on_rows(const formulon::pivot::PivotTable& table) {
+  return table.row_values_position().has_value();
+}
+
+bool has_values_level(const formulon::pivot::PivotTable& table) {
+  return table.data_fields().size() >= 2U;
+}
+
 // Common backing for `set_row_field_order` / `set_col_field_order`.
 fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                             const std::uint32_t* indices, std::size_t count, bool row, const char* fn) {
@@ -287,7 +359,21 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
   constexpr std::uint8_t kRequested = 1U;
   constexpr std::uint8_t kAlreadyRemoved = 2U;
   std::vector<std::uint8_t> requested_field(field_count, kNotRequested);
+  // The getter exposes the axis vector's storage, so copy the request before
+  // updating either order in case `indices` aliases one of them. The Values
+  // level is split off: `values_slot` is its index among the fields.
+  std::vector<std::uint32_t> requested_order;
+  std::optional<std::size_t> values_slot;
   for (std::size_t i = 0; i < count; ++i) {
+    if (indices[i] == FM_PIVOT_VALUES_FIELD) {
+      if (values_slot.has_value()) {
+        return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                                 (std::string(fn) + ": indices lists the Values field twice").c_str(),
+                                 "i=" + std::to_string(i));
+      }
+      values_slot = requested_order.size();
+      continue;
+    }
     if (indices[i] >= field_count) {
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                                (std::string(fn) + ": indices[i] out of range").c_str(),
@@ -299,12 +385,17 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
                                "i=" + std::to_string(i) + " value=" + std::to_string(indices[i]));
     }
     requested_field[indices[i]] = kRequested;
+    requested_order.push_back(indices[i]);
   }
-  // The getter exposes the axis vector's storage, so preserve the request
-  // before updating either order in case `indices` aliases one of them.
-  std::vector<std::uint32_t> requested_order;
-  if (count > 0U) {
-    requested_order.assign(indices, indices + count);
+  const bool holds_values = has_values_level(*table) && values_on_rows(*table) == row;
+  if (values_slot.has_value() && !has_values_level(*table)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(fn) + ": the Values field needs at least two data fields").c_str(),
+                             "data_fields=" + std::to_string(table->data_fields().size()));
+  }
+  if (holds_values && !values_slot.has_value()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(fn) + ": the Values field is on this axis and must stay listed").c_str());
   }
   // The list is the axis's whole membership: a field left out comes off the
   // axis, and a listed field moves onto it from wherever it was.
@@ -348,18 +439,26 @@ fm_status_t set_field_order(fm_workbook_t* wb, std::size_t sheet_index, std::siz
       table->set_row_values_position(*opposite_values_position - removed_before_values);
     }
   }
-  if (count == 0U) {
-    target.clear();
-  } else {
-    target.assign(requested_order.begin(), requested_order.end());
-  }
-  // Keep a Values marker within the new order's slots.
-  const std::optional<std::size_t> values_position = row ? table->row_values_position() : table->col_values_position();
-  if (values_position.has_value() && *values_position > count) {
+  target.assign(requested_order.begin(), requested_order.end());
+  if (values_slot.has_value()) {
+    // The Values level moves here; the other axis gives it up.
     if (row) {
-      table->set_row_values_position(count);
+      table->set_row_values_position(*values_slot);
+      table->set_col_values_position(std::nullopt);
     } else {
-      table->set_col_values_position(count);
+      table->set_col_values_position(*values_slot);
+      table->set_row_values_position(std::nullopt);
+    }
+  } else {
+    // Keep a Values marker within the new order's slots.
+    const std::optional<std::size_t> values_position =
+        row ? table->row_values_position() : table->col_values_position();
+    if (values_position.has_value() && *values_position > requested_order.size()) {
+      if (row) {
+        table->set_row_values_position(requested_order.size());
+      } else {
+        table->set_col_values_position(requested_order.size());
+      }
     }
   }
   invalidate_pivot_result(wb->workbook(), *table);
@@ -530,8 +629,30 @@ fm_status_t get_field_order(const fm_workbook_t* wb, std::size_t sheet_index, st
     return rc;
   }
   const std::vector<std::uint32_t>& order = row ? table->row_field_order() : table->col_field_order();
-  *out_indices = order.data();
-  *out_count = order.size();
+  // The Values level is listed on the axis that holds it; the columns hold it,
+  // at the end, when the table records no position.
+  std::optional<std::size_t> values_slot;
+  if (has_values_level(*table) && values_on_rows(*table) == row) {
+    values_slot = row ? table->row_values_position() : table->col_values_position().value_or(order.size());
+  }
+  if (!values_slot.has_value()) {
+    *out_indices = order.data();
+    *out_count = order.size();
+    return 0;
+  }
+  // The listing is not the model's own vector, so it lives in the read scratch.
+  // A string shorter than its inline buffer would not be 4-byte aligned, hence
+  // the padding that forces a heap block.
+  const std::size_t listed = order.size() + 1U;
+  std::string& buffer =
+      fresh_read_scratch(wb).emplace_back(std::max<std::size_t>(listed * sizeof(std::uint32_t), 64U), '\0');
+  auto* listing = reinterpret_cast<std::uint32_t*>(buffer.data());
+  const std::size_t slot = std::min(*values_slot, order.size());
+  std::copy(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(slot), listing);
+  listing[slot] = FM_PIVOT_VALUES_FIELD;
+  std::copy(order.begin() + static_cast<std::ptrdiff_t>(slot), order.end(), listing + slot + 1U);
+  *out_indices = listing;
+  *out_count = listed;
   return 0;
 }
 
@@ -574,6 +695,33 @@ extern "C" fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* w
   }
   *out_rows = table->grand_totals_rows() ? 1 : 0;
   *out_cols = table->grand_totals_cols() ? 1 : 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_get_grand_total_caption(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                                 std::size_t pivot_index, const char** out) {
+  clear_last_error();
+  const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_get_grand_total_caption",
+                                      &table);
+      rc != 0) {
+    return rc;
+  }
+  const std::optional<std::string>& caption = table->grand_total_caption();
+  *out = caption.has_value() ? caption->c_str() : nullptr;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_get_auto_formatting(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                             std::size_t pivot_index, std::int32_t* out) {
+  clear_last_error();
+  const formulon::pivot::PivotTable* table = nullptr;
+  if (auto rc =
+          resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_get_auto_formatting", &table);
+      rc != 0) {
+    return rc;
+  }
+  *out = table->auto_formatting() ? 1 : 0;
   return 0;
 }
 

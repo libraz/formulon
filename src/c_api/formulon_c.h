@@ -4328,6 +4328,14 @@ typedef enum {
 } fm_pivot_filter_type_t;
 
 /**
+ * @brief The Values pseudo-field (the "Σ Values" level) in a row / column
+ *        field order, as `fm_workbook_pivot_get_row_field_order` returns it
+ *        and `fm_workbook_pivot_set_row_field_order` accepts it. Its bits
+ *        match the OOXML `x="-2"` field reference.
+ */
+#define FM_PIVOT_VALUES_FIELD 0xFFFFFFFEu
+
+/**
  * @brief Calendar periods of a date group, as bits of the `periods_mask` of
  *        `fm_workbook_pivot_field_set_date_group` and the `date_periods` of
  *        `fm_pivot_field_info_t`.
@@ -4486,11 +4494,17 @@ typedef struct {
  *                     OOXML `<item x="N">`), `-1` for an item bound by label
  *                     only.
  *   * `visible`     — non-zero when the item is shown.
+ *   * `caption`     — the caption shown instead of the item's value, a
+ *                     model-backed view; `NULL` when the item has none.
+ *   * `show_detail` — non-zero when the item is expanded, `0` when it is
+ *                     collapsed.
  */
 typedef struct {
   const char* name;
   int32_t cache_index;
   int32_t visible;
+  const char* caption;
+  int32_t show_detail;
 } fm_pivot_item_info_t;
 
 /**
@@ -4847,6 +4861,64 @@ FM_API fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* wb, s
                                                             size_t field_idx, int32_t top);
 
 /**
+ * @brief Turns the automatic subtotal of pivot field `field_idx` on or off
+ *        (`0` off, any other value on). Custom subtotal functions replace the
+ *        automatic subtotal whatever this flag says.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_default_subtotal(fm_workbook_t* wb, size_t sheet_index,
+                                                                size_t pivot_index, size_t field_idx, int32_t on);
+
+/**
+ * @brief Sets whether a blank row follows each item block of pivot field
+ *        `field_idx` (`0` off, any other value on).
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_insert_blank_row(fm_workbook_t* wb, size_t sheet_index,
+                                                                size_t pivot_index, size_t field_idx, int32_t on);
+
+/**
+ * @brief Sets whether pivot field `field_idx` repeats its item labels on
+ *        every row of a block (`0` off, any other value on).
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_fill_down_labels(fm_workbook_t* wb, size_t sheet_index,
+                                                                size_t pivot_index, size_t field_idx, int32_t on);
+
+/**
+ * @brief Expands (non-zero) or collapses (`0`) every item of pivot field
+ *        `field_idx`, together with the field's subtotal row.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_show_detail(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                           size_t field_idx, int32_t on);
+
+/**
+ * @brief Expands (non-zero) or collapses (`0`) item `item_idx` of pivot field
+ *        `field_idx`.
+ *
+ * @return `kInvalidArgument` when an index is out of range, otherwise as
+ *         `fm_workbook_pivot_field_set_show_detail`.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_item_show_detail(fm_workbook_t* wb, size_t sheet_index,
+                                                                size_t pivot_index, size_t field_idx, size_t item_idx,
+                                                                int32_t on);
+
+/**
+ * @brief Shows `caption` instead of the value of item `item_idx` of pivot
+ *        field `field_idx`.
+ *
+ * `NULL` or an empty string clears the caption, as does a caption equal to
+ * the item's own value. The item's value, not the caption, still decides
+ * hidden-item matching and ordering.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when an index is out of range, `caption` is not
+ *         valid UTF-8 or is longer than 255 UTF-16 code units, or it matches,
+ *         under the workbook profile's text collation, the label another item
+ *         of the field shows.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_item_caption(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                            size_t field_idx, size_t item_idx, const char* caption);
+
+/**
  * @brief Appends a manual-filter item to pivot field `field_idx`, addressed
  *        by its label.
  *        `utf8_name` must be non-NULL. `visible` is a 32-bit boolean.
@@ -4956,12 +5028,19 @@ FM_API fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, 
 
 /**
  * @brief Replaces the row-axis field order with `indices[0..count)`.
- *        Each entry must be `< field_count` and appear once, else
- *        `kInvalidArgument`. The list is the axis's whole membership: listed
- *        fields move onto the row axis (leaving the column order), and fields
- *        previously on it but not listed come off every axis. Pass
- *        `count == 0` to clear. Adding or moving a field already maintains
- *        the order, so this is needed only to reorder.
+ *        Each entry must be `< field_count` or `FM_PIVOT_VALUES_FIELD`, and
+ *        appear once, else `kInvalidArgument`. The list is the axis's whole
+ *        membership: listed fields move onto the row axis (leaving the column
+ *        order), and fields previously on it but not listed come off every
+ *        axis. Pass `count == 0` to clear. Adding or moving a field already
+ *        maintains the order, so this is needed only to reorder.
+ *
+ * `FM_PIVOT_VALUES_FIELD` places the Values level at that position and takes
+ * it off the other axis. It needs at least two data fields
+ * (`kInvalidArgument` otherwise). With two or more data fields the Values
+ * level is always on one axis, so a list for the axis that holds it must
+ * include it (`kInvalidArgument` otherwise); the column axis holds it, at the
+ * end, until it is moved.
  */
 FM_API fm_status_t fm_workbook_pivot_set_row_field_order(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                          const uint32_t* indices, size_t count);
@@ -5039,6 +5118,65 @@ FM_API fm_status_t fm_workbook_pivot_get_name(const fm_workbook_t* wb, size_t sh
                                               const char** out_name);
 
 /**
+ * @brief Renames the grand total row / column label. `NULL` or an empty
+ *        string restores the locale's word. Subtotal labels keep the locale's
+ *        word.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` if an index is out of range, `caption` is not
+ *         valid UTF-8 or is longer than 255 UTF-16 code units.
+ */
+FM_API fm_status_t fm_workbook_pivot_set_grand_total_caption(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                             const char* caption);
+
+/**
+ * @brief Reads the grand total caption into `*out`, a model-backed view that
+ *        is `NULL` when none is set.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_grand_total_caption(const fm_workbook_t* wb, size_t sheet_index,
+                                                             size_t pivot_index, const char** out);
+
+/**
+ * @brief Sets the "autofit column widths on update" flag (`0` off, any other
+ *        value on).
+ */
+FM_API fm_status_t fm_workbook_pivot_set_auto_formatting(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                         int32_t on);
+
+/**
+ * @brief Reads the autofit flag (`0` or `1`).
+ *
+ * @return As `fm_workbook_pivot_get_grand_total_caption`, with `out` an
+ *         `int32_t*`.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_auto_formatting(const fm_workbook_t* wb, size_t sheet_index,
+                                                         size_t pivot_index, int32_t* out);
+
+/**
+ * @brief Writes the cells behind the data or total cell (`row`, `col`) of the
+ *        pivot onto a new sheet, as Excel's Show Details does.
+ *
+ * The new sheet is inserted immediately before the pivot's sheet, gets the
+ * locale's default sheet name and holds one table of the matching source
+ * records, with a header row. It becomes the active sheet and its index is
+ * stored in `*out_sheet_index`. Sheets at and after the pivot's sheet index
+ * shift by one, so indices held for them must be refreshed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_sheet_index` is `NULL`;
+ *         `kInvalidArgument` if an index is out of range or the cell is not
+ *         a data, subtotal or grand total cell of the pivot;
+ *         `kPreconditionFailed` when the pivot disables drill-down.
+ */
+FM_API fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                  uint32_t row, uint32_t col, size_t* out_sheet_index);
+
+/**
  * @brief Reads the row / column grand total flags (`0` or `1`), the values
  *        `fm_workbook_pivot_set_grand_totals` writes.
  *
@@ -5107,7 +5245,9 @@ FM_API fm_status_t fm_workbook_pivot_data_field_at(const fm_workbook_t* wb, size
  * @brief Reads the row-axis field order: `*out_indices` points at
  *        `*out_count` indices into the pivot's fields, the list
  *        `fm_workbook_pivot_set_row_field_order` takes. `*out_indices` may
- *        be `NULL` when `*out_count` is `0`.
+ *        be `NULL` when `*out_count` is `0`. With two or more data fields the
+ *        axis holding the Values level lists `FM_PIVOT_VALUES_FIELD` at its
+ *        position; when it is listed the view is read-scratch-backed.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `out_indices` or `out_count` is `NULL`;
@@ -8403,6 +8543,21 @@ FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index
  */
 FM_API fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                const fm_drawing_anchor* anchor);
+
+/**
+ * @brief Renames the picture or chart `object_id` (the first one when ids
+ *        repeat). Duplicate names are allowed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `name` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range, `name` is
+ *         empty or not valid UTF-8, or the sheet has no picture or chart with
+ *         that id;
+ *         `kIoDrawingUnparseable` (5024) when the drawing part does not parse
+ *         or was retained from an `.xlsb` package.
+ */
+FM_API fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                             const char* name);
 
 /**
  * @brief Moves the picture or chart `object_id` so it becomes item `index`

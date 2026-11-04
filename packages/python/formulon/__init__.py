@@ -28,6 +28,7 @@ from .metadata import (
     merge_function_metadata,
 )
 from .workbook import (
+    PIVOT_VALUES_FIELD,
     AnchorEditAs,
     AnchorKind,
     ArrayFormula,
@@ -336,6 +337,7 @@ __all__ = [
     "PivotFilterSpec",
     "PivotFilterType",
     "PivotFilterValueKind",
+    "PIVOT_VALUES_FIELD",
     "PivotItemInfo",
     "PivotStyleInfo",
     "PivotLayout",

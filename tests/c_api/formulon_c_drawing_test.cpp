@@ -30,6 +30,8 @@ static_assert(sizeof(fm_image_insert) == (kWasm32 ? 56U : 64U), "fm_image_insert
 static_assert(sizeof(fm_drawing_anchor) == 48U, "fm_drawing_anchor ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+constexpr fm_status_t kBindingUtf8EncodingError =
+    static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingUtf8EncodingError);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 constexpr fm_status_t kIoImageUnsupported = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoImageUnsupported);
 constexpr fm_status_t kIoDrawingUnparseable =
@@ -500,6 +502,47 @@ TEST(FormulonCApiDrawing, ZOrderMovesPictureInListOrder) {
   // The chart reorders like a picture.
   ASSERT_EQ(fm_sheet_set_drawing_z_order(wb.handle, 0, 2, 2), 0) << fm_last_error_message();
   EXPECT_EQ(ObjectIds(wb.handle), (std::vector<std::uint32_t>{first, second, 2U}));
+}
+
+TEST(FormulonCApiDrawing, SetNameRenamesPictureAndChartAndSurvivesReload) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  AddChartDrawing(wb.handle);  // object 2, the chart
+  const std::uint32_t picture = InsertAt(wb.handle, 1, "Logo");
+
+  ASSERT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, picture, "Logo \xE3\x83\xAD\xE3\x82\xB4 \xF0\x9F\x98\x80"), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, 2, "Sales chart"), 0) << fm_last_error_message();
+  // A repeated name is allowed.
+  ASSERT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, picture, "Sales chart"), 0) << fm_last_error_message();
+
+  WorkbookGuard reloaded;
+  SaveAndReload(wb.handle, &reloaded);
+  fm_drawing_object obj{};
+  ASSERT_EQ(fm_sheet_drawing_object_at(reloaded.handle, 0, 0, &obj), 0);
+  EXPECT_STREQ(obj.name, "Sales chart");
+  ASSERT_EQ(fm_sheet_drawing_object_at(reloaded.handle, 0, 1, &obj), 0);
+  EXPECT_STREQ(obj.name, "Sales chart");
+
+  ASSERT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, picture, "\xE3\x83\xAD\xE3\x82\xB4\xF0\x9F\x98\x80"), 0);
+  ASSERT_EQ(fm_sheet_drawing_object_at(wb.handle, 0, 1, &obj), 0);
+  EXPECT_STREQ(obj.name, "\xE3\x83\xAD\xE3\x82\xB4\xF0\x9F\x98\x80");
+}
+
+TEST(FormulonCApiDrawing, SetNameRejectsBadArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const std::uint32_t id = InsertAt(wb.handle, 1, "Logo");
+  const Bytes before = DrawingBytes(wb.handle);
+
+  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, id, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_set_drawing_name(nullptr, 0, id, "x"), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, id, ""), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, id, "\xC3"), kBindingUtf8EncodingError);
+  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, 99, "x"), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 9, id, "x"), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_drawing_name(wb.handle, 0, 0xFFFFFFFFU, "x"), kInvalidArgument);
+  EXPECT_EQ(DrawingBytes(wb.handle), before);
 }
 
 TEST(FormulonCApiDrawing, SnapshotRestoreReturnsDeletedPictureToItsPlace) {

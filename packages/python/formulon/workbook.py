@@ -160,6 +160,7 @@ __all__ = [
     "PivotFilterSpec",
     "PivotFilterType",
     "PivotFilterValueKind",
+    "PIVOT_VALUES_FIELD",
     "PivotItemInfo",
     "PivotStyleInfo",
     "PivotLayout",
@@ -1017,6 +1018,12 @@ class PivotSortOrder(IntEnum):
 # "(previous)" / "(next)" (mirrors the C ABI constants).
 PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828
 PIVOT_SHOW_AS_BASE_NEXT = 1048829
+
+# The "Σ Values" level in a pivot row / column field order, as read by
+# ``pivot_row_field_order`` / ``pivot_col_field_order`` and accepted by the
+# matching setters (``FM_PIVOT_VALUES_FIELD`` reinterpreted as a signed value).
+PIVOT_VALUES_FIELD = -2
+_PIVOT_VALUES_FIELD_C = 0xFFFFFFFE
 
 # Sentinel for ``CellStyle.builtin_id`` meaning "custom (no builtinId)".
 CELL_STYLE_BUILTIN_ID_NONE = S.CELL_STYLE_BUILTIN_ID_NONE
@@ -3188,6 +3195,8 @@ class PivotFieldInfo:
     group_base_index: int
     default_subtotal: bool
     subtotal_fns: Tuple[PivotAggregation, ...]
+    insert_blank_row: bool = False
+    fill_down_labels: bool = False
 
 
 @dataclass(frozen=True)
@@ -3196,12 +3205,16 @@ class PivotItemInfo:
 
     ``name`` is the item's own label (empty for an item bound only by cache
     index); ``cache_index`` indexes the bound cache field's shared items and
-    is ``-1`` for an item bound by label only.
+    is ``-1`` for an item bound by label only. ``caption`` is the text shown
+    instead of the item's value (``None`` when it has none); ``show_detail``
+    is false for a collapsed item.
     """
 
     name: str
     cache_index: int
     visible: bool
+    caption: Optional[str] = None
+    show_detail: bool = True
 
 
 @dataclass(frozen=True)
@@ -7161,6 +7174,16 @@ class Workbook:
             "fm_sheet_set_drawing_z_order",
         )
 
+    def set_drawing_name(self, sheet: int, object_id: int, name: str) -> None:
+        """Rename the picture or chart ``object_id``. Duplicate names are allowed; ``name`` must be non-empty."""
+        h = self._require()
+        with _ArgScope() as scope:
+            name_ptr = scope.cstr(name)
+            _check(
+                LIB.fm_sheet_set_drawing_name(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), name_ptr),
+                "fm_sheet_set_drawing_name",
+            )
+
     def snapshot_drawing(self, sheet: int, object_id: int) -> bytes:
         """Capture the picture or chart ``object_id`` as opaque bytes for :meth:`restore_drawing`.
 
@@ -10961,7 +10984,7 @@ class Workbook:
             if count == 0:
                 return []
             raw = LIB.read_bytes(LIB.read_u32(out_ptr), 4 * count)
-            return list(struct.unpack("<%dI" % count, raw))
+            return [PIVOT_VALUES_FIELD if v == _PIVOT_VALUES_FIELD_C else v for v in struct.unpack("<%dI" % count, raw)]
 
     def pivot_row_field_order(self, sheet: int, pivot_index: int) -> List[int]:
         """Return the row-axis field order (the list :meth:`pivot_set_row_field_order` takes)."""
@@ -11001,6 +11024,8 @@ class Workbook:
                 group_base_index=d["group_base_index"],
                 default_subtotal=d["default_subtotal"] != 0,
                 subtotal_fns=tuple(agg for agg in PivotAggregation if d["subtotal_fns"] & (1 << int(agg))),
+                insert_blank_row=d["insert_blank_row"] != 0,
+                fill_down_labels=d["fill_down_labels"] != 0,
             )
 
     def pivot_field_item_count(self, sheet: int, pivot_index: int, field_idx: int) -> int:
@@ -11035,6 +11060,8 @@ class Workbook:
                 name=LIB.read_cstr(d["name"]),
                 cache_index=d["cache_index"],
                 visible=d["visible"] != 0,
+                caption=LIB.read_cstr(d["caption"]) if d["caption"] else None,
+                show_detail=d["show_detail"] != 0,
             )
 
     def pivot_data_field_at(self, sheet: int, pivot_index: int, data_field_idx: int) -> PivotDataFieldSpec:
@@ -11180,6 +11207,150 @@ class Workbook:
             ),
             "fm_workbook_pivot_field_set_subtotal_top",
         )
+
+    def _pivot_field_set_flag(self, fn, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+        h = self._require()
+        _check(
+            fn(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                1 if on else 0,
+            ),
+            getattr(fn, "__name__", "pivot_field_set_flag"),
+        )
+
+    def pivot_field_set_default_subtotal(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+        """Turn the automatic subtotal of pivot field ``field_idx`` on or off.
+
+        Custom subtotal functions replace the automatic subtotal whatever this flag says.
+        """
+        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_default_subtotal, sheet, pivot_index, field_idx, on)
+
+    def pivot_field_set_insert_blank_row(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+        """Set whether a blank row follows each item block of pivot field ``field_idx``."""
+        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_insert_blank_row, sheet, pivot_index, field_idx, on)
+
+    def pivot_field_set_fill_down_labels(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+        """Set whether pivot field ``field_idx`` repeats its item labels on every row of a block."""
+        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_fill_down_labels, sheet, pivot_index, field_idx, on)
+
+    def pivot_field_set_show_detail(self, sheet: int, pivot_index: int, field_idx: int, on: bool) -> None:
+        """Expand (``True``) or collapse (``False``) every item of pivot field ``field_idx`` and its subtotal row."""
+        self._pivot_field_set_flag(LIB.fm_workbook_pivot_field_set_show_detail, sheet, pivot_index, field_idx, on)
+
+    def pivot_field_set_item_show_detail(
+        self, sheet: int, pivot_index: int, field_idx: int, item_idx: int, on: bool
+    ) -> None:
+        """Expand (``True``) or collapse (``False``) item ``item_idx`` of pivot field ``field_idx``."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_field_set_item_show_detail(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                _uint(item_idx, "item_idx"),
+                1 if on else 0,
+            ),
+            "fm_workbook_pivot_field_set_item_show_detail",
+        )
+
+    def pivot_field_set_item_caption(
+        self, sheet: int, pivot_index: int, field_idx: int, item_idx: int, caption: Optional[str]
+    ) -> None:
+        """Show ``caption`` instead of the value of item ``item_idx``; ``None`` or ``""`` clears it.
+
+        A caption longer than 255 UTF-16 code units, or one matching the label another item of
+        the field shows, is rejected.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            cap_ptr = scope.nonempty_cstr(caption)
+            _check(
+                LIB.fm_workbook_pivot_field_set_item_caption(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
+                    _uint(item_idx, "item_idx"),
+                    cap_ptr,
+                ),
+                "fm_workbook_pivot_field_set_item_caption",
+            )
+
+    def pivot_set_grand_total_caption(self, sheet: int, pivot_index: int, caption: Optional[str]) -> None:
+        """Rename the grand total row / column label; ``None`` or ``""`` restores the locale's word."""
+        h = self._require()
+        with _ArgScope() as scope:
+            cap_ptr = scope.nonempty_cstr(caption)
+            _check(
+                LIB.fm_workbook_pivot_set_grand_total_caption(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), cap_ptr
+                ),
+                "fm_workbook_pivot_set_grand_total_caption",
+            )
+
+    def pivot_get_grand_total_caption(self, sheet: int, pivot_index: int) -> Optional[str]:
+        """Return the grand total caption, ``None`` when none is set."""
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_pivot_get_grand_total_caption(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
+                ),
+                "fm_workbook_pivot_get_grand_total_caption",
+            )
+            ptr = LIB.read_u32(out)
+            return LIB.read_cstr(ptr) if ptr else None
+
+    def pivot_set_auto_formatting(self, sheet: int, pivot_index: int, on: bool) -> None:
+        """Set the "autofit column widths on update" flag."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_set_auto_formatting(
+                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), 1 if on else 0
+            ),
+            "fm_workbook_pivot_set_auto_formatting",
+        )
+
+    def pivot_get_auto_formatting(self, sheet: int, pivot_index: int) -> bool:
+        """Return the "autofit column widths on update" flag."""
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_pivot_get_auto_formatting(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
+                ),
+                "fm_workbook_pivot_get_auto_formatting",
+            )
+            return LIB.read_i32(out) != 0
+
+    def pivot_show_details(self, sheet: int, pivot_index: int, row: int, col: int) -> int:
+        """Write the source records behind pivot cell (``row``, ``col``) onto a new sheet.
+
+        Returns the new sheet's index. The sheet is inserted immediately before the pivot's
+        sheet and becomes the active sheet, so sheets at and after the pivot's sheet index
+        shift by one; refresh any sheet indices held for them.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_workbook_pivot_show_details(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(row, "row"),
+                    _uint(col, "col"),
+                    out,
+                ),
+                "fm_workbook_pivot_show_details",
+            )
+            return LIB.read_u32(out)
 
     def pivot_field_add_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> None:
         """Append a manual-filter item addressed by its label.
@@ -11367,6 +11538,7 @@ class Workbook:
 
         The list is the axis's whole membership: listed fields move onto the
         row axis, and fields left out come off it. Each index may appear once.
+        ``PIVOT_VALUES_FIELD`` (``-2``) places the Σ Values level.
         """
         self._pivot_set_field_order(
             LIB.fm_workbook_pivot_set_row_field_order,
@@ -11393,7 +11565,10 @@ class Workbook:
         with _ArgScope() as scope:
             if indices:
                 arr_ptr = scope.alloc(4 * len(indices))
-                buf = b"".join(struct.pack("<I", _uint(i, "index")) for i in indices)
+                buf = b"".join(
+                    struct.pack("<I", _PIVOT_VALUES_FIELD_C if i == PIVOT_VALUES_FIELD else _uint(i, "index"))
+                    for i in indices
+                )
                 LIB.write_bytes(arr_ptr, buf)
             _check(
                 fn(h, sheet, pivot_index, arr_ptr, _uint(len(indices), "count")),

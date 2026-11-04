@@ -213,6 +213,23 @@ extern "C" fm_status_t fm_sheet_set_drawing_anchor(fm_workbook_t* wb, size_t she
   return finish_status(formulon::set_drawing_anchor(wb->workbook(), sheet_index, object_id, model));
 }
 
+extern "C" fm_status_t fm_sheet_set_drawing_name(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                                 const char* name) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_sheet_set_drawing_name";
+  if (name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": name is NULL").c_str());
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8(kApi, {name}); rc != 0) {
+    return rc;
+  }
+  return finish_status(formulon::set_drawing_name(wb->workbook(), sheet_index, object_id, name));
+}
+
 extern "C" fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                     uint32_t index) {
   clear_last_error();

@@ -48,7 +48,7 @@ class StructLayoutTests(unittest.TestCase):
         "PIVOT_DATA_FIELD_SPEC": 28,
         "PIVOT_FILTER_SPEC": 64,
         "PIVOT_FIELD_INFO": 60,
-        "PIVOT_ITEM_INFO": 12,
+        "PIVOT_ITEM_INFO": 20,
         "PIVOT_STYLE_INFO": 28,
         "TABLE_INFO": 36,
         "TABLE_COLUMN_INFO": 16,

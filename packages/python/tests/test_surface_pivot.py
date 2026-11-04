@@ -9,6 +9,7 @@ import zipfile
 from typing import Any, Dict, List, Tuple
 
 from formulon import (
+    PIVOT_VALUES_FIELD,
     FormulonError,
     PivotAggregation,
     PivotAxis,
@@ -202,10 +203,20 @@ _PIVOT_READERS = {
     "pivot_field_at",
     "pivot_field_item_count",
     "pivot_field_item_at",
+    "pivot_get_grand_total_caption",
+    "pivot_get_auto_formatting",
     "pivot_data_field_at",
     "get_pivot_cache_worksheet_source",
     "get_pivot_report_layout",
 }
+
+
+def _first_number_cell(f: _PivotFixture) -> Tuple[int, int]:
+    """Position of a data cell of the fixture pivot's layout."""
+    for cell in f.wb.pivot_layout(0, f.pivot).cells:
+        if cell.value.kind == ValueKind.NUMBER:
+            return cell.row, cell.col
+    raise AssertionError("pivot layout has no number cell")
 
 
 def _two_levels(f: _PivotFixture) -> None:
@@ -656,6 +667,96 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(_WEST_ONLY),
             ),
+            "pivot_set_grand_total_caption": (
+                None,
+                lambda f: f.wb.pivot_set_grand_total_caption(0, f.pivot, "Total"),
+                None,
+                lambda t, f, r: (
+                    eq(f.wb.pivot_get_grand_total_caption(0, f.pivot), "Total"),
+                    f.wb.pivot_set_grand_total_caption(0, f.pivot, None),
+                    eq(f.wb.pivot_get_grand_total_caption(0, f.pivot), None),
+                    rejects(lambda: f.wb.pivot_set_grand_total_caption(0, 9, "x")),
+                ),
+            ),
+            "pivot_set_auto_formatting": (
+                None,
+                lambda f: f.wb.pivot_set_auto_formatting(0, f.pivot, False),
+                None,
+                lambda t, f, r: (
+                    eq(f.wb.pivot_get_auto_formatting(0, f.pivot), False),
+                    f.wb.pivot_set_auto_formatting(0, f.pivot, True),
+                    eq(f.wb.pivot_get_auto_formatting(0, f.pivot), True),
+                    rejects(lambda: f.wb.pivot_set_auto_formatting(0, 9, True)),
+                ),
+            ),
+            "pivot_field_set_default_subtotal": (
+                None,
+                lambda f: f.wb.pivot_field_set_default_subtotal(0, f.pivot, f.region, False),
+                None,
+                lambda t, f, r: (
+                    eq(f.wb.pivot_field_at(0, f.pivot, f.region).default_subtotal, False),
+                    rejects(lambda: f.wb.pivot_field_set_default_subtotal(0, f.pivot, 99, True)),
+                ),
+            ),
+            "pivot_field_set_insert_blank_row": (
+                None,
+                lambda f: f.wb.pivot_field_set_insert_blank_row(0, f.pivot, f.region, True),
+                None,
+                lambda t, f, r: (
+                    eq(f.wb.pivot_field_at(0, f.pivot, f.region).insert_blank_row, True),
+                    rejects(lambda: f.wb.pivot_field_set_insert_blank_row(0, f.pivot, 99, True)),
+                ),
+            ),
+            "pivot_field_set_fill_down_labels": (
+                None,
+                lambda f: f.wb.pivot_field_set_fill_down_labels(0, f.pivot, f.region, True),
+                None,
+                lambda t, f, r: (
+                    eq(f.wb.pivot_field_at(0, f.pivot, f.region).fill_down_labels, True),
+                    rejects(lambda: f.wb.pivot_field_set_fill_down_labels(0, f.pivot, 99, True)),
+                ),
+            ),
+            "pivot_field_set_show_detail": (
+                None,
+                lambda f: f.wb.pivot_field_set_show_detail(0, f.pivot, f.region, False),
+                None,
+                lambda t, f, r: (
+                    eq([f.wb.pivot_field_item_at(0, f.pivot, f.region, i).show_detail for i in (0, 1)], [False, False]),
+                    rejects(lambda: f.wb.pivot_field_set_show_detail(0, f.pivot, 99, False)),
+                ),
+            ),
+            "pivot_field_set_item_show_detail": (
+                None,
+                lambda f: f.wb.pivot_field_set_item_show_detail(0, f.pivot, f.region, 1, False),
+                None,
+                lambda t, f, r: (
+                    eq([f.wb.pivot_field_item_at(0, f.pivot, f.region, i).show_detail for i in (0, 1)], [True, False]),
+                    rejects(lambda: f.wb.pivot_field_set_item_show_detail(0, f.pivot, f.region, 9, False)),
+                ),
+            ),
+            "pivot_field_set_item_caption": (
+                None,
+                lambda f: f.wb.pivot_field_set_item_caption(0, f.pivot, f.region, 0, "Eastern"),
+                None,
+                lambda t, f, r: (
+                    eq(f.wb.pivot_field_item_at(0, f.pivot, f.region, 0).caption, "Eastern"),
+                    eq(f.wb.pivot_field_item_at(0, f.pivot, f.region, 1).caption, None),
+                    f.wb.pivot_field_set_item_caption(0, f.pivot, f.region, 0, None),
+                    eq(f.wb.pivot_field_item_at(0, f.pivot, f.region, 0).caption, None),
+                    rejects(lambda: f.wb.pivot_field_set_item_caption(0, f.pivot, f.region, 9, "x")),
+                    rejects(lambda: f.wb.pivot_field_set_item_caption(0, f.pivot, f.region, 0, "West")),
+                ),
+            ),
+            "pivot_show_details": (
+                None,
+                lambda f: f.wb.pivot_show_details(0, f.pivot, *_first_number_cell(f)),
+                None,
+                lambda t, f, r: (
+                    eq(r, 0),
+                    eq(f.wb.sheet_count(), 2),
+                    rejects(lambda: f.wb.pivot_show_details(1, f.pivot, 0, 0)),
+                ),
+            ),
         }
 
     def test_table_covers_every_pivot_mutator(self) -> None:
@@ -712,6 +813,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq(region.sort_order, PivotSortOrder.ASCENDING)
         eq(region.date_periods, PivotDatePeriod(0))
         eq(region.group_base_index, -1)
+        eq((region.insert_blank_row, region.fill_down_labels), (False, False))
 
         eq(wb.pivot_field_item_count(0, pivot, f.region), 2)
         for index, label in enumerate(("East", "West")):
@@ -749,6 +851,20 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             wb.pivot_set_row_field_order(0, f.pivot, [f.product, f.region])
             self.assertEqual(wb.pivot_row_field_order(0, f.pivot), [f.product, f.region])
             self.assertEqual(wb.pivot_col_field_order(0, f.pivot), [])
+
+    def test_values_level_marker_round_trips_in_field_order(self) -> None:
+        self.assertEqual(PIVOT_VALUES_FIELD, -2)
+        with Workbook.create_default() as wb:
+            f = _PivotFixture(wb)
+            wb.pivot_data_field_add(
+                0,
+                f.pivot,
+                PivotDataFieldSpec(name="Count of Amount", field_index=f.amount, aggregation=PivotAggregation.COUNT),
+            )
+            wb.pivot_set_col_field_order(0, f.pivot, [PIVOT_VALUES_FIELD])
+            self.assertEqual(wb.pivot_col_field_order(0, f.pivot), [PIVOT_VALUES_FIELD])
+            with self.assertRaises(ValueError):
+                wb.pivot_set_col_field_order(0, f.pivot, [-3])
 
     def test_style_info_defaults_on_create_and_round_trips(self) -> None:
         with Workbook.create_default() as wb:

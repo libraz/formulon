@@ -455,7 +455,7 @@ PIVOT_FIELD_INFO = Struct(
 
 PIVOT_ITEM_INFO = Struct(
     "fm_pivot_item_info_t",
-    [("name", PTR), ("cache_index", I32), ("visible", I32)],
+    [("name", PTR), ("cache_index", I32), ("visible", I32), ("caption", PTR), ("show_detail", I32)],
 )
 
 TABLE_INFO = Struct(

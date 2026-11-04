@@ -1669,5 +1669,39 @@ TEST(PivotTableWriter, X14FieldExtensionWithoutItsElementIsKeptWhole) {
   EXPECT_NE(xml.find("<unknown a=\"1\"/></ext></extLst>"), std::string::npos) << xml;
 }
 
+TEST(PivotTableWriter, DataOnRowsFollowsTheValuesMarkerAndDropsAStaleAttribute) {
+  pivot::PivotTable table;
+  table.mutable_passthrough_attrs().emplace_back("dataOnRows", "1");
+  table.mutable_passthrough_attrs().emplace_back("dataPosition", "0");
+  table.mutable_data_fields().resize(2);
+  table.mutable_data_fields()[1].field_index = 1;
+
+  table.set_row_values_position(0U);
+  std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find(" dataOnRows=\"1\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("dataPosition"), std::string::npos) << xml;
+
+  // Moved to the columns, or fewer than two data fields: the attribute goes.
+  table.set_row_values_position(std::nullopt);
+  table.set_col_values_position(0U);
+  EXPECT_EQ(write_pivot_table_definition(table).find("dataOnRows"), std::string::npos);
+  table.set_col_values_position(std::nullopt);
+  table.set_row_values_position(0U);
+  table.mutable_data_fields().pop_back();
+  EXPECT_EQ(write_pivot_table_definition(table).find("dataOnRows"), std::string::npos);
+}
+
+TEST(PivotTableReader, DataOnRowsAndDataPositionAreNotKeptAsPassthrough) {
+  const std::string xml = std::string(kXmlDecl) + "<pivotTableDefinition" + std::string(kPivotNs) +
+                          " name=\"P\" cacheId=\"1\" dataOnRows=\"1\" dataPosition=\"1\">"
+                          "<location ref=\"A1:B2\"/></pivotTableDefinition>";
+  auto parsed = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed)) << parsed.error().message;
+  for (const auto& attr : parsed.value().passthrough_attrs()) {
+    EXPECT_NE(attr.first, "dataOnRows");
+    EXPECT_NE(attr.first, "dataPosition");
+  }
+}
+
 }  // namespace
 }  // namespace formulon::io

@@ -471,6 +471,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_clear_shared_items(fm_workb
     return status;
   }
   field->shared_items.clear();
+  field->shared_item_is_date.clear();
   return 0;
 }
 
@@ -563,14 +564,30 @@ formulon::pivot::PivotCacheRecord* lookup_record_mut(fm_workbook_t* wb, std::uin
   return rec;
 }
 
+// A cell written through the C API is an inline value: it is never the index
+// of a shared item (unless the field has shared items and the value is a
+// number, the hand-built convention) and never a `<d>` date. Flags the record
+// carries for the cell would otherwise survive the overwrite.
+void reset_cell_encoding(formulon::pivot::PivotCacheRecord& rec, const formulon::pivot::PivotCacheField& field,
+                         std::size_t field_idx, const formulon::Value& value) {
+  if (field_idx < rec.cell_is_index.size()) {
+    rec.cell_is_index[field_idx] = !field.shared_items.empty() && value.is_number();
+  }
+  if (field_idx < rec.cell_is_date.size()) {
+    rec.cell_is_date[field_idx] = false;
+  }
+}
+
 // Shared body of the scalar `record_set_*` setters.
 fm_status_t set_record_cell(fm_workbook_t* wb, std::uint32_t cache_id, std::size_t record_idx, std::size_t field_idx,
                             const char* fn, formulon::Value value) {
   fm_status_t status = 0;
-  auto* rec = lookup_record_mut(wb, cache_id, record_idx, field_idx, fn, nullptr, &status);
+  formulon::pivot::PivotCache* cache = nullptr;
+  auto* rec = lookup_record_mut(wb, cache_id, record_idx, field_idx, fn, &cache, &status);
   if (rec == nullptr) {
     return status;
   }
+  reset_cell_encoding(*rec, cache->fields()[field_idx], field_idx, value);
   rec->cells[field_idx] = std::move(value);
   return 0;
 }
@@ -611,6 +628,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb
   if (!cache->set_record_text(record_idx, field_idx, std::string_view(utf8))) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
+  reset_cell_encoding(*rec, cache->fields()[field_idx], field_idx, rec->cells[field_idx]);
   return 0;
 }
 

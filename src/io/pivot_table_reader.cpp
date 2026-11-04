@@ -886,11 +886,11 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   }
   table.set_auto_formatting(attr_bool(root, "useAutoFormatting", false));
   table.set_enable_drill(attr_bool(root, "enableDrill", true));
-  capture_unknown_attrs(
-      root,
-      {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline", "compactData",
-       "outlineData", "subtotalHiddenItems", "grandTotalCaption", "useAutoFormatting", "enableDrill"},
-      table.mutable_passthrough_attrs());
+  capture_unknown_attrs(root,
+                        {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline",
+                         "compactData", "outlineData", "subtotalHiddenItems", "grandTotalCaption", "useAutoFormatting",
+                         "enableDrill", "dataOnRows", "dataPosition"},
+                        table.mutable_passthrough_attrs());
 
   pugi::xml_node loc = root.child("location");
   if (!loc) {
