@@ -8,6 +8,7 @@
 #include "io/pivot_cache_writer.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -15,10 +16,14 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml_writer.h"
 #include "io/pivot_cache_reader.h"
+#include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
 #include "pivot/record_access.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon::io {
 namespace {
@@ -605,8 +610,10 @@ TEST(PivotCacheWriter, UnknownRootAttributesRoundTrip) {
     return false;
   };
   EXPECT_TRUE(has_attr("refreshedBy", "Alice"));
-  EXPECT_TRUE(has_attr("refreshOnLoad", "1"));
   EXPECT_TRUE(has_attr("createdVersion", "8"));
+  // refreshOnLoad is modelled, not passed through.
+  EXPECT_FALSE(has_attr("refreshOnLoad", "1"));
+  EXPECT_TRUE(def_or.value().refresh_on_load());
   // r:id / recordCount / namespace decls are not captured as passthrough.
   for (const auto& [name, value] : attrs) {
     (void)value;
@@ -808,6 +815,222 @@ TEST(PivotCacheWriter, DatesRoundTripAsDatesInSharedGroupAndRecordItems) {
   EXPECT_NE(rec_xml.find("<r><x v=\"0\"/><d v=\"2024-01-16T06:00:00\"/></r><r><x v=\"1\"/><n v=\"5\"/></r>"),
             std::string::npos)
       << rec_xml;
+}
+
+// ---------------------------------------------------------------------------
+// Calculated fields / items, cache options and saveData
+// ---------------------------------------------------------------------------
+
+constexpr std::string_view kRootNs =
+    " xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\""
+    " xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"";
+
+std::string DefinitionXml(std::string_view root_attrs, std::string_view fields, std::string_view trailing) {
+  std::string xml("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<pivotCacheDefinition");
+  xml.append(kRootNs).append(root_attrs).append(">");
+  xml.append("<cacheSource type=\"worksheet\"><worksheetSource ref=\"A1:D6\" sheet=\"Sheet1\"/></cacheSource>");
+  xml.append("<cacheFields count=\"2\">").append(fields).append("</cacheFields>");
+  xml.append(trailing).append("</pivotCacheDefinition>");
+  return xml;
+}
+
+pivot::PivotCache ReadCache(std::string_view xml) {
+  auto cache_or = read_pivot_cache_definition(Bytes(xml));
+  EXPECT_TRUE(static_cast<bool>(cache_or)) << (cache_or ? "" : cache_or.error().message);
+  return cache_or ? std::move(cache_or.value()) : pivot::PivotCache{};
+}
+
+bool Has(const std::string& haystack, std::string_view needle) {
+  return haystack.find(needle) != std::string::npos;
+}
+
+// The measured shape of a calculated field.
+constexpr std::string_view kCalcFieldXml =
+    "<cacheField name=\"Price\" numFmtId=\"0\" formula=\"Amt/Qty\" databaseField=\"0\"/>";
+
+TEST(PivotCacheCalculated, CalculatedFieldRoundTripsAsMeasured) {
+  const std::string input =
+      DefinitionXml(" refreshedBy=\"libraz\"",
+                    "<cacheField name=\"Amt\" numFmtId=\"0\"><sharedItems containsNumber=\"1\"/></cacheField>" +
+                        std::string(kCalcFieldXml),
+                    "");
+  const pivot::PivotCache cache = ReadCache(input);
+  const std::string out = write_pivot_cache_definition(cache);
+  EXPECT_TRUE(Has(out, kCalcFieldXml)) << out;
+  // The formula is stored without a leading '=' and is not an extra attribute.
+  EXPECT_FALSE(Has(out, "formula=\"=")) << out;
+  EXPECT_EQ(write_pivot_cache_definition(ReadCache(out)), out);
+}
+
+TEST(PivotCacheCalculated, AuthoredCalculatedFieldWritesNoChildren) {
+  pivot::PivotCache cache;
+  pivot::PivotCacheField calc;
+  calc.name = "Price";
+  calc.formula = "Amt/Qty";
+  calc.is_database_field = false;
+  calc.num_fmt_id = 0U;
+  cache.mutable_fields().push_back(std::move(calc));
+  EXPECT_TRUE(Has(write_pivot_cache_definition(cache), kCalcFieldXml));
+}
+
+constexpr std::string_view kCalcItemsXml =
+    "<calculatedItems count=\"1\"><calculatedItem formula=\"Region[North]+Region[South]\">"
+    "<pivotArea cacheIndex=\"1\" outline=\"0\" fieldPosition=\"0\"><references count=\"1\">"
+    "<reference field=\"0\" count=\"1\"><x v=\"3\"/></reference></references></pivotArea>"
+    "</calculatedItem></calculatedItems>";
+
+constexpr std::string_view kCalcItemFields =
+    "<cacheField name=\"Region\" numFmtId=\"0\"><sharedItems count=\"4\"><s v=\"East\"/><s v=\"North\"/>"
+    "<s v=\"South\"/><s v=\"X\" f=\"1\"/></sharedItems></cacheField>"
+    "<cacheField name=\"Amt\" numFmtId=\"0\"><sharedItems containsNumber=\"1\"/></cacheField>";
+
+TEST(PivotCacheCalculated, CalculatedItemRoundTripsAsMeasured) {
+  const std::string input = DefinitionXml(" refreshedBy=\"libraz\"", kCalcItemFields, kCalcItemsXml);
+  const std::string out = write_pivot_cache_definition(ReadCache(input));
+  EXPECT_TRUE(Has(out, "<s v=\"X\" f=\"1\"/>")) << out;
+  EXPECT_FALSE(Has(out, "<s v=\"South\" f=")) << out;
+  EXPECT_TRUE(Has(out, kCalcItemsXml)) << out;
+  EXPECT_EQ(write_pivot_cache_definition(ReadCache(out)), out);
+}
+
+TEST(PivotCacheCalculated, CalculatedItemsSitBetweenTheSurroundingTrailingChildren) {
+  const std::string trailing =
+      "<cacheHierarchies count=\"0\"/>" + std::string(kCalcItemsXml) + "<extLst><ext uri=\"{u}\"/></extLst>";
+  const std::string out =
+      write_pivot_cache_definition(ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, trailing)));
+  EXPECT_TRUE(Has(out, "</cacheFields>" + trailing + "</pivotCacheDefinition>")) << out;
+}
+
+TEST(PivotCacheCalculated, ExtLstWithoutCalculatedItemsStaysAfterTheCacheHierarchies) {
+  const std::string trailing = "<cacheHierarchies count=\"0\"/><extLst><ext uri=\"{u}\"/></extLst>";
+  pivot::PivotCache cache = ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, trailing));
+  EXPECT_TRUE(Has(write_pivot_cache_definition(cache), "</cacheFields>" + trailing + "</pivotCacheDefinition>"));
+  pivot::PivotCalculatedItem item;
+  item.formula = "Region[East]";
+  item.area.references.push_back({});
+  item.area.references.back().field = 0U;
+  item.area.references.back().items = {3U};
+  cache.mutable_calculated_items().push_back(std::move(item));
+  const std::string out = write_pivot_cache_definition(cache);
+  const std::size_t hierarchies = out.find("<cacheHierarchies");
+  const std::size_t calculated = out.find("<calculatedItems");
+  const std::size_t ext = out.find("<extLst");
+  ASSERT_NE(calculated, std::string::npos) << out;
+  EXPECT_LT(hierarchies, calculated);
+  EXPECT_LT(calculated, ext);
+}
+
+TEST(PivotCacheCalculated, UnknownAreaAttributesAndChildrenSurvive) {
+  const std::string items =
+      "<calculatedItems count=\"1\"><calculatedItem field=\"0\" formula=\"Region[East]\">"
+      "<pivotArea cacheIndex=\"1\" dataOnly=\"0\"><references count=\"1\"><reference field=\"0\" count=\"1\" "
+      "selected=\"0\"><x v=\"3\"/></reference></references><extLst><ext uri=\"{a}\"/></extLst></pivotArea>"
+      "<extLst><ext uri=\"{b}\"/></extLst></calculatedItem></calculatedItems>";
+  const std::string out = write_pivot_cache_definition(ReadCache(DefinitionXml("", kCalcItemFields, items)));
+  EXPECT_TRUE(Has(out, items)) << out;
+}
+
+TEST(PivotCacheOptions, SaveDataLimitAndRefreshOnLoadRoundTrip) {
+  const std::string input = DefinitionXml(
+      " refreshedBy=\"x\" saveData=\"0\" missingItemsLimit=\"0\" refreshOnLoad=\"1\"", kCalcItemFields, "");
+  const std::string out = write_pivot_cache_definition(ReadCache(input));
+  EXPECT_TRUE(Has(out, " saveData=\"0\"")) << out;
+  EXPECT_TRUE(Has(out, " missingItemsLimit=\"0\"")) << out;
+  EXPECT_TRUE(Has(out, " refreshOnLoad=\"1\"")) << out;
+  EXPECT_EQ(out.find("refreshOnLoad"), out.rfind("refreshOnLoad")) << out;
+  EXPECT_FALSE(Has(out, "r:id=")) << out;
+}
+
+TEST(PivotCacheOptions, DefaultsWriteNothing) {
+  const std::string out =
+      write_pivot_cache_definition(ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, "")));
+  EXPECT_FALSE(Has(out, "saveData")) << out;
+  EXPECT_FALSE(Has(out, "missingItemsLimit")) << out;
+  EXPECT_FALSE(Has(out, "refreshOnLoad")) << out;
+  EXPECT_TRUE(Has(out, " r:id=\"rId1\"")) << out;
+}
+
+TEST(PivotCacheOptions, MissingItemsLimitMaxIsWrittenAsSet) {
+  pivot::PivotCache cache = ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, ""));
+  cache.set_missing_items_limit(32500U);
+  EXPECT_TRUE(Has(write_pivot_cache_definition(cache), " missingItemsLimit=\"32500\""));
+}
+
+TEST(PivotCacheOptions, UserRefreshOnLoadIsOrredWithThePlanRule) {
+  pivot::PivotCache cache = ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, ""));
+  PivotCacheWritePlan plan;
+  plan.refresh_on_load = false;
+  EXPECT_FALSE(Has(write_pivot_cache_definition(cache, &plan), "refreshOnLoad"));
+  cache.set_refresh_on_load(true);
+  const std::string user = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Has(user, " refreshOnLoad=\"1\"")) << user;
+  cache.set_refresh_on_load(false);
+  plan.refresh_on_load = true;
+  const std::string rule = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Has(rule, " refreshOnLoad=\"1\"")) << rule;
+  EXPECT_EQ(rule.find("refreshOnLoad"), rule.rfind("refreshOnLoad")) << rule;
+}
+
+// Saves a one-pivot workbook whose cache has `save_data`, returning the package parts.
+class PackageParts {
+ public:
+  explicit PackageParts(bool save_data) {
+    Workbook wb = Workbook::create();
+    wb.set_cell_value(0, 0, 0, Value::number(1.0));
+    auto cache = std::make_unique<pivot::PivotCache>();
+    cache->set_cache_id(7U);
+    cache->set_save_data(save_data);
+    cache->mutable_worksheet_source().present = true;
+    cache->mutable_worksheet_source().ref = "A1:B2";
+    cache->mutable_worksheet_source().sheet = wb.sheet(0).name();
+    cache->mutable_fields().push_back(pivot::PivotCacheField{"Region", {}});
+    cache->mutable_fields().push_back(pivot::PivotCacheField{"Amt", {}});
+    wb.add_pivot_cache(std::move(cache));
+    auto table = std::make_unique<pivot::PivotTable>();
+    table->set_name("P");
+    table->set_pivot_cache_id(7U);
+    table->set_anchor(0U, 0U, 1U, 1U);
+    wb.sheet(0).add_pivot_table(std::move(table));
+    auto saved = write_ooxml(wb);
+    ok_ = static_cast<bool>(saved);
+    if (ok_) {
+      bytes_ = std::move(saved.value());
+      ok_ = static_cast<bool>(zip_.open(ByteSpan{bytes_.data(), bytes_.size()}));
+    }
+  }
+
+  bool ok() const { return ok_; }
+  bool Has(std::string_view part) const { return zip_.has_entry(part); }
+  std::string Read(std::string_view part) const {
+    auto bytes = zip_.read_entry(part);
+    return bytes ? std::string(bytes.value().begin(), bytes.value().end()) : std::string();
+  }
+
+ private:
+  std::vector<std::uint8_t> bytes_;
+  ZipReader zip_;
+  bool ok_ = false;
+};
+
+TEST(PivotCacheSaveData, SavedDataKeepsTheRecordsPart) {
+  const PackageParts pkg(/*save_data=*/true);
+  ASSERT_TRUE(pkg.ok());
+  EXPECT_TRUE(pkg.Has("xl/pivotCache/pivotCacheRecords1.xml"));
+  EXPECT_TRUE(pkg.Has("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels"));
+  EXPECT_TRUE(Has(pkg.Read("[Content_Types].xml"), "/xl/pivotCache/pivotCacheRecords1.xml"));
+  EXPECT_TRUE(Has(pkg.Read("xl/pivotCache/pivotCacheDefinition1.xml"), " r:id=\"rId1\""));
+}
+
+TEST(PivotCacheSaveData, DroppedDataLeavesNoRecordsReference) {
+  const PackageParts pkg(/*save_data=*/false);
+  ASSERT_TRUE(pkg.ok());
+  EXPECT_TRUE(pkg.Has("xl/pivotCache/pivotCacheDefinition1.xml"));
+  EXPECT_FALSE(pkg.Has("xl/pivotCache/pivotCacheRecords1.xml"));
+  EXPECT_FALSE(pkg.Has("xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels"));
+  EXPECT_FALSE(Has(pkg.Read("[Content_Types].xml"), "pivotCacheRecords"));
+  const std::string definition = pkg.Read("xl/pivotCache/pivotCacheDefinition1.xml");
+  EXPECT_FALSE(Has(definition, "r:id=")) << definition;
+  EXPECT_TRUE(Has(definition, " saveData=\"0\"")) << definition;
 }
 
 }  // namespace

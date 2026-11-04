@@ -117,6 +117,15 @@ void AppendInlineTypedValue(std::string& out, const Value& v, bool as_date = fal
   out.append("<m/>");
 }
 
+/// `AppendInlineTypedValue` for a shared item, adding `f="1"` to a calculated
+/// one.
+void AppendSharedItem(std::string& out, const Value& v, bool as_date, bool calculated) {
+  AppendInlineTypedValue(out, v, as_date);
+  if (calculated && out.size() >= 2U && out.compare(out.size() - 2U, 2U, "/>") == 0) {
+    out.insert(out.size() - 2U, " f=\"1\"");
+  }
+}
+
 /// Emits `<x v="N"/>` for an integer-valued shared-items index. The
 /// caller has already verified that the matching field is shared and
 /// that the record cell is `Value::number(...)`. Negative or fractional
@@ -376,6 +385,74 @@ void AppendFieldGroup(std::string& out, const pivot::FieldGroup& group, const pi
   out.append("</fieldGroup>");
 }
 
+/// Emits `<calculatedItems>`; nothing when the cache has none.
+void AppendCalculatedItems(std::string& out, const std::vector<pivot::PivotCalculatedItem>& items) {
+  if (items.empty()) {
+    return;
+  }
+  out.append("<calculatedItems");
+  append_xml_attr_uint(out, "count", items.size());
+  out.push_back('>');
+  for (const pivot::PivotCalculatedItem& item : items) {
+    out.append("<calculatedItem");
+    if (item.has_field_attr) {
+      append_xml_attr_uint(out, "field", item.cache_field_index);
+    }
+    append_xml_attr(out, "formula", item.formula);
+    if (!item.has_area && item.extra_children_xml.empty()) {
+      out.append("/>");
+      continue;
+    }
+    out.push_back('>');
+    const pivot::PivotArea& area = item.area;
+    if (item.has_area) {
+      out.append("<pivotArea");
+      if (area.cache_index.has_value()) {
+        emit_xsd_bool_attr(out, "cacheIndex", *area.cache_index);
+      }
+      if (area.outline.has_value()) {
+        emit_xsd_bool_attr(out, "outline", *area.outline);
+      }
+      if (area.field_position.has_value()) {
+        append_xml_attr_uint(out, "fieldPosition", *area.field_position);
+      }
+      append_raw_attrs(out, area.extra_attrs);
+      if (area.references.empty() && area.extra_children_xml.empty()) {
+        out.append("/>");
+      } else {
+        out.push_back('>');
+        if (!area.references.empty()) {
+          out.append("<references");
+          append_xml_attr_uint(out, "count", area.references.size());
+          out.push_back('>');
+          for (const pivot::PivotAreaReference& ref : area.references) {
+            out.append("<reference");
+            if (ref.field.has_value()) {
+              append_xml_attr_uint(out, "field", *ref.field);
+            }
+            append_xml_attr_uint(out, "count", ref.items.size());
+            append_raw_attrs(out, ref.extra_attrs);
+            out.push_back('>');
+            for (const std::uint32_t x : ref.items) {
+              out.append("<x");
+              append_xml_attr_uint(out, "v", x);
+              out.append("/>");
+            }
+            out.append(ref.extra_children_xml);
+            out.append("</reference>");
+          }
+          out.append("</references>");
+        }
+        out.append(area.extra_children_xml);
+        out.append("</pivotArea>");
+      }
+    }
+    out.append(item.extra_children_xml);
+    out.append("</calculatedItem>");
+  }
+  out.append("</calculatedItems>");
+}
+
 }  // namespace
 
 PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
@@ -449,14 +526,25 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
   out.append("<pivotCacheDefinition");
   append_xml_attr(out, "xmlns", kNsSpreadsheetMl);
   append_xml_attr(out, "xmlns:r", kNsOfficeRelationships);
-  append_xml_attr(out, "r:id", "rId1");
+  if (cache.save_data()) {
+    append_xml_attr(out, "r:id", "rId1");
+  }
   append_xml_attr_uint(out, "recordCount", cache.records().size());
   // A cache built in memory has no rendered pivot cells behind it, and an
   // edited table drops the ones it was read with, so either asks Excel to
   // rebuild the report on open. Otherwise the captured attributes stand.
-  const bool refresh_on_load = plan != nullptr ? plan->refresh_on_load : cache.passthrough_attrs().empty();
+  const bool refresh_on_load =
+      (plan != nullptr ? plan->refresh_on_load : cache.passthrough_attrs().empty()) || cache.refresh_on_load();
   if (refresh_on_load) {
     append_xml_attr(out, "refreshOnLoad", "1");
+  } else if (cache.refresh_on_load_attr().has_value()) {
+    append_xml_attr(out, "refreshOnLoad", "0");
+  }
+  if (!cache.save_data()) {
+    emit_xsd_bool_attr(out, "saveData", false);
+  }
+  if (cache.missing_items_limit().has_value()) {
+    append_xml_attr_uint(out, "missingItemsLimit", *cache.missing_items_limit());
   }
   // Re-emit any unmodelled root attributes captured on read (refreshedBy,
   // refreshedDate, createdVersion, ...).
@@ -515,12 +603,26 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
     if (field.num_fmt_id.has_value()) {
       append_xml_attr_uint(out, "numFmtId", *field.num_fmt_id);
     }
+    if (field.formula.has_value()) {
+      append_xml_attr(out, "formula", *field.formula);
+    }
     // `databaseField` defaults to true; emit `="0"` only for a
     // grouping-derived field so it is excluded from record output on read.
     if (!field.is_database_field) {
       emit_xsd_bool_attr(out, "databaseField", false);
     }
     append_raw_attrs(out, field.extra_attrs);
+    if (field.formula.has_value()) {
+      // A calculated field carries no shared items or group.
+      if (field.trailing_children_xml.empty()) {
+        out.append("/>");
+      } else {
+        out.append(">");
+        out.append(field.trailing_children_xml);
+        out.append("</cacheField>");
+      }
+      continue;
+    }
     out.append(">");
 
     const bool group_field = !field.is_database_field && field.field_group.has_value() && field.shared_items.empty() &&
@@ -560,7 +662,8 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
       append_xml_attr_uint(out, "count", field.shared_items.size());
       out.append(">");
       for (std::size_t i = 0; i < field.shared_items.size(); ++i) {
-        AppendInlineTypedValue(out, field.shared_items[i], FlagAt(field.shared_item_is_date, i));
+        AppendSharedItem(out, field.shared_items[i], FlagAt(field.shared_item_is_date, i),
+                         FlagAt(field.shared_item_is_calculated, i));
       }
       out.append("</sharedItems>");
     }
@@ -581,6 +684,8 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
 
   out.append("</cacheFields>");
   out.append(cache.trailing_children_xml());
+  AppendCalculatedItems(out, cache.calculated_items());
+  out.append(cache.trailing_children_after_calculated_xml());
   out.append("</pivotCacheDefinition>");
   return out;
 }

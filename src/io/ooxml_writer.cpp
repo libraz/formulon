@@ -110,9 +110,8 @@ std::string BuildSingleRelationshipRels(std::string_view type, std::string_view 
 /// must not fail to save because one pivot could not be evaluated.
 std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivot::PivotTable& table) {
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(wb.excel_profile());
-  // Reuse the memoised result when the host has already evaluated this
-  // pivot; `last_result()` is the same cache GETPIVOTDATA and the layout
-  // API read.
+  // Reuse the result a host evaluation left behind; otherwise evaluate
+  // without memoising, since this path has no formula host.
   std::shared_ptr<const pivot::PivotResult> result = table.last_result();
   if (!result) {
     const pivot::PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
@@ -124,8 +123,7 @@ std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivo
     if (!eval_or) {
       return std::nullopt;
     }
-    table.set_last_result(std::move(eval_or.value()));
-    result = table.last_result();
+    result = std::make_shared<const pivot::PivotResult>(std::move(eval_or.value()));
   }
   if (!result) {
     return std::nullopt;
@@ -493,6 +491,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
     RETURN_IF_ERROR(AddPart(writer.get(), c.definition_path,
                             write_pivot_cache_definition(*c.cache, plan_for(c.cache_id)), &written_paths));
+    if (c.records_path.empty()) {
+      continue;
+    }
     RETURN_IF_ERROR(AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache, plan_for(c.cache_id)),
                             &written_paths));
     {

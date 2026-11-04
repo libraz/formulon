@@ -127,8 +127,8 @@ struct EmissionPlan {
     const pivot::PivotCache* cache = nullptr;
     std::uint32_t numeric_id = 0;      // 1-based, package-wide
     std::string definition_path;       // "xl/pivotCache/pivotCacheDefinition1.xml"
-    std::string records_path;          // "xl/pivotCache/pivotCacheRecords1.xml"
-    std::string definition_rels_path;  // "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels"
+    std::string records_path;          // "xl/pivotCache/pivotCacheRecords1.xml"; empty when saveData=0
+    std::string definition_rels_path;  // "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels"; empty when saveData=0
     std::uint32_t workbook_rid = 0;    // workbook-rels rId number for this cache definition
     std::uint32_t cache_id = 0;        // PivotCache::cache_id(); used by <pivotCaches> entry
   };

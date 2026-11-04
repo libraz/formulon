@@ -276,7 +276,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // Pivot caches: one Override per definition + one per records part.
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
     AppendOverride(out, c.definition_path, kCtPivotCacheDefinition);
-    AppendOverride(out, c.records_path, kCtPivotCacheRecords);
+    if (!c.records_path.empty()) {
+      AppendOverride(out, c.records_path, kCtPivotCacheRecords);
+    }
   }
   // Pivot tables: one Override per part.
   for (const auto& per_sheet : plan.pivot_tables_by_sheet) {

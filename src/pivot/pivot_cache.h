@@ -120,6 +120,48 @@ struct FieldGroup {
   std::vector<std::pair<std::string, std::string>> extra_attrs;
 };
 
+/// `<reference>` of a `<pivotArea>`: the items of one field it selects.
+struct PivotAreaReference {
+  std::optional<std::uint32_t> field;
+  /// `<x v>` item indices; `count` is derived on write.
+  std::vector<std::uint32_t> items;
+  /// Unmodelled attributes (`selected`, `byPosition`, ...), re-emitted after
+  /// `field` / `count`.
+  std::vector<std::pair<std::string, std::string>> extra_attrs;
+  /// Children other than `<x>` (`extLst`), verbatim.
+  std::string extra_children_xml;
+};
+
+/// `<pivotArea>`. The three attributes Excel writes for a calculated item are
+/// typed; any other attribute is kept in `extra_attrs` and written after them.
+struct PivotArea {
+  std::optional<bool> cache_index;
+  std::optional<bool> outline;
+  std::optional<std::uint32_t> field_position;
+  std::vector<std::pair<std::string, std::string>> extra_attrs;
+  /// `<references>` children, in order.
+  std::vector<PivotAreaReference> references;
+  /// Children other than `<references>` (`extLst`), verbatim.
+  std::string extra_children_xml;
+};
+
+/// `<calculatedItem>` of the cache's `<calculatedItems>`. Element order in
+/// `PivotCache::calculated_items()` is the solve order.
+struct PivotCalculatedItem {
+  /// The cache field the item belongs to: `@field` when present, else the
+  /// first `<reference field>` of `area`.
+  std::uint32_t cache_field_index = 0;
+  /// `@formula`, without a leading `=`.
+  std::string formula;
+  PivotArea area;
+  /// False when the source had no `<pivotArea>`; none is written then.
+  bool has_area = true;
+  /// True when `@field` was written explicitly and is re-emitted.
+  bool has_field_attr = false;
+  /// Children other than `<pivotArea>` (`extLst`), verbatim.
+  std::string extra_children_xml;
+};
+
 /// One column of the pivot cache.
 ///
 /// `shared_items` enumerates the distinct values for a discrete (string /
@@ -139,6 +181,9 @@ struct PivotCacheField {
   /// Per shared item, true when it was a `<d>` date, which the cache holds as
   /// its serial; shorter than `shared_items` means the rest are not dates.
   std::vector<bool> shared_item_is_date;
+  /// Per shared item, true when it is a calculated item (`<s v=".." f="1"/>`);
+  /// shorter than `shared_items` means the rest are not.
+  std::vector<bool> shared_item_is_calculated;
   /// Numeric / date range + grouping hints from `<sharedItems>`. Preserved
   /// verbatim so Excel's Refresh keeps its grouping boundaries.
   SharedItemsHints shared_items_hints;
@@ -157,8 +202,13 @@ struct PivotCacheField {
   /// `<fieldGroup>`; absent when the field is neither grouped nor a group.
   std::optional<FieldGroup> field_group;
 
-  /// Unmodelled `<cacheField>` attributes (`caption`, `formula`, `sqlType`,
-  /// ...), re-emitted verbatim.
+  /// `<cacheField formula>` of a calculated field, without a leading `=`.
+  /// Such a field is not a database field, has no `<sharedItems>` and no
+  /// record slot.
+  std::optional<std::string> formula;
+
+  /// Unmodelled `<cacheField>` attributes (`caption`, `sqlType`, ...),
+  /// re-emitted verbatim.
   std::vector<std::pair<std::string, std::string>> extra_attrs;
 
   /// `<cacheField>` children after `<fieldGroup>` (`mpMap`, `extLst`),
@@ -234,9 +284,10 @@ class PivotCache {
   std::vector<PivotCacheRecord>& mutable_records() { return records_; }
 
   /// Unmodelled `<pivotCacheDefinition>` root attributes (`refreshedBy`,
-  /// `refreshedDate`, `refreshOnLoad`, `createdVersion`, ...), captured as
+  /// `refreshedDate`, `createdVersion`, ...), captured as
   /// `(name, value)` pairs so the writer re-emits them verbatim. The
-  /// modelled attributes (`r:id` / `recordCount`, plus the namespace
+  /// modelled attributes (`r:id` / `recordCount` / `saveData` /
+  /// `missingItemsLimit` / `refreshOnLoad`, plus the namespace
   /// declarations) are excluded and written from the structured state.
   const std::vector<std::pair<std::string, std::string>>& passthrough_attrs() const { return passthrough_attrs_; }
   std::vector<std::pair<std::string, std::string>>& mutable_passthrough_attrs() { return passthrough_attrs_; }
@@ -303,11 +354,38 @@ class PivotCache {
   const std::string& cache_source_children_xml() const { return cache_source_children_xml_; }
   std::string& mutable_cache_source_children_xml() { return cache_source_children_xml_; }
 
-  /// `<pivotCacheDefinition>` children after `<cacheFields>`
-  /// (`cacheHierarchies`, `calculatedItems`, `extLst`, ...), retained
-  /// verbatim in their schema position.
+  /// `<pivotCacheDefinition>` children after `<cacheFields>` that precede
+  /// `<calculatedItems>` in the schema (`cacheHierarchies`, `kpis`,
+  /// `tupleCache`), retained verbatim.
   const std::string& trailing_children_xml() const { return trailing_children_xml_; }
   std::string& mutable_trailing_children_xml() { return trailing_children_xml_; }
+
+  /// Children that follow `<calculatedItems>` (`calculatedMembers`,
+  /// `dimensions`, `measureGroups`, `maps`, `extLst`), retained verbatim.
+  const std::string& trailing_children_after_calculated_xml() const { return trailing_children_after_calculated_xml_; }
+  std::string& mutable_trailing_children_after_calculated_xml() { return trailing_children_after_calculated_xml_; }
+
+  /// `<calculatedItems>`, in solve order.
+  const std::vector<PivotCalculatedItem>& calculated_items() const { return calculated_items_; }
+  std::vector<PivotCalculatedItem>& mutable_calculated_items() { return calculated_items_; }
+
+  /// `saveData`: false drops the records part on save.
+  bool save_data() const { return save_data_; }
+  void set_save_data(bool value) { save_data_ = value; }
+
+  /// `missingItemsLimit`; absent is Excel's automatic limit, 0 none.
+  std::optional<std::uint32_t> missing_items_limit() const { return missing_items_limit_; }
+  void set_missing_items_limit(std::optional<std::uint32_t> value) { missing_items_limit_ = value; }
+
+  /// User-requested `refreshOnLoad`. An explicit `"0"` read from a file is
+  /// kept so it is written back; the writer ORs this with its own rule.
+  bool refresh_on_load() const { return refresh_on_load_.value_or(false); }
+  std::optional<bool> refresh_on_load_attr() const { return refresh_on_load_; }
+  void set_refresh_on_load(bool value) {
+    if (value || refresh_on_load_.has_value()) {
+      refresh_on_load_ = value;
+    }
+  }
 
  private:
   std::uint32_t cache_id_ = 0;
@@ -319,6 +397,11 @@ class PivotCache {
   std::vector<std::pair<std::string, std::string>> cache_source_attrs_;
   std::string cache_source_children_xml_;
   std::string trailing_children_xml_;
+  std::string trailing_children_after_calculated_xml_;
+  std::vector<PivotCalculatedItem> calculated_items_;
+  bool save_data_ = true;
+  std::optional<std::uint32_t> missing_items_limit_;
+  std::optional<bool> refresh_on_load_;
 };
 
 }  // namespace formulon::pivot

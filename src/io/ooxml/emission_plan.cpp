@@ -181,8 +181,10 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   // Pivot-cache parts: definition, records, and definition rels.
   for (const EmissionPlan::PivotCachePlan& c : pivot_caches) {
     paths.insert(c.definition_path);
-    paths.insert(c.records_path);
-    paths.insert(c.definition_rels_path);
+    if (!c.records_path.empty()) {
+      paths.insert(c.records_path);
+      paths.insert(c.definition_rels_path);
+    }
   }
   // Pivot-table parts (one per pivot table, package-wide) plus the rels
   // file naming the cache definition each one draws from.
@@ -408,9 +410,12 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     entry.numeric_id = static_cast<std::uint32_t>(i + 1);
     entry.cache_id = cache->cache_id();
     entry.definition_path = NumberedPartPath("xl/pivotCache/pivotCacheDefinition", entry.numeric_id, ".xml");
-    entry.records_path = NumberedPartPath("xl/pivotCache/pivotCacheRecords", entry.numeric_id, ".xml");
-    entry.definition_rels_path =
-        NumberedPartPath("xl/pivotCache/_rels/pivotCacheDefinition", entry.numeric_id, ".xml.rels");
+    // saveData=0 writes neither the records part nor the rels file naming it.
+    if (cache->save_data()) {
+      entry.records_path = NumberedPartPath("xl/pivotCache/pivotCacheRecords", entry.numeric_id, ".xml");
+      entry.definition_rels_path =
+          NumberedPartPath("xl/pivotCache/_rels/pivotCacheDefinition", entry.numeric_id, ".xml.rels");
+    }
     // sheets rId1..rId(sheet_count), styles rId(sheet_count+1),
     // first cache rId(sheet_count+2). Cast safe: workbook size is
     // bounded well within uint32 range.

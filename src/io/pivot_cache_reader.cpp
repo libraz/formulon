@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -203,6 +204,48 @@ Expected<pivot::FieldGroup, Error> ReadFieldGroup(const pugi::xml_node& node, st
   return group;
 }
 
+/// Decodes `<pivotArea>` of a calculated item; attributes and children the
+/// model has no member for are kept verbatim.
+pivot::PivotArea ReadPivotArea(const pugi::xml_node& node) {
+  pivot::PivotArea area;
+  if (pugi::xml_attribute a = node.attribute("cacheIndex"); a) {
+    area.cache_index = attr_bool(node, "cacheIndex");
+  }
+  if (pugi::xml_attribute a = node.attribute("outline"); a) {
+    area.outline = attr_bool(node, "outline");
+  }
+  area.field_position = parse_xml_u32_attr_strict(node.attribute("fieldPosition"));
+  capture_unknown_attrs(node, {"cacheIndex", "outline", "fieldPosition"}, area.extra_attrs);
+  for (pugi::xml_node ref = node.child("references").child("reference"); ref; ref = ref.next_sibling("reference")) {
+    pivot::PivotAreaReference r;
+    r.field = parse_xml_u32_attr_strict(ref.attribute("field"));
+    for (pugi::xml_node x = ref.child("x"); x; x = x.next_sibling("x")) {
+      r.items.push_back(attr_u32(x, "v"));
+    }
+    capture_unknown_attrs(ref, {"field", "count"}, r.extra_attrs);
+    capture_unknown_children(ref, {"x"}, r.extra_children_xml);
+    area.references.push_back(std::move(r));
+  }
+  capture_unknown_children(node, {"references"}, area.extra_children_xml);
+  return area;
+}
+
+/// Decodes one `<calculatedItem>`.
+pivot::PivotCalculatedItem ReadCalculatedItem(const pugi::xml_node& node) {
+  pivot::PivotCalculatedItem item;
+  item.formula = node.attribute("formula").as_string();
+  item.has_area = static_cast<bool>(node.child("pivotArea"));
+  item.area = ReadPivotArea(node.child("pivotArea"));
+  if (const std::optional<std::uint32_t> field = parse_xml_u32_attr_strict(node.attribute("field")); field) {
+    item.cache_field_index = *field;
+    item.has_field_attr = true;
+  } else if (!item.area.references.empty() && item.area.references.front().field.has_value()) {
+    item.cache_field_index = *item.area.references.front().field;
+  }
+  capture_unknown_children(node, {"pivotArea"}, item.extra_children_xml);
+  return item;
+}
+
 }  // namespace
 
 Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector<std::uint8_t>& definition_bytes) {
@@ -220,7 +263,13 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
   // `refreshOnLoad`, `createdVersion`, ...) for verbatim round-trip. `r:id`
   // and `recordCount` are written from the structured state; namespace
   // declarations are skipped by the capture helper.
-  capture_unknown_attrs(root, {"r:id", "recordCount"}, cache.mutable_passthrough_attrs());
+  capture_unknown_attrs(root, {"r:id", "recordCount", "saveData", "missingItemsLimit", "refreshOnLoad"},
+                        cache.mutable_passthrough_attrs());
+  cache.set_save_data(attr_bool(root, "saveData", true));
+  cache.set_missing_items_limit(parse_xml_u32_attr_strict(root.attribute("missingItemsLimit")));
+  if (root.attribute("refreshOnLoad")) {
+    cache.set_refresh_on_load(attr_bool(root, "refreshOnLoad"));
+  }
 
   // External cache sources require live data-connection plumbing we do
   // not implement; fail explicitly so the workbook reader can surface
@@ -266,7 +315,10 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       // grouping-derived field that carries no per-record cell.
       field.is_database_field = attr_bool(f, "databaseField", true);
       field.num_fmt_id = parse_xml_u32_attr_strict(f.attribute("numFmtId"));
-      capture_unknown_attrs(f, {"name", "databaseField", "numFmtId"}, field.extra_attrs);
+      if (pugi::xml_attribute formula = f.attribute("formula"); formula) {
+        field.formula = formula.value();
+      }
+      capture_unknown_attrs(f, {"name", "databaseField", "numFmtId", "formula"}, field.extra_attrs);
       capture_unknown_children(f, {"sharedItems", "fieldGroup"}, field.trailing_children_xml);
       if (pugi::xml_node group = f.child("fieldGroup"); group) {
         auto group_or = ReadFieldGroup(group, cache.mutable_text_storage());
@@ -296,12 +348,39 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
           }
           field.shared_items.push_back(val_or.value());
           field.shared_item_is_date.push_back(is_date);
+          field.shared_item_is_calculated.push_back(attr_bool(child, "f"));
         }
       }
       cache.mutable_fields().push_back(std::move(field));
     }
   }
-  capture_unknown_children(root, {"cacheSource", "cacheFields"}, cache.mutable_trailing_children_xml());
+  // Children after `<cacheFields>` split around `<calculatedItems>` at its
+  // schema position so each keeps its relative order on write.
+  bool past_calculated_items = false;
+  for (pugi::xml_node child = fields ? fields.next_sibling() : root.first_child(); child;
+       child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    const std::string_view name = child.name();
+    if (name == "cacheSource" || name == "cacheFields") {
+      continue;
+    }
+    if (name == "calculatedItems") {
+      past_calculated_items = true;
+      for (pugi::xml_node item = child.child("calculatedItem"); item; item = item.next_sibling("calculatedItem")) {
+        cache.mutable_calculated_items().push_back(ReadCalculatedItem(item));
+      }
+    } else if (name == "calculatedMembers" || name == "dimensions" || name == "measureGroups" || name == "maps" ||
+               name == "extLst") {
+      past_calculated_items = true;
+      append_raw_xml(cache.mutable_trailing_children_after_calculated_xml(), child);
+    } else {
+      append_raw_xml(past_calculated_items ? cache.mutable_trailing_children_after_calculated_xml()
+                                           : cache.mutable_trailing_children_xml(),
+                     child);
+    }
+  }
 
   return cache;
 }

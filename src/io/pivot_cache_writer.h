@@ -12,9 +12,6 @@
 // workbook part and is the writer-integration's responsibility (a later
 // PR in the pivot-writer umbrella).
 //
-// Calculated cache fields remain out of scope at this layer, mirroring the
-// reader's coverage.
-//
 // Design references:
 //   * src/io/pivot_cache_reader.h (sister reader; canonical grammar)
 
@@ -106,7 +103,12 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
 ///
 /// `r:id="rId1"` on the root is a stable placeholder for the records
 /// part; the cache-definition's own rels file (emitted by the writer-
-/// integration PR) will define `rId1` as the records-part target.
+/// integration PR) will define `rId1` as the records-part target. A cache
+/// with `save_data() == false` has no records part, so the attribute is
+/// omitted.
+///
+/// A calculated field (`formula`) is written as a childless `<cacheField>`;
+/// `<calculatedItems>` follows the `trailing_children_xml()` run.
 ///
 /// With a non-null `plan`, a derived field is written as a discrete field:
 /// `<sharedItems>` lists the plan's items with its hints, and

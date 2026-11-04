@@ -8,6 +8,7 @@
 #include "io/pivot_cache_reader.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -516,6 +517,116 @@ TEST(PivotCacheReader, WorksheetSourceAndSharedItemsHintsSurviveRoundTrip) {
   ASSERT_TRUE(h2.has_max_value);
   EXPECT_EQ(h2.min_value, "10");
   EXPECT_EQ(h2.max_value, "500");
+}
+
+// ---------------------------------------------------------------------------
+// Calculated fields / items and cache options
+// ---------------------------------------------------------------------------
+
+std::string CacheXml(std::string_view root_attrs, std::string_view fields, std::string_view trailing) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotCacheDefinition").append(kPivotNs).append(root_attrs).append(">");
+  xml.append("<cacheSource type=\"worksheet\"><worksheetSource ref=\"A1:D6\" sheet=\"Sheet1\"/></cacheSource>");
+  xml.append("<cacheFields count=\"2\">").append(fields).append("</cacheFields>");
+  xml.append(trailing).append("</pivotCacheDefinition>");
+  return xml;
+}
+
+constexpr std::string_view kCalcItemFields =
+    "<cacheField name=\"Region\" numFmtId=\"0\"><sharedItems count=\"4\"><s v=\"East\"/><s v=\"North\"/>"
+    "<s v=\"South\"/><s v=\"X\" f=\"1\"/></sharedItems></cacheField>"
+    "<cacheField name=\"Amt\" numFmtId=\"0\"><sharedItems containsSemiMixedTypes=\"0\" containsString=\"0\" "
+    "containsNumber=\"1\" containsInteger=\"1\" minValue=\"20\" maxValue=\"200\"/></cacheField>";
+
+TEST(PivotCacheCalculated, CalculatedFieldFormulaIsModelled) {
+  const std::string xml =
+      CacheXml("",
+               "<cacheField name=\"Amt\" numFmtId=\"0\"><sharedItems containsNumber=\"1\"/></cacheField>"
+               "<cacheField name=\"Price\" numFmtId=\"0\" formula=\"Amt/Qty\" databaseField=\"0\"/>",
+               "");
+  auto cache_or = read_pivot_cache_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCacheField& calc = cache_or.value().fields()[1];
+  ASSERT_TRUE(calc.formula.has_value());
+  EXPECT_EQ(*calc.formula, "Amt/Qty");
+  EXPECT_FALSE(calc.is_database_field);
+  EXPECT_TRUE(calc.extra_attrs.empty());
+  EXPECT_FALSE(cache_or.value().fields()[0].formula.has_value());
+}
+
+TEST(PivotCacheCalculated, CalculatedSharedItemFlagIsModelled) {
+  auto cache_or = read_pivot_cache_definition(Bytes(CacheXml("", kCalcItemFields, "")));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCacheField& region = cache_or.value().fields()[0];
+  ASSERT_EQ(region.shared_items.size(), 4U);
+  ASSERT_EQ(region.shared_item_is_calculated.size(), 4U);
+  EXPECT_FALSE(region.shared_item_is_calculated[2]);
+  EXPECT_TRUE(region.shared_item_is_calculated[3]);
+}
+
+TEST(PivotCacheCalculated, CalculatedItemsAreStructuredAndSplitTheTrailingChildren) {
+  const std::string xml = CacheXml(
+      "", kCalcItemFields,
+      "<cacheHierarchies count=\"0\"/>"
+      "<calculatedItems count=\"2\">"
+      "<calculatedItem formula=\"Region[North]+Region[South]\"><pivotArea cacheIndex=\"1\" outline=\"0\" "
+      "fieldPosition=\"0\"><references count=\"1\"><reference field=\"0\" count=\"1\"><x v=\"3\"/></reference>"
+      "</references></pivotArea></calculatedItem>"
+      "<calculatedItem field=\"0\" formula=\"Region[-1]\"><pivotArea dataOnly=\"0\" outline=\"0\"/></calculatedItem>"
+      "</calculatedItems><extLst><ext uri=\"{u}\"/></extLst>");
+  auto cache_or = read_pivot_cache_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCache& cache = cache_or.value();
+  ASSERT_EQ(cache.calculated_items().size(), 2U);
+
+  const pivot::PivotCalculatedItem& first = cache.calculated_items()[0];
+  EXPECT_EQ(first.formula, "Region[North]+Region[South]");
+  EXPECT_EQ(first.cache_field_index, 0U);
+  EXPECT_FALSE(first.has_field_attr);
+  EXPECT_EQ(first.area.cache_index, std::optional<bool>(true));
+  EXPECT_EQ(first.area.outline, std::optional<bool>(false));
+  EXPECT_EQ(first.area.field_position, std::optional<std::uint32_t>(0U));
+  ASSERT_EQ(first.area.references.size(), 1U);
+  EXPECT_EQ(first.area.references[0].field, std::optional<std::uint32_t>(0U));
+  ASSERT_EQ(first.area.references[0].items.size(), 1U);
+  EXPECT_EQ(first.area.references[0].items[0], 3U);
+
+  const pivot::PivotCalculatedItem& second = cache.calculated_items()[1];
+  EXPECT_TRUE(second.has_field_attr);
+  EXPECT_FALSE(second.area.cache_index.has_value());
+  ASSERT_EQ(second.area.extra_attrs.size(), 1U);
+  EXPECT_EQ(second.area.extra_attrs[0].first, "dataOnly");
+
+  EXPECT_EQ(cache.trailing_children_xml(), "<cacheHierarchies count=\"0\"/>");
+  EXPECT_EQ(cache.trailing_children_after_calculated_xml(), "<extLst><ext uri=\"{u}\"/></extLst>");
+}
+
+TEST(PivotCacheOptions, SaveDataMissingItemsLimitAndRefreshOnLoadAreModelled) {
+  auto cache_or = read_pivot_cache_definition(
+      Bytes(CacheXml(" saveData=\"0\" missingItemsLimit=\"32500\" refreshOnLoad=\"1\" refreshedBy=\"x\"", "", "")));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCache& cache = cache_or.value();
+  EXPECT_FALSE(cache.save_data());
+  EXPECT_EQ(cache.missing_items_limit(), std::optional<std::uint32_t>(32500U));
+  EXPECT_TRUE(cache.refresh_on_load());
+  ASSERT_EQ(cache.passthrough_attrs().size(), 1U);
+  EXPECT_EQ(cache.passthrough_attrs()[0].first, "refreshedBy");
+}
+
+TEST(PivotCacheOptions, AbsentOptionsTakeTheSchemaDefaults) {
+  auto cache_or = read_pivot_cache_definition(Bytes(CacheXml(" refreshedBy=\"x\"", "", "")));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCache& cache = cache_or.value();
+  EXPECT_TRUE(cache.save_data());
+  EXPECT_FALSE(cache.missing_items_limit().has_value());
+  EXPECT_FALSE(cache.refresh_on_load());
+  EXPECT_FALSE(cache.refresh_on_load_attr().has_value());
+}
+
+TEST(PivotCacheOptions, MissingItemsLimitZeroIsDistinctFromAbsent) {
+  auto cache_or = read_pivot_cache_definition(Bytes(CacheXml(" missingItemsLimit=\"0\"", "", "")));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  EXPECT_EQ(cache_or.value().missing_items_limit(), std::optional<std::uint32_t>(0U));
 }
 
 }  // namespace
