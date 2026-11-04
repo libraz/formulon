@@ -532,7 +532,7 @@ class JsWorkbook {
   JsStatus setChartLegend(uint32_t sheet, uint32_t objectId, int32_t position, bool overlay,
                           emscripten::val hiddenSeries);
   JsStatus setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t axisId, emscripten::val patch);
-  JsStatus setChartDisplay(uint32_t sheet, uint32_t objectId, int32_t blanksAs, emscripten::val plotVisibleOnly);
+  JsStatus setChartDisplay(uint32_t sheet, uint32_t objectId, emscripten::val patch);
   JsStatus setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, emscripten::val patch);
   JsStatus setChartPoint(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, uint32_t pointIdx,
                          emscripten::val patch);
@@ -571,6 +571,8 @@ class JsWorkbook {
                               const std::string& profile_id) const;
   emscripten::val collationClasses(emscripten::val values, int32_t strength, const std::string& profile_id) const;
   emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val parseReference(const std::string& text, emscripten::val options) const;
+  emscripten::val formatReference(emscripten::val range, emscripten::val options) const;
   emscripten::val getArrayFormula(uint32_t sheet, uint32_t row, uint32_t col) const;
   JsStatus setArrayFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols,
                            const std::string& formula);

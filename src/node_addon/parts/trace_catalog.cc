@@ -89,6 +89,7 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
   out.Set("anchorCol", Napi::Number::New(env, 0));
   out.Set("rows", Napi::Number::New(env, 0));
   out.Set("cols", Napi::Number::New(env, 0));
+  out.Set("blocked", Napi::Boolean::New(env, false));
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
@@ -107,6 +108,7 @@ Napi::Value Workbook::SpillInfo(const Napi::CallbackInfo& info) {
   out.Set("anchorCol", Napi::Number::New(env, spill.anchor_col));
   out.Set("rows", Napi::Number::New(env, spill.rows));
   out.Set("cols", Napi::Number::New(env, spill.cols));
+  out.Set("blocked", Napi::Boolean::New(env, spill.blocked != 0));
   return out;
 }
 

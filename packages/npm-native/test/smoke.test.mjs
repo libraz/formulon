@@ -15,6 +15,7 @@ import './smoke_theme_styles.mjs';
 import './smoke_filter_validation_comments.mjs';
 import './smoke_drawing.mjs';
 import './smoke_chart.mjs';
+import './smoke_reference.mjs';
 import './smoke_tables.mjs';
 import './smoke_view_style_fidelity.mjs';
 import './smoke_protection_fidelity.mjs';

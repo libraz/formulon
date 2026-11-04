@@ -666,6 +666,14 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("sheetCount", &JsWorkbook::sheetCount)
       .function("sheetName", &JsWorkbook::sheetName)
       .function("spillInfo", &JsWorkbook::spillInfo)
+      .function("parseReference", &JsWorkbook::parseReference)
+      .function("parseReference", emscripten::optional_override([](const JsWorkbook& self, const std::string& text) {
+                  return self.parseReference(text, emscripten::val::undefined());
+                }))
+      .function("formatReference", &JsWorkbook::formatReference)
+      .function("formatReference", emscripten::optional_override([](const JsWorkbook& self, emscripten::val range) {
+                  return self.formatReference(range, emscripten::val::undefined());
+                }))
       .function("getArrayFormula", &JsWorkbook::getArrayFormula)
       .function("setArrayFormula", &JsWorkbook::setArrayFormula)
       .function("tableAt", &JsWorkbook::tableAt)

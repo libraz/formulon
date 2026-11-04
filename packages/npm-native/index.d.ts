@@ -2668,6 +2668,8 @@ export interface ChartInfo {
   legend: { position: ChartLegendPosition; overlay: boolean; hiddenSeries: number[] };
   blanksAs: ChartBlanksAs;
   plotVisibleOnly: boolean | null;
+  /** Whether `#N/A` points draw as blank cells; `null` when the chart carries no setting. */
+  naAsBlank: boolean | null;
   date1904: boolean;
   style: number | null;
   plots: ChartPlotInfo[];
@@ -2825,6 +2827,15 @@ export interface ChartAxisPatch {
   tickLabelPosition?: string | null;
 }
 
+/** Patch for `setChartDisplay`. An omitted key keeps the element, `null` removes it, a value sets it.
+ *  `naAsBlank: true` writes `c16r3:dispNaAsBlank`; `false` and `null` both remove it, as Excel does, so a
+ *  read-back is `null`. `blanksAs` takes `Gap`, `Zero` or `Span`; `Absent` is not a value (use `null`). */
+export interface ChartDisplayPatch {
+  blanksAs?: ChartBlanksAs | null;
+  plotVisibleOnly?: boolean | null;
+  naAsBlank?: boolean | null;
+}
+
 /** Overrides `previewChartData` applies to a copy of the chart; an omitted field keeps the chart's own value. */
 export interface ChartPreviewOverrides {
   source?: string;
@@ -2833,6 +2844,7 @@ export interface ChartPreviewOverrides {
   headerColumn?: boolean;
   blanksAs?: ChartBlanksAs;
   plotVisibleOnly?: boolean;
+  naAsBlank?: boolean;
 }
 
 /** Result of `Workbook.getChart`; `chart` is `null` unless `status` is ok. */
@@ -3830,6 +3842,40 @@ export interface SpillInfo {
   readonly anchorCol: number;
   readonly rows: number;
   readonly cols: number;
+  /** `true` when the cell is the anchor of a spill that failed with `#SPILL!`; then `(anchorRow, anchorCol)`
+   *  + `(rows, cols)` describe the rectangle it attempted. `engaged` is `false` then. */
+  readonly blocked: boolean;
+}
+
+/** A parsed reference: a 0-based, inclusive rectangle. A whole column or row is expanded to the grid
+ *  edge, and `row0 <= row1`, `col0 <= col1`. `sheetName` is the unquoted local qualifier, `null` when none. */
+export interface ParsedReference {
+  sheetName: string | null;
+  row0: number;
+  col0: number;
+  row1: number;
+  col1: number;
+}
+
+/** Options for `parseReference`. `baseRow` and `baseCol` anchor R1C1 relative axes and are given together. */
+export interface ParseReferenceOptions {
+  r1c1?: boolean;
+  baseRow?: number;
+  baseCol?: number;
+}
+
+/** The rectangle `formatReference` writes; `sheetName` `null`, omitted or `""` writes no qualifier. */
+export interface ReferenceRange {
+  sheetName?: string | null;
+  row0: number;
+  col0: number;
+  row1: number;
+  col1: number;
+}
+
+/** Options for `formatReference`. */
+export interface FormatReferenceOptions {
+  absolute?: boolean;
 }
 
 /** Return type of `Workbook.addFont/Fill/Border/Xf(...)`. The
@@ -5220,8 +5266,8 @@ export interface Workbook {
   ): Status;
   /** Patches the axis `axisId`. */
   setChartAxis(sheet: number, objectId: number, axisId: number, patch: ChartAxisPatch): Status;
-  /** Sets how blanks are plotted and whether hidden cells are skipped; `Absent` and `null` remove the element. */
-  setChartDisplay(sheet: number, objectId: number, blanksAs: ChartBlanksAs, plotVisibleOnly: boolean | null): Status;
+  /** Patches how blanks are plotted, whether hidden cells are skipped and whether `#N/A` draws as blank. */
+  setChartDisplay(sheet: number, objectId: number, patch: ChartDisplayPatch): Status;
   /** Patches the series with `c:idx` `seriesIdx` of plot group `plot`. */
   setChartSeries(sheet: number, objectId: number, plot: number, seriesIdx: number, patch: ChartSeriesPatch): Status;
   /** Patches a data point; `null` or an empty patch removes its formatting. */
@@ -5363,6 +5409,18 @@ export interface Workbook {
    *  spill-aware. Otherwise `engaged` is `false` and the other fields
    *  are zero. */
   spillInfo(sheet: number, row: number, col: number): SpillInfo;
+
+  /** Parses `text` as `INDIRECT` reads a reference under the workbook's profile: A1, or R1C1 with the
+   *  profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
+   *  range in either order and whole columns / rows. Returns `null` for anything else (3D, external, named,
+   *  structured or multi-area references, surrounding whitespace, a sheet name over 31 characters, an R1C1
+   *  relative axis without a base). Throws `TypeError` when only one of `baseRow` / `baseCol` is given and
+   *  `RangeError` when the base lies outside the grid. */
+  parseReference(text: string, options?: ParseReferenceOptions): ParsedReference | null;
+  /** Writes the inclusive rectangle as A1 reference text: `A1`, `$A$1:$B$2`, `B:D` (every row), `2:11`
+   *  (every column), with the sheet name quoted as a stored formula quotes it. Throws `RangeError` for a
+   *  coordinate outside the grid or an unordered rectangle. */
+  formatReference(range: ReferenceRange, options?: FormatReferenceOptions): string;
 
   // Legacy array (CSE) formulas.
   /** Returns the legacy array (`<f t="array">`) formula covering `(sheet, row, col)`, the same value

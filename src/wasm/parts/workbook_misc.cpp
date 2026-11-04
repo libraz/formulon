@@ -199,6 +199,7 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
   item.set("anchorCol", 0U);
   item.set("rows", 0U);
   item.set("cols", 0U);
+  item.set("blocked", false);
   if (handle_ == nullptr) {
     item.set("status", invalid_handle_status());
     return item;
@@ -214,6 +215,7 @@ emscripten::val JsWorkbook::spillInfo(uint32_t sheet, uint32_t row, uint32_t col
   item.set("anchorCol", info.anchor_col);
   item.set("rows", info.rows);
   item.set("cols", info.cols);
+  item.set("blocked", info.blocked != 0);
   return item;
 }
 

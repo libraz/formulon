@@ -216,6 +216,7 @@ constexpr RdField kInfoRd[] = {
     RD("autoTitleDeleted", fm_chart_info_t, auto_title_deleted, kTri),
     RD("blanksAs", fm_chart_info_t, blanks_as, kI32),
     RD("plotVisibleOnly", fm_chart_info_t, plot_vis_only, kTri),
+    RD("naAsBlank", fm_chart_info_t, na_as_blank, kTri),
     RD("date1904", fm_chart_info_t, date1904, kBool),
     RD_OPT("style", fm_chart_info_t, has_style, style, kOptI32),
     RD_END,
@@ -658,6 +659,13 @@ constexpr WrField kAxisWr[] = {
     WR_END,
 };
 
+constexpr WrField kDisplayWr[] = {
+    WR("blanksAs", fm_chart_display_patch, kI32, blanks_as_op, blanks_as),
+    WR("plotVisibleOnly", fm_chart_display_patch, kBool, plot_vis_only_op, plot_vis_only),
+    WR("naAsBlank", fm_chart_display_patch, kBool, na_as_blank_op, na_as_blank),
+    WR_END,
+};
+
 /// Keeps the bytes behind the `const char*` fields of a patch alive.
 using Arena = std::deque<std::string>;
 
@@ -818,6 +826,7 @@ val JsWorkbook::previewChartData(uint32_t sheet, uint32_t objectId, val override
   set("headerColumn", o.header_column_op, o.header_column, true);
   set("blanksAs", o.blanks_as_op, o.blanks_as, false);
   set("plotVisibleOnly", o.plot_vis_only_op, o.plot_vis_only, true);
+  set("naAsBlank", o.na_as_blank_op, o.na_as_blank, true);
   if (!reader.ok()) {
     return envelope(argument_error(reader), "data", val::null());
   }
@@ -926,21 +935,17 @@ JsStatus JsWorkbook::setChartAxis(uint32_t sheet, uint32_t objectId, uint32_t ax
   return status_from_rc(fm_sheet_set_chart_axis(handle_, sheet, objectId, axisId, &p));
 }
 
-JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, int32_t blanksAs, val plotVisibleOnly) {
+JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, val patch) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartDisplay");
-  // `ABSENT` removes `c:dispBlanksAs`; `null` or omitted removes `c:plotVisOnly`.
-  fm_chart_display_patch patch{};
-  patch.blanks_as_op = blanksAs == FM_CHART_BLANKS_ABSENT ? FM_CHART_PATCH_CLEAR : FM_CHART_PATCH_SET;
-  patch.blanks_as = blanksAs;
-  patch.plot_vis_only_op = FM_CHART_PATCH_CLEAR;
-  if (js_value_present(plotVisibleOnly)) {
-    patch.plot_vis_only_op = FM_CHART_PATCH_SET;
-    patch.plot_vis_only = reader.boolean_value(plotVisibleOnly, false) ? 1 : 0;
+  Arena arena;
+  fm_chart_display_patch p{};
+  if (!read_patch_arg(reader, patch, &p, kDisplayWr, arena)) {
+    return argument_error(reader);
   }
-  return status_from_rc(fm_sheet_set_chart_display(handle_, sheet, objectId, &patch));
+  return status_from_rc(fm_sheet_set_chart_display(handle_, sheet, objectId, &p));
 }
 
 JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, val patch) {

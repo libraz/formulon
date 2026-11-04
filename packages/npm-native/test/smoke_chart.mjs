@@ -209,14 +209,35 @@ test('typed chart edits are visible through getChart', async () => {
     must(wb.setChartLegend(0, id, mod.ChartLegendPosition.None, false), 'setChartLegend none');
     assert.equal(chartOf(wb, id).legend.position, mod.ChartLegendPosition.None);
 
-    must(wb.setChartDisplay(0, id, mod.ChartBlanksAs.Zero, false), 'setChartDisplay');
+    // A new chart carries `dispNaAsBlank`.
+    assert.equal(chartOf(wb, id).naAsBlank, true);
+    must(wb.setChartDisplay(0, id, { blanksAs: mod.ChartBlanksAs.Zero, plotVisibleOnly: false }), 'setChartDisplay');
     let info = chartOf(wb, id);
     assert.equal(info.blanksAs, mod.ChartBlanksAs.Zero);
     assert.equal(info.plotVisibleOnly, false);
-    must(wb.setChartDisplay(0, id, mod.ChartBlanksAs.Absent, null), 'setChartDisplay absent');
+    // An omitted key keeps, including `naAsBlank`.
+    assert.equal(info.naAsBlank, true);
+    must(wb.setChartDisplay(0, id, { blanksAs: null, plotVisibleOnly: null }), 'setChartDisplay clear');
     info = chartOf(wb, id);
     assert.equal(info.blanksAs, mod.ChartBlanksAs.Absent);
     assert.equal(info.plotVisibleOnly, null);
+    assert.equal(info.naAsBlank, true);
+    must(wb.setChartDisplay(0, id, { plotVisibleOnly: true }), 'setChartDisplay keep blanksAs');
+    assert.equal(chartOf(wb, id).blanksAs, mod.ChartBlanksAs.Absent);
+    assert.equal(chartOf(wb, id).plotVisibleOnly, true);
+    // `false` and `null` both remove the extension, which reads back as `null`.
+    must(wb.setChartDisplay(0, id, { naAsBlank: false }), 'setChartDisplay naAsBlank false');
+    assert.equal(chartOf(wb, id).naAsBlank, null);
+    must(wb.setChartDisplay(0, id, { naAsBlank: true }), 'setChartDisplay naAsBlank true');
+    assert.equal(chartOf(wb, id).naAsBlank, true);
+    must(wb.setChartDisplay(0, id, { naAsBlank: null }), 'setChartDisplay naAsBlank null');
+    assert.equal(chartOf(wb, id).naAsBlank, null);
+    assert.equal(chartOf(wb, id).plotVisibleOnly, true);
+    assert.equal(wb.setChartDisplay(0, id, { blanksAs: mod.ChartBlanksAs.Absent }).ok, false);
+    assert.throws(() => wb.setChartDisplay(0, id, 5), TypeError);
+    must(wb.previewChartData(0, id, { naAsBlank: true }), 'previewChartData naAsBlank');
+    must(wb.previewChartData(0, id, { naAsBlank: false }), 'previewChartData naAsBlank false');
+    assert.equal(chartOf(wb, id).naAsBlank, null);
 
     must(wb.setChartPlot(0, id, 0, { gapWidth: 40, overlap: 10, varyColors: true }), 'setChartPlot');
     const plot = chartOf(wb, id).plots[0];

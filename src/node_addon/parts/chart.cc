@@ -261,6 +261,7 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
 
   o.Set("blanksAs", JsNumber(env, info.blanks_as));
   o.Set("plotVisibleOnly", TriToJs(env, info.plot_vis_only));
+  o.Set("naAsBlank", TriToJs(env, info.na_as_blank));
   o.Set("date1904", JsBool(env, info.date1904));
   o.Set("style", OptionalNumber(env, info.has_style, info.style));
 
@@ -740,6 +741,7 @@ Napi::Value Workbook::PreviewChartData(const Napi::CallbackInfo& info) {
   set("headerColumn", overrides.header_column_op, overrides.header_column, true);
   set("blanksAs", overrides.blanks_as_op, overrides.blanks_as, false);
   set("plotVisibleOnly", overrides.plot_vis_only_op, overrides.plot_vis_only, true);
+  set("naAsBlank", overrides.na_as_blank_op, overrides.na_as_blank, true);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -904,15 +906,17 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  // `blanksAs` `ABSENT` removes `c:dispBlanksAs`; `plotVisibleOnly` null or
-  // omitted removes `c:plotVisOnly`.
+  Napi::Object spec;
+  if (!PatchObjectArg(info, 2, "setChartDisplay", &spec)) {
+    return env.Undefined();
+  }
+  CheckedSpecReader reader(env);
   fm_chart_display_patch patch{};
-  patch.blanks_as = ArgI32(info, 2);
-  patch.blanks_as_op = patch.blanks_as == FM_CHART_BLANKS_ABSENT ? FM_CHART_PATCH_CLEAR : FM_CHART_PATCH_SET;
-  patch.plot_vis_only_op = FM_CHART_PATCH_CLEAR;
-  if (info.Length() > 3 && !info[3].IsUndefined() && !info[3].IsNull()) {
-    patch.plot_vis_only_op = FM_CHART_PATCH_SET;
-    patch.plot_vis_only = ArgFlag(info, 3);
+  ReadI32Op(reader, spec, "blanksAs", patch.blanks_as_op, patch.blanks_as);
+  ReadBoolOp(reader, spec, "plotVisibleOnly", patch.plot_vis_only_op, patch.plot_vis_only);
+  ReadBoolOp(reader, spec, "naAsBlank", patch.na_as_blank_op, patch.na_as_blank);
+  if (!reader.ok()) {
+    return env.Undefined();
   }
   return MakeStatus(env, fm_sheet_set_chart_display(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch));
 }
