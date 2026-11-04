@@ -846,7 +846,7 @@ bool AppendGeneratedFilter(std::string& out, const pivot::PivotFilter& filter, s
   }
   out.append("<filter");
   append_xml_attr_uint(out, "fld", field_index);
-  append_xml_attr(out, "type", pivot::kFilterTypeNames[static_cast<std::size_t>(type)]);
+  append_xml_attr(out, "type", kFilterTypeNames[static_cast<std::size_t>(type)]);
   out.append(" evalOrder=\"-1\"");
   append_xml_attr_uint(out, "id", id);
   if (pivot::is_value_filter_type(type)) {
@@ -901,7 +901,7 @@ bool AppendGeneratedFilter(std::string& out, const pivot::PivotFilter& filter, s
     default:
       if (operandless) {
         out.append("<dynamicFilter");
-        append_xml_attr(out, "type", pivot::kFilterTypeNames[static_cast<std::size_t>(type)]);
+        append_xml_attr(out, "type", kFilterTypeNames[static_cast<std::size_t>(type)]);
         out.append("/>");
       } else if (const std::optional<std::string> pattern =
                      caption ? pivot::caption_wildcard_pattern(type, *low_text) : std::nullopt;

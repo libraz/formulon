@@ -13,7 +13,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -158,81 +157,6 @@ enum class FilterType : std::uint8_t {
   DateM11 = 66,
   DateM12 = 67,
 };
-
-/// The `ST_PivotFilterType` spelling of each `FilterType`, by ordinal. The
-/// top / bottom pairs share one spelling; `<top10 top="0">` tells them apart.
-inline constexpr std::string_view kFilterTypeNames[] = {
-    "count",
-    "valueGreaterThan",
-    "valueBetween",
-    "captionContains",
-    "captionBeginsWith",
-    "dateBetween",
-    "valueEqual",
-    "valueNotEqual",
-    "valueGreaterThanOrEqual",
-    "valueLessThan",
-    "valueLessThanOrEqual",
-    "valueNotBetween",
-    "captionEqual",
-    "captionNotEqual",
-    "captionNotBeginsWith",
-    "captionEndsWith",
-    "captionNotEndsWith",
-    "captionNotContains",
-    "captionGreaterThan",
-    "captionGreaterThanOrEqual",
-    "captionLessThan",
-    "captionLessThanOrEqual",
-    "captionBetween",
-    "captionNotBetween",
-    "count",
-    "percent",
-    "percent",
-    "sum",
-    "sum",
-    "dateEqual",
-    "dateNotEqual",
-    "dateOlderThan",
-    "dateOlderThanOrEqual",
-    "dateNewerThan",
-    "dateNewerThanOrEqual",
-    "dateNotBetween",
-    "tomorrow",
-    "today",
-    "yesterday",
-    "nextWeek",
-    "thisWeek",
-    "lastWeek",
-    "nextMonth",
-    "thisMonth",
-    "lastMonth",
-    "nextQuarter",
-    "thisQuarter",
-    "lastQuarter",
-    "nextYear",
-    "thisYear",
-    "lastYear",
-    "yearToDate",
-    "Q1",
-    "Q2",
-    "Q3",
-    "Q4",
-    "M1",
-    "M2",
-    "M3",
-    "M4",
-    "M5",
-    "M6",
-    "M7",
-    "M8",
-    "M9",
-    "M10",
-    "M11",
-    "M12",
-};
-static_assert(sizeof(kFilterTypeNames) / sizeof(kFilterTypeNames[0]) ==
-              static_cast<std::size_t>(FilterType::DateM12) + 1U);
 
 /// Calendar a date field's years are grouped by: Gregorian years, or the
 /// Japanese era years.

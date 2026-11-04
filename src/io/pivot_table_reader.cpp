@@ -391,8 +391,8 @@ std::variant<std::monostate, int, double, std::string> TopCountValue(double coun
 /// pairs resolved by `<top10 top>`. Empty for `unknown` and anything newer.
 std::optional<pivot::FilterType> ParseFilterType(const pugi::xml_node& node) {
   const std::string_view name = attr_str(node, "type");
-  for (std::size_t i = 0; i < std::size(pivot::kFilterTypeNames); ++i) {
-    if (pivot::kFilterTypeNames[i] != name) {
+  for (std::size_t i = 0; i < std::size(kFilterTypeNames); ++i) {
+    if (kFilterTypeNames[i] != name) {
       continue;
     }
     const auto type = static_cast<pivot::FilterType>(i);
