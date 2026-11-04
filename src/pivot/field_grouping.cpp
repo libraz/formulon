@@ -1,3 +1,5 @@
+// @size-budget: 32 KB
+
 #include "pivot/field_grouping.h"
 
 #include <algorithm>

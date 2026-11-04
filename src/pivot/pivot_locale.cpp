@@ -1,3 +1,4 @@
+// @size-budget: 18 KB
 //
 // Locale-driven labelling for the pivot-grid layout layer. See the
 // header for the contract.

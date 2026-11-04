@@ -1,3 +1,4 @@
+// @size-budget: 20 KB
 //
 // `Workbook::show_pivot_details`: Excel's Show Details on a pivot value cell.
 // The records are selected and ordered before anything is mutated; the new
