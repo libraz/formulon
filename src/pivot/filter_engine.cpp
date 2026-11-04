@@ -326,16 +326,19 @@ bool PreparedRecordFilter::caption_passes(const ResolvedFilter& f, const Value& 
     rendered = display_string(v);
     label = rendered;
   }
-  const auto order_low = [&]() { return caption_order(label, number, f.low, f.low_number, f.low_pattern, f.matcher); };
-  const auto order_high = [&]() {
-    return caption_order(label, number, f.high, f.high_number, f.high_pattern, f.matcher_high);
-  };
-  // A numeric label never orders against a plain text operand that does not read as a number.
+  // A numeric label orders before a plain text operand that does not read as a number.
   const auto unordered = [&](bool operand_numeric, bool pattern) {
     return number.has_value() && !operand_numeric && !pattern;
   };
   const bool low_unordered = unordered(f.low_number.has_value(), f.low_pattern);
   const bool high_unordered = unordered(f.high_number.has_value(), f.high_pattern);
+  const auto order_low = [&]() {
+    return low_unordered ? -1 : caption_order(label, number, f.low, f.low_number, f.low_pattern, f.matcher);
+  };
+  const auto order_high = [&]() {
+    return high_unordered ? -1 : caption_order(label, number, f.high, f.high_number, f.high_pattern, f.matcher_high);
+  };
+  // "Between" with a bound the label cannot order against matches nothing.
   const auto in_between = [&]() { return !low_unordered && !high_unordered && order_low() >= 0 && order_high() <= 0; };
   const auto equal = [&]() {
     return f.low_pattern ? caption_wildcard_matches(f.matcher, f.low, label) : caption_collate(label, f.low) == 0;
@@ -354,17 +357,17 @@ bool PreparedRecordFilter::caption_passes(const ResolvedFilter& f, const Value& 
     case FilterType::LabelNotContains:
       return !caption_wildcard_matches(f.matcher, f.low, label);
     case FilterType::LabelGreaterThan:
-      return !low_unordered && order_low() > 0;
+      return order_low() > 0;
     case FilterType::LabelGreaterThanOrEqual:
-      return !low_unordered && order_low() >= 0;
+      return order_low() >= 0;
     case FilterType::LabelLessThan:
-      return !low_unordered && order_low() < 0;
+      return order_low() < 0;
     case FilterType::LabelLessThanOrEqual:
-      return !low_unordered && order_low() <= 0;
+      return order_low() <= 0;
     case FilterType::LabelBetween:
       return in_between();
     case FilterType::LabelNotBetween:
-      return !in_between();
+      return order_low() < 0 || order_high() > 0;
     default:
       return true;
   }

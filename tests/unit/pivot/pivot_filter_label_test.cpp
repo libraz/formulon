@@ -434,9 +434,10 @@ TEST(PivotEvaluatorCaptionFilter, NumericLabelsCompareAsNumbers) {
   EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelBeginsWith, std::string("1"))), 150.0);
 }
 
-// A numeric label never orders against a text operand that does not read as a
-// number; "not between" is the negation of "between".
-TEST(PivotEvaluatorCaptionFilter, NumericLabelsDoNotOrderAgainstTextOperands) {
+// A numeric label orders before a text operand that does not read as a number;
+// "between" with such a bound matches nothing, and "not between" keeps the labels
+// below the low bound or above the high one.
+TEST(PivotEvaluatorCaptionFilter, NumericLabelsOrderBeforeTextOperands) {
   PivotCache cache;
   cache.set_cache_id(1);
   cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
@@ -457,9 +458,11 @@ TEST(PivotEvaluatorCaptionFilter, NumericLabelsDoNotOrderAgainstTextOperands) {
   };
   EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelGreaterThan, std::string("3"))), 250.0);
   EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelGreaterThan, std::string("abc"))), 0.0);
-  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelLessThan, std::string("abc"))), 0.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelGreaterThanOrEqual, std::string("abc"))), 0.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelLessThan, std::string("abc"))), 1050.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelLessThanOrEqual, std::string("abc"))), 1050.0);
   EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelBetween, std::string("2"), std::string("abc"))), 0.0);
-  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelNotBetween, std::string("2"), std::string("abc"))), 1050.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelNotBetween, std::string("2"), std::string("abc"))), 100.0);
 }
 
 TEST(PivotEvaluator, AuthoredCaptionBetweenFilterKeepsTheInclusiveRange) {
