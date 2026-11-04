@@ -434,6 +434,34 @@ TEST(PivotEvaluatorCaptionFilter, NumericLabelsCompareAsNumbers) {
   EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelBeginsWith, std::string("1"))), 150.0);
 }
 
+// A numeric label never orders against a text operand that does not read as a
+// number; "not between" is the negation of "between".
+TEST(PivotEvaluatorCaptionFilter, NumericLabelsDoNotOrderAgainstTextOperands) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  const std::pair<double, double> items[] = {{1.0, 100.0}, {2.0, 300.0}, {3.0, 400.0}, {4.0, 200.0}, {10.0, 50.0}};
+  for (const auto& [label, amount] : items) {
+    PivotCacheRecord rec;
+    rec.cells = {Value::number(label), owned_text(cache, "P"), Value::number(amount)};
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  const auto total = [&](PivotFilter filter) {
+    PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+    table.mutable_active_filters().push_back(std::move(filter));
+    auto r_or = evaluate(table, cache, pivot_layout_options_for(mac_365_ja_jp_profile()));
+    EXPECT_TRUE(static_cast<bool>(r_or));
+    return r_or && r_or.value().grand_total.is_number() ? r_or.value().grand_total.as_number() : 0.0;
+  };
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelGreaterThan, std::string("3"))), 250.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelGreaterThan, std::string("abc"))), 0.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelLessThan, std::string("abc"))), 0.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelBetween, std::string("2"), std::string("abc"))), 0.0);
+  EXPECT_DOUBLE_EQ(total(decoded_filter(0, FilterType::LabelNotBetween, std::string("2"), std::string("abc"))), 1050.0);
+}
+
 TEST(PivotEvaluator, AuthoredCaptionBetweenFilterKeepsTheInclusiveRange) {
   PivotCache cache = build_basic_cache();
   // Row on Product so the range spans "Gadget" / "Widget".
