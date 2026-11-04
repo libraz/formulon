@@ -545,5 +545,178 @@ TEST_F(PivotCalculated, ShowAllOnColumnsDrawsAnEmptyColumn) {
   EXPECT_TRUE(result.col_leaf_totals[1][0].is_blank());
 }
 
+PivotFilter ValueFilter(const char* field, FilterType type, double value, std::uint32_t data_field = 0) {
+  PivotFilter filter;
+  filter.axis = PivotAxis::Row;
+  filter.field_name = field;
+  filter.type = type;
+  filter.value = value;
+  filter.data_field_index = data_field;
+  return filter;
+}
+
+/// The U0b P12 report: Product on columns filtered to B, Region `showAll`,
+/// so East (no B record) is listed empty.
+PivotTable EmptyEastTable() {
+  PivotTable table = BuildTable(/*product_on_columns=*/true);
+  table.mutable_fields()[kProduct].items[0].visible = false;
+  table.mutable_fields()[kRegion].show_all = true;
+  return table;
+}
+
+struct EmptyItemCase {
+  FilterType type;
+  double value;
+  double value_high;
+  std::vector<std::string> rows;
+  double grand;
+};
+
+TEST_F(PivotCalculated, AnEmptyShowAllItemComparesAsZero) {
+  const std::vector<EmptyItemCase> cases = {
+      {FilterType::ValueGreaterThan, 60, 0, {"North"}, 90},
+      {FilterType::ValueLessThan, 60, 0, {"East", "South"}, 50},
+      // Only the empty item passes: the totals stay those of the whole report.
+      {FilterType::ValueEqual, 0, 0, {"East"}, 140},
+      {FilterType::ValueGreaterThanOrEqual, 0, 0, {"East", "North", "South"}, 140},
+      {FilterType::ValueNotEqual, 90, 0, {"East", "South"}, 50},
+      {FilterType::ValueNotBetween, 10, 20, {"East", "North", "South"}, 140},
+  };
+  for (const EmptyItemCase& c : cases) {
+    PivotTable table = EmptyEastTable();
+    PivotFilter filter = ValueFilter("Region", c.type, c.value);
+    if (c.type == FilterType::ValueNotBetween) {
+      filter.value_high = c.value_high;
+    }
+    table.mutable_active_filters().push_back(std::move(filter));
+    const PivotResult result = Evaluate(table, cache_);
+    EXPECT_EQ(RowLabels(result), c.rows) << static_cast<int>(c.type);
+    ASSERT_FALSE(result.grand_totals.empty());
+    ASSERT_TRUE(result.grand_totals[0].is_number()) << static_cast<int>(c.type);
+    EXPECT_DOUBLE_EQ(result.grand_totals[0].as_number(), c.grand) << static_cast<int>(c.type);
+    ASSERT_EQ(result.col_leaf_totals.size(), 1U);
+    EXPECT_DOUBLE_EQ(result.col_leaf_totals[0][0].as_number(), c.grand) << static_cast<int>(c.type);
+  }
+}
+
+TEST_F(PivotCalculated, AnEmptyShowAllItemRanksAsZero) {
+  PivotTable table = EmptyEastTable();
+  table.mutable_active_filters().push_back(ValueFilter("Region", FilterType::ValueBottomCount, 1));
+  EXPECT_EQ(RowLabels(Evaluate(table, cache_)), (std::vector<std::string>{"East"}));
+}
+
+/// The U0b P10 report: Apple 100/1, Apricot 300/3, Banana 400/4, Cherry 200/2,
+/// *star 50/10 and X = Banana+Apricot, Sum of Amt and Sum of Qty.
+struct FruitReport {
+  PivotCache cache;
+  PivotTable table;
+};
+
+FruitReport BuildFruitReport(PivotFormulaHost& host) {
+  FruitReport report;
+  PivotCache& cache = report.cache;
+  cache.set_cache_id(7);
+  PivotCacheField fruit("Fruit", {});
+  for (const char* name : {"Apple", "Apricot", "Banana", "Cherry", "*star"}) {
+    fruit.shared_items.push_back(Owned(cache, name));
+  }
+  cache.mutable_fields().push_back(std::move(fruit));
+  cache.mutable_fields().push_back(PivotCacheField{"Amt", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Qty", {}});
+  const double data[][2] = {{100, 1}, {300, 3}, {400, 4}, {200, 2}, {50, 10}};
+  for (std::size_t i = 0; i < 5; ++i) {
+    PivotCacheRecord record;
+    record.cells = {Value::number(static_cast<double>(i)), Value::number(data[i][0]), Value::number(data[i][1])};
+    cache.mutable_records().push_back(std::move(record));
+  }
+  PivotTable& table = report.table;
+  table.set_pivot_cache_id(7);
+  PivotField field;
+  field.source_name = "Fruit";
+  field.axis = PivotAxis::Row;
+  field.sort.manual = true;
+  for (std::uint32_t x = 0; x < 5U; ++x) {
+    PivotItem item;
+    item.has_cache_index = true;
+    item.cache_index = x;
+    field.items.push_back(std::move(item));
+  }
+  PivotField amt;
+  amt.source_name = "Amt";
+  amt.axis = PivotAxis::Value;
+  PivotField qty;
+  qty.source_name = "Qty";
+  qty.axis = PivotAxis::Value;
+  table.mutable_fields() = {std::move(field), std::move(amt), std::move(qty)};
+  table.mutable_row_field_order() = {0U};
+  table.mutable_data_fields() = {DataField("Summe von Amt", 1), DataField("Summe von Qty", 2)};
+  EXPECT_TRUE(static_cast<bool>(add_calculated_item(cache, {&table}, 0, "X", "Fruit[Banana]+Fruit[Apricot]", host)));
+  return report;
+}
+
+struct FruitCase {
+  FilterType type;
+  double value;
+  std::vector<std::string> rows;
+  double amt;
+  double qty;
+};
+
+TEST_F(PivotCalculated, ACalculatedItemTakesPartInValueFiltersWithItsCellValue) {
+  const std::vector<FruitCase> cases = {
+      {FilterType::ValueTop10, 2, {"Banana", "X"}, 1100, 11},
+      {FilterType::ValueBottomCount, 2, {"Apple", "*star"}, 150, 11},
+      {FilterType::ValueGreaterThan, 350, {"Banana", "X"}, 1100, 11},
+      {FilterType::ValueTopPercent, 50, {"Banana", "X"}, 1100, 11},
+  };
+  for (const FruitCase& c : cases) {
+    FruitReport report = BuildFruitReport(host_);
+    report.table.mutable_active_filters().push_back(ValueFilter("Fruit", c.type, c.value));
+    const PivotResult result = Evaluate(report.table, report.cache);
+    EXPECT_EQ(RowLabels(result), c.rows) << static_cast<int>(c.type);
+    ASSERT_EQ(result.grand_totals.size(), 2U);
+    EXPECT_DOUBLE_EQ(result.grand_totals[0].as_number(), c.amt) << static_cast<int>(c.type);
+    EXPECT_DOUBLE_EQ(result.grand_totals[1].as_number(), c.qty) << static_cast<int>(c.type);
+  }
+}
+
+TEST_F(PivotCalculated, ValueFiltersScoreTheTotalsTheRowsShow) {
+  // Row totals with PY = A+100 on columns: East 240, North 430, South 750, RX 1080.
+  PivotTable table = BuildTable(/*product_on_columns=*/true);
+  ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, "RX", "North+South", host_)));
+  ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kProduct, "PY", "Product[A]+100", host_)));
+  table.mutable_active_filters().push_back(ValueFilter("Region", FilterType::ValueGreaterThan, 300));
+  const PivotResult result = Evaluate(table, cache_);
+  EXPECT_EQ(RowLabels(result), (std::vector<std::string>{"North", "South", "RX"}));
+  EXPECT_DOUBLE_EQ(result.grand_totals[0].as_number(), 2260);
+}
+
+TEST_F(PivotCalculated, AValueFilterOnACalculatedFieldReadsItsValues) {
+  PivotTable table = BuildTable();
+  ASSERT_TRUE(static_cast<bool>(add_calculated_field(cache_, {&table}, "Price", "Amt/Qty", host_)));
+  table.mutable_data_fields().push_back(DataField("合計 / Price", 4));
+  table.mutable_active_filters().push_back(ValueFilter("Region", FilterType::ValueGreaterThan, 20, 2));
+  const PivotResult result = Evaluate(table, cache_);
+  EXPECT_EQ(RowLabels(result), (std::vector<std::string>{"North", "South"}));
+  ExpectNumbers(Column(result, 2), {30, 50, 40});
+  ExpectNumbers(Column(result, 0), {210, 350, 560});
+
+  PivotTable top = BuildTable();
+  sync_table_fields(cache_, {&top});
+  top.mutable_data_fields().push_back(DataField("合計 / Price", 4));
+  top.mutable_active_filters().push_back(ValueFilter("Region", FilterType::ValueTop10, 1, 2));
+  EXPECT_EQ(RowLabels(Evaluate(top, cache_)), (std::vector<std::string>{"South"}));
+}
+
+TEST_F(PivotCalculated, ACalculatedItemSortsByItsValue) {
+  PivotTable table = BuildTable();
+  ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, "X", "North+South", host_)));
+  PivotField& region = table.mutable_fields()[kRegion];
+  region.sort.manual = false;
+  region.sort.ascending = false;
+  region.sort.by_field = "Sum of Amt";
+  EXPECT_EQ(RowLabels(Evaluate(table, cache_)), (std::vector<std::string>{"X", "South", "North", "East"}));
+}
+
 }  // namespace
 }  // namespace formulon::pivot

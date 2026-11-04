@@ -128,6 +128,12 @@ void recompute_sum_totals_from_cells(const PivotTable& table, PivotResult& resul
 /// Sum, Count and CountNumbers add; Max, Min and Product fold.
 bool aggregation_combines_cells(Aggregation aggregation);
 
+/// Folds the leaf cells `result.values[r][c][slot]` for `r` in `rows` and `c`
+/// in `cols` with `aggregation`, as a total of them displays: blank cells are
+/// skipped, the first error wins, and no number leaves the fold blank.
+Value fold_leaf_cells(Aggregation aggregation, const PivotResult& result, const std::vector<std::size_t>& rows,
+                      const std::vector<std::size_t>& cols, std::size_t slot);
+
 /// Rebuilds every total of the data-field slots marked in `slots` by folding
 /// the leaf cells beneath it with the slot's aggregation, which is how a table
 /// with calculated items totals: their cells have no records. Blank cells are

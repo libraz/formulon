@@ -817,25 +817,63 @@ Value CalculatedPlan::field_value(std::size_t field_index, const std::vector<Val
   return keep(host_->evaluate(compiled->id, args.data(), args.size()), result);
 }
 
+void CalculatedPlan::fill_field_slots(std::vector<Value>& slots, PivotResult& result) const {
+  if (host_ == nullptr) {
+    return;
+  }
+  for (std::size_t slot = 0; slot < visible_slots_ && slot < slots.size(); ++slot) {
+    if (!calculated_slots_[slot]) {
+      continue;
+    }
+    Inputs inputs;
+    const Value value = field_value(slot_fields_[slot], slots, 0U, inputs, result);
+    // A cell none of whose summed fields has data stays empty.
+    slots[slot] = inputs.any && !inputs.non_blank ? Value::blank() : value;
+  }
+}
+
 void CalculatedPlan::fill_field_slots(PivotResult& result) const {
   if (host_ == nullptr ||
       std::find(calculated_slots_.begin(), calculated_slots_.end(), true) == calculated_slots_.end()) {
     return;
   }
-  for_each_slot_vector(result, [&](std::vector<Value>& slots) {
-    for (std::size_t slot = 0; slot < visible_slots_ && slot < slots.size(); ++slot) {
-      if (!calculated_slots_[slot]) {
-        continue;
-      }
-      Inputs inputs;
-      const Value value = field_value(slot_fields_[slot], slots, 0U, inputs, result);
-      // A cell none of whose summed fields has data stays empty.
-      slots[slot] = inputs.any && !inputs.non_blank ? Value::blank() : value;
-    }
-  });
+  for_each_slot_vector(result, [&](std::vector<Value>& slots) { fill_field_slots(slots, result); });
   if (!result.grand_totals.empty()) {
     result.grand_total = result.grand_totals[0];
   }
+}
+
+Value CalculatedPlan::item_sort_key(std::size_t field_index, const Value& key,
+                                    const std::map<Value, Value, ValueLess>& sibling_keys) const {
+  if (host_ == nullptr || field_index >= cache_->fields().size()) {
+    return Value::blank();
+  }
+  const std::vector<Value>& shared = cache_->fields()[field_index].shared_items;
+  std::optional<std::size_t> winner;
+  for (std::size_t e = 0; e < cache_->calculated_items().size(); ++e) {
+    const PivotCalculatedItem& entry = cache_->calculated_items()[e];
+    const std::optional<std::uint32_t> item = entry_item(entry);
+    if (entry.cache_field_index == field_index && item.has_value() && *item < shared.size() &&
+        same_value(shared[*item], key)) {
+      winner = e;
+    }
+  }
+  if (!winner.has_value() || !items_[*winner].ok) {
+    return Value::blank();
+  }
+  const Compiled& compiled = items_[*winner];
+  std::vector<Value> args;
+  args.reserve(compiled.refs.size());
+  for (const FormulaRef& ref : compiled.refs) {
+    if (ref.kind != FormulaRef::Kind::Item || ref.field != field_index || ref.item >= shared.size()) {
+      args.push_back(Value::error(ErrorCode::Ref));
+      continue;
+    }
+    const auto it = sibling_keys.find(shared[ref.item]);
+    args.push_back(it == sibling_keys.end() ? Value::blank() : it->second);
+  }
+  const Value value = host_->evaluate(compiled.id, args.data(), args.size());
+  return value.is_text() ? Value::blank() : value;
 }
 
 void CalculatedPlan::drop_sum_slots(PivotResult& result) const {

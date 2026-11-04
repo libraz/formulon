@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -29,6 +30,7 @@
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/value_order.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -113,6 +115,16 @@ class CalculatedPlan {
 
   /// Evaluates the calculated-field slots at every cell and total.
   void fill_field_slots(PivotResult& result) const;
+
+  /// Evaluates the calculated-field slots of one cell or total, `slots`
+  /// carrying the hidden Sum slots it reads. Text results live in `result`.
+  void fill_field_slots(std::vector<Value>& slots, PivotResult& result) const;
+
+  /// The value-sort key of calculated item `key` of field `field_index`: its
+  /// formula over the keys `sibling_keys` holds for the items it names. Blank
+  /// when it cannot be resolved, or for a text result.
+  Value item_sort_key(std::size_t field_index, const Value& key,
+                      const std::map<Value, Value, ValueLess>& sibling_keys) const;
 
   /// Drops the hidden Sum slots from every cell and total.
   void drop_sum_slots(PivotResult& result) const;

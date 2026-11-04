@@ -385,13 +385,21 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
       return;
     }
     const HierLevel& level = levels[depth];
-    for (auto& [unused_key, child] : node.children) {
-      (void)unused_key;
-      if (level.value_sort_field.has_value() && level.value_sort_aggregation.has_value()) {
+    const bool by_value = level.value_sort_field.has_value() && level.value_sort_aggregation.has_value();
+    std::map<Value, Value, ValueLess> real_keys;
+    for (auto& [key, child] : node.children) {
+      if (by_value && !child.calculated) {
         child.value_sort_key = apply_record_aggregation(*level.value_sort_aggregation, cache, child.record_indices,
                                                         *level.value_sort_field);
+        real_keys.emplace(key.value, *child.value_sort_key);
       }
       self(self, child, levels, depth + 1U);
+    }
+    // A calculated item sorts by its formula over the keys of the items it names.
+    for (auto& [key, child] : node.children) {
+      if (by_value && child.calculated) {
+        child.value_sort_key = plan.item_sort_key(level.field_index, key.value, real_keys);
+      }
     }
   };
   assign_value_sort_keys(assign_value_sort_keys, row_tree, row_levels, 0U);
@@ -709,9 +717,10 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
   }
 
   // 7. Value-axis filters (Top-N, GreaterThan, Between).
-  apply_value_filters(table, cache, buckets, row_leaf_count, col_leaf_count, result, row_subtotal_leaf_sets,
-                      col_subtotal_leaf_sets);
-  if (has_calculated_cells) {
+  const bool totals_rebuilt =
+      apply_value_filters(table, cache, buckets, row_leaf_count, col_leaf_count, result, row_subtotal_leaf_sets,
+                          col_subtotal_leaf_sets, plan, has_calculated_cells);
+  if (has_calculated_cells && totals_rebuilt) {
     combine_totals_from_cells(table, result, item_slots, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
   }
 

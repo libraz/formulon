@@ -689,6 +689,22 @@ class CellFold {
 
 }  // namespace
 
+Value fold_leaf_cells(Aggregation aggregation, const PivotResult& result, const std::vector<std::size_t>& rows,
+                      const std::vector<std::size_t>& cols, std::size_t slot) {
+  CellFold total(aggregation);
+  for (const std::size_t r : rows) {
+    if (r >= result.values.size()) {
+      continue;
+    }
+    for (const std::size_t c : cols) {
+      if (c < result.values[r].size() && slot < result.values[r][c].size()) {
+        total.add(result.values[r][c][slot]);
+      }
+    }
+  }
+  return total.finish();
+}
+
 void combine_totals_from_cells(const PivotTable& table, PivotResult& result, const std::vector<bool>& slots,
                                const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                                const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
@@ -711,15 +727,7 @@ void combine_totals_from_cells(const PivotTable& table, PivotResult& result, con
       continue;
     }
     const auto fold = [&](const std::vector<std::size_t>& rows, const std::vector<std::size_t>& cols) {
-      CellFold total(aggregation);
-      for (const std::size_t r : rows) {
-        for (const std::size_t c : cols) {
-          if (r < row_count && c < col_count) {
-            total.add(result.values[r][c][df]);
-          }
-        }
-      }
-      return total.finish();
+      return fold_leaf_cells(aggregation, result, rows, cols, df);
     };
     const auto own = [&](const std::optional<Aggregation>& spec) { return spec.value_or(aggregation) == aggregation; };
 

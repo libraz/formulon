@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "pivot/aggregator.h"
+#include "pivot/calculated.h"
 #include "pivot/filter_engine.h"
 #include "pivot/hierarchy_builder.h"
 #include "pivot/pivot_cache.h"
@@ -201,10 +202,42 @@ struct ValueFilterState {
   PivotResult& result;
   std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets;
   std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets;
+  const CalculatedPlan& plan;
+  bool has_calculated_cells;
   std::vector<std::size_t> surviving_row_leaves;
   std::vector<std::size_t> surviving_col_leaves;
   bool any_applied = false;
+  /// Set once a filter kept only items without records.
+  bool keep_totals = false;
 };
+
+// The value a group of leaves shows for data field `slot`: the fold of its
+// cells across the standing cross leaves, a calculated field evaluated over
+// the folded Sums. `records` are the group's records, for the functions a
+// fold cannot rebuild.
+Value DisplayedGroupValue(const ValueFilterState& state, bool row_axis, const std::vector<std::size_t>& positions,
+                          const RecordIndexView& records, std::size_t slot) {
+  const PivotTable& table = state.table;
+  const std::size_t cross_count = row_axis ? state.surviving_col_leaves.size() : state.surviving_row_leaves.size();
+  std::vector<std::size_t> cross(cross_count);
+  std::iota(cross.begin(), cross.end(), std::size_t{0});
+  const std::vector<bool>& calculated = state.plan.calculated_slots();
+  std::vector<Value> slots(table.data_fields().size(), Value::blank());
+  for (std::size_t j = 0; j < slots.size(); ++j) {
+    if (j < calculated.size() && calculated[j]) {
+      continue;
+    }
+    const PivotDataField& df = table.data_fields()[j];
+    if (state.has_calculated_cells && aggregation_combines_cells(df.aggregation)) {
+      slots[j] =
+          fold_leaf_cells(df.aggregation, state.result, row_axis ? positions : cross, row_axis ? cross : positions, j);
+    } else if (!records.empty()) {
+      slots[j] = apply_record_aggregation(df.aggregation, state.cache, records, df.field_index);
+    }
+  }
+  state.plan.fill_field_slots(slots, state.result);
+  return slots[slot];
+}
 
 // Applies the value filter `f` to the leaves of `axis`, pruning the items of
 // the field at `depth` in that axis's order.
@@ -235,33 +268,35 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, PivotAxis a
   // Each item's score is its own aggregate re-derived from the records,
   // so a non-additive aggregation ranks by the value the item displays.
   const PivotDataField& df = table.data_fields()[f.data_field_index];
-  const std::vector<std::vector<Value>>& leaf_totals = row_axis ? result.row_leaf_totals : result.col_leaf_totals;
+  const std::vector<bool>& calculated = state.plan.calculated_slots();
+  const bool displayed =
+      state.has_calculated_cells || (f.data_field_index < calculated.size() && calculated[f.data_field_index]);
   AxisScores scores;
   scores.scores.assign(groups.size(), 0.0);
   scores.all_blank.assign(groups.size(), true);
+  std::vector<bool> has_records(groups.size(), false);
   for (std::size_t g = 0; g < groups.size(); ++g) {
+    std::vector<std::size_t> positions;
     std::vector<std::size_t> group_leaves;
     for (std::size_t i = groups[g].first_leaf; i < groups[g].first_leaf + groups[g].leaf_count && i < leaf_count; ++i) {
+      positions.push_back(i);
       group_leaves.push_back(axis_leaves[i]);
     }
     std::vector<RecordIndexSpan> spans;
     const RecordIndexView records = make_leaf_set_record_view(buckets, row_axis ? group_leaves : cross_leaves,
                                                               row_axis ? cross_leaves : group_leaves, spans);
-    if (records.empty()) {
-      // An item without records (a calculated item, or one listed with no
-      // data) scores the total its own leaf shows, and 0 when it shows none.
-      scores.all_blank[g] = false;
-      const std::size_t first = groups[g].first_leaf;
-      if (groups[g].leaf_count == 1U && first < leaf_totals.size() && f.data_field_index < leaf_totals[first].size()) {
-        if (const auto n = numeric_aggregate_value(leaf_totals[first][f.data_field_index])) {
-          scores.scores[g] = *n;
-        }
-      }
-      continue;
+    has_records[g] = !records.empty();
+    Value value = Value::blank();
+    if (displayed) {
+      value = DisplayedGroupValue(state, row_axis, positions, records, f.data_field_index);
+    } else if (!records.empty()) {
+      value = apply_record_aggregation(df.aggregation, cache, records, df.field_index);
     }
-    if (const auto n =
-            numeric_aggregate_value(apply_record_aggregation(df.aggregation, cache, records, df.field_index))) {
+    if (const auto n = numeric_aggregate_value(value)) {
       scores.scores[g] = *n;
+      scores.all_blank[g] = false;
+    } else if (records.empty()) {
+      // An item listed without data compares as 0.
       scores.all_blank[g] = false;
     }
   }
@@ -270,6 +305,16 @@ void ApplyValueFilter(ValueFilterState& state, const PivotFilter& f, PivotAxis a
     return;
   }
   const std::vector<bool>& keep = *keep_or;
+  bool kept_any = false;
+  bool kept_data = false;
+  for (std::size_t g = 0; g < groups.size(); ++g) {
+    const std::size_t first = groups[g].first_leaf;
+    if (first < keep.size() && keep[first]) {
+      kept_any = true;
+      kept_data = kept_data || has_records[g];
+    }
+  }
+  state.keep_totals = state.keep_totals || (kept_any && !kept_data);
   // Prune the hierarchy: leaves survive when `keep[leaf] == true` and
   // interior nodes survive when at least one descendant leaf does. Then
   // re-express every leaf-indexed structure in the surviving-leaf index
@@ -319,11 +364,14 @@ std::optional<std::pair<PivotAxis, std::size_t>> ValueFilterTarget(const PivotTa
 
 }  // namespace
 
-void apply_value_filters(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
+bool apply_value_filters(const PivotTable& table, const PivotCache& cache, const RecordBuckets& buckets,
                          std::size_t row_leaf_count, std::size_t col_leaf_count, PivotResult& result,
                          std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
-                         std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
-  ValueFilterState state{table, cache, buckets, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets, {}, {}};
+                         std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets, const CalculatedPlan& plan,
+                         bool has_calculated_cells) {
+  ValueFilterState state{
+      table, cache, buckets, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets, plan, has_calculated_cells,
+      {},    {}};
   state.surviving_row_leaves.resize(row_leaf_count);
   std::iota(state.surviving_row_leaves.begin(), state.surviving_row_leaves.end(), std::size_t{0});
   state.surviving_col_leaves.resize(col_leaf_count);
@@ -346,10 +394,13 @@ void apply_value_filters(const PivotTable& table, const PivotCache& cache, const
       }
     }
   }
-  if (state.any_applied) {
-    ReaggregateTotalsAfterValueFilter(table, cache, buckets, state.surviving_row_leaves, state.surviving_col_leaves,
-                                      row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);
+  // A filter that keeps only empty items leaves the report's totals standing.
+  if (!state.any_applied || state.keep_totals) {
+    return false;
   }
+  ReaggregateTotalsAfterValueFilter(table, cache, buckets, state.surviving_row_leaves, state.surviving_col_leaves,
+                                    row_subtotal_leaf_sets, col_subtotal_leaf_sets, result);
+  return true;
 }
 
 }  // namespace formulon::pivot
