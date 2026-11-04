@@ -5556,46 +5556,6 @@ FM_API fm_status_t fm_workbook_pivot_get_name(const fm_workbook_t* wb, size_t sh
                                               const char** out_name);
 
 /**
- * @brief Renames the grand total row / column label. `NULL` or an empty
- *        string restores the locale's word. Subtotal labels keep the locale's
- *        word.
- *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` is `NULL`;
- *         `kInvalidArgument` if an index is out of range, `caption` is not
- *         valid UTF-8 or is longer than 255 UTF-16 code units.
- */
-FM_API fm_status_t fm_workbook_pivot_set_grand_total_caption(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                             const char* caption);
-
-/**
- * @brief Reads the grand total caption into `*out`, a model-backed view that
- *        is `NULL` when none is set.
- *
- * @return `kOk` on success;
- *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
- *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
- */
-FM_API fm_status_t fm_workbook_pivot_get_grand_total_caption(const fm_workbook_t* wb, size_t sheet_index,
-                                                             size_t pivot_index, const char** out);
-
-/**
- * @brief Sets the "autofit column widths on update" flag (`0` off, any other
- *        value on).
- */
-FM_API fm_status_t fm_workbook_pivot_set_auto_formatting(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                         int32_t on);
-
-/**
- * @brief Reads the autofit flag (`0` or `1`).
- *
- * @return As `fm_workbook_pivot_get_grand_total_caption`, with `out` an
- *         `int32_t*`.
- */
-FM_API fm_status_t fm_workbook_pivot_get_auto_formatting(const fm_workbook_t* wb, size_t sheet_index,
-                                                         size_t pivot_index, int32_t* out);
-
-/**
  * @brief Reads the pivot's options into `out`.
  *
  * @return `kOk` on success;

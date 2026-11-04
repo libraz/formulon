@@ -37,13 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group fields.
 - Pivot field and item labels that hold dates or numbers are drawn in the
   field's number format.
-- Pivot report options: `fm_workbook_pivot_set_grand_total_caption` /
-  `_get_grand_total_caption`, `fm_workbook_pivot_set_auto_formatting` /
-  `_get_auto_formatting`, and per field `fm_workbook_pivot_field_set_default_subtotal`,
+- Pivot report options: per field `fm_workbook_pivot_field_set_default_subtotal`,
   `_set_insert_blank_row`, `_set_fill_down_labels` and `_set_show_detail`
-  (`pivotSetGrandTotalCaption`, `pivotFieldSetShowDetail`, and so on). The
-  layout draws the grand total caption, blank rows, repeated labels and
-  collapsed items as Excel does, and loaded files keep them.
+  (`pivotFieldSetShowDetail`, `pivot_field_set_show_detail`, and so on), and
+  the grand total caption and autofit flag in `fm_pivot_options_t`. The layout
+  draws the grand total caption, blank rows, repeated labels and collapsed
+  items as Excel does, and loaded files keep them.
 - `fm_workbook_pivot_field_set_item_caption` renames an item without changing
   the value it stands for; `fm_workbook_pivot_field_set_item_show_detail`
   expands or collapses one item. `fm_pivot_item_info_t` reports both. A

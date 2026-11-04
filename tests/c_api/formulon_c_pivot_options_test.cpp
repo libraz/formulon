@@ -100,26 +100,47 @@ const char* const kEmoji = "\xF0\x9F\x98\x80";  // two UTF-16 code units
 // Table level
 // ---------------------------------------------------------------------------
 
+// Read-modify-write of one options member through the struct API.
+fm_status_t SetGrandTotalCaption(fm_workbook_t* wb, std::size_t sheet, std::size_t pivot, const char* caption) {
+  fm_pivot_options_t o{};
+  const fm_status_t rc = fm_workbook_pivot_get_options(wb, sheet, pivot, &o);
+  if (rc != 0) {
+    return rc;
+  }
+  o.grand_total_caption = caption;
+  return fm_workbook_pivot_set_options(wb, sheet, pivot, &o);
+}
+
+fm_status_t SetAutoFormatting(fm_workbook_t* wb, std::size_t sheet, std::size_t pivot, std::int32_t on) {
+  fm_pivot_options_t o{};
+  const fm_status_t rc = fm_workbook_pivot_get_options(wb, sheet, pivot, &o);
+  if (rc != 0) {
+    return rc;
+  }
+  o.auto_formatting = on;
+  return fm_workbook_pivot_set_options(wb, sheet, pivot, &o);
+}
+
 TEST(FormulonCApiPivotOptions, GrandTotalCaptionSetsGetsAndClears) {
   WorkbookGuard wb;
   LoadScratchPivot(wb);
-  const char* caption = "unset";
-  ASSERT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, kPivot, &caption), 0);
-  EXPECT_EQ(caption, nullptr);
+  fm_pivot_options_t o{};
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_EQ(o.grand_total_caption, nullptr);
 
-  ASSERT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, "Total \xE5\x90\x88\xE8\xA8\x88"), 0);
-  ASSERT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, kPivot, &caption), 0);
-  EXPECT_STREQ(caption, "Total \xE5\x90\x88\xE8\xA8\x88");
+  ASSERT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, "Total \xE5\x90\x88\xE8\xA8\x88"), 0);
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_STREQ(o.grand_total_caption, "Total \xE5\x90\x88\xE8\xA8\x88");
   EXPECT_TRUE(LayoutHasText(wb.handle, kPivot, "Total \xE5\x90\x88\xE8\xA8\x88"));
 
-  ASSERT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, nullptr), 0);
-  ASSERT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, kPivot, &caption), 0);
-  EXPECT_EQ(caption, nullptr);
+  ASSERT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, nullptr), 0);
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_EQ(o.grand_total_caption, nullptr);
 
-  ASSERT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, "All"), 0);
-  ASSERT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, ""), 0);
-  ASSERT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, kPivot, &caption), 0);
-  EXPECT_EQ(caption, nullptr);
+  ASSERT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, "All"), 0);
+  ASSERT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, ""), 0);
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_EQ(o.grand_total_caption, nullptr);
 }
 
 TEST(FormulonCApiPivotOptions, GrandTotalCaptionBoundaries) {
@@ -127,53 +148,50 @@ TEST(FormulonCApiPivotOptions, GrandTotalCaptionBoundaries) {
   LoadScratchPivot(wb);
   // 255 UTF-16 units fit; 256 do not, and a surrogate pair counts as two.
   const std::string at_limit = Repeat(kEmoji, 127) + "a";
-  ASSERT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, at_limit.c_str()), 0)
-      << fm_last_error_message();
-  const char* caption = nullptr;
-  ASSERT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, kPivot, &caption), 0);
-  EXPECT_EQ(std::string(caption), at_limit);
+  ASSERT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, at_limit.c_str()), 0) << fm_last_error_message();
+  fm_pivot_options_t o{};
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_EQ(std::string(o.grand_total_caption), at_limit);
 
-  EXPECT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, Repeat(kEmoji, 128).c_str()),
+  EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, Repeat(kEmoji, 128).c_str()), kInvalidArgument);
+  EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, Repeat("a", 256).c_str()), kInvalidArgument);
+  EXPECT_EQ(SetGrandTotalCaption(wb.handle, 0U, kPivot, "\xC3"), kBindingUtf8EncodingError);
+  const fm_pivot_options_t keep = o;
+  EXPECT_EQ(fm_workbook_pivot_set_options(wb.handle, 9U, kPivot, &keep), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_pivot_set_options(wb.handle, 0U, 9U, &keep), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_pivot_set_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), &keep),
             kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, Repeat("a", 256).c_str()),
+  EXPECT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), &o),
             kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, kPivot, "\xC3"), kBindingUtf8EncodingError);
-  EXPECT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 9U, kPivot, "x"), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, 9U, "x"), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_set_grand_total_caption(wb.handle, 0U, std::numeric_limits<std::size_t>::max(), "x"),
-            kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_set_grand_total_caption(nullptr, 0U, kPivot, "x"), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, kPivot, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, 9U, &caption), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_pivot_set_options(nullptr, 0U, kPivot, &keep), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, nullptr), kBindingNullPointer);
   // The rejected calls left the accepted caption alone.
-  ASSERT_EQ(fm_workbook_pivot_get_grand_total_caption(wb.handle, 0U, kPivot, &caption), 0);
-  EXPECT_EQ(std::string(caption), at_limit);
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_EQ(std::string(o.grand_total_caption), at_limit);
 }
 
 TEST(FormulonCApiPivotOptions, GrandTotalCaptionMarksLayoutDirty) {
-  ExpectMarksDirty([](fm_workbook_t* wb) { return fm_workbook_pivot_set_grand_total_caption(wb, 0U, kPivot, "All"); });
+  ExpectMarksDirty([](fm_workbook_t* wb) { return SetGrandTotalCaption(wb, 0U, kPivot, "All"); });
 }
 
 TEST(FormulonCApiPivotOptions, AutoFormattingSetsAndGets) {
   WorkbookGuard wb;
   LoadScratchPivot(wb);
-  std::int32_t value = -1;
-  ASSERT_EQ(fm_workbook_pivot_set_auto_formatting(wb.handle, 0U, kPivot, 0), 0);
-  ASSERT_EQ(fm_workbook_pivot_get_auto_formatting(wb.handle, 0U, kPivot, &value), 0);
-  EXPECT_EQ(value, 0);
-  ASSERT_EQ(fm_workbook_pivot_set_auto_formatting(wb.handle, 0U, kPivot, 7), 0);
-  ASSERT_EQ(fm_workbook_pivot_get_auto_formatting(wb.handle, 0U, kPivot, &value), 0);
-  EXPECT_EQ(value, 1);
+  fm_pivot_options_t o{};
+  ASSERT_EQ(SetAutoFormatting(wb.handle, 0U, kPivot, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_EQ(o.auto_formatting, 0);
+  ASSERT_EQ(SetAutoFormatting(wb.handle, 0U, kPivot, 7), 0);
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, kPivot, &o), 0);
+  EXPECT_EQ(o.auto_formatting, 1);
 
-  EXPECT_EQ(fm_workbook_pivot_set_auto_formatting(wb.handle, 1U, kPivot, 1), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_set_auto_formatting(wb.handle, 0U, 1U, 1), kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_set_auto_formatting(nullptr, 0U, kPivot, 1), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_pivot_get_auto_formatting(wb.handle, 0U, kPivot, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_pivot_get_auto_formatting(wb.handle, 0U, 1U, &value), kInvalidArgument);
+  EXPECT_EQ(SetAutoFormatting(wb.handle, 1U, kPivot, 1), kInvalidArgument);
+  EXPECT_EQ(SetAutoFormatting(wb.handle, 0U, 1U, 1), kInvalidArgument);
+  EXPECT_EQ(SetAutoFormatting(nullptr, 0U, kPivot, 1), kBindingNullPointer);
 }
 
 TEST(FormulonCApiPivotOptions, AutoFormattingMarksLayoutDirty) {
-  ExpectMarksDirty([](fm_workbook_t* wb) { return fm_workbook_pivot_set_auto_formatting(wb, 0U, kPivot, 0); });
+  ExpectMarksDirty([](fm_workbook_t* wb) { return SetAutoFormatting(wb, 0U, kPivot, 0); });
 }
 
 // ---------------------------------------------------------------------------

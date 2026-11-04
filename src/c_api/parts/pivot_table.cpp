@@ -232,40 +232,6 @@ extern "C" fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, std
   return edit.commit();
 }
 
-extern "C" fm_status_t fm_workbook_pivot_set_grand_total_caption(fm_workbook_t* wb, std::size_t sheet_index,
-                                                                 std::size_t pivot_index, const char* caption) {
-  clear_last_error();
-  constexpr const char* kApi = "fm_workbook_pivot_set_grand_total_caption";
-  formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc = resolve_pivot_checked(wb, sheet_index, pivot_index, kApi, &table); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_utf8(kApi, {caption}); rc != 0) {
-    return rc;
-  }
-  if (caption != nullptr && formulon::utf16_units_in(caption) > kMaxCaptionUnits) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             (std::string(kApi) + ": caption longer than 255 UTF-16 code units").c_str());
-  }
-  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->set_grand_total_caption(optional_text(caption));
-  return edit.commit();
-}
-
-extern "C" fm_status_t fm_workbook_pivot_set_auto_formatting(fm_workbook_t* wb, std::size_t sheet_index,
-                                                             std::size_t pivot_index, std::int32_t on) {
-  clear_last_error();
-  formulon::pivot::PivotTable* table = nullptr;
-  if (fm_status_t rc =
-          resolve_pivot_checked(wb, sheet_index, pivot_index, "fm_workbook_pivot_set_auto_formatting", &table);
-      rc != 0) {
-    return rc;
-  }
-  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->set_auto_formatting(on != 0);
-  return edit.commit();
-}
-
 extern "C" fm_status_t fm_workbook_pivot_show_details(fm_workbook_t* wb, std::size_t sheet_index,
                                                       std::size_t pivot_index, std::uint32_t row, std::uint32_t col,
                                                       std::size_t* out_sheet_index) {
@@ -733,33 +699,6 @@ extern "C" fm_status_t fm_workbook_pivot_get_grand_totals(const fm_workbook_t* w
   }
   *out_rows = table->grand_totals_rows() ? 1 : 0;
   *out_cols = table->grand_totals_cols() ? 1 : 0;
-  return 0;
-}
-
-extern "C" fm_status_t fm_workbook_pivot_get_grand_total_caption(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                                 std::size_t pivot_index, const char** out) {
-  clear_last_error();
-  const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc = resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_get_grand_total_caption",
-                                      &table);
-      rc != 0) {
-    return rc;
-  }
-  const std::optional<std::string>& caption = table->grand_total_caption();
-  *out = caption.has_value() ? caption->c_str() : nullptr;
-  return 0;
-}
-
-extern "C" fm_status_t fm_workbook_pivot_get_auto_formatting(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                             std::size_t pivot_index, std::int32_t* out) {
-  clear_last_error();
-  const formulon::pivot::PivotTable* table = nullptr;
-  if (auto rc =
-          resolve_pivot_checked(wb, {out}, sheet_index, pivot_index, "fm_workbook_pivot_get_auto_formatting", &table);
-      rc != 0) {
-    return rc;
-  }
-  *out = table->auto_formatting() ? 1 : 0;
   return 0;
 }
 
