@@ -594,6 +594,8 @@ class JsWorkbook {
   JsNumberResult pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const;
   JsCellResult pivotCacheFieldSharedItemValue(uint32_t cacheId, uint32_t fieldIdx, uint32_t itemIdx) const;
   JsStatus pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32_t fieldIdx, double value);
+  JsStatus pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIdx, double serial);
+  emscripten::val pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIdx, uint32_t itemIdx) const;
   JsStatus pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8);
   JsStatus pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIdx, bool value);
   JsStatus pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIdx);
@@ -604,6 +606,7 @@ class JsWorkbook {
   JsAddStyleResult pivotCacheRecordAdd(uint32_t cacheId);
   JsStatus pivotCacheRecordClear(uint32_t cacheId);
   JsStatus pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double value);
+  JsStatus pivotCacheRecordSetDate(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double serial);
   JsStatus pivotCacheRecordSetText(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, const std::string& utf8);
   JsStatus pivotCacheRecordSetBool(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, bool value);
   JsStatus pivotCacheRecordSetBlank(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx);

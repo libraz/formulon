@@ -192,6 +192,23 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInf
   return InvokeSheetCall(info, &fm_workbook_pivot_cache_field_add_shared_item_number);
 }
 
+Napi::Value Workbook::PivotCacheFieldAddSharedItemDate(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_field_add_shared_item_date);
+}
+
+Napi::Value Workbook::PivotCacheFieldSharedItemIsDate(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  int32_t is_date = 0;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_cache_field_shared_item_is_date(
+                                                  handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)),
+                                                  static_cast<std::size_t>(ArgU32(info, 2)), &is_date)
+                                            : kBindingInvalidHandle;
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", MakeStatus(env, rc));
+  out.Set("value", Napi::Boolean::New(env, rc == 0 && is_date != 0));
+  return out;
+}
+
 Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const uint32_t cache_id = ArgU32(info, 0);
@@ -247,6 +264,10 @@ Napi::Value Workbook::PivotCacheRecordClear(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_workbook_pivot_cache_record_set_number);
+}
+
+Napi::Value Workbook::PivotCacheRecordSetDate(const Napi::CallbackInfo& info) {
+  return InvokeSheetCall(info, &fm_workbook_pivot_cache_record_set_date);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {

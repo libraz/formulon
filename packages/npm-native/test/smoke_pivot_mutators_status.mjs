@@ -189,6 +189,13 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
+    'pivotCacheFieldAddSharedItemDate',
+    {
+      act: (b) => b.wb.pivotCacheFieldAddSharedItemDate(b.cacheId, 3, 45292),
+      expect: (b) => assert.equal(b.wb.pivotCacheFieldSharedItemIsDate(b.cacheId, 3, 0).value, true),
+    },
+  ],
+  [
     'pivotCacheFieldAddSharedItemText',
     {
       act: (b) => b.wb.pivotCacheFieldAddSharedItemText(b.cacheId, 0, 'North'),
@@ -254,6 +261,13 @@ const PIVOT_MUTATORS = [
     {
       act: (b) => b.wb.pivotCacheRecordSetNumber(b.cacheId, 0, 2, 1000),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', 'East|1005', 'West|37', '総計|1042']),
+    },
+  ],
+  [
+    'pivotCacheRecordSetDate',
+    {
+      act: (b) => b.wb.pivotCacheRecordSetDate(b.cacheId, 0, 3, 45300),
+      expect: (b) => assert.deepEqual(pivotGrid(b.wb), BASE_GRID),
     },
   ],
   [
@@ -1105,6 +1119,32 @@ test('pivotFieldSetDateGroup defaults its trailing three arguments', async () =>
   } finally {
     explicit.wb.dispose();
     defaulted.wb.dispose();
+  }
+});
+
+test('pivot cache date shared items report as dates and reject invalid serials', async () => {
+  const mod = await getModule();
+  const b = buildPivot(mod);
+  try {
+    assert.ok(b.wb.pivotCacheFieldAddSharedItemDate(b.cacheId, 3, 45292).ok);
+    assert.ok(b.wb.pivotCacheFieldAddSharedItemDate(b.cacheId, 3, 45323.5).ok);
+    assert.ok(b.wb.pivotCacheFieldAddSharedItemNumber(b.cacheId, 3, 7).ok);
+    for (const [idx, expected] of [
+      [0, true],
+      [1, true],
+      [2, false],
+    ]) {
+      const r = b.wb.pivotCacheFieldSharedItemIsDate(b.cacheId, 3, idx);
+      assert.ok(r.status.ok, JSON.stringify(r.status));
+      assert.equal(r.value, expected);
+    }
+    assert.equal(b.wb.pivotCacheFieldSharedItemIsDate(b.cacheId, 3, 3).status.ok, false);
+    for (const bad of [-1, Number.NaN]) {
+      assert.equal(b.wb.pivotCacheFieldAddSharedItemDate(b.cacheId, 3, bad).ok, false);
+      assert.equal(b.wb.pivotCacheRecordSetDate(b.cacheId, 0, 3, bad).ok, false);
+    }
+  } finally {
+    b.wb.dispose();
   }
 });
 

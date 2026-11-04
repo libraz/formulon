@@ -855,6 +855,12 @@ export interface PivotProjectionPendingResult {
   value: boolean;
 }
 
+/** Return type of `Workbook.pivotCacheFieldSharedItemIsDate(...)`. */
+export interface PivotCacheSharedItemIsDateResult {
+  status: Status;
+  value: boolean;
+}
+
 /** Return type of `Workbook.pivotGetGrandTotals(...)`. */
 export interface PivotGrandTotalsResult {
   status: Status;
@@ -4351,6 +4357,13 @@ export interface Workbook {
   pivotCacheFieldSharedItemValue(cacheId: number, fieldIdx: number, itemIdx: number): CellResult;
   /** Appends a numeric shared item to cache field `fieldIdx`. */
   pivotCacheFieldAddSharedItemNumber(cacheId: number, fieldIdx: number, value: number): Status;
+  /** Appends a date shared item to cache field `fieldIdx`. `serial` is a date serial in the workbook's
+   *  date system, as a cell holds it; it must be finite, non-negative and not past 9999-12-31, else
+   *  `kInvalidArgument`. Saved with seconds precision. */
+  pivotCacheFieldAddSharedItemDate(cacheId: number, fieldIdx: number, serial: number): Status;
+  /** Reports whether shared item `itemIdx` of cache field `fieldIdx` is a date.
+   *  Fails with `kInvalidArgument` when `itemIdx` is not below the shared item count. */
+  pivotCacheFieldSharedItemIsDate(cacheId: number, fieldIdx: number, itemIdx: number): PivotCacheSharedItemIsDateResult;
   /** Appends a text shared item to cache field `fieldIdx`. */
   pivotCacheFieldAddSharedItemText(cacheId: number, fieldIdx: number, value: string): Status;
   /** Appends a boolean shared item to cache field `fieldIdx`. */
@@ -4370,6 +4383,9 @@ export interface Workbook {
   pivotCacheRecordClear(cacheId: number): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to a numeric value. */
   pivotCacheRecordSetNumber(cacheId: number, recordIdx: number, fieldIdx: number, value: number): Status;
+  /** Sets cell `(recordIdx, fieldIdx)` to an inline date; `serial` is validated as in
+   *  `pivotCacheFieldAddSharedItemDate` and saved with seconds precision. */
+  pivotCacheRecordSetDate(cacheId: number, recordIdx: number, fieldIdx: number, serial: number): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to a UTF-8 text value. */
   pivotCacheRecordSetText(cacheId: number, recordIdx: number, fieldIdx: number, value: string): Status;
   /** Sets cell `(recordIdx, fieldIdx)` to a boolean value. */

@@ -191,6 +191,24 @@ JsStatus JsWorkbook::pivotCacheFieldAddSharedItemNumber(uint32_t cacheId, uint32
                             : kBindingInvalidHandle);
 }
 
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemDate(uint32_t cacheId, uint32_t fieldIdx, double serial) {
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_pivot_cache_field_add_shared_item_date(handle_, cacheId, fieldIdx, serial)
+                            : kBindingInvalidHandle);
+}
+
+emscripten::val JsWorkbook::pivotCacheFieldSharedItemIsDate(uint32_t cacheId, uint32_t fieldIdx,
+                                                            uint32_t itemIdx) const {
+  emscripten::val o = emscripten::val::object();
+  int32_t isDate = 0;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_cache_field_shared_item_is_date(
+                                                  handle_, cacheId, fieldIdx, itemIdx, &isDate)
+                                            : kBindingInvalidHandle;
+  o.set("status", status_from_rc(rc));
+  o.set("value", rc == 0 && isDate != 0);
+  return o;
+}
+
 JsStatus JsWorkbook::pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8) {
   return status_from_rc(
       handle_ != nullptr ? fm_workbook_pivot_cache_field_add_shared_item_text(handle_, cacheId, fieldIdx, utf8.c_str())
@@ -252,6 +270,12 @@ JsStatus JsWorkbook::pivotCacheRecordClear(uint32_t cacheId) {
 JsStatus JsWorkbook::pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double value) {
   return status_from_rc(handle_ != nullptr
                             ? fm_workbook_pivot_cache_record_set_number(handle_, cacheId, recordIdx, fieldIdx, value)
+                            : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotCacheRecordSetDate(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double serial) {
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_pivot_cache_record_set_date(handle_, cacheId, recordIdx, fieldIdx, serial)
                             : kBindingInvalidHandle);
 }
 

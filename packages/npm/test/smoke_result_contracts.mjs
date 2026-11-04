@@ -88,6 +88,7 @@ function envelopeProbes(wb) {
     ['PivotCacheOptionsResult', true, () => wb.pivotCacheGetOptions(9999)],
     ['PivotCalculatedItemResult', true, () => wb.pivotCacheCalculatedItemAt(9999, 0)],
     ['PivotProjectionPendingResult', true, () => wb.pivotProjectionPending(99, 0)],
+    ['PivotCacheSharedItemIsDateResult', true, () => wb.pivotCacheFieldSharedItemIsDate(9999, 0, 0)],
     ['PivotStyleInfoResult', true, () => wb.pivotGetStyleInfo(99, 0)],
     ['PivotFieldOrderResult', true, () => wb.pivotRowFieldOrder(99, 0)],
     ['PivotFieldResult', true, () => wb.pivotFieldAt(99, 0, 0)],
