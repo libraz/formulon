@@ -26,6 +26,7 @@
 #include "pivot/pivot_types.h"
 #include "pivot/value_order.h"
 #include "utils/a1_ref.h"
+#include "utils/strings.h"
 
 namespace formulon::io {
 namespace {
@@ -82,6 +83,103 @@ bool HasRawAttr(const std::vector<std::pair<std::string, std::string>>& attrs, s
 bool HasFormOverride(const std::vector<std::pair<std::string, std::string>>& attrs) {
   return HasRawAttr(attrs, "compact") || HasRawAttr(attrs, "outline") || HasRawAttr(attrs, "compactData") ||
          HasRawAttr(attrs, "outlineData");
+}
+
+/// Where a captured `<item>` element spells `sd`.
+struct MarkerSd {
+  /// The attribute with its leading whitespace, `[begin, end)`; `begin` is
+  /// npos when absent.
+  std::size_t begin = std::string_view::npos;
+  std::size_t end = 0;
+  /// Position of the `/` or `>` closing the start tag.
+  std::size_t tag_end = std::string_view::npos;
+  bool shows_detail = true;
+};
+
+/// Scans the attributes of the start tag in `xml`, quoted either way.
+MarkerSd FindMarkerSd(std::string_view xml) {
+  constexpr std::string_view kSpace = " \t\r\n";
+  MarkerSd sd;
+  std::size_t pos = xml.find_first_of(kSpace);
+  while (pos < xml.size()) {
+    const std::size_t name_begin = xml.find_first_not_of(kSpace, pos);
+    if (name_begin == std::string_view::npos || xml[name_begin] == '/' || xml[name_begin] == '>') {
+      sd.tag_end = name_begin;
+      break;
+    }
+    const std::size_t eq = xml.find('=', name_begin);
+    const std::size_t open = eq == std::string_view::npos ? eq : xml.find_first_not_of(kSpace, eq + 1);
+    if (open == std::string_view::npos || (xml[open] != '"' && xml[open] != '\'')) {
+      break;
+    }
+    const std::size_t close = xml.find(xml[open], open + 1);
+    if (close == std::string_view::npos) {
+      break;
+    }
+    std::string_view name = xml.substr(name_begin, eq - name_begin);
+    name = name.substr(0, name.find_last_not_of(kSpace) + 1);
+    if (name == "sd") {
+      const std::string_view value = xml.substr(open + 1, close - open - 1);
+      sd.begin = pos;
+      sd.end = close + 1;
+      sd.shows_detail = value != "0" && value != "false";
+    }
+    pos = close + 1;
+  }
+  return sd;
+}
+
+/// `xml` with its `sd` attribute set to `shows_detail`: `sd="0"` added or
+/// rewritten when collapsed, removed when expanded. Every other attribute
+/// stays as captured.
+std::string WithMarkerShowDetail(std::string_view xml, bool shows_detail) {
+  const MarkerSd sd = FindMarkerSd(xml);
+  std::string out(xml);
+  if (sd.begin != std::string_view::npos) {
+    out.replace(sd.begin, sd.end - sd.begin, shows_detail ? "" : " sd=\"0\"");
+  } else if (!shows_detail && sd.tag_end != std::string_view::npos) {
+    out.insert(sd.tag_end, " sd=\"0\"");
+  }
+  return out;
+}
+
+/// True when the field's x14 `<pivotField>` extension is generated from the
+/// model rather than kept verbatim in `raw_ext_xml`.
+bool GeneratesFieldX14Ext(const pivot::PivotField& field) {
+  return (field.fill_down_labels || !field.x14_attrs.empty() || !field.x14_children_xml.empty()) &&
+         !strings::case_insensitive_contains(field.raw_ext_xml, kPivotFieldExtUri);
+}
+
+/// True when the field writes an `<extLst>`.
+bool HasFieldExtLst(const pivot::PivotField& field) {
+  return field.fill_down_labels || !field.x14_attrs.empty() || !field.x14_children_xml.empty() ||
+         !field.raw_ext_xml.empty();
+}
+
+/// Emits the field's `<extLst>`: the x14 `<pivotField>` extension when it
+/// carries anything, then the other extensions verbatim.
+void AppendFieldExtLst(std::string& out, const pivot::PivotField& field) {
+  out.append("<extLst>");
+  if (GeneratesFieldX14Ext(field)) {
+    out.append("<ext uri=\"");
+    out.append(kPivotFieldExtUri);
+    out.append("\"");
+    append_xml_ns_decl(out, "x14", kNsX14);
+    out.append("><x14:pivotField");
+    if (field.fill_down_labels) {
+      out.append(" fillDownLabels=\"1\"");
+    }
+    append_raw_attrs(out, field.x14_attrs);
+    if (field.x14_children_xml.empty()) {
+      out.append("/></ext>");
+    } else {
+      out.push_back('>');
+      out.append(field.x14_children_xml);
+      out.append("</x14:pivotField></ext>");
+    }
+  }
+  out.append(field.raw_ext_xml);
+  out.append("</extLst>");
 }
 
 /// Emits one `<pivotField>` element. Self-closing when there are no
@@ -154,14 +252,20 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
       out.append(" compact=\"0\"");
     }
   }
+  if (field.insert_blank_row) {
+    out.append(" insertBlankRow=\"1\"");
+  }
   // Re-emit any unmodelled `<pivotField>` attributes captured on read.
   append_raw_attrs(out, field.passthrough_attrs);
   if (items.empty() && field.marker_items.empty()) {
-    if (field.raw_children_xml.empty()) {
+    if (field.raw_children_xml.empty() && !HasFieldExtLst(field)) {
       out.append("/>");
     } else {
       out.push_back('>');
       out.append(field.raw_children_xml);
+      if (HasFieldExtLst(field)) {
+        AppendFieldExtLst(out, field);
+      }
       out.append("</pivotField>");
     }
     return;
@@ -234,18 +338,43 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
     if (!item.visible) {
       out.append(" h=\"1\"");
     }
+    if (!item.caption.empty()) {
+      append_xml_attr(out, "n", item.caption);
+    }
+    if (!item.show_detail) {
+      out.append(" sd=\"0\"");
+    }
     append_raw_attrs(out, item.passthrough_attrs);
     out.append("/>");
   }
   append_blanks_at(items.size());
+  // A collapsed field carries `sd="0"` on its `default` marker too; the
+  // captured marker's `sd` is patched once its state no longer matches.
+  bool default_shows_detail = true;
+  for (const pivot::PivotMarkerItem& marker : field.marker_items) {
+    if (marker.type == "default") {
+      default_shows_detail = marker.show_detail;
+    }
+  }
+  const std::string_view default_marker =
+      default_shows_detail ? "<item t=\"default\"/>" : "<item t=\"default\" sd=\"0\"/>";
   if (keep_subtotals) {
     for (const pivot::PivotMarkerItem& marker : field.marker_items) {
-      if (is_subtotal(marker.type)) {
+      if (!is_subtotal(marker.type)) {
+        continue;
+      }
+      if (marker.type == "default" && marker.show_detail != FindMarkerSd(marker.xml).shows_detail) {
+        out.append(WithMarkerShowDetail(marker.xml, marker.show_detail));
+      } else {
         out.append(marker.xml);
       }
     }
   } else {
     for (const std::string_view type : expected) {
+      if (type == "default") {
+        out.append(default_marker);
+        continue;
+      }
       out.append("<item t=\"");
       out.append(type);
       out.append("\"/>");
@@ -258,6 +387,9 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
   }
   out.append("</items>");
   out.append(field.raw_children_xml);
+  if (HasFieldExtLst(field)) {
+    AppendFieldExtLst(out, field);
+  }
   out.append("</pivotField>");
 }
 
@@ -711,6 +843,9 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   out.append("\" dataCaption=\"");
   AppendXmlAttrEscaped(out, table.data_caption());
   out.append("\"");
+  if (table.grand_total_caption().has_value()) {
+    append_xml_attr(out, "grandTotalCaption", *table.grand_total_caption());
+  }
   // Grand-total flags default to true in OOXML and in the model. Emit them
   // only when turned OFF so an explicit OFF state survives the round trip
   // (omitting them would let the reader's default flip the pivot back ON).
@@ -722,6 +857,12 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   }
   if (table.subtotal_hidden_items()) {
     out.append(" subtotalHiddenItems=\"1\"");
+  }
+  if (!table.enable_drill()) {
+    out.append(" enableDrill=\"0\"");
+  }
+  if (table.auto_formatting()) {
+    out.append(" useAutoFormatting=\"1\"");
   }
   // Report layout as Excel writes it at table level, where it is the form
   // new fields take (`compact` defaults to true, `outline` to false). A form
@@ -818,14 +959,21 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (!table.row_field_order().empty() || table.row_values_position().has_value()) {
     AppendFieldOrder(out, "rowFields", table.row_field_order(), table.row_values_position());
   }
-  // `<rowItems>` and any other post-rowFields unmodelled elements.
-  out.append(table.raw_passthrough_after_row_fields());
+  // `<rowItems>` and `<colItems>` render the report as it was read. An edited
+  // table leaves them out only when its cache asks Excel to rebuild the report
+  // on open; otherwise nothing would ever redraw it.
+  const bool rebuilt_on_open = table.layout_dirty() && plan != nullptr && plan->refresh_on_load;
+  if (!rebuilt_on_open) {
+    out.append(table.raw_passthrough_after_row_fields());
+  }
 
   if (!table.col_field_order().empty() || col_values_position.has_value()) {
     AppendFieldOrder(out, "colFields", table.col_field_order(), col_values_position);
   }
-  // `<colItems>` / `<pageFields>` and other post-colFields unmodelled
-  // elements, which the schema places before `<dataFields>`.
+  if (!rebuilt_on_open) {
+    out.append(table.raw_col_items());
+  }
+  // `<pageFields>`, which the schema places before `<dataFields>`.
   out.append(table.raw_passthrough_after_col_fields());
 
   // A table whose `<pageFields>` was decoded re-emits it from the bin

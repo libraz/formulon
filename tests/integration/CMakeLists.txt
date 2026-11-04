@@ -34,10 +34,14 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   pivot_aggregation_fixture_test.cpp
   pivot_blank_item_fixture_test.cpp
   pivot_caption_filter_fixture_test.cpp
+  pivot_date_group_fixture_test.cpp
   pivot_layout_fixture_test.cpp
+  pivot_options_fixture_test.cpp
   pivot_recurring_period_filter_fixture_test.cpp
   pivot_show_as_fixture_test.cpp
+  pivot_show_details_fixture_test.cpp
   pivot_value_date_filter_fixture_test.cpp
+  pivot_values_axis_fixture_test.cpp
   real_excel_fixture_smoke_test.cpp
   recalc_text_lifetime_test.cpp
   xlsb_default_passthrough_test.cpp

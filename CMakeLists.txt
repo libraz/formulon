@@ -142,6 +142,8 @@ set(FORMULON_CORE_SOURCES
   src/sheet_name_casefold_data.cpp
   src/workbook.cpp
   src/workbook_copy_sheet.cpp
+  src/workbook_pivot_details.cpp
+  src/workbook_tables.cpp
   src/workbook_formula_index.cpp
   src/workbook_ref_rewrite.cpp
   src/workbook_data_table.cpp
@@ -277,6 +279,7 @@ set(FORMULON_CORE_SOURCES
   src/pivot/value_filter_pass.cpp
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
+  src/pivot/field_grouping.cpp
   src/pivot/pivot_layout.cpp
   src/pivot/pivot_locale.cpp
   src/print/page_setup.cpp

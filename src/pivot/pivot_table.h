@@ -201,6 +201,13 @@ class PivotTable {
   void mark_span_authored() { has_authored_span_ = true; }
   void clear_span_authored() { has_authored_span_ = false; }
 
+  /// True once the definition was edited after load, so the `<rowItems>` /
+  /// `<colItems>` read with it no longer describe the report. The writer then
+  /// drops them and asks Excel to rebuild the report on open. Unlike
+  /// `has_authored_span`, a change of evaluation context leaves it alone.
+  bool layout_dirty() const { return layout_dirty_; }
+  void mark_layout_dirty() { layout_dirty_ = true; }
+
   // `<location>` required / commonly-present attributes ----------------------
   //
   // ECMA-376 marks `firstHeaderRow`, `firstDataRow`, and `firstDataCol` as
@@ -353,8 +360,8 @@ class PivotTable {
   // after `<dataFields>` and make Excel flag the file for repair. Those
   // three are the only unmodelled elements the schema places *before*
   // `<dataFields>`, so the reader bins them by name into the two
-  // pre-dataFields slots (rowItems after `<rowFields>`; colItems and
-  // pageFields after `<colFields>`). `<pivotTableStyleInfo>` is modelled
+  // pre-dataFields slots (rowItems after `<rowFields>`; colItems, held in
+  // its own bin, and pageFields after `<colFields>`). `<pivotTableStyleInfo>` is modelled
   // (`style_info`) and splits the post-dataFields elements: formats,
   // conditionalFormats, chartFormats and pivotHierarchies go to
   // `raw_passthrough_before_style_info_`; everything else — hierarchy
@@ -374,6 +381,11 @@ class PivotTable {
 
   const std::string& raw_passthrough_after_col_fields() const { return raw_passthrough_after_col_fields_; }
   std::string& mutable_raw_passthrough_after_col_fields() { return raw_passthrough_after_col_fields_; }
+
+  /// `<colItems>`, kept apart from the rest of the post-colFields bin because
+  /// the writer drops it, and only it, from a `layout_dirty()` table.
+  const std::string& raw_col_items() const { return raw_col_items_; }
+  std::string& mutable_raw_col_items() { return raw_col_items_; }
 
   /// `<pivotTableStyleInfo>`; nullopt when the definition has none.
   const std::optional<PivotStyleInfo>& style_info() const { return style_info_; }
@@ -402,6 +414,21 @@ class PivotTable {
   /// if the page filter were absent.
   bool subtotal_hidden_items() const { return subtotal_hidden_items_; }
   void set_subtotal_hidden_items(bool on) { subtotal_hidden_items_ = on; }
+
+  /// `grandTotalCaption`: the label of the grand-total row and column, in
+  /// place of the locale's word. Absent when not renamed.
+  const std::optional<std::string>& grand_total_caption() const { return grand_total_caption_; }
+  void set_grand_total_caption(std::optional<std::string> caption) { grand_total_caption_ = std::move(caption); }
+
+  /// `useAutoFormatting`: Excel autofits the report's columns on update.
+  /// A table read from a file takes the attribute (absent = false); one
+  /// created in memory starts on, as Excel creates every pivot.
+  bool auto_formatting() const { return auto_formatting_; }
+  void set_auto_formatting(bool on) { auto_formatting_ = on; }
+
+  /// `enableDrill`: a data cell may be expanded into its source records.
+  bool enable_drill() const { return enable_drill_; }
+  void set_enable_drill(bool on) { enable_drill_ = on; }
 
  private:
   // Private so `clone()` is the only copy: the defaulted member-wise copy
@@ -435,6 +462,7 @@ class PivotTable {
   std::uint32_t span_rows_ = 0;
   std::uint32_t span_cols_ = 0;
   bool has_authored_span_ = false;
+  bool layout_dirty_ = false;
   std::optional<std::uint32_t> location_first_header_row_;
   std::optional<std::uint32_t> location_first_data_row_;
   std::optional<std::uint32_t> location_first_data_col_;
@@ -443,6 +471,9 @@ class PivotTable {
   bool grand_totals_rows_ = true;
   bool grand_totals_cols_ = true;
   bool subtotal_hidden_items_ = false;
+  std::optional<std::string> grand_total_caption_;
+  bool auto_formatting_ = true;
+  bool enable_drill_ = true;
   std::vector<PivotFilter> active_filters_;
   std::vector<RetainedPivotFilter> retained_filters_;
   std::vector<AuthoredCaptionFilter> authored_caption_filters_;
@@ -454,6 +485,7 @@ class PivotTable {
   std::string raw_passthrough_before_style_info_;
   std::string raw_passthrough_after_row_fields_;
   std::string raw_passthrough_after_col_fields_;
+  std::string raw_col_items_;
   std::vector<std::pair<std::string, std::string>> passthrough_attrs_;
   // Keep the mutex separately allocated so PivotTable remains movable.
   mutable std::shared_ptr<std::mutex> last_result_mutex_ = std::make_shared<std::mutex>();

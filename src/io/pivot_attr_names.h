@@ -1,6 +1,6 @@
 //
-// OOXML attribute spellings of the pivot-table enums, shared by the pivot table
-// reader and writer.
+// OOXML attribute spellings of the pivot-table and pivot-cache enums, shared by
+// the readers and writers.
 
 #ifndef FORMULON_IO_PIVOT_ATTR_NAMES_H_
 #define FORMULON_IO_PIVOT_ATTR_NAMES_H_
@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "io/enum_name_table.h"
+#include "pivot/pivot_cache.h"
 #include "pivot/pivot_types.h"
 
 namespace formulon::io {
@@ -66,6 +67,22 @@ inline constexpr std::array<EnumName, 6> kPivotShowAsX14Names = {{
 
 /// `<ext uri>` of the extension carrying `kPivotShowAsX14Names`.
 inline constexpr std::string_view kPivotDataFieldExtUri = "{E15A36E0-9728-4e99-A89B-3F7291B0FE68}";
+
+/// `<rangePr groupBy="...">` spellings.
+inline constexpr std::array<EnumName, 8> kPivotGroupByNames = {{
+    {pivot::GroupBy::Range, "range"},
+    {pivot::GroupBy::Seconds, "seconds"},
+    {pivot::GroupBy::Minutes, "minutes"},
+    {pivot::GroupBy::Hours, "hours"},
+    {pivot::GroupBy::Days, "days"},
+    {pivot::GroupBy::Months, "months"},
+    {pivot::GroupBy::Quarters, "quarters"},
+    {pivot::GroupBy::Years, "years"},
+}};
+static_assert(kPivotGroupByNames.size() == static_cast<std::size_t>(pivot::GroupBy::Years) + 1U);
+
+/// `<ext uri>` of the x14 `<pivotField>` extension, spelled as Excel writes it.
+inline constexpr std::string_view kPivotFieldExtUri = "{2946ED86-A175-432a-8AC1-64E0C546D7DE}";
 
 /// One subtotal function's `<pivotField>` boolean attribute (`sumSubtotal`) and
 /// its `<item t="...">` token (`sum`) inside the field's `<items>` list.

@@ -32,6 +32,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_spill_scale_test.cpp
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
+  unit/workbook_tables_test.cpp
   unit/derived_guid_test.cpp
   unit/workbook_external_bind_test.cpp
   unit/auto_filter_eval_test.cpp
@@ -415,6 +416,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_layout_axes_test.cpp
   unit/pivot/pivot_layout_page_test.cpp
   unit/pivot/pivot_layout_subtotals_test.cpp
+  unit/pivot/field_grouping_test.cpp
+  unit/pivot/pivot_layout_options_test.cpp
+  unit/pivot/pivot_show_details_test.cpp
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_authoring_test.cpp
@@ -435,6 +439,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/drawing/image_header_test.cpp
   unit/drawing/drawing_clone_test.cpp
   unit/drawing/drawing_edit_test.cpp
+  unit/drawing/drawing_names_test.cpp
   unit/drawing/drawing_snapshot_test.cpp
   unit/chart/chart_model_test.cpp
   unit/chart/chart_xml_test.cpp

@@ -7,7 +7,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -317,21 +316,6 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
     }
   }
   formulon::Workbook& book = wb->workbook();
-  if (sheet_index >= book.sheet_count() || ref[0] == '\0' || name[0] == '\0' || display_name[0] == '\0' ||
-      column_count == 0U) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_table_create: invalid sheet, table identity, range, or columns");
-  }
-  if (table_ref_column_count(ref) != column_count) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_table_create: column_count does not match the range width",
-                             "ref=" + std::string(ref) + " column_count=" + std::to_string(column_count));
-  }
-  if (auto rc = check_table_names(book, name, display_name, book.tables().size(),
-                                  "fm_workbook_table_create: table name already exists");
-      rc != 0) {
-    return rc;
-  }
   formulon::TableMetadata table;
   table.sheet_index = sheet_index;
   table.name = name;
@@ -339,53 +323,22 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
   table.ref = ref;
   table.header_row = header_row != 0;
   table.totals_row = totals_row != 0;
-  uint32_t next_id = 1;
-  for (const formulon::TableMetadata& existing : book.tables()) {
-    next_id = std::max(next_id, existing.id + 1U);
-  }
-  // A table part kept verbatim still owns its id.
-  const auto retained_tables = formulon::io::xlsb::xlsb_retained_tables(book);
-  for (bool taken = true; taken;) {
-    taken = false;
-    for (const formulon::io::xlsb::XlsbRetainedTable& retained : retained_tables) {
-      if (retained.id == next_id) {
-        ++next_id;
-        taken = true;
-      }
-    }
-  }
-  table.id = next_id;
   table.columns.reserve(column_count);
-  std::unordered_set<std::string> column_keys;
-  column_keys.reserve(column_count);
   for (size_t i = 0; i < column_count; ++i) {
-    if (column_names[i] == nullptr || column_names[i][0] == '\0') {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_table_create: column name is empty");
-    }
-    std::string column_key = formulon::strings::to_ascii_lower(column_names[i]);
-    if (!column_keys.insert(std::move(column_key)).second) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_table_create: column name is duplicated");
-    }
     formulon::TableColumn column;
-    column.id = static_cast<uint32_t>(i + 1U);
-    column.name = column_names[i];
+    if (column_names[i] != nullptr) {
+      column.name = column_names[i];
+    }
     table.columns.push_back(std::move(column));
   }
-  table.auto_filter_xml.set(
-      formulon::io::auto_filter_from_xml("<autoFilter ref=\"" + xml_attr_escape(table.ref) + "\"/>"));
   table.style_info = default_style_info(style_name != nullptr ? style_name : "");
-  auto& tables = book.mutable_tables();
-  tables.push_back(std::move(table));
-  *out_index = tables.size() - 1U;
-  // A structured reference can already exist in a formula authored ahead of
-  // its table (Excel resolves it once the table appears, surfacing #NAME?
-  // until then, exactly like a forward-referenced defined name), so the new
-  // table's name and display name both need the same scoped reindex a
-  // defined-name edit gets.
-  const formulon::TableMetadata& created = tables.back();
-  book.reindex_formulas_for_table_change({created.name, created.display_name});
+  auto added = book.add_table(std::move(table));
+  if (!added) {
+    formulon::Error err = added.error();
+    err.message = "fm_workbook_table_create: " + err.message;
+    return formulon::c_api::parts::set_last_error(err);
+  }
+  *out_index = added.value();
   return 0;
 }
 

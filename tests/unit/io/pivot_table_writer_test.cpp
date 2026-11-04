@@ -1398,5 +1398,276 @@ TEST(PivotTableWriter, DefaultSubtotalOffDropsTheDefaultMarkerOfSynthesizedItems
   EXPECT_FALSE(Has(xml, "t=\"default\"")) << xml;
 }
 
+// ---------------------------------------------------------------------------
+// Report options, item captions / collapse state and the x14 field extension
+// ---------------------------------------------------------------------------
+
+constexpr std::string_view kX14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+
+// One row field (Region) with three items closed by `<item t="default"/>`,
+// plus the rendered-report bins a file carries.
+std::string LoadedDefinition(std::string_view default_marker) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs);
+  xml.append(" name=\"P\" cacheId=\"1\" dataCaption=\"Values\" updatedVersion=\"8\" useAutoFormatting=\"1\">");
+  xml.append("<location ref=\"A3:B7\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  xml.append("<pivotFields count=\"3\">");
+  xml.append("<pivotField axis=\"axisRow\" showAll=\"0\"><items count=\"4\"><item x=\"2\"/><item x=\"0\"/>");
+  xml.append("<item x=\"1\"/>").append(default_marker).append("</items></pivotField>");
+  xml.append("<pivotField axis=\"axisPage\" showAll=\"0\"/>");
+  xml.append("<pivotField dataField=\"1\" showAll=\"0\"/></pivotFields>");
+  xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields>");
+  xml.append("<rowItems count=\"1\"><i><x/></i></rowItems>");
+  xml.append("<colItems count=\"1\"><i/></colItems>");
+  xml.append("<pageFields count=\"1\"><pageField fld=\"1\" hier=\"-1\"/></pageFields>");
+  xml.append("<dataFields count=\"1\"><dataField name=\"Sum of Amt\" fld=\"2\" baseField=\"0\" baseItem=\"0\"/>");
+  xml.append("</dataFields></pivotTableDefinition>");
+  return xml;
+}
+
+pivot::PivotTable ReadLoaded(std::string_view default_marker = "<item t=\"default\"/>") {
+  auto table_or = read_pivot_table_definition(Bytes(LoadedDefinition(default_marker)));
+  EXPECT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  return std::move(table_or.value());
+}
+
+TEST(PivotTableWriter, ReportOptionsAreWrittenOnlyWhenSet) {
+  pivot::PivotTable table;
+  std::string xml = write_pivot_table_definition(table);
+  // A table created in memory autofits, as every table Excel creates does.
+  EXPECT_NE(xml.find(" useAutoFormatting=\"1\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("grandTotalCaption"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("enableDrill"), std::string::npos) << xml;
+
+  table.set_grand_total_caption(std::string("TOTAL & more"));
+  table.set_auto_formatting(false);
+  table.set_enable_drill(false);
+  xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find(" grandTotalCaption=\"TOTAL &amp; more\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("useAutoFormatting"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(" enableDrill=\"0\""), std::string::npos) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << parsed_or.error().message;
+  EXPECT_EQ(parsed_or.value().grand_total_caption(), std::optional<std::string>("TOTAL & more"));
+  EXPECT_FALSE(parsed_or.value().auto_formatting());
+  EXPECT_FALSE(parsed_or.value().enable_drill());
+}
+
+TEST(PivotTableWriter, BlankRowAndFillDownLabelsAreWrittenAsExcelWritesThem) {
+  pivot::PivotTable table = TableWithTwoItemRowField();
+  table.mutable_fields()[0].insert_blank_row = true;
+  table.mutable_fields()[0].fill_down_labels = true;
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find(" insertBlankRow=\"1\""), std::string::npos) << xml;
+  std::string ext =
+      "<item t=\"default\"/></items><extLst><ext uri=\"{2946ED86-A175-432a-8AC1-64E0C546D7DE}\" xmlns:x14=\"";
+  ext.append(kX14Ns).append("\"><x14:pivotField fillDownLabels=\"1\"/></ext></extLst></pivotField>");
+  EXPECT_NE(xml.find(ext), std::string::npos) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << parsed_or.error().message;
+  EXPECT_TRUE(parsed_or.value().fields()[0].insert_blank_row);
+  EXPECT_TRUE(parsed_or.value().fields()[0].fill_down_labels);
+}
+
+TEST(PivotTableWriter, FillDownLabelsOnAFieldWithoutItemsOpensTheElement) {
+  pivot::PivotTable table;
+  pivot::PivotField field;
+  field.axis = pivot::PivotAxis::None;
+  field.fill_down_labels = true;
+  table.mutable_fields().push_back(std::move(field));
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<x14:pivotField fillDownLabels=\"1\"/></ext></extLst></pivotField>"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, X14FieldExtensionKeepsItsOtherContentAndTheOtherExtensions) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A3:B6\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  xml.append("<pivotFields count=\"1\"><pivotField axis=\"axisRow\" showAll=\"0\"><extLst>");
+  xml.append("<ext uri=\"{2946ed86-a175-432a-8ac1-64e0c546d7de}\" xmlns:x14=\"").append(kX14Ns);
+  xml.append("\"><x14:pivotField fillDownLabels=\"1\" ignore=\"1\"><x14:child/></x14:pivotField></ext>");
+  xml.append("<ext uri=\"{AAAAAAAA-0000-0000-0000-000000000000}\"><other a=\"1\"/></ext>");
+  xml.append("</extLst></pivotField></pivotFields></pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  pivot::PivotTable table = std::move(table_or.value());
+  ASSERT_TRUE(table.fields()[0].fill_down_labels);
+
+  std::string written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("<ext uri=\"{2946ED86-A175-432a-8AC1-64E0C546D7DE}\""), std::string::npos) << written;
+  EXPECT_NE(written.find("<x14:pivotField fillDownLabels=\"1\" ignore=\"1\"><x14:child/></x14:pivotField></ext>"
+                         "<ext uri=\"{AAAAAAAA-0000-0000-0000-000000000000}\"><other a=\"1\"/></ext></extLst>"),
+            std::string::npos)
+      << written;
+
+  // Turning the option off keeps the extension's other content.
+  table.mutable_fields()[0].fill_down_labels = false;
+  written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("<x14:pivotField ignore=\"1\"><x14:child/></x14:pivotField>"), std::string::npos) << written;
+  EXPECT_EQ(written.find("fillDownLabels"), std::string::npos) << written;
+}
+
+TEST(PivotTableWriter, ItemCaptionAndCollapseAreWrittenAsNAndSd) {
+  pivot::PivotTable table = TableWithTwoItemRowField();
+  table.mutable_fields()[0].items[0].caption = "zz";
+  table.mutable_fields()[0].items[1].show_detail = false;
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<item x=\"0\" n=\"zz\"/><item x=\"1\" sd=\"0\"/>"), std::string::npos) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << parsed_or.error().message;
+  EXPECT_EQ(parsed_or.value().fields()[0].items[0].caption, "zz");
+  EXPECT_FALSE(parsed_or.value().fields()[0].items[1].show_detail);
+  EXPECT_TRUE(parsed_or.value().fields()[0].items[0].passthrough_attrs.empty());
+}
+
+TEST(PivotTableWriter, CollapsingAFieldRegeneratesItsDefaultMarker) {
+  pivot::PivotTable table = ReadLoaded("<item t=\"default\" c=\"1\"/>");
+  // Unchanged, the captured marker is kept with its other attributes.
+  EXPECT_NE(write_pivot_table_definition(table).find("<item t=\"default\" c=\"1\"/></items>"), std::string::npos);
+
+  pivot::PivotField& field = table.mutable_fields()[0];
+  for (pivot::PivotItem& item : field.items) {
+    item.show_detail = false;
+  }
+  field.marker_items[0].show_detail = false;
+  const std::string xml = write_pivot_table_definition(table);
+  // `sd` is patched into the captured marker, which keeps its other attributes.
+  EXPECT_NE(xml.find("<items count=\"4\"><item x=\"2\" sd=\"0\"/><item x=\"0\" sd=\"0\"/><item x=\"1\" sd=\"0\"/>"
+                     "<item t=\"default\" c=\"1\" sd=\"0\"/></items>"),
+            std::string::npos)
+      << xml;
+}
+
+TEST(PivotTableWriter, ExpandingACollapsedFieldDropsSdFromItsDefaultMarker) {
+  pivot::PivotTable table = ReadLoaded("<item t=\"default\" sd=\"0\"/>");
+  ASSERT_FALSE(table.fields()[0].marker_items[0].show_detail);
+  EXPECT_NE(write_pivot_table_definition(table).find("<item t=\"default\" sd=\"0\"/></items>"), std::string::npos);
+
+  table.mutable_fields()[0].marker_items[0].show_detail = true;
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<item x=\"1\"/><item t=\"default\"/></items>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("sd="), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, ExpandingPatchesSdOutOfTheCapturedMarkerEitherQuoted) {
+  pivot::PivotTable table = ReadLoaded("<item c=\"1\" sd=\"0\" t=\"default\"/>");
+  table.mutable_fields()[0].marker_items[0].show_detail = true;
+  EXPECT_NE(write_pivot_table_definition(table).find("<item c=\"1\" t=\"default\"/></items>"), std::string::npos);
+
+  // A marker captured with single quotes is read and patched the same way.
+  pivot::PivotMarkerItem& marker = table.mutable_fields()[0].marker_items[0];
+  marker.xml = "<item t='default' sd='0' c='1'/>";
+  marker.show_detail = false;
+  EXPECT_NE(write_pivot_table_definition(table).find("<item t='default' sd='0' c='1'/></items>"), std::string::npos);
+  marker.show_detail = true;
+  EXPECT_NE(write_pivot_table_definition(table).find("<item t='default' c='1'/></items>"), std::string::npos);
+}
+
+TEST(PivotTableWriter, RegeneratedSubtotalsKeepTheCollapsedDefaultMarker) {
+  // The stray `sum` marker no longer matches the selection, so the subtotal
+  // markers are regenerated; the collapse state of `default` carries over.
+  const pivot::PivotTable table = ReadLoaded("<item t=\"default\" sd=\"0\"/><item t=\"sum\"/>");
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<item x=\"1\"/><item t=\"default\" sd=\"0\"/></items>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("t=\"sum\""), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, UntouchedLoadedTableKeepsItsRenderedItems) {
+  const std::string xml = write_pivot_table_definition(ReadLoaded());
+  EXPECT_NE(xml.find("<rowItems count=\"1\"><i><x/></i></rowItems>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<colItems count=\"1\"><i/></colItems><pageFields"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, DirtyTableDropsRowAndColItemsButKeepsPageFields) {
+  pivot::PivotTable table = ReadLoaded();
+  ASSERT_FALSE(table.layout_dirty());
+  table.mark_layout_dirty();
+  PivotCacheWritePlan plan;
+  plan.refresh_on_load = true;
+  const std::string xml = write_pivot_table_definition(table, std::nullopt, &plan);
+  EXPECT_EQ(xml.find("<rowItems"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("<colItems"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<pageFields count=\"1\"><pageField fld=\"1\" hier=\"-1\"/></pageFields>"), std::string::npos)
+      << xml;
+  EXPECT_NE(xml.find("</rowFields><pageFields"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, DirtyTableKeepsItsItemsWhenTheCacheIsNotRefreshedOnLoad) {
+  // Nothing would redraw a report whose items were dropped, so they stay.
+  pivot::PivotTable table = ReadLoaded();
+  table.mark_layout_dirty();
+  PivotCacheWritePlan plan;
+  plan.refresh_on_load = false;
+  for (const std::string& xml :
+       {write_pivot_table_definition(table, std::nullopt, &plan), write_pivot_table_definition(table)}) {
+    EXPECT_NE(xml.find("<rowItems count=\"1\"><i><x/></i></rowItems>"), std::string::npos) << xml;
+    EXPECT_NE(xml.find("<colItems count=\"1\"><i/></colItems>"), std::string::npos) << xml;
+  }
+}
+
+TEST(PivotTableWriter, ACloneKeepsTheDirtyFlag) {
+  pivot::PivotTable table = ReadLoaded();
+  table.mark_layout_dirty();
+  EXPECT_TRUE(table.clone()->layout_dirty());
+}
+
+// The x14 field extension under an unusual shape is kept whole and never
+// duplicated by a generated one.
+pivot::PivotTable ReadFieldExtLst(std::string_view ext_xml) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A3:B6\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  xml.append("<pivotFields count=\"1\"><pivotField axis=\"axisRow\" showAll=\"0\"><extLst>").append(ext_xml);
+  xml.append("</extLst></pivotField></pivotFields></pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  EXPECT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  return std::move(table_or.value());
+}
+
+std::size_t Occurrences(const std::string& haystack, std::string_view needle) {
+  std::size_t count = 0;
+  for (std::size_t at = haystack.find(needle); at != std::string::npos; at = haystack.find(needle, at + 1)) {
+    ++count;
+  }
+  return count;
+}
+
+TEST(PivotTableWriter, X14FieldUnderAnotherPrefixIsModelled) {
+  std::string ext = "<ext uri=\"{2946ED86-A175-432a-8AC1-64E0C546D7DE}\" xmlns:y=\"";
+  ext.append(kX14Ns).append("\"><y:pivotField fillDownLabels=\"1\"/></ext>");
+  const pivot::PivotTable table = ReadFieldExtLst(ext);
+  const pivot::PivotField& field = table.fields()[0];
+  EXPECT_TRUE(field.fill_down_labels);
+  EXPECT_TRUE(field.raw_ext_xml.empty());
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("<x14:pivotField fillDownLabels=\"1\"/></ext></extLst>"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, X14FieldExtensionWithASiblingIsKeptWhole) {
+  std::string ext = "<ext uri=\"{2946ED86-A175-432a-8AC1-64E0C546D7DE}\" xmlns:x14=\"";
+  ext.append(kX14Ns).append("\"><x14:pivotField fillDownLabels=\"1\"/><x14:other/></ext>");
+  const pivot::PivotTable table = ReadFieldExtLst(ext);
+  const pivot::PivotField& field = table.fields()[0];
+  EXPECT_TRUE(field.fill_down_labels);
+  EXPECT_TRUE(field.x14_attrs.empty());
+  EXPECT_NE(field.raw_ext_xml.find("<x14:other/>"), std::string::npos);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_EQ(Occurrences(xml, "2946ED86"), 1U) << xml;
+  EXPECT_NE(xml.find("<x14:pivotField fillDownLabels=\"1\"/><x14:other/></ext></extLst>"), std::string::npos) << xml;
+}
+
+TEST(PivotTableWriter, X14FieldExtensionWithoutItsElementIsKeptWhole) {
+  const pivot::PivotTable table =
+      ReadFieldExtLst("<ext uri=\"{2946ED86-A175-432a-8AC1-64E0C546D7DE}\"><unknown a=\"1\"/></ext>");
+  const pivot::PivotField& field = table.fields()[0];
+  EXPECT_FALSE(field.fill_down_labels);
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_EQ(Occurrences(xml, "2946ED86"), 1U) << xml;
+  EXPECT_NE(xml.find("<unknown a=\"1\"/></ext></extLst>"), std::string::npos) << xml;
+}
+
 }  // namespace
 }  // namespace formulon::io

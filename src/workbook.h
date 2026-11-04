@@ -694,6 +694,20 @@ class Workbook {
   /// same reason as `set_defined_names`.
   void set_tables(std::vector<TableMetadata> tables) { tables_ = std::move(tables); }
 
+  /// Validates and appends `table`, assigning its id, default AutoFilter and
+  /// the formula reindex a new table needs; returns its index in `tables()`.
+  /// `table.ref` must be a single-area A1 range as wide as `table.columns`,
+  /// whose names must be non-empty and pairwise distinct (case-insensitive).
+  /// Returns `kInvalidArgument` for a bad sheet index, an empty or unparsable
+  /// identity or range, a column mismatch, or a name or display name any
+  /// existing table (a verbatim-retained XLSB table part included) already
+  /// uses. `table.style_info` is kept as given.
+  Expected<std::size_t, Error> add_table(TableMetadata table);
+
+  /// Smallest N >= 1 such that `<word><N>` is not the name or display name
+  /// of any table (compared case-insensitively), as `add_table` checks.
+  std::string next_default_table_name(std::string_view word) const;
+
   /// Re-registers dep-graph edges and dirties every formula cell whose
   /// structured reference names one of `table_names` (typically a table's
   /// `name` and `display_name`). Call after a `mutable_tables()` edit

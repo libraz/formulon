@@ -26,6 +26,7 @@ namespace {
 void clear_pivot_derived_state(formulon::pivot::PivotTable& table) {
   table.clear_last_result();
   table.clear_span_authored();
+  table.mark_layout_dirty();
 }
 
 }  // namespace

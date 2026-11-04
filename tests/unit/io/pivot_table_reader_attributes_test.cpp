@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -175,7 +176,7 @@ TEST(PivotTableReader, RowItemsAndColItemsSurviveRoundTrip) {
   const pivot::PivotTable& table = table_or.value();
   EXPECT_NE(table.raw_passthrough_after_row_fields().find("<rowItems"), std::string::npos);
   EXPECT_NE(table.raw_passthrough_after_row_fields().find("t=\"grand\""), std::string::npos);
-  EXPECT_NE(table.raw_passthrough_after_col_fields().find("<colItems"), std::string::npos);
+  EXPECT_NE(table.raw_col_items().find("<colItems"), std::string::npos);
   // They must NOT leak into the tail buffer.
   EXPECT_EQ(table.raw_passthrough_xml().find("<rowItems"), std::string::npos);
 
@@ -191,7 +192,122 @@ TEST(PivotTableReader, RowItemsAndColItemsSurviveRoundTrip) {
   ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
   const pivot::PivotTable& reparsed = reparsed_or.value();
   EXPECT_NE(reparsed.raw_passthrough_after_row_fields().find("<rowItems"), std::string::npos);
-  EXPECT_NE(reparsed.raw_passthrough_after_col_fields().find("<colItems"), std::string::npos);
+  EXPECT_NE(reparsed.raw_col_items().find("<colItems"), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// Report options, item captions / collapse state and the x14 field extension
+// ---------------------------------------------------------------------------
+
+constexpr std::string_view kX14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+
+std::string OptionsDefinition(std::string_view root_attrs, std::string_view field_xml) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\" dataCaption=\"Values\"");
+  xml.append(root_attrs).append(">");
+  xml.append("<location ref=\"A3:B6\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  xml.append("<pivotFields count=\"1\">").append(field_xml).append("</pivotFields>");
+  xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields>");
+  xml.append("</pivotTableDefinition>");
+  return xml;
+}
+
+bool HasPassthrough(const std::vector<std::pair<std::string, std::string>>& attrs, std::string_view name) {
+  for (const auto& attr : attrs) {
+    if (attr.first == name) {
+      return true;
+    }
+  }
+  return false;
+}
+
+TEST(PivotTableReader, ReportOptionAttributesAreModelled) {
+  const std::string xml = OptionsDefinition(" grandTotalCaption=\"TOTAL\" useAutoFormatting=\"1\" enableDrill=\"0\"",
+                                            "<pivotField axis=\"axisRow\"/>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_TRUE(table.grand_total_caption().has_value());
+  EXPECT_EQ(*table.grand_total_caption(), "TOTAL");
+  EXPECT_TRUE(table.auto_formatting());
+  EXPECT_FALSE(table.enable_drill());
+  EXPECT_FALSE(HasPassthrough(table.passthrough_attrs(), "grandTotalCaption"));
+  EXPECT_FALSE(HasPassthrough(table.passthrough_attrs(), "useAutoFormatting"));
+  EXPECT_FALSE(HasPassthrough(table.passthrough_attrs(), "enableDrill"));
+}
+
+TEST(PivotTableReader, AbsentReportOptionsReadAsTheirSchemaDefaults) {
+  // A table read without `useAutoFormatting` does not autofit, although a
+  // table created in memory does.
+  auto table_or = read_pivot_table_definition(Bytes(OptionsDefinition("", "<pivotField axis=\"axisRow\"/>")));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_FALSE(table_or.value().grand_total_caption().has_value());
+  EXPECT_FALSE(table_or.value().auto_formatting());
+  EXPECT_TRUE(table_or.value().enable_drill());
+  EXPECT_TRUE(pivot::PivotTable().auto_formatting());
+}
+
+TEST(PivotTableReader, InsertBlankRowAndItemCaptionAndCollapseAreModelled) {
+  const std::string xml = OptionsDefinition(
+      "",
+      "<pivotField axis=\"axisRow\" showAll=\"0\" insertBlankRow=\"1\"><items count=\"4\">"
+      "<item sd=\"0\" x=\"2\"/><item n=\"zz\" x=\"0\" s=\"1\"/><item x=\"1\"/><item t=\"default\" sd=\"0\"/>"
+      "</items></pivotField>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const pivot::PivotField& field = table_or.value().fields()[0];
+  EXPECT_TRUE(field.insert_blank_row);
+  EXPECT_FALSE(HasPassthrough(field.passthrough_attrs, "insertBlankRow"));
+  ASSERT_EQ(field.items.size(), 3U);
+  EXPECT_FALSE(field.items[0].show_detail);
+  EXPECT_TRUE(field.items[0].caption.empty());
+  EXPECT_TRUE(field.items[1].show_detail);
+  EXPECT_EQ(field.items[1].caption, "zz");
+  EXPECT_FALSE(HasPassthrough(field.items[1].passthrough_attrs, "n"));
+  EXPECT_FALSE(HasPassthrough(field.items[0].passthrough_attrs, "sd"));
+  EXPECT_TRUE(HasPassthrough(field.items[1].passthrough_attrs, "s"));
+  ASSERT_EQ(field.marker_items.size(), 1U);
+  EXPECT_FALSE(field.marker_items[0].show_detail);
+}
+
+TEST(PivotTableReader, X14PivotFieldExtensionIsSplitAndOtherExtensionsKeptVerbatim) {
+  std::string field_xml =
+      "<pivotField axis=\"axisRow\" showAll=\"0\"><items count=\"1\"><item t=\"default\"/></items>"
+      "<autoSortScope><pivotArea dataOnly=\"0\" outline=\"0\" fieldPosition=\"0\"/></autoSortScope><extLst>"
+      "<ext uri=\"{AAAAAAAA-0000-0000-0000-000000000000}\"><other/></ext>"
+      "<ext uri=\"{2946ED86-A175-432A-8AC1-64E0C546D7DE}\" xmlns:x14=\"";
+  field_xml.append(kX14Ns).append(
+      "\"><x14:pivotField fillDownLabels=\"1\" ignore=\"1\"><x14:child/></x14:pivotField></ext></extLst>"
+      "</pivotField>");
+  auto table_or = read_pivot_table_definition(Bytes(OptionsDefinition("", field_xml)));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const pivot::PivotField& field = table_or.value().fields()[0];
+  // The upper-case URI spelling is the same extension.
+  EXPECT_TRUE(field.fill_down_labels);
+  ASSERT_EQ(field.x14_attrs.size(), 1U);
+  EXPECT_EQ(field.x14_attrs[0].first, "ignore");
+  EXPECT_NE(field.x14_children_xml.find("<x14:child"), std::string::npos);
+  EXPECT_NE(field.raw_ext_xml.find("{AAAAAAAA-0000-0000-0000-000000000000}"), std::string::npos);
+  EXPECT_EQ(field.raw_ext_xml.find("2946ED86"), std::string::npos);
+  EXPECT_NE(field.raw_children_xml.find("<autoSortScope"), std::string::npos);
+  EXPECT_EQ(field.raw_children_xml.find("<extLst"), std::string::npos);
+}
+
+TEST(PivotTableReader, ColItemsAndPageFieldsLandInSeparateBins) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A3:B6\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  xml.append("<pivotFields count=\"2\"><pivotField axis=\"axisCol\"/><pivotField axis=\"axisPage\"/></pivotFields>");
+  xml.append("<colFields count=\"1\"><field x=\"0\"/></colFields>");
+  xml.append("<colItems count=\"1\"><i/></colItems>");
+  xml.append("<pageFields count=\"1\"><pageField fld=\"1\" hier=\"-1\"/></pageFields>");
+  xml.append("</pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_NE(table_or.value().raw_col_items().find("<colItems"), std::string::npos);
+  EXPECT_EQ(table_or.value().raw_col_items().find("<pageFields"), std::string::npos);
+  EXPECT_NE(table_or.value().raw_passthrough_after_col_fields().find("<pageFields"), std::string::npos);
+  EXPECT_EQ(table_or.value().raw_passthrough_after_col_fields().find("<colItems"), std::string::npos);
 }
 
 }  // namespace

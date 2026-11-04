@@ -8,8 +8,10 @@
 #include "io/pivot_cache_writer.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -555,7 +557,8 @@ TEST(PivotCacheWriter, GroupedFieldExcludedFromRecordsAndFieldGroupSurvives) {
   ASSERT_EQ(cache.fields().size(), 2U);
   EXPECT_TRUE(cache.fields()[0].is_database_field);
   EXPECT_FALSE(cache.fields()[1].is_database_field);
-  EXPECT_NE(cache.fields()[1].field_group_xml.find("<fieldGroup"), std::string::npos);
+  ASSERT_TRUE(cache.fields()[1].field_group.has_value());
+  EXPECT_EQ(cache.fields()[1].field_group->par, std::optional<std::uint32_t>(0U));
 
   // Records carry one cell per database field (the Date field only).
   const std::string_view rec =
@@ -617,6 +620,194 @@ TEST(PivotCacheWriter, UnknownRootAttributesRoundTrip) {
   EXPECT_NE(xml.find("refreshedBy=\"Alice\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("refreshOnLoad=\"1\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("createdVersion=\"8\""), std::string::npos) << xml;
+}
+
+// ---------------------------------------------------------------------------
+// cacheField numFmtId and <fieldGroup>
+// ---------------------------------------------------------------------------
+
+// The shape Excel saves for a date field grouped by months: the base keeps
+// its shared items and points at the group field through `par`; the group
+// field derives from the base and lists every month plus the two boundaries.
+constexpr std::string_view kMonthGroupedCache =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+    "<pivotCacheDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+    "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:id=\"rId1\" "
+    "refreshedBy=\"x\" recordCount=\"0\"><cacheSource type=\"worksheet\"><worksheetSource ref=\"A1:B3\" "
+    "sheet=\"Sheet1\"/></cacheSource><cacheFields count=\"3\">"
+    "<cacheField name=\"Date\" numFmtId=\"14\"><sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" "
+    "containsDate=\"1\" containsString=\"0\" minDate=\"2024-01-15T00:00:00\" maxDate=\"2024-07-23T00:00:00\" "
+    "count=\"2\"><d v=\"2024-01-15T00:00:00\"/><d v=\"2024-07-22T00:00:00\"/></sharedItems>"
+    "<fieldGroup par=\"2\"/></cacheField>"
+    "<cacheField name=\"Amt\" numFmtId=\"0\"><sharedItems containsNumber=\"1\"/></cacheField>"
+    "<cacheField name=\"Month (Date)\" numFmtId=\"0\" databaseField=\"0\"><fieldGroup base=\"0\">"
+    "<rangePr groupBy=\"months\" startDate=\"2024-01-15T00:00:00\" endDate=\"2024-07-23T00:00:00\"/>"
+    "<groupItems count=\"4\"><s v=\"&lt;2024/1/15\"/><s v=\"1\"/><s v=\"2\"/><s v=\">2024/7/23\"/></groupItems>"
+    "</fieldGroup></cacheField></cacheFields></pivotCacheDefinition>";
+
+TEST(PivotCacheWriter, NumFmtIdIsModelledAndAbsenceSurvives) {
+  auto cache_or = read_pivot_cache_definition(Bytes(kMonthGroupedCache));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCache& cache = cache_or.value();
+  EXPECT_EQ(cache.fields()[0].num_fmt_id, std::optional<std::uint32_t>(14U));
+  EXPECT_EQ(cache.fields()[2].num_fmt_id, std::optional<std::uint32_t>(0U));
+  for (const pivot::PivotCacheField& field : cache.fields()) {
+    for (const auto& attr : field.extra_attrs) {
+      EXPECT_NE(attr.first, "numFmtId");
+    }
+  }
+  const std::string xml = write_pivot_cache_definition(cache);
+  EXPECT_NE(xml.find("<cacheField name=\"Date\" numFmtId=\"14\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<cacheField name=\"Month (Date)\" numFmtId=\"0\" databaseField=\"0\">"), std::string::npos)
+      << xml;
+
+  pivot::PivotCache bare;
+  bare.mutable_fields().push_back(pivot::PivotCacheField{"Region", {}});
+  EXPECT_EQ(write_pivot_cache_definition(bare).find("numFmtId"), std::string::npos);
+}
+
+TEST(PivotCacheWriter, DateRangeGroupIsReadStructurally) {
+  auto cache_or = read_pivot_cache_definition(Bytes(kMonthGroupedCache));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCache& cache = cache_or.value();
+  ASSERT_TRUE(cache.fields()[0].field_group.has_value());
+  const pivot::FieldGroup& base = *cache.fields()[0].field_group;
+  EXPECT_EQ(base.par, std::optional<std::uint32_t>(2U));
+  EXPECT_FALSE(base.base.has_value());
+  EXPECT_EQ(base.kind, pivot::GroupKind::None);
+  EXPECT_FALSE(cache.fields()[1].field_group.has_value());
+
+  ASSERT_TRUE(cache.fields()[2].field_group.has_value());
+  const pivot::FieldGroup& group = *cache.fields()[2].field_group;
+  EXPECT_FALSE(group.par.has_value());
+  EXPECT_EQ(group.base, std::optional<std::uint32_t>(0U));
+  ASSERT_EQ(group.kind, pivot::GroupKind::Range);
+  EXPECT_EQ(group.range.by, pivot::GroupBy::Months);
+  EXPECT_TRUE(group.range.is_date);
+  EXPECT_EQ(group.range.start_date, "2024-01-15T00:00:00");
+  EXPECT_EQ(group.range.end_date, "2024-07-23T00:00:00");
+  EXPECT_TRUE(group.range.auto_start);
+  EXPECT_TRUE(group.range.auto_end);
+  EXPECT_EQ(group.range.interval, 1.0);
+  ASSERT_EQ(group.group_items.size(), 4U);
+  EXPECT_EQ(group.group_items[0].as_text(), "<2024/1/15");
+  EXPECT_EQ(group.group_items[3].as_text(), ">2024/7/23");
+  EXPECT_TRUE(cache.fields()[2].shared_items.empty());
+}
+
+TEST(PivotCacheWriter, DateRangeGroupWritesAsExcelDoes) {
+  auto cache_or = read_pivot_cache_definition(Bytes(kMonthGroupedCache));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const std::string xml = write_pivot_cache_definition(cache_or.value());
+  EXPECT_NE(xml.find("<d v=\"2024-01-15T00:00:00\"/><d v=\"2024-07-22T00:00:00\"/></sharedItems><fieldGroup par=\"2\"/>"
+                     "</cacheField>"),
+            std::string::npos)
+      << xml;
+  // A group field carries no `<sharedItems>`.
+  EXPECT_NE(xml.find("databaseField=\"0\"><fieldGroup base=\"0\"><rangePr groupBy=\"months\" "
+                     "startDate=\"2024-01-15T00:00:00\" endDate=\"2024-07-23T00:00:00\"/><groupItems count=\"4\">"
+                     "<s v=\"&lt;2024/1/15\"/><s v=\"1\"/><s v=\"2\"/>"),
+            std::string::npos)
+      << xml;
+}
+
+TEST(PivotCacheWriter, FieldGroupShapesRoundTrip) {
+  const std::string_view def =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<pivotCacheDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" recordCount=\"0\">"
+      "<cacheSource type=\"worksheet\"/><cacheFields count=\"4\">"
+      "<cacheField name=\"N\"><sharedItems containsNumber=\"1\" minValue=\"1\" maxValue=\"9\"/></cacheField>"
+      "<cacheField name=\"N2\" databaseField=\"0\"><fieldGroup base=\"0\" future=\"x\"><rangePr autoStart=\"0\" "
+      "autoEnd=\"0\" startNum=\"0.5\" endNum=\"10\" groupInterval=\"2.5\"/><groupItems count=\"3\"><s v=\"a\"/>"
+      "<n v=\"2\"/><m/></groupItems></fieldGroup></cacheField>"
+      "<cacheField name=\"D\" databaseField=\"0\"><fieldGroup base=\"0\"><rangePr groupBy=\"days\" "
+      "startDate=\"2024-01-15T00:00:00\" endDate=\"2024-07-23T00:00:00\" groupInterval=\"7\"/></fieldGroup>"
+      "</cacheField>"
+      "<cacheField name=\"G\" databaseField=\"0\"><fieldGroup base=\"0\"><discretePr count=\"3\"><x v=\"1\"/>"
+      "<x v=\"0\"/><x v=\"1\"/></discretePr><groupItems count=\"2\"><s v=\"Group1\"/><s v=\"Group2\"/>"
+      "</groupItems></fieldGroup></cacheField></cacheFields></pivotCacheDefinition>";
+  auto first_or = read_pivot_cache_definition(Bytes(def));
+  ASSERT_TRUE(static_cast<bool>(first_or)) << first_or.error().message;
+  const pivot::PivotCache& first = first_or.value();
+
+  const pivot::FieldGroup& numeric = *first.fields()[1].field_group;
+  EXPECT_EQ(numeric.range.by, pivot::GroupBy::Range);
+  EXPECT_FALSE(numeric.range.is_date);
+  EXPECT_FALSE(numeric.range.auto_start);
+  EXPECT_FALSE(numeric.range.auto_end);
+  EXPECT_EQ(numeric.range.start_num, 0.5);
+  EXPECT_EQ(numeric.range.end_num, 10.0);
+  EXPECT_EQ(numeric.range.interval, 2.5);
+  ASSERT_EQ(numeric.extra_attrs.size(), 1U);
+  EXPECT_EQ(numeric.extra_attrs[0], (std::pair<std::string, std::string>("future", "x")));
+  const pivot::FieldGroup& days = *first.fields()[2].field_group;
+  EXPECT_EQ(days.range.by, pivot::GroupBy::Days);
+  EXPECT_EQ(days.range.interval, 7.0);
+  EXPECT_TRUE(days.group_items.empty());
+  const pivot::FieldGroup& discrete = *first.fields()[3].field_group;
+  EXPECT_EQ(discrete.kind, pivot::GroupKind::Discrete);
+  EXPECT_EQ(discrete.discrete_map, (std::vector<std::uint32_t>{1U, 0U, 1U}));
+
+  const std::string written = write_pivot_cache_definition(first);
+  EXPECT_NE(written.find("<rangePr autoStart=\"0\" autoEnd=\"0\" startNum=\"0.5\" endNum=\"10\" "
+                         "groupInterval=\"2.5\"/>"),
+            std::string::npos)
+      << written;
+  EXPECT_NE(written.find("<rangePr groupBy=\"days\" startDate=\"2024-01-15T00:00:00\" "
+                         "endDate=\"2024-07-23T00:00:00\" groupInterval=\"7\"/></fieldGroup>"),
+            std::string::npos)
+      << written;
+  EXPECT_NE(written.find("<discretePr count=\"3\"><x v=\"1\"/><x v=\"0\"/><x v=\"1\"/></discretePr>"),
+            std::string::npos)
+      << written;
+
+  auto second_or = read_pivot_cache_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(second_or)) << second_or.error().message;
+  EXPECT_EQ(write_pivot_cache_definition(second_or.value()), written);
+  const pivot::FieldGroup& again = *second_or.value().fields()[1].field_group;
+  ASSERT_EQ(again.group_items.size(), 3U);
+  EXPECT_EQ(again.group_items[0].as_text(), "a");
+  EXPECT_EQ(again.group_items[1].as_number(), 2.0);
+  EXPECT_TRUE(again.group_items[2].is_blank());
+}
+
+TEST(PivotCacheWriter, DatesRoundTripAsDatesInSharedGroupAndRecordItems) {
+  const std::string_view def =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<pivotCacheDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" recordCount=\"2\">"
+      "<cacheSource type=\"worksheet\"/><cacheFields count=\"3\">"
+      "<cacheField name=\"Mixed\"><sharedItems containsMixedTypes=\"1\" count=\"2\"><d v=\"2024-01-15T13:30:00\"/>"
+      "<n v=\"45306\"/></sharedItems></cacheField>"
+      "<cacheField name=\"When\"><sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" containsDate=\"1\" "
+      "containsString=\"0\" minDate=\"2024-01-15T00:00:00\" maxDate=\"2024-01-17T00:00:00\"/></cacheField>"
+      "<cacheField name=\"G\" databaseField=\"0\"><fieldGroup base=\"0\"><discretePr count=\"2\"><x v=\"0\"/>"
+      "<x v=\"0\"/></discretePr><groupItems count=\"2\"><d v=\"2024-01-15T00:00:00\"/><n v=\"7\"/></groupItems>"
+      "</fieldGroup></cacheField></cacheFields></pivotCacheDefinition>";
+  auto def_or = read_pivot_cache_definition(Bytes(def));
+  ASSERT_TRUE(static_cast<bool>(def_or)) << def_or.error().message;
+  pivot::PivotCache cache = std::move(def_or.value());
+  EXPECT_EQ(cache.fields()[0].shared_item_is_date, (std::vector<bool>{true, false}));
+  EXPECT_EQ(cache.fields()[2].field_group->group_item_is_date, (std::vector<bool>{true, false}));
+
+  const std::string_view rec =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<pivotCacheRecords xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" count=\"2\">"
+      "<r><x v=\"0\"/><d v=\"2024-01-16T06:00:00\"/></r><r><x v=\"1\"/><n v=\"5\"/></r></pivotCacheRecords>";
+  ASSERT_TRUE(static_cast<bool>(read_pivot_cache_records(Bytes(rec), cache)));
+  EXPECT_EQ(cache.records()[0].cell_is_date, (std::vector<bool>{false, true, false}));
+  EXPECT_TRUE(cache.records()[1].cell_is_date.empty());
+
+  const std::string def_xml = write_pivot_cache_definition(cache);
+  EXPECT_NE(def_xml.find("<d v=\"2024-01-15T13:30:00\"/><n v=\"45306\"/></sharedItems>"), std::string::npos) << def_xml;
+  EXPECT_NE(def_xml.find("<groupItems count=\"2\"><d v=\"2024-01-15T00:00:00\"/><n v=\"7\"/></groupItems>"),
+            std::string::npos)
+      << def_xml;
+  const std::string rec_xml = write_pivot_cache_records(cache);
+  EXPECT_NE(rec_xml.find("<r><x v=\"0\"/><d v=\"2024-01-16T06:00:00\"/></r><r><x v=\"1\"/><n v=\"5\"/></r>"),
+            std::string::npos)
+      << rec_xml;
 }
 
 }  // namespace

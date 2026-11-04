@@ -187,7 +187,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       continue;  // The caller (C API) has already supplied a grouping.
     }
     const PivotCacheField& cache_field = cache.fields()[fi];
-    if (!cache_field.is_database_field && !cache_field.field_group_xml.empty()) {
+    if (!cache_field.is_database_field && cache_field.field_group.has_value()) {
       return make_error(FormulonErrorCode::kEvalPivotInvalid,
                         "pivot field is Excel date/number grouping, which this reader does not decode; refusing "
                         "rather than evaluating every record as blank",

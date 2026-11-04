@@ -12,8 +12,8 @@
 // workbook part and is the writer-integration's responsibility (a later
 // PR in the pivot-writer umbrella).
 //
-// Date grouping (`<fieldGroup>` / `<rangePr>`) and calculated cache fields
-// remain out of scope at this layer, mirroring the reader's coverage.
+// Calculated cache fields remain out of scope at this layer, mirroring the
+// reader's coverage.
 //
 // Design references:
 //   * src/io/pivot_cache_reader.h (sister reader; canonical grammar)
@@ -38,8 +38,12 @@ struct PivotCacheFieldWritePlan {
   bool derived = false;
   /// Distinct record values in first-appearance order (the shared items).
   std::vector<Value> items;
-  /// `<sharedItems>` content hints to emit alongside `items`.
+  /// `<sharedItems>` content hints: those of `items` for a derived field; for
+  /// any other field with neither shared items nor captured hints, the hints
+  /// to emit in place of the range placeholder when `present`.
   pivot::SharedItemsHints hints;
+  /// Write the field's numeric record values as `<d>` dates.
+  bool dates = false;
   /// Per record, the index into `items` of its value.
   std::vector<std::uint32_t> record_index;
   /// Indices into `items` in ascending `value_less` order, blank last.
@@ -54,6 +58,8 @@ struct PivotCacheFieldWritePlan {
 /// stays as authored.
 struct PivotCacheWritePlan {
   std::vector<PivotCacheFieldWritePlan> fields;
+  /// Emit `refreshOnLoad="1"`, replacing any captured value.
+  bool refresh_on_load = false;
 };
 
 /// Builds the plan for `cache`; `tables` are the pivot tables drawing on it.
@@ -63,6 +69,13 @@ struct PivotCacheWritePlan {
 /// Row / Col / Page axis or authors items for it, or a record value is text,
 /// boolean, error or blank. A purely numeric, blank-free field off every axis
 /// keeps the range-typed placeholder.
+///
+/// The base of a date group with neither shared items nor captured hints gets
+/// date hints (`minDate` at the earliest record date, `maxDate` at the day
+/// after the latest, both at midnight), and its records are written as `<d>`.
+///
+/// `refresh_on_load` is set for a cache built in memory (no captured root
+/// attributes) and for one any of `tables` has edited since load.
 ///
 /// The caller must hold an `eval::ScopedEvalProfile`: values are deduplicated
 /// and ordered with `pivot::value_less`.
@@ -96,8 +109,10 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
 /// integration PR) will define `rId1` as the records-part target.
 ///
 /// With a non-null `plan`, a derived field is written as a discrete field:
-/// `<sharedItems>` lists the plan's items with its hints. A null plan writes
-/// the model as it stands.
+/// `<sharedItems>` lists the plan's items with its hints, and
+/// `refreshOnLoad` follows `plan->refresh_on_load`. A null plan writes the
+/// model as it stands, with `refreshOnLoad="1"` only for a cache built in
+/// memory.
 std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const PivotCacheWritePlan* plan = nullptr);
 
 /// Emits a complete `xl/pivotCache/pivotCacheRecords*.xml` document.

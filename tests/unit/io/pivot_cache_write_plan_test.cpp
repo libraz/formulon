@@ -189,7 +189,8 @@ TEST(PivotCacheWritePlan, FileReadFieldsAreNotDerived) {
   cache.mutable_fields().push_back(std::move(hinted));
   pivot::PivotCacheField grouped;
   grouped.name = "Grouped";
-  grouped.field_group_xml = "<fieldGroup base=\"0\"/>";
+  grouped.field_group = pivot::FieldGroup{};
+  grouped.field_group->base = 0U;
   cache.mutable_fields().push_back(std::move(grouped));
   AddRecord(cache, {Value::number(0), MakeText(cache, "x"), MakeText(cache, "y")});
 
@@ -223,6 +224,146 @@ TEST(PivotCacheWritePlan, NullPlanKeepsTheOldBytesAndDerivedOutputReads) {
   ASSERT_EQ(parsed.value().fields()[0].shared_items.size(), 2U);
   EXPECT_EQ(parsed.value().fields()[0].shared_items[0].as_text(), "East");
   EXPECT_TRUE(parsed.value().fields()[0].shared_items[1].is_blank());
+}
+
+// ---------------------------------------------------------------------------
+// refreshOnLoad and date hints
+// ---------------------------------------------------------------------------
+
+// A cache as read from a file: captured root attributes, one of them an
+// authored `refreshOnLoad="0"`.
+pivot::PivotCache LoadedCache() {
+  pivot::PivotCache cache;
+  cache.mutable_passthrough_attrs().emplace_back("refreshedBy", "x");
+  cache.mutable_passthrough_attrs().emplace_back("refreshOnLoad", "0");
+  pivot::PivotCacheField field;
+  field.name = "Amt";
+  field.shared_items_hints.present = true;
+  field.shared_items_hints.has_contains_number = true;
+  field.shared_items_hints.contains_number = true;
+  cache.mutable_fields().push_back(std::move(field));
+  AddRecord(cache, {Value::number(1)});
+  return cache;
+}
+
+TEST(PivotCacheWritePlan, UntouchedLoadedCacheKeepsItsRefreshAttribute) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  const pivot::PivotCache cache = LoadedCache();
+  const pivot::PivotTable table = TableWithAxes({pivot::PivotAxis::Value});
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {&table});
+  EXPECT_FALSE(plan.refresh_on_load);
+  const std::string xml = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(xml, " refreshOnLoad=\"0\"")) << xml;
+  EXPECT_FALSE(Contains(xml, "refreshOnLoad=\"1\"")) << xml;
+}
+
+TEST(PivotCacheWritePlan, EditedTableAsksExcelToRebuildALoadedCache) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  const pivot::PivotCache cache = LoadedCache();
+  const pivot::PivotTable untouched = TableWithAxes({pivot::PivotAxis::Value});
+  pivot::PivotTable edited = TableWithAxes({pivot::PivotAxis::Value});
+  edited.mark_layout_dirty();
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {&untouched, &edited});
+  EXPECT_TRUE(plan.refresh_on_load);
+  const std::string xml = write_pivot_cache_definition(cache, &plan);
+  // The authored value is replaced, not duplicated.
+  EXPECT_TRUE(Contains(xml, " refreshOnLoad=\"1\"")) << xml;
+  EXPECT_FALSE(Contains(xml, "refreshOnLoad=\"0\"")) << xml;
+  EXPECT_EQ(xml.find("refreshOnLoad"), xml.rfind("refreshOnLoad")) << xml;
+  EXPECT_TRUE(Contains(xml, " refreshedBy=\"x\"")) << xml;
+}
+
+TEST(PivotCacheWritePlan, InMemoryCacheRefreshesOnLoad) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache;
+  AddField(cache, "Amt");
+  AddRecord(cache, {Value::number(1)});
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  EXPECT_TRUE(plan.refresh_on_load);
+  EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &plan), " refreshOnLoad=\"1\""));
+}
+
+// An in-memory date field grouped by months: serials 45306.75 (2024-01-15
+// 18:00) and 45495 (2024-07-22).
+pivot::PivotCache InMemoryMonthGroupedCache() {
+  pivot::PivotCache cache;
+  AddField(cache, "Date");
+  cache.mutable_fields()[0].field_group = pivot::FieldGroup{};
+  cache.mutable_fields()[0].field_group->par = 1U;
+  pivot::PivotCacheField months;
+  months.name = "Months";
+  months.num_fmt_id = 0U;
+  months.is_database_field = false;
+  months.field_group = pivot::FieldGroup{};
+  months.field_group->base = 0U;
+  months.field_group->kind = pivot::GroupKind::Range;
+  months.field_group->range.by = pivot::GroupBy::Months;
+  months.field_group->range.is_date = true;
+  cache.mutable_fields().push_back(std::move(months));
+  AddRecord(cache, {Value::number(45495.0), Value::blank()});
+  AddRecord(cache, {Value::number(45306.75), Value::blank()});
+  return cache;
+}
+
+TEST(PivotCacheWritePlan, InMemoryDateGroupBaseGetsDateHints) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  const pivot::PivotCache cache = InMemoryMonthGroupedCache();
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  ASSERT_TRUE(plan.fields[0].hints.present);
+  EXPECT_FALSE(plan.fields[0].derived);
+  EXPECT_FALSE(plan.fields[1].hints.present);
+  const std::string xml = write_pivot_cache_definition(cache, &plan);
+  EXPECT_TRUE(Contains(xml,
+                       "<cacheField name=\"Date\"><sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" "
+                       "containsDate=\"1\" containsString=\"0\" minDate=\"2024-01-15T00:00:00\" "
+                       "maxDate=\"2024-07-23T00:00:00\"/><fieldGroup par=\"1\"/></cacheField>"))
+      << xml;
+  // The group's bounds repeat the base's, as Excel writes them.
+  EXPECT_TRUE(Contains(xml,
+                       "<cacheField name=\"Months\" numFmtId=\"0\" databaseField=\"0\"><fieldGroup base=\"0\">"
+                       "<rangePr groupBy=\"months\" startDate=\"2024-01-15T00:00:00\" "
+                       "endDate=\"2024-07-23T00:00:00\"/></fieldGroup>"))
+      << xml;
+}
+
+TEST(PivotCacheWritePlan, InMemoryDateGroupBaseRecordsAreWrittenAsDates) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  const pivot::PivotCache cache = InMemoryMonthGroupedCache();
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  EXPECT_TRUE(plan.fields[0].dates);
+  const std::string records = write_pivot_cache_records(cache, &plan);
+  EXPECT_TRUE(Contains(records, "<r><d v=\"2024-07-22T00:00:00\"/></r><r><d v=\"2024-01-15T18:00:00\"/></r>"))
+      << records;
+
+  // The records read back as the same serials.
+  const std::string definition = write_pivot_cache_definition(cache, &plan);
+  auto def_or = read_pivot_cache_definition(std::vector<std::uint8_t>(definition.begin(), definition.end()));
+  ASSERT_TRUE(static_cast<bool>(def_or)) << def_or.error().message;
+  ASSERT_TRUE(static_cast<bool>(
+      read_pivot_cache_records(std::vector<std::uint8_t>(records.begin(), records.end()), def_or.value())));
+  EXPECT_EQ(def_or.value().records()[1].cells[0].as_number(), 45306.75);
+}
+
+TEST(PivotCacheWritePlan, ExplicitGroupBoundsWinOverTheBaseHints) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache = InMemoryMonthGroupedCache();
+  cache.mutable_fields()[1].field_group->range.start_date = "2024-02-01T00:00:00";
+  cache.mutable_fields()[1].field_group->range.auto_start = false;
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &plan),
+                       "<rangePr autoStart=\"0\" groupBy=\"months\" startDate=\"2024-02-01T00:00:00\" "
+                       "endDate=\"2024-07-23T00:00:00\"/>"));
+}
+
+TEST(PivotCacheWritePlan, DateHintsNeedEveryRecordToBeADate) {
+  const eval::ScopedEvalProfile scope(default_excel_profile());
+  pivot::PivotCache cache = InMemoryMonthGroupedCache();
+  AddRecord(cache, {MakeText(cache, "n/a"), Value::blank()});
+  const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
+  EXPECT_FALSE(plan.fields[0].hints.present);
+  EXPECT_TRUE(Contains(write_pivot_cache_definition(cache, &plan),
+                       "<cacheField name=\"Date\"><sharedItems "
+                       "containsNumber=\"1\"/>"));
 }
 
 }  // namespace

@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -69,6 +70,56 @@ struct SharedItemsHints {
   std::vector<std::pair<std::string, std::string>> extra_attrs;
 };
 
+/// `<rangePr groupBy>`: the unit a range group buckets its base values by.
+enum class GroupBy : std::uint8_t {
+  Range = 0,
+  Seconds = 1,
+  Minutes = 2,
+  Hours = 3,
+  Days = 4,
+  Months = 5,
+  Quarters = 6,
+  Years = 7,
+};
+
+/// Which of `<rangePr>` / `<discretePr>` a `<fieldGroup>` carries.
+enum class GroupKind : std::uint8_t {
+  None = 0,
+  Range = 1,
+  Discrete = 2,
+};
+
+/// `<rangePr>`. A date group keeps `startDate` / `endDate` as the ISO bodies
+/// it was read with; a numeric group uses `start_num` / `end_num`.
+struct RangeGroup {
+  GroupBy by = GroupBy::Range;
+  bool is_date = false;
+  std::string start_date;
+  std::string end_date;
+  double start_num = 0.0;
+  double end_num = 0.0;
+  bool auto_start = true;
+  bool auto_end = true;
+  double interval = 1.0;
+};
+
+/// `<fieldGroup>`: how a group field derives its items from a base field, or,
+/// on the base field itself, which group field sits directly above it (`par`).
+struct FieldGroup {
+  std::optional<std::uint32_t> par;
+  std::optional<std::uint32_t> base;
+  GroupKind kind = GroupKind::None;
+  RangeGroup range;
+  /// `<discretePr>`: per shared item of the base, the group item it falls in.
+  std::vector<std::uint32_t> discrete_map;
+  /// `<groupItems>`; text payloads live in the owning cache's text storage.
+  std::vector<Value> group_items;
+  /// Per group item, true when it was a `<d>` date; shorter means not a date.
+  std::vector<bool> group_item_is_date;
+  /// Unmodelled `<fieldGroup>` attributes, re-emitted verbatim.
+  std::vector<std::pair<std::string, std::string>> extra_attrs;
+};
+
 /// One column of the pivot cache.
 ///
 /// `shared_items` enumerates the distinct values for a discrete (string /
@@ -85,6 +136,9 @@ struct PivotCacheField {
 
   std::string name;
   std::vector<Value> shared_items;
+  /// Per shared item, true when it was a `<d>` date, which the cache holds as
+  /// its serial; shorter than `shared_items` means the rest are not dates.
+  std::vector<bool> shared_item_is_date;
   /// Numeric / date range + grouping hints from `<sharedItems>`. Preserved
   /// verbatim so Excel's Refresh keeps its grouping boundaries.
   SharedItemsHints shared_items_hints;
@@ -97,14 +151,14 @@ struct PivotCacheField {
   /// hand-built caches keep the "every field is a source column" shape.
   bool is_database_field = true;
 
-  /// Raw `<fieldGroup>` element captured verbatim (date / numeric / discrete
-  /// grouping definition) so a grouped field round-trips even though v1.0
-  /// does not model grouping structurally. Empty when the field carries no
-  /// `<fieldGroup>`.
-  std::string field_group_xml;
+  /// `<cacheField numFmtId>`; absent when the source omitted it.
+  std::optional<std::uint32_t> num_fmt_id;
 
-  /// Unmodelled `<cacheField>` attributes (`caption`, `formula`,
-  /// `numFmtId`, `sqlType`, ...), re-emitted verbatim.
+  /// `<fieldGroup>`; absent when the field is neither grouped nor a group.
+  std::optional<FieldGroup> field_group;
+
+  /// Unmodelled `<cacheField>` attributes (`caption`, `formula`, `sqlType`,
+  /// ...), re-emitted verbatim.
   std::vector<std::pair<std::string, std::string>> extra_attrs;
 
   /// `<cacheField>` children after `<fieldGroup>` (`mpMap`, `extLst`),
@@ -145,6 +199,9 @@ inline constexpr std::size_t kNoCacheTextSlot = static_cast<std::size_t>(-1);
 struct PivotCacheRecord {
   std::vector<Value> cells;
   std::vector<bool> cell_is_index;
+  /// Per cell, true when the source spelled it as an inline `<d>` date. Empty
+  /// when the record holds none.
+  std::vector<bool> cell_is_date;
   /// Per-cell index into `PivotCache::text_storage()` for the entry that
   /// backs this cell's Text payload, or `kNoCacheTextSlot`.
   ///

@@ -809,11 +809,19 @@ TEST(PivotEvaluator, OutOfRangeFieldIndexYieldsInvalid) {
   EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
 }
 
+FieldGroup YearsGroupOverFieldZero() {
+  FieldGroup group;
+  group.base = 0U;
+  group.kind = GroupKind::Range;
+  group.range.by = GroupBy::Years;
+  return group;
+}
+
 TEST(PivotEvaluator, GroupingDerivedAxisFieldWithNoDateGroupIsRefused) {
   PivotCache cache = build_basic_cache();
   cache.mutable_fields().push_back(PivotCacheField{"Region Years", {}});
   cache.mutable_fields().back().is_database_field = false;
-  cache.mutable_fields().back().field_group_xml = "<fieldGroup base=\"0\"><rangePr groupBy=\"years\"/></fieldGroup>";
+  cache.mutable_fields().back().field_group = YearsGroupOverFieldZero();
 
   PivotTable table = build_sum_amount_table(/*row=*/{3}, /*col=*/{});
   PivotField grouped_f;
@@ -831,7 +839,7 @@ TEST(PivotEvaluator, GroupingDerivedAxisFieldWithDateGroupSetEvaluatesNormally) 
   PivotCache cache = build_basic_cache();
   cache.mutable_fields().push_back(PivotCacheField{"Region Years", {}});
   cache.mutable_fields().back().is_database_field = false;
-  cache.mutable_fields().back().field_group_xml = "<fieldGroup base=\"0\"><rangePr groupBy=\"years\"/></fieldGroup>";
+  cache.mutable_fields().back().field_group = YearsGroupOverFieldZero();
 
   PivotTable table = build_sum_amount_table(/*row=*/{3}, /*col=*/{});
   PivotField grouped_f;

@@ -93,7 +93,9 @@ struct PivotRenderedSpan {
 /// derives as discrete gets `<items>` bound to the derived shared items: for
 /// an axis field with none authored they are synthesized in the field's sort
 /// order, and authored items are bound by label with the missing shared items
-/// appended. Null emits the items the model holds.
+/// appended. Null emits the items the model holds. An edited table
+/// (`layout_dirty()`) drops its `<rowItems>` / `<colItems>` only when the plan
+/// asks Excel to refresh the cache on load.
 ///
 /// Returns an owning `std::string`; there is no error channel because
 /// the inputs are pure-data (no I/O, no allocation failure surfaced).

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "io/iso_date.h"
+#include "io/pivot_attr_names.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "pivot/pivot_cache.h"
@@ -50,8 +51,10 @@ bool ParseBoolFlag(std::string_view text, bool* ok) {
 /// appended into the caller-supplied `text_storage` (a deque for
 /// pointer-stability across appends) and `Value::text` aliases that
 /// entry. Returns `kIoSheetCorrupt` for malformed numeric / boolean
-/// bodies.
-Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<std::string>& text_storage) {
+/// bodies. `*is_date` is set when a `<d>` decoded to a serial.
+Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<std::string>& text_storage,
+                                        bool* is_date) {
+  *is_date = false;
   const std::string_view name = node.name();
   if (name == "s") {
     text_storage.emplace_back(node.attribute("v").as_string());
@@ -89,6 +92,7 @@ Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<s
     std::string_view raw = node.attribute("v").as_string();
     double serial = 0.0;
     if (parse_iso_date_serial(raw, &serial)) {
+      *is_date = true;
       return Value::number(serial);
     }
     text_storage.emplace_back(raw);
@@ -158,6 +162,47 @@ void ReadSharedItemsHints(const pugi::xml_node& items, pivot::SharedItemsHints* 
   out->present = any || !out->extra_attrs.empty();
 }
 
+/// Decodes `<fieldGroup>`. Text group items are appended to `text_storage`.
+Expected<pivot::FieldGroup, Error> ReadFieldGroup(const pugi::xml_node& node, std::deque<std::string>& text_storage) {
+  pivot::FieldGroup group;
+  group.par = parse_xml_u32_attr_strict(node.attribute("par"));
+  group.base = parse_xml_u32_attr_strict(node.attribute("base"));
+  capture_unknown_attrs(node, {"par", "base"}, group.extra_attrs);
+  if (pugi::xml_node range = node.child("rangePr"); range) {
+    group.kind = pivot::GroupKind::Range;
+    pivot::RangeGroup& r = group.range;
+    r.by = enum_from_name(kPivotGroupByNames, range.attribute("groupBy").as_string(), pivot::GroupBy::Range);
+    r.auto_start = attr_bool(range, "autoStart", true);
+    r.auto_end = attr_bool(range, "autoEnd", true);
+    r.start_num = attr_f64(range, "startNum", 0.0);
+    r.end_num = attr_f64(range, "endNum", 0.0);
+    r.interval = attr_f64(range, "groupInterval", 1.0);
+    const pugi::xml_attribute start_date = range.attribute("startDate");
+    const pugi::xml_attribute end_date = range.attribute("endDate");
+    r.is_date = start_date || end_date;
+    r.start_date = start_date.as_string();
+    r.end_date = end_date.as_string();
+  } else if (pugi::xml_node discrete = node.child("discretePr"); discrete) {
+    group.kind = pivot::GroupKind::Discrete;
+    for (pugi::xml_node x = discrete.child("x"); x; x = x.next_sibling("x")) {
+      group.discrete_map.push_back(attr_u32(x, "v"));
+    }
+  }
+  for (pugi::xml_node child : node.child("groupItems").children()) {
+    if (!IsTypedValueElement(child.name())) {
+      continue;
+    }
+    bool is_date = false;
+    auto val_or = DecodeTypedValue(child, text_storage, &is_date);
+    if (!val_or) {
+      return std::move(val_or.error());
+    }
+    group.group_items.push_back(val_or.value());
+    group.group_item_is_date.push_back(is_date);
+  }
+  return group;
+}
+
 }  // namespace
 
 Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector<std::uint8_t>& definition_bytes) {
@@ -220,12 +265,15 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       // `databaseField` defaults to true; `databaseField="0"` marks a
       // grouping-derived field that carries no per-record cell.
       field.is_database_field = attr_bool(f, "databaseField", true);
-      capture_unknown_attrs(f, {"name", "databaseField"}, field.extra_attrs);
+      field.num_fmt_id = parse_xml_u32_attr_strict(f.attribute("numFmtId"));
+      capture_unknown_attrs(f, {"name", "databaseField", "numFmtId"}, field.extra_attrs);
       capture_unknown_children(f, {"sharedItems", "fieldGroup"}, field.trailing_children_xml);
-      // Capture any `<fieldGroup>` verbatim so a grouped field round-trips
-      // even though the grouping structure is not modelled.
       if (pugi::xml_node group = f.child("fieldGroup"); group) {
-        append_raw_xml(field.field_group_xml, group);
+        auto group_or = ReadFieldGroup(group, cache.mutable_text_storage());
+        if (!group_or) {
+          return std::move(group_or.error());
+        }
+        field.field_group = std::move(group_or.value());
       }
 
       // Walk `<sharedItems>` children. Any typed value child marks this
@@ -241,11 +289,13 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
           if (!IsTypedValueElement(child_name)) {
             continue;
           }
-          auto val_or = DecodeTypedValue(child, cache.mutable_text_storage());
+          bool is_date = false;
+          auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date);
           if (!val_or) {
             return std::move(val_or.error());
           }
           field.shared_items.push_back(val_or.value());
+          field.shared_item_is_date.push_back(is_date);
         }
       }
       cache.mutable_fields().push_back(std::move(field));
@@ -320,12 +370,17 @@ Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records
         continue;
       }
       if (IsTypedValueElement(child_name)) {
-        auto val_or = DecodeTypedValue(child, cache.mutable_text_storage());
+        bool is_date = false;
+        auto val_or = DecodeTypedValue(child, cache.mutable_text_storage(), &is_date);
         if (!val_or) {
           return std::move(val_or.error());
         }
         record.cells[field_pos] = val_or.value();
         record.cell_is_index[field_pos] = false;
+        if (is_date) {
+          record.cell_is_date.resize(field_count, false);
+          record.cell_is_date[field_pos] = true;
+        }
         ++db_idx;
         continue;
       }

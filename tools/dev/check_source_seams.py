@@ -133,7 +133,9 @@ _FACADE_FILES = frozenset(
         "workbook_ref_rewrite.cpp",
         "workbook_copy_sheet.cpp",
         "workbook_data_table.cpp",
+        "workbook_pivot_details.cpp",
         "workbook_row_col_edit.cpp",
+        "workbook_tables.cpp",
         "workbook_sheet_mutation.h",
     }
 )

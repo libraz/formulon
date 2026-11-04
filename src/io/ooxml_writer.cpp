@@ -136,6 +136,40 @@ std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivo
   return PivotRenderedSpan{layout_or.value().rows, layout_or.value().cols};
 }
 
+/// True when `cache` reads a worksheet range or name of `wb` itself, so Excel
+/// can rebuild it on open.
+bool CacheSourceInWorkbook(const Workbook& wb, const pivot::PivotCache& cache) {
+  for (const auto& attr : cache.cache_source_attrs()) {
+    if (attr.first == "type" && attr.second != "worksheet") {
+      return false;
+    }
+  }
+  const pivot::WorksheetSource& source = cache.worksheet_source();
+  if (!source.present) {
+    return false;
+  }
+  if (!source.sheet.empty()) {
+    return wb.sheet_by_name(source.sheet) != nullptr;
+  }
+  const std::size_t bang = source.ref.rfind('!');
+  if (bang != std::string::npos) {
+    std::string_view quoted = std::string_view(source.ref).substr(0, bang);
+    std::string sheet;
+    if (quoted.size() >= 2 && quoted.front() == '\'' && quoted.back() == '\'') {
+      quoted = quoted.substr(1, quoted.size() - 2);
+      // A doubled apostrophe inside the quotes stands for one.
+      for (std::size_t i = 0; i < quoted.size(); ++i) {
+        sheet.push_back(quoted[i]);
+        i += quoted[i] == '\'' && i + 1 < quoted.size() && quoted[i + 1] == '\'' ? 1U : 0U;
+      }
+    } else {
+      sheet.assign(quoted);
+    }
+    return sheet.find('[') == std::string::npos && wb.sheet_by_name(sheet) != nullptr;
+  }
+  return !source.name.empty();
+}
+
 std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   std::string out;
   out.reserve(256 + t.columns.size() * 64);
@@ -424,7 +458,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
           }
         }
       }
-      cache_plans.emplace(cache->cache_id(), build_pivot_cache_write_plan(*cache, users));
+      PivotCacheWritePlan cache_plan = build_pivot_cache_write_plan(*cache, users);
+      // An edited table is rebuilt only from a source Excel can re-read; any
+      // other loaded cache keeps its attributes as read.
+      if (!cache->passthrough_attrs().empty() && !CacheSourceInWorkbook(wb, *cache)) {
+        cache_plan.refresh_on_load = false;
+      }
+      cache_plans.emplace(cache->cache_id(), std::move(cache_plan));
     }
   }
   const auto plan_for = [&cache_plans](std::uint32_t cache_id) -> const PivotCacheWritePlan* {

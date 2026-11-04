@@ -27,6 +27,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 
 namespace formulon::io {
 namespace {
@@ -75,12 +76,15 @@ Expected<void, Error> ParseItems(const pugi::xml_node& items_node, pivot::PivotF
     if (is_marker) {
       // Subtotal / grand-total / blank marker; not a real item, but kept so
       // its attributes survive.
-      field->marker_items.push_back(pivot::PivotMarkerItem{raw_xml(it), std::string(t), ordinal});
+      field->marker_items.push_back(
+          pivot::PivotMarkerItem{raw_xml(it), std::string(t), ordinal, attr_bool(it, "sd", true)});
       continue;
     }
     pivot::PivotItem entry;
     entry.visible = !parse_xml_bool_attr(it.attribute("h"));
-    capture_unknown_attrs(it, {"x", "h", "t"}, entry.passthrough_attrs);
+    entry.caption = it.attribute("n").as_string();
+    entry.show_detail = attr_bool(it, "sd", true);
+    capture_unknown_attrs(it, {"x", "h", "t", "n", "sd"}, entry.passthrough_attrs);
     if (pugi::xml_attribute x = it.attribute("x"); x) {
       const std::optional<std::uint32_t> cache_index = parse_xml_u32_attr_strict(x);
       if (!cache_index.has_value()) {
@@ -162,15 +166,45 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     // `compact` / `outline` are the report form, which the writer derives
     // from the table's layout; `CaptureFormOverride` keeps them once the
     // layout is known and they depart from it.
+    field.insert_blank_row = attr_bool(f, "insertBlankRow", false);
     capture_unknown_attrs(f, {"axis",          "dataField",      "name",
                               "numFmtId",      "subtotalTop",    "defaultSubtotal",
                               "sumSubtotal",   "countASubtotal", "avgSubtotal",
                               "maxSubtotal",   "minSubtotal",    "productSubtotal",
                               "countSubtotal", "stdDevSubtotal", "stdDevPSubtotal",
                               "varSubtotal",   "varPSubtotal",   "sortType",
-                              "compact",       "outline"},
+                              "compact",       "outline",        "insertBlankRow"},
                           field.passthrough_attrs);
-    capture_unknown_children(f, {"items"}, field.raw_children_xml);
+    capture_unknown_children(f, {"items", "extLst"}, field.raw_children_xml);
+    // Excel spells the extension's URI with a lower-case `432a`, so it is
+    // matched case-insensitively. An extension holding anything beside its one
+    // `<pivotField>` (found under any prefix) is kept whole; `fillDownLabels`
+    // is still read from it.
+    for (pugi::xml_node ext : f.child("extLst").children("ext")) {
+      if (!strings::case_insensitive_eq(ext.attribute("uri").as_string(), kPivotFieldExtUri)) {
+        append_raw_xml(field.raw_ext_xml, ext);
+        continue;
+      }
+      const pugi::xml_node x14 = child_local(ext, "pivotField");
+      std::size_t elements = 0;
+      for (pugi::xml_node child = ext.first_child(); child; child = child.next_sibling()) {
+        elements += child.type() == pugi::node_element ? 1U : 0U;
+      }
+      field.fill_down_labels = attr_bool(x14, "fillDownLabels", false);
+      // The writer spells the element `x14:`; children under another prefix
+      // would lose their binding.
+      const bool foreign_children = std::string_view(x14.name()) != "x14:pivotField" && has_element_child(x14);
+      if (!x14 || elements != 1U || foreign_children) {
+        append_raw_xml(field.raw_ext_xml, ext);
+        continue;
+      }
+      capture_unknown_attrs(x14, {"fillDownLabels"}, field.x14_attrs);
+      for (pugi::xml_node child = x14.first_child(); child; child = child.next_sibling()) {
+        if (child.type() == pugi::node_element) {
+          append_raw_xml(field.x14_children_xml, child);
+        }
+      }
+    }
     out->mutable_fields().push_back(std::move(field));
   }
   return Expected<void, Error>::Ok();
@@ -844,10 +878,16 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // Capture every root attribute the model does not represent structurally
   // (`updatedVersion`, `createdVersion`, `itemPrintTitles`, `indent`, ...)
   // so the writer re-emits them verbatim.
-  capture_unknown_attrs(root,
-                        {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline",
-                         "compactData", "outlineData", "subtotalHiddenItems"},
-                        table.mutable_passthrough_attrs());
+  if (pugi::xml_attribute caption = root.attribute("grandTotalCaption"); caption) {
+    table.set_grand_total_caption(std::string(caption.value()));
+  }
+  table.set_auto_formatting(attr_bool(root, "useAutoFormatting", false));
+  table.set_enable_drill(attr_bool(root, "enableDrill", true));
+  capture_unknown_attrs(
+      root,
+      {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline", "compactData",
+       "outlineData", "subtotalHiddenItems", "grandTotalCaption", "useAutoFormatting", "enableDrill"},
+      table.mutable_passthrough_attrs());
 
   pugi::xml_node loc = root.child("location");
   if (!loc) {
@@ -948,10 +988,10 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // `<colItems>`, and `<pageFields>` are the only unmodelled elements the
   // schema places *before* `<dataFields>`; they are binned by name into
   // the two pre-dataFields slots (rowItems after `<rowFields>`; colItems
-  // and pageFields after `<colFields>`). Every other unmodelled element
-  // (`<formats>`, `<conditionalFormats>`, `<chartFormats>`,
-  // `<calculatedFields>`, `<calculatedItems>`, `<pivotTableStyleInfo>`,
-  // `<extLst>`, ...) belongs after `<dataFields>`. `<pivotTableStyleInfo>`
+  // and pageFields, each in a bin of its own, after `<colFields>`). Every
+  // other unmodelled element (`<formats>`, `<conditionalFormats>`,
+  // `<chartFormats>`, `<calculatedFields>`, `<calculatedItems>`,
+  // `<pivotTableStyleInfo>`, `<extLst>`, ...) belongs after `<dataFields>`. `<pivotTableStyleInfo>`
   // and `<filters>` are decoded into the structured state; the
   // post-dataFields elements the schema places before the style go to their
   // own bin, the rest to the tail buffer. Relative order within each bin
@@ -987,7 +1027,9 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     std::string* bucket = nullptr;
     if (name == "rowItems") {
       bucket = &table.mutable_raw_passthrough_after_row_fields();
-    } else if (name == "colItems" || name == "pageFields") {
+    } else if (name == "colItems") {
+      bucket = &table.mutable_raw_col_items();
+    } else if (name == "pageFields") {
       bucket = &table.mutable_raw_passthrough_after_col_fields();
     } else if (name == "formats" || name == "conditionalFormats" || name == "chartFormats" ||
                name == "pivotHierarchies") {
