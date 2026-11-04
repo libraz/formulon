@@ -624,7 +624,17 @@ extern "C" fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, std::uint
     region = s.spill_region_covering(row, col);
   }
   if (region == nullptr) {
-    out->engaged = 0;
+    // Only a footprint that fits the grid is reported: an overflowing one is
+    // recorded on some spill paths and not others.
+    const auto blocked = s.blocked_spill_footprint_at(row, col);
+    if (blocked && static_cast<std::uint64_t>(blocked->anchor_row) + blocked->rows <= formulon::Sheet::kMaxRows &&
+        static_cast<std::uint64_t>(blocked->anchor_col) + blocked->cols <= formulon::Sheet::kMaxCols) {
+      out->anchor_row = blocked->anchor_row;
+      out->anchor_col = blocked->anchor_col;
+      out->rows = blocked->rows;
+      out->cols = blocked->cols;
+      out->blocked = 1;
+    }
     return 0;
   }
   out->anchor_row = region->anchor_row;

@@ -171,6 +171,18 @@ std::vector<BlockedSpillFootprint> Sheet::blocked_spill_footprints() const {
   return out;
 }
 
+std::optional<BlockedSpillFootprint> Sheet::blocked_spill_footprint_at(std::uint32_t row, std::uint32_t col) const {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  if (spill_table_ == nullptr) {
+    return std::nullopt;
+  }
+  const auto it = spill_table_->blocked_by_anchor.find(CellAddress{row, col});
+  if (it == spill_table_->blocked_by_anchor.end()) {
+    return std::nullopt;
+  }
+  return it->second;
+}
+
 std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(std::uint32_t row,
                                                                                std::uint32_t col) const {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);

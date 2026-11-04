@@ -725,6 +725,11 @@ class Sheet {
   /// mapped coordinates after the cell move.
   std::vector<BlockedSpillFootprint> blocked_spill_footprints() const;
 
+  /// Returns a copy of the blocked-footprint record anchored at `(row, col)`,
+  /// or `nullopt` when that cell is not a blocked spill anchor. One hash
+  /// lookup under the spill mutex.
+  std::optional<BlockedSpillFootprint> blocked_spill_footprint_at(std::uint32_t row, std::uint32_t col) const;
+
   /// Returns a copy of the committed spill rectangle covering `(row, col)`.
   /// The anchor itself is included, unlike `spill_region_covering`, because
   /// mutation callers need the complete rectangle before they clear it.

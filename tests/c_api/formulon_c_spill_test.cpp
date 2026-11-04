@@ -388,3 +388,86 @@ TEST(FormulonCApiSpill, NullArgsReturnBindingNullPointer) {
   EXPECT_EQ(fm_workbook_spill_info(wb.handle, 0, 0, 0, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
+
+namespace {
+
+fm_spill_info_t SpillAt(fm_workbook_t* wb, uint32_t row, uint32_t col) {
+  fm_spill_info_t info{};
+  EXPECT_EQ(fm_workbook_spill_info(wb, 0, row, col, &info), 0);
+  return info;
+}
+
+/// Expects `info` to report a blocked anchor at `(row, col)` that attempted `rows` x `cols`.
+void ExpectBlocked(const fm_spill_info_t& info, uint32_t row, uint32_t col, uint32_t rows, uint32_t cols) {
+  EXPECT_EQ(info.engaged, 0);
+  EXPECT_EQ(info.blocked, 1);
+  EXPECT_EQ(info.anchor_row, row);
+  EXPECT_EQ(info.anchor_col, col);
+  EXPECT_EQ(info.rows, rows);
+  EXPECT_EQ(info.cols, cols);
+}
+
+void ExpectNothing(const fm_spill_info_t& info) {
+  EXPECT_EQ(info.engaged, 0);
+  EXPECT_EQ(info.blocked, 0);
+  EXPECT_EQ(info.anchor_row, 0U);
+  EXPECT_EQ(info.anchor_col, 0U);
+  EXPECT_EQ(info.rows, 0U);
+  EXPECT_EQ(info.cols, 0U);
+}
+
+}  // namespace
+
+TEST(FormulonCApiSpill, OccupiedCellBlocksAnchorUntilCleared) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);  // D2
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 3, 3, "x"), 0);                // D4
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  ExpectBlocked(SpillAt(wb.handle, 1, 3), 1, 3, 5, 1);
+  // Only the anchor reports it: an empty cell inside the attempted range and
+  // the blocker itself read as nothing.
+  ExpectNothing(SpillAt(wb.handle, 2, 3));
+  ExpectNothing(SpillAt(wb.handle, 3, 3));
+  ExpectNothing(SpillAt(wb.handle, 5, 3));
+
+  ASSERT_EQ(fm_workbook_set_blank(wb.handle, 0, 3, 3), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  const fm_spill_info_t info = SpillAt(wb.handle, 1, 3);
+  EXPECT_EQ(info.engaged, 1);
+  EXPECT_EQ(info.blocked, 0);
+  EXPECT_EQ(info.anchor_row, 1U);
+  EXPECT_EQ(info.anchor_col, 3U);
+  EXPECT_EQ(info.rows, 5U);
+  EXPECT_EQ(info.cols, 1U);
+}
+
+TEST(FormulonCApiSpill, MergedCellBlocksAnchor) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0, fm_merge_range{3, 3, 3, 4}), 0);  // D4:E4
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);   // D2
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  ExpectBlocked(SpillAt(wb.handle, 1, 3), 1, 3, 5, 1);
+  ExpectNothing(SpillAt(wb.handle, 2, 3));
+}
+
+TEST(FormulonCApiSpill, OtherSpillBlocksAnchor) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 3, 1, "=SEQUENCE(1,5)"), 0);  // B4 spills B4:F4
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 1, 3, "=SEQUENCE(5)"), 0);  // D2 meets D4
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  ExpectBlocked(SpillAt(wb.handle, 1, 3), 1, 3, 5, 1);
+  // D4 belongs to the committed spill, not to the blocked one.
+  const fm_spill_info_t d4 = SpillAt(wb.handle, 3, 3);
+  EXPECT_EQ(d4.engaged, 1);
+  EXPECT_EQ(d4.blocked, 0);
+  EXPECT_EQ(d4.anchor_row, 3U);
+  EXPECT_EQ(d4.anchor_col, 1U);
+  ExpectNothing(SpillAt(wb.handle, 2, 3));
+}

@@ -241,6 +241,14 @@ class PatchReader {
     field(op, static_cast<E>(value), out, name);
   }
 
+  // A removable boolean; a `SET` value other than 0/1 is rejected.
+  void bool_field(std::int32_t op, std::int32_t value, ChartPatchField<bool>& out, const char* name) {
+    if (op == FM_CHART_PATCH_SET && !enum_ok(value, 1, name)) {
+      return;
+    }
+    field(op, value == 1, out, name);
+  }
+
   void text_field(std::int32_t op, const char* value, ChartPatchField<std::string>& out, const char* name) {
     if (text_ok(value, name)) {
       field(op, std::string(value != nullptr ? value : ""), out, name);
@@ -457,6 +465,7 @@ extern "C" fm_status_t fm_chart_info(const fm_chart_t* chart, fm_chart_info_t* o
     out->source_header_row = m.source->header_row ? 1 : 0;
     out->source_header_column = m.source->header_column ? 1 : 0;
   }
+  out->na_as_blank = tri(m.disp_na_as_blank);
   return 0;
 }
 
@@ -704,6 +713,7 @@ extern "C" fm_status_t fm_sheet_chart_preview_open(const fm_workbook_t* wb, size
   r.enum_optional(overrides->blanks_as_op, overrides->blanks_as, formulon::ChartBlanksAs::kSpan, model.blanks_as,
                   "blanks_as");
   r.flag(overrides->plot_vis_only_op, overrides->plot_vis_only, model.plot_vis_only, "plot_vis_only_op");
+  r.flag(overrides->na_as_blank_op, overrides->na_as_blank, model.na_as_blank, "na_as_blank_op");
   if (r.status() != 0) {
     return r.status();
   }
@@ -1034,25 +1044,23 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                                  int32_t blanks_as, int32_t plot_vis_only) {
+                                                  const fm_chart_display_patch* patch) {
   constexpr const char* kApi = "fm_sheet_set_chart_display";
-  if (auto rc = edit_entry(wb, sheet_index, wb, kApi); rc != 0) {
+  if (auto rc = edit_entry(wb, sheet_index, patch, kApi); rc != 0) {
     return rc;
   }
   PatchReader r(kApi);
-  r.enum_ok(blanks_as, formulon::ChartBlanksAs::kSpan, "blanks_as");
-  r.enum_ok(plot_vis_only, formulon::Tri::kTrue, "plot_vis_only");
+  formulon::ChartDisplayPatch model;
+  if (patch->blanks_as_op == FM_CHART_PATCH_SET && patch->blanks_as == FM_CHART_BLANKS_ABSENT) {
+    r.fail("blanks_as", "cannot be set to ABSENT");
+  }
+  r.enum_field(patch->blanks_as_op, patch->blanks_as, formulon::ChartBlanksAs::kSpan, model.blanks_as, "blanks_as");
+  r.bool_field(patch->plot_vis_only_op, patch->plot_vis_only, model.plot_vis_only, "plot_vis_only");
+  r.bool_field(patch->na_as_blank_op, patch->na_as_blank, model.na_as_blank, "na_as_blank");
   if (r.status() != 0) {
     return r.status();
   }
-  formulon::ChartDisplayPatch patch;
-  patch.blanks_as =
-      blanks_as == 0
-          ? formulon::ChartPatchField<formulon::ChartBlanksAs>::Clear()
-          : formulon::ChartPatchField<formulon::ChartBlanksAs>::Set(static_cast<formulon::ChartBlanksAs>(blanks_as));
-  patch.plot_vis_only = plot_vis_only == 0 ? formulon::ChartPatchField<bool>::Clear()
-                                           : formulon::ChartPatchField<bool>::Set(plot_vis_only == 2);
-  return finish_status(formulon::set_chart_display(wb->workbook(), sheet_index, object_id, patch));
+  return finish_status(formulon::set_chart_display(wb->workbook(), sheet_index, object_id, model));
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,

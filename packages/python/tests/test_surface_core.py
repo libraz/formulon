@@ -59,7 +59,7 @@ class StructLayoutTests(unittest.TestCase):
         "TABLE_STYLE": 20,
         "READ_DIAGNOSTICS": 20,
         "SAVE_DIAGNOSTICS": 20,
-        "SPILL_INFO": 20,
+        "SPILL_INFO": 24,
         "ARRAY_FORMULA": 24,
         "FUNCTION_METADATA": 24,
         "LOCALE_FACTS": 56,
@@ -130,7 +130,7 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_LITERAL": 24,
         "CHART_POINT": 144,
         "CHART_AXIS": 112,
-        "CHART_PREVIEW_OVERRIDES": 44,
+        "CHART_PREVIEW_OVERRIDES": 52,
         "CHART_DATA_INFO": 44,
         "CHART_DATA_SERIES": 56,
         "CHART_DATA_POINTS": 20,
@@ -147,6 +147,7 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_PLOT_PATCH": 40,
         "CHART_AXIS_PATCH": 136,
         "CHART_LEGEND_PATCH": 20,
+        "CHART_DISPLAY_PATCH": 24,
     }
 
     def test_struct_sizes(self) -> None:

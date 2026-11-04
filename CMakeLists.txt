@@ -518,6 +518,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/version.cpp
   src/c_api/parts/workbook.cpp
   src/c_api/parts/recalc.cpp
+  src/c_api/parts/reference.cpp
   src/c_api/parts/tables.cpp
   src/c_api/parts/theme.cpp
   src/c_api/parts/threaded_comments.cpp

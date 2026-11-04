@@ -4300,11 +4300,6 @@ def _encode_axis_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
     return out
 
 
-def _tri_flag(flag: Optional[bool]) -> int:
-    """Map an optional flag to ``fm_chart_tri_t``: absent, false, true."""
-    return 0 if flag is None else (2 if flag else 1)
-
-
 def _header_mode(flag: Optional[bool]) -> int:
     """Map an optional flag to ``fm_chart_header_mode_t``: ``None`` is Excel's detection."""
     return 0 if flag is None else (1 if flag else 2)
@@ -8003,16 +7998,19 @@ class Workbook:
     ) -> None:
         """Write how blanks plot and whether hidden cells are skipped; ``ABSENT`` / ``None`` remove the element."""
         h = self._require()
-        _check(
-            LIB.fm_sheet_set_chart_display(
-                h,
-                _uint(sheet, "sheet_index"),
-                _uint(object_id, "object_id"),
-                _sint(blanks_as, "blanks_as"),
-                _sint(_tri_flag(plot_visible_only), "plot_vis_only"),
-            ),
-            "fm_sheet_set_chart_display",
-        )
+        fields: Dict[str, object] = {
+            "blanks_as_op": 1 if int(blanks_as) == 0 else 2,
+            "blanks_as": _sint(blanks_as, "blanks_as"),
+            "plot_vis_only_op": 1 if plot_visible_only is None else 2,
+            "plot_vis_only": 1 if plot_visible_only else 0,
+        }
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CHART_DISPLAY_PATCH)
+            S.CHART_DISPLAY_PATCH.pack(LIB, ptr, fields)
+            _check(
+                LIB.fm_sheet_set_chart_display(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), ptr),
+                "fm_sheet_set_chart_display",
+            )
 
     def set_chart_series(self, sheet: int, object_id: int, plot: int, series_idx: int, patch: ChartSeriesPatch) -> None:
         """Patch the series with ``c:idx`` ``series_idx`` of plot group ``plot``; a changed reference refreshes its cache."""

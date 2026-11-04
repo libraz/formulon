@@ -597,6 +597,7 @@ SPILL_INFO = Struct(
         ("rows", U32),
         ("cols", U32),
         ("engaged", I32),
+        ("blocked", I32),
     ],
 )
 
@@ -1538,6 +1539,7 @@ CHART_INFO = Struct(
         ("source_direction", I32),
         ("source_header_row", I32),
         ("source_header_column", I32),
+        ("na_as_blank", I32),
     ],
 )
 
@@ -1646,6 +1648,8 @@ CHART_PREVIEW_OVERRIDES = Struct(
         ("blanks_as", I32),
         ("plot_vis_only_op", I32),
         ("plot_vis_only", I32),
+        ("na_as_blank_op", I32),
+        ("na_as_blank", I32),
     ],
 )
 
@@ -1863,5 +1867,17 @@ CHART_LEGEND_PATCH = Struct(
         ("hidden_series_op", I32),
         ("hidden_series", PTR),
         ("hidden_series_count", U32),
+    ],
+)
+
+CHART_DISPLAY_PATCH = Struct(
+    "fm_chart_display_patch",
+    [
+        ("blanks_as_op", I32),
+        ("blanks_as", I32),
+        ("plot_vis_only_op", I32),
+        ("plot_vis_only", I32),
+        ("na_as_blank_op", I32),
+        ("na_as_blank", I32),
     ],
 )

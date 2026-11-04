@@ -26,6 +26,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quarter and month); the existing numbers are unchanged.
   `fm_pivot_field_info_t` gains `show_all` at its end. A caller compiled
   against an earlier header must be recompiled.
+- **C ABI:** `fm_sheet_set_chart_display` takes a `fm_chart_display_patch`
+  (keep / clear / set per field, like the legend and axis patches) in place of
+  its `blanks_as` and `plot_vis_only` arguments. To port a call, clear a field
+  whose old value was `ABSENT` and set the others; `ABSENT` as a set value is
+  now `kInvalidArgument`. `fm_chart_info_t` gains `na_as_blank`,
+  `fm_chart_preview_overrides` gains `na_as_blank_op` / `na_as_blank`, and
+  `fm_spill_info_t` gains `blocked`, each at its end. A caller compiled
+  against an earlier header must be recompiled.
+- `setChartDisplay(sheet, objectId, patch)` (JavaScript) and
+  `set_chart_display(sheet, object_id, patch)` (Python) take one patch object
+  in place of the positional values: `blanksAs`, `plotVisibleOnly` and
+  `naAsBlank` (`blanks_as`, `plot_visible_only`, `na_as_blank`). An omitted
+  key keeps the element, `null` / `None` removes it, a value sets it.
 
 ### Added
 
@@ -117,6 +130,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pivot's report into its cells now, and `fm_workbook_pivot_projection_pending`
   (`pivotProjectionPending`, `pivot_projection_pending`) tells whether a cache
   change left them stale.
+- Charts read and write "Show #N/A as an empty cell" (`c16r3:dispNaAsBlank`):
+  `na_as_blank` in `fm_chart_info_t` (`naAsBlank`, `na_as_blank`), the
+  `na_as_blank` field of the display patch, and a preview override. Turning it
+  off removes the extension, as Excel writes it.
+- `fm_workbook_spill_info` (`spillInfo`, `spill_info`) reports a spill that is
+  blocked with `#SPILL!`: at the anchor, `blocked` is 1 and the anchor, rows
+  and columns give the range the spill tried to fill, so a host can outline
+  it as Excel does.
+- `fm_workbook_parse_reference` (`parseReference`, `parse_reference`) reads a
+  reference string with the grammar `INDIRECT` uses under the workbook's
+  profile, A1 or R1C1, into a sheet name and a 0-based rectangle;
+  `fm_workbook_format_reference` (`formatReference`, `format_reference`)
+  writes a rectangle back as A1 text, quoting the sheet name as a formula
+  does.
 
 ### Changed
 
@@ -140,6 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `INDIRECT` reads an unquoted sheet name with non-ASCII characters or a dot
+  (`INDIRECT("売上!A1")`, `INDIRECT("Sheet.1!A1")`) instead of returning
+  `#REF!`, following the rule formulas use for sheet names.
 - Writing a number, text or blank into a pivot cache record, or clearing a
   field's shared items, no longer leaves the cell saved as a date or as a
   shared-item index.

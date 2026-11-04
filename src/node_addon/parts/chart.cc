@@ -904,13 +904,17 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  // `plotVisibleOnly` null or omitted removes the element.
-  int32_t plot_vis_only = FM_CHART_TRI_ABSENT;
+  // `blanksAs` `ABSENT` removes `c:dispBlanksAs`; `plotVisibleOnly` null or
+  // omitted removes `c:plotVisOnly`.
+  fm_chart_display_patch patch{};
+  patch.blanks_as = ArgI32(info, 2);
+  patch.blanks_as_op = patch.blanks_as == FM_CHART_BLANKS_ABSENT ? FM_CHART_PATCH_CLEAR : FM_CHART_PATCH_SET;
+  patch.plot_vis_only_op = FM_CHART_PATCH_CLEAR;
   if (info.Length() > 3 && !info[3].IsUndefined() && !info[3].IsNull()) {
-    plot_vis_only = ArgBool(info, 3) ? FM_CHART_TRI_TRUE : FM_CHART_TRI_FALSE;
+    patch.plot_vis_only_op = FM_CHART_PATCH_SET;
+    patch.plot_vis_only = ArgFlag(info, 3);
   }
-  return MakeStatus(
-      env, fm_sheet_set_chart_display(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgI32(info, 2), plot_vis_only));
+  return MakeStatus(env, fm_sheet_set_chart_display(handle_, ArgU32(info, 0), ArgU32(info, 1), &patch));
 }
 
 Napi::Value Workbook::SetChartSeries(const Napi::CallbackInfo& info) {

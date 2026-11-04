@@ -1375,6 +1375,73 @@ FM_API fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* wb, s
 FM_API fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook_t* wb, size_t index, fm_value_t* out);
 
 /* -------------------------------------------------------------------------- */
+/* Reference text                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief A parsed reference: a 0-based, inclusive rectangle with an optional
+ *        sheet qualifier.
+ *
+ * `valid` is 0 when the text is not a reference, and every other field is
+ * then zero / `NULL`. `sheet_name` is `NULL` when `has_sheet` is 0, else the
+ * unquoted UTF-8 name as a read-scratch-backed view. A whole column or row
+ * is expanded to the grid edge, and `row0 <= row1`, `col0 <= col1`.
+ */
+typedef struct {
+  int32_t valid;
+  int32_t has_sheet;
+  const char* sheet_name;
+  uint32_t row0;
+  uint32_t col0;
+  uint32_t row1;
+  uint32_t col1;
+} fm_reference_t;
+
+/**
+ * @brief Parses `text` as `INDIRECT` reads a reference under the workbook's
+ *        profile: A1 when `r1c1` is 0, R1C1 (letters and brackets of the
+ *        profile's locale) when 1.
+ *
+ * Accepts an optional local sheet qualifier (quoted with `''` escaping, or
+ * bare), `$` markers (dropped), a `:` range in either order, and whole
+ * columns / rows. 3D, external, named, structured and multi-area
+ * references, surrounding whitespace, and a sheet name longer than 31
+ * UTF-16 units read as `valid = 0`. With `has_base` 1, R1C1 relative axes
+ * are measured from `(base_row, base_col)` and wrap at the grid edge; with
+ * `has_base` 0 a relative axis reads as `valid = 0`.
+ *
+ * @return `kOk` on success, including text that is not a reference;
+ *         `kBindingNullPointer` when `wb`, `text` or `out` is `NULL`;
+ *         `kBindingUtf8EncodingError` when `text` is malformed UTF-8;
+ *         `kInvalidArgument` when `r1c1` or `has_base` is not 0/1, or
+ *         `has_base` is 1 with the base outside the grid.
+ */
+FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const char* text, int32_t r1c1,
+                                               int32_t has_base, uint32_t base_row, uint32_t base_col,
+                                               fm_reference_t* out);
+
+/**
+ * @brief Formats the inclusive rectangle `(row0, col0)..(row1, col1)` as A1
+ *        reference text, the inverse of `fm_workbook_parse_reference`.
+ *
+ * `sheet_name` `NULL` or empty writes no qualifier; otherwise the name is
+ * quoted as a stored formula quotes it (and is not validated as a sheet
+ * name). A single cell writes one endpoint (`A1`), a rectangle spanning
+ * every row writes columns (`B:D`), one spanning every column writes rows
+ * (`2:11`). `absolute` 1 prefixes each component with `$`. `*out_text` is
+ * a read-scratch-backed view.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` or `out_text` is `NULL`;
+ *         `kBindingUtf8EncodingError` when `sheet_name` is malformed UTF-8;
+ *         `kInvalidArgument` when a coordinate is outside the grid,
+ *         `row0 > row1` or `col0 > col1`, or `absolute` is not 0/1.
+ */
+FM_API fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const char* sheet_name, uint32_t row0,
+                                                uint32_t col0, uint32_t row1, uint32_t col1, int32_t absolute,
+                                                const char** out_text);
+
+/* -------------------------------------------------------------------------- */
 /* Iteration / dump                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -5797,11 +5864,18 @@ FM_API fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, size_t 
  * @brief Result shape for `fm_workbook_spill_info`.
  *
  *   * `engaged` — `1` when `(row, col)` is part of a registered spill
- *     region, `0` otherwise. The other fields carry meaning only when
- *     `engaged == 1`.
+ *     region, `0` otherwise.
+ *   * `blocked` — `1` when `engaged == 0` and `(row, col)` is the anchor
+ *     of a spill refused with `#SPILL!` whose attempted rectangle fits
+ *     inside the grid, `0` otherwise. Only the anchor reports it; cells
+ *     inside the attempted rectangle read `engaged == 0`, `blocked == 0`.
  *   * `anchor_row`, `anchor_col` — the region's anchor cell (the cell
  *     that holds the dynamic-array formula).
- *   * `rows`, `cols` — region dimensions including the anchor.
+ *   * `rows`, `cols` — region dimensions including the anchor; for a
+ *     blocked anchor, the rectangle the spill attempted.
+ *
+ * `anchor_*`, `rows` and `cols` carry meaning only when `engaged` or
+ * `blocked` is `1`.
  *
  * Use `fm_workbook_get_value(sheet, anchor_row + r, anchor_col + c)`
  * to read individual cells; `fm_workbook_get_value` is already
@@ -5813,14 +5887,16 @@ typedef struct {
   uint32_t rows;
   uint32_t cols;
   int32_t engaged; /* 0/1 */
+  int32_t blocked; /* 0/1 */
 } fm_spill_info_t;
 
 /**
  * @brief Returns the spill-region info for `(sheet, row, col)`.
  *
  * If `(row, col)` is the anchor of a region, returns that region. If
- * it is a phantom of a region, returns the same region. Otherwise sets
- * `out->engaged = 0` and leaves the remaining fields zero.
+ * it is a phantom of a region, returns the same region. If it is a
+ * blocked anchor (see `blocked`), returns the attempted rectangle with
+ * `out->blocked = 1`. Otherwise every field is zero.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;
@@ -9784,8 +9860,9 @@ typedef struct {
  * @brief Top-level fields of a chart.
  *
  * The anchor fields read as `fm_drawing_object` does. `legend_position` is
- * `FM_CHART_LEGEND_NONE` when the chart has no legend. `auto_title_deleted`
- * and `plot_vis_only` are `fm_chart_tri_t`; `blanks_as` an
+ * `FM_CHART_LEGEND_NONE` when the chart has no legend. `auto_title_deleted`,
+ * `plot_vis_only` and `na_as_blank` (`c16r3:dispNaAsBlank`, whether `#N/A`
+ * points draw as blank cells) are `fm_chart_tri_t`; `blanks_as` an
  * `fm_chart_blanks_as_t`. `source_range` is the sheet-qualified rectangle
  * every series was split from, `NULL` (with the other `source_*` fields
  * zero) when the series share no such rectangle.
@@ -9826,6 +9903,7 @@ typedef struct {
   int32_t source_direction;
   int32_t source_header_row;
   int32_t source_header_column;
+  int32_t na_as_blank;
 } fm_chart_info_t;
 
 /**
@@ -10060,6 +10138,7 @@ typedef struct fm_chart_data fm_chart_data_t;
  *        field applies when its `_op` is `FM_CHART_PATCH_SET` (`CLEAR` is
  *        rejected). `direction` is an `fm_chart_series_direction_t`,
  *        `blanks_as` an `fm_chart_blanks_as_t`; the rest are 0/1.
+ *        `na_as_blank` overrides whether `#N/A` points draw as blank cells.
  */
 typedef struct {
   const char* source;
@@ -10073,6 +10152,8 @@ typedef struct {
   int32_t blanks_as;
   int32_t plot_vis_only_op;
   int32_t plot_vis_only;
+  int32_t na_as_blank_op;
+  int32_t na_as_blank;
 } fm_chart_preview_overrides;
 
 /**
@@ -10479,6 +10560,22 @@ typedef struct {
 } fm_chart_legend_patch;
 
 /**
+ * @brief Display-option patch. `blanks_as` (`c:dispBlanksAs`) is an
+ *        `fm_chart_blanks_as_t` of `GAP`, `ZERO` or `SPAN`; `plot_vis_only`
+ *        (`c:plotVisOnly`) and `na_as_blank` (`c16r3:dispNaAsBlank`, `#N/A`
+ *        points drawn as blank cells) are 0/1. `CLEAR` removes the element;
+ *        `na_as_blank` set to 0 removes it too, as Excel writes it.
+ */
+typedef struct {
+  int32_t blanks_as_op;
+  int32_t blanks_as;
+  int32_t plot_vis_only_op;
+  int32_t plot_vis_only;
+  int32_t na_as_blank_op;
+  int32_t na_as_blank;
+} fm_chart_display_patch;
+
+/**
  * @brief Creates a chart from `opts` with filled caches and returns its
  *        object id.
  *
@@ -10540,13 +10637,15 @@ FM_API fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_index
                                            const fm_chart_axis_patch* patch);
 
 /**
- * @brief Writes `c:dispBlanksAs` (an `fm_chart_blanks_as_t`) and
- *        `c:plotVisOnly` (an `fm_chart_tri_t`); `ABSENT` removes the element.
+ * @brief Patches the chart's display options.
  *
- * @return `kOk` on success, or a common chart failure.
+ * @return `kOk` on success, or a common chart failure;
+ *         `kBindingNullPointer` when `patch` is `NULL`;
+ *         `kInvalidArgument` when a `SET` value is outside its domain
+ *         (`blanks_as` `ABSENT` included; `CLEAR` removes the element).
  */
 FM_API fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                              int32_t blanks_as, int32_t plot_vis_only);
+                                              const fm_chart_display_patch* patch);
 
 /**
  * @brief Patches the series with `c:idx` `series_idx` of plot group `plot`.

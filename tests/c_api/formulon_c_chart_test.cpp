@@ -16,6 +16,8 @@
 #include "drawing/drawing_xml.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
+#include "io/ooxml/part_dom.h"
+#include "passthrough_part.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -36,7 +38,7 @@ static_assert(sizeof(fm_chart_series_t) == (kWasm32 ? 304U : 400U), "fm_chart_se
 static_assert(sizeof(fm_chart_literal_t) == 24U, "fm_chart_literal_t ABI layout changed");
 static_assert(sizeof(fm_chart_point_t) == 144U, "fm_chart_point_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_t) == (kWasm32 ? 112U : 136U), "fm_chart_axis_t ABI layout changed");
-static_assert(sizeof(fm_chart_preview_overrides) == (kWasm32 ? 44U : 48U),
+static_assert(sizeof(fm_chart_preview_overrides) == (kWasm32 ? 52U : 56U),
               "fm_chart_preview_overrides ABI layout changed");
 static_assert(sizeof(fm_chart_data_info_t) == (kWasm32 ? 44U : 88U), "fm_chart_data_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_series_t) == (kWasm32 ? 56U : 112U), "fm_chart_data_series_t ABI layout changed");
@@ -57,6 +59,8 @@ static_assert(sizeof(fm_chart_point_patch) == 192U, "fm_chart_point_patch ABI la
 static_assert(sizeof(fm_chart_plot_patch) == 40U, "fm_chart_plot_patch ABI layout changed");
 static_assert(sizeof(fm_chart_axis_patch) == (kWasm32 ? 136U : 168U), "fm_chart_axis_patch ABI layout changed");
 static_assert(sizeof(fm_chart_legend_patch) == (kWasm32 ? 20U : 32U), "fm_chart_legend_patch ABI layout changed");
+static_assert(sizeof(fm_chart_display_patch) == 24U, "fm_chart_display_patch ABI layout changed");
+static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 172U : 228U), "fm_chart_info_t na_as_blank offset");
 
 constexpr fm_status_t Code(formulon::FormulonErrorCode c) {
   return static_cast<fm_status_t>(c);
@@ -501,14 +505,17 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
   legend = fm_chart_legend_patch{6, 0, FM_CHART_PATCH_KEEP, nullptr, 0};
   EXPECT_EQ(fm_sheet_set_chart_legend(wb.handle, 0, id, &legend), kInvalidArgument);
 
-  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, FM_CHART_BLANKS_ZERO, FM_CHART_TRI_FALSE), 0)
-      << fm_last_error_message();
+  fm_chart_display_patch display{
+      FM_CHART_PATCH_SET, FM_CHART_BLANKS_ZERO, FM_CHART_PATCH_SET, 0, FM_CHART_PATCH_KEEP, 0};
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &display), 0) << fm_last_error_message();
   Open(wb.handle, id, &chart);
   info = Info(chart);
   EXPECT_EQ(info.blanks_as, FM_CHART_BLANKS_ZERO);
   EXPECT_EQ(info.plot_vis_only, FM_CHART_TRI_FALSE);
-  EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, 4, FM_CHART_TRI_FALSE), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, FM_CHART_BLANKS_GAP, 3), kInvalidArgument);
+  display = fm_chart_display_patch{FM_CHART_PATCH_SET, 4, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0};
+  EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &display), kInvalidArgument);
+  display = fm_chart_display_patch{FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 3, FM_CHART_PATCH_KEEP, 0};
+  EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &display), kInvalidArgument);
 
   ASSERT_EQ(fm_sheet_set_chart_type(wb.handle, 0, id, 0, FM_CHART_INSERT_LINE, FM_CHART_GROUPING_STANDARD), 0)
       << fm_last_error_message();
@@ -1047,8 +1054,9 @@ TEST(FormulonCApiChart, ChartexAndPivotChartsRefuseEdits) {
   EXPECT_STRNE(plot.chartex_layout, "");
   const fm_chart_title_t title{FM_CHART_TITLE_TEXT, "T", nullptr};
   EXPECT_EQ(fm_sheet_set_chart_title(cx.handle, c.sheet, c.id, &title), kUnsupportedKind);
-  EXPECT_EQ(fm_sheet_set_chart_display(cx.handle, c.sheet, c.id, FM_CHART_BLANKS_GAP, FM_CHART_TRI_TRUE),
-            kUnsupportedKind);
+  const fm_chart_display_patch display{
+      FM_CHART_PATCH_SET, FM_CHART_BLANKS_GAP, FM_CHART_PATCH_SET, 1, FM_CHART_PATCH_KEEP, 0};
+  EXPECT_EQ(fm_sheet_set_chart_display(cx.handle, c.sheet, c.id, &display), kUnsupportedKind);
   fm_chart_preview_overrides o{};
   fm_chart_data_t* preview = nullptr;
   EXPECT_EQ(fm_sheet_chart_preview_open(cx.handle, c.sheet, c.id, &o, &preview), kUnsupportedKind);
@@ -1132,6 +1140,181 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
     }
   }
   EXPECT_TRUE(found);
+}
+
+/// A display patch touching only `c16r3:dispNaAsBlank`.
+fm_chart_display_patch NaPatch(int32_t op, int32_t value) {
+  return fm_chart_display_patch{FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, op, value};
+}
+
+int32_t NaAsBlank(fm_workbook_t* wb, uint32_t id, size_t sheet = 0) {
+  ChartGuard chart;
+  Open(wb, id, &chart, sheet);
+  return Info(chart).na_as_blank;
+}
+
+/// The part path of chart `id` on sheet 0.
+std::string ChartPath(fm_workbook_t* wb, uint32_t id) {
+  auto all = formulon::all_chart_parts(wb->workbook());
+  EXPECT_TRUE(static_cast<bool>(all));
+  if (all) {
+    for (const formulon::SheetChartPartRef& e : all.value()) {
+      if (e.sheet == 0 && e.ref.object_id == id) {
+        return e.ref.part_path;
+      }
+    }
+  }
+  ADD_FAILURE() << "no chart " << id;
+  return {};
+}
+
+TEST(FormulonCApiChart, NaAsBlankReadsFromTemplatesAndExcelFiles) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  FillGrid(wb.handle);
+  const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_LINE);
+  EXPECT_EQ(NaAsBlank(wb.handle, id), FM_CHART_TRI_TRUE);
+
+  WorkbookGuard line;
+  LoadFixture("chart_line.xlsx", &line);
+  const std::vector<Located> charts = AllCharts(line.handle);
+  ASSERT_FALSE(charts.empty());
+  EXPECT_EQ(NaAsBlank(line.handle, charts[0].id, charts[0].sheet), FM_CHART_TRI_TRUE);
+
+  // A file without the extension reads ABSENT.
+  const fm_chart_display_patch clear = NaPatch(FM_CHART_PATCH_CLEAR, 0);
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &clear), 0) << fm_last_error_message();
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_last_error_message();
+  EXPECT_EQ(NaAsBlank(reloaded.handle, id), FM_CHART_TRI_ABSENT);
+
+  // `val="0"`, which Excel never writes, reads FALSE.
+  const fm_chart_display_patch on = NaPatch(FM_CHART_PATCH_SET, 1);
+  ASSERT_EQ(fm_sheet_set_chart_display(reloaded.handle, 0, id, &on), 0) << fm_last_error_message();
+  const std::string path = ChartPath(reloaded.handle, id);
+  const formulon::PassthroughPart* part = formulon::io::ooxml::find_passthrough_part(reloaded.handle->workbook(), path);
+  ASSERT_NE(part, nullptr);
+  std::string xml(part->bytes.begin(), part->bytes.end());
+  const std::string on_text = "dispNaAsBlank val=\"1\"";
+  const std::size_t at = xml.find(on_text);
+  ASSERT_NE(at, std::string::npos);
+  xml.replace(at, on_text.size(), "dispNaAsBlank val=\"0\"");
+  ASSERT_TRUE(static_cast<bool>(
+      reloaded.handle->workbook().replace_passthrough_part(path, std::vector<std::uint8_t>(xml.begin(), xml.end()))));
+  EXPECT_EQ(NaAsBlank(reloaded.handle, id), FM_CHART_TRI_FALSE);
+}
+
+TEST(FormulonCApiChart, NaAsBlankPatchSetClearAndKeep) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  FillGrid(wb.handle);
+  const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_LINE);
+
+  // Setting false drops the extension, as Excel writes it, so it reads ABSENT.
+  fm_chart_display_patch patch = NaPatch(FM_CHART_PATCH_SET, 0);
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &patch), 0) << fm_last_error_message();
+  EXPECT_EQ(NaAsBlank(wb.handle, id), FM_CHART_TRI_ABSENT);
+  patch = NaPatch(FM_CHART_PATCH_SET, 1);
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &patch), 0) << fm_last_error_message();
+  EXPECT_EQ(NaAsBlank(wb.handle, id), FM_CHART_TRI_TRUE);
+
+  // A zeroed patch changes nothing.
+  patch = fm_chart_display_patch{};
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &patch), 0) << fm_last_error_message();
+  ChartGuard chart;
+  Open(wb.handle, id, &chart);
+  fm_chart_info_t info = Info(chart);
+  EXPECT_EQ(info.na_as_blank, FM_CHART_TRI_TRUE);
+  EXPECT_EQ(info.blanks_as, FM_CHART_BLANKS_GAP);
+  EXPECT_EQ(info.plot_vis_only, FM_CHART_TRI_TRUE);
+
+  // Each field moves on its own.
+  patch = fm_chart_display_patch{FM_CHART_PATCH_CLEAR, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0};
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &patch), 0) << fm_last_error_message();
+  Open(wb.handle, id, &chart);
+  info = Info(chart);
+  EXPECT_EQ(info.blanks_as, FM_CHART_BLANKS_ABSENT);
+  EXPECT_EQ(info.plot_vis_only, FM_CHART_TRI_TRUE);
+  EXPECT_EQ(info.na_as_blank, FM_CHART_TRI_TRUE);
+
+  patch = NaPatch(FM_CHART_PATCH_CLEAR, 0);
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &patch), 0) << fm_last_error_message();
+  EXPECT_EQ(NaAsBlank(wb.handle, id), FM_CHART_TRI_ABSENT);
+}
+
+TEST(FormulonCApiChart, DisplayPatchRejectsBadFields) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  FillGrid(wb.handle);
+  const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_LINE);
+
+  EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, nullptr), kBindingNullPointer);
+  const fm_chart_display_patch bad[] = {
+      // An op outside KEEP / CLEAR / SET.
+      {3, FM_CHART_BLANKS_GAP, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
+      {FM_CHART_PATCH_KEEP, 0, -1, 0, FM_CHART_PATCH_KEEP, 0},
+      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, 3, 1},
+      // ABSENT is not a value; CLEAR removes the element.
+      {FM_CHART_PATCH_SET, FM_CHART_BLANKS_ABSENT, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
+      {FM_CHART_PATCH_SET, 4, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
+      {FM_CHART_PATCH_SET, -1, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0},
+      // Flags are 0/1.
+      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 2, FM_CHART_PATCH_KEEP, 0},
+      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, 2},
+      {FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_KEEP, 0, FM_CHART_PATCH_SET, -1},
+  };
+  for (const fm_chart_display_patch& p : bad) {
+    EXPECT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &p), kInvalidArgument)
+        << p.blanks_as_op << "/" << p.blanks_as << " " << p.plot_vis_only_op << "/" << p.plot_vis_only << " "
+        << p.na_as_blank_op << "/" << p.na_as_blank;
+  }
+  // A rejected patch leaves the chart unchanged.
+  ChartGuard chart;
+  Open(wb.handle, id, &chart);
+  const fm_chart_info_t info = Info(chart);
+  EXPECT_EQ(info.blanks_as, FM_CHART_BLANKS_GAP);
+  EXPECT_EQ(info.plot_vis_only, FM_CHART_TRI_TRUE);
+  EXPECT_EQ(info.na_as_blank, FM_CHART_TRI_TRUE);
+}
+
+TEST(FormulonCApiChart, PreviewNaAsBlankOverrideTurnsNaIntoBlank) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  FillGrid(wb.handle);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 2, 1, "=NA()"), 0);  // B3, series S1 point 1
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_LINE);
+  const fm_chart_display_patch off = NaPatch(FM_CHART_PATCH_CLEAR, 0);
+  ASSERT_EQ(fm_sheet_set_chart_display(wb.handle, 0, id, &off), 0) << fm_last_error_message();
+
+  fm_chart_preview_overrides o{};
+  o.blanks_as_op = FM_CHART_PATCH_SET;
+  o.blanks_as = FM_CHART_BLANKS_ZERO;
+  o.na_as_blank_op = FM_CHART_PATCH_SET;
+  o.na_as_blank = 1;
+  DataGuard blank;
+  ASSERT_EQ(fm_sheet_chart_preview_open(wb.handle, 0, id, &o, &blank.handle), 0) << fm_last_error_message();
+  fm_chart_data_points_t p{};
+  ASSERT_EQ(fm_chart_data_series_points(blank.handle, 0, &p), 0);
+  ASSERT_GT(p.count, 1U);
+  EXPECT_EQ(p.states[1], FM_CHART_POINT_VALUE);
+  EXPECT_EQ(p.values[1], 0.0);
+
+  o.na_as_blank = 0;
+  DataGuard na;
+  ASSERT_EQ(fm_sheet_chart_preview_open(wb.handle, 0, id, &o, &na.handle), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_chart_data_series_points(na.handle, 0, &p), 0);
+  ASSERT_GT(p.count, 1U);
+  EXPECT_NE(p.states[1], FM_CHART_POINT_VALUE);
+
+  // The preview leaves the chart's own setting alone; CLEAR is rejected.
+  EXPECT_EQ(NaAsBlank(wb.handle, id), FM_CHART_TRI_ABSENT);
+  o.na_as_blank_op = FM_CHART_PATCH_CLEAR;
+  fm_chart_data_t* raw = nullptr;
+  EXPECT_EQ(fm_sheet_chart_preview_open(wb.handle, 0, id, &o, &raw), kInvalidArgument);
+  EXPECT_EQ(raw, nullptr);
 }
 
 }  // namespace

@@ -931,12 +931,16 @@ JsStatus JsWorkbook::setChartDisplay(uint32_t sheet, uint32_t objectId, int32_t 
     return invalid_handle_status();
   }
   JsNarrowNumericReader reader("setChartDisplay");
-  // `null` or omitted removes `c:plotVisOnly`.
-  int32_t plot_vis_only = FM_CHART_TRI_ABSENT;
+  // `ABSENT` removes `c:dispBlanksAs`; `null` or omitted removes `c:plotVisOnly`.
+  fm_chart_display_patch patch{};
+  patch.blanks_as_op = blanksAs == FM_CHART_BLANKS_ABSENT ? FM_CHART_PATCH_CLEAR : FM_CHART_PATCH_SET;
+  patch.blanks_as = blanksAs;
+  patch.plot_vis_only_op = FM_CHART_PATCH_CLEAR;
   if (js_value_present(plotVisibleOnly)) {
-    plot_vis_only = reader.boolean_value(plotVisibleOnly, false) ? FM_CHART_TRI_TRUE : FM_CHART_TRI_FALSE;
+    patch.plot_vis_only_op = FM_CHART_PATCH_SET;
+    patch.plot_vis_only = reader.boolean_value(plotVisibleOnly, false) ? 1 : 0;
   }
-  return status_from_rc(fm_sheet_set_chart_display(handle_, sheet, objectId, blanksAs, plot_vis_only));
+  return status_from_rc(fm_sheet_set_chart_display(handle_, sheet, objectId, &patch));
 }
 
 JsStatus JsWorkbook::setChartSeries(uint32_t sheet, uint32_t objectId, uint32_t plot, uint32_t seriesIdx, val patch) {
