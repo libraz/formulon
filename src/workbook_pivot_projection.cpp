@@ -9,6 +9,8 @@
 // left-aligned and indented by depth, value cells apply the data field's
 // number format, and under `mergeItem` the label area is centered. Structural
 // blanks get no cell; empty value cells keep their format.
+//
+// @size-budget: 17 KB
 
 #include <cstddef>
 #include <cstdint>

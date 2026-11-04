@@ -1,5 +1,7 @@
 //
 // Pivot formula host backed by the standard parser and tree walker.
+//
+// @size-budget: 20 KB
 
 #include "eval/pivot_formula.h"
 

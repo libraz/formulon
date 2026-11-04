@@ -1,5 +1,7 @@
 //
 // Calculated-field and calculated-item model operations and evaluation.
+//
+// @size-budget: 28 KB
 
 #include "pivot/calculated.h"
 
