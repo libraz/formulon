@@ -424,6 +424,9 @@ JsCallbackOutcome call_js_callback(const emscripten::val& fn, const emscripten::
 /// payload directly.
 JsValue translate_value(const fm_value_t& v);
 
+/// Moves a value-producing C call's outcome into a result envelope.
+void adopt_value(fm_status_t rc, const fm_value_t& v, JsStatus& status, JsValue& value);
+
 /// Translates an `fm_cf_color_t` into the embind value-object mirror.
 JsCfColor translate_cf_color(const fm_cf_color_t& c);
 

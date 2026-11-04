@@ -119,20 +119,6 @@ JsStatus JsWorkbook::setFormula(uint32_t sheet, uint32_t row, uint32_t col, cons
                                            : kBindingInvalidHandle);
 }
 
-namespace {
-
-// Moves a value-producing C call's outcome into a result envelope.
-void adopt_value(fm_status_t rc, const fm_value_t& v, JsStatus& status, JsValue& value) {
-  if (rc != 0) {
-    status = error_status(rc);
-    return;
-  }
-  value = translate_value(v);
-  status = ok_status();
-}
-
-}  // namespace
-
 JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) const {
   JsCellResult r;
   if (handle_ == nullptr) {

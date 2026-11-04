@@ -606,6 +606,15 @@ JsAddStyleResult index_result(fm_status_t rc, std::size_t index) {
   return out;
 }
 
+void adopt_value(fm_status_t rc, const fm_value_t& v, JsStatus& status, JsValue& value) {
+  if (rc != 0) {
+    status = error_status(rc);
+    return;
+  }
+  value = translate_value(v);
+  status = ok_status();
+}
+
 JsValue translate_value(const fm_value_t& v) {
   JsValue out;
   out.kind = static_cast<int32_t>(v.kind);
