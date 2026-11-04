@@ -152,6 +152,32 @@ TEST(DrawingNames, JapanesePictureName) {
   EXPECT_EQ(book.Items(0), (Items{{2, "図 1"}}));
 }
 
+struct LocaleWords {
+  ExcelLocale locale;
+  const char* chart;
+  const char* picture;
+};
+
+TEST(DrawingNames, DefaultChartAndPictureWordsPerLocale) {
+  constexpr LocaleWords kWords[] = {
+      {ExcelLocale::kJaJP, "グラフ", "図"},         {ExcelLocale::kEnUS, "Chart", "Picture"},
+      {ExcelLocale::kDeDE, "Diagramm", "Grafik"},   {ExcelLocale::kFrFR, "Graphique", "Image"},
+      {ExcelLocale::kZhCN, "图表", "图片"},         {ExcelLocale::kKoKR, "차트", "그림"},
+      {ExcelLocale::kThTH, "แผนภูมิ", "รูปภาพ"},       {ExcelLocale::kEsES, "Gráfico", "Imagen"},
+      {ExcelLocale::kEsMX, "Gráfico", "Imagen"},    {ExcelLocale::kPtBR, "Gráfico", "Imagem"},
+      {ExcelLocale::kRuRU, "Диаграмма", "Рисунок"}, {ExcelLocale::kZhTW, "圖表", "圖片"},
+      {ExcelLocale::kItIT, "Grafico", "Immagine"},  {ExcelLocale::kNlNL, "Grafiek", "Afbeelding"},
+  };
+  for (const LocaleWords& words : kWords) {
+    SCOPED_TRACE(static_cast<int>(words.locale));
+    Book book(Workbook::create_for_profile(ExcelProfile{ExcelHost::kMac365, words.locale}));
+    book.wb().add_sheet("Fresh");
+    EXPECT_EQ(book.AddChart(1), 2U);
+    EXPECT_EQ(book.AddPicture(1), 3U);
+    EXPECT_EQ(book.Items(1), (Items{{2, std::string(words.chart) + " 1"}, {3, std::string(words.picture) + " 2"}}));
+  }
+}
+
 TEST(DrawingNames, PastedDefaultNamesAreRecognisedByPattern) {
   Book book(Workbook::create_for_profile(mac_365_ja_jp_profile()));
   const std::uint32_t english = book.AddChart(0, "Chart 9");
