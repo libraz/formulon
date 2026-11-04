@@ -37,6 +37,10 @@ namespace formulon::pivot {
 /// options to `layout` so both sides agree. The default keeps the English
 /// vocabulary.
 ///
+/// Calculated fields and items evaluate through `env.formulas`; without a
+/// host their cells are blank. Calculated items, and the items of a
+/// `showAll` field, are on the axes either way.
+///
 /// Returns `kEvalPivotMissing` when `table.pivot_cache_id()` does not
 /// match `cache.cache_id()`. Returns `kEvalPivotInvalid` when a
 /// `PivotDataField::field_index` is out of bounds against

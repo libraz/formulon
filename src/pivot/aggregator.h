@@ -124,6 +124,19 @@ void recompute_sum_totals_from_cells(const PivotTable& table, PivotResult& resul
                                      const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
                                      const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
 
+/// True for the aggregations whose total is a fold of the cells beneath it:
+/// Sum, Count and CountNumbers add; Max, Min and Product fold.
+bool aggregation_combines_cells(Aggregation aggregation);
+
+/// Rebuilds every total of the data-field slots marked in `slots` by folding
+/// the leaf cells beneath it with the slot's aggregation, which is how a table
+/// with calculated items totals: their cells have no records. Blank cells are
+/// skipped and the first error wins. Subtotals with a custom function other
+/// than the slot's own are left as they are.
+void combine_totals_from_cells(const PivotTable& table, PivotResult& result, const std::vector<bool>& slots,
+                               const std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                               const std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
+
 /// Aggregates cache records while preserving the sparse-intersection rule:
 /// no record positions or only blank values means a blank result; otherwise
 /// normal aggregation identities and error semantics apply.

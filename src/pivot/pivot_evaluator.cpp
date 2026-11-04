@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <numeric>
 #include <optional>
 #include <string>
@@ -37,6 +38,7 @@
 #include "eval/eval_profile_scope.h"
 #include "num_fmt_locale.h"
 #include "pivot/aggregator.h"
+#include "pivot/calculated.h"
 #include "pivot/field_grouping.h"
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
@@ -186,26 +188,15 @@ Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
   return static_cast<Aggregation>(static_cast<std::uint8_t>(fn));
 }
 
-}  // namespace
+bool same_value(const Value& a, const Value& b) {
+  return !value_less(a, b) && !value_less(b, a);
+}
 
-Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache,
-                                      const PivotLayoutOptions& options, const PivotFilterEnv& env) {
-  // Item identity, ordering and label filters collate under this profile.
-  const eval::ScopedEvalProfile profile_scope(options.profile);
-  // 1. Validate.
-  if (table.pivot_cache_id() != cache.cache_id()) {
-    return make_error(FormulonErrorCode::kEvalPivotMissing, "pivot table cache_id does not match supplied PivotCache",
-                      "table=" + table.name() + " table.cache_id=" + std::to_string(table.pivot_cache_id()) +
-                          " cache.cache_id=" + std::to_string(cache.cache_id()));
-  }
-  for (std::size_t i = 0; i < table.data_fields().size(); ++i) {
-    const PivotDataField& df = table.data_fields()[i];
-    if (df.field_index >= cache.fields().size()) {
-      return make_error(FormulonErrorCode::kEvalPivotInvalid, "data field references out-of-range cache field",
-                        "data_field=" + df.name + " field_index=" + std::to_string(df.field_index) +
-                            " cache_fields=" + std::to_string(cache.fields().size()));
-    }
-  }
+/// Steps 2-8 on `table`, which is `source` with the plan's hidden Sum data
+/// fields appended.
+Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const PivotTable& source, const PivotCache& cache,
+                                            const PivotLayoutOptions& options, const PivotFilterEnv& env,
+                                            const CalculatedPlan& plan) {
   // 2. Filter records.
   //
   // Everything the filter derives from the table alone — which items each
@@ -283,7 +274,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   auto level_for = [&](std::uint32_t fi) -> HierLevel {
     const bool manual = fi < table.fields().size() && table.fields()[fi].sort.manual;
     const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;
-    const std::optional<ValueSortSpec> value_sort = resolve_value_sort(table, fi);
+    const std::optional<ValueSortSpec> value_sort = resolve_value_sort(source, fi);
     HierLevel level{fi, ascending,
                     value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
@@ -327,6 +318,62 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
                                              resolved_env.date1904, options.profile);
     }
   }
+
+  // Calculated items, and the items of a `showAll` field no surviving record
+  // carries, are drawn without records. A `showAll` item still obeys its own
+  // field's filters: it is shown iff a surviving record would pass with it.
+  const auto passes_own_filters = [&](std::size_t field_index, std::size_t shared_index) {
+    if (surviving.empty()) {
+      return true;
+    }
+    PivotCacheRecord probe = cache.records()[surviving.front()];
+    if (field_index >= probe.cells.size()) {
+      return true;
+    }
+    probe.cells[field_index] = Value::number(static_cast<double>(shared_index));
+    if (field_index < probe.cell_is_index.size()) {
+      probe.cell_is_index[field_index] = true;
+    }
+    if (field_index < probe.cell_is_date.size()) {
+      probe.cell_is_date[field_index] = false;
+    }
+    return record_filter.passes(probe);
+  };
+  const auto recordless_items = [&](const std::vector<HierLevel>& levels) {
+    std::vector<std::vector<RecordlessItem>> items(levels.size());
+    for (std::size_t depth = 0; depth < levels.size(); ++depth) {
+      const std::uint32_t fi = levels[depth].field_index;
+      if (fi >= cache.fields().size() || fi >= table.fields().size() || is_group_field(cache.fields()[fi])) {
+        continue;
+      }
+      const PivotCacheField& cache_field = cache.fields()[fi];
+      const PivotField& field = table.fields()[fi];
+      std::vector<Value> hidden;
+      for (const PivotItem& item : field.items) {
+        if (!item.visible) {
+          if (const std::optional<Value> key = pivot_item_record_value(cache, fi, item)) {
+            hidden.push_back(*key);
+          }
+        }
+      }
+      for (std::size_t k = 0; k < cache_field.shared_items.size(); ++k) {
+        const bool calculated =
+            k < cache_field.shared_item_is_calculated.size() && cache_field.shared_item_is_calculated[k];
+        const Value& key = cache_field.shared_items[k];
+        if ((!calculated && !field.show_all) ||
+            std::any_of(hidden.begin(), hidden.end(), [&](const Value& h) { return same_value(h, key); }) ||
+            (!calculated && !passes_own_filters(fi, k))) {
+          continue;
+        }
+        items[depth].push_back(RecordlessItem{key, calculated});
+      }
+    }
+    return items;
+  };
+  add_recordless_nodes(row_tree, row_levels, recordless_items(row_levels), options.blank_item_label,
+                       resolved_env.date1904, options.profile);
+  add_recordless_nodes(col_tree, col_levels, recordless_items(col_levels), options.blank_item_label,
+                       resolved_env.date1904, options.profile);
 
   // A non-empty SortSpec::by_field orders siblings by the aggregate of the
   // named value field rather than by their display labels. Populate those
@@ -406,6 +453,15 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
             aggregate_records_or_blank(df.aggregation, cache, RecordIndexView(records), df.field_index, result));
       }
     }
+  }
+
+  // Cells on a calculated item have no records; they are the item's formula
+  // over the cells of the items it names.
+  bool has_calculated_cells = false;
+  if (!cache.calculated_items().empty()) {
+    const AxisLeafPaths row_paths = collect_leaf_paths(row_tree, row_levels);
+    const AxisLeafPaths col_paths = collect_leaf_paths(col_tree, col_levels);
+    has_calculated_cells = plan.fill_item_cells(result, row_paths, col_paths);
   }
 
   // 4b. Per-leaf totals across the opposite axis, re-aggregated from the
@@ -643,20 +699,69 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
 
   // Sum totals are running sums of the rendered cells, not of the records.
   recompute_sum_totals_from_cells(table, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+  // With calculated items every total folds the cells, the items' included.
+  std::vector<bool> item_slots(plan.calculated_slots().size());
+  for (std::size_t slot = 0; slot < item_slots.size(); ++slot) {
+    item_slots[slot] = !plan.calculated_slots()[slot];
+  }
+  if (has_calculated_cells) {
+    combine_totals_from_cells(table, result, item_slots, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+  }
 
   // 7. Value-axis filters (Top-N, GreaterThan, Between).
   apply_value_filters(table, cache, buckets, row_leaf_count, col_leaf_count, result, row_subtotal_leaf_sets,
                       col_subtotal_leaf_sets);
+  if (has_calculated_cells) {
+    combine_totals_from_cells(table, result, item_slots, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
+  }
+
+  // Calculated fields read the Sums of their fields at every cell and total.
+  plan.fill_field_slots(result);
 
   // 8. Show-values-as transforms.
   apply_show_values_as_transforms(table, cache, result, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
 
+  plan.drop_sum_slots(result);
   if (!table.grand_totals_rows() && !table.grand_totals_cols()) {
     result.grand_totals.clear();
     result.grand_total = Value::blank();
   }
 
   return result;
+}
+
+}  // namespace
+
+Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache,
+                                      const PivotLayoutOptions& options, const PivotFilterEnv& env) {
+  // Item identity, ordering and label filters collate under this profile.
+  const eval::ScopedEvalProfile profile_scope(options.profile);
+  // 1. Validate.
+  if (table.pivot_cache_id() != cache.cache_id()) {
+    return make_error(FormulonErrorCode::kEvalPivotMissing, "pivot table cache_id does not match supplied PivotCache",
+                      "table=" + table.name() + " table.cache_id=" + std::to_string(table.pivot_cache_id()) +
+                          " cache.cache_id=" + std::to_string(cache.cache_id()));
+  }
+  for (std::size_t i = 0; i < table.data_fields().size(); ++i) {
+    const PivotDataField& df = table.data_fields()[i];
+    if (df.field_index >= cache.fields().size()) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid, "data field references out-of-range cache field",
+                        "data_field=" + df.name + " field_index=" + std::to_string(df.field_index) +
+                            " cache_fields=" + std::to_string(cache.fields().size()));
+    }
+  }
+  const CalculatedPlan plan(table, cache, env.formulas);
+  if (plan.sum_fields().empty()) {
+    return evaluate_table(table, table, cache, options, env, plan);
+  }
+  // Calculated fields read the Sums of their fields from hidden data fields.
+  const std::unique_ptr<PivotTable> extended = table.clone();
+  for (const std::uint32_t field : plan.sum_fields()) {
+    PivotDataField sum;
+    sum.field_index = field;
+    extended->mutable_data_fields().push_back(std::move(sum));
+  }
+  return evaluate_table(*extended, table, cache, options, env, plan);
 }
 
 }  // namespace formulon::pivot

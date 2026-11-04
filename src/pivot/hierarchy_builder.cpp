@@ -68,6 +68,99 @@ void collect_axis_leaf_groups(const AxisHierarchyNode& node, std::size_t depth, 
   }
 }
 
+/// The label a node keyed `raw` on `level` draws instead of its cache value's
+/// text; empty when it draws that text.
+std::string label_override_for(const HierLevel& level, const Value& raw, std::string_view blank_item_label,
+                               bool date1904, ExcelProfile profile) {
+  if (level.captions != nullptr) {
+    if (const auto it_caption = level.captions->find(raw); it_caption != level.captions->end()) {
+      return it_caption->second;
+    }
+  }
+  if (level.group_items != nullptr && raw.is_number()) {
+    const std::optional<std::size_t> item = index_from_double(raw.as_number(), level.group_items->size());
+    return item.has_value() ? display_string((*level.group_items)[*item]) : std::string();
+  }
+  if (raw.is_blank()) {
+    // A source cell with no value still occupies a group on the axis, so
+    // the group needs a name: the label is what the grid draws, and it is
+    // the only literal GETPIVOTDATA can address the group by, since that
+    // lookup matches labels exactly. The placeholder text itself belongs
+    // to the locale and arrives from the caller.
+    return std::string(blank_item_label);
+  }
+  if (!level.number_format.empty() && raw.is_number()) {
+    return text_format::format_value_for_display(raw, level.number_format, date1904, profile).text;
+  }
+  return {};
+}
+
+/// Copies the subtree shape of `src` (keys, labels, calculated flags) into `dst`.
+void merge_shape(HierNode& dst, const HierNode& src) {
+  for (const auto& [key, child] : src.children) {
+    auto [it, inserted] = dst.children.try_emplace(key);
+    if (inserted) {
+      it->second.label_override = child.label_override;
+      it->second.calculated = child.calculated;
+    }
+    merge_shape(it->second, child);
+  }
+}
+
+void add_recordless_at(HierNode& node, const std::vector<HierLevel>& levels,
+                       const std::vector<std::vector<RecordlessItem>>& items, std::size_t depth,
+                       std::string_view blank_item_label, bool date1904, ExcelProfile profile) {
+  if (depth >= levels.size()) {
+    return;
+  }
+  if (depth < items.size()) {
+    std::vector<const HierNode*> real_children;
+    for (const auto& entry : node.children) {
+      if (!entry.second.calculated) {
+        real_children.push_back(&entry.second);
+      }
+    }
+    for (const RecordlessItem& item : items[depth]) {
+      auto [it, inserted] = node.children.try_emplace(HierarchyKey{item.key});
+      if (!inserted) {
+        continue;
+      }
+      it->second.label_override = label_override_for(levels[depth], item.key, blank_item_label, date1904, profile);
+      it->second.calculated = item.calculated;
+      if (item.calculated && depth + 1U < levels.size()) {
+        for (const HierNode* sibling : real_children) {
+          merge_shape(it->second, *sibling);
+        }
+      }
+    }
+  }
+  for (auto& entry : node.children) {
+    add_recordless_at(entry.second, levels, items, depth + 1U, blank_item_label, date1904, profile);
+  }
+}
+
+void collect_paths_at(HierNode& node, const std::vector<HierLevel>& levels, std::size_t depth,
+                      std::vector<LeafPathStep>& path, AxisLeafPaths& out) {
+  const std::vector<OrderedHierarchyChild> entries = ordered_children(node, levels, depth);
+  const std::size_t siblings = out.sibling_keys.size();
+  out.sibling_keys.emplace_back();
+  for (const OrderedHierarchyChild& entry : entries) {
+    out.sibling_keys[siblings].push_back(entry.key->value);
+  }
+  for (const OrderedHierarchyChild& entry : entries) {
+    path.push_back(LeafPathStep{depth < levels.size() ? levels[depth].field_index : 0U, entry.key->value, siblings});
+    if (entry.node->children.empty()) {
+      if (entry.node->leaf_index >= out.paths.size()) {
+        out.paths.resize(entry.node->leaf_index + 1U);
+      }
+      out.paths[entry.node->leaf_index] = path;
+    } else {
+      collect_paths_at(*entry.node, levels, depth + 1U, path, out);
+    }
+    path.pop_back();
+  }
+}
+
 }  // namespace
 
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
@@ -78,33 +171,7 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
     const Value raw = cell_value(cache, record, level.field_index);
     auto [it, inserted] = cursor->children.try_emplace(HierarchyKey{raw});
     if (inserted) {
-      std::string label_override;
-      const std::string* caption = nullptr;
-      if (level.captions != nullptr) {
-        if (const auto it_caption = level.captions->find(raw); it_caption != level.captions->end()) {
-          caption = &it_caption->second;
-        }
-      }
-      if (caption != nullptr) {
-        label_override = *caption;
-      } else if (level.group_items != nullptr && raw.is_number()) {
-        const std::optional<std::size_t> item = index_from_double(raw.as_number(), level.group_items->size());
-        if (item.has_value()) {
-          label_override = display_string((*level.group_items)[*item]);
-        }
-      } else if (raw.is_blank()) {
-        // A source cell with no value still occupies a group on the axis, so
-        // the group needs a name: the label is what the grid draws, and it is
-        // the only literal GETPIVOTDATA can address the group by, since that
-        // lookup matches labels exactly. The placeholder text itself belongs
-        // to the locale and arrives from the caller.
-        label_override.assign(blank_item_label);
-      } else if (!level.number_format.empty() && raw.is_number()) {
-        label_override = text_format::format_value_for_display(raw, level.number_format, date1904, profile).text;
-      }
-      if (!label_override.empty()) {
-        it->second.label_override = std::move(label_override);
-      }
+      it->second.label_override = label_override_for(level, raw, blank_item_label, date1904, profile);
     }
     cursor = &it->second;
     cursor->first_record = std::min(cursor->first_record, record_index);
@@ -114,6 +181,23 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
     }
   }
   return cursor;
+}
+
+void add_recordless_nodes(HierNode& tree, const std::vector<HierLevel>& levels,
+                          const std::vector<std::vector<RecordlessItem>>& items, std::string_view blank_item_label,
+                          bool date1904, ExcelProfile profile) {
+  add_recordless_at(tree, levels, items, 0U, blank_item_label, date1904, profile);
+}
+
+AxisLeafPaths collect_leaf_paths(HierNode& tree, const std::vector<HierLevel>& levels) {
+  AxisLeafPaths out;
+  if (levels.empty()) {
+    out.paths.emplace_back();
+    return out;
+  }
+  std::vector<LeafPathStep> path;
+  collect_paths_at(tree, levels, 0U, path, out);
+  return out;
 }
 
 std::string node_label(const HierarchyKey& key, const HierNode& child) {

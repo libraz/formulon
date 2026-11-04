@@ -66,6 +66,8 @@ struct HierNode {
   /// node's label. Set by `insert_path` when the label differs from the
   /// cache value's textual form.
   std::string label_override;
+  /// True for a calculated item's node, which no record lands on.
+  bool calculated = false;
 };
 
 struct HierLevel {
@@ -163,6 +165,39 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
                       std::size_t record_index, HierNode& root, std::string_view blank_item_label,
                       bool date1904 = false, ExcelProfile profile = default_excel_profile());
+
+/// An item drawn on the axis whether or not a record carries it: a calculated
+/// item, or an item of a `showAll` field.
+struct RecordlessItem {
+  Value key;
+  bool calculated = false;
+};
+
+/// Adds, under every node whose children sit on level d, a childless node for
+/// each `items[d]` entry the node lacks. A calculated item above the innermost
+/// level first takes the union of its real siblings' subtrees, so its cells
+/// line up with theirs. Labels follow `insert_path`.
+void add_recordless_nodes(HierNode& tree, const std::vector<HierLevel>& levels,
+                          const std::vector<std::vector<RecordlessItem>>& items, std::string_view blank_item_label,
+                          bool date1904 = false, ExcelProfile profile = default_excel_profile());
+
+/// One level of a leaf's path.
+struct LeafPathStep {
+  std::uint32_t field_index = 0;
+  Value key;
+  /// Index into `AxisLeafPaths::sibling_keys`: the node's siblings in display order.
+  std::size_t siblings = 0;
+};
+
+/// The root-to-leaf path of every leaf of one axis, by leaf index.
+struct AxisLeafPaths {
+  std::vector<std::vector<Value>> sibling_keys;
+  std::vector<std::vector<LeafPathStep>> paths;
+};
+
+/// Collects the leaf paths of a finalised hierarchy. An axis without levels
+/// has one leaf with an empty path.
+AxisLeafPaths collect_leaf_paths(HierNode& tree, const std::vector<HierLevel>& levels);
 
 /// Returns the display label for `(key, child)`: the override if set,
 /// otherwise the standard `display_string(key.value)`. Used by all hierarchy
