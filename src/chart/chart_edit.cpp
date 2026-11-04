@@ -124,7 +124,7 @@ void put_title(xml_node host, Order order, const xml_node& from, const ChartTitl
   }
   if (title.kind == ChartTitleKind::kRef) {
     std::string x = "<c:tx><c:strRef><c:f>";
-    io::AppendXmlAttrEscaped(x, title.ref_formula);
+    io::AppendXmlRawTextEscaped(x, title.ref_formula);
     x += "</c:f></c:strRef></c:tx>";
     pugi::xml_document frag;
     copy_at(node, fragment(frag, x), kTitleOrder);

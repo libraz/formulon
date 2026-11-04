@@ -351,7 +351,7 @@ void append_title(std::string& x, const std::optional<std::string>& text, const 
     x += "<a:p><a:pPr>";
     append_def_rpr(x, sz, !axis);
     x += "</a:pPr><a:r><a:rPr lang=\"" + lang + "\"/><a:t>";
-    io::AppendXmlAttrEscaped(x, *text);
+    io::AppendXmlRawTextEscaped(x, *text);
     x += "</a:t></a:r></a:p></c:rich></c:tx>";
   }
   x += "<c:overlay val=\"0\"/>";
@@ -375,7 +375,7 @@ void append_source(std::string& x, const char* tag, const std::string& f, RefKin
   const char* ref = kind == RefKind::kNum ? "numRef" : (kind == RefKind::kStr ? "strRef" : "multiLvlStrRef");
   const char* cache = kind == RefKind::kNum ? "numCache" : (kind == RefKind::kStr ? "strCache" : "multiLvlStrCache");
   x += std::string("<c:") + tag + "><c:" + ref + "><c:f>";
-  io::AppendXmlAttrEscaped(x, f);
+  io::AppendXmlRawTextEscaped(x, f);
   x += std::string("</c:f><c:") + cache + ">";
   x += kind == RefKind::kNum ? "<c:formatCode>General</c:formatCode>" : "";
   x += std::string("<c:ptCount val=\"0\"/></c:") + cache + "></c:" + ref + "></c:" + tag + ">";

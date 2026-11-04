@@ -31,8 +31,8 @@ void AppendXmlEscaped(std::string& out, std::string_view in);
 // pugi::xml will escape `&` / `<` / `>` when it serialises the node.
 void AppendOoxmlTextEscaped(std::string& out, std::string_view in);
 
-// Escapes `in` for an attribute value (`name="..."`). Same five
-// XML-critical characters as `AppendXmlEscaped`, but attribute-value
+// Escapes `in` for an attribute value (`name="..."`). `& < "` become named
+// entities; `>` and `'` stay raw, as Excel writes them. Attribute-value
 // normalisation turns a literal TAB / LF / CR into a space, so those three
 // are written as the `&#9;` / `&#10;` / `&#13;` character references a
 // conforming parser restores verbatim.
@@ -50,6 +50,11 @@ void AppendOoxmlTextEscaped(std::string& out, std::string_view in);
 // not gain OOXML escapes, and this function emits none. Element text that is
 // read back raw (plain `xsd:string`, e.g. chart `c:f` and `a:t`) uses it too.
 void AppendXmlAttrEscaped(std::string& out, std::string_view in);
+
+// Escapes `in` for element text that readers take raw (no OOXML notation):
+// control and whitespace handling as `AppendXmlAttrEscaped`, but `>` and `'`
+// are written as `&gt;` / `&apos;` as Excel does in element text.
+void AppendXmlRawTextEscaped(std::string& out, std::string_view in);
 
 // Appends `in` after decoding OOXML `_xHHHH_` escapes. This is for text
 // payloads read from OOXML parts after XML entity decoding; it preserves a

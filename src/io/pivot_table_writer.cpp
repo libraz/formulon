@@ -112,6 +112,155 @@ void AppendTailWithAltText(std::string& out, const pivot::PivotTable& table) {
   out.append(tail);
 }
 
+using AttrList = std::vector<std::pair<std::string, std::string>>;
+
+/// `<pivotField>` attribute names in CT_PivotField order.
+constexpr std::string_view kPivotFieldAttrOrder[] = {
+    "name",
+    "axis",
+    "dataField",
+    "subtotalCaption",
+    "showDropDowns",
+    "hiddenLevel",
+    "uniqueMemberProperty",
+    "compact",
+    "allDrilled",
+    "numFmtId",
+    "outline",
+    "subtotalTop",
+    "dragToRow",
+    "dragToCol",
+    "multipleItemSelectionAllowed",
+    "dragToPage",
+    "dragToData",
+    "dragOff",
+    "showAll",
+    "insertBlankRow",
+    "serverField",
+    "insertPageBreak",
+    "autoShow",
+    "topAutoShow",
+    "hideNewItems",
+    "measureFilter",
+    "includeNewItemsInFilter",
+    "itemPageCount",
+    "sortType",
+    "dataSourceSort",
+    "nonAutoSortDefault",
+    "rankBy",
+    "defaultSubtotal",
+    "sumSubtotal",
+    "countASubtotal",
+    "avgSubtotal",
+    "maxSubtotal",
+    "minSubtotal",
+    "productSubtotal",
+    "countSubtotal",
+    "stdDevSubtotal",
+    "stdDevPSubtotal",
+    "varSubtotal",
+    "varPSubtotal",
+    "showPropCell",
+    "showPropTip",
+    "showPropAsCaption",
+    "defaultAttributeDrillState",
+};
+
+/// `<pivotTableDefinition>` attribute names in CT_pivotTableDefinition order.
+constexpr std::string_view kPivotTableAttrOrder[] = {
+    "name",
+    "cacheId",
+    "dataOnRows",
+    "dataPosition",
+    "authKey",
+    "applyNumberFormats",
+    "applyBorderFormats",
+    "applyFontFormats",
+    "applyPatternFormats",
+    "applyAlignmentFormats",
+    "applyWidthHeightFormats",
+    "dataCaption",
+    "grandTotalCaption",
+    "errorCaption",
+    "showError",
+    "missingCaption",
+    "showMissing",
+    "pageStyle",
+    "pivotTableStyle",
+    "vacatedStyle",
+    "tag",
+    "updatedVersion",
+    "minRefreshableVersion",
+    "asteriskTotals",
+    "showItems",
+    "editData",
+    "disableFieldList",
+    "showCalcMbrs",
+    "visualTotals",
+    "showMultipleLabel",
+    "showDataDropDown",
+    "showDrill",
+    "printDrill",
+    "showMemberPropertyTips",
+    "showDataTips",
+    "enableWizard",
+    "enableDrill",
+    "enableFieldProperties",
+    "preserveFormatting",
+    "useAutoFormatting",
+    "pageWrap",
+    "pageOverThenDown",
+    "subtotalHiddenItems",
+    "rowGrandTotals",
+    "colGrandTotals",
+    "fieldPrintTitles",
+    "itemPrintTitles",
+    "mergeItem",
+    "showDropZones",
+    "createdVersion",
+    "indent",
+    "showEmptyRow",
+    "showEmptyCol",
+    "showHeaders",
+    "compact",
+    "outline",
+    "outlineData",
+    "compactData",
+    "published",
+    "gridDropZones",
+    "immersive",
+    "multipleFieldFilters",
+    "chartFormat",
+    "rowHeaderCaption",
+    "colHeaderCaption",
+    "fieldListSortAscending",
+    "mdxSubqueries",
+    "customListSort",
+};
+
+/// Appends `attrs` in the order of `order`; names outside it follow in their
+/// given order.
+template <std::size_t N>
+void AppendAttrsInOrder(std::string& out, const AttrList& attrs, const std::string_view (&order)[N]) {
+  AttrList sorted;
+  sorted.reserve(attrs.size());
+  std::vector<bool> taken(attrs.size(), false);
+  for (const std::string_view name : order) {
+    for (std::size_t i = 0; i < attrs.size(); ++i) {
+      if (!taken[i] && attrs[i].first == name) {
+        taken[i] = true;
+        sorted.push_back(attrs[i]);
+      }
+    }
+  }
+  for (std::size_t i = 0; i < attrs.size(); ++i) {
+    if (!taken[i]) {
+      sorted.push_back(attrs[i]);
+    }
+  }
+  append_raw_attrs(out, sorted);
+}
+
 /// True when `attrs` already carries `name` (an attribute captured on read).
 bool HasRawAttr(const std::vector<std::pair<std::string, std::string>>& attrs, std::string_view name) {
   for (const auto& attr : attrs) {
@@ -291,46 +440,48 @@ void AppendFieldExtLst(std::string& out, const pivot::PivotField& field) {
 /// which Excel marks with `measureFilter="1"`.
 void AppendPivotField(std::string& out, const pivot::PivotField& field, const std::vector<pivot::PivotItem>& items,
                       pivot::PivotLayout layout, bool used_as_data, bool measure_filter) {
-  // Attributes follow CT_PivotField order, as Excel writes them.
-  out.append("<pivotField");
+  // Modelled and captured attributes alike are written in CT_PivotField order,
+  // as Excel does; names the schema does not list follow.
+  AttrList attrs;
   if (!field.custom_name.empty()) {
-    append_xml_attr(out, "name", field.custom_name);
+    attrs.emplace_back("name", field.custom_name);
   }
   if (field.axis != pivot::PivotAxis::Value && field.axis != pivot::PivotAxis::None) {
-    append_xml_attr(out, "axis", enum_name(kPivotAxisNames, field.axis));
+    attrs.emplace_back("axis", std::string(enum_name(kPivotAxisNames, field.axis)));
   }
   if (used_as_data) {
-    out.append(" dataField=\"1\"");
+    attrs.emplace_back("dataField", "1");
   }
   // The report form is per field in Excel (`compact` / `outline` default to
   // true); every field carries the table's form, as Excel writes it, unless
   // the field was read with a form of its own (kept in `passthrough_attrs`).
-  const bool derived_form = !HasFormOverride(field.passthrough_attrs);
-  if (derived_form && layout != pivot::PivotLayout::Compact) {
-    out.append(" compact=\"0\"");
+  if (!HasFormOverride(field.passthrough_attrs)) {
+    if (layout != pivot::PivotLayout::Compact) {
+      attrs.emplace_back("compact", "0");
+    }
+    if (layout == pivot::PivotLayout::Tabular) {
+      attrs.emplace_back("outline", "0");
+    }
   }
   if (!field.number_format.empty()) {
-    append_xml_attr(out, "numFmtId", field.number_format);
-  }
-  if (derived_form && layout == pivot::PivotLayout::Tabular) {
-    out.append(" outline=\"0\"");
+    attrs.emplace_back("numFmtId", field.number_format);
   }
   // `subtotalTop` defaults to true in OOXML; only emit it when turned OFF
   // so an explicit "subtotals at bottom" choice survives the round trip.
   if (!field.subtotal_top) {
-    out.append(" subtotalTop=\"0\"");
+    attrs.emplace_back("subtotalTop", "0");
   }
   // Excel writes `showAll="0"` on every field; without it a refresh shows
   // items that have no data. `true` is the schema default and goes unwritten.
   if (!field.show_all) {
-    out.append(" showAll=\"0\"");
+    attrs.emplace_back("showAll", "0");
   }
   if (field.insert_blank_row) {
-    out.append(" insertBlankRow=\"1\"");
+    attrs.emplace_back("insertBlankRow", "1");
   }
   if (measure_filter && std::none_of(field.passthrough_attrs.begin(), field.passthrough_attrs.end(),
                                      [](const auto& attr) { return attr.first == "measureFilter"; })) {
-    out.append(" measureFilter=\"1\"");
+    attrs.emplace_back("measureFilter", "1");
   }
   // An absent `sortType` reads back as manual (`<items>` order), so a
   // label-sorted axis field spells its direction out, as does a field off
@@ -338,7 +489,7 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
   const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
                        field.axis == pivot::PivotAxis::Page;
   if ((on_axis || field.sort.stated) && !field.sort.manual) {
-    out.append(field.sort.ascending ? " sortType=\"ascending\"" : " sortType=\"descending\"");
+    attrs.emplace_back("sortType", field.sort.ascending ? "ascending" : "descending");
   }
   // Custom functions replace the automatic subtotal, and Excel then writes
   // neither `defaultSubtotal` nor a `t="default"` item. Without custom
@@ -347,19 +498,16 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
   const std::vector<pivot::SubtotalFn> subtotal_fns = pivot::ordered_subtotal_fns(field);
   const bool automatic_subtotal = field.default_subtotal && subtotal_fns.empty();
   if (!field.default_subtotal && subtotal_fns.empty()) {
-    out.append(" defaultSubtotal=\"0\"");
+    attrs.emplace_back("defaultSubtotal", "0");
   }
   for (const pivot::SubtotalFn fn : subtotal_fns) {
-    const PivotSubtotalName* names = find_pivot_subtotal_name(fn);
-    if (names == nullptr) {
-      continue;
+    if (const PivotSubtotalName* names = find_pivot_subtotal_name(fn); names != nullptr) {
+      attrs.emplace_back(std::string(names->attr), "1");
     }
-    out.push_back(' ');
-    out.append(names->attr);
-    out.append("=\"1\"");
   }
-  // Re-emit any unmodelled `<pivotField>` attributes captured on read.
-  append_raw_attrs(out, field.passthrough_attrs);
+  attrs.insert(attrs.end(), field.passthrough_attrs.begin(), field.passthrough_attrs.end());
+  out.append("<pivotField");
+  AppendAttrsInOrder(out, attrs, kPivotFieldAttrOrder);
   if (items.empty() && field.marker_items.empty()) {
     if (field.raw_children_xml.empty() && !HasFieldExtLst(field)) {
       out.append("/>");
@@ -1049,133 +1197,84 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   out.append(kXmlDecl);
   out.append("<pivotTableDefinition xmlns=\"");
   out.append(kNsSpreadsheetMl);
-  out.append("\" name=\"");
-  AppendXmlAttrEscaped(out, table.name());
-  out.append("\" cacheId=\"");
-  out.append(std::to_string(table.pivot_cache_id()));
-  out.append("\" dataCaption=\"");
-  AppendXmlAttrEscaped(out, table.data_caption());
   out.append("\"");
+  // Modelled and captured attributes alike are written in
+  // CT_pivotTableDefinition order, as Excel does; names the schema does not
+  // list follow in captured order.
+  AttrList attrs;
+  const auto flag = [&attrs](bool on, const char* name, const char* value) {
+    if (on) {
+      attrs.emplace_back(name, value);
+    }
+  };
+  attrs.emplace_back("name", table.name());
+  attrs.emplace_back("cacheId", std::to_string(table.pivot_cache_id()));
+  attrs.emplace_back("dataCaption", table.data_caption());
   if (table.grand_total_caption().has_value()) {
-    append_xml_attr(out, "grandTotalCaption", *table.grand_total_caption());
+    attrs.emplace_back("grandTotalCaption", *table.grand_total_caption());
   }
   if (table.error_caption().has_value()) {
-    append_xml_attr(out, "errorCaption", *table.error_caption());
+    attrs.emplace_back("errorCaption", *table.error_caption());
   }
-  if (table.show_error()) {
-    out.append(" showError=\"1\"");
-  }
+  flag(table.show_error(), "showError", "1");
   if (table.missing_caption().has_value()) {
-    append_xml_attr(out, "missingCaption", *table.missing_caption());
+    attrs.emplace_back("missingCaption", *table.missing_caption());
   }
-  if (!table.show_missing()) {
-    out.append(" showMissing=\"0\"");
-  }
+  flag(!table.show_missing(), "showMissing", "0");
   // Grand-total flags default to true in OOXML and in the model. Emit them
   // only when turned OFF so an explicit OFF state survives the round trip
   // (omitting them would let the reader's default flip the pivot back ON).
   // `rowGrandTotals` is the bottom grand total row, i.e. the model's column
   // totals; `colGrandTotals` the right-hand column, the model's row totals.
-  if (!table.grand_totals_cols()) {
-    out.append(" rowGrandTotals=\"0\"");
-  }
-  if (!table.grand_totals_rows()) {
-    out.append(" colGrandTotals=\"0\"");
-  }
-  // The Values level sitting among the row fields is what `dataOnRows` states.
-  if (table.data_fields().size() >= 2U && table.row_values_position().has_value()) {
-    out.append(" dataOnRows=\"1\"");
-  }
-  if (table.subtotal_hidden_items()) {
-    out.append(" subtotalHiddenItems=\"1\"");
-  }
-  if (!table.show_data_drop_down()) {
-    out.append(" showDataDropDown=\"0\"");
-  }
-  if (!table.show_drill()) {
-    out.append(" showDrill=\"0\"");
-  }
-  if (table.print_drill()) {
-    out.append(" printDrill=\"1\"");
-  }
-  if (!table.show_data_tips()) {
-    out.append(" showDataTips=\"0\"");
-  }
-  if (!table.enable_drill()) {
-    out.append(" enableDrill=\"0\"");
-  }
-  if (!table.preserve_formatting()) {
-    out.append(" preserveFormatting=\"0\"");
-  }
-  if (table.auto_formatting()) {
-    out.append(" useAutoFormatting=\"1\"");
-  }
+  flag(!table.grand_totals_cols(), "rowGrandTotals", "0");
+  flag(!table.grand_totals_rows(), "colGrandTotals", "0");
+  // The Values level sitting among the row fields is what `dataOnRows` states;
+  // it is written from the field orders, never from a stored copy.
+  flag(table.data_fields().size() >= 2U && table.row_values_position().has_value(), "dataOnRows", "1");
+  flag(table.subtotal_hidden_items(), "subtotalHiddenItems", "1");
+  flag(!table.show_data_drop_down(), "showDataDropDown", "0");
+  flag(!table.show_drill(), "showDrill", "0");
+  flag(table.print_drill(), "printDrill", "1");
+  flag(!table.show_data_tips(), "showDataTips", "0");
+  flag(!table.enable_drill(), "enableDrill", "0");
+  flag(!table.preserve_formatting(), "preserveFormatting", "0");
+  flag(table.auto_formatting(), "useAutoFormatting", "1");
   if (table.page_wrap() != 0U) {
-    append_xml_attr_uint(out, "pageWrap", table.page_wrap());
+    attrs.emplace_back("pageWrap", std::to_string(table.page_wrap()));
   }
-  if (table.page_over_then_down()) {
-    out.append(" pageOverThenDown=\"1\"");
-  }
-  if (table.field_print_titles()) {
-    out.append(" fieldPrintTitles=\"1\"");
-  }
-  if (table.item_print_titles()) {
-    out.append(" itemPrintTitles=\"1\"");
-  }
-  if (table.merge_item()) {
-    out.append(" mergeItem=\"1\"");
-  }
+  flag(table.page_over_then_down(), "pageOverThenDown", "1");
+  flag(table.field_print_titles(), "fieldPrintTitles", "1");
+  flag(table.item_print_titles(), "itemPrintTitles", "1");
+  flag(table.merge_item(), "mergeItem", "1");
   if (table.indent() != 1U) {
-    append_xml_attr_uint(out, "indent", table.indent());
+    attrs.emplace_back("indent", std::to_string(table.indent()));
   }
-  if (table.show_empty_row()) {
-    out.append(" showEmptyRow=\"1\"");
-  }
-  if (table.show_empty_col()) {
-    out.append(" showEmptyCol=\"1\"");
-  }
-  if (!table.show_headers()) {
-    out.append(" showHeaders=\"0\"");
-  }
+  flag(table.show_empty_row(), "showEmptyRow", "1");
+  flag(table.show_empty_col(), "showEmptyCol", "1");
+  flag(!table.show_headers(), "showHeaders", "0");
   // Report layout as Excel writes it at table level, where it is the form
   // new fields take (`compact` defaults to true, `outline` to false). A form
   // read back that departs from it is re-emitted from `passthrough_attrs`.
   if (!HasFormOverride(table.passthrough_attrs())) {
-    switch (table.layout()) {
-      case pivot::PivotLayout::Compact:
-        out.append(" outline=\"1\" outlineData=\"1\"");
-        break;
-      case pivot::PivotLayout::Tabular:
-        out.append(" compact=\"0\" compactData=\"0\"");
-        break;
-      case pivot::PivotLayout::Outline:
-        out.append(" compact=\"0\" compactData=\"0\" outline=\"1\" outlineData=\"1\"");
-        break;
-    }
+    const bool outline = table.layout() != pivot::PivotLayout::Tabular;
+    const bool compact = table.layout() == pivot::PivotLayout::Compact;
+    flag(!compact, "compact", "0");
+    flag(!compact, "compactData", "0");
+    flag(outline, "outline", "1");
+    flag(outline, "outlineData", "1");
   }
-  if (table.grid_drop_zones()) {
-    out.append(" gridDropZones=\"1\"");
-  }
-  if (!table.multiple_field_filters()) {
-    out.append(" multipleFieldFilters=\"0\"");
-  }
-  if (!table.custom_list_sort()) {
-    out.append(" customListSort=\"0\"");
-  }
+  flag(table.grid_drop_zones(), "gridDropZones", "1");
+  flag(!table.multiple_field_filters(), "multipleFieldFilters", "0");
+  flag(!table.custom_list_sort(), "customListSort", "0");
   // Without `updatedVersion` Excel adds a stray caption row above the
-  // pivot on refresh; a captured value is re-emitted below.
-  if (!HasRawAttr(table.passthrough_attrs(), "updatedVersion")) {
-    out.append(" updatedVersion=\"8\"");
-  }
-  // Re-emit any unmodelled root attributes captured on read.
-  // The Values placement is written from the field orders above, never from a stored copy.
-  std::vector<std::pair<std::string, std::string>> carried;
+  // pivot on refresh; a captured value is re-emitted with the rest.
+  flag(!HasRawAttr(table.passthrough_attrs(), "updatedVersion"), "updatedVersion", "8");
   for (const auto& attr : table.passthrough_attrs()) {
     if (attr.first != "dataOnRows" && attr.first != "dataPosition") {
-      carried.push_back(attr);
+      attrs.push_back(attr);
     }
   }
-  append_raw_attrs(out, carried);
+  AppendAttrsInOrder(out, attrs, kPivotTableAttrOrder);
   out.append(">");
 
   // Excel refuses a definition with two or more data fields unless the

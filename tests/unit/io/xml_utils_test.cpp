@@ -164,7 +164,7 @@ TEST(XmlUtilsAttr, RootExtraAttributesEscapeValuesForReEmission) {
       Load(R"(<worksheet xmlns="urn:main" xmlns:r="urn:rel" custom="one &amp; two &quot;three&quot; &lt;four&gt;"/>)");
 
   EXPECT_EQ(capture_root_extra_ns_attrs(doc.document_element()),
-            " custom=\"one &amp; two &quot;three&quot; &lt;four&gt;\"");
+            " custom=\"one &amp; two &quot;three&quot; &lt;four>\"");
 }
 
 TEST(XmlUtilsNamespaces, FindsDefaultAndNearestPrefixedBindings) {

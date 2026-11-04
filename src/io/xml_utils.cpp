@@ -483,7 +483,7 @@ void AppendSlowRawXml(std::string& out, const pugi::xml_node& root) {
       if (!empty) {
         if (current.value() != nullptr && *current.value() != '\0') {
           // Embedded pcdata; attribute escaping keeps CR as `&#13;` in text content too.
-          AppendXmlAttrEscaped(out, current.value());
+          AppendXmlRawTextEscaped(out, current.value());
         }
         if (pugi::xml_node child = current.first_child(); child) {
           current = child;

@@ -79,10 +79,11 @@ std::size_t ValidUtf8SequenceLength(std::string_view in, std::size_t pos) {
   return 0U;
 }
 
-enum class XmlEscapingMode { kElementText, kAttribute, kOoxmlNotationOnly };
+enum class XmlEscapingMode { kElementText, kAttribute, kRawText, kOoxmlNotationOnly };
 
 void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode mode) {
-  const bool attribute = mode == XmlEscapingMode::kAttribute;
+  // Raw text shares the attribute control/whitespace handling but spells `>` and `'` as entities.
+  const bool attribute = mode == XmlEscapingMode::kAttribute || mode == XmlEscapingMode::kRawText;
   for (std::size_t i = 0; i < in.size(); ++i) {
     const char raw = in[i];
     const unsigned char byte = static_cast<unsigned char>(raw);
@@ -99,7 +100,7 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode
       }
       continue;
     }
-    if (mode != XmlEscapingMode::kAttribute) {
+    if (!attribute) {
       // Element text and notation-only DOM text are decoded by
       // `AppendOoxmlTextUnescaped` on the way back in, so both may carry the
       // notation and must protect a literal `_xHHHH_` spelling behind
@@ -141,13 +142,22 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, XmlEscapingMode
         out.append("&lt;");
         break;
       case '>':
-        out.append("&gt;");
+        // Excel writes `>` and `'` raw inside attribute values.
+        if (mode == XmlEscapingMode::kAttribute) {
+          out.push_back(raw);
+        } else {
+          out.append("&gt;");
+        }
         break;
       case '"':
         out.append("&quot;");
         break;
       case '\'':
-        out.append("&apos;");
+        if (mode == XmlEscapingMode::kAttribute) {
+          out.push_back(raw);
+        } else {
+          out.append("&apos;");
+        }
         break;
       case '\t':
         if (attribute) {
@@ -194,6 +204,10 @@ void AppendOoxmlTextEscaped(std::string& out, std::string_view in) {
 
 void AppendXmlAttrEscaped(std::string& out, std::string_view in) {
   AppendXmlEscapedImpl(out, in, XmlEscapingMode::kAttribute);
+}
+
+void AppendXmlRawTextEscaped(std::string& out, std::string_view in) {
+  AppendXmlEscapedImpl(out, in, XmlEscapingMode::kRawText);
 }
 
 void AppendOoxmlTextUnescaped(std::string& out, std::string_view in) {

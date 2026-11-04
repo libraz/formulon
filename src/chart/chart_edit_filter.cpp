@@ -40,7 +40,7 @@ void put_ref(xml_node ser, const char* tag, const std::string& formula, bool mul
   const char* ref = name ? "strRef" : multi ? "multiLvlStrRef" : "numRef";
   std::string x = std::string("<") + tag + "><c:" + ref + ">";
   std::string esc;
-  io::AppendXmlAttrEscaped(esc, formula);
+  io::AppendXmlRawTextEscaped(esc, formula);
   x += filtered ? std::string("<c:extLst><c:ext uri=\"") + kUriC15 + "\"><c15:formulaRef><c15:sqref>" + esc +
                       "</c15:sqref></c15:formulaRef></c:ext></c:extLst>"
                 : "<c:f>" + esc + "</c:f>";

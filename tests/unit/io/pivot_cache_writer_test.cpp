@@ -332,10 +332,10 @@ TEST(PivotCacheWriter, XmlEscapingApplies) {
   // Sanity: escaped sequences are present in the bytes; the raw '<' / '&'
   // inside the field name and shared item text must not survive verbatim
   // as element/attribute characters.
-  EXPECT_NE(xml.find("&lt;R&amp;D&gt;"), std::string::npos);
+  EXPECT_NE(xml.find("&lt;R&amp;D>"), std::string::npos);
   EXPECT_NE(xml.find("a&amp;b"), std::string::npos);
   EXPECT_NE(xml.find("quote&quot;here"), std::string::npos);
-  EXPECT_NE(xml.find("&lt;tag&gt;"), std::string::npos);
+  EXPECT_NE(xml.find("&lt;tag>"), std::string::npos);
 
   // Round-trip: the reader must recover the original (unescaped) bytes.
   auto parsed_or = read_pivot_cache_definition(Bytes(xml));

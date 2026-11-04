@@ -420,7 +420,7 @@ TEST(PivotTableWriter, XmlEscapingApplies) {
 
   const std::string xml = write_pivot_table_definition(table);
   // Sanity: escaped sequences are present in the bytes.
-  EXPECT_NE(xml.find("&lt;R&amp;D&gt;"), std::string::npos);
+  EXPECT_NE(xml.find("&lt;R&amp;D>"), std::string::npos);
   EXPECT_NE(xml.find("Sum &amp; Average of &quot;X&quot;"), std::string::npos);
 
   auto parsed_or = read_pivot_table_definition(Bytes(xml));
@@ -1927,12 +1927,14 @@ TEST(PivotTableOptionsRoundTrip, RootAttributesFollowExcelsOrder) {
   const std::size_t drill = written.find(" useAutoFormatting=");
   const std::size_t print = written.find(" itemPrintTitles=");
   const std::size_t merge = written.find(" mergeItem=");
+  const std::size_t created = written.find(" createdVersion=");
   const std::size_t indent = written.find(" indent=");
   const std::size_t multi = written.find(" multipleFieldFilters=");
   ASSERT_NE(drill, std::string::npos) << written;
   EXPECT_LT(drill, print);
   EXPECT_LT(print, merge);
-  EXPECT_LT(merge, indent);
+  EXPECT_LT(merge, created);
+  EXPECT_LT(created, indent);
   EXPECT_LT(indent, multi);
 }
 
@@ -1975,6 +1977,20 @@ TEST(PivotFieldShowAll, FieldCreatedInMemoryStartsOffAndWritesZero) {
   EXPECT_NE(write_pivot_table_definition(table).find("<pivotField showAll=\"0\"/>"), std::string::npos);
   table.mutable_fields()[0].show_all = true;
   EXPECT_EQ(write_pivot_table_definition(table).find("showAll"), std::string::npos);
+}
+
+// A calculated field as Excel saves it (pivot_calc/cf1_price_amt_per_qty.xlsx): the captured drag*
+// attributes sit between the form attributes and showAll, ahead of defaultSubtotal.
+TEST(PivotFieldShowAll, CapturedAttributesKeepSchemaPosition) {
+  const std::string field =
+      "<pivotField dataField=\"1\" dragToRow=\"0\" dragToCol=\"0\" dragToPage=\"0\" showAll=\"0\" "
+      "defaultSubtotal=\"0\"/>";
+  const std::string xml =
+      OptionsXml("", field, "<dataFields count=\"1\"><dataField name=\"X\" fld=\"0\"/></dataFields>");
+  auto table = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+  const std::string written = write_pivot_table_definition(table.value());
+  EXPECT_NE(written.find(field), std::string::npos) << written;
 }
 
 // ---------------------------------------------------------------------------

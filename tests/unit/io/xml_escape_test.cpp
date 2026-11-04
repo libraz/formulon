@@ -56,7 +56,19 @@ TEST(XmlEscape, AttrEscapesCriticalCharsAndWhitespaceControls) {
   // replaced, the same way an invalid UTF-8 byte is.
   std::string out;
   AppendXmlAttrEscaped(out, "a&b<c>\"d'e\n\tf\r\x01");
-  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e&#10;&#9;f&#13;\xEF\xBF\xBD");
+  EXPECT_EQ(out, "a&amp;b&lt;c>&quot;d'e&#10;&#9;f&#13;\xEF\xBF\xBD");
+}
+
+TEST(XmlEscape, AttrKeepsGreaterThanAndApostropheRaw) {
+  std::string out;
+  AppendXmlAttrEscaped(out, "IF(a>2,'x',\"y\")&<");
+  EXPECT_EQ(out, "IF(a>2,'x',&quot;y&quot;)&amp;&lt;");
+}
+
+TEST(XmlEscape, RawTextEscapesGreaterThanAndApostrophe) {
+  std::string out;
+  AppendXmlRawTextEscaped(out, "a>'b\r");
+  EXPECT_EQ(out, "a&gt;&apos;b&#13;");
 }
 
 TEST(XmlEscape, OoxmlControlAndLiteralEscapeRoundTrip) {
