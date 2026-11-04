@@ -13,6 +13,7 @@
 #include "excel_profile.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "style_resolve.h"
@@ -44,49 +45,12 @@ struct RectRef {
   bool full_row = false;
 };
 
-/// Splits an optional (possibly quoted) sheet qualifier from `text`.
-bool split_qualifier(std::string_view text, std::string* sheet, std::string_view* rest) {
-  sheet->clear();
-  if (text.empty()) {
-    return false;
-  }
-  if (text.front() != '\'') {
-    const std::size_t bang = text.find('!');
-    if (bang == std::string_view::npos) {
-      *rest = text;
-      return true;
-    }
-    sheet->assign(text.substr(0, bang));
-    *rest = text.substr(bang + 1);
-    return !sheet->empty();
-  }
-  std::size_t i = 1;
-  for (; i < text.size(); ++i) {
-    if (text[i] == '\'') {
-      if (i + 1 < text.size() && text[i + 1] == '\'') {
-        ++i;
-      } else {
-        break;
-      }
-    }
-    sheet->push_back(text[i]);
-  }
-  if (i + 1 >= text.size() || text[i + 1] != '!') {
-    return false;
-  }
-  *rest = text.substr(i + 2);
-  return true;
-}
-
 bool parse_rect(std::string_view text, RectRef* out) {
-  std::string_view rest;
-  if (!split_qualifier(text, &out->sheet, &rest)) {
+  const a1p::A1Parse p = a1p::parse_a1_ref(text);
+  if (!p.valid) {
     return false;
   }
-  const a1p::A1Parse p = a1p::parse_a1_ref(rest);
-  if (!p.valid || !p.sheet.empty()) {
-    return false;
-  }
+  out->sheet.assign(p.sheet);
   const std::uint32_t row2 = p.is_range ? p.row2 : p.row;
   const std::uint32_t col2 = p.is_range ? p.col2 : p.col;
   out->top = std::min(p.row, row2);
@@ -100,18 +64,7 @@ bool parse_rect(std::string_view text, RectRef* out) {
 
 std::string sheet_prefix(const std::string& name) {
   std::string out;
-  if (parser::local_sheet_needs_quoting_a1(name)) {
-    out += '\'';
-    for (const char c : name) {
-      out += c;
-      if (c == '\'') {
-        out += '\'';
-      }
-    }
-    out += '\'';
-  } else {
-    out = name;
-  }
+  parser::append_sheet_name(name, /*force_quote=*/false, out);
   out += '!';
   return out;
 }
