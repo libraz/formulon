@@ -857,11 +857,14 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // file that turned grand totals OFF carries `rowGrandTotals="0"` /
   // `colGrandTotals="0"` explicitly. The model also defaults to true; we
   // read whatever is present so an OFF state survives the round trip
-  // instead of silently flipping back to ON.
+  // instead of silently flipping back to ON. The attributes are named after
+  // the axis they total: `rowGrandTotals` is the grand total row at the
+  // bottom (the model's column totals), `colGrandTotals` the column at the
+  // right (the model's row totals).
   {
-    const bool row_grand = attr_bool(root, "rowGrandTotals", true);
-    const bool col_grand = attr_bool(root, "colGrandTotals", true);
-    table.set_grand_totals(row_grand, col_grand);
+    const bool bottom_row = attr_bool(root, "rowGrandTotals", true);
+    const bool right_col = attr_bool(root, "colGrandTotals", true);
+    table.set_grand_totals(/*rows=*/right_col, /*cols=*/bottom_row);
     table.set_subtotal_hidden_items(attr_bool(root, "subtotalHiddenItems", false));
   }
 

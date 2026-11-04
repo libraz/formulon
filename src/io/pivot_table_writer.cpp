@@ -849,10 +849,12 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // Grand-total flags default to true in OOXML and in the model. Emit them
   // only when turned OFF so an explicit OFF state survives the round trip
   // (omitting them would let the reader's default flip the pivot back ON).
-  if (!table.grand_totals_rows()) {
+  // `rowGrandTotals` is the bottom grand total row, i.e. the model's column
+  // totals; `colGrandTotals` the right-hand column, the model's row totals.
+  if (!table.grand_totals_cols()) {
     out.append(" rowGrandTotals=\"0\"");
   }
-  if (!table.grand_totals_cols()) {
+  if (!table.grand_totals_rows()) {
     out.append(" colGrandTotals=\"0\"");
   }
   if (table.subtotal_hidden_items()) {
