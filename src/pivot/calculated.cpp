@@ -68,11 +68,14 @@ Expected<void, Error> check_name(std::string_view name) {
 }
 
 /// The references of `formula`, compiled in `cache` for a calculated field
-/// (no `item_field`) or an item of `item_field`.
+/// (no `item_field`) or an item of `item_field`. A non-null `canonical`
+/// receives the form Excel stores.
 Expected<std::vector<FormulaRef>, Error> compile_refs(PivotFormulaHost& host, const PivotCache& cache,
-                                                      std::optional<std::size_t> item_field, std::string_view formula) {
+                                                      std::optional<std::size_t> item_field, std::string_view formula,
+                                                      std::string* canonical = nullptr) {
   std::vector<FormulaRef> refs;
-  Expected<std::uint32_t, Error> id = host.compile(without_equals(formula), FormulaScope{&cache, item_field}, &refs);
+  Expected<std::uint32_t, Error> id =
+      host.compile(without_equals(formula), FormulaScope{&cache, item_field}, &refs, canonical);
   if (!id) {
     return id.error();
   }
@@ -539,7 +542,9 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
       return invalid("calculated item name is already an item", name);
     }
   }
-  if (Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, field_index, formula); !refs) {
+  std::string canonical;
+  if (Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, field_index, formula, &canonical);
+      !refs) {
     return refs.error();
   }
 
@@ -552,7 +557,7 @@ Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::v
 
   PivotCalculatedItem entry;
   entry.cache_field_index = static_cast<std::uint32_t>(field_index);
-  entry.formula = std::string(without_equals(formula));
+  entry.formula = std::move(canonical);
   entry.area.cache_index = true;
   entry.area.outline = false;
   entry.area.field_position = position;
@@ -597,7 +602,8 @@ Expected<void, Error> set_calculated_item_formula(PivotCache& cache, std::size_t
   }
   const PivotCalculatedItem& entry = cache.calculated_items()[index];
   const std::size_t field = entry.cache_field_index;
-  Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, field, formula);
+  std::string canonical;
+  Expected<std::vector<FormulaRef>, Error> refs = compile_refs(host, cache, field, formula, &canonical);
   if (!refs) {
     return refs.error();
   }
@@ -605,7 +611,7 @@ Expected<void, Error> set_calculated_item_formula(PivotCache& cache, std::size_t
       item.has_value() && item_refs_reach(host, cache, field, refs.value(), *item)) {
     return invalid("calculated item refers to itself", formula);
   }
-  cache.mutable_calculated_items()[index].formula = std::string(without_equals(formula));
+  cache.mutable_calculated_items()[index].formula = std::move(canonical);
   return Expected<void, Error>::Ok();
 }
 
@@ -742,7 +748,7 @@ CalculatedPlan::CalculatedPlan(const PivotTable& table, const PivotCache& cache,
       Compiled compiled;
       if (entry.cache_field_index < cache.fields().size()) {
         Expected<std::uint32_t, Error> id = host_->compile(
-            without_equals(entry.formula), FormulaScope{&cache, entry.cache_field_index}, &compiled.refs);
+            without_equals(entry.formula), FormulaScope{&cache, entry.cache_field_index}, &compiled.refs, nullptr);
         if (id) {
           compiled.ok = true;
           compiled.id = id.value();
@@ -765,7 +771,7 @@ void CalculatedPlan::compile_field(std::size_t field_index, std::vector<std::uin
   state[field_index] = 1U;
   Compiled compiled;
   Expected<std::uint32_t, Error> id = host_->compile(without_equals(*cache_->fields()[field_index].formula),
-                                                     FormulaScope{cache_, std::nullopt}, &compiled.refs);
+                                                     FormulaScope{cache_, std::nullopt}, &compiled.refs, nullptr);
   if (id) {
     compiled.ok = true;
     compiled.id = id.value();

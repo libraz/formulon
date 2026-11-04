@@ -69,11 +69,14 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
 /// formula; `kPreconditionFailed` when the field is grouped, calculated, on no
 /// table's axis, or a table summarises with a function that excludes
 /// calculated items.
+///
+/// The formula is stored as Excel saves it: bare item names qualified as
+/// `Field[Item]`, everything else as typed.
 Expected<std::size_t, Error> add_calculated_item(PivotCache& cache, const std::vector<PivotTable*>& tables,
                                                  std::size_t field_index, std::string_view name,
                                                  std::string_view formula, PivotFormulaHost& host);
 
-/// Replaces entry `index`'s formula, checked as on add.
+/// Replaces entry `index`'s formula, checked and stored as on add.
 Expected<void, Error> set_calculated_item_formula(PivotCache& cache, std::size_t index, std::string_view formula,
                                                   PivotFormulaHost& host);
 

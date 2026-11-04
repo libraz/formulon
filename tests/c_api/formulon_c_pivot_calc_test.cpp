@@ -506,8 +506,8 @@ TEST(FormulonCApiPivotCalc, CalculatedItemGridAndSavedStringsMatchExcel) {
   WorkbookGuard wb;
   std::uint32_t cache = 0;
   BuildSales(wb, &cache);
-  ASSERT_EQ(fm_workbook_pivot_cache_calculated_item_add(wb.handle, cache, kRegion, "X", "=Region[North]+Region[South]"),
-            0)
+  // Typed as `=North+South`; Excel stores the item names qualified.
+  ASSERT_EQ(fm_workbook_pivot_cache_calculated_item_add(wb.handle, cache, kRegion, "X", "=North+South"), 0)
       << fm_last_error_message();
   EXPECT_EQ(Pending(wb.handle), 1);
   ASSERT_EQ(fm_workbook_pivot_project(wb.handle, 0U, kPivot), 0) << fm_last_error_message();
@@ -665,7 +665,8 @@ TEST(FormulonCApiPivotCalc, CalculatedItemFormulaAndRemoval) {
       << fm_last_error_message();
   fm_pivot_calculated_item_t item{};
   ASSERT_EQ(fm_workbook_pivot_cache_calculated_item_at(wb.handle, cache, 1U, &item), 0);
-  EXPECT_STREQ(item.formula, "X*3");
+  // Stored as Excel stores it: a bare item name is qualified with its field.
+  EXPECT_STREQ(item.formula, "Region[X]*3");
   ASSERT_EQ(fm_workbook_pivot_project(wb.handle, 0U, kPivot), 0) << fm_last_error_message();
   ExpectNumber(wb.handle, "Y", SumOf("Amt"), 1680.0);
 

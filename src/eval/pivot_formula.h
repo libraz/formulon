@@ -31,7 +31,7 @@ namespace formulon::eval {
 class PivotFormulaEvaluator final : public pivot::PivotFormulaHost {
  public:
   Expected<std::uint32_t, Error> compile(std::string_view formula, const pivot::FormulaScope& scope,
-                                         std::vector<pivot::FormulaRef>* refs) override;
+                                         std::vector<pivot::FormulaRef>* refs, std::string* canonical) override;
   Value evaluate(std::uint32_t formula_id, const Value* ref_values, std::size_t ref_count) override;
 
   /// Capacity held by the per-call scratch arena; for tests and diagnostics.

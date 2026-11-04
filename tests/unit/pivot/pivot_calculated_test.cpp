@@ -302,7 +302,7 @@ TEST_F(PivotCalculated, AFieldAnotherFormulaNamesCannotBeRemoved) {
 
 TEST_F(PivotCalculated, ItemSumsTheNamedItemsAndTheTotalsIncludeIt) {
   PivotTable table = BuildTable();
-  auto added = add_calculated_item(cache_, {&table}, kRegion, "X", "Region[North]+Region[South]", host_);
+  auto added = add_calculated_item(cache_, {&table}, kRegion, "X", "=North+South", host_);
   ASSERT_TRUE(static_cast<bool>(added)) << added.error().message;
   EXPECT_EQ(added.value(), 0U);
 
@@ -350,6 +350,8 @@ TEST_F(PivotCalculated, PositionalReferencesCountDisplayedItems) {
   ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, "Prev", "Region[-1]", host_)));
   ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, "Next", "Region[+1]", host_)));
   ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, "Far", "Region[-9]", host_)));
+  EXPECT_EQ(cache_.calculated_items()[0].formula, "Region[-1]");
+  EXPECT_EQ(cache_.calculated_items()[1].formula, "Region[+1]");
   const PivotResult result = Evaluate(table, cache_);
   EXPECT_EQ(RowLabels(result), (std::vector<std::string>{"East", "North", "South", "Prev", "Next", "Far"}));
   const std::vector<Value> amt = Column(result, 0);
@@ -371,7 +373,9 @@ TEST_F(PivotCalculated, ItemsSortByNameInASortedField) {
 TEST_F(PivotCalculated, LaterItemWinsAtAnIntersectionAndMoveSwapsTheWinner) {
   PivotTable table = BuildTable(/*product_on_columns=*/true);
   ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kRegion, "RX", "North+South", host_)));
-  ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kProduct, "PY", "Product[A]+100", host_)));
+  ASSERT_TRUE(static_cast<bool>(add_calculated_item(cache_, {&table}, kProduct, "PY", "=A+100", host_)));
+  EXPECT_EQ(cache_.calculated_items()[0].formula, "Region[North]+Region[South]");
+  EXPECT_EQ(cache_.calculated_items()[1].formula, "Product[A]+100");
   {
     const PivotResult result = Evaluate(table, cache_);
     EXPECT_EQ(RowLabels(result), (std::vector<std::string>{"East", "North", "South", "RX"}));
@@ -467,7 +471,7 @@ TEST_F(PivotCalculated, SetItemFormulaRejectsACycle) {
   ASSERT_FALSE(static_cast<bool>(cycle));
   EXPECT_EQ(cycle.error().code, FormulonErrorCode::kInvalidArgument);
   ASSERT_TRUE(static_cast<bool>(set_calculated_item_formula(cache_, 0, "=North*3", host_)));
-  EXPECT_EQ(cache_.calculated_items()[0].formula, "North*3");
+  EXPECT_EQ(cache_.calculated_items()[0].formula, "Region[North]*3");
   ExpectNumbers(Column(Evaluate(table, cache_), 0), {70, 210, 350, 630, 1260, 2520});
 }
 

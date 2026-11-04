@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -36,13 +37,15 @@ struct FormulaScope {
 /// Compiles and evaluates pivot formulas on behalf of the pivot layer.
 class PivotFormulaHost {
  public:
-  /// Parses once and fills `refs` in first-appearance order.
+  /// Parses once and fills `refs` in first-appearance order. A non-null
+  /// `canonical` receives the stored form: the text without a leading `=`, and
+  /// in a calculated-item formula every bare item name qualified as `Field[Item]`.
   ///
   /// Errors: `kInvalidArgument` with a reason for syntax errors, names outside
   /// the scope, cell/range/structured/external references, defined names,
   /// array constants, the disallowed functions, and All/Blank.
   virtual Expected<std::uint32_t, Error> compile(std::string_view formula, const FormulaScope& scope,
-                                                 std::vector<FormulaRef>* refs) = 0;
+                                                 std::vector<FormulaRef>* refs, std::string* canonical) = 0;
 
   /// Evaluates a compiled formula; `ref_values[i]` is the value of `refs[i]`
   /// for the cell being evaluated.

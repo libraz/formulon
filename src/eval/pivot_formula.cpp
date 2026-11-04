@@ -94,6 +94,7 @@ class Rewriter {
     src_ = src;
     std::size_t i = 0;
     while (i < src_.size()) {
+      const std::size_t start = i;
       const auto c = static_cast<unsigned char>(src_[i]);
       if (c == '"') {
         i = copy_string_literal(i);
@@ -118,11 +119,49 @@ class Rewriter {
       } else {
         out_.push_back(src_[i++]);
       }
+      append_canonical(src_.substr(start, i - start));
     }
     return std::move(out_);
   }
 
+  /// The source with every bare item name qualified as `Field[Item]`.
+  std::string& canonical() { return canonical_; }
+
  private:
+  void append_canonical(std::string_view token) {
+    if (!qualify_) {
+      canonical_.append(token);
+      return;
+    }
+    qualify_ = false;
+    const std::string& field = scope_.cache->fields()[*scope_.item_field].name;
+    if (needs_quotes(field)) {
+      canonical_.push_back('\'');
+      for (const char ch : field) {
+        canonical_.append(ch == '\'' ? 2U : 1U, ch);
+      }
+      canonical_.push_back('\'');
+    } else {
+      canonical_.append(field);
+    }
+    canonical_.push_back('[');
+    canonical_.append(token);
+    canonical_.push_back(']');
+  }
+
+  // A field name stays bare in `Field[...]` only when it reads back as one run.
+  static bool needs_quotes(std::string_view name) {
+    if (name.empty() || strings::case_insensitive_starts_with(name, kSyntheticPrefix)) {
+      return true;
+    }
+    for (const char ch : name) {
+      if (!is_run_byte(static_cast<unsigned char>(ch))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   std::size_t copy_string_literal(std::size_t i) {
     out_.push_back(src_[i++]);
     while (i < src_.size()) {
@@ -200,6 +239,7 @@ class Rewriter {
     if (scope_.item_field) {
       if (const std::optional<std::size_t> item = find_item(name)) {
         emit(pivot::FormulaRef{pivot::FormulaRef::Kind::Item, *scope_.item_field, *item, 0});
+        qualify_ = true;
         return {};
       }
       if (find_field(name)) {
@@ -355,6 +395,9 @@ class Rewriter {
   std::vector<pivot::FormulaRef>* refs_;
   std::string_view src_;
   std::string out_;
+  std::string canonical_;
+  /// Set when the token being scanned is a bare item name to qualify.
+  bool qualify_ = false;
 };
 
 // True when `name` is a synthetic identifier below `ref_count`.
@@ -430,7 +473,8 @@ Expected<void, Error> check_node(const parser::AstNode& node, std::size_t ref_co
 
 Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view formula,
                                                               const pivot::FormulaScope& scope,
-                                                              std::vector<pivot::FormulaRef>* refs) {
+                                                              std::vector<pivot::FormulaRef>* refs,
+                                                              std::string* canonical) {
   assert(eval_profile_scope_active());
   if (scope.cache == nullptr || refs == nullptr) {
     return invalid("pivot formula scope has no cache");
@@ -471,6 +515,9 @@ Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view f
     names_.push_back(std::move(name));
   }
   formulas_.push_back(std::move(compiled));
+  if (canonical != nullptr) {
+    *canonical = std::move(rewriter.canonical());
+  }
   return static_cast<std::uint32_t>(formulas_.size() - 1);
 }
 

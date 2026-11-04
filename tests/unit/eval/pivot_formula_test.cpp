@@ -31,6 +31,7 @@ constexpr std::size_t kAmtNet = 4;
 constexpr std::size_t kQ1 = 5;
 constexpr std::size_t kTrue = 6;
 constexpr std::size_t kQuote = 7;
+constexpr std::size_t kSalesArea = 9;
 
 Value owned_text(PivotCache& cache, std::string s) {
   cache.mutable_text_storage().push_back(std::move(s));
@@ -52,6 +53,10 @@ PivotCache build_cache() {
   std::vector<Value> products;
   products.push_back(owned_text(cache, "Widget"));
   cache.mutable_fields().push_back(PivotCacheField{"Product", std::move(products)});
+  std::vector<Value> areas;
+  areas.push_back(owned_text(cache, "North East"));
+  areas.push_back(owned_text(cache, "West"));
+  cache.mutable_fields().push_back(PivotCacheField{"Sales Area", std::move(areas)});
   return cache;
 }
 
@@ -61,14 +66,21 @@ class PivotFormula : public ::testing::Test {
   FormulaScope item_scope() const { return FormulaScope{&cache_, kRegion}; }
 
   std::uint32_t compile_ok(std::string_view formula, const FormulaScope& scope) {
-    auto id = host_.compile(formula, scope, &refs_);
+    auto id = host_.compile(formula, scope, &refs_, nullptr);
     EXPECT_TRUE(id.has_value()) << formula << ": " << (id ? "" : id.error().message);
     return id ? id.value() : 0;
   }
 
+  std::string canonical(std::string_view formula, const FormulaScope& scope) {
+    std::string out = "unset";
+    auto id = host_.compile(formula, scope, &refs_, &out);
+    EXPECT_TRUE(id.has_value()) << formula << ": " << (id ? "" : id.error().message);
+    return out;
+  }
+
   FormulonErrorCode compile_error(std::string_view formula, const FormulaScope& scope) {
     std::vector<FormulaRef> refs;
-    auto id = host_.compile(formula, scope, &refs);
+    auto id = host_.compile(formula, scope, &refs, nullptr);
     EXPECT_FALSE(id.has_value()) << formula;
     return id ? FormulonErrorCode::kOk : id.error().code;
   }
@@ -273,6 +285,37 @@ TEST_F(PivotFormula, IdsAreIndependentPerFormula) {
   EXPECT_DOUBLE_EQ(host_.evaluate(a, one, 1).as_number(), 10.0);
   const Value two[] = {Value::number(1), Value::number(5)};
   EXPECT_DOUBLE_EQ(host_.evaluate(b, two, 2).as_number(), 6.0);
+}
+
+TEST_F(PivotFormula, CanonicalQualifiesBareItemNames) {
+  EXPECT_EQ(canonical("=North+South", item_scope()), "Region[North]+Region[South]");
+  EXPECT_EQ(canonical("North*2+SUM(South,1)", item_scope()), "Region[North]*2+SUM(Region[South],1)");
+  EXPECT_EQ(canonical("'North'+1", item_scope()), "Region['North']+1");
+}
+
+TEST_F(PivotFormula, CanonicalKeepsQualifiedPositionalAndLiterals) {
+  EXPECT_EQ(canonical("=Region[-1]", item_scope()), "Region[-1]");
+  EXPECT_EQ(canonical("Region[+1]+Region[2]", item_scope()), "Region[+1]+Region[2]");
+  EXPECT_EQ(canonical("Region[North]+South", item_scope()), "Region[North]+Region[South]");
+  EXPECT_EQ(canonical("IF(North>0,\"North\",#N/A)", item_scope()), "IF(Region[North]>0,\"North\",#N/A)");
+}
+
+TEST_F(PivotFormula, CanonicalQuotesFieldNamesThatNeedIt) {
+  const FormulaScope scope{&cache_, kSalesArea};
+  const std::string text = canonical("'North East'+West", scope);
+  EXPECT_EQ(text, "'Sales Area'['North East']+'Sales Area'[West]");
+  // The canonical form compiles back to the same references.
+  const std::vector<FormulaRef> before = refs_;
+  compile_ok(text, scope);
+  ASSERT_EQ(refs_.size(), before.size());
+  for (std::size_t i = 0; i < refs_.size(); ++i) {
+    expect_ref(refs_[i], before[i].kind, before[i].field, before[i].item, before[i].position);
+  }
+}
+
+TEST_F(PivotFormula, CanonicalFieldFormulaIsAsTyped) {
+  EXPECT_EQ(canonical("=Amt/Qty", field_scope()), "Amt/Qty");
+  EXPECT_EQ(canonical("IF(数量>2,'Amt Net',0)", field_scope()), "IF(数量>2,'Amt Net',0)");
 }
 
 }  // namespace
