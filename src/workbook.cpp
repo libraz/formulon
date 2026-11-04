@@ -1376,6 +1376,33 @@ void Workbook::put_cell_text(std::size_t sheet_index, std::uint32_t row, std::ui
   sheets_[sheet_index].set_cell_text(row, col, text);
 }
 
+void Workbook::erase_cells_in(std::size_t sheet_index, const MergeRange& rect) {
+  Sheet& sheet = sheets_[sheet_index];
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  std::vector<CellAddress> stored;
+  for (std::uint64_t row = rect.first_row; row <= rect.last_row; ++row) {
+    const auto it = sheet.rows().find(static_cast<std::uint32_t>(row));
+    if (it == sheet.rows().end()) {
+      continue;
+    }
+    for (const RowCells::Entry entry :
+         it->second.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+      stored.push_back(CellAddress{static_cast<std::uint32_t>(row), entry.col});
+    }
+  }
+  // Like a literal write, the erase re-evaluates whatever read the cell.
+  for (const CellAddress address : stored) {
+    const eval::CellNodeId node = make_node(sheet_index, address.row, address.col);
+    mutator.mark_dirty(node);
+    mark_dependents_dirty(mutator, node);
+    mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, address.row, address.col);
+    mutator.clear_cell_dependencies(node);
+    mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, address.row, address.col);
+    sheet.erase_cell(address.row, address.col);
+  }
+}
+
 void Workbook::apply_legacy_implicit_intersections() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   for (std::size_t sheet_index = 0; sheet_index < sheets_.size(); ++sheet_index) {

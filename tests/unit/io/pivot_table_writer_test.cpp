@@ -7,6 +7,7 @@
 #include "io/pivot_table_writer.h"
 
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <optional>
 #include <string>
@@ -17,11 +18,14 @@
 #include "eval/eval_profile_scope.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "sheet.h"
+#include "workbook.h"
 
 namespace formulon::io {
 namespace {
@@ -2066,6 +2070,115 @@ TEST(PivotTableClone, CopiesEveryOptionAndProjectionMember) {
   t.mutable_projected_merges().clear();
   EXPECT_EQ(c->indent(), 3U);
   EXPECT_EQ(c->projected_merges().size(), 1U);
+}
+
+// ---------------------------------------------------------------------------
+// `<location>` offsets derived from the report options
+//
+// A table whose offsets were not read with it gets them from its shape. Each
+// case drops the offsets Excel wrote and requires the derived ones to equal
+// them.
+// ---------------------------------------------------------------------------
+
+#ifndef FORMULON_FIXTURES_DIR
+#error "FORMULON_FIXTURES_DIR must be defined by the build"
+#endif
+
+std::vector<std::uint8_t> ReadFixtureBytes(const std::string& path) {
+  std::vector<std::uint8_t> out;
+  FILE* file = std::fopen(path.c_str(), "rb");
+  if (file == nullptr) {
+    return out;
+  }
+  std::fseek(file, 0, SEEK_END);
+  const long size = std::ftell(file);
+  std::fseek(file, 0, SEEK_SET);
+  if (size > 0) {
+    out.resize(static_cast<std::size_t>(size));
+    if (std::fread(out.data(), 1, out.size(), file) != out.size()) {
+      out.clear();
+    }
+  }
+  std::fclose(file);
+  return out;
+}
+
+void AppendLocationAttr(std::string& out, const char* name, std::optional<std::uint32_t> value) {
+  if (value.has_value()) {
+    out.append(" ").append(name).append("=\"").append(std::to_string(*value)).append("\"");
+  }
+}
+
+/// The offset attributes of the written `<location>`, after its `ref`.
+std::string WrittenLocationOffsets(const std::string& xml) {
+  const std::size_t at = xml.find("<location ref=\"");
+  if (at == std::string::npos) {
+    return "(no location)";
+  }
+  const std::size_t ref_end = xml.find('"', at + 15U);
+  const std::size_t end = xml.find("/>", at);
+  return ref_end == std::string::npos || end == std::string::npos ? "(malformed)"
+                                                                  : xml.substr(ref_end + 1U, end - ref_end - 1U);
+}
+
+class PivotTableWriterLocation : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(PivotTableWriterLocation, DerivedOffsetsMatchTheOnesExcelSaved) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_options/" + GetParam();
+  const std::vector<std::uint8_t> bytes = ReadFixtureBytes(path);
+  ASSERT_FALSE(bytes.empty()) << "could not read " << path;
+  auto read_or = read_ooxml(ByteSpan{bytes.data(), bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  Workbook& wb = read_or.value().workbook;
+  std::size_t tables = 0;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const std::unique_ptr<pivot::PivotTable>& table : wb.sheet(s).mutable_pivot_tables()) {
+      std::string excel;
+      AppendLocationAttr(excel, "firstHeaderRow", table->location_first_header_row());
+      AppendLocationAttr(excel, "firstDataRow", table->location_first_data_row());
+      AppendLocationAttr(excel, "firstDataCol", table->location_first_data_col());
+      AppendLocationAttr(excel, "rowPageCount", table->location_row_page_count());
+      AppendLocationAttr(excel, "colPageCount", table->location_col_page_count());
+      table->set_location_attributes(std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt);
+      EXPECT_EQ(WrittenLocationOffsets(write_pivot_table_definition(*table)), excel) << table->name();
+      ++tables;
+    }
+  }
+  EXPECT_GT(tables, 0U);
+}
+
+INSTANTIATE_TEST_SUITE_P(ExcelSaved, PivotTableWriterLocation,
+                         ::testing::Values("op_headers_off.xlsx", "op_griddz.xlsx", "op_pagewrap2_down_over.xlsx",
+                                           "op_pagewrap2_over_down.xlsx", "op_merge_tabular.xlsx",
+                                           "op_merge_outline.xlsx", "op_emptyrow_show_all.xlsx",
+                                           "op_emptycol_show_all.xlsx", "op_indent3.xlsx", "op_missing_caption.xlsx"),
+                         [](const ::testing::TestParamInfo<const char*>& info) {
+                           std::string name;
+                           for (const char* p = info.param; *p != '\0' && *p != '.'; ++p) {
+                             name.push_back(*p);
+                           }
+                           return name;
+                         });
+
+TEST(PivotTableWriter, HiddenFieldCaptionsDropTheColumnLabelsRow) {
+  // Two data fields beside a column field: without captions the
+  // "Column Labels" row goes, and both offsets move up one row.
+  pivot::PivotTable table;
+  table.mutable_fields().resize(3);
+  table.mutable_fields()[0].axis = pivot::PivotAxis::Row;
+  table.mutable_fields()[1].axis = pivot::PivotAxis::Col;
+  table.mutable_fields()[2].axis = pivot::PivotAxis::Value;
+  table.mutable_row_field_order() = {0U};
+  table.mutable_col_field_order() = {1U};
+  table.mutable_data_fields().resize(2);
+  table.mutable_data_fields()[0].field_index = 2U;
+  table.mutable_data_fields()[1].field_index = 2U;
+  table.set_col_values_position(std::optional<std::size_t>(1U));
+  EXPECT_EQ(WrittenLocationOffsets(write_pivot_table_definition(table)),
+            " firstHeaderRow=\"1\" firstDataRow=\"3\" firstDataCol=\"1\"");
+  table.set_show_headers(false);
+  EXPECT_EQ(WrittenLocationOffsets(write_pivot_table_definition(table)),
+            " firstHeaderRow=\"0\" firstDataRow=\"2\" firstDataCol=\"1\"");
 }
 
 }  // namespace

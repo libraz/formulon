@@ -66,6 +66,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/lazy_impls.h"
+#include "eval/pivot_formula.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "pivot/field_lookup.h"
@@ -328,9 +329,10 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     // The workbook's locale decides how an axis group with no source value is
     // named, and that label is what the (field, item) pairs below match, so it
     // has to be resolved before the hierarchy is built.
+    PivotFormulaEvaluator formulas;
     Expected<pivot::PivotResult, Error> evaluated =
         pivot::evaluate(*table, *cache, pivot::pivot_layout_options_for(ctx.workbook()->excel_profile()),
-                        pivot::PivotFilterEnv{ctx.pinned_now(), ctx.date1904(), &ctx.workbook()->styles()});
+                        pivot::PivotFilterEnv{ctx.pinned_now(), ctx.date1904(), &ctx.workbook()->styles(), &formulas});
     if (!evaluated) {
       // Hide internal evaluator error codes behind the Mac-visible
       // GETPIVOTDATA surface.

@@ -505,6 +505,58 @@ PivotCells ProjectCells(const PivotTable& table, const PivotCache& cache) {
   return cells_or ? std::move(cells_or.value()) : PivotCells{};
 }
 
+TEST(PivotLayoutOptions, NumberAndDateItemsCarryTheirValue) {
+  PivotCache cache;
+  cache.set_cache_id(kCacheId);
+  for (const char* name : {"Code", "Date", "Amt"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  cache.mutable_fields()[1].num_fmt_id = 14;
+  for (const auto& [code, serial] : {std::pair<double, double>{1.0, 45306.0}, {2.0, 45316.0}}) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(Value::number(code));
+    rec.cells.push_back(Value::number(serial));
+    rec.cells.push_back(Value::number(10.0));
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  PivotTable table;
+  table.set_pivot_cache_id(kCacheId);
+  table.set_anchor(2, 0, 1, 1);
+  for (const char* name : {"Code", "Date", "Amt"}) {
+    PivotField field;
+    field.source_name = name;
+    field.axis = PivotAxis::Row;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  table.mutable_fields()[2].axis = PivotAxis::Value;
+  table.mutable_row_field_order() = {0, 1};
+  PivotDataField sum;
+  sum.name = "Sum of Amt";
+  sum.field_index = 2;
+  sum.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum));
+
+  const PivotCells cells = ProjectCells(table, cache);
+  std::vector<double> items;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.role == PivotCellRole::RowItem) {
+      ASSERT_TRUE(cell.item_value.has_value()) << cell.row;
+      ASSERT_TRUE(cell.item_value->is_number()) << cell.row;
+      items.push_back(cell.item_value->as_number());
+    } else {
+      EXPECT_FALSE(cell.item_value.has_value()) << cell.row << "," << cell.col;
+    }
+  }
+  EXPECT_EQ(items, (std::vector<double>{1.0, 45306.0, 2.0, 45316.0}));
+
+  // A text item keeps only its label.
+  const PivotCells text =
+      ProjectCells(build_region_product_table(PivotLayout::Compact, true), build_region_product_cache());
+  for (const PivotCell& cell : text.cells) {
+    EXPECT_FALSE(cell.item_value.has_value()) << cell.row << "," << cell.col;
+  }
+}
+
 /// Region on the rows with the data fields below each item, Product on the columns.
 PivotTable build_cross_table_values_on_rows() {
   PivotTable table = build_region_product_table(PivotLayout::Compact, true);

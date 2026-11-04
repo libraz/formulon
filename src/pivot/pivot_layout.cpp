@@ -930,6 +930,18 @@ std::string label_format(const AxisEntry& entry, std::size_t level) {
                                                                      : std::string();
 }
 
+// The number behind the item at `entry.labels[level]`, when it is one.
+std::optional<Value> label_item_value(const AxisEntry& entry, std::size_t level) {
+  if (level >= entry.nodes.size() || entry.nodes[level] == nullptr) {
+    return std::nullopt;
+  }
+  const AxisHierarchyNode& node = *entry.nodes[level];
+  if (node.identity_is_group_item || !node.identity.has_value() || !node.identity->is_number()) {
+    return std::nullopt;
+  }
+  return node.identity;
+}
+
 void emit_text_or_blank(PivotCells& cells, std::uint32_t row, std::uint32_t col, const std::string& text,
                         PivotCellKind kind, PivotCellRole role, std::uint32_t depth, std::string field_name = {},
                         std::string number_format = {}) {
@@ -1035,6 +1047,9 @@ void emit_col_hierarchy_row(const LayoutPlan& plan, PivotCells& cells, std::uint
                        subtotal_here ? PivotCellRole::SubtotalLabel : PivotCellRole::ColItem,
                        static_cast<std::uint32_t>(depth), col_level_name(plan, depth),
                        subtotal_here ? std::string() : label_format(entry, depth));
+    if (!subtotal_here && !label.empty()) {
+      cells.cells.back().item_value = label_item_value(entry, depth);
+    }
   }
   if (row != plan.total_header_row) {
     for (std::size_t s = 0; s < plan.total_strip_cols; ++s) {
@@ -1320,6 +1335,9 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
         append_cell(cells, row, left + static_cast<std::uint32_t>(depth), text_value(cells, label), kind, role,
                     static_cast<std::uint32_t>(level), row_level_name(plan, level),
                     bare_level.has_value() ? label_format(entry, *bare_level) : std::string());
+        if (bare_level.has_value()) {
+          cells.cells.back().item_value = label_item_value(entry, *bare_level);
+        }
         if (compact && role != PivotCellRole::FieldHeader) {
           set_compact_indent(plan, cells, level);
         }

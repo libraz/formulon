@@ -961,12 +961,32 @@ class Workbook {
 
   /// Evaluates a pivot and writes its report range into the sheet cells.
   ///
-  /// Errors: `kInvalidArgument` for an index out of range;
-  /// `kPreconditionFailed` when the range overlaps another object.
+  /// The cells the previous projection covered (on the first one, the
+  /// location and the page area above it) and the new report range are
+  /// cleared, along with the merges inside the old range; then each report
+  /// cell is written as a literal with the format Excel gives its role, and
+  /// the layout's merges are added. Cells outside the report keep their
+  /// content. A pivot over a cache loaded without records writes nothing.
+  ///
+  /// Errors, each leaving the sheet unchanged:
+  ///   * `kInvalidArgument` for an index out of range.
+  ///   * `kEvalPivotMissing` when the pivot's cache is absent.
+  ///   * `kPreconditionFailed` when the new range overlaps another PivotTable,
+  ///     a table, a data table, a legacy array block, or a merge the previous
+  ///     projection did not cover.
+  ///   * an evaluation or layout error of the pivot.
   Expected<void, Error> project_pivot(std::size_t sheet_index, std::size_t pivot_index);
 
-  /// Projects every pivot whose cache changed since its last projection.
+  /// Projects every pivot whose cache changed since its last projection. A
+  /// pivot that cannot be projected stays pending.
   void project_pending_pivots();
+
+  /// Clears the cells and merges a pivot's last projection wrote, as deleting
+  /// the report does, and forgets them. Nothing happens for a pivot never
+  /// projected.
+  ///
+  /// Errors: `kInvalidArgument` for an index out of range.
+  Expected<void, Error> clear_pivot_projection(std::size_t sheet_index, std::size_t pivot_index);
 
   /// Returns the OOXML workbook variant this instance round-trips as.
   /// Defaults to `WorkbookKind::kXlsx`; the reader updates it from the
@@ -1322,6 +1342,8 @@ class Workbook {
   // `set_cell_value` without the array / data-table write refusals.
   void put_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
   void put_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string_view text);
+  // Drops every stored cell of `rect`, marking what read them dirty.
+  void erase_cells_in(std::size_t sheet_index, const MergeRange& rect);
   // `set_cell_formula` without the write refusals; a non-zero `block_rows` x
   // `block_cols` stores the cell as the anchor of a legacy array block.
   void put_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, std::string formula,

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -316,6 +317,35 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
     }
     pivot->set_anchor(row_axis ? anchor : pivot->anchor_row(), row_axis ? pivot->anchor_col() : anchor,
                       pivot->span_rows(), pivot->span_cols());
+    // The cells and merges the last projection wrote move with the report.
+    std::vector<MergeRange> projected;
+    if (pivot->projected_extent().has_value()) {
+      const pivot::PivotRect& r = *pivot->projected_extent();
+      projected.push_back(MergeRange{r.row0, r.col0, r.row1, r.col1});
+    }
+    const std::size_t extent_count = projected.size();
+    for (const pivot::PivotRect& r : pivot->projected_merges()) {
+      projected.push_back(MergeRange{r.row0, r.col0, r.row1, r.col1});
+    }
+    std::vector<bool> dropped(projected.size(), false);
+    for (std::size_t i = 0; i < projected.size(); ++i) {
+      bool drop = false;
+      ShiftAxisRange(projected[i], index, count, is_delete, row_axis, &drop);
+      dropped[i] = drop;
+    }
+    const auto to_rect = [](const MergeRange& m) {
+      return pivot::PivotRect{m.first_row, m.first_col, m.last_row, m.last_col};
+    };
+    if (extent_count != 0U) {
+      pivot->set_projected_extent(dropped[0] ? std::nullopt : std::optional<pivot::PivotRect>(to_rect(projected[0])));
+    }
+    std::vector<pivot::PivotRect>& merges = pivot->mutable_projected_merges();
+    merges.clear();
+    for (std::size_t i = extent_count; i < projected.size(); ++i) {
+      if (!dropped[i]) {
+        merges.push_back(to_rect(projected[i]));
+      }
+    }
   }
   pivots.erase(std::remove(pivots.begin(), pivots.end(), nullptr), pivots.end());
 }

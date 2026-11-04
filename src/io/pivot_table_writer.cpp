@@ -988,10 +988,12 @@ struct LocationDefaults {
   std::uint32_t first_header_row = 1;
   std::uint32_t first_data_row = 1;
   std::uint32_t first_data_col = 1;
+  std::optional<std::uint32_t> row_page_count;
+  std::optional<std::uint32_t> col_page_count;
 };
 
-LocationDefaults ComputeLocationDefaults(pivot::PivotLayout layout, std::size_t row_entries, std::size_t col_entries,
-                                         bool col_values_only) {
+LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table, std::size_t row_entries,
+                                         std::size_t col_entries, bool col_values_only) {
   LocationDefaults d;
   if (col_values_only) {
     // Only the Values marker on columns: no "Column Labels" header row.
@@ -1000,10 +1002,31 @@ LocationDefaults ComputeLocationDefaults(pivot::PivotLayout layout, std::size_t 
   } else {
     d.first_data_row = static_cast<std::uint32_t>(1U + col_entries);
   }
+  const bool col_fields = !table.col_field_order().empty();
+  if (col_fields && !table.show_headers() && !(table.data_fields().size() == 1U && !table.row_field_order().empty())) {
+    // Hidden field captions drop the "Column Labels" row, unless a lone data
+    // field's caption holds its corner.
+    d.first_header_row -= 1U;
+    d.first_data_row -= 1U;
+  } else if (!col_fields && table.grid_drop_zones()) {
+    // The classic layout's drop-zone row sits above the header.
+    d.first_header_row += 1U;
+    d.first_data_row += 1U;
+  }
   if (row_entries > 0) {
-    d.first_data_col = layout == pivot::PivotLayout::Compact ? 1U : static_cast<std::uint32_t>(row_entries);
+    d.first_data_col = table.layout() == pivot::PivotLayout::Compact ? 1U : static_cast<std::uint32_t>(row_entries);
   } else if (col_entries > 0) {
     d.first_data_col = 0;
+  }
+  // Page fields fold into lines of `pageWrap` (0 is one line), down then over
+  // unless `pageOverThenDown`.
+  const std::size_t pages = table.page_field_order().size();
+  if (pages > 0) {
+    const std::size_t per_line = table.page_wrap() == 0U ? pages : std::min<std::size_t>(table.page_wrap(), pages);
+    const auto lines = static_cast<std::uint32_t>((pages + per_line - 1U) / per_line);
+    const auto across = static_cast<std::uint32_t>(per_line);
+    d.row_page_count = table.page_over_then_down() ? lines : across;
+    d.col_page_count = table.page_over_then_down() ? across : lines;
   }
   return d;
 }
@@ -1166,7 +1189,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   const std::size_t row_entries = table.row_field_order().size() + (table.row_values_position().has_value() ? 1U : 0U);
   const std::size_t col_entries = table.col_field_order().size() + (col_values_position.has_value() ? 1U : 0U);
   const LocationDefaults loc_defaults = ComputeLocationDefaults(
-      table.layout(), row_entries, col_entries, col_values_position.has_value() && table.col_field_order().empty());
+      table, row_entries, col_entries, col_values_position.has_value() && table.col_field_order().empty());
 
   out.append("<location ref=\"");
   // Anchor is unconditionally emitted as a range; an empty table
@@ -1200,9 +1223,13 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
                              table.location_first_data_row().value_or(loc_defaults.first_data_row));
   AppendOptionalLocationAttr(out, "firstDataCol",
                              table.location_first_data_col().value_or(loc_defaults.first_data_col));
-  // rowPageCount / colPageCount are optional and stay presence-based.
-  AppendOptionalLocationAttr(out, "rowPageCount", table.location_row_page_count());
-  AppendOptionalLocationAttr(out, "colPageCount", table.location_col_page_count());
+  // rowPageCount / colPageCount are optional: a table without page fields omits them.
+  AppendOptionalLocationAttr(
+      out, "rowPageCount",
+      table.location_row_page_count() ? table.location_row_page_count() : loc_defaults.row_page_count);
+  AppendOptionalLocationAttr(
+      out, "colPageCount",
+      table.location_col_page_count() ? table.location_col_page_count() : loc_defaults.col_page_count);
   out.append("/>");
 
   // `<pivotFields>` is always emitted (even for an empty count) so the
