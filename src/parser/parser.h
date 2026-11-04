@@ -47,6 +47,7 @@
 #include "parser/lexer_error.h"
 #include "parser/parse_error.h"
 #include "parser/token.h"
+#include "parser/tokenizer.h"
 #include "utils/arena.h"
 
 namespace formulon {
@@ -92,6 +93,10 @@ struct ParserOptions {
   /// is untrappable, and the engine is built with exceptions off, so there is
   /// nothing to catch it with either way.
   std::uint32_t max_parse_depth = kMaxFormulaAstDepth;
+  /// Input length cap handed to the tokenizer. Callers that parse a text
+  /// rewritten from an already length-checked formula raise it to the
+  /// rewritten length.
+  std::uint32_t max_formula_length_utf16 = TokenizerOptions{}.max_formula_length_utf16;
 };
 
 /// Single-shot Pratt parser.
@@ -334,6 +339,9 @@ class Parser {
 /// `src` must already have any leading `=` stripped. `arena` owns the
 /// returned AST.
 AstNode* parse_strict(std::string_view src, Arena& arena);
+
+/// `parse_strict` under explicit parser options.
+AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts);
 
 }  // namespace parser
 }  // namespace formulon

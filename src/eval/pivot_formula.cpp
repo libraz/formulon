@@ -3,6 +3,7 @@
 
 #include "eval/pivot_formula.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <optional>
@@ -452,7 +453,10 @@ Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view f
   }
 
   Compiled compiled;
-  compiled.root = parser::parse_strict(text.value(), compiled.arena);
+  // Placeholders can lengthen the text past the limit the input already met.
+  parser::ParserOptions parse_opts;
+  parse_opts.max_formula_length_utf16 = std::max(parse_opts.max_formula_length_utf16, utf16_units_in(text.value()));
+  compiled.root = parser::parse_strict(text.value(), compiled.arena, parse_opts);
   if (compiled.root == nullptr) {
     return invalid("syntax error in pivot formula", formula);
   }

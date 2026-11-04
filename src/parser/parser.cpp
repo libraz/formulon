@@ -346,7 +346,9 @@ AstNode* Parser::parse() {
   // re-validates that the left operand is reference-shaped before consuming
   // the whitespace as an operator, so non-reference noise still degrades to
   // a normal whitespace strip.
-  Tokenizer tz(source_);
+  TokenizerOptions tokenizer_opts;
+  tokenizer_opts.max_formula_length_utf16 = opts_.max_formula_length_utf16;
+  Tokenizer tz(source_, tokenizer_opts);
   const auto& raw = tz.tokens();
   tokens_.reserve(raw.size());
   // `RefCandidate` includes structurally reference-shaped token kinds: bare
@@ -567,7 +569,11 @@ AstNode* Parser::parse() {
 }
 
 AstNode* parse_strict(std::string_view src, Arena& arena) {
-  Parser parser(src, arena);
+  return parse_strict(src, arena, ParserOptions{});
+}
+
+AstNode* parse_strict(std::string_view src, Arena& arena, ParserOptions opts) {
+  Parser parser(src, arena, opts);
   AstNode* root = parser.parse();
   if (root == nullptr || !parser.errors().empty()) {
     return nullptr;
