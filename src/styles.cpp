@@ -320,4 +320,90 @@ std::optional<std::string_view> effective_num_fmt(const formulon::StylesTable& s
   return localized;
 }
 
+namespace {
+
+template <typename T>
+void append_key_scalar(std::string& out, const T& value) {
+  out.append(reinterpret_cast<const char*>(&value), sizeof(value));
+}
+
+}  // namespace
+
+std::string cell_xf_key(const formulon::CellXf& value) {
+  std::string out;
+  append_key_scalar(out, value.font_index);
+  append_key_scalar(out, value.fill_index);
+  append_key_scalar(out, value.border_index);
+  append_key_scalar(out, value.num_fmt_id);
+  append_key_scalar(out, value.xf_id);
+  append_key_scalar(out, value.apply_number_format);
+  append_key_scalar(out, value.apply_font);
+  append_key_scalar(out, value.apply_fill);
+  append_key_scalar(out, value.apply_border);
+  append_key_scalar(out, value.apply_alignment);
+  append_key_scalar(out, value.apply_protection);
+  append_key_scalar(out, value.quote_prefix);
+  const bool has_alignment = formulon::HasAlignment(value);
+  append_key_scalar(out, has_alignment);
+  const bool has_horizontal_align = formulon::HasHorizontalAlign(value);
+  append_key_scalar(out, has_horizontal_align);
+  if (has_horizontal_align) {
+    append_key_scalar(out, value.horizontal_align);
+  }
+  const bool has_vertical_align = formulon::HasVerticalAlign(value);
+  append_key_scalar(out, has_vertical_align);
+  if (has_vertical_align) {
+    append_key_scalar(out, value.vertical_align);
+  }
+  const bool has_wrap_text = formulon::HasWrapText(value);
+  append_key_scalar(out, has_wrap_text);
+  if (has_wrap_text) {
+    append_key_scalar(out, value.wrap_text);
+  }
+  const bool has_justify_last_line = formulon::HasJustifyLastLine(value);
+  append_key_scalar(out, has_justify_last_line);
+  if (has_justify_last_line) {
+    append_key_scalar(out, value.justify_last_line);
+  }
+  append_key_scalar(out, value.has_text_rotation);
+  if (value.has_text_rotation) {
+    append_key_scalar(out, value.text_rotation);
+  }
+  append_key_scalar(out, value.has_indent);
+  if (value.has_indent) {
+    append_key_scalar(out, value.indent);
+  }
+  append_key_scalar(out, value.has_relative_indent);
+  if (value.has_relative_indent) {
+    append_key_scalar(out, value.relative_indent);
+  }
+  append_key_scalar(out, value.has_shrink_to_fit);
+  if (value.has_shrink_to_fit) {
+    append_key_scalar(out, value.shrink_to_fit);
+  }
+  append_key_scalar(out, value.has_reading_order);
+  if (value.has_reading_order) {
+    append_key_scalar(out, value.reading_order);
+  }
+  append_key_scalar(out, value.has_protection);
+  if (value.has_protection) {
+    append_key_scalar(out, value.locked);
+    append_key_scalar(out, value.hidden);
+  }
+  // Unmodelled attributes (`pivotButton`, ...) distinguish records too.
+  out.append(value.extra_attrs);
+  return out;
+}
+
+std::uint32_t intern_cell_xf(StylesTable& styles, CellXf candidate) {
+  const std::string candidate_key = cell_xf_key(candidate);
+  for (std::size_t i = 0; i < styles.cell_xfs.size(); ++i) {
+    if (cell_xf_key(styles.cell_xfs[i]) == candidate_key) {
+      return static_cast<std::uint32_t>(i);
+    }
+  }
+  styles.cell_xfs.push_back(std::move(candidate));
+  return static_cast<std::uint32_t>(styles.cell_xfs.size() - 1U);
+}
+
 }  // namespace formulon

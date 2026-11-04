@@ -74,77 +74,6 @@ bool border_records_equal(const formulon::BorderRecord& a, const formulon::Borde
   return border_key(a) == border_key(b);
 }
 
-template <typename T>
-void append_key_scalar(std::string& out, const T& value) {
-  out.append(reinterpret_cast<const char*>(&value), sizeof(value));
-}
-
-std::string cell_xf_key(const formulon::CellXf& value) {
-  std::string out;
-  append_key_scalar(out, value.font_index);
-  append_key_scalar(out, value.fill_index);
-  append_key_scalar(out, value.border_index);
-  append_key_scalar(out, value.num_fmt_id);
-  append_key_scalar(out, value.xf_id);
-  append_key_scalar(out, value.apply_number_format);
-  append_key_scalar(out, value.apply_font);
-  append_key_scalar(out, value.apply_fill);
-  append_key_scalar(out, value.apply_border);
-  append_key_scalar(out, value.apply_alignment);
-  append_key_scalar(out, value.apply_protection);
-  append_key_scalar(out, value.quote_prefix);
-  const bool has_alignment = formulon::HasAlignment(value);
-  append_key_scalar(out, has_alignment);
-  const bool has_horizontal_align = formulon::HasHorizontalAlign(value);
-  append_key_scalar(out, has_horizontal_align);
-  if (has_horizontal_align) {
-    append_key_scalar(out, value.horizontal_align);
-  }
-  const bool has_vertical_align = formulon::HasVerticalAlign(value);
-  append_key_scalar(out, has_vertical_align);
-  if (has_vertical_align) {
-    append_key_scalar(out, value.vertical_align);
-  }
-  const bool has_wrap_text = formulon::HasWrapText(value);
-  append_key_scalar(out, has_wrap_text);
-  if (has_wrap_text) {
-    append_key_scalar(out, value.wrap_text);
-  }
-  const bool has_justify_last_line = formulon::HasJustifyLastLine(value);
-  append_key_scalar(out, has_justify_last_line);
-  if (has_justify_last_line) {
-    append_key_scalar(out, value.justify_last_line);
-  }
-  append_key_scalar(out, value.has_text_rotation);
-  if (value.has_text_rotation) {
-    append_key_scalar(out, value.text_rotation);
-  }
-  append_key_scalar(out, value.has_indent);
-  if (value.has_indent) {
-    append_key_scalar(out, value.indent);
-  }
-  append_key_scalar(out, value.has_relative_indent);
-  if (value.has_relative_indent) {
-    append_key_scalar(out, value.relative_indent);
-  }
-  append_key_scalar(out, value.has_shrink_to_fit);
-  if (value.has_shrink_to_fit) {
-    append_key_scalar(out, value.shrink_to_fit);
-  }
-  append_key_scalar(out, value.has_reading_order);
-  if (value.has_reading_order) {
-    append_key_scalar(out, value.reading_order);
-  }
-  append_key_scalar(out, value.has_protection);
-  if (value.has_protection) {
-    append_key_scalar(out, value.locked);
-    append_key_scalar(out, value.hidden);
-  }
-  // Unmodelled attributes (`pivotButton`, ...) distinguish records too.
-  out.append(value.extra_attrs);
-  return out;
-}
-
 /// Index of the record in `table` whose key equals `candidate`'s, appending
 /// `candidate` when none does. The candidate's key is built once, so the scan
 /// stays linear in the table size.
@@ -604,7 +533,7 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, const fm_cell_xf& record, uint32
                 "fm_cell_xf::num_fmt_id width must match formulon::CellXf");
 
   formulon::CellXf candidate = cell_xf_from_c(record, record.xf_id);
-  *out_xf_index = find_or_append_record(styles.cell_xfs, std::move(candidate), &cell_xf_key);
+  *out_xf_index = formulon::intern_cell_xf(styles, std::move(candidate));
   return 0;
 }
 
@@ -630,7 +559,7 @@ extern "C" fm_status_t fm_styles_add_cell_style_xf(fm_workbook_t* wb, fm_cell_xf
     return rc;
   }
   formulon::CellXf candidate = cell_xf_from_c(record, 0U);
-  *out_xf_id = find_or_append_record(styles.cell_style_xfs, std::move(candidate), &cell_xf_key);
+  *out_xf_id = find_or_append_record(styles.cell_style_xfs, std::move(candidate), &formulon::cell_xf_key);
   return 0;
 }
 
@@ -822,7 +751,7 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
   std::unordered_map<std::string, uint32_t> xfs;
   xfs.reserve(staged.cell_xfs.size() + batch->cell_xf_count);
   for (uint32_t i = 0; i < staged.cell_xfs.size(); ++i)
-    xfs.emplace(cell_xf_key(staged.cell_xfs[i]), i);
+    xfs.emplace(formulon::cell_xf_key(staged.cell_xfs[i]), i);
   for (size_t i = 0; i < batch->cell_xf_count; ++i) {
     const fm_cell_xf& record = batch->cell_xfs[i];
     if (fm_status_t rc = validate_xf_alignment(record, "fm_styles_add_batch"); rc != 0) {
@@ -840,7 +769,7 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
                                    " cell_style_xfs_count=" + std::to_string(staged.cell_style_xfs.size()));
     }
     const formulon::CellXf value = cell_xf_from_c(record, record.xf_id);
-    const std::string key = cell_xf_key(value);
+    const std::string key = formulon::cell_xf_key(value);
     const auto [it, inserted] = xfs.emplace(key, static_cast<uint32_t>(staged.cell_xfs.size()));
     if (inserted)
       staged.cell_xfs.push_back(value);

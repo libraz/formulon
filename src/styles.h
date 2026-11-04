@@ -425,6 +425,14 @@ struct StylesTable {
 /// Normal style (`builtin_id == 0`).
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name);
 
+/// Dedup identity of a `<cellXfs>` / `<cellStyleXfs>` record: two records
+/// with equal keys are written identically.
+std::string cell_xf_key(const CellXf& value);
+
+/// Index of the `cell_xfs` record whose `cell_xf_key` equals `candidate`'s,
+/// appending `candidate` when none does.
+std::uint32_t intern_cell_xf(StylesTable& styles, CellXf candidate);
+
 /// Returns the format string for a built-in Excel number-format id
 /// (0..163). For ids outside the documented range returns an empty
 /// string. The returned pointer is a static `.rodata` view with

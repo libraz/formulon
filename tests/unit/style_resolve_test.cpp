@@ -392,5 +392,24 @@ TEST(StylesIndexedColors, AbsentPaletteWritesNoColorsElement) {
   EXPECT_EQ(xml.find("<colors"), std::string::npos);
 }
 
+TEST(StylesInternCellXf, ReusesAnEqualRecordAndAppendsADistinctOne) {
+  StylesTable styles;
+  styles.cell_xfs.emplace_back();
+  CellXf dated;
+  dated.num_fmt_id = 14U;
+  dated.apply_number_format = true;
+  const std::uint32_t first = intern_cell_xf(styles, dated);
+  EXPECT_EQ(first, 1U);
+  EXPECT_EQ(intern_cell_xf(styles, dated), first);
+  // An explicit default alignment is a different record.
+  CellXf aligned = dated;
+  aligned.has_alignment = true;
+  aligned.has_vertical_align = true;
+  EXPECT_EQ(intern_cell_xf(styles, aligned), 2U);
+  EXPECT_EQ(intern_cell_xf(styles, CellXf{}), 0U);
+  EXPECT_EQ(styles.cell_xfs.size(), 3U);
+  EXPECT_NE(cell_xf_key(dated), cell_xf_key(aligned));
+}
+
 }  // namespace
 }  // namespace formulon
