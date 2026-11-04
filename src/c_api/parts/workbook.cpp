@@ -16,6 +16,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "c_api/parts/pivot_internal.h"
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -77,6 +78,11 @@ fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t for
                              (std::string(api_name) + ": NULL argument").c_str());
   }
 
+  // Pivots left stale by a cache edit are projected into their cells first. The
+  // handle is never a const object, so the cast is well-defined.
+  if (format == FM_WORKBOOK_FORMAT_XLSX || format == FM_WORKBOOK_FORMAT_XLSB) {
+    formulon::c_api::parts::project_pending_pivots(const_cast<fm_workbook_t*>(wb)->workbook());
+  }
   std::vector<std::uint8_t> bytes;
   fm_save_diagnostics_t diagnostics{};
   switch (format) {

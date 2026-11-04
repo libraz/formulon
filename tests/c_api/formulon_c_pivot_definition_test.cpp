@@ -233,7 +233,8 @@ TEST(FormulonCApiPivot, ReadBackRejectsBadArguments) {
 }
 
 TEST(FormulonCApiPivot, EmptyDataFieldNameIsDerivedFromTheProfile) {
-  EXPECT_EQ(DerivedDataFieldName("win-365-en_US", FM_PIVOT_AGG_SUM, nullptr), "Sum of Amount");
+  // The scratch pivot already holds "Sum of Amount", so Excel numbers the new one.
+  EXPECT_EQ(DerivedDataFieldName("win-365-en_US", FM_PIVOT_AGG_SUM, nullptr), "Sum of Amount2");
   EXPECT_EQ(DerivedDataFieldName("win-365-en_US", FM_PIVOT_AGG_AVERAGE, ""), "Average of Amount");
   EXPECT_EQ(DerivedDataFieldName("win-365-ja_JP", FM_PIVOT_AGG_SUM, nullptr), "合計 / Amount");
   EXPECT_EQ(DerivedDataFieldName("win-365-ja_JP", FM_PIVOT_AGG_COUNT, ""), "個数 / Amount");

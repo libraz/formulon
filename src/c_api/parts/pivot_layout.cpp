@@ -18,6 +18,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "eval/pivot_formula.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_locale.h"
@@ -111,10 +112,12 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
                                "fm_workbook_pivot_layout: pivot cache not found",
                                "cache_id=" + std::to_string(table->pivot_cache_id()));
     }
-    auto eval_or =
-        formulon::pivot::evaluate(*table, *cache, layout_options,
-                                  formulon::pivot::PivotFilterEnv{wb->workbook().pinned_now(),
-                                                                  wb->workbook().date1904(), &wb->workbook().styles()});
+    // Calculated fields and items are evaluated through the formula host.
+    formulon::eval::PivotFormulaEvaluator formulas;
+    auto eval_or = formulon::pivot::evaluate(
+        *table, *cache, layout_options,
+        formulon::pivot::PivotFilterEnv{wb->workbook().pinned_now(), wb->workbook().date1904(),
+                                        &wb->workbook().styles(), &formulas});
     if (!eval_or) {
       return set_last_error(eval_or.error());
     }

@@ -21,11 +21,11 @@
 
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::invalidate_pivot_result;
 using formulon::c_api::parts::pivot_axis_from_fm;
 using formulon::c_api::parts::pivot_axis_to_fm;
 using formulon::c_api::parts::pivot_count;
 using formulon::c_api::parts::pivot_filter_type_from_fm;
+using formulon::c_api::parts::PivotEdit;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_binding_error;
@@ -165,9 +165,9 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
       return invalid("value is out of range for this filter type", kind_detail);
     }
   }
+  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   table->mutable_active_filters().push_back(std::move(filter));
-  invalidate_pivot_result(wb->workbook(), *table);
-  return 0;
+  return edit.commit();
 }
 
 }  // namespace
@@ -251,9 +251,9 @@ extern "C" fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, std::si
       rc != 0) {
     return rc;
   }
+  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   table->erase_active_filters_if([](const formulon::pivot::PivotFilter&) { return true; });
-  invalidate_pivot_result(wb->workbook(), *table);
-  return 0;
+  return edit.commit();
 }
 
 extern "C" fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, std::size_t sheet_index,
@@ -272,8 +272,8 @@ extern "C" fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, std
       rc != 0) {
     return rc;
   }
+  PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
   std::size_t position = 0;
   table->erase_active_filters_if([&](const formulon::pivot::PivotFilter&) { return position++ == filter_idx; });
-  invalidate_pivot_result(wb->workbook(), *table);
-  return 0;
+  return edit.commit();
 }

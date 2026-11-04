@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is not the same thing as Excel's months period, so it has no replacement.
   `fm_pivot_item_info_t` gains `caption` and `show_detail` at its end. A caller
   compiled against an earlier header must be recompiled.
+- **C ABI:** `fm_pivot_filter_spec_t` gains `value_high_text` at its end, the
+  upper bound of a label Between / Not Between filter, and
+  `fm_pivot_filter_type_t` covers every OOXML pivot filter type (label, value,
+  top / bottom count, percent and sum, date comparison, relative period,
+  quarter and month); the existing numbers are unchanged.
+  `fm_pivot_field_info_t` gains `show_all` at its end. A caller compiled
+  against an earlier header must be recompiled.
 
 ### Added
 
@@ -76,8 +83,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cells. The setter refuses a rectangle that partly overlaps another block or
   intersects a merge, a data table or a PivotTable.
 
+- Calculated fields: `fm_workbook_pivot_cache_calculated_field_add`,
+  `_calculated_field_set_formula`, `_calculated_field_remove` and
+  `fm_workbook_pivot_cache_field_formula` (`pivotCacheCalculatedFieldAdd`,
+  `pivot_cache_calculated_field_add`, and so on). A calculated field shows its
+  formula over the Sums of the fields it names, totals included, and is saved
+  in Excel's form.
+- Calculated items: `fm_workbook_pivot_cache_calculated_item_add`, `_count`,
+  `_at` (`fm_pivot_calculated_item_t`), `_set_formula`, `_move` and `_remove`
+  (`pivotCacheCalculatedItemAdd`, `pivot_cache_calculated_item_add`, and so
+  on). Items are evaluated in the context of each cell, the field's totals
+  include them, and where items meet the one later in solve order wins. A data
+  field cannot use Average, StdDev, StdDevP, Var or VarP beside them.
+- PivotTable options in one struct: `fm_workbook_pivot_get_options` /
+  `fm_workbook_pivot_set_options` with `fm_pivot_options_t`
+  (`pivotGetOptions` / `pivotSetOptions`, `pivot_get_options` /
+  `pivot_set_options`): error and empty-cell captions, field headers, classic
+  grid layout, empty rows and columns, report filter wrapping, merged labels,
+  compact indent, print titles, alternative text and the rest of the options
+  dialog. The layout draws those that change the report.
+- Pivot cache options: `fm_workbook_pivot_cache_get_options` /
+  `_set_options` with `fm_pivot_cache_options_t` (`pivotCacheGetOptions`,
+  `pivot_cache_get_options`): saving the source records, the missing-items
+  limit and refresh on open. A cache saved without records writes no records
+  part.
+- `fm_workbook_pivot_field_set_custom_name` (`pivotFieldSetCustomName`,
+  `pivot_field_set_custom_name`) renames a pivot field in the report, and
+  `fm_workbook_pivot_field_set_show_all` (`pivotFieldSetShowAll`,
+  `pivot_field_set_show_all`) lists its items without data.
+- `fm_workbook_pivot_data_field_default_name` (`pivotDataFieldDefaultName`,
+  `pivot_data_field_default_name`) reads the name a new data field would get,
+  without adding one.
+- `fm_workbook_pivot_project` (`pivotProject`, `pivot_project`) writes a
+  pivot's report into its cells now, and `fm_workbook_pivot_projection_pending`
+  (`pivotProjectionPending`, `pivot_projection_pending`) tells whether a cache
+  change left them stale.
+
 ### Changed
 
+- A pivot table's report is kept in the sheet cells, as Excel keeps it. Every
+  pivot table edit writes the report into its range with Excel's cell formats,
+  and formulas that read the range see it; deleting a pivot table clears its
+  range. An edit or a new pivot table whose report would overlap another
+  pivot table, a table, a data table, an array formula or a merge now fails
+  with `kPreconditionFailed` and changes nothing. A cache edit leaves the
+  cells stale until the pivot's next edit, `fm_workbook_pivot_project` or a
+  save, which writes them first.
+- A data field named by the engine takes a number after the name, as Excel
+  does, when the name is already taken by another data field or a field
+  ("Sum of Amt2").
+- A pivot table created through the API starts with the options Excel gives a
+  new pivot: item print titles on, compact indent 0 and one filter per field.
+- Loaded pivot filters of every type are listed by `fm_workbook_pivot_filter_at`
+  and removed by `fm_workbook_pivot_filter_clear`.
 - The WASM size report's Brotli ceilings moved to 1280 KiB soft / 1344 KiB
   hard, to take in the pivot layout, date grouping and drawing-name API.
 

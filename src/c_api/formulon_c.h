@@ -4485,7 +4485,10 @@ typedef struct {
  *                       from the workbook profile's pivot wording, e.g.
  *                       "Sum of Sales" (en-US) or "合計 / Sales" (ja-JP):
  *                       the aggregation label, the locale's separator and
- *                       the source pivot field's display name.
+ *                       the source pivot field's display name, followed by
+ *                       2, 3, ... while that repeats another data field's
+ *                       name or a field's display name under the profile's
+ *                       collation ("Sum of Amt2").
  *   * `field_index`   — index into `PivotTable::fields()` of the source
  *                       pivot field; must be in range.
  *   * `aggregation`   — aggregation function applied to the source.
@@ -4540,6 +4543,9 @@ typedef struct {
  *                           field's item blocks (OOXML `insertBlankRow`).
  *   * `fill_down_labels`  — non-zero when the field's label repeats on every
  *                           row of its block (x14 `fillDownLabels`).
+ *   * `show_all`          — non-zero when items without data are listed
+ *                           (OOXML `showAll`; absent in a file reads `1`, a
+ *                           field created through the API starts at `0`).
  */
 typedef struct {
   const char* source_name;
@@ -4557,6 +4563,7 @@ typedef struct {
   uint32_t subtotal_fns;
   int32_t insert_blank_row;
   int32_t fill_down_labels;
+  int32_t show_all;
 } fm_pivot_field_info_t;
 
 /**
@@ -4641,6 +4648,132 @@ typedef struct {
   uint32_t data_field_index;
   const char* value_high_text;
 } fm_pivot_filter_spec_t;
+
+/**
+ * @brief The PivotTable Options of one pivot table
+ *        (`fm_workbook_pivot_get_options` / `fm_workbook_pivot_set_options`).
+ *
+ * `fm_workbook_pivot_set_options` writes every member, so read the current
+ * options, change what is needed and set them back. Flags read `0` or `1`
+ * and any non-zero value sets them. A string reads `NULL` when the option is
+ * unset; setting `NULL` or an empty string unsets it. Strings read back are
+ * read-scratch-backed views.
+ *
+ *   * `show_error` / `error_caption`     — error cells show `error_caption`
+ *                                          (`showError`, `errorCaption`). The
+ *                                          caption is kept while `show_error`
+ *                                          is `0`.
+ *   * `show_missing` / `missing_caption` — empty value cells show
+ *                                          `missing_caption`; a caption of
+ *                                          exactly `-` is written as the
+ *                                          number 0 (`showMissing`,
+ *                                          `missingCaption`).
+ *   * `show_headers`         — field captions and filter drop-downs
+ *                              (`showHeaders`).
+ *   * `show_drill`           — expand / collapse buttons (`showDrill`).
+ *   * `show_data_tips`       — contextual tooltips (`showDataTips`).
+ *   * `grid_drop_zones`      — classic layout with grid drop zones
+ *                              (`gridDropZones`).
+ *   * `show_empty_row` / `show_empty_col` — `showEmptyRow` / `showEmptyCol`;
+ *                              the layout follows each field's `show_all`.
+ *   * `show_data_drop_down`  — `showDataDropDown`.
+ *   * `print_drill`          — print expand / collapse buttons (`printDrill`).
+ *   * `field_print_titles`   — repeat field titles on each printed page
+ *                              (`fieldPrintTitles`).
+ *   * `item_print_titles`    — repeat row labels on each printed page
+ *                              (`itemPrintTitles`).
+ *   * `merge_item`           — merge and center cells with labels
+ *                              (`mergeItem`).
+ *   * `indent`               — compact-form indent per level, 0 to 126
+ *                              (`indent`; the dialog's characters minus one).
+ *   * `page_over_then_down`  — report filter fields run across, then down
+ *                              (`pageOverThenDown`).
+ *   * `page_wrap`            — report filter fields per column or row, 0 to
+ *                              255; 0 does not wrap (`pageWrap`).
+ *   * `multiple_field_filters` — allow several filters per field
+ *                              (`multipleFieldFilters`).
+ *   * `preserve_formatting`  — keep cell formatting on update
+ *                              (`preserveFormatting`).
+ *   * `custom_list_sort`     — sort by custom lists (`customListSort`).
+ *   * `alt_text` / `alt_text_summary` — alternative text title and
+ *                              description (x14 `altText`, `altTextSummary`).
+ *   * `grand_total_caption`  — the grand total label in place of the
+ *                              locale's word (`grandTotalCaption`).
+ *   * `auto_formatting`      — autofit column widths on update
+ *                              (`useAutoFormatting`).
+ *   * `enable_drill`         — Show Details is allowed (`enableDrill`).
+ *
+ * A pivot created through the API starts with `item_print_titles` on,
+ * `indent` 0 and `multiple_field_filters` off, as Excel creates one.
+ */
+typedef struct {
+  int32_t show_error;
+  const char* error_caption;
+  int32_t show_missing;
+  const char* missing_caption;
+  int32_t show_headers;
+  int32_t show_drill;
+  int32_t show_data_tips;
+  int32_t grid_drop_zones;
+  int32_t show_empty_row;
+  int32_t show_empty_col;
+  int32_t show_data_drop_down;
+  int32_t print_drill;
+  int32_t field_print_titles;
+  int32_t item_print_titles;
+  int32_t merge_item;
+  uint32_t indent;
+  int32_t page_over_then_down;
+  uint32_t page_wrap;
+  int32_t multiple_field_filters;
+  int32_t preserve_formatting;
+  int32_t custom_list_sort;
+  const char* alt_text;
+  const char* alt_text_summary;
+  const char* grand_total_caption;
+  int32_t auto_formatting;
+  int32_t enable_drill;
+} fm_pivot_options_t;
+
+/**
+ * @brief The options of one pivot cache, shared by every pivot table drawing
+ *        from it (`fm_workbook_pivot_cache_get_options` /
+ *        `fm_workbook_pivot_cache_set_options`).
+ *
+ *   * `save_data`           — save the source records with the file
+ *                             (`saveData`). Off, the records part is left out
+ *                             and the reports keep their sheet cells.
+ *   * `missing_items_limit` — items kept per field after they leave the
+ *                             source (`missingItemsLimit`): `-1` automatic
+ *                             (no attribute), `0` none, up to `1048576`.
+ *                             Excel's "Max" writes 32500.
+ *   * `refresh_on_load`     — refresh the data when the file opens
+ *                             (`refreshOnLoad`).
+ */
+typedef struct {
+  int32_t save_data;
+  int32_t missing_items_limit;
+  int32_t refresh_on_load;
+} fm_pivot_cache_options_t;
+
+/**
+ * @brief Read-back of one calculated item
+ *        (`fm_workbook_pivot_cache_calculated_item_at`).
+ *
+ *   * `field_index` — the cache field the item belongs to.
+ *   * `name`        — the item's name, a read-scratch-backed view.
+ *   * `formula`     — its formula without a leading `=`, a
+ *                     read-scratch-backed view.
+ *   * `scoped`      — non-zero for an entry read from a file that applies the
+ *                     formula only where the item meets items of other
+ *                     fields.
+ */
+typedef struct {
+  uint32_t field_index;
+  const char* name;
+  const char* formula;
+  int32_t scoped;
+} fm_pivot_calculated_item_t;
 
 /* --- Pivot caches (workbook-owned) --------------------------------------- */
 
@@ -4731,7 +4864,8 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_name(const fm_workbook_t* wb, u
 /**
  * @brief Appends a new field with the given UTF-8 name to the cache.
  *        `out_field_idx` receives the new field's index. `utf8_name`
- *        must be non-NULL.
+ *        must be non-NULL. Every pivot table drawing from the cache gains an
+ *        unplaced field for it.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, uint32_t cache_id, const char* utf8_name,
                                                      size_t* out_field_idx);
@@ -4814,24 +4948,203 @@ FM_API fm_status_t fm_workbook_pivot_cache_record_set_blank(fm_workbook_t* wb, u
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_error(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
                                                             size_t field_idx, fm_error_code_t error);
 
-/* --- Pivot tables (sheet-owned) ------------------------------------------ */
+/*
+ * Every successful cache mutation above and below (sources, fields, shared
+ * items, records, options, calculated fields and items, date grouping) leaves
+ * each pivot table drawing from the cache projection-pending: its sheet cells
+ * are not rewritten until that table's next edit, `fm_workbook_pivot_project`
+ * or a save (see `fm_workbook_pivot_projection_pending`).
+ */
 
 /**
- * @brief Creates a new empty pivot table on `sheet_index`. `cache_id`
- *        must reference an existing cache. The new table's flat index
- *        is written to `*out_pivot_index`.
+ * @brief Reads the cache's options into `out`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `cache_id` does not match any cache.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_get_options(const fm_workbook_t* wb, uint32_t cache_id,
+                                                       fm_pivot_cache_options_t* out);
+
+/**
+ * @brief Writes every member of `options` to the cache. A
+ *        `missing_items_limit` equal to the value read from the file is kept
+ *        even when outside the settable range.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `options` is `NULL`;
+ *         `kInvalidArgument` when `cache_id` does not match any cache or
+ *         `missing_items_limit` is outside `-1` to `1048576`.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_set_options(fm_workbook_t* wb, uint32_t cache_id,
+                                                       const fm_pivot_cache_options_t* options);
+
+/**
+ * @brief Adds calculated field `name` with `formula` to the cache, as the last
+ *        cache field; `*out_field_index` receives its index. Every pivot
+ *        table drawing from the cache gains an unplaced field for it; place
+ *        it with `fm_workbook_pivot_data_field_add`.
+ *
+ * The formula is in English canonical form and names cache fields only,
+ * quoting a name with spaces or other non-identifier characters as
+ * `'Amt Net'` (`''` escapes a quote). A leading `=` is optional and is not
+ * stored. A cell shows the formula applied to the Sums of the named fields,
+ * whatever the data field's function.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `name`, `formula` or
+ *         `out_field_index` is `NULL`;
+ *         `kBindingUtf8EncodingError` for malformed UTF-8;
+ *         `kInvalidArgument` when `cache_id` does not match any cache, the
+ *         name is empty, longer than 255 UTF-16 code units, `All` or `Blank`,
+ *         contains `[` or `]`, or equals an existing field name under the
+ *         profile's collation, or the formula is empty, longer than 8192
+ *         UTF-16 code units, does not parse, names something other than a
+ *         cache field, refers to a cell, range, table, external workbook or
+ *         defined name, holds an array constant or a function a calculated
+ *         field cannot use, or reaches back to itself.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_add(fm_workbook_t* wb, uint32_t cache_id, const char* name,
+                                                                const char* formula, size_t* out_field_index);
+
+/**
+ * @brief Replaces the formula of calculated field `field_index`.
+ *
+ * @return As `fm_workbook_pivot_cache_calculated_field_add` for the formula;
+ *         `kInvalidArgument` when `field_index` is not a calculated field.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_set_formula(fm_workbook_t* wb, uint32_t cache_id,
+                                                                        size_t field_index, const char* formula);
+
+/**
+ * @brief Removes calculated field `field_index` and its data fields in every
+ *        pivot table; the fields after it move down by one.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `cache_id` does not match any cache or
+ *         `field_index` is not a calculated field;
+ *         `kPreconditionFailed` while another calculated field's formula
+ *         names it.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_remove(fm_workbook_t* wb, uint32_t cache_id,
+                                                                   size_t field_index);
+
+/**
+ * @brief Reads the formula of cache field `field_idx`, without a leading `=`,
+ *        into `*out_utf8`: an empty string when the field is not calculated.
+ *        A model-backed view valid until the field's formula or the cache
+ *        field list changes.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t* wb, uint32_t cache_id, size_t field_idx,
+                                                         const char** out_utf8);
+
+/**
+ * @brief Adds calculated item `name` with `formula` to cache field
+ *        `field_index`. The item follows the field's items in every pivot
+ *        table and is last in solve order: where items meet, the formula of
+ *        the item later in that order wins.
+ *
+ * The formula names items of the same field, as `North`, `'North East'`,
+ * `Region[North]`, `Region[2]` (position) or `Region[-1]` (offset). A cell
+ * shows the formula applied to the named items' values in the same context,
+ * and the field's totals include the item.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `name` or `formula` is `NULL`;
+ *         `kBindingUtf8EncodingError` for malformed UTF-8;
+ *         `kInvalidArgument` when `cache_id` or `field_index` is out of
+ *         range, for a name as `fm_workbook_pivot_cache_calculated_field_add`
+ *         refuses it or equal to an item of the field, or for a formula it
+ *         refuses or that names another field;
+ *         `kPreconditionFailed` when the field is grouped, calculated or on
+ *         no pivot table's axis, or a data field drawing from the cache uses
+ *         Average, StdDev, StdDevP, Var or VarP.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_add(fm_workbook_t* wb, uint32_t cache_id, size_t field_index,
+                                                               const char* name, const char* formula);
+
+/** @brief Number of calculated items in the cache, in solve order. */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_count(const fm_workbook_t* wb, uint32_t cache_id,
+                                                                 size_t* out_count);
+
+/**
+ * @brief Reads calculated item `idx` (in solve order) into `out`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `cache_id` or `idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_at(const fm_workbook_t* wb, uint32_t cache_id, size_t idx,
+                                                              fm_pivot_calculated_item_t* out);
+
+/**
+ * @brief Replaces the formula of calculated item `idx`.
+ *
+ * @return As `fm_workbook_pivot_cache_calculated_item_add` for the formula;
+ *         `kInvalidArgument` when `idx` is out of range or the formula refers
+ *         back to the item.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_set_formula(fm_workbook_t* wb, uint32_t cache_id, size_t idx,
+                                                                       const char* formula);
+
+/**
+ * @brief Moves calculated item `idx` to position `new_idx` in solve order.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `cache_id`, `idx` or `new_idx` is out of
+ *         range.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_move(fm_workbook_t* wb, uint32_t cache_id, size_t idx,
+                                                                size_t new_idx);
+
+/**
+ * @brief Removes calculated item `idx`, its item in the cache field and in
+ *        every pivot table.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` when `cache_id` or `idx` is out of range;
+ *         `kPreconditionFailed` while another calculated item names it.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_calculated_item_remove(fm_workbook_t* wb, uint32_t cache_id, size_t idx);
+
+/* --- Pivot tables (sheet-owned) ------------------------------------------ */
+
+/*
+ * A pivot table's report is kept in its sheet's cells, as Excel keeps it.
+ * Every successful pivot-table mutation below writes the report into the
+ * cells: those the previous report covered and the new range are cleared,
+ * then each report cell is written as a value with Excel's format for its
+ * role, and formulas reading the range recalculate. A mutation whose report
+ * would overlap another pivot table, a table, a data table, an array formula
+ * or a merge it does not own returns `kPreconditionFailed` and leaves the
+ * pivot table and the sheet unchanged. A pivot table read from a file keeps
+ * the cells read with it until it is edited.
+ */
+
+/**
+ * @brief Creates a new empty pivot table on `sheet_index`, with the options
+ *        Excel gives a new pivot. `cache_id` must reference an existing
+ *        cache. The new table's flat index is written to `*out_pivot_index`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `utf8_name`, or `out_pivot_index`
  *         is `NULL`;
  *         `kInvalidArgument` when `sheet_index` is out of range or
- *         `cache_id` does not match any existing cache.
+ *         `cache_id` does not match any existing cache;
+ *         `kPreconditionFailed`, creating nothing, when the report range
+ *         would overlap another structure.
  */
 FM_API fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, size_t sheet_index, const char* utf8_name,
                                             uint32_t cache_id, uint32_t anchor_row, uint32_t anchor_col,
                                             size_t* out_pivot_index);
 
-/** @brief Removes the pivot table at `pivot_index` from `sheet_index`. */
+/**
+ * @brief Removes the pivot table at `pivot_index` from `sheet_index`, clearing
+ *        the cells and merges its report was last written to.
+ */
 FM_API fm_status_t fm_workbook_pivot_remove(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
 /** @brief Renames the pivot table. `utf8_name` must be non-NULL. */
@@ -4959,6 +5272,30 @@ FM_API fm_status_t fm_workbook_pivot_field_set_insert_blank_row(fm_workbook_t* w
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_fill_down_labels(fm_workbook_t* wb, size_t sheet_index,
                                                                 size_t pivot_index, size_t field_idx, int32_t on);
+
+/**
+ * @brief Renames pivot field `field_idx` in the report; `NULL` or an empty
+ *        `name` restores its source name. Data field names are not changed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kBindingUtf8EncodingError` for malformed UTF-8;
+ *         `kInvalidArgument` if an index is out of range, `name` is longer
+ *           than 255 UTF-16 code units, or it equals under the profile's
+ *           collation another field's source or custom name or a data
+ *           field's name (the field's own source name is allowed);
+ *         `kPreconditionFailed` when the report would overlap another
+ *           structure.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_custom_name(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                           size_t field_idx, const char* name);
+
+/**
+ * @brief Sets whether pivot field `field_idx` lists items without data
+ *        (`0` off, any other value on).
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_show_all(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                        size_t field_idx, int32_t on);
 
 /**
  * @brief Expands (non-zero) or collapses (`0`) every item of pivot field
@@ -5142,7 +5479,9 @@ FM_API fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* wb, s
  *           of range, `spec->aggregation` / `spec->show_as` names no
  *           declared enumerator, or `spec->field_index` or a set
  *           `spec->show_as_base_field` is not an index into the pivot's
- *           fields (the pivot is left unchanged).
+ *           fields (the pivot is left unchanged);
+ *         `kPreconditionFailed` when the cache has calculated items and
+ *           `spec->aggregation` is Average, StdDev, StdDevP, Var or VarP.
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     const fm_pivot_data_field_spec_t* spec, size_t* out_idx);
@@ -5161,10 +5500,31 @@ FM_API fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, size_t 
  *           `data_field_idx` is out of range, `spec->aggregation` /
  *           `spec->show_as` names no declared enumerator, or
  *           `spec->field_index` or a set `spec->show_as_base_field` is not
- *           an index into the pivot's fields (the pivot is left unchanged).
+ *           an index into the pivot's fields (the pivot is left unchanged);
+ *         `kPreconditionFailed` as for `fm_workbook_pivot_data_field_add`.
  */
 FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t data_field_idx, const fm_pivot_data_field_spec_t* spec);
+
+/**
+ * @brief Reads into `*out` the name a data field over pivot field
+ *        `field_index` with `aggregation` would get from an empty
+ *        `spec->name`, without changing anything. `exclude_data_field` is the
+ *        entry `fm_workbook_pivot_data_field_set` would replace, whose name is
+ *        not counted as taken; `SIZE_MAX` for none (the add case). The string
+ *        is a read-scratch-backed view.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index`, `pivot_index`,
+ *           `field_index` or a `exclude_data_field` other than `SIZE_MAX`
+ *           is out of range, or `aggregation` names no
+ *           `fm_pivot_aggregation_t`.
+ */
+FM_API fm_status_t fm_workbook_pivot_data_field_default_name(const fm_workbook_t* wb, size_t sheet_index,
+                                                             size_t pivot_index, size_t field_index,
+                                                             int32_t aggregation, size_t exclude_data_field,
+                                                             const char** out);
 
 /*
  * Definition read-back. Every getter below is read-only and works the same
@@ -5234,6 +5594,59 @@ FM_API fm_status_t fm_workbook_pivot_set_auto_formatting(fm_workbook_t* wb, size
  */
 FM_API fm_status_t fm_workbook_pivot_get_auto_formatting(const fm_workbook_t* wb, size_t sheet_index,
                                                          size_t pivot_index, int32_t* out);
+
+/**
+ * @brief Reads the pivot's options into `out`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_get_options(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                 fm_pivot_options_t* out);
+
+/**
+ * @brief Writes every member of `options` to the pivot. An `indent` or
+ *        `page_wrap` equal to the pivot's current value is kept even when
+ *        outside the settable range, so a definition read from a file
+ *        survives a get / set round trip.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `options` is `NULL`;
+ *         `kBindingUtf8EncodingError` for a malformed string;
+ *         `kInvalidArgument` if an index is out of range, `error_caption`,
+ *           `missing_caption`, `alt_text` or `grand_total_caption` is longer
+ *           than 255 UTF-16 code units, `indent` exceeds 126 or `page_wrap`
+ *           exceeds 255;
+ *         `kPreconditionFailed` when the report would overlap another
+ *           structure (the pivot is left unchanged).
+ */
+FM_API fm_status_t fm_workbook_pivot_set_options(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                 const fm_pivot_options_t* options);
+
+/**
+ * @brief Writes the pivot's report into its sheet cells now, as a pivot-table
+ *        mutation does, and clears its pending flag. A pivot over a cache
+ *        loaded without its records writes nothing.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range;
+ *         `kPreconditionFailed` when the report would overlap another
+ *           structure; the pivot stays pending.
+ */
+FM_API fm_status_t fm_workbook_pivot_project(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
+
+/**
+ * @brief Reads into `*out` whether the pivot's sheet cells are stale after a
+ *        change to its cache (`1`) or current (`0`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index` or `pivot_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_projection_pending(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                        int32_t* out);
 
 /**
  * @brief Writes the cells behind the data or total cell (`row`, `col`) of the

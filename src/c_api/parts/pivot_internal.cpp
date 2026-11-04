@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -15,6 +16,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
+#include "utils/expected.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -28,6 +30,15 @@ void clear_pivot_derived_state(formulon::pivot::PivotTable& table) {
   table.clear_last_result();
   table.clear_span_authored();
   table.mark_layout_dirty();
+}
+
+// The location offsets read with a span Excel wrote describe that report only;
+// once the span is no longer authored and the report has been projected, the
+// writer derives them from the model.
+void drop_derived_location(formulon::pivot::PivotTable& table) {
+  if (!table.has_authored_span() && table.projected_extent().has_value()) {
+    table.set_location_attributes(std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt);
+  }
 }
 
 }  // namespace
@@ -109,18 +120,76 @@ void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t ca
   if (formulon::pivot::PivotCache* cache = find_cache_mut(wb, cache_id); cache != nullptr) {
     formulon::pivot::materialize_group_fields(*cache, wb.date1904());
   }
-  bool matched = false;
+  const std::vector<formulon::pivot::PivotTable*> tables = cache_tables(wb, cache_id);
+  for (formulon::pivot::PivotTable* table : tables) {
+    clear_pivot_derived_state(*table);
+    table->set_projection_pending(true);
+  }
+  if (!tables.empty()) {
+    wb.mark_all_formulas_dirty();
+  }
+}
+
+void mark_cache_pivots_pending(formulon::Workbook& wb, std::uint32_t cache_id) {
+  for (formulon::pivot::PivotTable* table : cache_tables(wb, cache_id)) {
+    table->set_projection_pending(true);
+  }
+}
+
+std::vector<formulon::pivot::PivotTable*> cache_tables(formulon::Workbook& wb, std::uint32_t cache_id) {
+  std::vector<formulon::pivot::PivotTable*> tables;
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
       if (table != nullptr && table->pivot_cache_id() == cache_id) {
-        clear_pivot_derived_state(*table);
-        matched = true;
+        tables.push_back(table.get());
       }
     }
   }
-  if (matched) {
-    wb.mark_all_formulas_dirty();
+  return tables;
+}
+
+formulon::Expected<void, formulon::Error> project_pivot(formulon::Workbook& wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index) {
+  formulon::Expected<void, formulon::Error> projected = wb.project_pivot(sheet_index, pivot_index);
+  if (projected) {
+    drop_derived_location(*wb.sheet(sheet_index).mutable_pivot_tables()[pivot_index]);
   }
+  return projected;
+}
+
+void project_pending_pivots(formulon::Workbook& wb) {
+  std::vector<formulon::pivot::PivotTable*> pending;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
+      if (table != nullptr && table->projection_pending()) {
+        pending.push_back(table.get());
+      }
+    }
+  }
+  wb.project_pending_pivots();
+  for (formulon::pivot::PivotTable* table : pending) {
+    if (!table->projection_pending()) {
+      drop_derived_location(*table);
+    }
+  }
+}
+
+PivotEdit::PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
+                     formulon::pivot::PivotTable& table)
+    : wb_(wb), sheet_index_(sheet_index), pivot_index_(pivot_index), table_(table), snapshot_(table.clone()) {}
+
+fm_status_t PivotEdit::commit() {
+  invalidate_pivot_result(wb_, table_);
+  formulon::Expected<void, formulon::Error> projected = project_pivot(wb_, sheet_index_, pivot_index_);
+  if (projected) {
+    return 0;
+  }
+  if (projected.error().code == formulon::FormulonErrorCode::kPreconditionFailed) {
+    table_ = std::move(*snapshot_);
+    return set_last_error(projected.error());
+  }
+  table_.set_projection_pending(true);
+  return 0;
 }
 
 formulon::Value intern_cache_text(formulon::pivot::PivotCache& cache, std::string_view utf8) {

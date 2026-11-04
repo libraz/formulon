@@ -22,6 +22,8 @@
 #include "c_api/formulon_c.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -74,8 +76,50 @@ void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable
 // after any pivot-cache mutation so a subsequent layout or GETPIVOTDATA
 // recomputes against the changed cache instead of returning stale memoised
 // state. Formula cells are dirtied once
-// when at least one matching table exists.
+// when at least one matching table exists. Each such table's report is left
+// pending (see `mark_cache_pivots_pending`).
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id);
+
+// Marks every pivot drawing from cache `cache_id` as projection-pending: its
+// sheet cells are stale until its next table edit, `fm_workbook_pivot_project`
+// or a save. A cache edit does not project, so building records one by one
+// never re-evaluates every pivot per call.
+void mark_cache_pivots_pending(formulon::Workbook& wb, std::uint32_t cache_id);
+
+// Every pivot table, across all sheets, drawing from cache `cache_id`.
+std::vector<formulon::pivot::PivotTable*> cache_tables(formulon::Workbook& wb, std::uint32_t cache_id);
+
+// Writes pivot `(sheet_index, pivot_index)`'s report into the sheet cells. A
+// table whose span is no longer Excel's own also drops the location offsets
+// read with it, which would otherwise outrank the ones the writer derives.
+formulon::Expected<void, formulon::Error> project_pivot(formulon::Workbook& wb, std::size_t sheet_index,
+                                                        std::size_t pivot_index);
+
+// Projects every pending pivot as `project_pivot` does; one that cannot be
+// placed stays pending.
+void project_pending_pivots(formulon::Workbook& wb);
+
+// One table-level pivot edit. Construct it before touching the table; it keeps
+// a `clone()` of the definition. `commit()` invalidates the derived state and
+// projects the report: when the projection is refused (`kPreconditionFailed`,
+// an overlap) the definition is restored in place, so the table's address is
+// unchanged, and that status is returned with the error populated. Any other
+// projection failure keeps the edit, leaves the report pending and returns 0;
+// the layout API reports that error.
+class PivotEdit {
+ public:
+  PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,
+            formulon::pivot::PivotTable& table);
+
+  fm_status_t commit();
+
+ private:
+  formulon::Workbook& wb_;
+  std::size_t sheet_index_;
+  std::size_t pivot_index_;
+  formulon::pivot::PivotTable& table_;
+  std::unique_ptr<formulon::pivot::PivotTable> snapshot_;
+};
 
 // Interns `utf8` in the cache's text storage and returns a Value::text
 // referencing the stable backing string.

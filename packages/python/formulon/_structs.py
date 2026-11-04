@@ -450,6 +450,7 @@ PIVOT_FIELD_INFO = Struct(
         ("subtotal_fns", U32),
         ("insert_blank_row", I32),
         ("fill_down_labels", I32),
+        ("show_all", I32),
     ],
 )
 

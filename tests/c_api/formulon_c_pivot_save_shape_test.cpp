@@ -1,7 +1,13 @@
 // A pivot assembled through the C ABI (cache fields, inline record values,
 // fields placed on axes without items) must save as a package Excel opens: every
 // axis field lists its items and every discrete cache field carries shared items.
+// Its report lives in the sheet cells, written on every table edit, refused
+// where it would overlap another structure, and cleared on removal.
 
+#include <cstddef>
+#include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -160,4 +166,276 @@ TEST(FormulonCApiPivotSaveShape, HostBuiltPivotSavesWithItemsAndSharedItems) {
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_last_error_message();
   EXPECT_EQ(ProjectedCells(loaded.handle), before);
+}
+
+// ---------------------------------------------------------------------------
+// The report in the sheet cells
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
+
+// BuildScratchPivot's report at D1:E4: a header row, North 400, South 600 and
+// the grand total 1000 in column E.
+constexpr std::uint32_t kValueCol = 4U;
+constexpr std::uint32_t kLabelCol = 3U;
+
+fm_value_t SheetValue(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {
+  fm_value_t value{};
+  EXPECT_EQ(fm_workbook_get_value(wb, 0U, row, col, &value), 0) << fm_last_error_message();
+  return value;
+}
+
+void ExpectSheetNumber(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, double expected) {
+  const fm_value_t value = SheetValue(wb, row, col);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER) << "row=" << row << " col=" << col;
+  EXPECT_DOUBLE_EQ(value.u.number, expected) << "row=" << row << " col=" << col;
+}
+
+void ExpectSheetText(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, const std::string& expected) {
+  const fm_value_t value = SheetValue(wb, row, col);
+  ASSERT_EQ(value.kind, FM_VAL_TEXT) << "row=" << row << " col=" << col;
+  EXPECT_EQ(std::string(value.u.text), expected) << "row=" << row << " col=" << col;
+}
+
+void BuildScratch(WorkbookGuard& wb, std::uint32_t* cache_id = nullptr) {
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(BuildScratchPivot(wb.handle, cache_id, nullptr), 0) << fm_last_error_message();
+}
+
+std::int32_t Pending(const fm_workbook_t* wb) {
+  std::int32_t pending = -1;
+  EXPECT_EQ(fm_workbook_pivot_projection_pending(wb, 0U, 0U, &pending), 0) << fm_last_error_message();
+  return pending;
+}
+
+bool LayoutHasNumber(fm_workbook_t* wb, double number) {
+  PivotCellsGuard projected;
+  EXPECT_EQ(fm_workbook_pivot_layout(wb, 0U, 0U, &projected.handle), 0) << fm_last_error_message();
+  for (const fm_pivot_cell_t& cell : CollectCells(projected.handle)) {
+    if (cell.value.kind == FM_VAL_NUMBER && cell.value.u.number == number) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Save(fm_workbook_t* wb) {
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb, &saved.data, &saved.len), 0) << fm_last_error_message();
+}
+
+}  // namespace
+
+TEST(FormulonCApiPivotSaveShape, ApiPivotReportIsInTheCellsAndFormulasReadIt) {
+  WorkbookGuard wb;
+  BuildScratch(wb);
+  ExpectSheetText(wb.handle, 1U, kLabelCol, "North");
+  ExpectSheetNumber(wb.handle, 1U, kValueCol, 400.0);
+  ExpectSheetNumber(wb.handle, 2U, kValueCol, 600.0);
+  ExpectSheetNumber(wb.handle, 3U, kValueCol, 1000.0);
+
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0U, 9U, 0U, "=SUM(E1:E10)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ExpectSheetNumber(wb.handle, 9U, 0U, 2000.0);
+
+  // Hiding South re-projects the report one row shorter; the old last row is cleared.
+  ASSERT_EQ(fm_workbook_pivot_field_set_item_visible(wb.handle, 0U, 0U, 0U, 1U, 0), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ExpectSheetNumber(wb.handle, 2U, kValueCol, 400.0);
+  EXPECT_EQ(SheetValue(wb.handle, 3U, kValueCol).kind, FM_VAL_BLANK);
+  ExpectSheetNumber(wb.handle, 9U, 0U, 800.0);
+
+  // The saved file holds the cells.
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_last_error_message();
+  ExpectSheetText(loaded.handle, 1U, kLabelCol, "North");
+  ExpectSheetNumber(loaded.handle, 1U, kValueCol, 400.0);
+  ExpectSheetNumber(loaded.handle, 2U, kValueCol, 400.0);
+  EXPECT_EQ(SheetValue(loaded.handle, 3U, kValueCol).kind, FM_VAL_BLANK);
+}
+
+TEST(FormulonCApiPivotSaveShape, EditOverlappingAMergeIsRefusedAndUndone) {
+  WorkbookGuard wb;
+  BuildScratch(wb);
+  const formulon::pivot::PivotTable* table = wb.handle->wb->sheet(0U).pivot_tables()[0].get();
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, fm_merge_range{0U, 5U, 1U, 5U}), 0) << fm_last_error_message();
+
+  // A second data field widens the report into column F.
+  fm_pivot_data_field_spec_t spec{};
+  spec.name = "Count of Amount";
+  spec.field_index = 1U;
+  spec.aggregation = FM_PIVOT_AGG_COUNT;
+  spec.number_format = "";
+  spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  spec.show_as_base_field = -1;
+  spec.show_as_base_item = -1;
+  std::size_t index = 99;
+  EXPECT_EQ(fm_workbook_pivot_data_field_add(wb.handle, 0U, 0U, &spec, &index), kPreconditionFailed);
+  EXPECT_EQ(index, 99U);
+
+  // The definition is restored in place and the sheet is untouched.
+  EXPECT_EQ(wb.handle->wb->sheet(0U).pivot_tables()[0].get(), table);
+  std::size_t data_fields = 0;
+  ASSERT_EQ(fm_workbook_pivot_data_field_count(wb.handle, 0U, 0U, &data_fields), 0);
+  EXPECT_EQ(data_fields, 1U);
+  EXPECT_EQ(SheetValue(wb.handle, 0U, 5U).kind, FM_VAL_BLANK);
+  ExpectSheetNumber(wb.handle, 3U, kValueCol, 1000.0);
+  std::uint32_t merges = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merges), 0);
+  EXPECT_EQ(merges, 1U);
+  EXPECT_EQ(Pending(wb.handle), 0);
+
+  // Options edits roll back the same way.
+  fm_pivot_options_t options{};
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, 0U, &options), 0);
+  options.grid_drop_zones = 1;
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, fm_merge_range{4U, 3U, 4U, 4U}), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_pivot_set_options(wb.handle, 0U, 0U, &options), kPreconditionFailed);
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, 0U, &options), 0);
+  EXPECT_EQ(options.grid_drop_zones, 0);
+}
+
+TEST(FormulonCApiPivotSaveShape, CreatingAPivotOverAnotherReportCreatesNothing) {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+  BuildScratch(wb, &cache_id);
+  std::size_t created = 99;
+  EXPECT_EQ(fm_workbook_pivot_create(wb.handle, 0U, "PT2", cache_id, 1U, kValueCol, &created), kPreconditionFailed);
+  EXPECT_EQ(created, 99U);
+  std::size_t count = 0;
+  ASSERT_EQ(fm_workbook_pivot_count(wb.handle, 0U, &count), 0);
+  EXPECT_EQ(count, 1U);
+  ExpectSheetNumber(wb.handle, 1U, kValueCol, 400.0);
+
+  // Beside the report there is room.
+  ASSERT_EQ(fm_workbook_pivot_create(wb.handle, 0U, "PT2", cache_id, 0U, 7U, &created), 0) << fm_last_error_message();
+  EXPECT_EQ(created, 1U);
+  fm_pivot_options_t options{};
+  ASSERT_EQ(fm_workbook_pivot_get_options(wb.handle, 0U, created, &options), 0);
+  EXPECT_EQ(options.item_print_titles, 1);
+  EXPECT_EQ(options.indent, 0U);
+  EXPECT_EQ(options.multiple_field_filters, 0);
+}
+
+TEST(FormulonCApiPivotSaveShape, RemovingAPivotClearsItsReport) {
+  WorkbookGuard wb;
+  BuildScratch(wb);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0U, 9U, 0U, "=SUM(E1:E10)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ExpectSheetNumber(wb.handle, 9U, 0U, 2000.0);
+
+  ASSERT_EQ(fm_workbook_pivot_remove(wb.handle, 0U, 0U), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    EXPECT_EQ(SheetValue(wb.handle, row, kLabelCol).kind, FM_VAL_BLANK) << row;
+    EXPECT_EQ(SheetValue(wb.handle, row, kValueCol).kind, FM_VAL_BLANK) << row;
+  }
+  ExpectSheetNumber(wb.handle, 9U, 0U, 0.0);
+}
+
+TEST(FormulonCApiPivotSaveShape, CacheEditLeavesTheReportPendingUntilProjected) {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+  BuildScratch(wb, &cache_id);
+  EXPECT_EQ(Pending(wb.handle), 0);
+
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0U, 1U, 1100.0), 0);
+  EXPECT_EQ(Pending(wb.handle), 1);
+  // The cells are stale; the layout API is not.
+  ExpectSheetNumber(wb.handle, 1U, kValueCol, 400.0);
+  EXPECT_TRUE(LayoutHasNumber(wb.handle, 1400.0));
+
+  ASSERT_EQ(fm_workbook_pivot_project(wb.handle, 0U, 0U), 0) << fm_last_error_message();
+  EXPECT_EQ(Pending(wb.handle), 0);
+  ExpectSheetNumber(wb.handle, 1U, kValueCol, 1400.0);
+
+  // A save projects what is pending first.
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 1U, 1U, 900.0), 0);
+  EXPECT_EQ(Pending(wb.handle), 1);
+  Save(wb.handle);
+  EXPECT_EQ(Pending(wb.handle), 0);
+  ExpectSheetNumber(wb.handle, 2U, kValueCol, 1300.0);
+
+  // So does the next table edit.
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 1U, 1U, 200.0), 0);
+  EXPECT_EQ(Pending(wb.handle), 1);
+  ASSERT_EQ(fm_workbook_pivot_set_name(wb.handle, 0U, 0U, "Renamed"), 0) << fm_last_error_message();
+  EXPECT_EQ(Pending(wb.handle), 0);
+  ExpectSheetNumber(wb.handle, 2U, kValueCol, 600.0);
+}
+
+TEST(FormulonCApiPivotSaveShape, AProjectionThatWouldOverlapStaysPending) {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+  BuildScratch(wb, &cache_id);
+  // A new item grows the report to D1:E5, onto a merge.
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_text(wb.handle, cache_id, 0U, "West"), 0);
+  std::size_t record = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &record), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, record, 0U, 2.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, record, 1U, 500.0), 0);
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, fm_merge_range{4U, 3U, 4U, 4U}), 0) << fm_last_error_message();
+
+  EXPECT_EQ(fm_workbook_pivot_project(wb.handle, 0U, 0U), kPreconditionFailed);
+  EXPECT_EQ(Pending(wb.handle), 1);
+  ExpectSheetNumber(wb.handle, 3U, kValueCol, 1000.0);
+  // The save goes on and the pivot stays pending.
+  Save(wb.handle);
+  EXPECT_EQ(Pending(wb.handle), 1);
+}
+
+TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+  BuildScratch(wb, &cache_id);
+  fm_pivot_cache_options_t options{};
+  ASSERT_EQ(fm_workbook_pivot_cache_get_options(wb.handle, cache_id, &options), 0);
+  options.save_data = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_set_options(wb.handle, cache_id, &options), 0) << fm_last_error_message();
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0) << fm_last_error_message();
+
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_last_error_message();
+  // The cells read with the file are the report.
+  ExpectSheetNumber(loaded.handle, 1U, kValueCol, 400.0);
+  ASSERT_EQ(fm_workbook_set_text(loaded.handle, 0U, 1U, kValueCol, "kept"), 0);
+  EXPECT_EQ(fm_workbook_pivot_project(loaded.handle, 0U, 0U), 0) << fm_last_error_message();
+  ExpectSheetText(loaded.handle, 1U, kValueCol, "kept");
+}
+
+TEST(FormulonCApiPivotSaveShape, SavingDoesNotMemoiseAReportWithoutItsCalculatedCells) {
+  WorkbookGuard wb;
+  std::string dir = __FILE__;
+  dir = dir.substr(0, dir.find_last_of("/\\"));
+  std::ifstream in(dir + "/../fixtures/excel/pivot_calc/cf1_price_amt_per_qty.xlsx", std::ios::binary);
+  ASSERT_TRUE(in.good());
+  const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb.handle), 0) << fm_last_error_message();
+  // The save evaluates the report for its span without the formula host.
+  Save(wb.handle);
+  // The layout API still shows the calculated field: 630 / 20 at the grand total.
+  EXPECT_TRUE(LayoutHasNumber(wb.handle, 31.5));
+  EXPECT_TRUE(LayoutHasNumber(wb.handle, 50.0));
+}
+
+TEST(FormulonCApiPivotSaveShape, ProjectionEntryPointsRejectBadArguments) {
+  WorkbookGuard wb;
+  BuildScratch(wb);
+  std::int32_t pending = -1;
+  EXPECT_EQ(fm_workbook_pivot_project(nullptr, 0U, 0U), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_pivot_projection_pending(nullptr, 0U, 0U, &pending), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_pivot_projection_pending(wb.handle, 0U, 0U, nullptr), kBindingNullPointer);
+  for (const std::size_t index : {std::size_t{1}, std::size_t{0x80000000U}, static_cast<std::size_t>(0x100000000ULL)}) {
+    EXPECT_EQ(fm_workbook_pivot_project(wb.handle, index, 0U), kInvalidArgument) << index;
+    EXPECT_EQ(fm_workbook_pivot_project(wb.handle, 0U, index), kInvalidArgument) << index;
+    EXPECT_EQ(fm_workbook_pivot_projection_pending(wb.handle, index, 0U, &pending), kInvalidArgument) << index;
+    EXPECT_EQ(fm_workbook_pivot_projection_pending(wb.handle, 0U, index, &pending), kInvalidArgument) << index;
+  }
 }

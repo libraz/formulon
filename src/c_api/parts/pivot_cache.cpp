@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -17,11 +18,17 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
+#include "eval/eval_profile_scope.h"
+#include "eval/pivot_formula.h"
+#include "pivot/calculated.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/expected.h"
+#include "utils/utf8_length.h"
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::cache_tables;
 using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
@@ -32,8 +39,11 @@ using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::grow_record_cells;
 using formulon::c_api::parts::intern_cache_text;
 using formulon::c_api::parts::invalidate_pivot_results_for_cache;
+using formulon::c_api::parts::mark_cache_pivots_pending;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::value_to_fm;
 
 namespace {
@@ -296,6 +306,8 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, std:
   field.name = utf8_name;
   cache->mutable_fields().push_back(std::move(field));
   *out_field_idx = cache->fields().size() - 1U;
+  // Every table keeps one pivot field per cache field.
+  formulon::pivot::sync_table_fields(*cache, cache_tables(wb->workbook(), cache_id));
   invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
@@ -656,4 +668,336 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_error(fm_workbook_t* w
   }
   return set_record_cell(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_error",
                          formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
+}
+
+// ---------------------------------------------------------------------------
+// PivotCache options
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// The largest `missingItemsLimit` the API sets: one item per worksheet row.
+constexpr std::int64_t kMaxMissingItemsLimit = 1048576;
+constexpr std::int32_t kAutomaticMissingItemsLimit = -1;
+
+std::int32_t missing_items_limit_to_fm(std::optional<std::uint32_t> limit) {
+  if (!limit.has_value()) {
+    return kAutomaticMissingItemsLimit;
+  }
+  return *limit > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())
+             ? std::numeric_limits<std::int32_t>::max()
+             : static_cast<std::int32_t>(*limit);
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_pivot_cache_get_options(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                           fm_pivot_cache_options_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_get_options: NULL argument");
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_pivot_cache_get_options", &cache); rc != 0) {
+    return rc;
+  }
+  fm_pivot_cache_options_t result{};
+  result.save_data = cache->save_data() ? 1 : 0;
+  result.missing_items_limit = missing_items_limit_to_fm(cache->missing_items_limit());
+  result.refresh_on_load = cache->refresh_on_load() ? 1 : 0;
+  *out = result;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_set_options(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                           const fm_pivot_cache_options_t* options) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_workbook_pivot_cache_set_options";
+  if (wb == nullptr || options == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": NULL argument").c_str());
+  }
+  formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, kApi, &cache); rc != 0) {
+    return rc;
+  }
+  // -1 is automatic; a loaded value outside the settable range survives a
+  // get / set round trip unchanged.
+  const std::int32_t limit = options->missing_items_limit;
+  if (limit != kAutomaticMissingItemsLimit && (limit < 0 || limit > kMaxMissingItemsLimit) &&
+      limit != missing_items_limit_to_fm(cache->missing_items_limit())) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(kApi) + ": missing_items_limit out of range").c_str(),
+                             "missing_items_limit=" + std::to_string(limit));
+  }
+  cache->set_save_data(options->save_data != 0);
+  if (limit != missing_items_limit_to_fm(cache->missing_items_limit())) {
+    cache->set_missing_items_limit(limit == kAutomaticMissingItemsLimit
+                                       ? std::nullopt
+                                       : std::optional<std::uint32_t>(static_cast<std::uint32_t>(limit)));
+  }
+  cache->set_refresh_on_load(options->refresh_on_load != 0);
+  mark_cache_pivots_pending(wb->workbook(), cache_id);
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Calculated fields and calculated items
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Longest calculated field or item name, in UTF-16 code units.
+constexpr std::uint32_t kMaxCalculatedNameUnits = 255U;
+// Longest calculated formula, in UTF-16 code units.
+constexpr std::uint32_t kMaxFormulaUnits = 8192U;
+
+// Validates a required name or formula argument: NULL, malformed UTF-8, empty
+// and over-long text are refused.
+fm_status_t check_calculated_text(const char* text, const char* api, const char* what, std::uint32_t max_units) {
+  if (text == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(api) + ": " + what + " is NULL").c_str());
+  }
+  if (auto rc = check_utf8(api, {text}); rc != 0) {
+    return rc;
+  }
+  if (text[0] == '\0') {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": " + what + " is empty").c_str());
+  }
+  if (formulon::utf16_units_in(text) > max_units) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": " + what + " is too long").c_str());
+  }
+  return 0;
+}
+
+// Runs one calculated-field / -item model edit on cache `cache_id` and every
+// table drawing from it, formulas compiled and names collated under the
+// workbook's profile. The edit changes the cache, so the tables are left
+// pending rather than projected.
+template <typename Edit>
+fm_status_t edit_calculated(fm_workbook_t* wb, std::uint32_t cache_id, const char* api, Edit&& edit) {
+  formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache_mut(wb, cache_id, api, &cache); rc != 0) {
+    return rc;
+  }
+  const formulon::eval::ScopedEvalProfile profile_scope(wb->workbook().excel_profile());
+  formulon::eval::PivotFormulaEvaluator host;
+  const formulon::Expected<void, formulon::Error> done =
+      std::forward<Edit>(edit)(*cache, cache_tables(wb->workbook(), cache_id), host);
+  if (!done) {
+    return set_last_error(done.error());
+  }
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
+  return 0;
+}
+
+using CalculatedTables = std::vector<formulon::pivot::PivotTable*>;
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_add(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                    const char* name, const char* formula,
+                                                                    std::size_t* out_field_index) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_field_add";
+  if (wb == nullptr || out_field_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": NULL argument").c_str());
+  }
+  if (auto rc = check_calculated_text(name, kApi, "name", kMaxCalculatedNameUnits); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_calculated_text(formula, kApi, "formula", kMaxFormulaUnits); rc != 0) {
+    return rc;
+  }
+  std::size_t added = 0;
+  const fm_status_t status =
+      edit_calculated(wb, cache_id, kApi,
+                      [&](formulon::pivot::PivotCache& cache, const CalculatedTables& tables,
+                          formulon::eval::PivotFormulaEvaluator& host) -> formulon::Expected<void, formulon::Error> {
+                        formulon::Expected<std::size_t, formulon::Error> index =
+                            formulon::pivot::add_calculated_field(cache, tables, name, formula, host);
+                        if (!index) {
+                          return index.error();
+                        }
+                        added = index.value();
+                        return formulon::Expected<void, formulon::Error>::Ok();
+                      });
+  if (status == 0) {
+    *out_field_index = added;
+  }
+  return status;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_set_formula(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                            std::size_t field_index,
+                                                                            const char* formula) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_field_set_formula";
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": wb is NULL").c_str());
+  }
+  if (auto rc = check_calculated_text(formula, kApi, "formula", kMaxFormulaUnits); rc != 0) {
+    return rc;
+  }
+  return edit_calculated(
+      wb, cache_id, kApi,
+      [&](formulon::pivot::PivotCache& cache, const CalculatedTables&, formulon::eval::PivotFormulaEvaluator& host) {
+        return formulon::pivot::set_calculated_field_formula(cache, field_index, formula, host);
+      });
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_field_remove(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                       std::size_t field_index) {
+  clear_last_error();
+  return edit_calculated(wb, cache_id, "fm_workbook_pivot_cache_calculated_field_remove",
+                         [&](formulon::pivot::PivotCache& cache, const CalculatedTables& tables,
+                             formulon::eval::PivotFormulaEvaluator& host) {
+                           return formulon::pivot::remove_calculated_field(cache, tables, field_index, host);
+                         });
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                             std::size_t field_idx, const char** out_utf8) {
+  clear_last_error();
+  if (wb == nullptr || out_utf8 == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_field_formula: NULL argument");
+  }
+  fm_status_t status = 0;
+  const auto* field = lookup_cache_field(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_formula", &status);
+  if (field == nullptr) {
+    return status;
+  }
+  *out_utf8 = field->formula.has_value() ? field->formula->c_str() : "";
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_add(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                   std::size_t field_index, const char* name,
+                                                                   const char* formula) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_item_add";
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": wb is NULL").c_str());
+  }
+  if (auto rc = check_calculated_text(name, kApi, "name", kMaxCalculatedNameUnits); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_calculated_text(formula, kApi, "formula", kMaxFormulaUnits); rc != 0) {
+    return rc;
+  }
+  return edit_calculated(wb, cache_id, kApi,
+                         [&](formulon::pivot::PivotCache& cache, const CalculatedTables& tables,
+                             formulon::eval::PivotFormulaEvaluator& host) -> formulon::Expected<void, formulon::Error> {
+                           formulon::Expected<std::size_t, formulon::Error> index =
+                               formulon::pivot::add_calculated_item(cache, tables, field_index, name, formula, host);
+                           if (!index) {
+                             return index.error();
+                           }
+                           return formulon::Expected<void, formulon::Error>::Ok();
+                         });
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_count(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                     std::size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_calculated_item_count: NULL argument");
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, "fm_workbook_pivot_cache_calculated_item_count", &cache); rc != 0) {
+    return rc;
+  }
+  *out_count = cache->calculated_items().size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_at(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                  std::size_t idx, fm_pivot_calculated_item_t* out) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_item_at";
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": NULL argument").c_str());
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, kApi, &cache); rc != 0) {
+    return rc;
+  }
+  if (fm_status_t rc = check_index(idx, cache->calculated_items().size(), kApi, "idx"); rc != 0) {
+    return rc;
+  }
+  const formulon::pivot::PivotCalculatedItem& entry = cache->calculated_items()[idx];
+  // The item is the one the entry's area selects on its own field; any
+  // reference to another field scopes the formula to an intersection.
+  std::string_view name;
+  bool scoped = false;
+  for (const formulon::pivot::PivotAreaReference& reference : entry.area.references) {
+    if (!reference.field.has_value()) {
+      continue;
+    }
+    if (*reference.field != entry.cache_field_index) {
+      scoped = true;
+    } else if (name.empty() && !reference.items.empty() && entry.cache_field_index < cache->fields().size()) {
+      const std::vector<formulon::Value>& shared = cache->fields()[entry.cache_field_index].shared_items;
+      const std::uint32_t item = reference.items.front();
+      if (item < shared.size() && shared[item].is_text()) {
+        name = shared[item].as_text();
+      }
+    }
+  }
+  formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
+  fm_pivot_calculated_item_t result{};
+  result.field_index = entry.cache_field_index;
+  result.name = store_cstr(store, name);
+  result.formula = store_cstr(store, entry.formula);
+  result.scoped = entry.has_area && scoped ? 1 : 0;
+  *out = result;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_set_formula(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                           std::size_t idx, const char* formula) {
+  clear_last_error();
+  constexpr const char* kApi = "fm_workbook_pivot_cache_calculated_item_set_formula";
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(kApi) + ": wb is NULL").c_str());
+  }
+  if (auto rc = check_calculated_text(formula, kApi, "formula", kMaxFormulaUnits); rc != 0) {
+    return rc;
+  }
+  return edit_calculated(
+      wb, cache_id, kApi,
+      [&](formulon::pivot::PivotCache& cache, const CalculatedTables&, formulon::eval::PivotFormulaEvaluator& host) {
+        return formulon::pivot::set_calculated_item_formula(cache, idx, formula, host);
+      });
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_move(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                    std::size_t idx, std::size_t new_idx) {
+  clear_last_error();
+  return edit_calculated(
+      wb, cache_id, "fm_workbook_pivot_cache_calculated_item_move",
+      [&](formulon::pivot::PivotCache& cache, const CalculatedTables&, formulon::eval::PivotFormulaEvaluator&) {
+        return formulon::pivot::move_calculated_item(cache, idx, new_idx);
+      });
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_calculated_item_remove(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                      std::size_t idx) {
+  clear_last_error();
+  return edit_calculated(wb, cache_id, "fm_workbook_pivot_cache_calculated_item_remove",
+                         [&](formulon::pivot::PivotCache& cache, const CalculatedTables& tables,
+                             formulon::eval::PivotFormulaEvaluator& host) {
+                           return formulon::pivot::remove_calculated_item(cache, tables, idx, host);
+                         });
 }
