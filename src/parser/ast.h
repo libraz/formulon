@@ -149,6 +149,32 @@ enum class StructuredRefModifier : std::uint8_t {
   All = 5,
 };
 
+/// Where a `#REF!` came from, kept so the formula bar spells it as Excel
+/// does. Evaluation and dependency extraction read only the error code.
+struct RefErrorSite {
+  enum class Form : std::uint8_t {
+    /// A qualified reference whose cells were deleted: `Sheet3!#REF!`. The
+    /// qualifier follows sheet renames.
+    kQualified,
+    /// A reference whose sheet was deleted: `#REF!A1`, `#REF!A1:B2`,
+    /// `#REF!A:A`, or `#REF!#REF!` without an address. Stored as bare `#REF!`.
+    kDeadSheet,
+  };
+  Form form = Form::kQualified;
+  /// kQualified only; arena-interned.
+  std::string_view sheet;
+  /// kQualified only: the source spelled the qualifier in quotes.
+  bool sheet_quoted = false;
+  /// kDeadSheet: false spells `#REF!#REF!`.
+  bool has_address = false;
+  /// kDeadSheet with an address; sheet-less. A whole column or row pair that
+  /// names one index (`A:A`) is a single `first`.
+  Reference first;
+  /// The second corner or whole-axis endpoint when `is_range`.
+  Reference last;
+  bool is_range = false;
+};
+
 /// Tagged-union AST node.
 ///
 /// Construction is restricted to the `make_*` factories declared below. Each
@@ -309,6 +335,8 @@ class AstNode final {
 
   // --- ErrorLiteral --------------------------------------------------------
   ErrorCode as_error_literal() const;
+  /// The collapse site of a `#REF!`; null for a plain error literal.
+  const RefErrorSite* as_ref_error_site() const;
 
  private:
   AstNode() = default;
@@ -346,6 +374,8 @@ class AstNode final {
   friend AstNode* make_let_binding(Arena&, const std::string_view*, const AstNode* const*, std::uint32_t, AstNode*);
   friend AstNode* make_lambda_call(Arena&, AstNode*, const AstNode* const*, std::uint32_t);
   friend AstNode* make_error_literal(Arena&, ErrorCode);
+  friend AstNode* make_qualified_ref_error(Arena&, std::string_view, bool);
+  friend AstNode* make_dead_sheet_ref_error(Arena&, const Reference*, const Reference*);
   friend AstNode* make_error_placeholder(Arena&);
 
   // Arena-allocates a node of `kind` for a factory to fill; null on
@@ -460,6 +490,10 @@ class AstNode final {
     const AstNode* const* args;
     std::uint32_t arity;
   };
+  struct ErrorLiteralPayload {
+    ErrorCode code;
+    const RefErrorSite* site;  // arena-owned; null unless a sited `#REF!`
+  };
 
   // Tagged union of every payload variant. We deliberately store the larger
   // payloads (Lambda, Let) as pointer + count tuples so the union itself stays
@@ -483,7 +517,7 @@ class AstNode final {
     LambdaPayload lambda;
     LetPayload let;
     LambdaCallPayload lambda_call;
-    ErrorCode error_literal;
+    ErrorLiteralPayload error_literal;
 
     // The factories always overwrite the active member before any accessor
     // observes it, so we leave the union in an indeterminate state on
@@ -842,6 +876,16 @@ AstNode* make_lambda_call(Arena& arena, AstNode* callee, const AstNode* const* a
 
 /// Builds an `ErrorLiteral` node.
 AstNode* make_error_literal(Arena& arena, ErrorCode code);
+
+/// Builds the `#REF!` of a qualified reference whose cells were deleted
+/// (`Sheet3!#REF!`). `sheet` must be non-empty and is re-interned into `arena`.
+AstNode* make_qualified_ref_error(Arena& arena, std::string_view sheet, bool sheet_quoted);
+
+/// Builds the `#REF!` of a reference whose sheet was deleted, keeping its
+/// address: `first` alone (`#REF!A1`, `#REF!A:A`), `first:last`
+/// (`#REF!A1:B2`, `#REF!A:B`), or no address when `first` is null
+/// (`#REF!#REF!`). The references' sheet qualifiers are dropped.
+AstNode* make_dead_sheet_ref_error(Arena& arena, const Reference* first, const Reference* last);
 
 /// Builds an `ErrorPlaceholder` sentinel. The placeholder has no payload; it
 /// signals that panic-mode recovery skipped a subtree because the underlying

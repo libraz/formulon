@@ -193,6 +193,9 @@ class RecalcEngine {
     /// dependency covering `cell` dirty. Called alongside the ordinary
     /// reverse-edge walk for every workbook cell mutation.
     void mark_range_dependents_dirty(CellNodeId cell) const;
+    /// Marks the owner of every compact range dependency intersecting `range`
+    /// dirty.
+    void mark_range_dependents_dirty(const CellRangeDependency& range) const;
     /// Drops the entire dependency graph, volatile set, and dirty set.
     /// Used by `Workbook`'s sheet-permutation entry points, which
     /// invalidate every `CellNodeId.sheet_id` at once and must re-register
@@ -419,6 +422,7 @@ class RecalcEngine {
   void clear_cell_dependencies_locked(CellNodeId cell);
   void mark_dirty_locked(CellNodeId cell);
   void mark_range_dependents_dirty_locked(CellNodeId cell);
+  void mark_range_dependents_dirty_locked(const CellRangeDependency& range);
   void reset_graph_locked();
   Expected<RecalcStats, Error> recalc_locked(Workbook& workbook, const FunctionRegistry& registry);
   Expected<RecalcStats, Error> partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,

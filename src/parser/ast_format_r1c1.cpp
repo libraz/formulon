@@ -125,7 +125,6 @@ struct Emitter {
       case NodeKind::Literal:
       case NodeKind::StructuredRef:
       case NodeKind::ArrayLiteral:
-      case NodeKind::ErrorLiteral:
       case NodeKind::ErrorPlaceholder:
         // No cell reference inside; the A1 formatter's text (own parentheses
         // included) is already correct.
@@ -139,6 +138,28 @@ struct Emitter {
     out.append(n, '(');
     emit_bare(node, out);
     out.append(n, ')');
+  }
+
+  // `Sheet3!#REF!` under the R1C1 quoting rule; a dead sheet's address
+  // relative to the formula's cell (`#REF!R[-1]C[-4]`, `#REF!C[-4]`).
+  void emit_error_literal(const AstNode& node, std::string& out) const {
+    const RefErrorSite* site = node.as_ref_error_site();
+    if (site != nullptr && site->form == RefErrorSite::Form::kQualified) {
+      AppendSheetQualifier(site->sheet, out);
+    }
+    out.append(display_name(node.as_error_literal()));
+    if (site == nullptr || site->form != RefErrorSite::Form::kDeadSheet) {
+      return;
+    }
+    if (!site->has_address) {
+      out.append(display_name(ErrorCode::Ref));
+      return;
+    }
+    AppendCell(site->first, host, out);
+    if (site->is_range) {
+      out.push_back(':');
+      AppendCell(site->last, host, out);
+    }
   }
 
   void emit_args(std::uint32_t count, const AstNode& (AstNode::*arg)(std::uint32_t) const, const AstNode& node,
@@ -276,10 +297,12 @@ struct Emitter {
         AppendSheetQualifier(node.as_name_sheet(), out);
         out.append(node.as_name());
         return;
+      case NodeKind::ErrorLiteral:
+        emit_error_literal(node, out);
+        return;
       case NodeKind::Literal:
       case NodeKind::StructuredRef:
       case NodeKind::ArrayLiteral:
-      case NodeKind::ErrorLiteral:
       case NodeKind::ErrorPlaceholder:
         // Delegated in `emit`.
         return;

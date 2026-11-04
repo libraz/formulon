@@ -8,11 +8,14 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/ast_dump.h"
 #include "parser/formula_prefix.h"
+#include "parser/token.h"
+#include "parser/tokenizer.h"
 #include "utils/arena.h"
 
 namespace formulon {
@@ -81,9 +84,9 @@ TEST(ParserAtoms, ErrorLiteralNA) {
 
 // Excel rewrites a reference through a deleted row/column/sheet as `#REF!`
 // glued directly to whatever cell/range tail (`#REF!A1`, `#REF!A1:B2`) or
-// preceding sheet qualifier (`Sheet1!#REF!`) survived. The whole reference
-// has already collapsed to one error, so these fold into a single
-// `err-lit`, not `#NAME?` or a parse failure.
+// preceding sheet qualifier (`Sheet1!#REF!`) survived. Each folds into a
+// single `err-lit`, not `#NAME?` or a parse failure; the qualifier or tail
+// is kept as the node's `RefErrorSite`, which the dump does not show.
 TEST(ParserAtoms, ErrorLiteralRefWithGluedCellTail) {
   EXPECT_EQ(ParseToSexpr("=#REF!A1"), "(err-lit #REF!)");
 }
@@ -106,6 +109,148 @@ TEST(ParserAtoms, ErrorLiteralNADoesNotConsumeGluedCellTail) {
   ASSERT_NE(root, nullptr);
   ASSERT_EQ(root->kind(), NodeKind::ErrorLiteral);
   EXPECT_EQ(root->as_error_literal(), ErrorCode::NA);
+}
+
+// Parses `src` cleanly into `arena` and returns the root's `#REF!` site;
+// null for a plain error literal or any other node.
+const RefErrorSite* RefErrorSiteOf(std::string_view src, Arena& arena) {
+  Parser p(src, arena);
+  const AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << src;
+  EXPECT_TRUE(p.errors().empty()) << src;
+  if (root == nullptr || root->kind() != NodeKind::ErrorLiteral) {
+    return nullptr;
+  }
+  EXPECT_EQ(root->as_error_literal(), ErrorCode::Ref) << src;
+  return root->as_ref_error_site();
+}
+
+TEST(ParserRefErrorSite, PlainRefErrorHasNoSite) {
+  Arena a;
+  EXPECT_EQ(RefErrorSiteOf("=#REF!", a), nullptr);
+}
+
+TEST(ParserRefErrorSite, SheetQualifierIsKept) {
+  const struct {
+    const char* src;
+    const char* sheet;
+    bool quoted;
+  } kCases[] = {
+      {"=Sheet1!#REF!", "Sheet1", false},  {"='My Sheet'!#REF!", "My Sheet", true}, {"='Q1'!#REF!", "Q1", true},
+      {"='データ'!#REF!", "データ", true}, {"=Sheet1!#REF!A1", "Sheet1", false},
+  };
+  for (const auto& c : kCases) {
+    Arena a;
+    const RefErrorSite* site = RefErrorSiteOf(c.src, a);
+    ASSERT_NE(site, nullptr) << c.src;
+    EXPECT_EQ(site->form, RefErrorSite::Form::kQualified) << c.src;
+    EXPECT_EQ(site->sheet, c.sheet) << c.src;
+    EXPECT_EQ(site->sheet_quoted, c.quoted) << c.src;
+  }
+}
+
+TEST(ParserRefErrorSite, GluedCellTailIsADeadSheetAddress) {
+  Arena a;
+  const RefErrorSite* site = RefErrorSiteOf("=#REF!$A$1", a);
+  ASSERT_NE(site, nullptr);
+  EXPECT_EQ(site->form, RefErrorSite::Form::kDeadSheet);
+  EXPECT_TRUE(site->has_address);
+  EXPECT_FALSE(site->is_range);
+  EXPECT_EQ(site->first.col, 0U);
+  EXPECT_EQ(site->first.row, 0U);
+  EXPECT_TRUE(site->first.col_abs);
+  EXPECT_TRUE(site->first.row_abs);
+  EXPECT_TRUE(site->first.sheet.empty());
+
+  Arena b;
+  const RefErrorSite* lower = RefErrorSiteOf("=#ref!a1", b);
+  ASSERT_NE(lower, nullptr);
+  EXPECT_EQ(lower->form, RefErrorSite::Form::kDeadSheet);
+  EXPECT_FALSE(lower->first.col_abs);
+
+  Arena c;
+  const RefErrorSite* corner = RefErrorSiteOf("=#REF!XFD1048576", c);
+  ASSERT_NE(corner, nullptr);
+  EXPECT_EQ(corner->first.col, 16383U);
+  EXPECT_EQ(corner->first.row, 1048575U);
+}
+
+TEST(ParserRefErrorSite, GluedRangeTailKeepsBothCorners) {
+  Arena a;
+  const RefErrorSite* site = RefErrorSiteOf("=#REF!A1:B2", a);
+  ASSERT_NE(site, nullptr);
+  EXPECT_EQ(site->form, RefErrorSite::Form::kDeadSheet);
+  EXPECT_TRUE(site->is_range);
+  EXPECT_EQ(site->last.col, 1U);
+  EXPECT_EQ(site->last.row, 1U);
+}
+
+// A whole column or row tail decodes as the parser builds the bare token:
+// one index is a single reference, two are a range.
+TEST(ParserRefErrorSite, GluedWholeAxisTails) {
+  Arena a;
+  const RefErrorSite* col = RefErrorSiteOf("=#REF!A:A", a);
+  ASSERT_NE(col, nullptr);
+  EXPECT_EQ(col->form, RefErrorSite::Form::kDeadSheet);
+  EXPECT_TRUE(col->first.is_full_col);
+  EXPECT_FALSE(col->is_range);
+
+  Arena b;
+  const RefErrorSite* cols = RefErrorSiteOf("=#REF!$A:$B", b);
+  ASSERT_NE(cols, nullptr);
+  EXPECT_TRUE(cols->is_range);
+  EXPECT_TRUE(cols->first.col_abs);
+  EXPECT_TRUE(cols->last.is_full_col);
+  EXPECT_EQ(cols->last.col, 1U);
+
+  Arena c;
+  const RefErrorSite* rows = RefErrorSiteOf("=#REF!1:3", c);
+  ASSERT_NE(rows, nullptr);
+  EXPECT_TRUE(rows->is_range);
+  EXPECT_TRUE(rows->first.is_full_row);
+  EXPECT_EQ(rows->first.row, 0U);
+  EXPECT_EQ(rows->last.row, 2U);
+
+  Arena d;
+  const RefErrorSite* row = RefErrorSiteOf("=#REF!$1:$1", d);
+  ASSERT_NE(row, nullptr);
+  EXPECT_FALSE(row->is_range);
+  EXPECT_TRUE(row->first.row_abs);
+
+  EXPECT_EQ(ParseToSexpr("=SUM(#REF!A:A)"), "(call SUM (err-lit #REF!))");
+}
+
+TEST(ParserRefErrorSite, DoubleRefIsADeadSheetWithoutAddress) {
+  Arena a;
+  const RefErrorSite* site = RefErrorSiteOf("=#REF!#REF!", a);
+  ASSERT_NE(site, nullptr);
+  EXPECT_EQ(site->form, RefErrorSite::Form::kDeadSheet);
+  EXPECT_FALSE(site->has_address);
+}
+
+// The tokenizer's error-literal run takes in digits, but only `#REF!` matches,
+// so the row number of `#REF!1:3` arrives as its own Number token.
+TEST(ParserRefErrorSite, RowTailIsSplitFromTheErrorLiteral) {
+  Tokenizer t("#REF!1:3");
+  const std::vector<Token>& tokens = t.tokens();
+  ASSERT_EQ(tokens.size(), 5U);
+  EXPECT_EQ(tokens[0].kind, TokenKind::ErrorLiteral);
+  EXPECT_EQ(tokens[0].lexeme, "#REF!");
+  EXPECT_EQ(tokens[1].kind, TokenKind::Number);
+  EXPECT_EQ(tokens[1].lexeme, "1");
+  EXPECT_EQ(tokens[2].kind, TokenKind::Colon);
+  EXPECT_EQ(tokens[3].kind, TokenKind::Number);
+  EXPECT_EQ(tokens[4].kind, TokenKind::Eof);
+}
+
+// Shapes that name no address, or a sheet span, stay unparseable.
+TEST(ParserRefErrorSite, HalfTailsAndSpanQualifiersStayRejected) {
+  for (const char* src : {"=#REF!A", "=#REF!1", "=#REF!XFE1", "=Sheet1:Sheet2!#REF!", "=!#REF!"}) {
+    Arena a;
+    Parser p(src, a);
+    p.parse();
+    EXPECT_FALSE(p.errors().empty()) << src;
+  }
 }
 
 TEST(ParserAtoms, CellRefA1) {

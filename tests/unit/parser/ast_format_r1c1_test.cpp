@@ -140,6 +140,18 @@ TEST(AstFormatR1C1, ReferenceLikeTextInStringsIsUntouched) {
   EXPECT_EQ(R1C1("\"A1:B2\"&A1", 4, 2), "\"A1:B2\"&R[-4]C[-2]");
 }
 
+// A dead sheet's address reads relative to the formula's cell; a kept
+// qualifier prints as is (Mac Excel `FormulaR1C1`).
+TEST(AstFormatR1C1, RefErrorSites) {
+  EXPECT_EQ(R1C1("=#REF!A1", 1, 4), "#REF!R[-1]C[-4]");
+  EXPECT_EQ(R1C1("=#REF!$A$1", 1, 4), "#REF!R1C1");
+  EXPECT_EQ(R1C1("=SUM(#REF!A:A)", 3, 4), "SUM(#REF!C[-4])");
+  EXPECT_EQ(R1C1("=SUM(#REF!1:3)", 4, 4), "SUM(#REF!R[-4]:R[-2])");
+  EXPECT_EQ(R1C1("=Sheet3!#REF!*2", 0, 0), "Sheet3!#REF!*2");
+  EXPECT_EQ(R1C1("=#REF!#REF!", 0, 0), "#REF!#REF!");
+  EXPECT_EQ(R1C1("=#REF!", 0, 0), "#REF!");
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

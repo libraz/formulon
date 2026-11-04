@@ -167,6 +167,24 @@ class RangeDepIndex {
     }
   }
 
+  /// Invokes `fn(CellNodeId owner)` for every owner of a rectangle on
+  /// `query.sheet_id` that intersects `query`. An owner watching several
+  /// intersecting rectangles is visited once per rectangle. `fn` must not
+  /// mutate the index.
+  template <typename Fn>
+  void for_each_owner_intersecting(const CellRangeDependency& query, Fn&& fn) const {
+    for (const RangeEntry& entry : ranges_) {
+      const CellRangeDependency& range = entry.range;
+      if (entry.owners.empty() || range.sheet_id != query.sheet_id || range.row_first > query.row_last ||
+          range.row_last < query.row_first || range.col_first > query.col_last || range.col_last < query.col_first) {
+        continue;
+      }
+      for (const CellNodeId owner : entry.owners) {
+        fn(owner);
+      }
+    }
+  }
+
   /// Invokes `fn(const CellRangeDependency&)` for every rectangle `owner`
   /// watches. `fn` must not mutate the index.
   template <typename Fn>

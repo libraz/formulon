@@ -223,7 +223,9 @@ std::optional<SiteRewrite> rewrite_site(std::string_view text, const parser::Ref
   bool changed = false;
   for (std::uint32_t i = 0; i < areas; ++i) {
     const parser::AstNode& area = is_union ? root->as_union_child(i) : *root;
-    const parser::AstNode* shifted = parser::shift_refs(area, arena, transform);
+    // An area already `#REF!` keeps its text; the chart spells its own collapses.
+    const parser::AstNode* shifted =
+        area.kind() == parser::NodeKind::ErrorLiteral ? &area : parser::shift_refs(area, arena, transform);
     if (shifted == nullptr) {
       return std::nullopt;
     }
@@ -235,9 +237,11 @@ std::optional<SiteRewrite> rewrite_site(std::string_view text, const parser::Ref
       out.text.push_back(',');
     }
     std::string spelled = parser::format_formula(*shifted);
-    if (shifted != &area && spelled == kRefError) {
+    if (shifted != &area && shifted->kind() == parser::NodeKind::ErrorLiteral &&
+        shifted->as_error_literal() == ErrorCode::Ref) {
       const std::string_view sheet = area_sheet(area);
       const std::optional<std::string_view> kept = sheet.empty() ? std::nullopt : transform.apply_name_sheet(sheet);
+      spelled = kRefError;
       if (kept.has_value()) {
         spelled.clear();
         parser::append_sheet_name(*kept, false, spelled);

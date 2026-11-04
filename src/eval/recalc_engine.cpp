@@ -120,6 +120,10 @@ void RecalcEngine::LockedMutator::mark_range_dependents_dirty(CellNodeId cell) c
   engine_.mark_range_dependents_dirty_locked(cell);
 }
 
+void RecalcEngine::LockedMutator::mark_range_dependents_dirty(const CellRangeDependency& range) const {
+  engine_.mark_range_dependents_dirty_locked(range);
+}
+
 void RecalcEngine::LockedMutator::reset_graph() const {
   engine_.reset_graph_locked();
 }
@@ -668,6 +672,10 @@ void RecalcEngine::mark_dirty_locked(CellNodeId cell) {
 void RecalcEngine::mark_range_dependents_dirty_locked(CellNodeId cell) {
   range_dependencies_.for_each_new_owner_covering(cell, dirty_.generation(),
                                                   [this](CellNodeId owner) { dirty_.mark(owner); });
+}
+
+void RecalcEngine::mark_range_dependents_dirty_locked(const CellRangeDependency& range) {
+  range_dependencies_.for_each_owner_intersecting(range, [this](CellNodeId owner) { dirty_.mark(owner); });
 }
 
 void RecalcEngine::reset_graph_locked() {

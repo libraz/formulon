@@ -25,6 +25,54 @@ TEST(WorkbookRowColEdits, RowDeletesPreserveThreeDReferenceCoordinates) {
   EXPECT_EQ(wb.sheet(2).cell_at(8, 0)->formula_text, "=SUM(First:Second!A1:A3)");
 }
 
+namespace {
+// Sheet3 holds 10,20,...,100 along column A (rows) or row 1 (columns); Sheet1!A1 holds `formula`.
+Workbook make_compact_band_workbook(bool along_rows, const char* formula) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet3");
+  for (std::uint32_t i = 0; i < 10U; ++i) {
+    const Value v = Value::number(static_cast<double>((i + 1U) * 10U));
+    EXPECT_TRUE(static_cast<bool>(along_rows ? wb.set_cell_value(1, i, 0, v) : wb.set_cell_value(1, 0, i, v)));
+  }
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, formula)));
+  EXPECT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  return wb;
+}
+}  // namespace
+
+TEST(WorkbookRowColEdits, DeleteRowRecalcsWholeColumnSumOverEditedSheet) {
+  Workbook wb = make_compact_band_workbook(true, "=SUM(Sheet3!A:A)");
+  ASSERT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 550.0);
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(1, /*row=*/4, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 500.0);
+}
+
+TEST(WorkbookRowColEdits, InsertRowRecalcsWholeColumnMatchOverEditedSheet) {
+  Workbook wb = make_compact_band_workbook(true, "=MATCH(70,Sheet3!A:A,0)");
+  ASSERT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 7.0);
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(1, /*row=*/0, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 8.0);
+}
+
+TEST(WorkbookRowColEdits, DeleteColumnRecalcsWholeRowSumOverEditedSheet) {
+  Workbook wb = make_compact_band_workbook(false, "=SUM(Sheet3!1:1)");
+  ASSERT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 550.0);
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(1, /*col=*/4, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 500.0);
+}
+
+TEST(WorkbookRowColEdits, InsertColumnRecalcsWholeRowMatchOverEditedSheet) {
+  Workbook wb = make_compact_band_workbook(false, "=MATCH(70,Sheet3!1:1,0)");
+  ASSERT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 7.0);
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(1, /*col=*/0, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 8.0);
+}
+
 TEST(WorkbookRowColEdits, ThreeDRowEditsDirtySpanMembersOnly) {
   auto make_workbook = [] {
     Workbook wb = Workbook::create_empty();
@@ -439,9 +487,9 @@ TEST(WorkbookSheetOps, RemoveRewritesOnlyAffectedAstSubtreesAndDoesNotRebind) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 4, 0, "=Drop!A1+1")));
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(0)));
   ASSERT_EQ(wb.sheet_count(), 1U);
-  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=IFERROR(#REF!,99)+5");
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=IFERROR(#REF!A1,99)+5");
   EXPECT_EQ(wb.sheet(0).cell_at(3, 0)->formula_text, "=IF(A3=\"Drop!x\",1,2)");
-  EXPECT_EQ(wb.sheet(0).cell_at(4, 0)->formula_text, "=#REF!+1");
+  EXPECT_EQ(wb.sheet(0).cell_at(4, 0)->formula_text, "=#REF!A1+1");
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   EXPECT_DOUBLE_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 104.0);
   EXPECT_DOUBLE_EQ(wb.sheet(0).cell_at(3, 0)->cached_value.as_number(), 1.0);
@@ -541,19 +589,19 @@ TEST(WorkbookSheetOps, RemoveTransformsAllFormulaMetadataAndDropsDanglingPivotSt
 
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(0)));
   ASSERT_EQ(wb.sheet_count(), 1U);
-  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula1.value(), "#REF!");
-  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula2.value(), "#REF!");
-  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].color_scale->thresholds[0].value, "#REF!");
-  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].icon_set->thresholds[0].value, "#REF!");
-  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].data_bar->min.value, "#REF!");
-  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].data_bar->max.value, "#REF!");
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula1.value(), "#REF!A1");
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].formula2.value(), "#REF!B1");
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].color_scale->thresholds[0].value, "#REF!C1");
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].icon_set->thresholds[0].value, "#REF!D1");
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].data_bar->min.value, "#REF!E1");
+  EXPECT_EQ(wb.sheet(0).conditional_formats()[0].rules[0].data_bar->max.value, "#REF!F1");
   EXPECT_EQ(wb.sheet(0).hyperlinks()[0].location, "#Drop!A1") << "Excel keeps a hyperlink location's text";
-  EXPECT_EQ(wb.sheet(0).validations()[0].formula1, "#REF!");
-  EXPECT_EQ(wb.sheet(0).validations()[0].formula2, "#REF!");
+  EXPECT_EQ(wb.sheet(0).validations()[0].formula1, "#REF!A1");
+  EXPECT_EQ(wb.sheet(0).validations()[0].formula2, "#REF!B1");
   ASSERT_EQ(wb.tables().size(), 1U);
   EXPECT_EQ(wb.tables()[0].sheet_index, 0U);
-  EXPECT_EQ(wb.tables()[0].columns[0].calculated_column_formula, "#REF!");
-  EXPECT_EQ(wb.defined_names()[0].formula, "#REF!");
+  EXPECT_EQ(wb.tables()[0].columns[0].calculated_column_formula, "#REF!A1");
+  EXPECT_EQ(wb.defined_names()[0].formula, "#REF!A1");
   ASSERT_EQ(wb.pivot_caches().size(), 1U);
   EXPECT_EQ(wb.pivot_caches()[0]->cache_id(), 12U);
   ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
@@ -563,8 +611,8 @@ TEST(WorkbookSheetOps, RemoveTransformsAllFormulaMetadataAndDropsDanglingPivotSt
   // or resurrect the dropped cache/pivot relationship.
   wb.add_sheet("Drop");
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(99.0))));
-  EXPECT_EQ(wb.tables()[0].columns[0].calculated_column_formula, "#REF!");
-  EXPECT_EQ(wb.defined_names()[0].formula, "#REF!");
+  EXPECT_EQ(wb.tables()[0].columns[0].calculated_column_formula, "#REF!A1");
+  EXPECT_EQ(wb.defined_names()[0].formula, "#REF!A1");
   ASSERT_EQ(wb.pivot_caches().size(), 1U);
   EXPECT_EQ(wb.pivot_caches()[0]->cache_id(), 12U);
   ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);

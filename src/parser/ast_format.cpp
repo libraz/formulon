@@ -183,6 +183,25 @@ void AppendSheetlessArea(const Reference& first, const Reference& last, bool is_
   out.append(end_text);
 }
 
+// A `#REF!` with its collapse site: `Sheet3!#REF!` in both forms; a dead
+// sheet's `#REF!A1` in the formula bar, bare `#REF!` in storage.
+void FormatErrorLiteral(const AstNode& node, bool storage, std::string& out) {
+  const RefErrorSite* site = node.as_ref_error_site();
+  if (site != nullptr && site->form == RefErrorSite::Form::kQualified) {
+    append_sheet_name(site->sheet, site->sheet_quoted, out);
+    out.push_back('!');
+  }
+  out.append(display_name(node.as_error_literal()));
+  if (site == nullptr || site->form != RefErrorSite::Form::kDeadSheet || storage) {
+    return;
+  }
+  if (!site->has_address) {
+    out.append(display_name(ErrorCode::Ref));
+    return;
+  }
+  AppendSheetlessArea(site->first, site->last, site->is_range, out);
+}
+
 bool IsDecimal(std::string_view text) noexcept {
   if (text.empty()) {
     return false;
@@ -689,7 +708,7 @@ void FormatBare(const AstNode& node, std::string& out, const Layout& layout) {
       FormatLambdaCall(node, out, layout);
       return;
     case NodeKind::ErrorLiteral:
-      out.append(display_name(node.as_error_literal()));
+      FormatErrorLiteral(node, /*storage=*/false, out);
       return;
     case NodeKind::ErrorPlaceholder:
       // The placeholder represents a parse failure; rendering it as #REF!
@@ -984,7 +1003,7 @@ struct StorageEmitter {
         emit_lambda_call(node, out);
         return;
       case NodeKind::ErrorLiteral:
-        out.append(display_name(node.as_error_literal()));
+        FormatErrorLiteral(node, /*storage=*/true, out);
         return;
       case NodeKind::ErrorPlaceholder:
         out.append(display_name(ErrorCode::Ref));
@@ -1214,6 +1233,13 @@ bool formula_needs_storage_requote(const AstNode& root) {
         break;
       case NodeKind::NameRef:
         if (bare_but_needs_quotes(node.as_name_sheet(), node.as_name_sheet_quoted())) {
+          return true;
+        }
+        break;
+      case NodeKind::ErrorLiteral:
+        if (const RefErrorSite* site = node.as_ref_error_site();
+            site != nullptr && site->form == RefErrorSite::Form::kQualified &&
+            bare_but_needs_quotes(site->sheet, site->sheet_quoted)) {
           return true;
         }
         break;

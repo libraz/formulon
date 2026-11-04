@@ -749,7 +749,42 @@ AstNode* make_error_literal(Arena& arena, ErrorCode code) {
   if (n == nullptr) {
     return nullptr;
   }
-  n->data_.error_literal = code;
+  n->data_.error_literal = AstNode::ErrorLiteralPayload{code, nullptr};
+  return n;
+}
+
+AstNode* make_qualified_ref_error(Arena& arena, std::string_view sheet, bool sheet_quoted) {
+  auto* site = arena.create<RefErrorSite>();
+  if (site == nullptr || !InternChecked(arena, sheet, &site->sheet)) {
+    return nullptr;
+  }
+  site->form = RefErrorSite::Form::kQualified;
+  site->sheet_quoted = sheet_quoted;
+  AstNode* n = AstNode::make_node(arena, NodeKind::ErrorLiteral);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->data_.error_literal = AstNode::ErrorLiteralPayload{ErrorCode::Ref, site};
+  return n;
+}
+
+AstNode* make_dead_sheet_ref_error(Arena& arena, const Reference* first, const Reference* last) {
+  auto* site = arena.create<RefErrorSite>();
+  if (site == nullptr) {
+    return nullptr;
+  }
+  site->form = RefErrorSite::Form::kDeadSheet;
+  site->has_address = first != nullptr;
+  if (first != nullptr) {
+    site->first = SheetlessCopy(*first);
+    site->is_range = last != nullptr;
+    site->last = SheetlessCopy(last != nullptr ? *last : *first);
+  }
+  AstNode* n = AstNode::make_node(arena, NodeKind::ErrorLiteral);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->data_.error_literal = AstNode::ErrorLiteralPayload{ErrorCode::Ref, site};
   return n;
 }
 
@@ -1156,7 +1191,12 @@ const AstNode& AstNode::as_lambda_call_arg(std::uint32_t i) const {
 
 ErrorCode AstNode::as_error_literal() const {
   FM_CHECK(kind_ == NodeKind::ErrorLiteral, "AstNode::as_error_literal on non-ErrorLiteral");
-  return data_.error_literal;
+  return data_.error_literal.code;
+}
+
+const RefErrorSite* AstNode::as_ref_error_site() const {
+  FM_CHECK(kind_ == NodeKind::ErrorLiteral, "AstNode::as_ref_error_site on non-ErrorLiteral");
+  return data_.error_literal.site;
 }
 
 }  // namespace parser

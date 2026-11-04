@@ -458,6 +458,19 @@ TEST(ChartRef, DeletedSheetResetsCachesToTheExcelShape) {
   EXPECT_STREQ(doc.select_node("//c:val//c:pt[@idx='0']/c:v").node().child_value(), "1");
 }
 
+// A chart detects a collapse by node, so a deleted sheet's area reads bare
+// `#REF!` whatever its shape, unlike a cell formula's `#REF!$A:$A`.
+TEST(ChartRef, DeletedSheetAreaIsBareRefWhateverItsShape) {
+  pugi::xml_document doc =
+      Parse(std::string(kChartOpen) + Series("'Other'!$B$1", "Other!$A:$A", "Other!$B$2:$C$3") + kChartClose);
+  const std::vector<std::string_view> order = {"Sheet1", "Other"};
+  const parser::SheetRemovalTransform removal(order, 1);
+  EXPECT_EQ(chart_ref::rewrite_sites(doc, removal), 3U);
+  const std::vector<std::string> expected = {"#REF!", "#REF!", "#REF!"};
+  EXPECT_EQ(Texts(doc), expected);
+  EXPECT_STREQ(doc.select_node("//c:val//c:pt[@idx='0']/c:v").node().child_value(), "1");
+}
+
 TEST(ChartRef, DeletedNameAndCategoryMoveToFilteredTitles) {
   const std::string c16 =
       "<c:ext uri=\"{C3380CC4-5D6E-409C-BE32-E72D297353CC}\"><c16:uniqueId val=\"{00000002}\"/></c:ext>";

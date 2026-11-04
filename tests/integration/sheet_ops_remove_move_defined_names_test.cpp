@@ -199,7 +199,7 @@ TEST(WorkbookSheetOps, RemoveFreezesReferencingFormulaBeforeSameNameIsReadded) {
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(0)));
   ASSERT_EQ(wb.sheet(0).name(), "Dependent");
   ASSERT_NE(wb.sheet(0).cell_at(0, 0), nullptr);
-  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=#REF!");
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=#REF!A1");
 
   wb.add_sheet("Source");
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(99))));
@@ -295,7 +295,7 @@ TEST(WorkbookSheetOps, RemoveFreezesWorkbookScopedNamesTargetingRemovedSheet) {
   ASSERT_EQ(wb.defined_names().size(), 2U);
   EXPECT_EQ(wb.defined_names()[0].name, "Keeper");
   EXPECT_EQ(wb.defined_names()[1].name, "Goner");
-  EXPECT_EQ(wb.defined_names()[1].formula, "#REF!");
+  EXPECT_EQ(wb.defined_names()[1].formula, "#REF!$A$1");
 }
 
 TEST(WorkbookSheetOps, RemoveAdjustsSheetScopedLocalIds) {
@@ -407,6 +407,73 @@ TEST(WorkbookSheetOps, RemoveMiddleSheetRepointsCrossSheetDependencies) {
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 300.0)
       << "cross-sheet dependent stale after removing a preceding sheet";
+}
+
+// Excel's formula bar after deleting the sheet a reference names: `#REF!`
+// followed by the address as it was written. The value is `#REF!`.
+TEST(WorkbookSheetOps, RemoveSheetKeepsTheAddressAfterRef) {
+  const struct {
+    const char* entered;
+    const char* after;
+  } kCases[] = {
+      {"=Gamma!A1", "=#REF!A1"},
+      {"=Gamma!$A$1", "=#REF!$A$1"},
+      {"=SUM(Gamma!A1:A5)", "=SUM(#REF!A1:A5)"},
+      {"=SUM(Gamma!A:A)", "=SUM(#REF!A:A)"},
+      {"=SUM(Gamma!A:B)", "=SUM(#REF!A:B)"},
+      {"=SUM(Gamma!1:3)", "=SUM(#REF!1:3)"},
+      {"=SUM(Gamma:Gamma!A1)", "=SUM(#REF!A1)"},
+      {"=SUM(Gamma:Gamma!A1:B2)", "=SUM(#REF!A1:B2)"},
+  };
+  Workbook wb = ThreeSheetWorkbook();  // Alpha(0), Beta(1), Gamma(2)
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(2, 0, 0, Value::number(5.0))));
+  std::uint32_t row = 0;
+  for (const auto& c : kCases) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, row++, 0, c.entered))) << c.entered;
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(2)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  row = 0;
+  for (const auto& c : kCases) {
+    const Cell* cell = wb.sheet(0).cell_at(row++, 0);
+    ASSERT_NE(cell, nullptr) << c.entered;
+    EXPECT_EQ(cell->formula_text, c.after) << c.entered;
+    ASSERT_TRUE(cell->cached_value.is_error()) << c.entered;
+    EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Ref) << c.entered;
+  }
+}
+
+// A span that loses one endpoint sheet and is left on one sheet is spelled as
+// that sheet's own reference, and still reads it.
+TEST(WorkbookSheetOps, RemoveSpanEndpointLeavesASingleSheetReference) {
+  Workbook wb = ThreeSheetWorkbook();  // Alpha(0), Beta(1), Gamma(2)
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 1, 1, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(2, 0, 0, Value::number(40.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=SUM(Beta:Gamma!A1:B2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 43.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(2)));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=SUM(Beta!A1:B2)");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 3.0);
+}
+
+// `Gamma!#REF!` keeps naming its sheet: a rename carries it along, and
+// deleting that sheet leaves Excel's `#REF!#REF!`.
+TEST(WorkbookSheetOps, QualifiedRefErrorFollowsRenameAndDeletesToDoubleRef) {
+  Workbook wb = ThreeSheetWorkbook();  // Alpha(0), Beta(1), Gamma(2)
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=Gamma!#REF!*2")));
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(2, "Ren")));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=Ren!#REF!*2");
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(2)));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=#REF!#REF!*2");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value value = wb.sheet(0).cell_at(0, 0)->cached_value;
+  ASSERT_TRUE(value.is_error());
+  EXPECT_EQ(value.as_error(), ErrorCode::Ref);
 }
 
 TEST(WorkbookSheetOps, MoveSheetRepointsCrossSheetDependencies) {

@@ -39,6 +39,17 @@
 namespace formulon {
 namespace parser {
 
+/// How a reference that a transform collapses to `#REF!` is spelled.
+enum class RefCollapse : std::uint8_t {
+  /// Bare `#REF!`.
+  kBare,
+  /// A reference written with a qualifier keeps it (`Sheet3!#REF!`); a bare
+  /// one collapses bare. Row and column deletions.
+  kKeepSheet,
+  /// The sheet is gone and the address stays (`#REF!A1`). Sheet deletions.
+  kKeepAddress,
+};
+
 /// Generic reference-rewriting policy for `shift_refs`.
 ///
 /// Implementations override `apply` for the common case (sheet-local cell
@@ -69,6 +80,11 @@ class RefTransform {
   /// does not rewrite the shared `A1:B3` tail. Relative-copy transforms still
   /// use the ordinary `apply` / `apply_range` path.
   virtual bool preserves_ref3d_coordinates() const noexcept { return false; }
+
+  /// How the references this transform collapses are spelled. A `Sheet!#REF!`
+  /// left by an earlier edit maps its qualifier through `apply_name_sheet`;
+  /// under `kKeepAddress` a removed qualifier becomes `#REF!#REF!`.
+  virtual RefCollapse collapse_form() const noexcept { return RefCollapse::kBare; }
 
   /// Rewrites the workbook-local sheet span carried by a `Ref3D` node.
   ///

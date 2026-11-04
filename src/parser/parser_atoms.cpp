@@ -113,27 +113,60 @@ AstNode* Parser::parse_string_atom() {
   return make_literal_at(arena_, Value::text(tok.text), tok.range);
 }
 
-TextRange Parser::consume_ref_error_glued_tail(TextRange base_range) {
-  if (peek_kind() != TokenKind::CellRef) {
+TextRange Parser::consume_ref_error_glued_tail(TextRange base_range, GluedRefErrorTail* tail) {
+  *tail = GluedRefErrorTail{};
+  const TokenKind k = peek_kind();
+  if (k == TokenKind::ErrorLiteral && peek().error_code == ErrorCode::Ref) {
+    const Token& second = advance();
+    tail->present = true;
+    return SpanRange(base_range, second.range);
+  }
+  if (k == TokenKind::CellRef) {
+    const Token& first = advance();
+    TextRange range = SpanRange(base_range, first.range);
+    bool decoded = decode_cellref_lexeme(first.lexeme, &tail->first);
+    if (peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
+      advance();  // Colon
+      const Token& second = advance();
+      range = SpanRange(range, second.range);
+      decoded = decoded && decode_cellref_lexeme(second.lexeme, &tail->last);
+      tail->is_range = true;
+    }
+    tail->present = decoded;
+    tail->has_address = decoded;
+    return range;
+  }
+  // A whole column or row pair (`A:A`, `$A:$B`, `1:3`); a lone `A` or `1` is
+  // left for the caller to reject.
+  const bool col_pair = k == TokenKind::Ident && peek_kind_at(1) == TokenKind::Colon &&
+                        peek_kind_at(2) == TokenKind::Ident && decode_full_col_endpoint(peek(), &tail->first) &&
+                        decode_full_col_endpoint(peek_at(2), &tail->last);
+  const bool row_pair = !col_pair && k == TokenKind::Number && peek_kind_at(1) == TokenKind::Colon &&
+                        peek_kind_at(2) == TokenKind::Number && decode_full_row_endpoint(peek(), &tail->first) &&
+                        decode_full_row_endpoint(peek_at(2), &tail->last);
+  if (!col_pair && !row_pair) {
+    *tail = GluedRefErrorTail{};
     return base_range;
   }
-  const Token& first = advance();
-  TextRange range = SpanRange(base_range, first.range);
-  if (peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
-    advance();  // Colon
-    const Token& second = advance();
-    range = SpanRange(range, second.range);
-  }
-  return range;
+  advance();
+  advance();
+  const Token& end = advance();
+  tail->present = true;
+  tail->has_address = true;
+  tail->is_range = !whole_axis_pair_is_single(tail->first, tail->last);
+  return SpanRange(base_range, end.range);
 }
 
 AstNode* Parser::parse_error_literal_atom() {
   const Token& tok = advance();
   TextRange range = tok.range;
+  GluedRefErrorTail tail;
   if (tok.error_code == ErrorCode::Ref) {
-    range = consume_ref_error_glued_tail(range);
+    range = consume_ref_error_glued_tail(range, &tail);
   }
-  AstNode* n = make_error_literal(arena_, tok.error_code);
+  AstNode* n = !tail.present ? make_error_literal(arena_, tok.error_code)
+                             : make_dead_sheet_ref_error(arena_, tail.has_address ? &tail.first : nullptr,
+                                                         tail.has_address && tail.is_range ? &tail.last : nullptr);
   if (n == nullptr) {
     return nullptr;
   }

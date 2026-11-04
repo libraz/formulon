@@ -159,7 +159,7 @@ std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_s
     if (inward >= pre_removal_sheet_order_.size() || inward == removed_index_) {
       return std::nullopt;
     }
-    return Ref3DSheetSpan{pre_removal_sheet_order_[inward], end};
+    return Ref3DSheetSpan{pre_removal_sheet_order_[inward], end, /*collapse=*/inward == end_index};
   }
 
   // Move the last endpoint toward the surviving begin. The two endpoint
@@ -168,7 +168,7 @@ std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_s
   if (inward >= pre_removal_sheet_order_.size() || inward == removed_index_) {
     return std::nullopt;
   }
-  return Ref3DSheetSpan{begin, pre_removal_sheet_order_[inward]};
+  return Ref3DSheetSpan{begin, pre_removal_sheet_order_[inward], /*collapse=*/inward == begin_index};
 }
 
 RowColShiftTransform::RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit,

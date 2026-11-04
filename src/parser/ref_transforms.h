@@ -63,9 +63,10 @@ class SheetRenameTransform final : public RefTransform {
 /// - An ordinary reference or a sheet-scoped name qualified by `source` is
 ///   requalified by `copy`, its quoting recomputed as `SheetRenameTransform`
 ///   does. Unqualified references and other sheets are left alone.
-/// - A 3-D span with exactly one endpoint on `source` collapses to `#REF!`; a
-///   span whose two endpoints are both `source` becomes the single-sheet
-///   reference `copy!tail`. Any other span is unchanged.
+/// - A 3-D span with exactly one endpoint on `source` collapses to `#REF!`
+///   keeping its address (`#REF!A1`); a span whose two endpoints are both
+///   `source` becomes the single-sheet reference `copy!tail`. Any other span
+///   is unchanged.
 /// - A structured reference whose table name matches a `table_map` key
 ///   (ASCII case-insensitive) takes the mapped display name.
 ///
@@ -80,6 +81,7 @@ class SheetCopyTransform final : public RefTransform {
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
   std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
   std::optional<std::string_view> apply_structured_ref(std::string_view table, std::string_view column) const override;
+  RefCollapse collapse_form() const noexcept override { return RefCollapse::kKeepAddress; }
 
  private:
   SheetRenameTransform rename_;
@@ -101,12 +103,13 @@ class IdentityTransform final : public RefTransform {
 /// vector, but the referenced sheet-name bytes must remain alive for the
 /// duration of `shift_refs`. `removed_index` is an index into that order.
 /// Ordinary qualified references naming the removed sheet collapse to
-/// `#REF!`; local, unqualified references and references to other sheets are
-/// left untouched.
+/// `#REF!` keeping their address (`#REF!A1`); local, unqualified references
+/// and references to other sheets are left untouched.
 ///
 /// For a 3-D span, removing a middle sheet leaves the textual endpoints
 /// unchanged. Removing an endpoint moves that endpoint one sheet inward in
-/// the original direction (including reverse spans). A span whose only sheet
+/// the original direction (including reverse spans); a span left on one sheet
+/// is spelled as the single-sheet reference. A span whose only sheet
 /// is removed collapses to `#REF!`. An unresolved endpoint is preserved when
 /// the removed sheet is not resolved by either endpoint; if the other endpoint
 /// resolves to the removed sheet, the unresolved counterpart collapses to
@@ -118,6 +121,7 @@ class SheetRemovalTransform final : public RefTransform {
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
   std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
+  RefCollapse collapse_form() const noexcept override { return RefCollapse::kKeepAddress; }
 
  private:
   static constexpr std::size_t kInvalidSheetIndex = static_cast<std::size_t>(-1);
@@ -169,6 +173,7 @@ class RowColShiftTransform final : public RefTransform {
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<std::pair<Reference, Reference>> apply_range(const Reference& lhs, const Reference& rhs) const override;
   bool preserves_ref3d_coordinates() const noexcept override { return true; }
+  RefCollapse collapse_form() const noexcept override { return RefCollapse::kKeepSheet; }
 
  private:
   // Returns the rewritten coordinate, or std::nullopt for #REF!.

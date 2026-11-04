@@ -753,6 +753,17 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   }
   reregister_three_d_span_owners_after_row_col_edit(three_d_owners, sheets, mutator, wb, sheet_index, axis, edit,
                                                     origin, count);
+  // Compact range owners over the edited band read cells that moved or vanished without any cell write.
+  {
+    eval::CellRangeDependency band;
+    band.sheet_id = static_cast<std::uint16_t>(sheet_index);
+    const bool row_axis = axis == parser::RowColAxis::kRow;
+    band.row_first = row_axis ? origin : 0U;
+    band.row_last = Sheet::kMaxRows - 1U;
+    band.col_first = row_axis ? 0U : origin;
+    band.col_last = Sheet::kMaxCols - 1U;
+    mutator.mark_range_dependents_dirty(band);
+  }
   // Map each snapshotted anchor through the edit; deleted anchors and non-formula cells are skipped.
   for (const SpillFootprint& footprint : committed_before) {
     const CellShift shift =

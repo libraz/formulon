@@ -766,7 +766,12 @@ TEST(WorkbookCopySheet, RoundTripXlsx) {
   const std::vector<std::string> loaded = Projection(reloaded);
   ASSERT_EQ(loaded.size(), saved.size());
   for (std::size_t i = 0; i < saved.size(); ++i) {
-    EXPECT_EQ(loaded[i], saved[i]);
+    // A dead sheet's `#REF!A1` is a formula-bar spelling; Excel stores bare `#REF!`.
+    std::string expected = saved[i];
+    for (std::size_t at = expected.find("#REF!A1"); at != std::string::npos; at = expected.find("#REF!A1", at)) {
+      expected.erase(at + 5U, 2U);
+    }
+    EXPECT_EQ(loaded[i], expected);
   }
 
   std::set<std::string> paths;

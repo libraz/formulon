@@ -59,6 +59,23 @@ AstNode* MakeRefError(Arena& arena) {
   return make_error_literal(arena, ErrorCode::Ref);
 }
 
+// The `#REF!` that `first` (or the area `first:last`) collapses to under
+// `transform`: kept qualifier only when one was written, or the kept address.
+AstNode* CollapseRef(Arena& arena, const RefTransform& transform, const Reference& first, const Reference* last) {
+  switch (transform.collapse_form()) {
+    case RefCollapse::kKeepSheet:
+      if (!first.sheet.empty()) {
+        return make_qualified_ref_error(arena, first.sheet, first.sheet_quoted);
+      }
+      break;
+    case RefCollapse::kKeepAddress:
+      return make_dead_sheet_ref_error(arena, &first, last);
+    case RefCollapse::kBare:
+      break;
+  }
+  return MakeRefError(arena);
+}
+
 // Forward declaration: the recursive worker. Returns the rewritten node;
 // when nothing changed it returns `&node` directly so the caller can skip
 // allocation.
@@ -106,7 +123,7 @@ bool SameReference(const Reference& lhs, const Reference& rhs) {
 const AstNode* TransformRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
   std::optional<Reference> rewritten = transform.apply(node.as_ref());
   if (!rewritten.has_value()) {
-    return MakeRefError(arena);
+    return CollapseRef(arena, transform, node.as_ref(), nullptr);
   }
   // Identity short-circuit: avoid an allocation when the transform was a
   // no-op for this reference.
@@ -199,6 +216,9 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
   const std::string_view end = node.as_ref3d_sheet_end();
   const std::optional<RefTransform::Ref3DSheetSpan> rewritten_span = transform.apply_ref3d_span(begin, end);
   if (!rewritten_span.has_value()) {
+    if (transform.collapse_form() == RefCollapse::kKeepAddress) {
+      return make_dead_sheet_ref_error(arena, &*rewritten_first, is_range ? &*rewritten_last : nullptr);
+    }
     return MakeRefError(arena);
   }
   const std::string_view final_begin = rewritten_span->begin;
@@ -269,6 +289,25 @@ const AstNode* TransformBinary(const AstNode& node, Arena& arena, const RefTrans
   return make_chain_with_operands(arena, node, operands.data());
 }
 
+// A `Sheet!#REF!` follows its sheet through `apply_name_sheet`; a dead-sheet
+// `#REF!A1` is never moved, not even by a relative shift.
+const AstNode* TransformErrorLiteral(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const RefErrorSite* site = node.as_ref_error_site();
+  if (site == nullptr || site->form != RefErrorSite::Form::kQualified) {
+    return &node;
+  }
+  const std::optional<std::string_view> mapped = transform.apply_name_sheet(site->sheet);
+  if (!mapped.has_value()) {
+    return transform.collapse_form() == RefCollapse::kKeepAddress ? make_dead_sheet_ref_error(arena, nullptr, nullptr)
+                                                                  : MakeRefError(arena);
+  }
+  if (*mapped == site->sheet) {
+    return &node;
+  }
+  return make_qualified_ref_error(arena, *mapped, local_sheet_needs_quoting_a1(*mapped));
+}
+
+// True for any `#REF!`, sited or not.
 bool IsRefError(const AstNode& node) {
   return node.kind() == NodeKind::ErrorLiteral && node.as_error_literal() == ErrorCode::Ref;
 }
@@ -371,7 +410,8 @@ const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransf
     const std::optional<std::pair<Reference, Reference>> rewritten =
         transform.apply_range(OnSheetOf(lhs_orig, chain_owner), OnSheetOf(rhs_orig, token_owner));
     if (!rewritten.has_value()) {
-      return MakeRefError(arena);
+      // The token's written corners, never the qualifier `OnSheetOf` lent.
+      return CollapseRef(arena, transform, lhs_orig, &rhs_orig);
     }
     const Reference lhs_out = BareAgain(lhs_orig, rewritten->first);
     const Reference rhs_out = BareAgain(rhs_orig, rewritten->second);
@@ -559,8 +599,9 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
 
 const AstNode* TransformNodeBare(const AstNode& node, Arena& arena, const RefTransform& transform) {
   switch (node.kind()) {
-    case NodeKind::Literal:
     case NodeKind::ErrorLiteral:
+      return TransformErrorLiteral(node, arena, transform);
+    case NodeKind::Literal:
     case NodeKind::ErrorPlaceholder:
     // A cross-workbook reference addresses another file's grid. Inserting
     // or deleting rows here cannot move a cell there, and Excel leaves

@@ -767,8 +767,8 @@ TEST(AstShiftRef3DCollapse, CollapsedSpanReparsesAsOrdinaryReference) {
 
 TEST(ShiftRefsWithSheetRemoval, RemovesNormalQualifiedReference) {
   const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
-  EXPECT_EQ(ParseSheetRemovalFormula("=Sheet2!A1", order, /*removed_index=*/1), "#REF!");
-  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2!A1:B2)+1", order, /*removed_index=*/1), "SUM(#REF!)+1");
+  EXPECT_EQ(ParseSheetRemovalFormula("=Sheet2!A1", order, /*removed_index=*/1), "#REF!A1");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2!A1:B2)+1", order, /*removed_index=*/1), "SUM(#REF!A1:B2)+1");
   EXPECT_EQ(ParseSheetRemovalFormula("=Sheet1!A1", order, /*removed_index=*/1), "Sheet1!A1");
   EXPECT_EQ(ParseSheetRemovalFormula("=A1", order, /*removed_index=*/1), "A1");
 }
@@ -801,9 +801,9 @@ TEST(ShiftRefsWithSheetRemoval, ReverseSpanMovesInward) {
 
 TEST(ShiftRefsWithSheetRemoval, DegenerateAndUnresolvedSpansCollapse) {
   const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
-  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Sheet2!A1)", order, /*removed_index=*/1), "SUM(#REF!)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Sheet2!A1)", order, /*removed_index=*/1), "SUM(#REF!A1)");
   EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Missing:Sheet3!A1)", order, /*removed_index=*/1), "SUM(Missing:Sheet3!A1)");
-  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Missing!A1)", order, /*removed_index=*/1), "SUM(#REF!)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Missing!A1)", order, /*removed_index=*/1), "SUM(#REF!A1)");
 }
 
 TEST(ShiftRefsWithSheetRemoval, UnresolvedSpanOutsideRemovalPreservesAstIdentity) {
@@ -911,6 +911,142 @@ TEST(ShiftRefsCustom, DefaultRangeHookTransformsBothEndpoints) {
   const AstNode* shifted = shift_refs(*root, arena, transform);
   ASSERT_NE(shifted, nullptr);
   EXPECT_EQ(format_formula(*shifted), "F1:F2");
+}
+
+// ---------------------------------------------------------------------------
+// `#REF!` collapse sites
+// ---------------------------------------------------------------------------
+
+// A row or column deletion keeps the qualifier the reference was written
+// with, on another sheet or its own; an unqualified one collapses bare.
+TEST(ShiftRefsRefErrorSite, RowColDeleteKeepsTheWrittenQualifier) {
+  const struct {
+    const char* src;
+    RowColAxis axis;
+    std::uint32_t index;
+    std::string_view target;
+    bool local;
+    const char* want;
+  } kCases[] = {
+      {"=Sheet3!A5", RowColAxis::kRow, 4, "Sheet3", false, "Sheet3!#REF!"},
+      {"=Sheet3!A5", RowColAxis::kRow, 4, "Sheet3", true, "Sheet3!#REF!"},
+      {"=Sheet3!$A$5*2", RowColAxis::kRow, 4, "Sheet3", false, "Sheet3!#REF!*2"},
+      {"=SUM(Sheet3!A5:A5)", RowColAxis::kRow, 4, "Sheet3", false, "SUM(Sheet3!#REF!)"},
+      {"='Data 1'!A1", RowColAxis::kRow, 0, "Data 1", false, "'Data 1'!#REF!"},
+      {"='Q1'!A1", RowColAxis::kRow, 0, "Q1", false, "'Q1'!#REF!"},
+      {"=A5", RowColAxis::kRow, 4, "Sheet3", true, "#REF!"},
+      {"=Sheet3!B5", RowColAxis::kCol, 1, "Sheet3", false, "Sheet3!#REF!"},
+      {"=SUM(Sheet3!B1:B3)", RowColAxis::kCol, 1, "Sheet3", false, "SUM(Sheet3!#REF!)"},
+  };
+  for (const auto& c : kCases) {
+    EXPECT_EQ(ParseRowColShiftFormula(c.src, c.axis, RowColEdit::kDelete, c.index, 1, c.target, c.local), c.want)
+        << c.src;
+  }
+}
+
+// The qualifier a `:` chain lends its bare operands was never written there.
+TEST(ShiftRefsRefErrorSite, LentChainQualifierIsNotKept) {
+  EXPECT_EQ(
+      ParseRowColShiftFormula("=SUM(Sheet3!A1:A3:B5:B5)", RowColAxis::kRow, RowColEdit::kDelete, 4, 1, "Sheet3", false),
+      "SUM(#REF!)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 3), "SUM(#REF!)");
+}
+
+// A sheet deletion keeps the address after `#REF!`, in the shape it was written.
+TEST(ShiftRefsRefErrorSite, SheetRemovalKeepsTheAddress) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  const struct {
+    const char* src;
+    const char* want;
+  } kCases[] = {
+      {"=Sheet3!A1", "#REF!A1"},
+      {"=Sheet3!$A$1", "#REF!$A$1"},
+      {"='Sheet3'!A1*2", "#REF!A1*2"},
+      {"=SUM(Sheet3!A1:A5)", "SUM(#REF!A1:A5)"},
+      {"=SUM(Sheet3!A:A)", "SUM(#REF!A:A)"},
+      {"=SUM(Sheet3!A:B)", "SUM(#REF!A:B)"},
+      {"=SUM(Sheet3!$A:$B)", "SUM(#REF!$A:$B)"},
+      {"=SUM(Sheet3!1:3)", "SUM(#REF!1:3)"},
+      {"=SUM(Sheet3:Sheet3!A1)", "SUM(#REF!A1)"},
+      {"=SUM(Sheet3:Sheet3!A1:B2)", "SUM(#REF!A1:B2)"},
+      {"=SUM(Sheet3:Sheet3!A:B)", "SUM(#REF!A:B)"},
+  };
+  for (const auto& c : kCases) {
+    EXPECT_EQ(ParseSheetRemovalFormula(c.src, order, /*removed_index=*/2), c.want) << c.src;
+  }
+}
+
+// Removing one endpoint of a two-sheet span leaves a single-sheet reference.
+TEST(ShiftRefsRefErrorSite, SpanShrunkToOneSheetIsASingleSheetReference) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Sheet3!A1:B2)", order, /*removed_index=*/2), "SUM(Sheet2!A1:B2)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Sheet3!A1)", order, /*removed_index=*/1), "SUM(Sheet3!A1)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet3:Sheet2!A:B)", order, /*removed_index=*/2), "SUM(Sheet2!A:B)");
+}
+
+// An already collapsed `Sheet!#REF!` is left alone by an edit that does not
+// touch its sheet, without a new node.
+TEST(ShiftRefsRefErrorSite, UntouchedQualifiedSiteKeepsTheSamePointer) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=Sheet3!#REF!*2", arena);
+  ASSERT_NE(root, nullptr);
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet3"};
+  const RowColShiftTransform row_edit("Sheet3", RowColAxis::kRow, RowColEdit::kDelete, 0, 1);
+  const SheetRenameTransform other_rename("Sheet1", "Renamed");
+  const SheetRemovalTransform other_removal(order, /*removed_index=*/0);
+  EXPECT_EQ(shift_refs(*root, arena, row_edit), root);
+  EXPECT_EQ(shift_refs(*root, arena, other_rename), root);
+  EXPECT_EQ(shift_refs(*root, arena, other_removal), root);
+  EXPECT_EQ(shift_relative_refs(*root, arena, 3, 3), root);
+}
+
+// The qualifier follows a rename and outlives the transform's own string.
+TEST(ShiftRefsRefErrorSite, QualifiedSiteFollowsARename) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=Sheet3!#REF!*2", arena);
+  ASSERT_NE(root, nullptr);
+  const AstNode* renamed = nullptr;
+  const AstNode* quoted = nullptr;
+  {
+    const std::string new_name = "Ren";
+    const SheetRenameTransform rename("Sheet3", new_name);
+    renamed = shift_refs(*root, arena, rename);
+    const std::string spaced = "My Sheet";
+    const SheetRenameTransform rename_spaced("sheet3", spaced);
+    quoted = shift_refs(*root, arena, rename_spaced);
+  }
+  ASSERT_NE(renamed, nullptr);
+  ASSERT_NE(quoted, nullptr);
+  EXPECT_NE(renamed, root);
+  EXPECT_EQ(format_formula(*renamed), "Ren!#REF!*2");
+  EXPECT_EQ(format_formula(*quoted), "'My Sheet'!#REF!*2");
+}
+
+// Deleting the sheet a `Sheet!#REF!` names leaves Excel's `#REF!#REF!`.
+TEST(ShiftRefsRefErrorSite, RemovingTheQualifiedSheetLeavesDoubleRef) {
+  const std::vector<std::string_view> order = {"Sheet1", "Ren"};
+  EXPECT_EQ(ParseSheetRemovalFormula("=Ren!#REF!*2", order, /*removed_index=*/1), "#REF!#REF!*2");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Ren!#REF!)", order, /*removed_index=*/1), "SUM(#REF!#REF!)");
+}
+
+// A dead sheet's address never moves: not on a copy, a fill or any edit.
+TEST(ShiftRefsRefErrorSite, DeadSheetAddressNeverMoves) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=#REF!A1", arena);
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(shift_relative_refs(*root, arena, 4, 6), root);
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2"};
+  const SheetRemovalTransform removal(order, /*removed_index=*/1);
+  EXPECT_EQ(shift_refs(*root, arena, removal), root);
+  const RowColShiftTransform row_edit("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, 0, 1, true);
+  EXPECT_EQ(shift_refs(*root, arena, row_edit), root);
+
+  Arena mixed_arena;
+  const AstNode* mixed = ParseOrNull("=SUM(#REF!A1:B2)+B1", mixed_arena);
+  ASSERT_NE(mixed, nullptr);
+  const AstNode* shifted = shift_relative_refs(*mixed, mixed_arena, 4, 5);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM(#REF!A1:B2)+G5");
 }
 
 }  // namespace

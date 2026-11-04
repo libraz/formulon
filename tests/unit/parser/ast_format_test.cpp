@@ -754,6 +754,75 @@ TEST(AstFormat, SpillRefStorageFormWithComputedAnchor) {
   EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), "ANCHORARRAY(SEQUENCE(3))");
 }
 
+// ---------------------------------------------------------------------------
+// `#REF!` collapse sites
+// ---------------------------------------------------------------------------
+
+// The formula bar reads back the qualifier or the dead sheet's address; the
+// stored form keeps the qualifier and drops the address, as Excel stores it.
+TEST(AstFormat, RefErrorSitesFormulaBarAndStoredSpellings) {
+  const struct {
+    const char* src;
+    const char* display;
+    const char* stored;
+  } kCases[] = {
+      {"=#REF!", "#REF!", "#REF!"},
+      {"=Sheet1!#REF!", "Sheet1!#REF!", "Sheet1!#REF!"},
+      {"=Sheet3!#REF!*2", "Sheet3!#REF!*2", "Sheet3!#REF!*2"},
+      {"='Data 1'!#REF!", "'Data 1'!#REF!", "'Data 1'!#REF!"},
+      {"='Q1'!#REF!", "'Q1'!#REF!", "'Q1'!#REF!"},
+      {"='データ'!#REF!", "'データ'!#REF!", "'データ'!#REF!"},
+      {"=Sheet1!#REF!A1", "Sheet1!#REF!", "Sheet1!#REF!"},
+      {"=#REF!A1", "#REF!A1", "#REF!"},
+      {"=#REF!$A$1", "#REF!$A$1", "#REF!"},
+      {"=#ref!a1", "#REF!A1", "#REF!"},
+      {"=#REF!XFD1048576", "#REF!XFD1048576", "#REF!"},
+      {"=SUM(#REF!A1:A5)", "SUM(#REF!A1:A5)", "SUM(#REF!)"},
+      {"=SUM(#REF!A:A)", "SUM(#REF!A:A)", "SUM(#REF!)"},
+      {"=SUM(#REF!A:B)", "SUM(#REF!A:B)", "SUM(#REF!)"},
+      {"=#REF!A:A", "#REF!A:A", "#REF!"},
+      {"=#REF!$A:$B", "#REF!$A:$B", "#REF!"},
+      {"=#REF!1:3", "#REF!1:3", "#REF!"},
+      {"=SUM(#REF!1:3)", "SUM(#REF!1:3)", "SUM(#REF!)"},
+      {"=#REF!$1:$1", "#REF!$1:$1", "#REF!"},
+      {"=#REF!#REF!", "#REF!#REF!", "#REF!"},
+      {"=IFERROR(#REF!A1,99)+5", "IFERROR(#REF!A1,99)+5", "IFERROR(#REF!,99)+5"},
+  };
+  for (const auto& c : kCases) {
+    Arena arena;
+    Parser p(c.src, arena);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.src;
+    ASSERT_TRUE(p.errors().empty()) << c.src;
+    const std::string display = format_formula(*root);
+    EXPECT_EQ(display, c.display) << c.src;
+    EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), c.stored) << c.src;
+    Arena again;
+    Parser reparse(display, again);
+    const AstNode* reparsed = reparse.parse();
+    ASSERT_NE(reparsed, nullptr) << display;
+    ASSERT_TRUE(reparse.errors().empty()) << display;
+    EXPECT_EQ(format_formula(*reparsed), display) << c.src;
+  }
+}
+
+// A bare qualifier that A1 storage must quote sends the writer to the stored
+// spelling, as it does for an ordinary reference.
+TEST(AstFormat, QualifiedRefErrorNeedingQuotesRequotesInStorage) {
+  Arena arena;
+  Parser bare("=S2!#REF!", arena);
+  const AstNode* bare_root = bare.parse();
+  ASSERT_NE(bare_root, nullptr);
+  ASSERT_TRUE(bare.errors().empty());
+  EXPECT_TRUE(formula_needs_storage_requote(*bare_root));
+  EXPECT_EQ(format_formula_storage(*bare_root, &SpellVerbatim), "'S2'!#REF!");
+
+  Parser quoted("='S2'!#REF!", arena);
+  const AstNode* quoted_root = quoted.parse();
+  ASSERT_NE(quoted_root, nullptr);
+  EXPECT_FALSE(formula_needs_storage_requote(*quoted_root));
+}
+
 TEST(AstFormat, WholeAxisPairIsStoredAsTheCompactSpelling) {
   // Excel stores a multi-column whole reference as `A:C`, and stores back
   // exactly what was typed. Emitting `A:A:C:C` would rewrite an everyday

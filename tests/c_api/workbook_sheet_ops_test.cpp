@@ -377,7 +377,7 @@ TEST(WorkbookSheetOpsCApi, RenameAndRemoveRewriteFormulaThroughPublicPath) {
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 2), 0);
   ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, &formula, &cached), 0);
   ASSERT_NE(formula, nullptr);
-  EXPECT_STREQ(formula, "=#REF!");
+  EXPECT_STREQ(formula, "=#REF!A1");
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Delta"), 0);
   ASSERT_EQ(fm_workbook_set_number(wb.handle, 2, 0, 0, 99.0), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);

@@ -461,7 +461,7 @@ TEST(RecalcEngineThreadSafety, ParallelRecalcSerialisesAgainstRemoveSheetTransac
   ASSERT_EQ(wb.sheet(0U).pivot_tables().size(), 1U);
   EXPECT_EQ(wb.sheet(0U).pivot_tables()[0]->pivot_cache_id(), 1000U);
   ASSERT_EQ(wb.defined_names().size(), kMetadataCopies);
-  EXPECT_EQ(wb.defined_names()[0].formula, "#REF!");
+  EXPECT_EQ(wb.defined_names()[0].formula, "#REF!A1");
   ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr)));
   for (std::size_t i = 0; i < kMetadataCopies; ++i) {
     EXPECT_TRUE(wb.sheet(0U).cell_at(static_cast<std::uint32_t>(2U + i), 0U)->cached_value.is_error());

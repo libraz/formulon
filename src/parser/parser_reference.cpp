@@ -346,9 +346,9 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   //   1. CellRef: `Sheet1!A1`.
   //   2. Ident Colon Ident with matching column letters: `Sheet1!A:A`.
   //   3. Number Colon Number with matching row digits: `Sheet1!1:1`.
-  //   4. `#REF!`: Excel's spelling after the sheet itself is deleted
-  //      (`Sheet1!#REF!`). The whole reference has already collapsed to
-  //      one error, so the sheet qualifier carries no surviving meaning.
+  //   4. `#REF!`: Excel's spelling of a qualified reference whose cells
+  //      were deleted (`Sheet1!#REF!`). The qualifier is kept; a glued
+  //      address (`Sheet1!#REF!A1`) is accepted and dropped.
   //   5. Any other Ident: a defined name looked up in that sheet's scope
   //      (`Sheet1!Rate`), the only spelling that reaches another sheet's
   //      local name. A following `(` calls it (`Sheet1!Fn(2)`); the
@@ -357,8 +357,9 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   const TokenKind k = peek_kind();
   if (k == TokenKind::ErrorLiteral && peek().error_code == ErrorCode::Ref) {
     const Token& err_tok = advance();
-    const TextRange range = consume_ref_error_glued_tail(SpanRange(sheet_range, err_tok.range));
-    AstNode* n = make_error_literal(arena_, ErrorCode::Ref);
+    GluedRefErrorTail dropped;
+    const TextRange range = consume_ref_error_glued_tail(SpanRange(sheet_range, err_tok.range), &dropped);
+    AstNode* n = make_qualified_ref_error(arena_, sheet, quoted);
     if (n == nullptr) {
       return nullptr;
     }

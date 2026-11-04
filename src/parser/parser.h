@@ -186,14 +186,22 @@ class Parser {
   AstNode* parse_bool_atom();
   AstNode* parse_string_atom();
   AstNode* parse_error_literal_atom();
-  // Consumes a cell/range tail glued directly onto a `#REF!` error literal
-  // with no separating token (`#REF!A1`, `#REF!A1:B2`) -- Excel's own
-  // spelling after a row/column/sheet deletion, where the whole reference
-  // has already collapsed to the one error and the tail carries no
-  // surviving meaning. Returns `base_range` extended to cover whatever was
+  // The address glued onto a `#REF!` (`#REF!A1`, `#REF!A1:B2`, `#REF!A:A`,
+  // `#REF!$1:$3`, `#REF!#REF!`): Excel's formula-bar spelling of a
+  // reference whose sheet was deleted.
+  struct GluedRefErrorTail {
+    bool present = false;
+    // False for `#REF!#REF!`.
+    bool has_address = false;
+    Reference first;
+    Reference last;
+    bool is_range = false;
+  };
+  // Consumes the tail glued directly onto a `#REF!` with no separating
+  // token into `*tail`. Returns `base_range` extended to cover whatever was
   // consumed (or unchanged if there was no glued tail). Shared by
   // `parse_error_literal_atom` and `parse_sheet_qualified_ref`.
-  TextRange consume_ref_error_glued_tail(TextRange base_range);
+  TextRange consume_ref_error_glued_tail(TextRange base_range, GluedRefErrorTail* tail);
   AstNode* parse_paren_atom();
   AstNode* parse_array_literal_atom();
   AstNode* parse_at_prefix_atom(SyncContext ctx);

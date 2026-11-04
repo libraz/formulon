@@ -410,6 +410,42 @@ TEST(SheetRemovalTransform, DegenerateAndUnresolvedSpansCollapse) {
   EXPECT_FALSE(remove_beta.apply_ref3d_span("Beta", "Missing").has_value());
 }
 
+// A span that moves inward onto its other endpoint names one sheet, and is
+// spelled as that sheet's single reference.
+TEST(SheetRemovalTransform, SpanShrunkToOneSheetCollapses) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta", "Gamma"};
+  {
+    SheetRemovalTransform t(order, /*removed_index=*/2);
+    const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Beta", "Gamma");
+    ASSERT_TRUE(out.has_value());
+    EXPECT_EQ(out->begin, "Beta");
+    EXPECT_TRUE(out->collapse);
+  }
+  {
+    SheetRemovalTransform t(order, /*removed_index=*/1);
+    const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Beta", "Gamma");
+    ASSERT_TRUE(out.has_value());
+    EXPECT_EQ(out->begin, "Gamma");
+    EXPECT_TRUE(out->collapse);
+  }
+  {
+    SheetRemovalTransform t(order, /*removed_index=*/2);
+    const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Alpha", "Gamma");
+    ASSERT_TRUE(out.has_value());
+    EXPECT_FALSE(out->collapse);
+  }
+}
+
+TEST(SheetRemovalTransform, CollapseFormOfEachStructuralTransform) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta"};
+  EXPECT_EQ(RowColShiftTransform("Alpha", RowColAxis::kRow, RowColEdit::kDelete, 0, 1).collapse_form(),
+            RefCollapse::kKeepSheet);
+  EXPECT_EQ(SheetRemovalTransform(order, 1).collapse_form(), RefCollapse::kKeepAddress);
+  EXPECT_EQ(SheetCopyTransform("Alpha", "Alpha (2)", {}).collapse_form(), RefCollapse::kKeepAddress);
+  EXPECT_EQ(SheetRenameTransform("Alpha", "Beta").collapse_form(), RefCollapse::kBare);
+  EXPECT_EQ(IdentityTransform().collapse_form(), RefCollapse::kBare);
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

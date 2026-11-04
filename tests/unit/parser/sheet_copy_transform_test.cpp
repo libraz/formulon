@@ -61,12 +61,12 @@ TEST(SheetCopyTransform, OtherSheetUntouched) {
 
 TEST(SheetCopyTransform, ThreeDSpanWithSourceAsBeginIsRef) {
   const SheetCopyTransform t = MakeCopy();
-  EXPECT_EQ(Rewrite("=SUM(Src:Other!A1)", t), "SUM(#REF!)");
+  EXPECT_EQ(Rewrite("=SUM(Src:Other!A1)", t), "SUM(#REF!A1)");
 }
 
 TEST(SheetCopyTransform, ThreeDSpanWithSourceAsEndIsRef) {
   const SheetCopyTransform t = MakeCopy();
-  EXPECT_EQ(Rewrite("=SUM(Other:Src!A1:B2)", t), "SUM(#REF!)");
+  EXPECT_EQ(Rewrite("=SUM(Other:Src!A1:B2)", t), "SUM(#REF!A1:B2)");
 }
 
 TEST(SheetCopyTransform, ThreeDSpanWithSourceAsBothEndsCollapsesToCopy) {
@@ -112,9 +112,9 @@ TEST(SheetCopyTransform, BareCopyNameStaysBare) {
 
 TEST(SheetCopyTransform, IdentityTransformLeavesEveryShapeUnchanged) {
   const IdentityTransform t;
-  for (const std::string_view src :
-       {"Src!A1", "SUM(Src!A1:B2)", "'Src'!A2", "A1", "Other!A1", "SUM(Src:Other!A1)", "SUM(Other:Src!A1)",
-        "SUM(Src:Src!A1)", "SUM(First:Last!A1)", "Src!LN", "SUM(Tbl[V])", "INDIRECT(\"Src!A1\")"}) {
+  for (const std::string_view src : {"Src!A1", "SUM(Src!A1:B2)", "'Src'!A2", "A1", "Other!A1", "SUM(Src:Other!A1)",
+                                     "SUM(Other:Src!A1)", "SUM(Src:Src!A1)", "SUM(First:Last!A1)", "Src!LN",
+                                     "SUM(Tbl[V])", "INDIRECT(\"Src!A1\")", "Src!#REF!", "#REF!A1"}) {
     Arena arena;
     Parser p(src, arena);
     const AstNode* root = p.parse();
