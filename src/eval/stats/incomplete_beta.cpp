@@ -29,6 +29,8 @@ constexpr double kRescale = 0x1.502d2768807e1p+9;
 constexpr double kTwoOverSqrtPi = 0x1.20dd750429b6dp+0;
 constexpr double kQuarterSqrtPi = 0x1.c5bf891b4ef6bp-2;
 constexpr double kTwoPowNeg1p5 = 0x1.6a09e667f3bcdp-2;
+// sqrt(2) truncated to 16 significant digits, one ulp below the nearest double.
+constexpr double kSqrt2Trunc16 = 0x1.6a09e667f3bccp+0;
 constexpr std::uint64_t kBfracTolBits = 0x3ce4000000000001ULL;
 
 using flushed::bits_of;
@@ -368,7 +370,7 @@ double uniform_expansion_beta(double a, double b, double lam) noexcept {
     return 0.0;
   }
   const double z0 = std::sqrt(f);
-  const double z = mul(z0, 1.414213562373095);
+  const double z = mul(z0, kSqrt2Trunc16);
   const double z2 = f + f;
   double a0[22] = {};
   double c[22] = {};

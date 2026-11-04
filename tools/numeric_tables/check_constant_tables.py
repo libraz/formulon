@@ -370,6 +370,7 @@ def build_checks() -> List[Check]:
         _scalar("kTwoOverSqrtPi", beta, "kTwoOverSqrtPi", lambda: rn(2 / dec_sqrt(pi()))),
         _scalar("kQuarterSqrtPi", beta, "kQuarterSqrtPi", lambda: rn(dec_sqrt(pi()) / 4)),
         _scalar("kTwoPowNeg1p5", beta, "kTwoPowNeg1p5", lambda: rn(dec_sqrt(2) / 4)),
+        _scalar("kSqrt2Trunc16", beta, "kSqrt2Trunc16", lambda: trunc_sig(dec_sqrt(2), 16), "trunc(16)"),
         _scalar("kHalfEps", "stats/inverse_distributions.cpp", "kHalfEps", lambda: 2.0**-53),
         _scalar("kEps", "stats/numeric_constants.h", "kEps", lambda: 2.0**-52),
         _scalar("kLnSqrt2Pi", "stats/numeric_constants.h", "kLnSqrt2Pi", ln_sqrt_2pi),
