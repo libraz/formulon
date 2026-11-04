@@ -177,6 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a PivotTable keeps its row-label column. It labels the value row with the
   locale's total word, puts a lone data field's name in the top-left corner,
   and writes the matching `firstDataCol` / `firstHeaderRow` offsets.
+- A PivotTable read from a file and then edited (a filter, a field, a cache
+  change) saves the range of its new layout. Before, it kept the range the file
+  described whenever the report got smaller.
 - `INDIRECT` reads an unquoted sheet name with non-ASCII characters or a dot
   (`INDIRECT("売上!A1")`, `INDIRECT("Sheet.1!A1")`) instead of returning
   `#REF!`, following the rule formulas use for sheet names.

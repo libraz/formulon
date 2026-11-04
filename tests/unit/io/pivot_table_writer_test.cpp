@@ -102,6 +102,25 @@ TEST(PivotTableWriter, RenderedSpanIsOffsetFromTheAnchorNotFromA1) {
   EXPECT_NE(xml.find("<location ref=\"E3:G6\""), std::string::npos) << "xml=" << xml;
 }
 
+// A span read from a file describes the report Excel saved. Once an edit
+// makes it stale, the projection replaces it outright, shrinking included:
+// Excel's re-save of a filtered report drops the rows the filter hid.
+TEST(PivotTableWriter, RenderedSpanReplacesAStaleFileSpan) {
+  pivot::PivotTable table;
+  table.set_anchor(2U, 8U, 6U, 2U);  // I3:J8 as read
+  table.mark_span_authored();
+  table.clear_span_authored();
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{2U, 2U});
+  EXPECT_NE(xml.find("<location ref=\"I3:J4\""), std::string::npos) << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, RenderedSpanKeepsASpanTheCallerWidened) {
+  pivot::PivotTable table;
+  table.set_anchor(2U, 8U, 6U, 2U);
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{2U, 2U});
+  EXPECT_NE(xml.find("<location ref=\"I3:J8\""), std::string::npos) << "xml=" << xml;
+}
+
 // The ref covers the report body only. Excel's own files: one page field over
 // a body at I3 is I3:J8; two page fields over-then-down is I3:J8; three
 // page fields wrapped by two push the body to I4:J9.

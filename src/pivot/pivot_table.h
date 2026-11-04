@@ -187,6 +187,7 @@ class PivotTable {
     anchor_col_ = col;
     span_rows_ = rows;
     span_cols_ = cols;
+    span_read_ = false;
   }
 
   /// True when the span came from a `<location ref>` the reader decoded,
@@ -209,8 +210,16 @@ class PivotTable {
   /// a filter or a move all resize it. Position stays the caller's to set;
   /// the extent goes back to being projected.
   bool has_authored_span() const { return has_authored_span_; }
-  void mark_span_authored() { has_authored_span_ = true; }
+  void mark_span_authored() {
+    has_authored_span_ = true;
+    span_read_ = true;
+  }
   void clear_span_authored() { has_authored_span_ = false; }
+
+  /// True while the span is still the one read from a file, authored or gone
+  /// stale through an edit; `set_anchor` makes it the caller's. A stale read
+  /// span is replaced by the projection, whereas a caller's span is a floor.
+  bool span_read() const { return span_read_; }
 
   /// True once the definition was edited after load, so the `<rowItems>` /
   /// `<colItems>` read with it no longer describe the report. The writer then
@@ -547,6 +556,7 @@ class PivotTable {
   std::uint32_t span_rows_ = 0;
   std::uint32_t span_cols_ = 0;
   bool has_authored_span_ = false;
+  bool span_read_ = false;
   bool layout_dirty_ = false;
   std::optional<std::uint32_t> location_first_header_row_;
   std::optional<std::uint32_t> location_first_data_row_;

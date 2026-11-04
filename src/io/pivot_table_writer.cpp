@@ -1302,7 +1302,8 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   //
   // A span the reader decoded is Excel's own and is re-emitted verbatim.
   //
-  // Otherwise the projection acts as a floor rather than a replacement.
+  // A span read from a file that an edit made stale is replaced by the
+  // projection. Otherwise the projection acts as a floor rather than a replacement.
   // Under-sizing is the failure that matters: a `ref` smaller than the grid
   // the pivot draws makes Excel terminate when the report is refreshed, and
   // that is what a model assembled in memory produces, because nothing
@@ -1314,8 +1315,10 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   std::uint32_t span_cols = table.span_cols();
   std::uint32_t ref_top = table.anchor_row();
   if (rendered_span.has_value() && !table.has_authored_span()) {
-    span_rows = span_rows > rendered_span->rows ? span_rows : rendered_span->rows;
-    span_cols = span_cols > rendered_span->cols ? span_cols : rendered_span->cols;
+    // A read span gone stale describes the report before the edit; the projection replaces it.
+    const bool stale = table.span_read();
+    span_rows = !stale && span_rows > rendered_span->rows ? span_rows : rendered_span->rows;
+    span_cols = !stale && span_cols > rendered_span->cols ? span_cols : rendered_span->cols;
     // A page-field block taller than the anchor's headroom pushes the body down.
     ref_top = ref_top > rendered_span->top ? ref_top : rendered_span->top;
   }
