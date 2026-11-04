@@ -454,6 +454,13 @@ struct ChartPatchField {
   bool is_set() const { return op == Op::kSet; }
 };
 
+/// Chart-level display options; `na_as_blank` is the `c16r3:dispNaAsBlank` extension (false and Clear both remove it).
+struct ChartDisplayPatch {
+  ChartPatchField<ChartBlanksAs> blanks_as;  ///< Clear (or a `kAbsent` value) removes `c:dispBlanksAs`.
+  ChartPatchField<bool> plot_vis_only;
+  ChartPatchField<bool> na_as_blank;
+};
+
 struct ChartFillPatch {
   ChartPatchField<std::uint32_t> color;
   ChartPatchField<double> transparency_pct;  ///< 0..100.
@@ -548,6 +555,7 @@ struct ChartPreviewOverrides {
   std::optional<bool> header_column;
   std::optional<ChartBlanksAs> blanks_as;
   std::optional<bool> plot_vis_only;
+  std::optional<bool> na_as_blank;
 };
 
 }  // namespace formulon

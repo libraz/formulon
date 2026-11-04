@@ -1045,9 +1045,14 @@ extern "C" fm_status_t fm_sheet_set_chart_display(fm_workbook_t* wb, size_t shee
   if (r.status() != 0) {
     return r.status();
   }
-  return finish_status(formulon::set_chart_display(wb->workbook(), sheet_index, object_id,
-                                                   static_cast<formulon::ChartBlanksAs>(blanks_as),
-                                                   static_cast<formulon::Tri>(plot_vis_only)));
+  formulon::ChartDisplayPatch patch;
+  patch.blanks_as =
+      blanks_as == 0
+          ? formulon::ChartPatchField<formulon::ChartBlanksAs>::Clear()
+          : formulon::ChartPatchField<formulon::ChartBlanksAs>::Set(static_cast<formulon::ChartBlanksAs>(blanks_as));
+  patch.plot_vis_only = plot_vis_only == 0 ? formulon::ChartPatchField<bool>::Clear()
+                                           : formulon::ChartPatchField<bool>::Set(plot_vis_only == 2);
+  return finish_status(formulon::set_chart_display(wb->workbook(), sheet_index, object_id, patch));
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id, size_t plot,

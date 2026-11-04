@@ -120,6 +120,16 @@ std::string PartText(const Workbook& wb, const std::string& path) {
   return part == nullptr ? std::string() : std::string(part->bytes.begin(), part->bytes.end());
 }
 
+/// A display patch that sets `blanks` and `vis`; an absent value clears its element.
+ChartDisplayPatch DisplayOf(ChartBlanksAs blanks, Tri vis) {
+  ChartDisplayPatch p;
+  p.blanks_as = blanks == ChartBlanksAs::kAbsent ? ChartPatchField<ChartBlanksAs>::Clear()
+                                                 : ChartPatchField<ChartBlanksAs>::Set(blanks);
+  p.plot_vis_only =
+      vis == Tri::kAbsent ? ChartPatchField<bool>::Clear() : ChartPatchField<bool>::Set(vis == Tri::kTrue);
+  return p;
+}
+
 std::vector<std::pair<std::string, std::vector<std::uint8_t>>> Parts(const Workbook& wb) {
   std::vector<std::pair<std::string, std::vector<std::uint8_t>>> out;
   for (const PassthroughPart& p : wb.passthrough_parts()) {
@@ -342,7 +352,8 @@ TEST(ChartEdit, ChartexAndPivotRefusals) {
   const Located c = Find(cx);
   EXPECT_TRUE(Must(get_chart(cx, c.sheet, c.id)).is_chartex);
   ExpectCode(set_chart_title(cx, c.sheet, c.id, ChartTitle{}), Code::kIoChartUnsupportedKind);
-  ExpectCode(set_chart_display(cx, c.sheet, c.id, ChartBlanksAs::kGap, Tri::kTrue), Code::kIoChartUnsupportedKind);
+  ExpectCode(set_chart_display(cx, c.sheet, c.id, DisplayOf(ChartBlanksAs::kGap, Tri::kTrue)),
+             Code::kIoChartUnsupportedKind);
   ExpectCode(preview_chart_data(cx, c.sheet, c.id, ChartPreviewOverrides{}), Code::kIoChartUnsupportedKind);
 
   Workbook pv = LoadFixture("chart_pivot.xlsx");
@@ -377,7 +388,7 @@ TEST(ChartEdit, NoOpAndFailedEditsWriteNothing) {
   const Located c = Find(wb);
   const ChartModel m = Must(get_chart(wb, c.sheet, c.id));
   const auto before = Parts(wb);
-  MustOk(set_chart_display(wb, c.sheet, c.id, m.disp_blanks_as, m.plot_vis_only));
+  MustOk(set_chart_display(wb, c.sheet, c.id, DisplayOf(m.disp_blanks_as, m.plot_vis_only)));
   ChartPlotPatch plot;
   plot.gap_width = m.plots[0].gap_width;
   plot.vary_colors = m.plots[0].vary_colors == Tri::kTrue;
@@ -487,7 +498,7 @@ TEST(ChartEdit, TitleLegendDisplayPlotRoundTrip) {
 
   for (const ChartBlanksAs b2 : {ChartBlanksAs::kZero, ChartBlanksAs::kSpan, ChartBlanksAs::kAbsent}) {
     for (const Tri vis : {Tri::kFalse, Tri::kAbsent, Tri::kTrue}) {
-      MustOk(set_chart_display(wb, 0, id, b2, vis));
+      MustOk(set_chart_display(wb, 0, id, DisplayOf(b2, vis)));
       m = Must(get_chart(wb, 0, id));
       EXPECT_EQ(m.disp_blanks_as, b2);
       EXPECT_EQ(m.plot_vis_only, vis);
@@ -1681,10 +1692,145 @@ TEST(ChartEdit, PreviewMatchesAppliedEditPairwise) {
                               mode(o.header_row, m.source->header_row),
                               mode(o.header_column, m.source->header_column)));
     }
-    MustOk(set_chart_display(wb, 0, id, o.blanks_as ? *o.blanks_as : m.disp_blanks_as,
-                             o.plot_vis_only ? (*o.plot_vis_only ? Tri::kTrue : Tri::kFalse) : m.plot_vis_only));
+    MustOk(set_chart_display(
+        wb, 0, id,
+        DisplayOf(o.blanks_as ? *o.blanks_as : m.disp_blanks_as,
+                  o.plot_vis_only ? (*o.plot_vis_only ? Tri::kTrue : Tri::kFalse) : m.plot_vis_only)));
     ExpectSameData(preview, Must(get_chart_data(wb, 0, id)));
   }
+}
+
+namespace {
+
+constexpr const char* kUnrelatedExt = "<c:ext uri=\"urn:test\"><x:p xmlns:x=\"urn:test\"/></c:ext>";
+
+/// Everything in `c:chart` except its own trailing `c:extLst`.
+std::string ChartWithoutExtLst(const std::string& part) {
+  return std::regex_replace(part, std::regex("<c:extLst>(?:(?!<c:extLst>)[\\s\\S])*?</c:extLst></c:chart>"),
+                            "</c:chart>");
+}
+
+std::size_t CountOf(const std::string& text, const std::string& needle) {
+  std::size_t n = 0;
+  for (std::size_t at = text.find(needle); at != std::string::npos; at = text.find(needle, at + 1)) {
+    ++n;
+  }
+  return n;
+}
+
+/// The chart-level `c:extLst`, empty when absent.
+std::string ChartExtLst(const std::string& part) {
+  const std::string tail = part.substr(0, part.find("</c:chart>"));
+  const std::string end = "</c:extLst>";
+  if (tail.size() < end.size() || tail.compare(tail.size() - end.size(), end.size(), end) != 0) {
+    return {};
+  }
+  return tail.substr(tail.rfind("<c:extLst>"));
+}
+
+}  // namespace
+
+TEST(ChartEdit, NaAsBlankPatchWritesOnlyTheExtension) {
+  const std::string uri = chart_ns::kUriDataDisplayOptions16;
+  enum class Op { kKeep, kSet, kSetFalse, kClear };
+  for (const bool existing : {true, false}) {
+    for (const bool unrelated : {false, true}) {
+      for (const Op op : {Op::kKeep, Op::kSet, Op::kSetFalse, Op::kClear}) {
+        SCOPED_TRACE(testing::Message() << "existing=" << existing << " unrelated=" << unrelated
+                                        << " op=" << static_cast<int>(op));
+        Workbook wb = GridBook();
+        const std::uint32_t id = Insert(wb, K::kLine);
+        const Located c = Find(wb);
+        ASSERT_EQ(c.id, id);
+        ChartDisplayPatch drop_ext;
+        drop_ext.na_as_blank = ChartPatchField<bool>::Clear();
+        if (!existing) {
+          MustOk(set_chart_display(wb, c.sheet, c.id, drop_ext));
+          EXPECT_EQ(ChartExtLst(PartText(wb, c.path)), "");
+        }
+        if (unrelated) {
+          std::string xml = PartText(wb, c.path);
+          const std::size_t close = xml.find("</c:chart>");
+          ASSERT_NE(close, std::string::npos);
+          if (existing) {
+            xml.insert(xml.find("</c:extLst></c:chart>"), kUnrelatedExt);
+          } else {
+            xml.insert(close, std::string("<c:extLst>") + kUnrelatedExt + "</c:extLst>");
+          }
+          ASSERT_TRUE(static_cast<bool>(
+              wb.replace_passthrough_part(c.path, std::vector<std::uint8_t>(xml.begin(), xml.end()))));
+        }
+        const std::string before = PartText(wb, c.path);
+
+        ChartDisplayPatch patch;
+        if (op == Op::kSet) {
+          patch.na_as_blank = ChartPatchField<bool>::Set(true);
+        } else if (op == Op::kSetFalse) {
+          patch.na_as_blank = ChartPatchField<bool>::Set(false);
+        } else if (op == Op::kClear) {
+          patch.na_as_blank = ChartPatchField<bool>::Clear();
+        }
+        MustOk(set_chart_display(wb, c.sheet, c.id, patch));
+        const std::string after = PartText(wb, c.path);
+
+        EXPECT_EQ(ChartWithoutExtLst(after), ChartWithoutExtLst(before));
+        const std::string list = ChartExtLst(after);
+        const bool want_ext = op == Op::kSet || (op == Op::kKeep && existing);
+        EXPECT_EQ(CountOf(list, "uri=\"" + uri + "\""), want_ext ? 1U : 0U);
+        EXPECT_EQ(CountOf(list, "dispNaAsBlank val=\"1\""), want_ext ? 1U : 0U);
+        EXPECT_EQ(CountOf(list, "val=\"0\""), 0U);
+        EXPECT_EQ(CountOf(list, "urn:test\"><x:p"), unrelated ? 1U : 0U);
+        if (list.empty()) {
+          EXPECT_FALSE(want_ext || unrelated);
+        } else {
+          EXPECT_NE(after.find("</c:extLst></c:chart>"), std::string::npos);
+        }
+        if (op == Op::kKeep) {
+          EXPECT_EQ(after, before);
+        }
+        const ChartModel m = Must(get_chart(wb, c.sheet, c.id));
+        EXPECT_EQ(m.disp_na_as_blank, want_ext ? Tri::kTrue : Tri::kAbsent);
+      }
+    }
+  }
+}
+
+TEST(ChartEdit, DisplayKeepLeavesOtherElementsUntouched) {
+  Workbook wb = GridBook();
+  Insert(wb, K::kLine);
+  const Located c = Find(wb);
+  ChartDisplayPatch only_na;
+  only_na.na_as_blank = ChartPatchField<bool>::Clear();
+  const std::string before = PartText(wb, c.path);
+  MustOk(set_chart_display(wb, c.sheet, c.id, only_na));
+  EXPECT_EQ(ChartWithoutExtLst(PartText(wb, c.path)), ChartWithoutExtLst(before));
+  EXPECT_NE(PartText(wb, c.path).find("<c:plotVisOnly val=\"1\"/>"), std::string::npos);
+  EXPECT_NE(PartText(wb, c.path).find("<c:dispBlanksAs val=\"gap\"/>"), std::string::npos);
+
+  ChartDisplayPatch clear_blanks;
+  clear_blanks.blanks_as = ChartPatchField<ChartBlanksAs>::Clear();
+  MustOk(set_chart_display(wb, c.sheet, c.id, clear_blanks));
+  EXPECT_EQ(PartText(wb, c.path).find("dispBlanksAs"), std::string::npos);
+  EXPECT_NE(PartText(wb, c.path).find("<c:plotVisOnly val=\"1\"/>"), std::string::npos);
+
+  ChartDisplayPatch bad;
+  bad.blanks_as = ChartPatchField<ChartBlanksAs>::Set(static_cast<ChartBlanksAs>(9));
+  ExpectCode(set_chart_display(wb, c.sheet, c.id, bad), Code::kInvalidArgument);
+}
+
+TEST(ChartEdit, PreviewNaAsBlankOverrideTurnsNaIntoBlank) {
+  Workbook wb = GridBook();
+  wb.sheet(0).set_cell_value(2, 1, Value::error(ErrorCode::NA));
+  const std::uint32_t id = Insert(wb, K::kLine);
+  ChartPreviewOverrides o;
+  o.blanks_as = ChartBlanksAs::kZero;
+  o.na_as_blank = true;
+  const ChartData blank = Must(preview_chart_data(wb, 0, id, o));
+  EXPECT_EQ(blank.series[0].points[1].state, ChartPointState::kValue);
+  EXPECT_EQ(blank.series[0].points[1].value, 0.0);
+  o.na_as_blank = false;
+  const ChartData na = Must(preview_chart_data(wb, 0, id, o));
+  EXPECT_NE(na.series[0].points[1].state, ChartPointState::kValue);
 }
 
 TEST(ChartEdit, DoughnutHoleSizeAndRefusals) {

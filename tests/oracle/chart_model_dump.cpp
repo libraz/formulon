@@ -863,16 +863,15 @@ Expected<void, Error> set_display(Workbook& wb, std::size_t sheet, std::uint32_t
   if (blanks == nullptr && vis == nullptr) {
     return {};
   }
-  ASSIGN_OR_RETURN(const ChartModel model, get_chart(wb, sheet, id));
-  ChartBlanksAs b = model.disp_blanks_as;
-  Tri v = model.plot_vis_only;
+  ChartDisplayPatch patch;
   if (blanks != nullptr) {
-    ASSIGN_OR_RETURN(b, blanks_of(blanks->as_string()));
+    ASSIGN_OR_RETURN(const ChartBlanksAs b, blanks_of(blanks->as_string()));
+    patch.blanks_as = ChartPatchField<ChartBlanksAs>::Set(b);
   }
   if (vis != nullptr) {
-    v = vis->as_bool() ? Tri::kTrue : Tri::kFalse;
+    patch.plot_vis_only = ChartPatchField<bool>::Set(vis->as_bool());
   }
-  return set_chart_display(wb, sheet, id, b, v);
+  return set_chart_display(wb, sheet, id, patch);
 }
 
 /// One chart of a data / structural / create case. Series-listing charts

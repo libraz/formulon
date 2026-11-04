@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "chart/chart_ns.h"
 #include "eval/a1_parse.h"
 #include "excel_profile.h"
 #include "io/xml_escape.h"
@@ -721,11 +722,9 @@ Expected<std::string, Error> build_chart_xml(const Workbook& wb, const ChartInse
     append_tx_pr(x, "0", "900", false, lang);
     x += "</c:legend>";
   }
-  x += "<c:plotVisOnly val=\"1\"/><c:dispBlanksAs val=\"gap\"/><c:showDLblsOverMax val=\"0\"/><c:extLst>"
-       "<c:ext uri=\"{56B9EC1D-385E-4148-901F-78D8002777C0}\" "
-       "xmlns:c16r3=\"http://schemas.microsoft.com/office/drawing/2017/03/chart\"><c16r3:dataDisplayOptions16>"
-       "<c16r3:dispNaAsBlank val=\"1\"/></c16r3:dataDisplayOptions16></c:ext></c:extLst></c:chart>"
-       "<c:spPr><a:solidFill><a:schemeClr val=\"bg1\"/></a:solidFill>";
+  x += "<c:plotVisOnly val=\"1\"/><c:dispBlanksAs val=\"gap\"/><c:showDLblsOverMax val=\"0\"/><c:extLst>";
+  x += chart_ns::data_display_ext_xml();
+  x += "</c:extLst></c:chart><c:spPr><a:solidFill><a:schemeClr val=\"bg1\"/></a:solidFill>";
   append_grey_ln(x, 15);
   x += "<a:effectLst/></c:spPr><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr/></a:pPr><a:endParaRPr lang=\"" +
        lang +

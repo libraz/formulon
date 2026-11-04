@@ -224,11 +224,17 @@ Expected<ChartData, Error> preview_chart_data(const Workbook& wb, std::size_t sh
                                  mode(o.header_row, base && base->header_row),
                                  mode(o.header_column, base && base->header_column)));
   }
-  std::optional<Tri> vis;
-  if (o.plot_vis_only) {
-    vis = *o.plot_vis_only ? Tri::kTrue : Tri::kFalse;
+  ChartDisplayPatch display;
+  if (o.blanks_as) {
+    display.blanks_as = ChartPatchField<ChartBlanksAs>::Set(*o.blanks_as);
   }
-  patch_display(c, o.blanks_as, vis);
+  if (o.plot_vis_only) {
+    display.plot_vis_only = ChartPatchField<bool>::Set(*o.plot_vis_only);
+  }
+  if (o.na_as_blank) {
+    display.na_as_blank = ChartPatchField<bool>::Set(*o.na_as_blank);
+  }
+  patch_display(c, display);
   if (resplit) {
     refresh_chart_caches(wb, c.host, c.doc);
   }
@@ -439,13 +445,14 @@ Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint3
 }
 
 Expected<void, Error> set_chart_display(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
-                                        ChartBlanksAs blanks_as, Tri plot_vis_only) {
+                                        const ChartDisplayPatch& patch) {
   Chart c;
   RETURN_IF_ERROR(open_edit(wb, sheet, object_id, c, false));
-  if (static_cast<int>(blanks_as) < 0 || static_cast<int>(blanks_as) > 3 || static_cast<int>(plot_vis_only) > 2) {
+  if (patch.blanks_as.is_set() &&
+      (static_cast<int>(patch.blanks_as.value) < 0 || static_cast<int>(patch.blanks_as.value) > 3)) {
     return bad_arg("chart: unknown display option");
   }
-  patch_display(c, blanks_as, plot_vis_only);
+  patch_display(c, patch);
   return commit(wb, c, false);
 }
 

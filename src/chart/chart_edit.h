@@ -56,9 +56,9 @@ Expected<void, Error> set_chart_legend(Workbook& wb, std::size_t sheet, std::uin
 Expected<void, Error> set_chart_axis(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::uint32_t axis_id,
                                      const ChartAxisPatch& patch);
 
-/// Writes both elements; `kAbsent` removes the element.
+/// Keep leaves a display option alone, Clear removes it, Set writes it.
 Expected<void, Error> set_chart_display(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
-                                        ChartBlanksAs blanks_as, Tri plot_vis_only);
+                                        const ChartDisplayPatch& patch);
 
 /// `series_idx` is the series' `c:idx`.
 Expected<void, Error> set_chart_series(Workbook& wb, std::size_t sheet, std::uint32_t object_id, std::size_t plot,

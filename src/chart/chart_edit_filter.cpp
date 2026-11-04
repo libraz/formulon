@@ -374,24 +374,64 @@ void vary_bar(xml_node plot, bool on, const Palette& palette) {
   }
 }
 
-void patch_display(const Chart& c, std::optional<ChartBlanksAs> blanks, std::optional<Tri> vis) {
+namespace {
+
+xml_node find_ext(const xml_node& ext_list, const char* uri) {
+  for (const xml_node& ext : children_local(ext_list, "ext")) {
+    if (std::string_view(ext.attribute("uri").value()) == uri) {
+      return ext;
+    }
+  }
+  return {};
+}
+
+void patch_na_as_blank(xml_node chart, const ChartPatchField<bool>& field) {
+  if (field.is_keep()) {
+    return;
+  }
+  xml_node ext_list = child_local(chart, "extLst");
+  xml_node ext = ext_list ? find_ext(ext_list, chart_ns::kUriDataDisplayOptions16) : xml_node();
+  if (field.is_set() && field.value) {
+    if (ext) {
+      if (xml_node flag = child_local(child_local(ext, "dataDisplayOptions16"), "dispNaAsBlank")) {
+        io::set_attr(flag, "val", "1");
+        return;
+      }
+      ext_list.remove_child(ext);
+    }
+    pugi::xml_document frag;
+    ensure(chart, "c:extLst", kChartOrder).append_copy(fragment(frag, chart_ns::data_display_ext_xml()));
+    return;
+  }
+  if (ext) {
+    ext_list.remove_child(ext);
+    if (!ext_list.first_child()) {
+      chart.remove_child(ext_list);
+    }
+  }
+}
+
+}  // namespace
+
+void patch_display(const Chart& c, const ChartDisplayPatch& patch) {
   xml_node chart = c.chart();
-  if (blanks.has_value()) {
+  if (!patch.blanks_as.is_keep()) {
     static const char* const kBlanks[] = {"gap", "zero", "span"};
-    const int b = static_cast<int>(*blanks);
-    if (b >= 1 && b <= 3) {
+    const int b = static_cast<int>(patch.blanks_as.value);
+    if (patch.blanks_as.is_set() && b >= 1 && b <= 3) {
       put_val(chart, "c:dispBlanksAs", kChartOrder, kBlanks[b - 1]);
     } else {
       drop(chart, "dispBlanksAs");
     }
   }
-  if (vis.has_value()) {
-    if (*vis == Tri::kAbsent) {
+  if (!patch.plot_vis_only.is_keep()) {
+    if (patch.plot_vis_only.is_clear()) {
       drop(chart, "plotVisOnly");
     } else {
-      put_val(chart, "c:plotVisOnly", kChartOrder, *vis == Tri::kTrue ? "1" : "0");
+      put_val(chart, "c:plotVisOnly", kChartOrder, patch.plot_vis_only.value ? "1" : "0");
     }
   }
+  patch_na_as_blank(chart, patch.na_as_blank);
 }
 
 }  // namespace chart_edit

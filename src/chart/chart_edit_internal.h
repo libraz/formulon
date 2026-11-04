@@ -356,7 +356,7 @@ xml_node find_point(const xml_node& ser, std::uint32_t idx);
 /// Excel's column vary-colours form: per-point accent fills replace the series fill.
 void vary_bar(xml_node plot, bool on, const Palette& palette);
 
-void patch_display(const Chart& c, std::optional<ChartBlanksAs> blanks, std::optional<Tri> vis);
+void patch_display(const Chart& c, const ChartDisplayPatch& patch);
 
 std::vector<xml_node> axes_of(const Chart& c, const std::vector<std::uint32_t>& ids);
 
