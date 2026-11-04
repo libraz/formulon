@@ -488,6 +488,68 @@ export enum PivotFilterType {
   LabelContains = 3,
   LabelBeginsWith = 4,
   LabelDate = 5,
+  ValueEqual = 6,
+  ValueNotEqual = 7,
+  ValueGreaterThanOrEqual = 8,
+  ValueLessThan = 9,
+  ValueLessThanOrEqual = 10,
+  ValueNotBetween = 11,
+  LabelEqual = 12,
+  LabelNotEqual = 13,
+  LabelNotBeginsWith = 14,
+  LabelEndsWith = 15,
+  LabelNotEndsWith = 16,
+  LabelNotContains = 17,
+  LabelGreaterThan = 18,
+  LabelGreaterThanOrEqual = 19,
+  LabelLessThan = 20,
+  LabelLessThanOrEqual = 21,
+  LabelBetween = 22,
+  LabelNotBetween = 23,
+  ValueBottomCount = 24,
+  ValueTopPercent = 25,
+  ValueBottomPercent = 26,
+  ValueTopSum = 27,
+  ValueBottomSum = 28,
+  DateEqual = 29,
+  DateNotEqual = 30,
+  DateOlderThan = 31,
+  DateOlderThanOrEqual = 32,
+  DateNewerThan = 33,
+  DateNewerThanOrEqual = 34,
+  DateNotBetween = 35,
+  DateTomorrow = 36,
+  DateToday = 37,
+  DateYesterday = 38,
+  DateNextWeek = 39,
+  DateThisWeek = 40,
+  DateLastWeek = 41,
+  DateNextMonth = 42,
+  DateThisMonth = 43,
+  DateLastMonth = 44,
+  DateNextQuarter = 45,
+  DateThisQuarter = 46,
+  DateLastQuarter = 47,
+  DateNextYear = 48,
+  DateThisYear = 49,
+  DateLastYear = 50,
+  DateYearToDate = 51,
+  DateQ1 = 52,
+  DateQ2 = 53,
+  DateQ3 = 54,
+  DateQ4 = 55,
+  DateM1 = 56,
+  DateM2 = 57,
+  DateM3 = 58,
+  DateM4 = 59,
+  DateM5 = 60,
+  DateM6 = 61,
+  DateM7 = 62,
+  DateM8 = 63,
+  DateM9 = 64,
+  DateM10 = 65,
+  DateM11 = 66,
+  DateM12 = 67,
 }
 
 /** Calendar periods of a date group, as the bits of the `periods` mask of
@@ -620,10 +682,87 @@ export interface PivotGrandTotalsResult {
   cols: boolean;
 }
 
-/** Return type of `Workbook.pivotGetAutoFormatting(...)`. */
-export interface PivotAutoFormattingResult {
+/** Return type of `Workbook.pivotProjectionPending(...)`: `value` is `true`
+ *  while the pivot's sheet cells are stale after a change to its cache. */
+export interface PivotProjectionPendingResult {
   status: Status;
   value: boolean;
+}
+
+/** The PivotTable Options of one pivot (`pivotGetOptions` /
+ *  `pivotSetOptions`). Mirrors `fm_pivot_options_t`. A string is `""` when
+ *  the option is unset. `pivotSetOptions` takes any subset of the members:
+ *  an omitted member keeps its current value, and `""` unsets a string. */
+export interface PivotOptions {
+  /** Error cells show `errorCaption`; the caption is kept while this is off. */
+  showError: boolean;
+  errorCaption: string;
+  /** Empty value cells show `missingCaption` (`"-"` is written as the number 0). */
+  showMissing: boolean;
+  missingCaption: string;
+  /** Field captions and filter drop-downs. */
+  showHeaders: boolean;
+  /** Expand / collapse buttons. */
+  showDrill: boolean;
+  showDataTips: boolean;
+  /** Classic layout with grid drop zones. */
+  gridDropZones: boolean;
+  showEmptyRow: boolean;
+  showEmptyCol: boolean;
+  showDataDropDown: boolean;
+  printDrill: boolean;
+  fieldPrintTitles: boolean;
+  itemPrintTitles: boolean;
+  /** Merge and center cells with labels. */
+  mergeItem: boolean;
+  /** Compact-form indent per level, 0 to 126. */
+  indent: number;
+  pageOverThenDown: boolean;
+  /** Report filter fields per column or row, 0 to 255; 0 does not wrap. */
+  pageWrap: number;
+  multipleFieldFilters: boolean;
+  preserveFormatting: boolean;
+  customListSort: boolean;
+  altText: string;
+  altTextSummary: string;
+  /** The grand total label in place of the locale's word. */
+  grandTotalCaption: string;
+  /** Autofit column widths on update. */
+  autoFormatting: boolean;
+  /** Show Details is allowed. */
+  enableDrill: boolean;
+}
+
+/** Return type of `Workbook.pivotGetOptions(...)`: every member of {@link PivotOptions} plus `status`. */
+export interface PivotOptionsResult extends PivotOptions {
+  status: Status;
+}
+
+/** The options of one pivot cache (`pivotCacheGetOptions` /
+ *  `pivotCacheSetOptions`). Mirrors `fm_pivot_cache_options_t`. */
+export interface PivotCacheOptions {
+  /** Save the source records with the file. */
+  saveData: boolean;
+  /** Items kept per field after they leave the source: `-1` automatic, `0` none, up to `1048576`. */
+  missingItemsLimit: number;
+  refreshOnLoad: boolean;
+}
+
+/** Return type of `Workbook.pivotCacheGetOptions(...)`. */
+export interface PivotCacheOptionsResult extends PivotCacheOptions {
+  status: Status;
+}
+
+/** Return type of `Workbook.pivotCacheCalculatedItemAt(...)`. */
+export interface PivotCalculatedItemResult {
+  status: Status;
+  /** The cache field the item belongs to. */
+  fieldIndex: number;
+  name: string;
+  /** Formula without a leading `=`. */
+  formula: string;
+  /** `true` for an entry read from a file that applies the formula only where the item meets items of other fields. */
+  scoped: boolean;
 }
 
 /** Return type of `Workbook.pivotRowFieldOrder` / `pivotColFieldOrder`:
@@ -663,6 +802,8 @@ export interface PivotFieldResult {
   insertBlankRow: boolean;
   /** Whether item labels repeat on every row (`pivotFieldSetFillDownLabels`). */
   fillDownLabels: boolean;
+  /** Whether the field lists items without data (`pivotFieldSetShowAll`). */
+  showAll: boolean;
   /** Custom subtotal functions (`pivotFieldAddSubtotalFn`), in ascending
    *  `PivotAggregation` order. */
   subtotalFns: PivotAggregation[];
@@ -700,7 +841,9 @@ export interface PivotDataFieldResult {
 /** Plain-data spec for `Workbook.pivotFilterAdd`. Mirrors
  *  `fm_pivot_filter_spec_t`. For non-range filters, `valueKind` must be
  *  one of `Int` / `Double` / `Text`; the high-bound payload is honoured
- *  only for range filter types (`ValueBetween`, `LabelDate`). */
+ *  only for range filter types (`ValueBetween`, `ValueNotBetween`,
+ *  `LabelDate`, `DateNotBetween`); `LabelBetween` / `LabelNotBetween` take
+ *  their upper bound in `valueHighText`, and no other type may set it. */
 export interface PivotFilterSpec {
   axis: PivotAxis;
   fieldName: string;
@@ -714,16 +857,16 @@ export interface PivotFilterSpec {
   valueHighKind?: PivotFilterValueKind;
   valueHighInt?: number;
   valueHighDouble?: number;
+  valueHighText?: string;
 }
 
 /** Return type of `Workbook.pivotFilterAt(...)`: the stored filter plus a
  *  status envelope. Field names and semantics match `PivotFilterSpec`.
  *
- *  The filter list is saved as the definition's `<filters>` block. A loaded
- *  file's caption contains / begins-with, top-N count, value greater-than /
- *  between and date-between entries appear here, naming their field by
- *  source name. Its other entries are not listed, still filter, survive
- *  `pivotFilterClear` / `pivotFilterRemoveAt`, and are saved verbatim. */
+ *  The filter list is saved as the definition's `<filters>` block. Loaded
+ *  filters of every type appear here, naming their field by source name;
+ *  only an entry the engine cannot interpret is not listed, still filters,
+ *  survives `pivotFilterClear` / `pivotFilterRemoveAt`, and is saved verbatim. */
 export interface PivotFilterResult {
   status: Status;
   axis: number;
@@ -737,6 +880,8 @@ export interface PivotFilterResult {
   valueHighKind: number;
   valueHighInt: number;
   valueHighDouble: number;
+  /** `""` when none. */
+  valueHighText: string;
 }
 
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
@@ -4182,6 +4327,32 @@ export interface Workbook {
   /** Drops every field (and every record) from the cache. */
   pivotCacheFieldClear(cacheId: number): Status;
 
+  /** Reads the cache's options. */
+  pivotCacheGetOptions(cacheId: number): PivotCacheOptionsResult;
+  /** Writes the cache's options; members the object omits keep their current value. */
+  pivotCacheSetOptions(cacheId: number, options: Partial<PivotCacheOptions>): Status;
+  /** Adds calculated field `name` with `formula` (English canonical form, naming cache fields only) as the last
+   *  cache field. Returns `{ status, index }` with the new field's index. */
+  pivotCacheCalculatedFieldAdd(cacheId: number, name: string, formula: string): AddStyleResult;
+  /** Replaces the formula of calculated field `fieldIdx`. */
+  pivotCacheCalculatedFieldSetFormula(cacheId: number, fieldIdx: number, formula: string): Status;
+  /** Removes calculated field `fieldIdx` and its data fields in every pivot. */
+  pivotCacheCalculatedFieldRemove(cacheId: number, fieldIdx: number): Status;
+  /** Reads the formula of cache field `fieldIdx` without a leading `=`; empty when it is not calculated. */
+  pivotCacheFieldFormula(cacheId: number, fieldIdx: number): StringResult;
+  /** Adds calculated item `name` with `formula` to cache field `fieldIdx`. */
+  pivotCacheCalculatedItemAdd(cacheId: number, fieldIdx: number, name: string, formula: string): Status;
+  /** Number of calculated items in the cache, in solve order. */
+  pivotCacheCalculatedItemCount(cacheId: number): NumberResult;
+  /** Reads calculated item `idx` in solve order. */
+  pivotCacheCalculatedItemAt(cacheId: number, idx: number): PivotCalculatedItemResult;
+  /** Replaces the formula of calculated item `idx`. */
+  pivotCacheCalculatedItemSetFormula(cacheId: number, idx: number, formula: string): Status;
+  /** Moves calculated item `idx` to position `newIdx` in solve order. */
+  pivotCacheCalculatedItemMove(cacheId: number, idx: number, newIdx: number): Status;
+  /** Removes calculated item `idx`, its item in the cache field and in every pivot. */
+  pivotCacheCalculatedItemRemove(cacheId: number, idx: number): Status;
+
   /** Number of shared items configured on cache field `fieldIdx`. */
   pivotCacheFieldSharedItemCount(cacheId: number, fieldIdx: number): NumberResult;
   /** Reads shared item `itemIdx` of cache field `fieldIdx`; date items read back as serial numbers.
@@ -4251,10 +4422,10 @@ export interface Workbook {
   pivotName(sheet: number, pivotIdx: number): StringResult;
   /** Reads the row / column grand total flags `pivotSetGrandTotals` writes. */
   pivotGetGrandTotals(sheet: number, pivotIdx: number): PivotGrandTotalsResult;
-  /** Reads the grand total caption `pivotSetGrandTotalCaption` writes; empty when none is set. */
-  pivotGetGrandTotalCaption(sheet: number, pivotIdx: number): StringResult;
-  /** Reads the autofit-on-update flag `pivotSetAutoFormatting` writes. */
-  pivotGetAutoFormatting(sheet: number, pivotIdx: number): PivotAutoFormattingResult;
+  /** Reads the PivotTable Options `pivotSetOptions` writes. */
+  pivotGetOptions(sheet: number, pivotIdx: number): PivotOptionsResult;
+  /** Reads whether a cache change left the pivot's sheet cells stale; see `pivotProject`. */
+  pivotProjectionPending(sheet: number, pivotIdx: number): PivotProjectionPendingResult;
   /** Reads the table style `pivotSetStyleInfo` writes. */
   pivotGetStyleInfo(sheet: number, pivotIdx: number): PivotStyleInfoResult;
   /** Reads the row-axis field order (the list `pivotSetRowFieldOrder` takes). */
@@ -4293,10 +4464,16 @@ export interface Workbook {
   pivotFieldSetItemShowDetail(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, on: boolean): Status;
   /** Shows `caption` instead of the item's value; `""` clears it. */
   pivotFieldSetItemCaption(sheet: number, pivotIdx: number, fieldIdx: number, itemIdx: number, caption: string): Status;
-  /** Renames the grand total row / column label; `""` restores the locale's word. */
-  pivotSetGrandTotalCaption(sheet: number, pivotIdx: number, caption: string): Status;
-  /** Sets the autofit-column-widths-on-update flag. */
-  pivotSetAutoFormatting(sheet: number, pivotIdx: number, on: boolean): Status;
+  /** Renames pivot field `fieldIdx` in the report; `""` clears the name. The field's own source name is allowed;
+   *  another field's source or custom name, or a data field's name, is not. */
+  pivotFieldSetCustomName(sheet: number, pivotIdx: number, fieldIdx: number, name: string): Status;
+  /** Lists the field's items without data. */
+  pivotFieldSetShowAll(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Writes the PivotTable Options; members the object omits keep their current value. Wrong-typed members
+   *  fail without changing the pivot. Fails with `kPreconditionFailed` when the report would overlap another structure. */
+  pivotSetOptions(sheet: number, pivotIdx: number, options: Partial<PivotOptions>): Status;
+  /** Writes the pivot's report into its sheet cells now and clears the pending flag. */
+  pivotProject(sheet: number, pivotIdx: number): Status;
   /** Writes the records behind data cell (`row`, `col`) onto a new sheet and activates it. Returns
    *  `{ status, index }` with the new sheet's index; sheets at or after the pivot's sheet shift by one. */
   pivotShowDetails(sheet: number, pivotIdx: number, row: number, col: number): AddStyleResult;
@@ -4393,6 +4570,16 @@ export interface Workbook {
   pivotDataFieldAdd(sheet: number, pivotIdx: number, spec: PivotDataFieldSpec): AddStyleResult;
   /** Reads data field `dataFieldIdx`. */
   pivotDataFieldAt(sheet: number, pivotIdx: number, dataFieldIdx: number): PivotDataFieldResult;
+  /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
+   *  `excludeDataField` leaves that data field out of the numbering (as `pivotDataFieldSet` does); omit it
+   *  for a new data field. */
+  pivotDataFieldDefaultName(
+    sheet: number,
+    pivotIdx: number,
+    fieldIdx: number,
+    aggregation: PivotAggregation,
+    excludeDataField?: number,
+  ): StringResult;
   /** Drops every data-field entry from the pivot. */
   pivotDataFieldClear(sheet: number, pivotIdx: number): Status;
   /** Replaces the data-field entry at `dataFieldIdx` in place. An omitted

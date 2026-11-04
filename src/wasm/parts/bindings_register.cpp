@@ -492,10 +492,36 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotFieldSetShowDetail", &JsWorkbook::pivotFieldSetShowDetail)
       .function("pivotFieldSetItemShowDetail", &JsWorkbook::pivotFieldSetItemShowDetail)
       .function("pivotFieldSetItemCaption", &JsWorkbook::pivotFieldSetItemCaption)
-      .function("pivotSetGrandTotalCaption", &JsWorkbook::pivotSetGrandTotalCaption)
-      .function("pivotGetGrandTotalCaption", &JsWorkbook::pivotGetGrandTotalCaption)
-      .function("pivotSetAutoFormatting", &JsWorkbook::pivotSetAutoFormatting)
-      .function("pivotGetAutoFormatting", &JsWorkbook::pivotGetAutoFormatting)
+      .function("pivotFieldSetCustomName", &JsWorkbook::pivotFieldSetCustomName)
+      .function("pivotFieldSetShowAll", &JsWorkbook::pivotFieldSetShowAll)
+      .function("pivotGetOptions", &JsWorkbook::pivotGetOptions)
+      .function("pivotSetOptions", &JsWorkbook::pivotSetOptions)
+      .function("pivotCacheGetOptions", &JsWorkbook::pivotCacheGetOptions)
+      .function("pivotCacheSetOptions", &JsWorkbook::pivotCacheSetOptions)
+      .function("pivotCacheCalculatedFieldAdd", &JsWorkbook::pivotCacheCalculatedFieldAdd)
+      .function("pivotCacheCalculatedFieldSetFormula", &JsWorkbook::pivotCacheCalculatedFieldSetFormula)
+      .function("pivotCacheCalculatedFieldRemove", &JsWorkbook::pivotCacheCalculatedFieldRemove)
+      .function("pivotCacheFieldFormula", &JsWorkbook::pivotCacheFieldFormula)
+      .function("pivotCacheCalculatedItemAdd", &JsWorkbook::pivotCacheCalculatedItemAdd)
+      .function("pivotCacheCalculatedItemCount", &JsWorkbook::pivotCacheCalculatedItemCount)
+      .function("pivotCacheCalculatedItemAt", &JsWorkbook::pivotCacheCalculatedItemAt)
+      .function("pivotCacheCalculatedItemSetFormula", &JsWorkbook::pivotCacheCalculatedItemSetFormula)
+      .function("pivotCacheCalculatedItemMove", &JsWorkbook::pivotCacheCalculatedItemMove)
+      .function("pivotCacheCalculatedItemRemove", &JsWorkbook::pivotCacheCalculatedItemRemove)
+      .function("pivotProject", &JsWorkbook::pivotProject)
+      .function("pivotProjectionPending", &JsWorkbook::pivotProjectionPending)
+      .function("pivotDataFieldDefaultName",
+                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx,
+                                                 uint32_t fieldIdx, int32_t aggregation, uint32_t excludeDataField) {
+                  return self.pivotDataFieldDefaultName(sheet, pivotIdx, fieldIdx, aggregation, excludeDataField);
+                }))
+      // Without `excludeDataField`, no data field is left out of the numbering.
+      .function("pivotDataFieldDefaultName",
+                emscripten::optional_override([](const JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx,
+                                                 uint32_t fieldIdx, int32_t aggregation) {
+                  return self.pivotDataFieldDefaultName(sheet, pivotIdx, fieldIdx, aggregation,
+                                                        std::numeric_limits<std::size_t>::max());
+                }))
       .function("pivotShowDetails", &JsWorkbook::pivotShowDetails)
       .function("pivotFilterAdd", &JsWorkbook::pivotFilterAdd)
       .function("pivotFilterAt", &JsWorkbook::pivotFilterAt)

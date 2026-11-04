@@ -489,9 +489,139 @@ export const PivotFilterType: Readonly<{
   LabelContains: 3;
   LabelBeginsWith: 4;
   LabelDate: 5;
+  ValueEqual: 6;
+  ValueNotEqual: 7;
+  ValueGreaterThanOrEqual: 8;
+  ValueLessThan: 9;
+  ValueLessThanOrEqual: 10;
+  ValueNotBetween: 11;
+  LabelEqual: 12;
+  LabelNotEqual: 13;
+  LabelNotBeginsWith: 14;
+  LabelEndsWith: 15;
+  LabelNotEndsWith: 16;
+  LabelNotContains: 17;
+  LabelGreaterThan: 18;
+  LabelGreaterThanOrEqual: 19;
+  LabelLessThan: 20;
+  LabelLessThanOrEqual: 21;
+  LabelBetween: 22;
+  LabelNotBetween: 23;
+  ValueBottomCount: 24;
+  ValueTopPercent: 25;
+  ValueBottomPercent: 26;
+  ValueTopSum: 27;
+  ValueBottomSum: 28;
+  DateEqual: 29;
+  DateNotEqual: 30;
+  DateOlderThan: 31;
+  DateOlderThanOrEqual: 32;
+  DateNewerThan: 33;
+  DateNewerThanOrEqual: 34;
+  DateNotBetween: 35;
+  DateTomorrow: 36;
+  DateToday: 37;
+  DateYesterday: 38;
+  DateNextWeek: 39;
+  DateThisWeek: 40;
+  DateLastWeek: 41;
+  DateNextMonth: 42;
+  DateThisMonth: 43;
+  DateLastMonth: 44;
+  DateNextQuarter: 45;
+  DateThisQuarter: 46;
+  DateLastQuarter: 47;
+  DateNextYear: 48;
+  DateThisYear: 49;
+  DateLastYear: 50;
+  DateYearToDate: 51;
+  DateQ1: 52;
+  DateQ2: 53;
+  DateQ3: 54;
+  DateQ4: 55;
+  DateM1: 56;
+  DateM2: 57;
+  DateM3: 58;
+  DateM4: 59;
+  DateM5: 60;
+  DateM6: 61;
+  DateM7: 62;
+  DateM8: 63;
+  DateM9: 64;
+  DateM10: 65;
+  DateM11: 66;
+  DateM12: 67;
 }>;
 /** Union of the {@link PivotFilterType} ordinals. */
-export type PivotFilterType = 0 | 1 | 2 | 3 | 4 | 5;
+export type PivotFilterType =
+  | 0
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20
+  | 21
+  | 22
+  | 23
+  | 24
+  | 25
+  | 26
+  | 27
+  | 28
+  | 29
+  | 30
+  | 31
+  | 32
+  | 33
+  | 34
+  | 35
+  | 36
+  | 37
+  | 38
+  | 39
+  | 40
+  | 41
+  | 42
+  | 43
+  | 44
+  | 45
+  | 46
+  | 47
+  | 48
+  | 49
+  | 50
+  | 51
+  | 52
+  | 53
+  | 54
+  | 55
+  | 56
+  | 57
+  | 58
+  | 59
+  | 60
+  | 61
+  | 62
+  | 63
+  | 64
+  | 65
+  | 66
+  | 67;
 
 /** Calendar periods of a date group, as the bits of the `periods` mask of
  *  `pivotFieldSetDateGroup`. Mirrors `FM_PIVOT_PERIOD_*`. */
@@ -599,6 +729,9 @@ export interface PivotFilterSpec {
   valueHighKind?: PivotFilterValueKind;
   valueHighInt?: number;
   valueHighDouble?: number;
+  /** Upper bound of `LabelBetween` / `LabelNotBetween`; required for them and
+   *  rejected for every other type. */
+  valueHighText?: string;
 }
 
 /** Worksheet source metadata for a pivot cache. Input shape for
@@ -650,6 +783,78 @@ export interface PivotStyleInfoResult {
   showLastColumn: boolean;
 }
 
+/** The PivotTable Options of one pivot table, as `pivotGetOptions` reads them
+ *  and `pivotSetOptions` writes them. */
+export interface PivotOptions {
+  showError: boolean;
+  /** Text shown for error cells; empty when unset. */
+  errorCaption: string;
+  showMissing: boolean;
+  /** Text shown for empty cells; empty when unset. */
+  missingCaption: string;
+  showHeaders: boolean;
+  showDrill: boolean;
+  showDataTips: boolean;
+  gridDropZones: boolean;
+  showEmptyRow: boolean;
+  showEmptyCol: boolean;
+  showDataDropDown: boolean;
+  printDrill: boolean;
+  fieldPrintTitles: boolean;
+  itemPrintTitles: boolean;
+  mergeItem: boolean;
+  /** Compact-layout indent, 0 to 126. */
+  indent: number;
+  pageOverThenDown: boolean;
+  /** Report filters per row or column before wrapping, 0 to 255. */
+  pageWrap: number;
+  multipleFieldFilters: boolean;
+  preserveFormatting: boolean;
+  customListSort: boolean;
+  altText: string;
+  altTextSummary: string;
+  grandTotalCaption: string;
+  autoFormatting: boolean;
+  enableDrill: boolean;
+}
+
+/** Return type of `Workbook.pivotGetOptions(...)`. */
+export interface PivotOptionsResult extends PivotOptions {
+  status: Status;
+}
+
+/** The options of one pivot cache, shared by every pivot table drawing from it. */
+export interface PivotCacheOptions {
+  /** Save the source records with the file. */
+  saveData: boolean;
+  /** Items kept per field after they leave the source: `-1` automatic, `0`
+   *  none, up to `1048576`. */
+  missingItemsLimit: number;
+  refreshOnLoad: boolean;
+}
+
+/** Return type of `Workbook.pivotCacheGetOptions(...)`. */
+export interface PivotCacheOptionsResult extends PivotCacheOptions {
+  status: Status;
+}
+
+/** Return type of `Workbook.pivotCacheCalculatedItemAt(...)`. */
+export interface PivotCalculatedItemResult {
+  status: Status;
+  /** Index of the cache field the item belongs to. */
+  fieldIndex: number;
+  name: string;
+  /** Formula without a leading `=`. */
+  formula: string;
+  scoped: boolean;
+}
+
+/** Return type of `Workbook.pivotProjectionPending(...)`. */
+export interface PivotProjectionPendingResult {
+  status: Status;
+  value: boolean;
+}
+
 /** Return type of `Workbook.pivotGetGrandTotals(...)`. */
 export interface PivotGrandTotalsResult {
   status: Status;
@@ -695,6 +900,8 @@ export interface PivotFieldResult {
   insertBlankRow: boolean;
   /** Whether the field's label repeats on every row of its block. */
   fillDownLabels: boolean;
+  /** Whether items without data are listed (`pivotFieldSetShowAll`). */
+  showAll: boolean;
   /** Custom subtotal functions (`pivotFieldAddSubtotalFn`), as
    *  `PivotAggregation.*` ordinals in ascending order. */
   subtotalFns: PivotAggregation[];
@@ -713,12 +920,6 @@ export interface PivotItemResult {
   caption: string | null;
   /** `false` when the item is collapsed. */
   showDetail: boolean;
-}
-
-/** Return type of `Workbook.pivotGetAutoFormatting(...)`. */
-export interface PivotAutoFormattingResult {
-  status: Status;
-  value: boolean;
 }
 
 /** Return type of `Workbook.pivotDataFieldAt(...)`. Same shape as
@@ -758,6 +959,8 @@ export interface PivotFilterResult {
   valueHighKind: number;
   valueHighInt: number;
   valueHighDouble: number;
+  /** Upper bound text of `LabelBetween` / `LabelNotBetween`; empty otherwise. */
+  valueHighText: string;
 }
 
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
@@ -4171,15 +4374,57 @@ export interface Workbook {
   pivotRowFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
   /** Reads the column-axis field order. */
   pivotColFieldOrder(sheet: number, pivotIdx: number): PivotFieldOrderResult;
-  /** Renames the grand total row / column label; an empty string restores
-   *  the locale's word. */
-  pivotSetGrandTotalCaption(sheet: number, pivotIdx: number, caption: string): Status;
-  /** Reads the grand total caption; `value` is `""` when none is set. */
-  pivotGetGrandTotalCaption(sheet: number, pivotIdx: number): StringResult;
-  /** Sets the "autofit column widths on update" flag. */
-  pivotSetAutoFormatting(sheet: number, pivotIdx: number, on: boolean): Status;
-  /** Reads the autofit flag. */
-  pivotGetAutoFormatting(sheet: number, pivotIdx: number): PivotAutoFormattingResult;
+  /** Reads the PivotTable Options of the pivot table. */
+  pivotGetOptions(sheet: number, pivotIdx: number): PivotOptionsResult;
+  /** Writes PivotTable Options. Every member is optional: an omitted key keeps
+   *  the pivot's current value, and a string member set to `''` clears it. */
+  pivotSetOptions(sheet: number, pivotIdx: number, options: Partial<PivotOptions>): Status;
+  /** Reads the options of the pivot cache `cacheId`. */
+  pivotCacheGetOptions(cacheId: number): PivotCacheOptionsResult;
+  /** Writes pivot cache options. Every member is optional: an omitted key keeps
+   *  the cache's current value. */
+  pivotCacheSetOptions(cacheId: number, options: Partial<PivotCacheOptions>): Status;
+  /** Adds calculated field `name` with `formula` (English, naming cache fields
+   *  only) as the cache's last field. `index` carries its field index. */
+  pivotCacheCalculatedFieldAdd(cacheId: number, name: string, formula: string): AddStyleResult;
+  /** Replaces the formula of calculated field `fieldIdx`. */
+  pivotCacheCalculatedFieldSetFormula(cacheId: number, fieldIdx: number, formula: string): Status;
+  /** Removes calculated field `fieldIdx` and its data fields. */
+  pivotCacheCalculatedFieldRemove(cacheId: number, fieldIdx: number): Status;
+  /** Reads the formula of cache field `fieldIdx` without a leading `=`; empty
+   *  when the field is not calculated. */
+  pivotCacheFieldFormula(cacheId: number, fieldIdx: number): StringResult;
+  /** Adds calculated item `name` with `formula` to cache field `fieldIdx`. */
+  pivotCacheCalculatedItemAdd(cacheId: number, fieldIdx: number, name: string, formula: string): Status;
+  /** Number of calculated items in the cache, in solve order. */
+  pivotCacheCalculatedItemCount(cacheId: number): NumberResult;
+  /** Reads calculated item `idx` (in solve order). */
+  pivotCacheCalculatedItemAt(cacheId: number, idx: number): PivotCalculatedItemResult;
+  /** Replaces the formula of calculated item `idx`. */
+  pivotCacheCalculatedItemSetFormula(cacheId: number, idx: number, formula: string): Status;
+  /** Moves calculated item `idx` to position `newIdx` in solve order. */
+  pivotCacheCalculatedItemMove(cacheId: number, idx: number, newIdx: number): Status;
+  /** Removes calculated item `idx`. */
+  pivotCacheCalculatedItemRemove(cacheId: number, idx: number): Status;
+  /** Renames the pivot field in the report; `''` clears the custom name. */
+  pivotFieldSetCustomName(sheet: number, pivotIdx: number, fieldIdx: number, name: string): Status;
+  /** Lists (or stops listing) the field's items without data. */
+  pivotFieldSetShowAll(sheet: number, pivotIdx: number, fieldIdx: number, on: boolean): Status;
+  /** Reads the name a data field over pivot field `fieldIdx` with
+   *  `aggregation` would get from an empty name, without adding one.
+   *  `excludeDataField` is the data field a `pivotDataFieldSet` would replace,
+   *  whose name is not counted as taken; omit it for the add case. */
+  pivotDataFieldDefaultName(
+    sheet: number,
+    pivotIdx: number,
+    fieldIdx: number,
+    aggregation: PivotAggregation,
+    excludeDataField?: number,
+  ): StringResult;
+  /** Writes the pivot's report into its sheet cells now. */
+  pivotProject(sheet: number, pivotIdx: number): Status;
+  /** Whether a cache change left the pivot's sheet cells stale. */
+  pivotProjectionPending(sheet: number, pivotIdx: number): PivotProjectionPendingResult;
   /** Writes the source records behind the data or total cell (`row`, `col`)
    *  onto a new sheet inserted before the pivot's sheet, as Show Details
    *  does. Returns `{ status, index: newSheetIndex }`; sheets at and after

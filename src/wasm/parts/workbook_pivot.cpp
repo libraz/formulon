@@ -487,6 +487,7 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint
   o.set("defaultSubtotal", info.default_subtotal != 0);
   o.set("insertBlankRow", info.insert_blank_row != 0);
   o.set("fillDownLabels", info.fill_down_labels != 0);
+  o.set("showAll", info.show_all != 0);
   emscripten::val fns = emscripten::val::array();
   for (std::uint32_t agg = 0; agg < 32U; ++agg) {
     if ((info.subtotal_fns & (1U << agg)) != 0U) {
@@ -600,32 +601,266 @@ JsStatus JsWorkbook::pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIdx,
                          : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotSetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx, const std::string& caption) {
-  const char* text = caption.empty() ? nullptr : caption.c_str();
-  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_set_grand_total_caption(handle_, sheet, pivotIdx, text)
-                                           : kBindingInvalidHandle);
+JsStatus JsWorkbook::pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                             const std::string& name) {
+  const char* text = name.empty() ? nullptr : name.c_str();
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_pivot_field_set_custom_name(handle_, sheet, pivotIdx, fieldIdx, text)
+                            : kBindingInvalidHandle);
 }
 
-JsStringResult JsWorkbook::pivotGetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx) const {
-  const char* caption = nullptr;
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_pivot_get_grand_total_caption(handle_, sheet, pivotIdx, &caption)
-                             : kBindingInvalidHandle;
-  return string_result(rc, rc == 0 ? caption : nullptr);
+JsStatus JsWorkbook::pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on) {
+  return status_from_rc(handle_ != nullptr
+                            ? fm_workbook_pivot_field_set_show_all(handle_, sheet, pivotIdx, fieldIdx, on ? 1 : 0)
+                            : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotSetAutoFormatting(uint32_t sheet, uint32_t pivotIdx, bool on) {
-  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_set_auto_formatting(handle_, sheet, pivotIdx, on ? 1 : 0)
-                                           : kBindingInvalidHandle);
-}
-
-emscripten::val JsWorkbook::pivotGetAutoFormatting(uint32_t sheet, uint32_t pivotIdx) const {
-  emscripten::val o = emscripten::val::object();
-  int32_t on = 0;
+emscripten::val JsWorkbook::pivotGetOptions(uint32_t sheet, uint32_t pivotIdx) const {
+  fm_pivot_options_t opt{};
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_pivot_get_auto_formatting(handle_, sheet, pivotIdx, &on) : kBindingInvalidHandle;
+      handle_ != nullptr ? fm_workbook_pivot_get_options(handle_, sheet, pivotIdx, &opt) : kBindingInvalidHandle;
+  if (rc != 0) {
+    opt = fm_pivot_options_t{};
+  }
+  emscripten::val o = emscripten::val::object();
   o.set("status", status_from_rc(rc));
-  o.set("value", rc == 0 && on != 0);
+  o.set("showError", opt.show_error != 0);
+  js_set_cstr(o, "errorCaption", opt.error_caption);
+  o.set("showMissing", opt.show_missing != 0);
+  js_set_cstr(o, "missingCaption", opt.missing_caption);
+  o.set("showHeaders", opt.show_headers != 0);
+  o.set("showDrill", opt.show_drill != 0);
+  o.set("showDataTips", opt.show_data_tips != 0);
+  o.set("gridDropZones", opt.grid_drop_zones != 0);
+  o.set("showEmptyRow", opt.show_empty_row != 0);
+  o.set("showEmptyCol", opt.show_empty_col != 0);
+  o.set("showDataDropDown", opt.show_data_drop_down != 0);
+  o.set("printDrill", opt.print_drill != 0);
+  o.set("fieldPrintTitles", opt.field_print_titles != 0);
+  o.set("itemPrintTitles", opt.item_print_titles != 0);
+  o.set("mergeItem", opt.merge_item != 0);
+  o.set("indent", opt.indent);
+  o.set("pageOverThenDown", opt.page_over_then_down != 0);
+  o.set("pageWrap", opt.page_wrap);
+  o.set("multipleFieldFilters", opt.multiple_field_filters != 0);
+  o.set("preserveFormatting", opt.preserve_formatting != 0);
+  o.set("customListSort", opt.custom_list_sort != 0);
+  js_set_cstr(o, "altText", opt.alt_text);
+  js_set_cstr(o, "altTextSummary", opt.alt_text_summary);
+  js_set_cstr(o, "grandTotalCaption", opt.grand_total_caption);
+  o.set("autoFormatting", opt.auto_formatting != 0);
+  o.set("enableDrill", opt.enable_drill != 0);
+  return o;
+}
+
+JsStatus JsWorkbook::pivotSetOptions(uint32_t sheet, uint32_t pivotIdx, emscripten::val options) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  if (!js_value_present(options)) {
+    return binding_error_status(kInvalidArgument, "pivotSetOptions: `options` must be an object");
+  }
+  // The C call writes every member, so members the caller omits keep the
+  // pivot's current value.
+  fm_pivot_options_t opt{};
+  const fm_status_t get_rc = fm_workbook_pivot_get_options(handle_, sheet, pivotIdx, &opt);
+  if (get_rc != 0) {
+    return status_from_rc(get_rc);
+  }
+  std::string error_caption = opt.error_caption != nullptr ? opt.error_caption : "";
+  std::string missing_caption = opt.missing_caption != nullptr ? opt.missing_caption : "";
+  std::string alt_text = opt.alt_text != nullptr ? opt.alt_text : "";
+  std::string alt_summary = opt.alt_text_summary != nullptr ? opt.alt_text_summary : "";
+  std::string grand_total = opt.grand_total_caption != nullptr ? opt.grand_total_caption : "";
+
+  JsNarrowNumericReader reader("pivotSetOptions");
+  const auto flag = [&](const char* key, int32_t current) {
+    const std::string field = std::string("pivotOptions.") + key;
+    return reader.boolean(options, key, current != 0, field.c_str()) ? 1 : 0;
+  };
+  const auto text = [&](const char* key, std::string& storage) {
+    std::string value;
+    const std::string field = std::string("pivotOptions.") + key;
+    if (reader.optional_string(options, key, value, field.c_str()) != nullptr) {
+      storage = value;
+    }
+  };
+  opt.show_error = flag("showError", opt.show_error);
+  text("errorCaption", error_caption);
+  opt.show_missing = flag("showMissing", opt.show_missing);
+  text("missingCaption", missing_caption);
+  opt.show_headers = flag("showHeaders", opt.show_headers);
+  opt.show_drill = flag("showDrill", opt.show_drill);
+  opt.show_data_tips = flag("showDataTips", opt.show_data_tips);
+  opt.grid_drop_zones = flag("gridDropZones", opt.grid_drop_zones);
+  opt.show_empty_row = flag("showEmptyRow", opt.show_empty_row);
+  opt.show_empty_col = flag("showEmptyCol", opt.show_empty_col);
+  opt.show_data_drop_down = flag("showDataDropDown", opt.show_data_drop_down);
+  opt.print_drill = flag("printDrill", opt.print_drill);
+  opt.field_print_titles = flag("fieldPrintTitles", opt.field_print_titles);
+  opt.item_print_titles = flag("itemPrintTitles", opt.item_print_titles);
+  opt.merge_item = flag("mergeItem", opt.merge_item);
+  opt.indent = reader.u32(options, "indent", opt.indent, "pivotOptions.indent");
+  opt.page_over_then_down = flag("pageOverThenDown", opt.page_over_then_down);
+  opt.page_wrap = reader.u32(options, "pageWrap", opt.page_wrap, "pivotOptions.pageWrap");
+  opt.multiple_field_filters = flag("multipleFieldFilters", opt.multiple_field_filters);
+  opt.preserve_formatting = flag("preserveFormatting", opt.preserve_formatting);
+  opt.custom_list_sort = flag("customListSort", opt.custom_list_sort);
+  text("altText", alt_text);
+  text("altTextSummary", alt_summary);
+  text("grandTotalCaption", grand_total);
+  opt.auto_formatting = flag("autoFormatting", opt.auto_formatting);
+  opt.enable_drill = flag("enableDrill", opt.enable_drill);
+  if (!reader.ok()) {
+    return reader.failure();
+  }
+  const auto view = [](const std::string& s) { return s.empty() ? nullptr : s.c_str(); };
+  opt.error_caption = view(error_caption);
+  opt.missing_caption = view(missing_caption);
+  opt.alt_text = view(alt_text);
+  opt.alt_text_summary = view(alt_summary);
+  opt.grand_total_caption = view(grand_total);
+  return status_from_rc(fm_workbook_pivot_set_options(handle_, sheet, pivotIdx, &opt));
+}
+
+emscripten::val JsWorkbook::pivotCacheGetOptions(uint32_t cacheId) const {
+  fm_pivot_cache_options_t opt{};
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_workbook_pivot_cache_get_options(handle_, cacheId, &opt) : kBindingInvalidHandle;
+  if (rc != 0) {
+    opt = fm_pivot_cache_options_t{};
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("saveData", opt.save_data != 0);
+  o.set("missingItemsLimit", opt.missing_items_limit);
+  o.set("refreshOnLoad", opt.refresh_on_load != 0);
+  return o;
+}
+
+JsStatus JsWorkbook::pivotCacheSetOptions(uint32_t cacheId, emscripten::val options) {
+  if (handle_ == nullptr) {
+    return invalid_handle_status();
+  }
+  if (!js_value_present(options)) {
+    return binding_error_status(kInvalidArgument, "pivotCacheSetOptions: `options` must be an object");
+  }
+  fm_pivot_cache_options_t opt{};
+  const fm_status_t get_rc = fm_workbook_pivot_cache_get_options(handle_, cacheId, &opt);
+  if (get_rc != 0) {
+    return status_from_rc(get_rc);
+  }
+  JsNarrowNumericReader reader("pivotCacheSetOptions");
+  opt.save_data = reader.boolean(options, "saveData", opt.save_data != 0, "pivotCacheOptions.saveData") ? 1 : 0;
+  opt.missing_items_limit =
+      reader.i32(options, "missingItemsLimit", opt.missing_items_limit, "pivotCacheOptions.missingItemsLimit");
+  opt.refresh_on_load =
+      reader.boolean(options, "refreshOnLoad", opt.refresh_on_load != 0, "pivotCacheOptions.refreshOnLoad") ? 1 : 0;
+  if (!reader.ok()) {
+    return reader.failure();
+  }
+  return status_from_rc(fm_workbook_pivot_cache_set_options(handle_, cacheId, &opt));
+}
+
+JsAddStyleResult JsWorkbook::pivotCacheCalculatedFieldAdd(uint32_t cacheId, const std::string& name,
+                                                          const std::string& formula) {
+  std::size_t index = 0;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_cache_calculated_field_add(
+                                                  handle_, cacheId, name.c_str(), formula.c_str(), &index)
+                                            : kBindingInvalidHandle;
+  return index_result(rc, index);
+}
+
+JsStatus JsWorkbook::pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIdx,
+                                                         const std::string& formula) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_cache_calculated_field_set_formula(
+                                                 handle_, cacheId, fieldIdx, formula.c_str())
+                                           : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIdx) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_cache_calculated_field_remove(handle_, cacheId, fieldIdx)
+                                           : kBindingInvalidHandle);
+}
+
+JsStringResult JsWorkbook::pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIdx) const {
+  const char* formula = nullptr;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_pivot_cache_field_formula(handle_, cacheId, fieldIdx, &formula)
+                             : kBindingInvalidHandle;
+  return string_result(rc, rc == 0 ? formula : nullptr);
+}
+
+JsStatus JsWorkbook::pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
+                                                 const std::string& formula) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_cache_calculated_item_add(handle_, cacheId, fieldIdx,
+                                                                                         name.c_str(), formula.c_str())
+                                           : kBindingInvalidHandle);
+}
+
+JsNumberResult JsWorkbook::pivotCacheCalculatedItemCount(uint32_t cacheId) const {
+  if (handle_ == nullptr) {
+    return number_result(kBindingInvalidHandle, 0.0);
+  }
+  std::size_t count = 0;
+  const fm_status_t rc = fm_workbook_pivot_cache_calculated_item_count(handle_, cacheId, &count);
+  return number_result(rc, static_cast<double>(count));
+}
+
+emscripten::val JsWorkbook::pivotCacheCalculatedItemAt(uint32_t cacheId, uint32_t idx) const {
+  fm_pivot_calculated_item_t item{};
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_cache_calculated_item_at(handle_, cacheId, idx, &item)
+                                            : kBindingInvalidHandle;
+  if (rc != 0) {
+    item = fm_pivot_calculated_item_t{};
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("status", status_from_rc(rc));
+  o.set("fieldIndex", item.field_index);
+  js_set_cstr(o, "name", item.name);
+  js_set_cstr(o, "formula", item.formula);
+  o.set("scoped", item.scoped != 0);
+  return o;
+}
+
+JsStatus JsWorkbook::pivotCacheCalculatedItemSetFormula(uint32_t cacheId, uint32_t idx, const std::string& formula) {
+  return status_from_rc(
+      handle_ != nullptr ? fm_workbook_pivot_cache_calculated_item_set_formula(handle_, cacheId, idx, formula.c_str())
+                         : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotCacheCalculatedItemMove(uint32_t cacheId, uint32_t idx, uint32_t newIdx) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_cache_calculated_item_move(handle_, cacheId, idx, newIdx)
+                                           : kBindingInvalidHandle);
+}
+
+JsStatus JsWorkbook::pivotCacheCalculatedItemRemove(uint32_t cacheId, uint32_t idx) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_cache_calculated_item_remove(handle_, cacheId, idx)
+                                           : kBindingInvalidHandle);
+}
+
+JsStringResult JsWorkbook::pivotDataFieldDefaultName(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                                     int32_t aggregation, std::size_t excludeDataField) const {
+  const char* name = nullptr;
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_pivot_data_field_default_name(handle_, sheet, pivotIdx, fieldIdx,
+                                                                         aggregation, excludeDataField, &name)
+                             : kBindingInvalidHandle;
+  return string_result(rc, rc == 0 ? name : nullptr);
+}
+
+JsStatus JsWorkbook::pivotProject(uint32_t sheet, uint32_t pivotIdx) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_pivot_project(handle_, sheet, pivotIdx)
+                                           : kBindingInvalidHandle);
+}
+
+emscripten::val JsWorkbook::pivotProjectionPending(uint32_t sheet, uint32_t pivotIdx) const {
+  emscripten::val o = emscripten::val::object();
+  int32_t pending = 0;
+  const fm_status_t rc = handle_ != nullptr ? fm_workbook_pivot_projection_pending(handle_, sheet, pivotIdx, &pending)
+                                            : kBindingInvalidHandle;
+  o.set("status", status_from_rc(rc));
+  o.set("value", rc == 0 && pending != 0);
   return o;
 }
 
@@ -894,6 +1129,9 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
   const double value_double = reader.number(spec, "valueDouble", 0.0, "pivotFilter.valueDouble");
   const char* value_text_ptr = reader.optional_string(spec, "valueText", value_text, "pivotFilter.valueText");
   const double value_high_double = reader.number(spec, "valueHighDouble", 0.0, "pivotFilter.valueHighDouble");
+  std::string value_high_text;
+  const char* value_high_text_ptr =
+      reader.optional_string(spec, "valueHighText", value_high_text, "pivotFilter.valueHighText");
 
   fm_pivot_filter_spec_t c_spec{};
   c_spec.axis = static_cast<fm_pivot_axis_t>(reader.u32(spec, "axis", 0U, "pivotFilter.axis"));
@@ -910,6 +1148,7 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
       reader.i32(spec, "valueHighKind", FM_PIVOT_FILTER_VALUE_NONE, "pivotFilter.valueHighKind"));
   c_spec.value_high_int = reader.i32(spec, "valueHighInt", 0, "pivotFilter.valueHighInt");
   c_spec.value_high_double = value_high_double;
+  c_spec.value_high_text = value_high_text_ptr;
   c_spec.data_field_index = reader.u32(spec, "dataFieldIndex", 0U, "pivotFilter.dataFieldIndex");
 
   if (!reader.ok()) {
@@ -940,6 +1179,7 @@ emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIdx, uin
   o.set("valueHighKind", static_cast<int32_t>(spec.value_high_kind));
   o.set("valueHighInt", spec.value_high_int);
   o.set("valueHighDouble", spec.value_high_double);
+  js_set_cstr(o, "valueHighText", spec.value_high_text);
   return o;
 }
 

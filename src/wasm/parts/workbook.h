@@ -645,10 +645,29 @@ class JsWorkbook {
   JsStatus pivotFieldSetItemShowDetail(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx, bool on);
   JsStatus pivotFieldSetItemCaption(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
                                     const std::string& caption);
-  JsStatus pivotSetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx, const std::string& caption);
-  JsStringResult pivotGetGrandTotalCaption(uint32_t sheet, uint32_t pivotIdx) const;
-  JsStatus pivotSetAutoFormatting(uint32_t sheet, uint32_t pivotIdx, bool on);
-  emscripten::val pivotGetAutoFormatting(uint32_t sheet, uint32_t pivotIdx) const;
+  JsStatus pivotFieldSetCustomName(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name);
+  JsStatus pivotFieldSetShowAll(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool on);
+  emscripten::val pivotGetOptions(uint32_t sheet, uint32_t pivotIdx) const;
+  /// Members the object omits keep the pivot's current value.
+  JsStatus pivotSetOptions(uint32_t sheet, uint32_t pivotIdx, emscripten::val options);
+  emscripten::val pivotCacheGetOptions(uint32_t cacheId) const;
+  JsStatus pivotCacheSetOptions(uint32_t cacheId, emscripten::val options);
+  JsAddStyleResult pivotCacheCalculatedFieldAdd(uint32_t cacheId, const std::string& name, const std::string& formula);
+  JsStatus pivotCacheCalculatedFieldSetFormula(uint32_t cacheId, uint32_t fieldIdx, const std::string& formula);
+  JsStatus pivotCacheCalculatedFieldRemove(uint32_t cacheId, uint32_t fieldIdx);
+  JsStringResult pivotCacheFieldFormula(uint32_t cacheId, uint32_t fieldIdx) const;
+  JsStatus pivotCacheCalculatedItemAdd(uint32_t cacheId, uint32_t fieldIdx, const std::string& name,
+                                       const std::string& formula);
+  JsNumberResult pivotCacheCalculatedItemCount(uint32_t cacheId) const;
+  emscripten::val pivotCacheCalculatedItemAt(uint32_t cacheId, uint32_t idx) const;
+  JsStatus pivotCacheCalculatedItemSetFormula(uint32_t cacheId, uint32_t idx, const std::string& formula);
+  JsStatus pivotCacheCalculatedItemMove(uint32_t cacheId, uint32_t idx, uint32_t newIdx);
+  JsStatus pivotCacheCalculatedItemRemove(uint32_t cacheId, uint32_t idx);
+  /// `excludeDataField` is a data field index, or SIZE_MAX for none.
+  JsStringResult pivotDataFieldDefaultName(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, int32_t aggregation,
+                                           std::size_t excludeDataField) const;
+  JsStatus pivotProject(uint32_t sheet, uint32_t pivotIdx);
+  emscripten::val pivotProjectionPending(uint32_t sheet, uint32_t pivotIdx) const;
   JsAddStyleResult pivotShowDetails(uint32_t sheet, uint32_t pivotIdx, uint32_t row, uint32_t col);
   JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
                              bool visible);

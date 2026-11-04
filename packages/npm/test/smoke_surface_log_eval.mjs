@@ -604,6 +604,8 @@ test('an empty or omitted data field name is derived from the workbook profile',
         { fieldIndex: 1, aggregation: 0 },
         { name: '', fieldIndex: 1, aggregation: 0 },
       ]) {
+        // A repeat of the same source field is numbered, so each name starts from none.
+        assert.ok(wb.pivotDataFieldClear(0, pivot).ok);
         const added = wb.pivotDataFieldAdd(0, pivot, spec);
         assert.ok(added.status.ok, JSON.stringify(added.status));
         assert.equal(wb.pivotDataFieldAt(0, pivot, added.index).name, expected);

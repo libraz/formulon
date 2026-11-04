@@ -272,18 +272,19 @@ test('an empty or omitted data field name is derived from the workbook profile',
   const mod = await getModule();
   const { wb, pivot } = makePivotWorkbook(mod.Workbook);
   try {
+    // The second data field over the same source takes a numbered name.
     for (const [profile, expected] of [
-      ['win-365-ja_JP', '合計 / Amount'],
-      ['win-365-en_US', 'Sum of Amount'],
+      ['win-365-ja_JP', ['合計 / Amount', '合計 / Amount2']],
+      ['win-365-en_US', ['Sum of Amount', 'Sum of Amount2']],
     ]) {
       assert.ok(wb.setExcelProfileId(profile).ok);
-      for (const spec of [
+      for (const [i, spec] of [
         { fieldIndex: 1, aggregation: 0 },
         { name: '', fieldIndex: 1, aggregation: 0 },
-      ]) {
+      ].entries()) {
         const added = wb.pivotDataFieldAdd(0, pivot, spec);
         assert.ok(added.status.ok, JSON.stringify(added.status));
-        assert.equal(wb.pivotDataFieldAt(0, pivot, added.index).name, expected);
+        assert.equal(wb.pivotDataFieldAt(0, pivot, added.index).name, expected[i]);
       }
       assert.ok(wb.pivotDataFieldSet(0, pivot, 0, { fieldIndex: 1, aggregation: 2 }).ok);
       assert.ok(wb.pivotDataFieldAt(0, pivot, 0).name.endsWith(' Amount'));
