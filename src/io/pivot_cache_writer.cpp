@@ -658,7 +658,17 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
       // containsString / ...) alongside the item count so a discrete
       // field's hints survive the round trip instead of being dropped.
       out.append("<sharedItems");
-      AppendSharedItemsHints(out, field.shared_items_hints);
+      const auto any_set = [](const std::vector<bool>& flags) {
+        return std::find(flags.begin(), flags.end(), true) != flags.end();
+      };
+      if (field.shared_items_hints.present || any_set(field.shared_item_is_date) ||
+          any_set(field.shared_item_is_calculated)) {
+        AppendSharedItemsHints(out, field.shared_items_hints);
+      } else {
+        // A field built without captured hints: Excel asks to repair numeric
+        // shared items that carry no content hints.
+        AppendSharedItemsHints(out, DeriveHints(field.shared_items));
+      }
       append_xml_attr_uint(out, "count", field.shared_items.size());
       out.append(">");
       for (std::size_t i = 0; i < field.shared_items.size(); ++i) {

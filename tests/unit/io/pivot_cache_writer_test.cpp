@@ -314,6 +314,29 @@ TEST(PivotCacheWriter, NumbersUseTheExcelForm) {
   EXPECT_EQ(xml.find("0.10000000000000001"), std::string::npos) << xml;
 }
 
+// Excel asks to repair a cache whose numeric shared items carry no content
+// hints, so a field built without captured hints gets the ones Excel writes.
+TEST(PivotCacheWriter, NumericSharedItemsBuiltWithoutHintsGetExcelHints) {
+  pivot::PivotCache cache;
+  pivot::PivotCacheField nums;
+  nums.name = "N";
+  nums.shared_items.push_back(Value::number(3.0));
+  nums.shared_items.push_back(Value::number(1.0));
+  nums.shared_items.push_back(Value::number(5.0));
+  cache.mutable_fields().push_back(std::move(nums));
+  pivot::PivotCacheField texts;
+  texts.name = "T";
+  texts.shared_items.push_back(MakeText(cache, "a"));
+  cache.mutable_fields().push_back(std::move(texts));
+
+  const std::string xml = write_pivot_cache_definition(cache);
+  EXPECT_NE(xml.find("<sharedItems containsSemiMixedTypes=\"0\" containsString=\"0\" containsNumber=\"1\" "
+                     "containsInteger=\"1\" minValue=\"1\" maxValue=\"5\" count=\"3\">"),
+            std::string::npos)
+      << xml;
+  EXPECT_NE(xml.find("<sharedItems count=\"1\"><s v=\"a\"/>"), std::string::npos) << xml;
+}
+
 // ---------------------------------------------------------------------------
 // XML escaping
 // ---------------------------------------------------------------------------
