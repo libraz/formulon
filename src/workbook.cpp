@@ -723,7 +723,23 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
     drawing_candidates.push_back(drawing.value());
   }
 
-  const parser::SheetRemovalTransform removal(pre_removal_sheet_order, index);
+  // Decided before any formula is rewritten: the removed sheet's own cells would otherwise count.
+  std::vector<std::string> rebound_names =
+      referenced_local_names_of_removed_sheet(sheets_, defined_names_, tables_, index);
+  const auto has_book_namesake = [this](std::string_view name) {
+    return std::any_of(defined_names_.begin(), defined_names_.end(), [name](const DefinedName& entry) {
+      return entry.local_sheet_id < 0 && strings::case_insensitive_eq(entry.name, name);
+    });
+  };
+  std::vector<bool> promotes(defined_names_.size(), false);
+  for (std::size_t i = 0; i < defined_names_.size(); ++i) {
+    const DefinedName& entry = defined_names_[i];
+    promotes[i] = entry.local_sheet_id == static_cast<std::int32_t>(index) && !has_book_namesake(entry.name) &&
+                  std::any_of(rebound_names.begin(), rebound_names.end(), [&entry](const std::string& name) {
+                    return strings::case_insensitive_eq(name, entry.name);
+                  });
+  }
+  const parser::SheetRemovalTransform removal(pre_removal_sheet_order, index, std::move(rebound_names));
   std::vector<TableLoss> table_losses;
   for (const TableMetadata& table : tables_) {
     if (table.sheet_index == index) {
@@ -738,12 +754,16 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   (void)defined_names_changed;
   RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
 
-  // Sheet-scoped names owned by the removed sheet disappear; names scoped to
-  // later sheets follow their owner as the sheet vector closes the gap.
+  // The removed sheet's referenced names without a workbook-scoped namesake
+  // become workbook-scoped in place; its other names disappear. Names scoped
+  // to later sheets follow their owner as the sheet vector closes the gap.
   std::vector<DefinedName> retained;
   retained.reserve(defined_names_.size());
-  for (DefinedName& entry : defined_names_) {
-    if (entry.local_sheet_id == static_cast<std::int32_t>(index)) {
+  for (std::size_t i = 0; i < defined_names_.size(); ++i) {
+    DefinedName& entry = defined_names_[i];
+    if (promotes[i]) {
+      entry.local_sheet_id = -1;
+    } else if (entry.local_sheet_id == static_cast<std::int32_t>(index)) {
       continue;
     }
     entry.local_sheet_id = removed_index(entry.local_sheet_id, static_cast<std::int32_t>(index));

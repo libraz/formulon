@@ -150,7 +150,8 @@ TEST(DefinedNameResolve, SameTextInOtherScopeIsNotACycle) {
 
 // Workbook-level wiring of a cross-sheet local name: the dependency graph
 // sees the cell behind it, a sheet rename rewrites the qualifier, and
-// removing the qualifying sheet collapses the reference to #REF!.
+// removing the qualifying sheet promotes the referenced name to workbook
+// scope, spelled `[0]!Local` (Excel).
 TEST(DefinedNameResolve, SheetQualifiedNameRecalcsRenamesAndRemoves) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
@@ -171,7 +172,7 @@ TEST(DefinedNameResolve, SheetQualifiedNameRecalcsRenamesAndRemoves) {
   EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 10.0);
 
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1U)));
-  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=#REF!*2");
+  EXPECT_EQ(wb.sheet(0).cell_at(0U, 0U)->formula_text, "=[0]!Local*2");
 }
 
 // Values on Mac Excel 365 16.113.2 (ja-JP). Workbook names G = 5

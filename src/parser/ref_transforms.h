@@ -114,13 +114,19 @@ class IdentityTransform final : public RefTransform {
 /// the removed sheet is not resolved by either endpoint; if the other endpoint
 /// resolves to the removed sheet, the unresolved counterpart collapses to
 /// `#REF!` because the inward direction cannot be determined.
+///
+/// A name qualified by the removed sheet collapses to `#REF!` unless it is
+/// one of `rebound_names` (ASCII case-insensitive): those become `[0]!Name`,
+/// the workbook-scoped name the removal promotes or rebinds to.
 class SheetRemovalTransform final : public RefTransform {
  public:
-  SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order, std::uint32_t removed_index);
+  SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order, std::uint32_t removed_index,
+                        std::vector<std::string> rebound_names = {});
 
   std::optional<Reference> apply(const Reference& ref) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
   std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const override;
+  bool rebinds_name_to_book(std::string_view sheet, std::string_view name) const noexcept override;
   RefCollapse collapse_form() const noexcept override { return RefCollapse::kKeepAddress; }
 
  private:
@@ -131,6 +137,7 @@ class SheetRemovalTransform final : public RefTransform {
 
   std::vector<std::string_view> pre_removal_sheet_order_;
   std::size_t removed_index_;
+  std::vector<std::string> rebound_names_;
 };
 
 /// Direction of a row/column structural edit.

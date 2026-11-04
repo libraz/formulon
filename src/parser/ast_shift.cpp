@@ -10,10 +10,13 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "parser/ast.h"
+#include "parser/ast_format.h"
+#include "parser/parser.h"
 #include "parser/reference.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
@@ -257,6 +260,9 @@ const AstNode* TransformNameRef(const AstNode& node, Arena& arena, const RefTran
   }
   const std::optional<std::string_view> mapped = transform.apply_name_sheet(sheet);
   if (!mapped.has_value()) {
+    if (transform.rebinds_name_to_book(sheet, node.as_name())) {
+      return make_external_name_ref(arena, "", "0", "", node.as_name());
+    }
     return MakeRefError(arena);
   }
   if (*mapped == sheet) {
@@ -581,9 +587,15 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
     return nullptr;
   }
   // `Sheet2!Fn(3)` whose sheet is removed collapses whole to `#REF!`: an
-  // error literal is no callee `(` can follow.
-  if (callee->kind() == NodeKind::ErrorLiteral && node.as_lambda_call_callee().kind() == NodeKind::NameRef) {
-    return callee;
+  // error literal is no callee `(` can follow, and a rebound callee is not
+  // carried over either.
+  if (node.as_lambda_call_callee().kind() == NodeKind::NameRef) {
+    if (callee->kind() == NodeKind::ErrorLiteral) {
+      return callee;
+    }
+    if (callee->kind() == NodeKind::ExternalRef) {
+      return MakeRefError(arena);
+    }
   }
   const std::uint32_t n = node.as_lambda_call_arity();
   std::vector<const AstNode*> args;
@@ -698,6 +710,43 @@ const AstNode* shift_refs(const AstNode& root, Arena& arena, const RefTransform&
     return MakeRefError(arena);
   }
   return TransformNode(root, arena, transform);
+}
+
+FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransform& transform) {
+  FormulaRewriteResult out;
+  out.text.assign(formula);
+  std::string_view body = formula;
+  bool had_equals = false;
+  if (!body.empty() && body.front() == '=') {
+    body = body.substr(1);
+    had_equals = true;
+  }
+  if (body.empty()) {
+    return out;
+  }
+  Arena arena;
+  Parser parser(body, arena);
+  AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    out.error = true;
+    return out;
+  }
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  if (shifted == nullptr) {
+    out.error = true;
+    return out;
+  }
+  if (shifted == root) {
+    return out;  // Identity walk; no change required.
+  }
+  std::string rewritten;
+  if (had_equals) {
+    rewritten.push_back('=');
+  }
+  rewritten.append(format_formula(*shifted));
+  out.text = std::move(rewritten);
+  out.changed = true;
+  return out;
 }
 
 const AstNode* shift_relative_refs(const AstNode& root, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {

@@ -6,6 +6,7 @@
 #include "parser/ref_transforms.h"
 
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -352,6 +353,17 @@ TEST(SheetRemovalTransform, RemovesOnlyTheQualifiedTarget) {
   EXPECT_FALSE(t.apply(MakeRef("bEtA", 0, 0)).has_value());
   EXPECT_TRUE(t.apply(MakeRef("Alpha", 0, 0)).has_value());
   EXPECT_TRUE(t.apply(MakeRef("", 0, 0)).has_value());
+}
+
+TEST(SheetRemovalTransform, RebindsOnlyListedNamesOnTheRemovedSheet) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta", "Gamma"};
+  const SheetRemovalTransform t(order, /*removed_index=*/1, {"LN"});
+
+  EXPECT_TRUE(t.rebinds_name_to_book("Beta", "LN"));
+  EXPECT_TRUE(t.rebinds_name_to_book("bEtA", "ln"));
+  EXPECT_FALSE(t.rebinds_name_to_book("Beta", "Lonely"));
+  EXPECT_FALSE(t.rebinds_name_to_book("Alpha", "LN"));
+  EXPECT_FALSE(SheetRemovalTransform(order, 1).rebinds_name_to_book("Beta", "LN"));
 }
 
 TEST(SheetRemovalTransform, MiddleSpanKeepsEndpoints) {

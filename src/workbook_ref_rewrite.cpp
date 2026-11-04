@@ -19,54 +19,14 @@
 #include "io/xml_utils.h"
 #include "io/xsd_int.h"
 #include "parser/ast.h"
-#include "parser/ast_format.h"
 #include "parser/ast_shift.h"
-#include "parser/parser.h"
 #include "pivot/pivot_cache.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "table.h"
-#include "utils/arena.h"
 
 namespace formulon {
-
-FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::RefTransform& transform) {
-  FormulaRewriteResult out;
-  out.text.assign(formula);
-  std::string_view body = formula;
-  bool had_equals = false;
-  if (!body.empty() && body.front() == '=') {
-    body = body.substr(1);
-    had_equals = true;
-  }
-  if (body.empty()) {
-    return out;
-  }
-  Arena arena;
-  parser::Parser parser(body, arena);
-  parser::AstNode* root = parser.parse();
-  if (root == nullptr || !parser.errors().empty()) {
-    out.error = true;
-    return out;
-  }
-  const parser::AstNode* shifted = parser::shift_refs(*root, arena, transform);
-  if (shifted == nullptr) {
-    out.error = true;
-    return out;
-  }
-  if (shifted == root) {
-    return out;  // Identity walk; no change required.
-  }
-  std::string rewritten;
-  if (had_equals) {
-    rewritten.push_back('=');
-  }
-  rewritten.append(parser::format_formula(*shifted));
-  out.text = std::move(rewritten);
-  out.changed = true;
-  return out;
-}
 
 bool remap_book_views_xml(std::string& book_views_xml, const std::vector<std::uint32_t>& old_to_new) {
   if (book_views_xml.empty() || old_to_new.empty()) {

@@ -29,6 +29,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -107,6 +108,13 @@ class RefTransform {
   /// mapping; returning `std::nullopt` collapses the name to `#REF!`.
   virtual std::optional<std::string_view> apply_name_sheet(std::string_view sheet) const;
 
+  /// Whether `sheet!name`, whose qualifier `apply_name_sheet` collapses, is
+  /// rebound to the workbook-scoped name instead (spelled `[0]!name`). The
+  /// default is false: the name collapses to `#REF!`.
+  virtual bool rebinds_name_to_book(std::string_view /*sheet*/, std::string_view /*name*/) const noexcept {
+    return false;
+  }
+
   /// Rewrites the table name of a structured reference (`Table1[Col]`).
   /// `column` is the node's bracket payload verbatim
   /// (`eval::parse_structured_ref_payload` reads it). The default is an
@@ -124,6 +132,17 @@ class RefTransform {
 /// untouched; the returned pointer aliases `&root` when no descendant
 /// required rewriting (identity walks do not allocate).
 const AstNode* shift_refs(const AstNode& root, Arena& arena, const RefTransform& transform);
+
+/// Outcome of `rewrite_formula`.
+struct FormulaRewriteResult {
+  std::string text;      ///< Rewritten formula (the input when nothing changed).
+  bool changed = false;  ///< Any reference was actually rewritten.
+  bool error = false;    ///< Parse failure or arena exhaustion; `text` is the input.
+};
+
+/// Rewrites one formula text through `transform`, keeping a leading `=` if
+/// present. An unchanged result lets the caller skip dependent bookkeeping.
+FormulaRewriteResult rewrite_formula(std::string_view formula, const RefTransform& transform);
 
 /// Convenience wrapper for the historical relative-shift transform.
 ///

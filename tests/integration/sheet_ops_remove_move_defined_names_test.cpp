@@ -321,6 +321,110 @@ TEST(WorkbookSheetOps, RemoveAdjustsSheetScopedLocalIds) {
   EXPECT_EQ(wb.defined_names()[1].local_sheet_id, 1);  // Gamma shifted down
 }
 
+// Sheet1..Sheet3 with A1:A5 holding the row number times ten on every sheet.
+Workbook ThreeNumberedSheets() {
+  Workbook wb = Workbook::create_empty();
+  for (const char* name : {"Sheet1", "Sheet2", "Sheet3"}) {
+    wb.add_sheet(name);
+  }
+  for (std::uint32_t sheet = 0; sheet < 3U; ++sheet) {
+    for (std::uint32_t row = 0; row < 5U; ++row) {
+      EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(sheet, row, 0, Value::number((row + 1.0) * 10.0))));
+    }
+  }
+  return wb;
+}
+
+const DefinedName* FindName(const Workbook& wb, std::string_view name, std::int32_t local_sheet_id) {
+  for (const DefinedName& entry : wb.defined_names()) {
+    if (entry.name == name && entry.local_sheet_id == local_sheet_id) {
+      return &entry;
+    }
+  }
+  return nullptr;
+}
+
+// A removed sheet's local name that another sheet spells `Sheet2!LN`, with no
+// workbook-scoped namesake, is promoted to workbook scope and read as `[0]!LN`.
+TEST(WorkbookSheetOps, RemovePromotesAReferencedLocalNameToWorkbookScope) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  wb.set_defined_names({DefinedName{"LN", "Sheet2!$A$1", 1, false, ""},
+                        DefinedName{"Nm2", "Sheet2!$A$1", -1, false, ""},
+                        DefinedName{"Nm3", "Sheet2!$A$1:$B$2", -1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 3, "=Sheet2!LN")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 2, 3, "=Sheet2!LN+1")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 3)->formula_text, "=[0]!LN");
+  EXPECT_EQ(wb.sheet(0).cell_at(2, 3)->formula_text, "=[0]!LN+1");
+  const DefinedName* promoted = FindName(wb, "LN", -1);
+  ASSERT_NE(promoted, nullptr);
+  EXPECT_EQ(promoted->formula, "#REF!$A$1");
+  EXPECT_EQ(wb.defined_names().size(), 3U);
+}
+
+// A referenced local name with a workbook-scoped namesake is dropped and its
+// references bind to the workbook name; an unreferenced local name is dropped.
+TEST(WorkbookSheetOps, RemoveRebindsToTheWorkbookNameAndDropsUnreferencedLocals) {
+  Workbook wb = ThreeNumberedSheets();
+  wb.set_defined_names(
+      {DefinedName{"LN", "Sheet2!$A$1", 1, false, ""}, DefinedName{"Lonely", "Sheet2!$A$3", 1, false, ""},
+       DefinedName{"Other", "Sheet3!$A$4", 1, false, ""}, DefinedName{"LN", "Sheet3!$A$2", -1, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 3, "=Sheet2!LN")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1, 3, "=LN")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 2, 3, "=Sheet2!Other")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 3)->formula_text, "=[0]!LN");
+  EXPECT_EQ(wb.sheet(0).cell_at(1, 3)->formula_text, "=LN");
+  EXPECT_EQ(wb.sheet(0).cell_at(2, 3)->formula_text, "=[0]!Other");
+  ASSERT_EQ(wb.defined_names().size(), 2U);
+  const DefinedName* book_ln = FindName(wb, "LN", -1);
+  ASSERT_NE(book_ln, nullptr);
+  EXPECT_EQ(book_ln->formula, "Sheet3!$A$2");
+  const DefinedName* other = FindName(wb, "Other", -1);
+  ASSERT_NE(other, nullptr);
+  EXPECT_EQ(other->formula, "Sheet3!$A$4");
+  EXPECT_EQ(FindName(wb, "Lonely", -1), nullptr);
+  EXPECT_EQ(FindName(wb, "Lonely", 1), nullptr);
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const double expected[] = {20.0, 20.0, 40.0};
+  for (std::uint32_t row = 0; row < 3U; ++row) {
+    const Value value = wb.sheet(0).resolve_cell_value(row, 3);
+    ASSERT_TRUE(value.is_number()) << row;
+    EXPECT_DOUBLE_EQ(value.as_number(), expected[row]) << row;
+  }
+}
+
+// A promoted name sits beside another sheet's local namesake: `[0]!LN` reads
+// the promoted name, that sheet's bare `LN` still reads its own local.
+TEST(WorkbookSheetOps, RemovePromotedNameLeavesAnotherSheetsLocalNamesakeAlone) {
+  Workbook wb = ThreeNumberedSheets();
+  wb.set_defined_names(
+      {DefinedName{"LN", "Sheet3!$A$2", 1, false, ""}, DefinedName{"LN", "Sheet3!$A$3", 2, false, ""}});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 3, "=Sheet2!LN")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 0, 3, "=LN")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 3)->formula_text, "=[0]!LN");
+  EXPECT_EQ(wb.sheet(1).cell_at(0, 3)->formula_text, "=LN");
+  ASSERT_NE(FindName(wb, "LN", -1), nullptr);
+  ASSERT_NE(FindName(wb, "LN", 1), nullptr);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value promoted = wb.sheet(0).resolve_cell_value(0, 3);
+  ASSERT_TRUE(promoted.is_number());
+  EXPECT_DOUBLE_EQ(promoted.as_number(), 20.0);
+  const Value local = wb.sheet(1).resolve_cell_value(0, 3);
+  ASSERT_TRUE(local.is_number());
+  EXPECT_DOUBLE_EQ(local.as_number(), 30.0);
+}
+
 TEST(WorkbookSheetOps, MoveForwardRearrangesSheets) {
   Workbook wb = ThreeSheetWorkbook();
   // Move Alpha (0) to position 2 (the end). Excel UI semantics:

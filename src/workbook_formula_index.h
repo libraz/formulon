@@ -21,6 +21,7 @@
 #include "eval/recalc_engine.h"
 #include "parser/ast.h"
 #include "sheet.h"
+#include "table.h"
 #include "utils/arena.h"
 
 namespace formulon {
@@ -36,6 +37,17 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
 bool references_any_name(const parser::AstNode& root, const std::vector<std::string>& candidates);
 std::vector<std::string> close_affected_names(const std::vector<DefinedName>& defined_names,
                                               std::vector<std::string> affected);
+
+// The local names of the sheet at `removed_index` that survive its removal
+// as `[0]!Name`: those a surviving owner (another sheet's cells, CF and DV
+// formulas and table calculated columns, or a name not local to that sheet)
+// spells `Sheet!Name`, closed over the bodies of the ones promoted to
+// workbook scope (no workbook-scoped namesake). A lambda call's callee does
+// not count. Must run before the removal rewrites any formula.
+std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vector<Sheet>& sheets,
+                                                                 const std::vector<DefinedName>& defined_names,
+                                                                 const std::vector<TableMetadata>& tables,
+                                                                 std::size_t removed_index);
 
 // Re-registers and dirties only the formula cells whose value can change
 // when `changed_name` (and every name that transitively references it, per

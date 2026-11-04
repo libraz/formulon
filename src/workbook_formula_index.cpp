@@ -13,12 +13,15 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_types.h"
 #include "defined_name.h"
 #include "eval/builtin_names.h"
 #include "eval/recalc_engine.h"
 #include "parser/ast.h"
 #include "sheet.h"
+#include "sheet_metadata.h"
 #include "sheet_name.h"
+#include "table.h"
 #include "utils/arena.h"
 #include "utils/formula_text.h"
 #include "utils/strings.h"
@@ -190,6 +193,118 @@ std::vector<std::string> close_affected_names(const std::vector<DefinedName>& de
     }
   }
   return affected;
+}
+
+namespace {
+
+// Appends to `found` each entry of `locals` that `node` names as a NameRef
+// qualified by `sheet`, or unqualified when `unqualified_counts`. A NameRef
+// callee of a lambda call is skipped.
+void collect_local_name_refs(const parser::AstNode& node, std::string_view sheet, bool unqualified_counts,
+                             const std::vector<std::string>& locals, std::vector<std::string>& found) {
+  if (node.kind() == parser::NodeKind::NameRef) {
+    const std::string_view qualifier = node.as_name_sheet();
+    if (qualifier.empty() ? !unqualified_counts : !sheet_names::equal(qualifier, sheet)) {
+      return;
+    }
+    for (const std::string& local : locals) {
+      if (strings::case_insensitive_eq(local, node.as_name()) && !contains_affected_name(found, local)) {
+        found.push_back(local);
+      }
+    }
+    return;
+  }
+  const parser::AstNode* callee = node.kind() == parser::NodeKind::LambdaCall ? &node.as_lambda_call_callee() : nullptr;
+  parser::any_child_node(node, [&](const parser::AstNode& child) {
+    if (&child != callee || child.kind() != parser::NodeKind::NameRef) {
+      collect_local_name_refs(child, sheet, unqualified_counts, locals, found);
+    }
+    return false;
+  });
+}
+
+}  // namespace
+
+std::vector<std::string> referenced_local_names_of_removed_sheet(const std::vector<Sheet>& sheets,
+                                                                 const std::vector<DefinedName>& defined_names,
+                                                                 const std::vector<TableMetadata>& tables,
+                                                                 std::size_t removed_index) {
+  const std::int32_t removed_id = static_cast<std::int32_t>(removed_index);
+  std::vector<std::string> locals;
+  for (const DefinedName& entry : defined_names) {
+    if (entry.local_sheet_id == removed_id) {
+      locals.push_back(entry.name);
+    }
+  }
+  if (locals.empty()) {
+    return {};
+  }
+  const std::string_view sheet_name = sheets[removed_index].name();
+  std::vector<std::string> referenced;
+  Arena arena;
+  const auto scan = [&](std::string_view text, bool unqualified_counts) {
+    if (const parser::AstNode* root = parse_stored_formula(text, arena); root != nullptr) {
+      collect_local_name_refs(*root, sheet_name, unqualified_counts, locals, referenced);
+    }
+  };
+
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    if (sheet_idx == removed_index) {
+      continue;
+    }
+    const Sheet& sheet = sheets[sheet_idx];
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (const auto& [col, cell] : cells) {
+        scan(cell.formula_text, false);
+      }
+    }
+    for (const cf::ConditionalFormat& conditional_format : sheet.conditional_formats()) {
+      for (const cf::CFRule& rule : conditional_format.rules) {
+        if (rule.formula1.has_value()) {
+          scan(*rule.formula1, false);
+        }
+        if (rule.formula2.has_value()) {
+          scan(*rule.formula2, false);
+        }
+      }
+    }
+    for (const DataValidation& validation : sheet.validations()) {
+      scan(validation.formula1, false);
+      scan(validation.formula2, false);
+    }
+  }
+  for (const DefinedName& entry : defined_names) {
+    if (entry.local_sheet_id != removed_id) {
+      scan(entry.formula, false);
+    }
+  }
+  for (const TableMetadata& table : tables) {
+    if (table.sheet_index == removed_index) {
+      continue;
+    }
+    for (const TableColumn& column : table.columns) {
+      scan(column.calculated_column_formula, false);
+    }
+  }
+
+  // A promoted name keeps its body, so the locals that body reaches survive too.
+  const auto has_book_namesake = [&](std::string_view name) {
+    return std::any_of(defined_names.begin(), defined_names.end(), [&](const DefinedName& entry) {
+      return entry.local_sheet_id < 0 && strings::case_insensitive_eq(entry.name, name);
+    });
+  };
+  for (std::size_t i = 0; i < referenced.size(); ++i) {
+    const std::string name = referenced[i];
+    if (has_book_namesake(name)) {
+      continue;
+    }
+    for (const DefinedName& entry : defined_names) {
+      if (entry.local_sheet_id == removed_id && strings::case_insensitive_eq(entry.name, name)) {
+        scan(entry.formula, true);
+      }
+    }
+  }
+  return referenced;
 }
 
 namespace {

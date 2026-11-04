@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -90,8 +91,10 @@ std::optional<std::string_view> SheetCopyTransform::apply_structured_ref(std::st
 }
 
 SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order,
-                                             std::uint32_t removed_index)
-    : pre_removal_sheet_order_(pre_removal_sheet_order), removed_index_(removed_index) {}
+                                             std::uint32_t removed_index, std::vector<std::string> rebound_names)
+    : pre_removal_sheet_order_(pre_removal_sheet_order),
+      removed_index_(removed_index),
+      rebound_names_(std::move(rebound_names)) {}
 
 std::size_t SheetRemovalTransform::find_sheet(std::string_view sheet) const noexcept {
   for (std::size_t i = 0; i < pre_removal_sheet_order_.size(); ++i) {
@@ -122,6 +125,14 @@ std::optional<std::string_view> SheetRemovalTransform::apply_name_sheet(std::str
     return std::nullopt;
   }
   return sheet;
+}
+
+bool SheetRemovalTransform::rebinds_name_to_book(std::string_view sheet, std::string_view name) const noexcept {
+  if (!is_removed(find_sheet(sheet))) {
+    return false;
+  }
+  return std::any_of(rebound_names_.begin(), rebound_names_.end(),
+                     [name](const std::string& rebound) { return strings::case_insensitive_eq(rebound, name); });
 }
 
 std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_span(std::string_view begin,
