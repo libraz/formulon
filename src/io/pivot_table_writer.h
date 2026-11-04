@@ -45,6 +45,7 @@ namespace formulon::io {
 struct PivotRenderedSpan {
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
+  std::uint32_t top = 0;  ///< First row of the report body when the page-field block pushes it below the anchor.
 };
 
 /// Emits a complete `xl/pivotTables/pivotTable*.xml` document.
@@ -85,6 +86,9 @@ struct PivotRenderedSpan {
 ///     placeholder span it was created with however many fields are added
 ///     afterwards. Over-sizing is harmless, so a caller that deliberately
 ///     reserved a wider range keeps it.
+///   * The range covers the report body only, never the page-field block;
+///     `PivotRenderedSpan::top` moves its first row below that block when
+///     the anchor leaves no room for it.
 ///
 /// Passing it unconditionally is therefore safe — this function owns the
 /// choice.

@@ -102,6 +102,51 @@ TEST(PivotTableWriter, RenderedSpanIsOffsetFromTheAnchorNotFromA1) {
   EXPECT_NE(xml.find("<location ref=\"E3:G6\""), std::string::npos) << "xml=" << xml;
 }
 
+// The ref covers the report body only. Excel's own files: one page field over
+// a body at I3 is I3:J8; two page fields over-then-down is I3:J8; three
+// page fields wrapped by two push the body to I4:J9.
+TEST(PivotTableWriter, LocationRefExcludesTheSinglePageFieldBlock) {
+  pivot::PivotTable table;
+  table.set_anchor(2U, 8U, 1U, 1U);  // I3
+  table.set_location_attributes(1U, 1U, 1U, 1U, 1U);
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 2U});
+  EXPECT_NE(xml.find("<location ref=\"I3:J8\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\" "
+                     "rowPageCount=\"1\" colPageCount=\"1\"/>"),
+            std::string::npos)
+      << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, LocationRefExcludesTwoPageFieldsOverThenDown) {
+  pivot::PivotTable table;
+  table.set_anchor(2U, 8U, 1U, 1U);
+  table.set_location_attributes(1U, 1U, 1U, 1U, 2U);
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 2U});
+  EXPECT_NE(xml.find("<location ref=\"I3:J8\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\" "
+                     "rowPageCount=\"1\" colPageCount=\"2\"/>"),
+            std::string::npos)
+      << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, LocationRefStartsBelowAPageBlockTallerThanTheAnchorRoom) {
+  pivot::PivotTable table;
+  table.set_anchor(2U, 8U, 1U, 1U);  // I3, but the three-row page block needs I1:M2 plus a gap
+  table.set_location_attributes(1U, 1U, 1U, 2U, 2U);
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 3U});
+  EXPECT_NE(xml.find("<location ref=\"I4:J9\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\" "
+                     "rowPageCount=\"2\" colPageCount=\"2\"/>"),
+            std::string::npos)
+      << "xml=" << xml;
+}
+
+TEST(PivotTableWriter, TwoPageFieldsDownThenOverCarryTheirRowCount) {
+  pivot::PivotTable table;
+  table.set_anchor(2U, 8U, 1U, 1U);
+  table.set_location_attributes(1U, 1U, 1U, 2U, 1U);
+  const std::string xml = write_pivot_table_definition(table, PivotRenderedSpan{6U, 2U, 3U});
+  EXPECT_NE(xml.find("<location ref=\"I4:J9\""), std::string::npos) << "xml=" << xml;
+  EXPECT_NE(xml.find("rowPageCount=\"2\" colPageCount=\"1\"/>"), std::string::npos) << "xml=" << xml;
+}
+
 TEST(PivotTableWriter, AnAuthoredSpanIsReEmittedAndNeverReprojected) {
   // The span here came from a `ref` Excel wrote. Replacing it with our own
   // projection would make a read -> write cycle rewrite authored bytes,

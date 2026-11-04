@@ -124,6 +124,10 @@ struct PivotCells {
   std::uint32_t left = 0;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
+  /// The report body alone -- what `<location ref>` covers -- without the page-field block above it.
+  std::uint32_t body_top = 0;
+  std::uint32_t body_rows = 0;
+  std::uint32_t body_cols = 0;
   std::vector<PivotCell> cells;
   /// Cell ranges Excel merges under `mergeItem`, in absolute sheet coordinates.
   std::vector<PivotRect> merges;

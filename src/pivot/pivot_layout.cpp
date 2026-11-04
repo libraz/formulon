@@ -626,6 +626,7 @@ struct LayoutPlan {
   std::size_t page_lines = 0;  ///< Page fields per column (down-then-over) or row (over-then-down).
   std::size_t total_rows = 0;
   std::size_t total_cols = 0;
+  std::size_t body_cols = 0;  ///< Columns of the report body, the page block excluded.
   std::size_t cell_count = 0;
   std::size_t corner_extent = 0;
 
@@ -853,6 +854,7 @@ Expected<LayoutPlan, Error> build_layout_plan(const PivotTable& table, const Piv
   plan.page_lines = page_lines;
   plan.total_rows = total_rows;
   plan.total_cols = total_cols;
+  plan.body_cols = body_cols;
   return plan;
 }
 
@@ -969,10 +971,31 @@ std::size_t cell_data_field(const AxisEntry& row_entry, const AxisEntry& col_ent
   return col_entry.data_field.value_or(0);
 }
 
+// Under `gridDropZones` a lone data field with row fields and no column fields
+// moves its name to the drop-zone row; its value column reads the locale's
+// standalone total word instead.
+bool lone_data_field_in_drop_zone(const LayoutPlan& plan) {
+  return plan.drop_zone_rows > 0 && plan.data_field_count == 1 && plan.row_depth > 0;
+}
+
+// The locale's bare "total" word: the subtotal affix without its separator.
+std::string total_word(const LayoutPlan& plan) {
+  const bool prefixed = plan.options.subtotal_suffix.empty() && !plan.options.subtotal_prefix.empty();
+  const std::string& affix = prefixed ? plan.options.subtotal_prefix : plan.subtotal_suffix;
+  const std::size_t first = affix.find_first_not_of(' ');
+  if (first == std::string::npos) {
+    return std::string();
+  }
+  return affix.substr(first, affix.find_last_not_of(' ') - first + 1);
+}
+
 // Label of a column with no column level above it: its data field's name,
 // or nothing when the data fields sit on the rows.
 std::string flat_col_header(const LayoutPlan& plan, std::size_t c_entry) {
   const AxisEntry& entry = plan.col_entries[c_entry];
+  if (lone_data_field_in_drop_zone(plan)) {
+    return total_word(plan);
+  }
   if (entry.data_field) {
     return data_field_name(plan.table, *entry.data_field);
   }
@@ -1001,8 +1024,8 @@ void emit_page_block(const LayoutPlan& plan, PivotCells& cells) {
       if (r + 1 == plan.page_rows || c % stride == kPageHeaderCols || pos >= plan.page_lines || i >= pages.size()) {
         append_blank(cells, row, col);
       } else if (c % stride == 0) {
-        emit_text_or_blank(cells, row, col, field_caption(plan, pages[i].field_label), PivotCellKind::Header,
-                           PivotCellRole::PageCaption, 0, pages[i].field_label);
+        emit_text_or_blank(cells, row, col, pages[i].field_label, PivotCellKind::Header, PivotCellRole::PageCaption, 0,
+                           pages[i].field_label);
       } else {
         append_cell(cells, row, col, text_value(cells, pages[i].item_label), PivotCellKind::Header,
                     PivotCellRole::PageValue, 0, pages[i].field_label);
@@ -1084,7 +1107,10 @@ void emit_drop_zone_row(const LayoutPlan& plan, PivotCells& cells) {
   const std::size_t width = plan.row_header_cols + plan.data_cols + plan.total_strip_cols;
   for (std::size_t c = 0; c < width; ++c) {
     const std::uint32_t col = plan.left + static_cast<std::uint32_t>(c);
-    if (col == plan.data_left && plan.values_on_cols) {
+    if (col == plan.left && lone_data_field_in_drop_zone(plan)) {
+      append_df_cell(cells, plan.top, col, text_value(cells, data_field_name(plan.table, 0)), PivotCellKind::Header,
+                     PivotCellRole::FieldHeader, plan.table, 0);
+    } else if (col == plan.data_left && plan.values_on_cols) {
       emit_text_or_blank(cells, plan.top, col, field_caption(plan, plan.table.data_caption()), PivotCellKind::Header,
                          PivotCellRole::FieldHeader, 0);
     } else {
@@ -1702,6 +1728,9 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   cells.left = plan.left;
   cells.rows = static_cast<std::uint32_t>(plan.total_rows);
   cells.cols = static_cast<std::uint32_t>(plan.total_cols);
+  cells.body_top = plan.top;
+  cells.body_rows = static_cast<std::uint32_t>(plan.total_rows - plan.page_rows);
+  cells.body_cols = static_cast<std::uint32_t>(plan.body_cols);
   cells.cells.reserve(plan.cell_count);
 
   emit_page_block(plan, cells);

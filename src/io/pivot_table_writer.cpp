@@ -1307,11 +1307,14 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // `fm_workbook_pivot_set_anchor` keeps it.
   std::uint32_t span_rows = table.span_rows();
   std::uint32_t span_cols = table.span_cols();
+  std::uint32_t ref_top = table.anchor_row();
   if (rendered_span.has_value() && !table.has_authored_span()) {
     span_rows = span_rows > rendered_span->rows ? span_rows : rendered_span->rows;
     span_cols = span_cols > rendered_span->cols ? span_cols : rendered_span->cols;
+    // A page-field block taller than the anchor's headroom pushes the body down.
+    ref_top = ref_top > rendered_span->top ? ref_top : rendered_span->top;
   }
-  AppendXmlAttrEscaped(out, EncodeA1Range(table.anchor_row(), table.anchor_col(), span_rows, span_cols));
+  AppendXmlAttrEscaped(out, EncodeA1Range(ref_top, table.anchor_col(), span_rows, span_cols));
   out.append("\"");
   // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol. Preserve
   // authored values, including explicit zero, while supplying the schema's

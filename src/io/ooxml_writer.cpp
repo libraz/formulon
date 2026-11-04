@@ -132,7 +132,8 @@ std::optional<PivotRenderedSpan> ProjectPivotSpan(const Workbook& wb, const pivo
   if (!layout_or) {
     return std::nullopt;
   }
-  return PivotRenderedSpan{layout_or.value().rows, layout_or.value().cols};
+  const pivot::PivotCells& cells = layout_or.value();
+  return PivotRenderedSpan{cells.body_rows, cells.body_cols, cells.body_top};
 }
 
 /// True when `cache` reads a worksheet range or name of `wb` itself, so Excel

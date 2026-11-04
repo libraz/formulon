@@ -997,5 +997,143 @@ TEST(PivotLayoutCellItemPath, PathOutlivesTheResult) {
   EXPECT_EQ(Items(path->col_items), "1:Gadget");
 }
 
+// ---------------------------------------------------------------------------
+// Lone data field under gridDropZones, and the page block against the body
+// bounds. Expectations are Excel's own: the data field name sits one row above
+// the row-label header, the value column reads the locale's bare total word,
+// and a page field caption survives hidden headers.
+// ---------------------------------------------------------------------------
+
+// "集計" without the subtotal separator.
+#define TOTAL_WORD "\xE9\x9B\x86\xE8\xA8\x88"
+
+PivotTable build_lone_amt_table(PivotLayout layout, bool single_row_field) {
+  PivotTable table = build_region_product_table(layout, single_row_field);
+  table.mutable_data_fields().pop_back();
+  table.mutable_fields()[3].axis = PivotAxis::None;
+  table.set_grid_drop_zones(true);
+  return table;
+}
+
+TEST(PivotLayoutOptions, GridDropZonesMoveALoneDataFieldNameAboveTheRowLabels) {
+  const PivotCache cache = build_region_product_cache();
+  const PivotTable table = build_lone_amt_table(PivotLayout::Compact, true);
+  const std::vector<std::string> expected = {
+      "Sum of Amt|", ROW_LABELS "|" TOTAL_WORD, "East|500", "North|300", "South|700", TOTAL "|1500",
+  };
+  EXPECT_EQ(RenderGrid(table, cache), expected);
+}
+
+TEST(PivotLayoutOptions, GridDropZonesKeepALoneDataFieldCaptionWithHiddenHeaders) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_lone_amt_table(PivotLayout::Tabular, false);
+  table.set_show_headers(false);
+  const std::vector<std::string> expected = {
+      "Sum of Amt||",           "||" TOTAL_WORD, "East|A|500", "East" SUBTOTAL "||500",  "North|A|100",  "|B|200",
+      "North" SUBTOTAL "||300", "South|A|300",   "|B|400",     "South" SUBTOTAL "||700", TOTAL "||1500",
+  };
+  EXPECT_EQ(RenderGrid(table, cache), expected);
+}
+
+/// Region on the rows, Amt summed, and `page_count` page fields (P1..P3).
+PivotCache build_paged_cache() {
+  PivotCache cache;
+  cache.set_cache_id(kCacheId);
+  for (const char* name : {"Region", "Amt", "P1", "P2", "P3"}) {
+    cache.mutable_fields().push_back(PivotCacheField{name, {}});
+  }
+  for (const char* region : {"North", "South", "East"}) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(Value::number(10.0));
+    for (const char* page : {"a", "b", "c"}) {
+      rec.cells.push_back(owned_text(cache, page));
+    }
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  return cache;
+}
+
+PivotTable build_paged_table(std::size_t page_count, std::uint32_t page_wrap, bool over_then_down) {
+  PivotTable table;
+  table.set_name("PivotTable1");
+  table.set_pivot_cache_id(kCacheId);
+  table.set_anchor(2, 0, 1, 1);
+  for (const char* name : {"Region", "Amt", "P1", "P2", "P3"}) {
+    PivotField field;
+    field.source_name = name;
+    field.axis = PivotAxis::None;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  table.mutable_fields()[0].axis = PivotAxis::Row;
+  table.mutable_fields()[1].axis = PivotAxis::Value;
+  table.mutable_row_field_order() = {0};
+  for (std::size_t i = 0; i < page_count; ++i) {
+    table.mutable_fields()[2 + i].axis = PivotAxis::Page;
+    table.mutable_page_fields().push_back(PivotPageField{static_cast<std::uint32_t>(2 + i), std::nullopt});
+  }
+  PivotDataField sum;
+  sum.name = "Sum of Amt";
+  sum.field_index = 1;
+  sum.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum));
+  table.set_page_wrap(page_wrap);
+  table.set_page_over_then_down(over_then_down);
+  return table;
+}
+
+// The body is the label header, three regions and the grand total: 5 x 2.
+TEST(PivotLayoutOptions, OnePageFieldLeavesTheBodyBoundsAtTheAnchor) {
+  const PivotCache cache = build_paged_cache();
+  const PivotCells cells = ProjectCells(build_paged_table(1, 0, false), cache);
+  EXPECT_EQ(cells.top, 0U);
+  EXPECT_EQ(cells.rows, 7U);  // page row + gap + body
+  EXPECT_EQ(cells.body_top, 2U);
+  EXPECT_EQ(cells.body_rows, 5U);
+  EXPECT_EQ(cells.body_cols, 2U);
+}
+
+TEST(PivotLayoutOptions, TwoPageFieldsOverThenDownKeepTheBodyBelowOneLine) {
+  const PivotCache cache = build_paged_cache();
+  const PivotCells cells = ProjectCells(build_paged_table(2, 2, true), cache);
+  EXPECT_EQ(cells.cols, 5U);  // two page columns, wider than the body
+  EXPECT_EQ(cells.body_top, 2U);
+  EXPECT_EQ(cells.body_rows, 5U);
+  EXPECT_EQ(cells.body_cols, 2U);
+}
+
+TEST(PivotLayoutOptions, TwoPageFieldsDownThenOverPushTheBodyBelowTheBlock) {
+  const PivotCache cache = build_paged_cache();
+  const PivotCells cells = ProjectCells(build_paged_table(2, 2, false), cache);
+  EXPECT_EQ(cells.body_top, 3U);  // two page rows and the gap
+  EXPECT_EQ(cells.body_rows, 5U);
+  EXPECT_EQ(cells.body_cols, 2U);
+}
+
+TEST(PivotLayoutOptions, ThreePageFieldsWrappedByTwoPushTheBodyToTheThirdRow) {
+  const PivotCache cache = build_paged_cache();
+  const PivotCells cells = ProjectCells(build_paged_table(3, 2, false), cache);
+  EXPECT_EQ(cells.cols, 5U);
+  EXPECT_EQ(cells.body_top, 3U);  // two page rows and the gap
+  EXPECT_EQ(cells.body_rows, 5U);
+  EXPECT_EQ(cells.body_cols, 2U);
+  EXPECT_EQ(cells.top, 0U);
+  EXPECT_EQ(cells.rows, 8U);
+}
+
+TEST(PivotLayoutOptions, HiddenHeadersKeepThePageFieldCaption) {
+  const PivotCache cache = build_paged_cache();
+  PivotTable table = build_paged_table(1, 0, false);
+  table.set_show_headers(false);
+  const PivotCells cells = ProjectCells(table, cache);
+  const PivotCell* caption = layout_test::find_cell(cells, 0, 0);
+  ASSERT_NE(caption, nullptr);
+  EXPECT_EQ(caption->role, PivotCellRole::PageCaption);
+  EXPECT_EQ(CellText(caption->value), "P1");
+  const PivotCell* item = layout_test::find_cell(cells, 0, 1);
+  ASSERT_NE(item, nullptr);
+  EXPECT_EQ(item->role, PivotCellRole::PageValue);
+}
+
 }  // namespace
 }  // namespace formulon::pivot
