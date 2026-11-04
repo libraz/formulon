@@ -243,12 +243,13 @@ TEST(WorkbookCopySheet, MeasuredFormulas) {
             std::string(ValueAt(wb, kSrc, "B13").as_text()).replace(0, 3, "'Src (2)'"));
 
   // Conditional formatting and validation follow the copy (Excel stores
-  // these self-sheet references unqualified: `$A$1>0`, `$A$1:$A$3`).
+  // these self-sheet references unqualified: `$A$1>0`, `$A$1:$A$3`). The CF
+  // qualifier is already dropped on load; the validation keeps it.
   const Sheet& sheet = wb.sheet(2);
   ASSERT_EQ(sheet.conditional_formats().size(), 1U);
   ASSERT_EQ(sheet.conditional_formats()[0].rules.size(), 1U);
   ASSERT_TRUE(sheet.conditional_formats()[0].rules[0].formula1.has_value());
-  EXPECT_EQ(Strip(*sheet.conditional_formats()[0].rules[0].formula1), "'Src (2)'!$A$1>0");
+  EXPECT_EQ(Strip(*sheet.conditional_formats()[0].rules[0].formula1), "$A$1>0");
   ASSERT_EQ(sheet.validations().size(), 1U);
   EXPECT_EQ(Strip(sheet.validations()[0].formula1), "'Src (2)'!$A$1:$A$3");
 }

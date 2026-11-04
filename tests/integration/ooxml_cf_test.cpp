@@ -15,6 +15,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/zip_reader.h"
 #include "miniz.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -758,6 +759,116 @@ TEST(OoxmlCF, RoundTripPreservesExpressionRule) {
   EXPECT_EQ(rule.type, cf::RuleType::Expression);
   ASSERT_TRUE(rule.formula1.has_value());
   EXPECT_EQ(rule.formula1.value(), "A1>10");
+}
+
+// Excel drops a CF formula's qualifier naming its own sheet on load; a
+// qualifier naming another sheet stays.
+TEST(OoxmlCF, SelfSheetQualifierIsDroppedOnLoad) {
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n"
+      "  <Default Extension=\"rels\" "
+      "ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n"
+      "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n"
+      "  <Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet2.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet3.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "</Types>\n";
+  const std::string_view package_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+      "  <sheets>\n"
+      "    <sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>\n"
+      "    <sheet name=\"Sheet2\" sheetId=\"2\" r:id=\"rId2\"/>\n"
+      "    <sheet name=\"Sheet3\" sheetId=\"3\" r:id=\"rId3\"/>\n"
+      "  </sheets>\n"
+      "</workbook>\n";
+  const std::string_view workbook_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>\n"
+      "  <Relationship Id=\"rId2\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet2.xml\"/>\n"
+      "  <Relationship Id=\"rId3\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet3.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view sheet1_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "  <sheetData/>\n"
+      "</worksheet>\n";
+  const std::string_view sheet2_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "  <sheetData/>\n"
+      "  <conditionalFormatting sqref=\"C1\">\n"
+      "    <cfRule type=\"expression\" priority=\"1\"><formula>Sheet3!$A$5&gt;0</formula></cfRule>\n"
+      "  </conditionalFormatting>\n"
+      "</worksheet>\n";
+  const std::string_view sheet3_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "  <sheetData/>\n"
+      "  <conditionalFormatting sqref=\"C1\">\n"
+      "    <cfRule type=\"expression\" priority=\"1\"><formula>Sheet3!$A$1&gt;0</formula></cfRule>\n"
+      "  </conditionalFormatting>\n"
+      "  <conditionalFormatting sqref=\"C2\">\n"
+      "    <cfRule type=\"expression\" priority=\"2\"><formula>Sheet3!$A$5&gt;0</formula></cfRule>\n"
+      "  </conditionalFormatting>\n"
+      "</worksheet>\n";
+
+  const std::vector<std::uint8_t> bytes = BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet1_xml},
+      {"xl/worksheets/sheet2.xml", sheet2_xml},
+      {"xl/worksheets/sheet3.xml", sheet3_xml},
+  });
+  auto read_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+  Workbook& wb = read_or.value().workbook;
+  ASSERT_EQ(wb.sheet_count(), 3U);
+
+  const auto formula1 = [&wb](std::size_t sheet, std::size_t block) {
+    return wb.sheet(sheet).conditional_formats().at(block).rules.at(0).formula1.value();
+  };
+  EXPECT_EQ(formula1(2, 0), "$A$1>0");
+  EXPECT_EQ(formula1(2, 1), "$A$5>0");
+  EXPECT_EQ(formula1(1, 0), "Sheet3!$A$5>0");
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(2, 4, 1)));
+  EXPECT_EQ(formula1(2, 0), "$A$1>0");
+  EXPECT_EQ(formula1(2, 1), "#REF!>0");
+
+  auto written = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << "write_ooxml: " << written.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(written.value()))));
+  auto entry = zip.read_entry("xl/worksheets/sheet3.xml");
+  ASSERT_TRUE(static_cast<bool>(entry));
+  const std::string xml(entry.value().begin(), entry.value().end());
+  EXPECT_TRUE(xml.find("<formula>#REF!&gt;0</formula>") != std::string::npos ||
+              xml.find("<formula>#REF!>0</formula>") != std::string::npos)
+      << xml;
 }
 
 }  // namespace

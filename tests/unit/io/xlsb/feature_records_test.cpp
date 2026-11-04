@@ -467,6 +467,25 @@ TEST(XlsbFeatureRecords, EditedX14DataBarsReachTheSavedFile) {
   EXPECT_EQ(CountRecords(written.value(), "xl/worksheets/sheet1.bin", 1048), 4U);
 }
 
+// A CF formula naming its own sheet comes back from an XLSB round trip
+// without the qualifier.
+TEST(XlsbFeatureRecords, SelfSheetQualifierIsDroppedOnLoad) {
+  Workbook wb = Workbook::create();
+  const std::string own = wb.sheet(0).name();
+  cf::ConditionalFormat format;
+  format.sqref.push_back({{0, 2}, {0, 2}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::Expression;
+  rule.priority = 1;
+  rule.formula1 = own + "!$A$1>0";
+  format.rules.push_back(std::move(rule));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(format));
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const Workbook back = ReadXlsbBytes(written.value());
+  EXPECT_EQ(back.sheet(0).conditional_formats().at(0).rules.at(0).formula1.value(), "$A$1>0");
+}
+
 // A model data bar with x14-only settings and no retained x14 record (an
 // .xlsx source here) gets one written.
 TEST(XlsbFeatureRecords, X14DataBarsFromAnXlsxSourceAreWritten) {

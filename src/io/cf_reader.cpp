@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -22,9 +23,11 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "parser/ast_format.h"
+#include "parser/ast_shift.h"
 #include "parser/formula_prefix.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -559,6 +562,29 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   return out;
 }
 
+// Drops the qualifier that names the CF's own sheet, as Excel does on load.
+class OwnSheetQualifierStripper final : public parser::RefTransform {
+ public:
+  explicit OwnSheetQualifierStripper(std::string_view own_sheet) : own_sheet_(own_sheet) {}
+
+  std::optional<parser::Reference> apply(const parser::Reference& ref) const override {
+    parser::Reference out = ref;
+    if (!out.sheet.empty() && sheet_names::equal(out.sheet, own_sheet_)) {
+      out.sheet = {};
+      out.sheet_quoted = false;
+    }
+    return out;
+  }
+
+  std::optional<std::pair<parser::Reference, parser::Reference>> apply_range(
+      const parser::Reference& lhs, const parser::Reference& rhs) const override {
+    return std::make_pair(*apply(lhs), *apply(rhs));
+  }
+
+ private:
+  std::string_view own_sheet_;
+};
+
 }  // namespace
 
 Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet,
@@ -686,13 +712,23 @@ void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {
   };
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     Sheet& sheet = wb.sheet(i);
+    const OwnSheetQualifierStripper strip_own_sheet(sheet.name());
+    const auto ingest_rule_formula = [&](std::string& formula) {
+      ingest(formula);
+      if (!formula.empty()) {
+        parser::FormulaRewriteResult stripped = parser::rewrite_formula(formula, strip_own_sheet);
+        if (stripped.changed && !stripped.error) {
+          formula = std::move(stripped.text);
+        }
+      }
+    };
     for (cf::ConditionalFormat& format : sheet.mutable_conditional_formats()) {
       for (cf::CFRule& rule : format.rules) {
         if (rule.formula1.has_value()) {
-          ingest(*rule.formula1);
+          ingest_rule_formula(*rule.formula1);
         }
         if (rule.formula2.has_value()) {
-          ingest(*rule.formula2);
+          ingest_rule_formula(*rule.formula2);
         }
         if (rule.color_scale.has_value()) {
           for (cf::CfValueObject& cfvo : rule.color_scale->thresholds) {
