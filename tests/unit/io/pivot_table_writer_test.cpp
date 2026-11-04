@@ -7,6 +7,7 @@
 #include "io/pivot_table_writer.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -807,9 +808,9 @@ TEST(PivotTableWriter, UnusedFieldRoundTripsAsNoneAndDataCaptionEmitted) {
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\" dataCaption=\"Vals\">");
   xml.append("<location ref=\"A1:B2\"/>");
   xml.append("<pivotFields count=\"3\">");
-  xml.append("<pivotField axis=\"axisRow\"/>");  // used: Row
-  xml.append("<pivotField/>");                   // unused: None
-  xml.append("<pivotField dataField=\"1\"/>");   // Value
+  xml.append("<pivotField axis=\"axisRow\" showAll=\"0\"/>");  // used: Row
+  xml.append("<pivotField showAll=\"0\"/>");                   // unused: None
+  xml.append("<pivotField dataField=\"1\" showAll=\"0\"/>");   // Value
   xml.append("</pivotFields>");
   xml.append("<dataFields count=\"1\"><dataField name=\"X\" fld=\"2\"/></dataFields>");
   xml.append("</pivotTableDefinition>");
@@ -884,13 +885,13 @@ TEST(PivotTableWriter, RowFieldFormDecidesLayout) {
       {" outline=\"1\" outlineData=\"1\"", "", pivot::PivotLayout::Compact,
        "<pivotField axis=\"axisRow\" showAll=\"0\"/>"},
       {" compact=\"0\" compactData=\"0\"", " compact=\"0\" outline=\"0\"", pivot::PivotLayout::Tabular,
-       "<pivotField axis=\"axisRow\" showAll=\"0\" compact=\"0\" outline=\"0\"/>"},
-      {"", " compact=\"0\"", pivot::PivotLayout::Outline, "<pivotField axis=\"axisRow\" showAll=\"0\" compact=\"0\"/>"},
+       "<pivotField axis=\"axisRow\" compact=\"0\" outline=\"0\" showAll=\"0\"/>"},
+      {"", " compact=\"0\"", pivot::PivotLayout::Outline, "<pivotField axis=\"axisRow\" compact=\"0\" showAll=\"0\"/>"},
   };
   for (const Case& c : cases) {
     std::string xml(kXmlDecl);
     xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\"").append(c.root_attrs);
-    xml.append("><location ref=\"A1:B2\"/><pivotFields count=\"1\"><pivotField axis=\"axisRow\"");
+    xml.append("><location ref=\"A1:B2\"/><pivotFields count=\"1\"><pivotField axis=\"axisRow\" showAll=\"0\"");
     xml.append(c.field_attrs);
     xml.append("/></pivotFields>");
     xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields></pivotTableDefinition>");
@@ -928,8 +929,11 @@ TEST(PivotTableWriter, UnknownRootAndFieldAttributesRoundTrip) {
   };
   EXPECT_TRUE(has_attr(table.passthrough_attrs(), "updatedVersion", "8"));
   EXPECT_TRUE(has_attr(table.passthrough_attrs(), "createdVersion", "8"));
-  EXPECT_TRUE(has_attr(table.passthrough_attrs(), "itemPrintTitles", "1"));
-  EXPECT_TRUE(has_attr(table.passthrough_attrs(), "indent", "0"));
+  // `itemPrintTitles` and `indent` are modelled, not passed through.
+  EXPECT_FALSE(has_attr(table.passthrough_attrs(), "itemPrintTitles", "1"));
+  EXPECT_FALSE(has_attr(table.passthrough_attrs(), "indent", "0"));
+  EXPECT_TRUE(table.item_print_titles());
+  EXPECT_EQ(table.indent(), 0U);
   // Modelled attributes are NOT double-captured into the passthrough list.
   for (const auto& [name, value] : table.passthrough_attrs()) {
     (void)value;
@@ -941,7 +945,7 @@ TEST(PivotTableWriter, UnknownRootAndFieldAttributesRoundTrip) {
   // table layout rather than passed through.
   EXPECT_FALSE(has_attr(table.fields()[0].passthrough_attrs, "compact", "0"));
   EXPECT_EQ(table.layout(), pivot::PivotLayout::Outline);
-  EXPECT_TRUE(has_attr(table.fields()[0].passthrough_attrs, "showAll", "0"));
+  EXPECT_FALSE(table.fields()[0].show_all);
 
   const std::string written = write_pivot_table_definition(table);
   EXPECT_NE(written.find("updatedVersion=\"8\""), std::string::npos) << written;
@@ -1204,7 +1208,7 @@ TEST(PivotTableWriter, DataFieldFlagFollowsTheDataFieldList) {
       << xml;
 }
 
-TEST(PivotTableWriter, CapturedShowAllAndUpdatedVersionAreNotDuplicated) {
+TEST(PivotTableWriter, CapturedUpdatedVersionIsNotDuplicatedAndShowAllTrueIsUnwritten) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\" updatedVersion=\"6\">");
   xml.append("<location ref=\"A1:B2\"/><pivotFields count=\"1\"><pivotField axis=\"axisRow\" showAll=\"1\"/>");
@@ -1214,8 +1218,8 @@ TEST(PivotTableWriter, CapturedShowAllAndUpdatedVersionAreNotDuplicated) {
   const std::string written = write_pivot_table_definition(parsed_or.value());
   EXPECT_NE(written.find("updatedVersion=\"6\""), std::string::npos) << written;
   EXPECT_EQ(written.find("updatedVersion=\"8\""), std::string::npos) << written;
-  EXPECT_NE(written.find("showAll=\"1\""), std::string::npos) << written;
-  EXPECT_EQ(written.find("showAll=\"0\""), std::string::npos) << written;
+  EXPECT_TRUE(parsed_or.value().fields()[0].show_all);
+  EXPECT_EQ(written.find("showAll="), std::string::npos) << written;
 }
 
 // ---------------------------------------------------------------------------
@@ -1701,6 +1705,340 @@ TEST(PivotTableReader, DataOnRowsAndDataPositionAreNotKeptAsPassthrough) {
     EXPECT_NE(attr.first, "dataOnRows");
     EXPECT_NE(attr.first, "dataPosition");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Table options
+// ---------------------------------------------------------------------------
+
+std::string OptionsXml(std::string_view root_attrs, std::string_view fields = "<pivotField axis=\"axisRow\"/>",
+                       std::string_view tail = "") {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\"").append(root_attrs);
+  xml.append("><location ref=\"A1:B2\"/><pivotFields count=\"1\">").append(fields);
+  xml.append("</pivotFields><rowFields count=\"1\"><field x=\"0\"/></rowFields>").append(tail);
+  xml.append("</pivotTableDefinition>");
+  return xml;
+}
+
+struct OptionCase {
+  const char* label;
+  const char* attrs;
+  bool (*check)(const pivot::PivotTable&);
+};
+
+TEST(PivotTableOptionsRoundTrip, EveryOptionReadsWritesAndReadsBack) {
+  const OptionCase cases[] = {
+      {"showError", " showError=\"1\" errorCaption=\"ERR\"",
+       [](const pivot::PivotTable& t) { return t.show_error() && t.error_caption() == "ERR"; }},
+      {"showMissing", " showMissing=\"0\" missingCaption=\"-\"",
+       [](const pivot::PivotTable& t) { return !t.show_missing() && t.missing_caption() == "-"; }},
+      {"showHeaders", " showHeaders=\"0\"", [](const pivot::PivotTable& t) { return !t.show_headers(); }},
+      {"showDrill", " showDrill=\"0\"", [](const pivot::PivotTable& t) { return !t.show_drill(); }},
+      {"printDrill", " printDrill=\"1\"", [](const pivot::PivotTable& t) { return t.print_drill(); }},
+      {"showDataTips", " showDataTips=\"0\"", [](const pivot::PivotTable& t) { return !t.show_data_tips(); }},
+      {"gridDropZones", " gridDropZones=\"1\"", [](const pivot::PivotTable& t) { return t.grid_drop_zones(); }},
+      {"showEmptyRow", " showEmptyRow=\"1\"", [](const pivot::PivotTable& t) { return t.show_empty_row(); }},
+      {"showEmptyCol", " showEmptyCol=\"1\"", [](const pivot::PivotTable& t) { return t.show_empty_col(); }},
+      {"fieldPrintTitles", " fieldPrintTitles=\"1\"",
+       [](const pivot::PivotTable& t) { return t.field_print_titles(); }},
+      {"itemPrintTitles", " itemPrintTitles=\"1\"", [](const pivot::PivotTable& t) { return t.item_print_titles(); }},
+      {"showDataDropDown", " showDataDropDown=\"0\"",
+       [](const pivot::PivotTable& t) { return !t.show_data_drop_down(); }},
+      {"multipleFieldFilters", " multipleFieldFilters=\"0\"",
+       [](const pivot::PivotTable& t) { return !t.multiple_field_filters(); }},
+      {"preserveFormatting", " preserveFormatting=\"0\"",
+       [](const pivot::PivotTable& t) { return !t.preserve_formatting(); }},
+      {"mergeItem", " mergeItem=\"1\"", [](const pivot::PivotTable& t) { return t.merge_item(); }},
+      {"indent", " indent=\"2\"", [](const pivot::PivotTable& t) { return t.indent() == 2U; }},
+      {"indentZero", " indent=\"0\"", [](const pivot::PivotTable& t) { return t.indent() == 0U; }},
+      {"pageWrap", " pageWrap=\"2\" pageOverThenDown=\"1\"",
+       [](const pivot::PivotTable& t) { return t.page_wrap() == 2U && t.page_over_then_down(); }},
+      {"customListSort", " customListSort=\"0\"", [](const pivot::PivotTable& t) { return !t.custom_list_sort(); }},
+  };
+  for (const OptionCase& c : cases) {
+    SCOPED_TRACE(c.label);
+    auto first = read_pivot_table_definition(Bytes(OptionsXml(c.attrs)));
+    ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+    EXPECT_TRUE(c.check(first.value()));
+    for (const auto& attr : first.value().passthrough_attrs()) {
+      EXPECT_EQ(std::string(c.attrs).find(" " + attr.first + "="), std::string::npos) << attr.first;
+    }
+    const std::string written = write_pivot_table_definition(first.value());
+    // Each attribute is written verbatim, spelled as authored.
+    std::string_view rest = c.attrs;
+    while (!rest.empty()) {
+      const std::size_t end = rest.find("\" ", 1);
+      const std::string_view one = rest.substr(0, end == std::string_view::npos ? rest.size() : end + 1);
+      EXPECT_NE(written.find(one), std::string::npos) << one << " in " << written;
+      rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
+    }
+    auto second = read_pivot_table_definition(Bytes(written));
+    ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
+    EXPECT_TRUE(c.check(second.value()));
+    EXPECT_EQ(write_pivot_table_definition(second.value()), written);
+  }
+}
+
+TEST(PivotTableOptionsRoundTrip, SchemaDefaultsAreReadAndLeftUnwritten) {
+  auto table = read_pivot_table_definition(Bytes(OptionsXml("")));
+  ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+  const pivot::PivotTable& t = table.value();
+  EXPECT_FALSE(t.show_error());
+  EXPECT_FALSE(t.error_caption().has_value());
+  EXPECT_TRUE(t.show_missing());
+  EXPECT_FALSE(t.missing_caption().has_value());
+  EXPECT_TRUE(t.show_headers());
+  EXPECT_TRUE(t.show_drill());
+  EXPECT_FALSE(t.print_drill());
+  EXPECT_TRUE(t.show_data_tips());
+  EXPECT_FALSE(t.grid_drop_zones());
+  EXPECT_FALSE(t.show_empty_row());
+  EXPECT_FALSE(t.show_empty_col());
+  EXPECT_FALSE(t.field_print_titles());
+  EXPECT_FALSE(t.item_print_titles());
+  EXPECT_TRUE(t.show_data_drop_down());
+  EXPECT_TRUE(t.multiple_field_filters());
+  EXPECT_TRUE(t.preserve_formatting());
+  EXPECT_FALSE(t.merge_item());
+  EXPECT_EQ(t.indent(), 1U);
+  EXPECT_FALSE(t.page_over_then_down());
+  EXPECT_EQ(t.page_wrap(), 0U);
+  EXPECT_TRUE(t.custom_list_sort());
+  EXPECT_TRUE(t.alt_text().empty());
+  EXPECT_TRUE(t.alt_text_summary().empty());
+  const std::string written = write_pivot_table_definition(t);
+  for (const char* name :
+       {"showError",          "errorCaption",     "showMissing",     "missingCaption",   "showHeaders",
+        "showDrill",          "printDrill",       "showDataTips",    "gridDropZones",    "showEmptyRow",
+        "showEmptyCol",       "fieldPrintTitles", "itemPrintTitles", "showDataDropDown", "multipleFieldFilters",
+        "preserveFormatting", "mergeItem",        "indent",          "pageWrap",         "pageOverThenDown",
+        "customListSort",     "asteriskTotals",   "altText"}) {
+    EXPECT_EQ(written.find(std::string(" ") + name + "="), std::string::npos) << name << " in " << written;
+  }
+}
+
+TEST(PivotTableOptionsRoundTrip, NewPivotDefaultsWriteExcelsCreationAttributes) {
+  pivot::PivotTable table;
+  table.apply_new_pivot_defaults();
+  EXPECT_TRUE(table.item_print_titles());
+  EXPECT_EQ(table.indent(), 0U);
+  EXPECT_FALSE(table.multiple_field_filters());
+  const std::string written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find(" itemPrintTitles=\"1\""), std::string::npos) << written;
+  EXPECT_NE(written.find(" indent=\"0\""), std::string::npos) << written;
+  EXPECT_NE(written.find(" multipleFieldFilters=\"0\""), std::string::npos) << written;
+}
+
+TEST(PivotTableOptionsRoundTrip, AltTextLivesOnTheX14Extension) {
+  const std::string ext =
+      "<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:pivotTableDefinition "
+      "altText=\"Alt title\" altTextSummary=\"Alt summary text\" hideValuesRow=\"1\" "
+      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/></ext></extLst>";
+  auto table = read_pivot_table_definition(Bytes(OptionsXml("", "<pivotField axis=\"axisRow\"/>", ext)));
+  ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+  EXPECT_EQ(table.value().alt_text(), "Alt title");
+  EXPECT_EQ(table.value().alt_text_summary(), "Alt summary text");
+  EXPECT_EQ(table.value().raw_passthrough_xml().find("altText"), std::string::npos);
+  EXPECT_NE(table.value().raw_passthrough_xml().find("hideValuesRow=\"1\""), std::string::npos);
+
+  const std::string written = write_pivot_table_definition(table.value());
+  EXPECT_NE(written.find("altText=\"Alt title\" altTextSummary=\"Alt summary text\""), std::string::npos) << written;
+  EXPECT_EQ(written.find("altText"), written.rfind("altText=\"Alt title\"")) << written;
+  EXPECT_NE(written.find("hideValuesRow=\"1\""), std::string::npos) << written;
+  const std::string root_tag = written.substr(0, written.find("<location"));
+  EXPECT_EQ(root_tag.find("altText"), std::string::npos) << root_tag;
+
+  auto again = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+  EXPECT_EQ(again.value().alt_text(), "Alt title");
+  EXPECT_EQ(again.value().alt_text_summary(), "Alt summary text");
+}
+
+TEST(PivotTableOptionsRoundTrip, AltTextOnATableWithoutAnExtensionGeneratesIt) {
+  pivot::PivotTable table;
+  table.set_alt_text("Title");
+  table.set_alt_text_summary("Summary");
+  const std::string written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("<x14:pivotTableDefinition altText=\"Title\" altTextSummary=\"Summary\" hideValuesRow=\"1\""),
+            std::string::npos)
+      << written;
+  auto parsed = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(parsed)) << parsed.error().message;
+  EXPECT_EQ(parsed.value().alt_text(), "Title");
+  EXPECT_EQ(parsed.value().alt_text_summary(), "Summary");
+}
+
+TEST(PivotTableOptionsRoundTrip, AltTextIsAddedToAnExtLstWithoutTheTableExtension) {
+  const std::string other =
+      "<extLst><ext uri=\"{AAAAAAAA-0000-0000-0000-000000000000}\" "
+      "xmlns:x15=\"http://schemas.microsoft.com/office/spreadsheetml/2010/11/main\"><x15:foo/></ext></extLst>";
+  auto table =
+      read_pivot_table_definition(Bytes(OptionsXml(" updatedVersion=\"8\"", "<pivotField axis=\"axisRow\"/>", other)));
+  ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+  table.value().set_alt_text("T");
+  const std::string written = write_pivot_table_definition(table.value());
+  EXPECT_NE(written.find("<x15:foo/>"), std::string::npos) << written;
+  EXPECT_NE(written.find("<x14:pivotTableDefinition altText=\"T\""), std::string::npos) << written;
+  EXPECT_EQ(written.find("<extLst"), written.rfind("<extLst")) << written;
+}
+
+TEST(PivotTableOptionsRoundTrip, RootAttributesFollowExcelsOrder) {
+  pivot::PivotTable table;
+  table.set_auto_formatting(true);
+  table.set_item_print_titles(true);
+  table.set_merge_item(true);
+  table.set_indent(0U);
+  table.set_multiple_field_filters(false);
+  table.mutable_passthrough_attrs().emplace_back("createdVersion", "8");
+  const std::string written = write_pivot_table_definition(table);
+  const std::size_t drill = written.find(" useAutoFormatting=");
+  const std::size_t print = written.find(" itemPrintTitles=");
+  const std::size_t merge = written.find(" mergeItem=");
+  const std::size_t indent = written.find(" indent=");
+  const std::size_t multi = written.find(" multipleFieldFilters=");
+  ASSERT_NE(drill, std::string::npos) << written;
+  EXPECT_LT(drill, print);
+  EXPECT_LT(print, merge);
+  EXPECT_LT(merge, indent);
+  EXPECT_LT(indent, multi);
+}
+
+// ---------------------------------------------------------------------------
+// pivotField@showAll
+// ---------------------------------------------------------------------------
+
+TEST(PivotFieldShowAll, AttributeStatesReadAndWrite) {
+  struct Case {
+    const char* attr;
+    bool show_all;
+    bool written;  // whether the writer spells showAll="0"
+  };
+  const Case cases[] = {{"", true, false}, {" showAll=\"1\"", true, false}, {" showAll=\"0\"", false, true}};
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.attr);
+    const std::string field = std::string("<pivotField axis=\"axisRow\"") + c.attr + "/>";
+    auto table = read_pivot_table_definition(Bytes(OptionsXml("", field)));
+    ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+    ASSERT_EQ(table.value().fields().size(), 1U);
+    EXPECT_EQ(table.value().fields()[0].show_all, c.show_all);
+    for (const auto& attr : table.value().fields()[0].passthrough_attrs) {
+      EXPECT_NE(attr.first, "showAll");
+    }
+    const std::string out = write_pivot_table_definition(table.value());
+    EXPECT_EQ(out.find("showAll=\"0\"") != std::string::npos, c.written) << out;
+    EXPECT_EQ(out.find("showAll=\"1\""), std::string::npos) << out;
+    auto again = read_pivot_table_definition(Bytes(out));
+    ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+    EXPECT_EQ(again.value().fields()[0].show_all, c.show_all);
+  }
+}
+
+TEST(PivotFieldShowAll, FieldCreatedInMemoryStartsOffAndWritesZero) {
+  pivot::PivotField field;
+  field.axis = pivot::PivotAxis::None;
+  EXPECT_FALSE(field.show_all);
+  pivot::PivotTable table;
+  table.mutable_fields().push_back(field);
+  EXPECT_NE(write_pivot_table_definition(table).find("<pivotField showAll=\"0\"/>"), std::string::npos);
+  table.mutable_fields()[0].show_all = true;
+  EXPECT_EQ(write_pivot_table_definition(table).find("showAll"), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// item@f
+// ---------------------------------------------------------------------------
+
+TEST(PivotItemCalculatedFlag, ReadsWritesAndRoundTrips) {
+  const std::string field =
+      "<pivotField axis=\"axisRow\"><items count=\"3\"><item x=\"0\"/><item f=\"1\" x=\"1\"/><item t=\"default\"/>"
+      "</items></pivotField>";
+  auto table = read_pivot_table_definition(Bytes(OptionsXml("", field)));
+  ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+  const auto& items = table.value().fields()[0].items;
+  ASSERT_EQ(items.size(), 2U);
+  EXPECT_FALSE(items[0].calculated);
+  EXPECT_TRUE(items[1].calculated);
+  for (const auto& attr : items[1].passthrough_attrs) {
+    EXPECT_NE(attr.first, "f");
+  }
+  const std::string out = write_pivot_table_definition(table.value());
+  EXPECT_NE(out.find("<item x=\"0\"/>"), std::string::npos) << out;
+  EXPECT_NE(out.find("<item f=\"1\" x=\"1\"/>"), std::string::npos) << out;
+  auto again = read_pivot_table_definition(Bytes(out));
+  ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+  EXPECT_TRUE(again.value().fields()[0].items[1].calculated);
+  EXPECT_FALSE(again.value().fields()[0].items[0].calculated);
+}
+
+// ---------------------------------------------------------------------------
+// clone()
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableClone, CopiesEveryOptionAndProjectionMember) {
+  pivot::PivotTable t;
+  t.set_show_error(true);
+  t.set_error_caption(std::string("E"));
+  t.set_show_missing(false);
+  t.set_missing_caption(std::string("M"));
+  t.set_show_headers(false);
+  t.set_show_drill(false);
+  t.set_print_drill(true);
+  t.set_show_data_tips(false);
+  t.set_grid_drop_zones(true);
+  t.set_show_empty_row(true);
+  t.set_show_empty_col(true);
+  t.set_field_print_titles(true);
+  t.set_item_print_titles(true);
+  t.set_show_data_drop_down(false);
+  t.set_multiple_field_filters(false);
+  t.set_preserve_formatting(false);
+  t.set_merge_item(true);
+  t.set_indent(3U);
+  t.set_page_over_then_down(true);
+  t.set_page_wrap(4U);
+  t.set_custom_list_sort(false);
+  t.set_alt_text("A");
+  t.set_alt_text_summary("S");
+  t.set_projected_extent(pivot::PivotRect{1, 2, 3, 4});
+  t.mutable_projected_merges().push_back(pivot::PivotRect{5, 6, 7, 8});
+  t.set_projection_pending(true);
+
+  const std::unique_ptr<pivot::PivotTable> c = t.clone();
+  EXPECT_TRUE(c->show_error());
+  EXPECT_EQ(c->error_caption(), "E");
+  EXPECT_FALSE(c->show_missing());
+  EXPECT_EQ(c->missing_caption(), "M");
+  EXPECT_FALSE(c->show_headers());
+  EXPECT_FALSE(c->show_drill());
+  EXPECT_TRUE(c->print_drill());
+  EXPECT_FALSE(c->show_data_tips());
+  EXPECT_TRUE(c->grid_drop_zones());
+  EXPECT_TRUE(c->show_empty_row());
+  EXPECT_TRUE(c->show_empty_col());
+  EXPECT_TRUE(c->field_print_titles());
+  EXPECT_TRUE(c->item_print_titles());
+  EXPECT_FALSE(c->show_data_drop_down());
+  EXPECT_FALSE(c->multiple_field_filters());
+  EXPECT_FALSE(c->preserve_formatting());
+  EXPECT_TRUE(c->merge_item());
+  EXPECT_EQ(c->indent(), 3U);
+  EXPECT_TRUE(c->page_over_then_down());
+  EXPECT_EQ(c->page_wrap(), 4U);
+  EXPECT_FALSE(c->custom_list_sort());
+  EXPECT_EQ(c->alt_text(), "A");
+  EXPECT_EQ(c->alt_text_summary(), "S");
+  ASSERT_TRUE(c->projected_extent().has_value());
+  EXPECT_TRUE(*c->projected_extent() == (pivot::PivotRect{1, 2, 3, 4}));
+  ASSERT_EQ(c->projected_merges().size(), 1U);
+  EXPECT_TRUE(c->projected_merges()[0] == (pivot::PivotRect{5, 6, 7, 8}));
+  EXPECT_TRUE(c->projection_pending());
+
+  t.set_indent(9U);
+  t.mutable_projected_merges().clear();
+  EXPECT_EQ(c->indent(), 3U);
+  EXPECT_EQ(c->projected_merges().size(), 1U);
 }
 
 }  // namespace

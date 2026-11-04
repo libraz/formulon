@@ -437,7 +437,14 @@ TEST(PivotDefinitionRoundTrip, SettingTheLayoutDropsTheFormsReadFromTheFile) {
   EXPECT_EQ(root.at("compactData"), "0");
   EXPECT_EQ(root.count("outline"), 0U);
   EXPECT_EQ(root.count("outlineData"), 0U);
-  EXPECT_EQ(CountOccurrences(written, " compact=\"0\" outline=\"0\""), 5U) << written;
+  std::size_t tabular_fields = 0;
+  for (pugi::xml_node field : doc.document_element().child("pivotFields").children("pivotField")) {
+    const std::map<std::string, std::string> attrs = Attributes(field);
+    EXPECT_EQ(attrs.count("compact") == 1U ? attrs.at("compact") : "", "0") << written;
+    EXPECT_EQ(attrs.count("outline") == 1U ? attrs.at("outline") : "", "0") << written;
+    ++tabular_fields;
+  }
+  EXPECT_EQ(tabular_fields, 5U) << written;
 }
 
 // A subtotal selection edited in the model regenerates the subtotal markers;

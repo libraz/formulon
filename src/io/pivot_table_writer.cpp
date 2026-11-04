@@ -59,13 +59,56 @@ void AppendOptionalLocationAttr(std::string& out, std::string_view name, std::op
   append_xml_attr_uint(out, name, *value);
 }
 
-/// Appends Excel's x14 extension that hides the caption row of the Values field.
-void AppendValuesRowExtLst(std::string& out) {
-  out.append("<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\"");
+/// Appends the `<ext>` holding the x14 `<pivotTableDefinition>`: the table's
+/// alternative text and, when `hide_values_row`, the hidden caption row of the
+/// Values field.
+void AppendTableExt(std::string& out, const pivot::PivotTable& table, bool hide_values_row) {
+  out.append("<ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\"");
   append_xml_ns_decl(out, "x14", kNsX14);
-  out.append("><x14:pivotTableDefinition hideValuesRow=\"1\"");
+  out.append("><x14:pivotTableDefinition");
+  if (!table.alt_text().empty()) {
+    append_xml_attr(out, "altText", table.alt_text());
+  }
+  if (!table.alt_text_summary().empty()) {
+    append_xml_attr(out, "altTextSummary", table.alt_text_summary());
+  }
+  if (hide_values_row) {
+    out.append(" hideValuesRow=\"1\"");
+  }
   append_xml_ns_decl(out, "xm", kNsExcelMain);
-  out.append("/></ext></extLst>");
+  out.append("/></ext>");
+}
+
+/// Appends the tail bin with the table's alternative text put on its x14
+/// `<pivotTableDefinition>` extension, adding the extension when the bin
+/// carries an `<extLst>` without one.
+void AppendTailWithAltText(std::string& out, const pivot::PivotTable& table) {
+  const std::string& tail = table.raw_passthrough_xml();
+  const bool has_alt = !table.alt_text().empty() || !table.alt_text_summary().empty();
+  if (!has_alt) {
+    out.append(tail);
+    return;
+  }
+  constexpr std::string_view kElement = "<x14:pivotTableDefinition";
+  if (const std::size_t at = tail.find(kElement); at != std::string::npos) {
+    const std::size_t name_end = at + kElement.size();
+    out.append(tail, 0, name_end);
+    if (!table.alt_text().empty()) {
+      append_xml_attr(out, "altText", table.alt_text());
+    }
+    if (!table.alt_text_summary().empty()) {
+      append_xml_attr(out, "altTextSummary", table.alt_text_summary());
+    }
+    out.append(tail, name_end, std::string::npos);
+    return;
+  }
+  if (const std::size_t close = tail.rfind("</extLst>"); close != std::string::npos) {
+    out.append(tail, 0, close);
+    AppendTableExt(out, table, /*hide_values_row=*/false);
+    out.append(tail, close, std::string::npos);
+    return;
+  }
+  out.append(tail);
 }
 
 /// True when `attrs` already carries `name` (an attribute captured on read).
@@ -193,28 +236,50 @@ void AppendFieldExtLst(std::string& out, const pivot::PivotField& field) {
 /// flag follows the data-field list rather than the field's axis.
 void AppendPivotField(std::string& out, const pivot::PivotField& field, const std::vector<pivot::PivotItem>& items,
                       pivot::PivotLayout layout, bool used_as_data) {
+  // Attributes follow CT_PivotField order, as Excel writes them.
   out.append("<pivotField");
+  if (!field.custom_name.empty()) {
+    append_xml_attr(out, "name", field.custom_name);
+  }
   if (field.axis != pivot::PivotAxis::Value && field.axis != pivot::PivotAxis::None) {
     append_xml_attr(out, "axis", enum_name(kPivotAxisNames, field.axis));
   }
   if (used_as_data) {
     out.append(" dataField=\"1\"");
   }
-  // Excel writes `showAll="0"` on every field; without it a refresh shows
-  // items that have no data. A value captured on read is re-emitted below.
-  if (!HasRawAttr(field.passthrough_attrs, "showAll")) {
-    out.append(" showAll=\"0\"");
-  }
-  if (!field.custom_name.empty()) {
-    append_xml_attr(out, "name", field.custom_name);
+  // The report form is per field in Excel (`compact` / `outline` default to
+  // true); every field carries the table's form, as Excel writes it, unless
+  // the field was read with a form of its own (kept in `passthrough_attrs`).
+  const bool derived_form = !HasFormOverride(field.passthrough_attrs);
+  if (derived_form && layout != pivot::PivotLayout::Compact) {
+    out.append(" compact=\"0\"");
   }
   if (!field.number_format.empty()) {
     append_xml_attr(out, "numFmtId", field.number_format);
+  }
+  if (derived_form && layout == pivot::PivotLayout::Tabular) {
+    out.append(" outline=\"0\"");
   }
   // `subtotalTop` defaults to true in OOXML; only emit it when turned OFF
   // so an explicit "subtotals at bottom" choice survives the round trip.
   if (!field.subtotal_top) {
     out.append(" subtotalTop=\"0\"");
+  }
+  // Excel writes `showAll="0"` on every field; without it a refresh shows
+  // items that have no data. `true` is the schema default and goes unwritten.
+  if (!field.show_all) {
+    out.append(" showAll=\"0\"");
+  }
+  if (field.insert_blank_row) {
+    out.append(" insertBlankRow=\"1\"");
+  }
+  // An absent `sortType` reads back as manual (`<items>` order), so a
+  // label-sorted axis field spells its direction out, as does a field off
+  // the axes whose order was stated rather than defaulted.
+  const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
+                       field.axis == pivot::PivotAxis::Page;
+  if ((on_axis || field.sort.stated) && !field.sort.manual) {
+    out.append(field.sort.ascending ? " sortType=\"ascending\"" : " sortType=\"descending\"");
   }
   // Custom functions replace the automatic subtotal, and Excel then writes
   // neither `defaultSubtotal` nor a `t="default"` item. Without custom
@@ -233,27 +298,6 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
     out.push_back(' ');
     out.append(names->attr);
     out.append("=\"1\"");
-  }
-  // An absent `sortType` reads back as manual (`<items>` order), so a
-  // label-sorted axis field spells its direction out, as does a field off
-  // the axes whose order was stated rather than defaulted.
-  const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
-                       field.axis == pivot::PivotAxis::Page;
-  if ((on_axis || field.sort.stated) && !field.sort.manual) {
-    out.append(field.sort.ascending ? " sortType=\"ascending\"" : " sortType=\"descending\"");
-  }
-  // The report form is per field in Excel (`compact` / `outline` default to
-  // true); every field carries the table's form, as Excel writes it, unless
-  // the field was read with a form of its own (kept in `passthrough_attrs`).
-  if (!HasFormOverride(field.passthrough_attrs)) {
-    if (layout == pivot::PivotLayout::Tabular) {
-      out.append(" compact=\"0\" outline=\"0\"");
-    } else if (layout == pivot::PivotLayout::Outline) {
-      out.append(" compact=\"0\"");
-    }
-  }
-  if (field.insert_blank_row) {
-    out.append(" insertBlankRow=\"1\"");
   }
   // Re-emit any unmodelled `<pivotField>` attributes captured on read.
   append_raw_attrs(out, field.passthrough_attrs);
@@ -332,7 +376,11 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
     // Excel's implicit ordering. Item names are resolved against the
     // cache, not stored on the element, so no name attribute is emitted.
     const std::uint32_t x = item.has_cache_index ? item.cache_index : static_cast<std::uint32_t>(i);
-    out.append("<item x=\"");
+    out.append("<item");
+    if (item.calculated) {
+      out.append(" f=\"1\"");
+    }
+    out.append(" x=\"");
     out.append(std::to_string(x));
     out.append("\"");
     if (!item.visible) {
@@ -846,6 +894,18 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (table.grand_total_caption().has_value()) {
     append_xml_attr(out, "grandTotalCaption", *table.grand_total_caption());
   }
+  if (table.error_caption().has_value()) {
+    append_xml_attr(out, "errorCaption", *table.error_caption());
+  }
+  if (table.show_error()) {
+    out.append(" showError=\"1\"");
+  }
+  if (table.missing_caption().has_value()) {
+    append_xml_attr(out, "missingCaption", *table.missing_caption());
+  }
+  if (!table.show_missing()) {
+    out.append(" showMissing=\"0\"");
+  }
   // Grand-total flags default to true in OOXML and in the model. Emit them
   // only when turned OFF so an explicit OFF state survives the round trip
   // (omitting them would let the reader's default flip the pivot back ON).
@@ -864,11 +924,53 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (table.subtotal_hidden_items()) {
     out.append(" subtotalHiddenItems=\"1\"");
   }
+  if (!table.show_data_drop_down()) {
+    out.append(" showDataDropDown=\"0\"");
+  }
+  if (!table.show_drill()) {
+    out.append(" showDrill=\"0\"");
+  }
+  if (table.print_drill()) {
+    out.append(" printDrill=\"1\"");
+  }
+  if (!table.show_data_tips()) {
+    out.append(" showDataTips=\"0\"");
+  }
   if (!table.enable_drill()) {
     out.append(" enableDrill=\"0\"");
   }
+  if (!table.preserve_formatting()) {
+    out.append(" preserveFormatting=\"0\"");
+  }
   if (table.auto_formatting()) {
     out.append(" useAutoFormatting=\"1\"");
+  }
+  if (table.page_wrap() != 0U) {
+    append_xml_attr_uint(out, "pageWrap", table.page_wrap());
+  }
+  if (table.page_over_then_down()) {
+    out.append(" pageOverThenDown=\"1\"");
+  }
+  if (table.field_print_titles()) {
+    out.append(" fieldPrintTitles=\"1\"");
+  }
+  if (table.item_print_titles()) {
+    out.append(" itemPrintTitles=\"1\"");
+  }
+  if (table.merge_item()) {
+    out.append(" mergeItem=\"1\"");
+  }
+  if (table.indent() != 1U) {
+    append_xml_attr_uint(out, "indent", table.indent());
+  }
+  if (table.show_empty_row()) {
+    out.append(" showEmptyRow=\"1\"");
+  }
+  if (table.show_empty_col()) {
+    out.append(" showEmptyCol=\"1\"");
+  }
+  if (!table.show_headers()) {
+    out.append(" showHeaders=\"0\"");
   }
   // Report layout as Excel writes it at table level, where it is the form
   // new fields take (`compact` defaults to true, `outline` to false). A form
@@ -885,6 +987,15 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
         out.append(" compact=\"0\" compactData=\"0\" outline=\"1\" outlineData=\"1\"");
         break;
     }
+  }
+  if (table.grid_drop_zones()) {
+    out.append(" gridDropZones=\"1\"");
+  }
+  if (!table.multiple_field_filters()) {
+    out.append(" multipleFieldFilters=\"0\"");
+  }
+  if (!table.custom_list_sort()) {
+    out.append(" customListSort=\"0\"");
   }
   // Without `updatedVersion` Excel adds a stray caption row above the
   // pivot on refresh; a captured value is re-emitted below.
@@ -1027,14 +1138,16 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
     AppendStyleInfo(out, *table.style_info());
   }
   AppendFilters(out, table);
-  if (!table.raw_passthrough_xml().empty()) {
-    out.append(table.raw_passthrough_xml());
-  }
-  // Without this extension Excel adds a caption row above the pivot on
-  // refresh. A table read from a file keeps its own `<extLst>`.
-  if (!HasRawAttr(table.passthrough_attrs(), "updatedVersion") &&
-      table.raw_passthrough_xml().find("<extLst") == std::string::npos) {
-    AppendValuesRowExtLst(out);
+  AppendTailWithAltText(out, table);
+  // Without the hidden-row extension Excel adds a caption row above the pivot
+  // on refresh. A table read from a file keeps its own `<extLst>`.
+  if (table.raw_passthrough_xml().find("<extLst") == std::string::npos) {
+    const bool hide_values_row = !HasRawAttr(table.passthrough_attrs(), "updatedVersion");
+    if (hide_values_row || !table.alt_text().empty() || !table.alt_text_summary().empty()) {
+      out.append("<extLst>");
+      AppendTableExt(out, table, hide_values_row);
+      out.append("</extLst>");
+    }
   }
 
   out.append("</pivotTableDefinition>");

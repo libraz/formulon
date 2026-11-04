@@ -84,7 +84,8 @@ Expected<void, Error> ParseItems(const pugi::xml_node& items_node, pivot::PivotF
     entry.visible = !parse_xml_bool_attr(it.attribute("h"));
     entry.caption = it.attribute("n").as_string();
     entry.show_detail = attr_bool(it, "sd", true);
-    capture_unknown_attrs(it, {"x", "h", "t", "n", "sd"}, entry.passthrough_attrs);
+    entry.calculated = attr_bool(it, "f", false);
+    capture_unknown_attrs(it, {"x", "h", "t", "n", "sd", "f"}, entry.passthrough_attrs);
     if (pugi::xml_attribute x = it.attribute("x"); x) {
       const std::optional<std::uint32_t> cache_index = parse_xml_u32_attr_strict(x);
       if (!cache_index.has_value()) {
@@ -161,19 +162,19 @@ Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot:
     if (pugi::xml_node items_node = f.child("items"); items_node) {
       RETURN_IF_ERROR(ParseItems(items_node, &field));
     }
-    // Preserve unmodelled `<pivotField>` attributes (`showAll`,
-    // `includeNewItemsInFilter`, ...) and children for verbatim round-trip.
-    // `compact` / `outline` are the report form, which the writer derives
-    // from the table's layout; `CaptureFormOverride` keeps them once the
-    // layout is known and they depart from it.
+    // Preserve unmodelled `<pivotField>` attributes (`includeNewItemsInFilter`, ...) and children for verbatim
+    // round-trip. `compact` / `outline` are the report form, which the writer derives from the table's layout;
+    // `CaptureFormOverride` keeps them once the layout is known and they depart from it.
     field.insert_blank_row = attr_bool(f, "insertBlankRow", false);
+    field.show_all = attr_bool(f, "showAll", true);
     capture_unknown_attrs(f, {"axis",          "dataField",      "name",
                               "numFmtId",      "subtotalTop",    "defaultSubtotal",
                               "sumSubtotal",   "countASubtotal", "avgSubtotal",
                               "maxSubtotal",   "minSubtotal",    "productSubtotal",
                               "countSubtotal", "stdDevSubtotal", "stdDevPSubtotal",
                               "varSubtotal",   "varPSubtotal",   "sortType",
-                              "compact",       "outline",        "insertBlankRow"},
+                              "compact",       "outline",        "insertBlankRow",
+                              "showAll"},
                           field.passthrough_attrs);
     capture_unknown_children(f, {"items", "extLst"}, field.raw_children_xml);
     // Excel spells the extension's URI with a lower-case `432a`, so it is
@@ -822,6 +823,25 @@ void CaptureFormOverride(const pugi::xml_node& node, pivot::PivotLayout layout, 
   }
 }
 
+/// Moves `altText` / `altTextSummary` off the x14 `<pivotTableDefinition>`
+/// extension into `table`, leaving the rest of `extlst` for the verbatim bin.
+void ExtractAltText(pugi::xml_node extlst, pivot::PivotTable* table) {
+  for (pugi::xml_node ext : extlst.children("ext")) {
+    pugi::xml_node x14 = child_local(ext, "pivotTableDefinition");
+    if (!x14) {
+      continue;
+    }
+    if (pugi::xml_attribute attr = x14.attribute("altText"); attr) {
+      table->set_alt_text(attr.value());
+      x14.remove_attribute(attr);
+    }
+    if (pugi::xml_attribute attr = x14.attribute("altTextSummary"); attr) {
+      table->set_alt_text_summary(attr.value());
+      x14.remove_attribute(attr);
+    }
+  }
+}
+
 }  // namespace
 
 bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table) {
@@ -886,10 +906,68 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   }
   table.set_auto_formatting(attr_bool(root, "useAutoFormatting", false));
   table.set_enable_drill(attr_bool(root, "enableDrill", true));
+  table.set_show_error(attr_bool(root, "showError", false));
+  if (pugi::xml_attribute attr = root.attribute("errorCaption"); attr) {
+    table.set_error_caption(std::string(attr.value()));
+  }
+  table.set_show_missing(attr_bool(root, "showMissing", true));
+  if (pugi::xml_attribute attr = root.attribute("missingCaption"); attr) {
+    table.set_missing_caption(std::string(attr.value()));
+  }
+  table.set_show_headers(attr_bool(root, "showHeaders", true));
+  table.set_show_drill(attr_bool(root, "showDrill", true));
+  table.set_print_drill(attr_bool(root, "printDrill", false));
+  table.set_show_data_tips(attr_bool(root, "showDataTips", true));
+  table.set_grid_drop_zones(attr_bool(root, "gridDropZones", false));
+  table.set_show_empty_row(attr_bool(root, "showEmptyRow", false));
+  table.set_show_empty_col(attr_bool(root, "showEmptyCol", false));
+  table.set_field_print_titles(attr_bool(root, "fieldPrintTitles", false));
+  table.set_item_print_titles(attr_bool(root, "itemPrintTitles", false));
+  table.set_show_data_drop_down(attr_bool(root, "showDataDropDown", true));
+  table.set_multiple_field_filters(attr_bool(root, "multipleFieldFilters", true));
+  table.set_preserve_formatting(attr_bool(root, "preserveFormatting", true));
+  table.set_merge_item(attr_bool(root, "mergeItem", false));
+  table.set_indent(attr_u32(root, "indent", 1U));
+  table.set_page_over_then_down(attr_bool(root, "pageOverThenDown", false));
+  table.set_page_wrap(attr_u32(root, "pageWrap", 0U));
+  table.set_custom_list_sort(attr_bool(root, "customListSort", true));
   capture_unknown_attrs(root,
-                        {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline",
-                         "compactData", "outlineData", "subtotalHiddenItems", "grandTotalCaption", "useAutoFormatting",
-                         "enableDrill", "dataOnRows", "dataPosition"},
+                        {"name",
+                         "cacheId",
+                         "dataCaption",
+                         "rowGrandTotals",
+                         "colGrandTotals",
+                         "compact",
+                         "outline",
+                         "compactData",
+                         "outlineData",
+                         "subtotalHiddenItems",
+                         "grandTotalCaption",
+                         "useAutoFormatting",
+                         "enableDrill",
+                         "dataOnRows",
+                         "dataPosition",
+                         "showError",
+                         "errorCaption",
+                         "showMissing",
+                         "missingCaption",
+                         "showHeaders",
+                         "showDrill",
+                         "printDrill",
+                         "showDataTips",
+                         "gridDropZones",
+                         "showEmptyRow",
+                         "showEmptyCol",
+                         "fieldPrintTitles",
+                         "itemPrintTitles",
+                         "showDataDropDown",
+                         "multipleFieldFilters",
+                         "preserveFormatting",
+                         "mergeItem",
+                         "indent",
+                         "pageOverThenDown",
+                         "pageWrap",
+                         "customListSort"},
                         table.mutable_passthrough_attrs());
 
   pugi::xml_node loc = root.child("location");
@@ -1039,6 +1117,9 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       bucket = &table.mutable_raw_passthrough_before_style_info();
     } else {
       bucket = &table.mutable_raw_passthrough_xml();
+      if (name == "extLst") {
+        ExtractAltText(child, &table);
+      }
     }
     append_raw_xml(*bucket, child);
   }

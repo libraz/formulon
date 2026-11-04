@@ -130,7 +130,10 @@ struct PivotItem {
   /// inner fields below it.
   bool show_detail = true;
 
-  /// `<item>` attributes the model does not represent (`s`, `f`, `m`, `c`,
+  /// `<item f>`: the item is a calculated item.
+  bool calculated = false;
+
+  /// `<item>` attributes the model does not represent (`s`, `m`, `c`,
   /// `d`, `e`), captured as `(name, value)` pairs so the writer re-emits them
   /// verbatim.
   std::vector<std::pair<std::string, std::string>> passthrough_attrs{};
@@ -573,6 +576,10 @@ struct PivotField {
   /// default subtotal applies.
   std::vector<SubtotalFn> subtotal_fns;
 
+  /// `showAll`: items without data are listed. A loaded field takes the
+  /// attribute (absent = true); a field created in memory starts off.
+  bool show_all = false;
+
   /// Mirrors the OOXML `defaultSubtotal` attribute (default `true`).
   /// When `false` the field suppresses its automatic default subtotal;
   /// any entries in `subtotal_fns` then describe the explicit custom set.
@@ -582,7 +589,7 @@ struct PivotField {
   std::string number_format;
 
   /// OOXML `<pivotField>` attributes the model does not represent
-  /// structurally (e.g. `compact`, `outline`, `showAll`,
+  /// structurally (e.g. `compact`, `outline`,
   /// `includeNewItemsInFilter`), captured as `(name, value)` pairs so the
   /// writer re-emits them verbatim. Rendering keys off `PivotTable::layout`,
   /// so these are preserved for round-trip only.

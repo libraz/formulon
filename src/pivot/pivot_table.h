@@ -32,6 +32,18 @@ struct PivotStyleInfo {
   bool show_last_column = false;
 };
 
+/// A rectangle of sheet cells, inclusive on all four sides, zero-based.
+struct PivotRect {
+  std::uint32_t row0 = 0;
+  std::uint32_t col0 = 0;
+  std::uint32_t row1 = 0;
+  std::uint32_t col1 = 0;
+
+  bool operator==(const PivotRect& other) const {
+    return row0 == other.row0 && col0 == other.col0 && row1 == other.row1 && col1 == other.col1;
+  }
+};
+
 /// One pivot table definition + most recent evaluation result.
 ///
 /// Move-only; `clone()` is the one copy. Designed to be held by the owning
@@ -430,6 +442,121 @@ class PivotTable {
   bool enable_drill() const { return enable_drill_; }
   void set_enable_drill(bool on) { enable_drill_ = on; }
 
+  /// `showError`: error cells show `error_caption`.
+  bool show_error() const { return show_error_; }
+  void set_show_error(bool v) { show_error_ = v; }
+
+  /// `errorCaption`: the text error cells show while `show_error` is on.
+  const std::optional<std::string>& error_caption() const { return error_caption_; }
+  void set_error_caption(std::optional<std::string> v) { error_caption_ = std::move(v); }
+
+  /// `showMissing`: empty cells show `missing_caption`.
+  bool show_missing() const { return show_missing_; }
+  void set_show_missing(bool v) { show_missing_ = v; }
+
+  /// `missingCaption`: the text empty cells show while `show_missing` is on.
+  const std::optional<std::string>& missing_caption() const { return missing_caption_; }
+  void set_missing_caption(std::optional<std::string> v) { missing_caption_ = std::move(v); }
+
+  /// `showHeaders`: the field headers are shown.
+  bool show_headers() const { return show_headers_; }
+  void set_show_headers(bool v) { show_headers_ = v; }
+
+  /// `showDrill`: expand / collapse buttons are shown.
+  bool show_drill() const { return show_drill_; }
+  void set_show_drill(bool v) { show_drill_ = v; }
+
+  /// `printDrill`: expand / collapse buttons are printed.
+  bool print_drill() const { return print_drill_; }
+  void set_print_drill(bool v) { print_drill_ = v; }
+
+  /// `showDataTips`: cell tooltips are shown.
+  bool show_data_tips() const { return show_data_tips_; }
+  void set_show_data_tips(bool v) { show_data_tips_ = v; }
+
+  /// `gridDropZones`: the classic layout, with drop zones drawn on the grid.
+  bool grid_drop_zones() const { return grid_drop_zones_; }
+  void set_grid_drop_zones(bool v) { grid_drop_zones_ = v; }
+
+  /// `showEmptyRow`: items without data are shown on rows.
+  bool show_empty_row() const { return show_empty_row_; }
+  void set_show_empty_row(bool v) { show_empty_row_ = v; }
+
+  /// `showEmptyCol`: items without data are shown on columns.
+  bool show_empty_col() const { return show_empty_col_; }
+  void set_show_empty_col(bool v) { show_empty_col_ = v; }
+
+  /// `fieldPrintTitles`: field captions are repeated as print titles.
+  bool field_print_titles() const { return field_print_titles_; }
+  void set_field_print_titles(bool v) { field_print_titles_ = v; }
+
+  /// `itemPrintTitles`: item labels are repeated on every printed page.
+  bool item_print_titles() const { return item_print_titles_; }
+  void set_item_print_titles(bool v) { item_print_titles_ = v; }
+
+  /// `showDataDropDown`: the field drop-down buttons are shown.
+  bool show_data_drop_down() const { return show_data_drop_down_; }
+  void set_show_data_drop_down(bool v) { show_data_drop_down_ = v; }
+
+  /// `multipleFieldFilters`: a field may carry more than one filter type.
+  bool multiple_field_filters() const { return multiple_field_filters_; }
+  void set_multiple_field_filters(bool v) { multiple_field_filters_ = v; }
+
+  /// `preserveFormatting`: cell formatting survives a refresh.
+  bool preserve_formatting() const { return preserve_formatting_; }
+  void set_preserve_formatting(bool v) { preserve_formatting_ = v; }
+
+  /// `mergeItem`: item labels are merged and centred.
+  bool merge_item() const { return merge_item_; }
+  void set_merge_item(bool v) { merge_item_ = v; }
+
+  /// `indent`: the per-level indent of compact-form labels.
+  std::uint32_t indent() const { return indent_; }
+  void set_indent(std::uint32_t v) { indent_ = v; }
+
+  /// `pageOverThenDown`: page fields fill rows before columns.
+  bool page_over_then_down() const { return page_over_then_down_; }
+  void set_page_over_then_down(bool v) { page_over_then_down_ = v; }
+
+  /// `pageWrap`: page fields per row or column before wrapping; 0 is no wrap.
+  std::uint32_t page_wrap() const { return page_wrap_; }
+  void set_page_wrap(std::uint32_t v) { page_wrap_ = v; }
+
+  /// `customListSort`: custom lists take part in sorting.
+  bool custom_list_sort() const { return custom_list_sort_; }
+  void set_custom_list_sort(bool v) { custom_list_sort_ = v; }
+
+  /// x14 `altText`: the alternative-text title.
+  const std::string& alt_text() const { return alt_text_; }
+  void set_alt_text(std::string v) { alt_text_ = std::move(v); }
+
+  /// x14 `altTextSummary`: the alternative-text description.
+  const std::string& alt_text_summary() const { return alt_text_summary_; }
+  void set_alt_text_summary(std::string v) { alt_text_summary_ = std::move(v); }
+
+  /// Sets the options Excel gives a pivot it creates, which differ from the
+  /// schema defaults a loaded definition falls back to.
+  void apply_new_pivot_defaults() {
+    item_print_titles_ = true;
+    indent_ = 0;
+    multiple_field_filters_ = false;
+  }
+
+  // Projection state ---------------------------------------------------------
+  //
+  // The sheet cells the last projection of the report covered and the merges
+  // it added, so the next projection can clear exactly those.
+
+  const std::optional<PivotRect>& projected_extent() const { return projected_extent_; }
+  void set_projected_extent(std::optional<PivotRect> extent) { projected_extent_ = extent; }
+
+  const std::vector<PivotRect>& projected_merges() const { return projected_merges_; }
+  std::vector<PivotRect>& mutable_projected_merges() { return projected_merges_; }
+
+  /// True when a change to the shared cache left the sheet cells stale.
+  bool projection_pending() const { return projection_pending_; }
+  void set_projection_pending(bool pending) { projection_pending_ = pending; }
+
  private:
   // Private so `clone()` is the only copy: the defaulted member-wise copy
   // shares the result mutex and cache until `clone()` replaces them.
@@ -474,6 +601,32 @@ class PivotTable {
   std::optional<std::string> grand_total_caption_;
   bool auto_formatting_ = true;
   bool enable_drill_ = true;
+  bool show_error_ = false;
+  std::optional<std::string> error_caption_;
+  bool show_missing_ = true;
+  std::optional<std::string> missing_caption_;
+  bool show_headers_ = true;
+  bool show_drill_ = true;
+  bool print_drill_ = false;
+  bool show_data_tips_ = true;
+  bool grid_drop_zones_ = false;
+  bool show_empty_row_ = false;
+  bool show_empty_col_ = false;
+  bool field_print_titles_ = false;
+  bool item_print_titles_ = false;
+  bool show_data_drop_down_ = true;
+  bool multiple_field_filters_ = true;
+  bool preserve_formatting_ = true;
+  bool merge_item_ = false;
+  std::uint32_t indent_ = 1;
+  bool page_over_then_down_ = false;
+  std::uint32_t page_wrap_ = 0;
+  bool custom_list_sort_ = true;
+  std::string alt_text_;
+  std::string alt_text_summary_;
+  std::optional<PivotRect> projected_extent_;
+  std::vector<PivotRect> projected_merges_;
+  bool projection_pending_ = false;
   std::vector<PivotFilter> active_filters_;
   std::vector<RetainedPivotFilter> retained_filters_;
   std::vector<AuthoredCaptionFilter> authored_caption_filters_;
