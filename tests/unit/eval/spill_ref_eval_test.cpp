@@ -661,6 +661,19 @@ TEST(AnchorArrayLazy, NonReferenceArgIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(SpillRefEval, CollapsedAnchorAnswersRef) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SUM(#REF!#)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

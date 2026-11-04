@@ -21,6 +21,7 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/ast_dump.h"
+#include "parser/ast_format.h"
 #include "parser/parse_error.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
@@ -228,6 +229,32 @@ TEST(SpillRef, ErrorLiteralAfterAnAnchorTailStillLexes) {
     AstNode* root = p.parse();
     ASSERT_NE(root, nullptr) << src;
     EXPECT_TRUE(p.errors().empty()) << src;
+  }
+}
+
+TEST(SpillRef, RefErrorAnchorParses) {
+  for (const char* src : {"=SUM(#REF!#)", "=Sheet3!#REF!#", "=#REF!D5#"}) {
+    Arena a;
+    Parser p(src, a);
+    AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    EXPECT_TRUE(p.errors().empty()) << src;
+    EXPECT_EQ(format_formula(*root), std::string_view(src).substr(1)) << src;
+  }
+  Arena a;
+  Parser p("=#REF!#", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty());
+  EXPECT_EQ(root->kind(), NodeKind::SpillRef);
+}
+
+TEST(SpillRef, RefErrorFollowedByErrorLiteralStillLexes) {
+  for (const char* src : {"=#REF!#REF!", "=#REF!#N/A"}) {
+    Arena a;
+    Parser p(src, a);
+    (void)p.parse();
+    EXPECT_FALSE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct)) << src;
   }
 }
 

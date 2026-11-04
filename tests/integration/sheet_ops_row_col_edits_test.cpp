@@ -325,6 +325,26 @@ TEST(WorkbookRowColEdits, DeletedQualifiedReferenceKeepsItsSheet) {
   EXPECT_TRUE(wb.sheet(0).cell_at(1, 0)->cached_value.is_error());
 }
 
+TEST(WorkbookRowColEdits, DeletedSpillAnchorKeepsTheHash) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet3");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 4, 3, "=SEQUENCE(3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 3, "=SUM(Sheet3!D5#)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1, 0, 5, "=SUM(D5#)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(1, /*row=*/4, /*count=*/1)));
+
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 3)->formula_text, "=SUM(Sheet3!#REF!#)");
+  EXPECT_EQ(wb.sheet(1).cell_at(0, 5)->formula_text, "=SUM(#REF!#)");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (const Cell* cell : {wb.sheet(0).cell_at(0, 3), wb.sheet(1).cell_at(0, 5)}) {
+    ASSERT_NE(cell, nullptr);
+    ASSERT_TRUE(cell->cached_value.is_error());
+    EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Ref);
+  }
+}
+
 TEST(WorkbookRowColEdits, DeletedQuotedQualifierKeepsItsQuotes) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");

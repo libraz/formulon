@@ -754,6 +754,29 @@ TEST(AstFormat, SpillRefStorageFormWithComputedAnchor) {
   EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), "ANCHORARRAY(SEQUENCE(3))");
 }
 
+TEST(AstFormat, CollapsedSpillAnchorStorageForm) {
+  struct Case {
+    const char* src;
+    const char* display;
+    const char* storage;
+  };
+  const Case cases[] = {
+      {"=SUM(#REF!#)", "SUM(#REF!#)", "SUM(ANCHORARRAY(#REF!))"},
+      {"=SUM(Sheet3!#REF!#)", "SUM(Sheet3!#REF!#)", "SUM(ANCHORARRAY(Sheet3!#REF!))"},
+      {"=#REF!#", "#REF!#", "ANCHORARRAY(#REF!)"},
+      {"=#REF!D5#", "#REF!D5#", "ANCHORARRAY(#REF!)"},
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    Parser parser(c.src, arena);
+    AstNode* root = parser.parse();
+    ASSERT_NE(root, nullptr) << c.src;
+    ASSERT_TRUE(parser.errors().empty()) << c.src;
+    EXPECT_EQ(format_formula(*root), c.display) << c.src;
+    EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), c.storage) << c.src;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // `#REF!` collapse sites
 // ---------------------------------------------------------------------------
@@ -883,6 +906,7 @@ TEST(AstFormat, StorageOperatorCallsRespellAsOperators) {
   EXPECT_EQ(spell_storage_operators("=SINGLE((A1+1))"), "=@(A1+1)");
   EXPECT_EQ(spell_storage_operators("=SUM( single(A1:A2) , 1)"), "=SUM( @A1:A2 , 1)");
   EXPECT_EQ(spell_storage_operators("=ANCHORARRAY(A1)"), "=A1#");
+  EXPECT_EQ(spell_storage_operators("=SUM(ANCHORARRAY(#REF!))"), "=SUM(#REF!#)");
   EXPECT_EQ(spell_storage_operators("=SUM(ANCHORARRAY(B2))"), "=SUM(B2#)");
   EXPECT_EQ(spell_storage_operators("=ANCHORARRAY(INDEX(A1:B2,1,1))"), "=INDEX(A1:B2,1,1)#");
   EXPECT_EQ(spell_storage_operators("=SINGLE(ANCHORARRAY(A1))"), "=@A1#");

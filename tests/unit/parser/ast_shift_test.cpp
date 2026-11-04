@@ -424,6 +424,20 @@ TEST(ShiftRefsWithRowCol, RowDeleteCollapsesSingletonReference) {
   EXPECT_EQ(ParseRowColShiftFormula("=SUM(A2:A2)", RowColAxis::kRow, RowColEdit::kDelete, 1, 1), "SUM(#REF!)");
 }
 
+TEST(ShiftRefsSpillCollapse, RowDeleteKeepsTheHashWithQualifier) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet3!D5#)", RowColAxis::kRow, RowColEdit::kDelete, 4, 1, "Sheet3", false),
+            "SUM(Sheet3!#REF!#)");
+}
+
+TEST(ShiftRefsSpillCollapse, RowDeleteKeepsTheHashWithoutQualifier) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(D5#)", RowColAxis::kRow, RowColEdit::kDelete, 4, 1, "Sheet3", true),
+            "SUM(#REF!#)");
+}
+
+TEST(ShiftRefsSpillCollapse, SheetRemovalKeepsTheHashAndAddress) {
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet3!D5#)", {"Sheet1", "Sheet3"}, 1U), "SUM(#REF!D5#)");
+}
+
 TEST(ShiftRefsWithRowCol, RowDeleteCollapsesFullyDeletedMultiCellRange) {
   EXPECT_EQ(ParseRowColShiftFormula("=SUM(A2:A4)", RowColAxis::kRow, RowColEdit::kDelete, 1, 3), "SUM(#REF!)");
 }

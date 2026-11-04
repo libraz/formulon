@@ -53,6 +53,10 @@ bool resolve_spill_anchor_node(const parser::AstNode& node, Arena& arena, const 
       *out_col = ref.col;
       return true;
     }
+    case parser::NodeKind::ErrorLiteral:
+      // A collapsed anchor (`#REF!#`) answers with its own error.
+      *out_err = target.as_error_literal();
+      return false;
     case parser::NodeKind::Call: {
       std::uint32_t bottom_row = 0;
       std::uint32_t right_col = 0;

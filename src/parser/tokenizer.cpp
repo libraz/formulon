@@ -919,6 +919,18 @@ void Tokenizer::scan_error_literal() {
     return;
   }
 
+  // `#REF!#`: a `#` glued to a Ref error literal that opens no known error
+  // literal is the spill operator on a collapsed anchor.
+  if (!tokens_.empty()) {
+    const Token& prev = tokens_.back();
+    if (prev.kind == TokenKind::ErrorLiteral && prev.error_code == ErrorCode::Ref &&
+        prev.lexeme.data() + prev.lexeme.size() == source_.data() + byte_pos_) {
+      advance_one();
+      emit(TokenKind::Hash, start);
+      return;
+    }
+  }
+
   // Fallback: consume the run as Invalid so the parser can proceed past it.
   while (byte_pos_ < probe) {
     advance_one();

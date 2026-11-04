@@ -148,7 +148,9 @@ const AstNode* TransformSpillRef(const AstNode& node, Arena& arena, const RefTra
   }
   std::optional<Reference> rewritten = transform.apply(node.as_spill_ref());
   if (!rewritten.has_value()) {
-    return MakeRefError(arena);
+    // The `#` survives the collapse: `D5#` becomes `#REF!#`.
+    const AstNode* collapsed = CollapseRef(arena, transform, node.as_spill_ref(), nullptr);
+    return collapsed == nullptr ? nullptr : make_spill_ref_expr(arena, collapsed);
   }
   const Reference& orig = node.as_spill_ref();
   const Reference& nr = *rewritten;

@@ -900,6 +900,8 @@ bool is_spill_anchor(const AstNode& node) noexcept {
     case NodeKind::Call:
     case NodeKind::NameRef:
       return true;
+    case NodeKind::ErrorLiteral:
+      return node.as_error_literal() == ErrorCode::Ref;
     default:
       return false;
   }
