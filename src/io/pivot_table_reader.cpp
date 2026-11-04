@@ -259,19 +259,12 @@ void ParsePageFields(const pugi::xml_node& parent, pivot::PivotTable* out) {
   }
 }
 
-/// Walks `<dataFields>` in document order. Returns `kIoSheetCorrupt` on
-/// the first `<dataField>` that lacks a `name` attribute, since that
-/// name is the GETPIVOTDATA lookup key.
+/// Walks `<dataFields>` in document order. A missing or empty `name` is
+/// kept as an empty name; no default is derived on load.
 Expected<void, Error> ParseDataFields(const pugi::xml_node& parent, pivot::PivotTable* out) {
   for (pugi::xml_node df = parent.child("dataField"); df; df = df.next_sibling("dataField")) {
     pivot::PivotDataField entry;
-    pugi::xml_attribute name_attr = df.attribute("name");
-    if (!name_attr || name_attr.value() == nullptr || *name_attr.value() == '\0') {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                        "pivotTableDefinition: <dataField> missing required name attribute",
-                        "context=pivot_table_reader");
-    }
-    entry.name = name_attr.value();
+    entry.name = df.attribute("name").as_string();
     entry.field_index = attr_u32(df, "fld");
     entry.aggregation =
         enum_from_name(kPivotAggregationNames, df.attribute("subtotal").as_string(), pivot::Aggregation::Sum);

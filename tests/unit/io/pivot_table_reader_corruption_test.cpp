@@ -17,19 +17,6 @@
 namespace formulon::io {
 namespace {
 using namespace pivot_table_reader_test_support;
-TEST(PivotTableReader, MissingDataFieldNameIsCorruption) {
-  std::string xml(kXmlDecl);
-  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
-  xml.append("  <location ref=\"A1:B2\"/>");
-  xml.append("  <dataFields count=\"1\">");
-  xml.append("    <dataField fld=\"1\" subtotal=\"sum\"/>");
-  xml.append("  </dataFields>");
-  xml.append("</pivotTableDefinition>");
-
-  auto table_or = read_pivot_table_definition(Bytes(xml));
-  ASSERT_FALSE(static_cast<bool>(table_or));
-  EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
-}
 TEST(PivotTableReader, MissingLocationIsCorruption) {
   std::string xml(kXmlDecl);
   xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");

@@ -242,6 +242,25 @@ TEST(PivotTableReader, MultipleDataFieldsOnSameSourceField) {
   EXPECT_EQ(table.data_fields()[1].field_index, 3U);
   EXPECT_EQ(table.data_fields()[1].aggregation, pivot::Aggregation::Average);
 }
+TEST(PivotTableReader, DataFieldWithEmptyOrMissingNameKeepsEmptyName) {
+  for (const char* attr : {" name=\"\"", ""}) {
+    std::string xml(kXmlDecl);
+    xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+    xml.append("  <location ref=\"A1:B2\"/>");
+    xml.append("  <pivotFields count=\"1\"><pivotField dataField=\"1\"/></pivotFields>");
+    xml.append("  <dataFields count=\"1\">");
+    xml.append("    <dataField").append(attr).append(" fld=\"0\" subtotal=\"sum\"/>");
+    xml.append("  </dataFields>");
+    xml.append("</pivotTableDefinition>");
+
+    auto table_or = read_pivot_table_definition(Bytes(xml));
+    ASSERT_TRUE(static_cast<bool>(table_or)) << "attr=[" << attr << "] read failed: " << table_or.error().message;
+    ASSERT_EQ(table_or.value().data_fields().size(), 1U);
+    EXPECT_TRUE(table_or.value().data_fields()[0].name.empty()) << "attr=[" << attr << "]";
+    const std::string round = write_pivot_table_definition(table_or.value());
+    EXPECT_NE(round.find("<dataField name=\"\""), std::string::npos) << round;
+  }
+}
 TEST(PivotTableReader, DataFieldAggregationMappingExhaustive) {
   // One <dataField> per Aggregation enum value the OOXML subtotal
   // attribute can name.
