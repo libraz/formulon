@@ -2416,3 +2416,17 @@ cases:
     description: "Excel 365: #VALUE!"
     setup: { A1: "a", B1: "b", A2: 1, B2: 10, A3: 2, B3: 20, D1: "a", D2: ">0" }
     formula: "=DSUM(A1:B3,0.999999,D1:D2)"
+  # -- D-functions add plainly, without SUM's final-step cancellation snap --
+  - id: dsum_cancellation_not_snapped
+    description: "DSUM keeps 0.1+0.2-0.3 = 5.55e-17 where SUM returns 0"
+    setup: { A1: v, A2: 0.1, A3: 0.2, A4: -0.3, C1: v, C2: null }
+    formula: '=DSUM(A1:A4,"v",C1:C2)'
+  - id: sum_cancellation_snapped_control
+    setup: { A1: v, A2: 0.1, A3: 0.2, A4: -0.3 }
+    formula: "=SUM(A2:A4)"
+  - id: daverage_cancellation_not_snapped
+    setup: { A1: v, A2: 0.1, A3: 0.2, A4: -0.3, C1: v, C2: null }
+    formula: '=DAVERAGE(A1:A4,"v",C1:C2)'
+  - id: average_cancellation_snapped_control
+    setup: { A1: v, A2: 0.1, A3: 0.2, A4: -0.3 }
+    formula: "=AVERAGE(A2:A4)"
