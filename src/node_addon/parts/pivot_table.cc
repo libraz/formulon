@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -233,10 +234,7 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
     field = fm_pivot_field_info_t{};
     field.axis = -1;
     field.cache_field_index = -1;
-    field.date_start_year = -1;
-    field.date_end_year = -1;
-    field.date_start_serial = -1.0;
-    field.date_end_serial = -1.0;
+    field.group_base_index = -1;
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("status", MakeStatus(env, rc));
@@ -248,14 +246,9 @@ Napi::Value Workbook::PivotFieldAt(const Napi::CallbackInfo& info) {
   out.Set("cacheFieldIndex", Napi::Number::New(env, field.cache_field_index));
   out.Set("sortOrder", Napi::Number::New(env, field.sort_order));
   out.Set("sortByField", JsString(env, field.sort_by_field));
-  out.Set("hasDateGroup", Napi::Boolean::New(env, field.has_date_group != 0));
-  out.Set("dateGranularity", Napi::Number::New(env, field.date_granularity));
+  out.Set("datePeriods", Napi::Number::New(env, field.date_periods));
   out.Set("dateCalendar", Napi::Number::New(env, field.date_calendar));
-  out.Set("dateStartYear", Napi::Number::New(env, field.date_start_year));
-  out.Set("dateEndYear", Napi::Number::New(env, field.date_end_year));
-  out.Set("dateIntervalDays", Napi::Number::New(env, field.date_interval_days));
-  out.Set("dateStartSerial", Napi::Number::New(env, field.date_start_serial));
-  out.Set("dateEndSerial", Napi::Number::New(env, field.date_end_serial));
+  out.Set("groupBaseIndex", Napi::Number::New(env, field.group_base_index));
   out.Set("defaultSubtotal", Napi::Boolean::New(env, field.default_subtotal != 0));
   Napi::Array fns = Napi::Array::New(env);
   for (std::uint32_t agg = 0; agg < 32U; ++agg) {
@@ -411,18 +404,19 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   // The trailing three are optional on both surfaces: one-day intervals and
-  // the source data's own bounds (-1).
+  // the source data's own bounds (NaN).
+  constexpr double kAuto = std::numeric_limits<double>::quiet_NaN();
   CheckedSpecReader reader(env);
-  const std::uint32_t interval_days = reader.U32(info[7], "intervalDays", 1U);
-  const double start_serial = reader.Double(info[8], "startSerial", -1.0);
-  const double end_serial = reader.Double(info[9], "endSerial", -1.0);
+  const std::uint32_t interval_days = reader.U32(info[5], "intervalDays", 1U);
+  const double start = reader.Double(info[6], "start", kAuto);
+  const double end = reader.Double(info[7], "end", kAuto);
   if (!reader.ok()) {
     return env.Undefined();
   }
   const PivotFieldArgs field = ReadPivotField(info);
-  return MakeStatus(env, fm_workbook_pivot_field_set_date_group(
-                             handle_, field.sheet, field.pivot_idx, field.field_idx, ArgI32(info, 3), ArgI32(info, 4),
-                             ArgI32(info, 5), ArgI32(info, 6), interval_days, start_serial, end_serial));
+  return MakeStatus(
+      env, fm_workbook_pivot_field_set_date_group(handle_, field.sheet, field.pivot_idx, field.field_idx,
+                                                  ArgU32(info, 3), ArgI32(info, 4), interval_days, start, end));
 }
 
 Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {

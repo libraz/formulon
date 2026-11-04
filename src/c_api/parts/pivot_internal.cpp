@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
@@ -104,6 +105,10 @@ void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable
 }
 
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id) {
+  // Group fields follow their base, so an edited cache re-derives them.
+  if (formulon::pivot::PivotCache* cache = find_cache_mut(wb, cache_id); cache != nullptr) {
+    formulon::pivot::materialize_group_fields(*cache, wb.date1904());
+  }
   bool matched = false;
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
@@ -151,10 +156,6 @@ formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_as_t show_as) 
 
 formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_type_t t) {
   return static_cast<formulon::pivot::FilterType>(t);
-}
-
-formulon::pivot::DateGrouping pivot_date_grouping_from_fm(fm_pivot_date_grouping_t g) {
-  return static_cast<formulon::pivot::DateGrouping>(g);
 }
 
 formulon::pivot::CalendarSystem pivot_calendar_from_fm(fm_pivot_calendar_t c) {

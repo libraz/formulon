@@ -267,9 +267,12 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(fm_workbook_pivot_field_clear_items(wb.handle, 0, pivot_idx, 0), 0);
   ASSERT_EQ(fm_workbook_pivot_field_add_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_COUNT), 0);
   ASSERT_EQ(fm_workbook_pivot_field_clear_subtotal_fns(wb.handle, 0, pivot_idx, 0), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_DATE_YEAR,
-                                                   FM_PIVOT_CALENDAR_GREGORIAN, 2020, 2026, 1, -1.0, -1.0),
-            0);
+  // Region holds text: grouping it by date is refused, and clearing a
+  // grouping it does not have changes nothing.
+  ASSERT_EQ(fm_workbook_pivot_field_set_date_group(
+                wb.handle, 0, pivot_idx, 0, FM_PIVOT_PERIOD_YEARS, FM_PIVOT_CALENDAR_GREGORIAN, 1,
+                std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   ASSERT_EQ(fm_workbook_pivot_field_clear_date_group(wb.handle, 0, pivot_idx, 0), 0);
   ASSERT_EQ(fm_workbook_pivot_field_set_number_format(wb.handle, 0, pivot_idx, 1, "4"), 0);
   const std::uint32_t col_order[] = {1U};

@@ -315,13 +315,14 @@ TEST(PivotCacheWritePlan, InMemoryDateGroupBaseGetsDateHints) {
   const std::string xml = write_pivot_cache_definition(cache, &plan);
   EXPECT_TRUE(Contains(xml,
                        "<cacheField name=\"Date\"><sharedItems containsSemiMixedTypes=\"0\" containsNonDate=\"0\" "
-                       "containsDate=\"1\" containsString=\"0\" minDate=\"2024-01-15T00:00:00\" "
+                       "containsDate=\"1\" containsString=\"0\" minDate=\"2024-01-15T18:00:00\" "
                        "maxDate=\"2024-07-23T00:00:00\"/><fieldGroup par=\"1\"/></cacheField>"))
       << xml;
-  // The group's bounds repeat the base's, as Excel writes them.
+  // The minimum keeps its time; a date-only maximum becomes the next
+  // midnight. The group's bounds repeat the base's, as Excel writes them.
   EXPECT_TRUE(Contains(xml,
                        "<cacheField name=\"Months\" numFmtId=\"0\" databaseField=\"0\"><fieldGroup base=\"0\">"
-                       "<rangePr groupBy=\"months\" startDate=\"2024-01-15T00:00:00\" "
+                       "<rangePr groupBy=\"months\" startDate=\"2024-01-15T18:00:00\" "
                        "endDate=\"2024-07-23T00:00:00\"/></fieldGroup>"))
       << xml;
 }

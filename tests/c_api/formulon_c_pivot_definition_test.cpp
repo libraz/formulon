@@ -54,10 +54,10 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
 
   // Field 0 is "Region" (row), field 1 is "Amount" (value).
   ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_DESCENDING, "Sum of Amount"), 0);
-  ASSERT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_DATE_DAYS,
-                                                   FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, 7U, 45000.0, 45100.0),
-            0)
-      << fm_last_error_message();
+  // Region holds text, which no date group takes.
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_PERIOD_DAYS,
+                                                   FM_PIVOT_CALENDAR_GREGORIAN, 7U, 45000.0, 45100.0),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   fm_pivot_field_info_t region{};
   ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &region), 0) << fm_last_error_message();
   EXPECT_STREQ(region.source_name, "Region");
@@ -66,19 +66,17 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
   EXPECT_EQ(region.cache_field_index, 0);
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_DESCENDING);
   EXPECT_STREQ(region.sort_by_field, "Sum of Amount");
-  EXPECT_EQ(region.has_date_group, 1);
-  EXPECT_EQ(region.date_granularity, FM_PIVOT_DATE_DAYS);
+  EXPECT_EQ(region.date_periods, 0U);
   EXPECT_EQ(region.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
-  EXPECT_EQ(region.date_start_year, -1);
-  EXPECT_EQ(region.date_interval_days, 7U);
-  EXPECT_EQ(region.date_start_serial, 45000.0);
-  EXPECT_EQ(region.date_end_serial, 45100.0);
+  EXPECT_EQ(region.group_base_index, -1);
+  EXPECT_EQ(region.insert_blank_row, 0);
+  EXPECT_EQ(region.fill_down_labels, 0);
 
   ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, FM_PIVOT_SORT_MANUAL, nullptr), 0);
   ASSERT_EQ(fm_workbook_pivot_field_clear_date_group(wb.handle, 0, pivot_idx, 0), 0);
   ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &region), 0);
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_MANUAL);
-  EXPECT_EQ(region.has_date_group, 0);
+  EXPECT_EQ(region.date_periods, 0U);
 
   // Items: the scratch pivot added North and South by label, bound to the shared items.
   std::size_t item_count = 99;

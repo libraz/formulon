@@ -34,3 +34,4 @@ removed fm_sheet_set_image_anchor :: renamed fm_sheet_set_drawing_anchor, taking
 removed fm_sheet_set_image_z_order :: renamed fm_sheet_set_drawing_z_order; it reorders charts as well as pictures
 removed fm_sheet_snapshot_image :: renamed fm_sheet_snapshot_drawing; it captures charts as well as pictures
 removed fm_sheet_restore_image :: renamed fm_sheet_restore_drawing, with flag FM_DRAWING_RESTORE_NEW_ID (was FM_IMAGE_RESTORE_NEW_ID)
+signature fm_workbook_pivot_field_set_date_group :: groups by a FM_PIVOT_PERIOD_* mask into cache group fields with locale labels; the granularity, year and -1 serial arguments are gone, NaN bounds mean auto

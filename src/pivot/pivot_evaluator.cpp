@@ -23,7 +23,6 @@
 #include "pivot/pivot_evaluator.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -38,7 +37,6 @@
 #include "eval/eval_profile_scope.h"
 #include "num_fmt_locale.h"
 #include "pivot/aggregator.h"
-#include "pivot/date_serial.h"
 #include "pivot/field_grouping.h"
 #include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
@@ -48,7 +46,6 @@
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
-#include "pivot/record_access.h"
 #include "pivot/show_values_as.h"
 #include "pivot/value_filter_pass.h"
 #include "pivot/value_order.h"
@@ -209,29 +206,6 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
                             " cache_fields=" + std::to_string(cache.fields().size()));
     }
   }
-  for (std::size_t fi = 0; fi < table.fields().size(); ++fi) {
-    const auto& date_group = table.fields()[fi].date_group;
-    if (!date_group.has_value() || date_group->granularity != DateGrouping::Days) {
-      continue;
-    }
-    if (date_group->interval_days == 0) {
-      return make_error(FormulonErrorCode::kEvalPivotInvalid, "date grouping interval_days must be non-zero",
-                        "field_index=" + std::to_string(fi));
-    }
-    // Compare authored bounds before flooring so the core model agrees with
-    // the C API for inverted fractional windows (e.g. 0.9 > 0.1).
-    if (date_group->start_serial.has_value() && date_group->end_serial.has_value() &&
-        *date_group->start_serial > *date_group->end_serial) {
-      return make_error(FormulonErrorCode::kEvalPivotInvalid, "date grouping start must not exceed end",
-                        "field_index=" + std::to_string(fi));
-    }
-    if ((date_group->start_serial.has_value() && !is_valid_date_serial(*date_group->start_serial, env.date1904)) ||
-        (date_group->end_serial.has_value() && !is_valid_date_serial(*date_group->end_serial, env.date1904))) {
-      return make_error(FormulonErrorCode::kEvalPivotInvalid, "date grouping bound is outside the date serial domain",
-                        "field_index=" + std::to_string(fi));
-    }
-  }
-
   // 2. Filter records.
   //
   // Everything the filter derives from the table alone — which items each
@@ -260,11 +234,6 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   }
 
   // 3. Build hierarchies.
-  //
-  // A field whose `date_group` is set bucketises the cache value at
-  // hierarchy-insertion time; we plumb the optional through `HierLevel`
-  // so `insert_path` can call the bucketer without re-walking the table
-  // metadata.
   //
   // `manual_order_cache` backs `HierLevel::manual_order` for every field
   // with `SortSpec::manual` set: a value->document-position map built
@@ -311,67 +280,18 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     const auto& stored = caption_cache.emplace(fi, std::move(captions)).first->second;
     return stored.empty() ? nullptr : &stored;
   };
-  // A `Days` field's auto Start/End resolves once per field from the
-  // whole cache (matching Excel's Group dialog, unaffected by report
-  // filters); every hierarchy level for that field reuses the result.
-  std::unordered_map<std::uint32_t, PivotDateGroup> resolved_days_group_cache;
-  auto resolved_date_group = [&](std::uint32_t fi, const PivotDateGroup& dg) -> const PivotDateGroup* {
-    if (dg.granularity != DateGrouping::Days) {
-      return &dg;
-    }
-    if (auto it = resolved_days_group_cache.find(fi); it != resolved_days_group_cache.end()) {
-      return &it->second;
-    }
-    PivotDateGroup resolved = dg;
-    bool have_bound = false;
-    double data_min = 0.0;
-    double data_max = 0.0;
-    for (const PivotCacheRecord& rec : cache.records()) {
-      const Value v = cell_value(cache, rec, fi);
-      if (!v.is_number() || !is_valid_date_serial(v.as_number(), resolved_env.date1904)) {
-        continue;  // Mirrors bucket_date's own valid-serial domain.
-      }
-      const double n = std::floor(v.as_number());
-      if (!have_bound) {
-        data_min = n;
-        data_max = n;
-        have_bound = true;
-      } else {
-        data_min = std::min(data_min, n);
-        data_max = std::max(data_max, n);
-      }
-    }
-    if (resolved.start_serial.has_value()) {
-      resolved.start_serial = std::floor(*resolved.start_serial);
-    } else {
-      resolved.start_serial = have_bound ? data_min : 0.0;
-    }
-    if (!resolved.end_serial.has_value()) {
-      const double auto_end = have_bound ? (data_max + 1.0) : *resolved.start_serial;
-      resolved.end_serial = std::min(auto_end, last_valid_date_serial(resolved_env.date1904));
-    } else {
-      resolved.end_serial = std::floor(*resolved.end_serial);
-    }
-    return &resolved_days_group_cache.emplace(fi, resolved).first->second;
-  };
   auto level_for = [&](std::uint32_t fi) -> HierLevel {
-    const PivotDateGroup* dg = nullptr;
-    if (fi < table.fields().size() && table.fields()[fi].date_group.has_value()) {
-      dg = resolved_date_group(fi, *table.fields()[fi].date_group);
-    }
     const bool manual = fi < table.fields().size() && table.fields()[fi].sort.manual;
     const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;
     const std::optional<ValueSortSpec> value_sort = resolve_value_sort(table, fi);
-    HierLevel level{fi,
-                    dg,
-                    ascending,
+    HierLevel level{fi, ascending,
                     value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
                     manual ? manual_order_for(fi) : nullptr};
     level.captions = captions_for(fi);
     if (fi < cache.fields().size() && is_group_field(cache.fields()[fi])) {
       level.group_items = &cache.fields()[fi].field_group->group_items;
-    } else if (dg == nullptr) {
+    } else {
       level.number_format = item_number_format(table, cache, fi, options.profile, env.styles);
     }
     return level;

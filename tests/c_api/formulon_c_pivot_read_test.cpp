@@ -297,9 +297,9 @@ TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   // A field carrying an explicit item list sorts by it, as OOXML's default sortType does.
   EXPECT_EQ(region.sort_order, FM_PIVOT_SORT_MANUAL);
   EXPECT_STREQ(region.sort_by_field, "");
-  EXPECT_EQ(region.has_date_group, 0);
-  EXPECT_EQ(region.date_start_year, -1);
-  EXPECT_EQ(region.date_end_serial, -1.0);
+  EXPECT_EQ(region.date_periods, 0U);
+  EXPECT_EQ(region.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
+  EXPECT_EQ(region.group_base_index, -1);
 
   fm_pivot_field_info_t amount{};
   ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 1, 0, 1, &amount), 0);

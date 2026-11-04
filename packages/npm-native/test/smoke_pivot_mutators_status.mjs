@@ -518,7 +518,7 @@ const PIVOT_MUTATORS = [
     'pivotFieldSetDateGroup',
     {
       setup: dateRows,
-      act: (b) => b.wb.pivotFieldSetDateGroup(0, b.pivot, b.date, 3, 1, -1, -1),
+      act: (b) => b.wb.pivotFieldSetDateGroup(0, b.pivot, b.date, 64, 1),
       expect: (b) =>
         assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '令和6年|40', '令和7年|12', '総計|52']),
     },
@@ -528,7 +528,7 @@ const PIVOT_MUTATORS = [
     {
       setup: (b) => {
         dateRows(b);
-        b.wb.pivotFieldSetDateGroup(0, b.pivot, b.date, 3, 0, -1, -1);
+        b.wb.pivotFieldSetDateGroup(0, b.pivot, b.date, 64, 0);
       },
       act: (b) => b.wb.pivotFieldClearDateGroup(0, b.pivot, b.date),
       expect: (b) => assert.deepEqual(pivotGrid(b.wb), DATE_SERIAL_GRID),
@@ -900,13 +900,12 @@ test('pivotFieldSetDateGroup defaults its trailing three arguments', async () =>
   try {
     dateRows(explicit);
     dateRows(defaulted);
-    const days = 4; // PivotDateGrouping.Days
-    assert.ok(explicit.wb.pivotFieldSetDateGroup(0, explicit.pivot, explicit.date, days, 0, -1, -1, 1, -1, -1).ok);
-    const r = defaulted.wb.pivotFieldSetDateGroup(0, defaulted.pivot, defaulted.date, days, 0, -1, -1);
+    const days = 8; // PivotDatePeriod.Days
+    assert.ok(explicit.wb.pivotFieldSetDateGroup(0, explicit.pivot, explicit.date, days, 0, 1, NaN, NaN).ok);
+    const r = defaulted.wb.pivotFieldSetDateGroup(0, defaulted.pivot, defaulted.date, days, 0);
     assert.ok(r.ok, JSON.stringify(r));
     const field = defaulted.wb.pivotFieldAt(0, defaulted.pivot, defaulted.date);
-    assert.equal(field.dateGranularity, days);
-    assert.equal(field.dateIntervalDays, 1);
+    assert.equal(field.datePeriods, days);
     assert.deepEqual(field, explicit.wb.pivotFieldAt(0, explicit.pivot, explicit.date));
     assert.deepEqual(pivotGrid(defaulted.wb), pivotGrid(explicit.wb));
   } finally {

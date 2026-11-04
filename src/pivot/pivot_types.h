@@ -94,22 +94,8 @@ enum class FilterType : std::uint8_t {
   ValueNotBetween = 11,
 };
 
-/// Granularity at which a date column is grouped.
-enum class DateGrouping : std::uint8_t {
-  Day = 0,
-  Month = 1,
-  Quarter = 2,
-  Year = 3,
-  /// Excel's "By: Days" grouping: an explicit interval starting at the
-  /// data minimum or an explicit Start, with catch-all buckets below
-  /// Start / above End. A real Excel "week" is `interval_days == 7`.
-  Days = 4,
-  Hour = 5,
-  Minute = 6,
-  Second = 7,
-};
-
-/// Calendar system used when grouping date fields.
+/// Calendar a date field's years are grouped by: Gregorian years, or the
+/// Japanese era years.
 enum class CalendarSystem : std::uint8_t {
   Gregorian = 0,
   Japanese = 1,
@@ -191,30 +177,6 @@ struct PivotPageField {
   /// are listed in shared-item order. Resolution follows the literal
   /// reading.
   std::optional<std::uint32_t> item_index;
-};
-
-/// Configuration for grouping a date-typed source column.
-struct PivotDateGroup {
-  DateGrouping granularity = DateGrouping::Year;
-  CalendarSystem calendar = CalendarSystem::Gregorian;
-  std::optional<int> start_year;
-  std::optional<int> end_year;
-
-  /// `Days` granularity only: bucket width, Excel's "Number of days".
-  /// Unused otherwise.
-  std::uint32_t interval_days = 1;
-
-  /// `Days` granularity only: the bucket origin, as an Excel date
-  /// serial. Unset means Start=auto (the field's data minimum); an
-  /// explicit start past that minimum collapses everything below it
-  /// into one `"<" + start` catch-all bucket.
-  std::optional<double> start_serial;
-
-  /// `Days` granularity only: as an Excel date serial. Unset means
-  /// End=auto (the data maximum plus one day); an explicit end short
-  /// of the data maximum collapses everything above it into one
-  /// `">" + end` catch-all bucket.
-  std::optional<double> end_serial;
 };
 
 /// The `<filter>` element a loaded `PivotFilter` was decoded from.
@@ -618,7 +580,6 @@ struct PivotField {
 
   /// `<pivotField numFmtId>` as its decimal string; empty when absent.
   std::string number_format;
-  std::optional<PivotDateGroup> date_group;
 
   /// OOXML `<pivotField>` attributes the model does not represent
   /// structurally (e.g. `compact`, `outline`, `showAll`,

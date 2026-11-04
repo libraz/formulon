@@ -15,6 +15,7 @@
 #include <string_view>
 
 #include "excel_profile.h"
+#include "pivot/pivot_cache.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_types.h"
 
@@ -51,6 +52,31 @@ std::string_view data_field_separator(ExcelProfile profile);
 /// or "求和项:Amount" (zh-CN): the aggregation label, the locale's
 /// separator, then the field name.
 std::string data_field_display_name(pivot::Aggregation agg, std::string_view field_name, ExcelProfile profile);
+
+/// Name Excel gives the group field of calendar period `period` over the base
+/// field `base_name` in the profile's locale, e.g. "月 (Date)" or "Months
+/// (Date)".
+std::string date_group_field_name(GroupBy period, std::string_view base_name, ExcelProfile profile);
+
+/// Label of the in-range group item `index` of a calendar-unit `period`, in
+/// the order Excel lists them: second / minute 0-59, hour 0-23, day 0-365 of
+/// a leap year, month 0-11, quarter 0-3. Empty for an index past the unit.
+std::string date_group_unit_label(GroupBy period, unsigned index, ExcelProfile profile);
+
+/// Label of the years group item for Gregorian `year` ("2024年", "2024").
+std::string date_group_year_label(int year, ExcelProfile profile);
+
+/// Label of the item collecting values before the group's start, given the
+/// start rendered as a short date.
+std::string date_group_before_label(std::string_view start_text);
+
+/// Label of the item collecting values after the group's end, given the end
+/// rendered as a short date.
+std::string date_group_after_label(std::string_view end_text);
+
+/// Label of one interval of a days group spanning several days, given its
+/// first and last day rendered as short dates.
+std::string date_group_interval_label(std::string_view first_text, std::string_view last_text);
 
 }  // namespace formulon::pivot
 

@@ -13,6 +13,8 @@
 
 #include <emscripten/bind.h>
 
+#include <limits>
+
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -457,27 +459,27 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotFieldSetAxis", &JsWorkbook::pivotFieldSetAxis)
       .function("pivotFieldSetDateGroup", &JsWorkbook::pivotFieldSetDateGroup)
       // The trailing three default as on the Node surface: one-day intervals
-      // and an automatic Start / End window.
+      // and the field's own first and last date (NaN).
+      .function(
+          "pivotFieldSetDateGroup",
+          emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
+                                           uint32_t periods, uint32_t calendar, uint32_t intervalDays, double start) {
+            return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, periods, calendar, intervalDays, start,
+                                               std::numeric_limits<double>::quiet_NaN());
+          }))
       .function("pivotFieldSetDateGroup",
                 emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
-                                                 uint32_t granularity, uint32_t calendar, int32_t startYear,
-                                                 int32_t endYear, uint32_t intervalDays, double startSerial) {
-                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, granularity, calendar, startYear,
-                                                     endYear, intervalDays, startSerial, -1.0);
+                                                 uint32_t periods, uint32_t calendar, uint32_t intervalDays) {
+                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, periods, calendar, intervalDays,
+                                                     std::numeric_limits<double>::quiet_NaN(),
+                                                     std::numeric_limits<double>::quiet_NaN());
                 }))
       .function("pivotFieldSetDateGroup",
                 emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
-                                                 uint32_t granularity, uint32_t calendar, int32_t startYear,
-                                                 int32_t endYear, uint32_t intervalDays) {
-                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, granularity, calendar, startYear,
-                                                     endYear, intervalDays, -1.0, -1.0);
-                }))
-      .function("pivotFieldSetDateGroup",
-                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx,
-                                                 uint32_t granularity, uint32_t calendar, int32_t startYear,
-                                                 int32_t endYear) {
-                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, granularity, calendar, startYear,
-                                                     endYear, 1U, -1.0, -1.0);
+                                                 uint32_t periods, uint32_t calendar) {
+                  return self.pivotFieldSetDateGroup(sheet, pivotIdx, fieldIdx, periods, calendar, 1U,
+                                                     std::numeric_limits<double>::quiet_NaN(),
+                                                     std::numeric_limits<double>::quiet_NaN());
                 }))
       .function("pivotFieldSetItemVisible", &JsWorkbook::pivotFieldSetItemVisible)
       .function("pivotFieldSetNumberFormat", &JsWorkbook::pivotFieldSetNumberFormat)

@@ -167,6 +167,9 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
     ("pivot/hierarchy_builder.cpp", "eval/text_format/display_text.h"): (
         "Numeric axis items are labelled in their field's number format, like the cells Excel draws."
     ),
+    ("pivot/field_grouping.cpp", "eval/text_format/display_text.h"): (
+        "Date group items show their bounds as the locale's short date, as Excel writes them."
+    ),
     ("io/ooxml_writer.cpp", "eval/eval_profile_scope.h"): "Pivot write plans collate shared items like evaluation.",
 }
 

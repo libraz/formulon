@@ -19,6 +19,7 @@
 #include "io/pivot_attr_names.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "pivot/record_access.h"
@@ -296,10 +297,11 @@ pivot::SharedItemsHints DateHints(const pivot::PivotCache& cache, std::size_t fi
   SetHint(h.contains_non_date, h.has_contains_non_date, false);
   SetHint(h.contains_date, h.has_contains_date, true);
   SetHint(h.contains_string, h.has_contains_string, false);
+  const pivot::GroupBounds bounds = pivot::auto_date_group_bounds(lo, hi, /*date1904=*/false);
   h.has_min_date = true;
-  h.min_date = IsoDateTime(std::floor(lo));
+  h.min_date = IsoDateTime(bounds.start);
   h.has_max_date = true;
-  h.max_date = IsoDateTime(std::floor(hi) + 1.0);
+  h.max_date = IsoDateTime(bounds.end);
   h.present = true;
   return h;
 }

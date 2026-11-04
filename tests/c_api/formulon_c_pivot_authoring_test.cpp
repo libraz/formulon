@@ -6,6 +6,13 @@
 #include "formulon_c_pivot_test_helpers.h"
 #include "utils/date_time.h"
 
+namespace {
+
+// A NaN date-group bound leaves it to the data.
+constexpr double kAutoBound = std::numeric_limits<double>::quiet_NaN();
+
+}  // namespace
+
 TEST(FormulonCApiPivot, CreatePivotFromScratch) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -463,10 +470,12 @@ TEST(FormulonCApiPivot, ScalarEnumMutatorsRejectRawValuesWithoutMutation) {
     EXPECT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, 0, raw), expected) << raw;
     EXPECT_EQ(fm_workbook_pivot_field_add_subtotal_fn(wb.handle, 0, pivot_idx, 0, raw), expected) << raw;
     EXPECT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, raw, nullptr), expected) << raw;
-    EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, raw, 0, -1, -1, 1, -1.0, -1.0),
+    EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, static_cast<std::uint32_t>(raw),
+                                                     FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
               expected)
         << raw;
-    EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, 3, raw, -1, -1, 1, -1.0, -1.0),
+    EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_PERIOD_YEARS, raw, 1,
+                                                     kAutoBound, kAutoBound),
               expected)
         << raw;
   }
@@ -553,36 +562,119 @@ TEST(FormulonCApiPivot, ManualSortRejectsAByFieldKeyWithoutMutation) {
   EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
 }
 
-TEST(FormulonCApiPivot, DateGroupRejectsZeroIntervalAndInvertedWindowWithoutMutation) {
-  // FM_PIVOT_DATE_DAYS-only validation: a zero interval and an explicit
-  // Start past an explicit End are both nonsensical groupings, so
-  // neither may reach the model.
+namespace {
+
+// Date / Amount records (2024-01-01, 2025-01-01, 2024-06-01, 2025-06-01 with
+// 100..400), shown by a pivot with Date on rows and the sum of Amount.
+void BuildDatePivot(fm_workbook_t* wb, bool date1904, std::uint32_t* out_cache_id, std::size_t* out_pivot_idx,
+                    std::size_t* out_date_field) {
+  std::uint32_t& cache_id = *out_cache_id;
+  std::size_t& pivot_idx = *out_pivot_idx;
+  const double dates[] = {
+      formulon::date_time::serial_from_ymd(2024, 1U, 1U, date1904),
+      formulon::date_time::serial_from_ymd(2025, 1U, 1U, date1904),
+      formulon::date_time::serial_from_ymd(2024, 6U, 1U, date1904),
+      formulon::date_time::serial_from_ymd(2025, 6U, 1U, date1904),
+  };
+  const double amounts[] = {100.0, 200.0, 300.0, 400.0};
+
+  ASSERT_EQ(fm_workbook_pivot_cache_create(wb, 0, &cache_id), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb, cache_id, 1, "A1:B5", "Sheet1", nullptr), 0)
+      << fm_last_error_message();
+  std::size_t date_cache_field = 99;
+  std::size_t amount_cache_field = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb, cache_id, "Date", &date_cache_field), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb, cache_id, "Amount", &amount_cache_field), 0)
+      << fm_last_error_message();
+  for (std::size_t record = 0; record < std::size(dates); ++record) {
+    std::size_t record_idx = 99;
+    ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb, cache_id, &record_idx), 0) << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb, cache_id, record_idx, date_cache_field, dates[record]), 0)
+        << fm_last_error_message();
+    ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb, cache_id, record_idx, amount_cache_field, amounts[record]),
+              0)
+        << fm_last_error_message();
+  }
+
+  ASSERT_EQ(fm_workbook_pivot_create(wb, 0, "PT", cache_id, 0U, 3U, &pivot_idx), 0) << fm_last_error_message();
+  fm_pivot_field_spec_t date_spec{};
+  date_spec.source_name = "Date";
+  date_spec.custom_name = "";
+  date_spec.axis = FM_PIVOT_AXIS_ROW;
+  date_spec.subtotal_top = 0;
+  date_spec.number_format = "";
+  std::size_t& date_field = *out_date_field;
+  ASSERT_EQ(fm_workbook_pivot_field_add(wb, 0, pivot_idx, &date_spec, &date_field), 0) << fm_last_error_message();
+  const std::uint32_t row_order[] = {static_cast<std::uint32_t>(date_field)};
+  ASSERT_EQ(fm_workbook_pivot_set_row_field_order(wb, 0, pivot_idx, row_order, 1U), 0) << fm_last_error_message();
+  fm_pivot_field_spec_t amount_spec{};
+  amount_spec.source_name = "Amount";
+  amount_spec.custom_name = "";
+  amount_spec.axis = FM_PIVOT_AXIS_VALUE;
+  amount_spec.subtotal_top = 0;
+  amount_spec.number_format = "";
+  std::size_t amount_field = 99;
+  ASSERT_EQ(fm_workbook_pivot_field_add(wb, 0, pivot_idx, &amount_spec, &amount_field), 0) << fm_last_error_message();
+  fm_pivot_data_field_spec_t data_spec{};
+  data_spec.name = "Sum of Amount";
+  data_spec.field_index = static_cast<std::uint32_t>(amount_field);
+  data_spec.aggregation = FM_PIVOT_AGG_SUM;
+  data_spec.number_format = "";
+  data_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  data_spec.show_as_base_field = -1;
+  data_spec.show_as_base_item = -1;
+  std::size_t data_field = 99;
+  ASSERT_EQ(fm_workbook_pivot_data_field_add(wb, 0, pivot_idx, &data_spec, &data_field), 0) << fm_last_error_message();
+}
+
+}  // namespace
+
+TEST(FormulonCApiPivot, DateGroupRejectsBadArgumentsWithoutMutation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
-  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+  std::size_t date_field = 0;
+  BuildDatePivot(wb.handle, /*date1904=*/false, &cache_id, &pivot_idx, &date_field);
+  if (HasFatalFailure()) {
+    return;
+  }
 
   BufferGuard before;
   ASSERT_EQ(fm_workbook_save(wb.handle, &before.data, &before.len), 0) << fm_last_error_message();
   const std::vector<std::uint8_t> snapshot(before.data, before.data + before.len);
   const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  const double jan1 = formulon::date_time::serial_from_ymd(2024, 1U, 1U);
 
-  // interval_days == 0.
+  // No period, or a bit past the years.
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, 0U, FM_PIVOT_CALENDAR_GREGORIAN,
+                                                   1, kAutoBound, kAutoBound),
+            expected);
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_YEARS | 128U,
+                                                   FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
+            expected);
+  // A zero interval, and an interval with a period besides days.
   EXPECT_EQ(
-      fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_DATE_DAYS,
-                                             FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, /*interval_days=*/0, -1.0, -1.0),
+      fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
+                                             FM_PIVOT_CALENDAR_GREGORIAN, /*interval_days=*/0, kAutoBound, kAutoBound),
       expected);
-  // start_serial_or_neg1 > end_serial_or_neg1 (both explicit).
-  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_DATE_DAYS,
-                                                   FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, /*interval_days=*/7,
-                                                   /*start_serial=*/61.0, /*end_serial=*/60.0),
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(
+                wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS | FM_PIVOT_PERIOD_MONTHS,
+                FM_PIVOT_CALENDAR_GREGORIAN, /*interval_days=*/7, kAutoBound, kAutoBound),
             expected);
-  // Compare the raw values before flooring: 0.9 > 0.1 is still inverted.
-  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_DATE_DAYS,
-                                                   FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, /*interval_days=*/7,
-                                                   /*start_serial=*/0.9, /*end_serial=*/0.1),
+  // A start after the end, compared before flooring.
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
+                                                   FM_PIVOT_CALENDAR_GREGORIAN, 7, jan1 + 1.0, jan1),
             expected);
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
+                                                   FM_PIVOT_CALENDAR_GREGORIAN, 7, jan1 + 0.9, jan1 + 0.1),
+            expected);
+  // A field holding anything but dates.
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_text(wb.handle, cache_id, 0, 0, "n/a"), 0) << fm_last_error_message();
+  EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_YEARS,
+                                                   FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
+            expected);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, 0, jan1), 0) << fm_last_error_message();
 
   BufferGuard after;
   ASSERT_EQ(fm_workbook_save(wb.handle, &after.data, &after.len), 0) << fm_last_error_message();
@@ -599,71 +691,13 @@ TEST(FormulonCApiPivot, DateGroupRejectsInvalidSerialBoundsWithoutMutation) {
     }
     std::uint32_t cache_id = 0;
     std::size_t pivot_idx = 0;
-    const double dates[] = {
-        formulon::date_time::serial_from_ymd(2024, 1U, 1U, date1904),
-        formulon::date_time::serial_from_ymd(2025, 1U, 1U, date1904),
-        formulon::date_time::serial_from_ymd(2024, 6U, 1U, date1904),
-        formulon::date_time::serial_from_ymd(2025, 6U, 1U, date1904),
-    };
-    const double amounts[] = {100.0, 200.0, 300.0, 400.0};
-
-    ASSERT_EQ(fm_workbook_pivot_cache_create(wb.handle, 0, &cache_id), 0) << fm_last_error_message();
-    ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, 1, "A1:B5", "Sheet1", nullptr), 0)
-        << fm_last_error_message();
-    std::size_t date_cache_field = 99;
-    std::size_t amount_cache_field = 99;
-    ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, "Date", &date_cache_field), 0)
-        << fm_last_error_message();
-    ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, "Amount", &amount_cache_field), 0)
-        << fm_last_error_message();
-    for (std::size_t record = 0; record < std::size(dates); ++record) {
-      std::size_t record_idx = 99;
-      ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &record_idx), 0) << fm_last_error_message();
-      ASSERT_EQ(
-          fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, record_idx, date_cache_field, dates[record]),
-          0)
-          << fm_last_error_message();
-      ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, record_idx, amount_cache_field,
-                                                          amounts[record]),
-                0)
-          << fm_last_error_message();
+    std::size_t date_field = 0;
+    BuildDatePivot(wb.handle, date1904, &cache_id, &pivot_idx, &date_field);
+    if (HasFatalFailure()) {
+      return;
     }
-
-    ASSERT_EQ(fm_workbook_pivot_create(wb.handle, 0, "PT", cache_id, 0U, 3U, &pivot_idx), 0) << fm_last_error_message();
-    fm_pivot_field_spec_t date_spec{};
-    date_spec.source_name = "Date";
-    date_spec.custom_name = "";
-    date_spec.axis = FM_PIVOT_AXIS_ROW;
-    date_spec.subtotal_top = 0;
-    date_spec.number_format = "";
-    std::size_t date_field = 99;
-    ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &date_spec, &date_field), 0)
-        << fm_last_error_message();
-    const std::uint32_t row_order[] = {static_cast<std::uint32_t>(date_field)};
-    ASSERT_EQ(fm_workbook_pivot_set_row_field_order(wb.handle, 0, pivot_idx, row_order, 1U), 0)
-        << fm_last_error_message();
-    fm_pivot_field_spec_t amount_spec{};
-    amount_spec.source_name = "Amount";
-    amount_spec.custom_name = "";
-    amount_spec.axis = FM_PIVOT_AXIS_VALUE;
-    amount_spec.subtotal_top = 0;
-    amount_spec.number_format = "";
-    std::size_t amount_field = 99;
-    ASSERT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, pivot_idx, &amount_spec, &amount_field), 0)
-        << fm_last_error_message();
-    fm_pivot_data_field_spec_t data_spec{};
-    data_spec.name = "Sum of Amount";
-    data_spec.field_index = static_cast<std::uint32_t>(amount_field);
-    data_spec.aggregation = FM_PIVOT_AGG_SUM;
-    data_spec.number_format = "";
-    data_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
-    data_spec.show_as_base_field = -1;
-    data_spec.show_as_base_item = -1;
-    std::size_t data_field = 99;
-    ASSERT_EQ(fm_workbook_pivot_data_field_add(wb.handle, 0, pivot_idx, &data_spec, &data_field), 0)
-        << fm_last_error_message();
-    ASSERT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_DATE_YEAR,
-                                                     FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, 1, -1.0, -1.0),
+    ASSERT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_YEARS,
+                                                     FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
               0)
         << fm_last_error_message();
 
@@ -691,19 +725,18 @@ TEST(FormulonCApiPivot, DateGroupRejectsInvalidSerialBoundsWithoutMutation) {
     const double invalid[] = {
         -2.0,
         -0.1,
-        std::numeric_limits<double>::quiet_NaN(),
         std::numeric_limits<double>::infinity(),
         -std::numeric_limits<double>::infinity(),
         last_valid + 1.0,
         std::numeric_limits<double>::max(),
     };
     for (const double raw : invalid) {
-      EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_DATE_DAYS,
-                                                       FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, 7, raw, 70.0),
+      EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
+                                                       FM_PIVOT_CALENDAR_GREGORIAN, 7, raw, 70.0),
                 expected)
           << "invalid start=" << raw << " date1904=" << date1904;
-      EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_DATE_DAYS,
-                                                       FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, 7, 0.0, raw),
+      EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
+                                                       FM_PIVOT_CALENDAR_GREGORIAN, 7, 0.0, raw),
                 expected)
           << "invalid end=" << raw << " date1904=" << date1904;
     }

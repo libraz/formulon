@@ -488,25 +488,21 @@ export const PivotFilterType: Readonly<{
 /** Union of the {@link PivotFilterType} ordinals. */
 export type PivotFilterType = 0 | 1 | 2 | 3 | 4 | 5;
 
-/** Date-grouping granularity. Mirrors `fm_pivot_date_grouping_t`.
- *  `Days` is Excel's "By: Days" grouping (an explicit interval, e.g. a
- *  real Excel "week" is `Days` with `intervalDays: 7`); there is no
- *  separate week granularity. */
-export const PivotDateGrouping: Readonly<{
-  Day: 0;
-  Month: 1;
-  Quarter: 2;
-  Year: 3;
-  Days: 4;
-  Hour: 5;
-  Minute: 6;
-  Second: 7;
+/** Calendar periods of a date group, as the bits of the `periods` mask of
+ *  `pivotFieldSetDateGroup`. Mirrors `FM_PIVOT_PERIOD_*`. */
+export const PivotDatePeriod: Readonly<{
+  Seconds: 1;
+  Minutes: 2;
+  Hours: 4;
+  Days: 8;
+  Months: 16;
+  Quarters: 32;
+  Years: 64;
 }>;
-/** Union of the {@link PivotDateGrouping} ordinals. */
-export type PivotDateGrouping = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** Union of the {@link PivotDatePeriod} bits. */
+export type PivotDatePeriod = 1 | 2 | 4 | 8 | 16 | 32 | 64;
 
-/** Calendar system used by date grouping. Mirrors
- *  `fm_pivot_calendar_t`. */
+/** Calendar a date group's years follow. Mirrors `fm_pivot_calendar_t`. */
 export const PivotCalendar: Readonly<{
   Gregorian: 0;
   Japanese: 1;
@@ -680,17 +676,13 @@ export interface PivotFieldResult {
   /** One of `PivotSortOrder.*`, as written by `pivotFieldSetSort`. */
   sortOrder: PivotSortOrder;
   sortByField: string;
-  /** When `false` the `date*` members are zero and the unset sentinels. */
-  hasDateGroup: boolean;
-  dateGranularity: PivotDateGrouping;
+  /** For a date-grouped field, the `PivotDatePeriod` bits of its group
+   *  fields; `0` otherwise. */
+  datePeriods: number;
+  /** Calendar of that grouping; `Gregorian` when ungrouped. */
   dateCalendar: PivotCalendar;
-  /** `-1` when unset. */
-  dateStartYear: number;
-  dateEndYear: number;
-  dateIntervalDays: number;
-  /** `-1` when unset. */
-  dateStartSerial: number;
-  dateEndSerial: number;
+  /** For a group field, the index of the field it groups; `-1` otherwise. */
+  groupBaseIndex: number;
   /** Whether the automatic subtotal shows; `false` whenever `subtotalFns`
    *  is non-empty, since custom functions replace it. */
   defaultSubtotal: boolean;
@@ -4225,30 +4217,34 @@ export interface Workbook {
   pivotFieldAddSubtotalFn(sheet: number, pivotIdx: number, fieldIdx: number, agg: PivotAggregation): Status;
   /** Drops every subtotal-fn entry from pivot field `fieldIdx`. */
   pivotFieldClearSubtotalFns(sheet: number, pivotIdx: number, fieldIdx: number): Status;
-  /** Configures date-grouping on pivot field `fieldIdx`. Pass `-1` for
-   *  `startYear` / `endYear` to leave the Year-truncation bound unset
-   *  (meaningful only for `PivotDateGrouping.Year`). `intervalDays` is
-   *  the `PivotDateGrouping.Days`-only bucket width in whole days;
-   *  defaults to `1`, which is also what every other granularity
-   *  should pass. `startSerial` / `endSerial` are the `Days`-only
-   *  Start/End window as Excel date serials; default `-1` leaves
-   *  either auto (Start = the field's data minimum, End = the data
-   *  maximum plus one day), and both are ignored for every other
-   *  granularity. With `Days`, a zero `intervalDays` or a start after
-   *  the end is rejected with `kInvalidArgument`. */
+  /** Groups the date field `fieldIdx` (a source field, or one of its group
+   *  fields) by the `PivotDatePeriod` bits of `periods`, as Excel's Group
+   *  command does, replacing any grouping it has. Each period becomes a
+   *  group field appended to the pivot cache, finest first, named and
+   *  labelled in the workbook's locale; this pivot shows them in the
+   *  field's place, coarsest outermost, and another pivot showing the field
+   *  shows them before it. `PivotCalendar.Japanese` groups the years by era
+   *  year. `intervalDays` (default `1`) above 1 groups by runs of days and
+   *  needs `periods === PivotDatePeriod.Days`. `start` / `end` are date
+   *  serials; `NaN` (the default) takes the field's first value and its
+   *  last (the midnight after it for a date without a time). An empty or
+   *  unknown mask, a zero interval, an invalid bound, a start after the end
+   *  or a field holding anything but dates is `kInvalidArgument`. */
   pivotFieldSetDateGroup(
     sheet: number,
     pivotIdx: number,
     fieldIdx: number,
-    granularity: PivotDateGrouping,
+    periods: number,
     calendar: PivotCalendar,
-    startYear: number,
-    endYear: number,
     intervalDays?: number,
-    startSerial?: number,
-    endSerial?: number,
+    start?: number,
+    end?: number,
   ): Status;
-  /** Removes the date-grouping config from pivot field `fieldIdx`. */
+  /** Removes the date grouping of pivot field `fieldIdx` (a source field,
+   *  or one of its group fields) from every pivot on its cache; the field
+   *  returns to the axis position its group fields held. A field that is
+   *  not grouped is left as it is. `kPreconditionFailed` when the group
+   *  fields are not the last fields of the cache. */
   pivotFieldClearDateGroup(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Sets the `numFmtId` of pivot field `fieldIdx`, as a decimal string
    *  naming a built-in id or one returned by `addNumFmt`. Pass an empty
@@ -5209,7 +5205,7 @@ declare const _default: {
   PIVOT_SHOW_AS_BASE_PREVIOUS: typeof PIVOT_SHOW_AS_BASE_PREVIOUS;
   PIVOT_SHOW_AS_BASE_NEXT: typeof PIVOT_SHOW_AS_BASE_NEXT;
   PivotFilterType: typeof PivotFilterType;
-  PivotDateGrouping: typeof PivotDateGrouping;
+  PivotDatePeriod: typeof PivotDatePeriod;
   PivotCalendar: typeof PivotCalendar;
   PivotFilterValueKind: typeof PivotFilterValueKind;
   PivotReportLayout: typeof PivotReportLayout;

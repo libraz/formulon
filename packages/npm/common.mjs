@@ -64,15 +64,14 @@ export const PivotFilterType = Object.freeze({
   LabelBeginsWith: 4,
   LabelDate: 5,
 });
-export const PivotDateGrouping = Object.freeze({
-  Day: 0,
-  Month: 1,
-  Quarter: 2,
-  Year: 3,
-  Days: 4,
-  Hour: 5,
-  Minute: 6,
-  Second: 7,
+export const PivotDatePeriod = Object.freeze({
+  Seconds: 1,
+  Minutes: 2,
+  Hours: 4,
+  Days: 8,
+  Months: 16,
+  Quarters: 32,
+  Years: 64,
 });
 export const PivotCalendar = Object.freeze({ Gregorian: 0, Japanese: 1 });
 export const PivotSortOrder = Object.freeze({ Descending: 0, Ascending: 1, Manual: 2 });

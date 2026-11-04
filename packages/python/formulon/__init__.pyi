@@ -3,7 +3,7 @@
 
 import builtins
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from typing import (
     Dict,
     Iterator,
@@ -589,15 +589,14 @@ class PivotFilterValueKind(IntEnum):
     DOUBLE = 1
     TEXT = 2
 
-class PivotDateGrouping(IntEnum):
-    DAY = 0
-    MONTH = 1
-    QUARTER = 2
-    YEAR = 3
-    DAYS = 4
-    HOUR = 5
-    MINUTE = 6
-    SECOND = 7
+class PivotDatePeriod(IntFlag):
+    SECONDS = 1
+    MINUTES = 2
+    HOURS = 4
+    DAYS = 8
+    MONTHS = 16
+    QUARTERS = 32
+    YEARS = 64
 
 class PivotCalendar(IntEnum):
     GREGORIAN = 0
@@ -2288,14 +2287,9 @@ class PivotFieldInfo:
     cache_field_index: int
     sort_order: PivotSortOrder
     sort_by_field: str
-    has_date_group: bool
-    date_granularity: PivotDateGrouping
+    date_periods: PivotDatePeriod
     date_calendar: PivotCalendar
-    date_start_year: int
-    date_end_year: int
-    date_interval_days: int
-    date_start_serial: float
-    date_end_serial: float
+    group_base_index: int
     default_subtotal: bool
     subtotal_fns: Tuple[PivotAggregation, ...]
 
@@ -3195,13 +3189,11 @@ class Workbook:
         sheet: int,
         pivot_index: int,
         field_idx: int,
-        granularity: Union[PivotDateGrouping, int],
-        calendar: Union[PivotCalendar, int],
-        start_year: int = ...,
-        end_year: int = ...,
+        periods: Union[PivotDatePeriod, int],
+        calendar: Union[PivotCalendar, int] = ...,
         interval_days: int = ...,
-        start_serial: float = ...,
-        end_serial: float = ...,
+        start: float = ...,
+        end: float = ...,
     ) -> None: ...
     def pivot_field_clear_date_group(self, sheet: int, pivot_index: int, field_idx: int) -> None: ...
     def pivot_field_set_number_format(self, sheet: int, pivot_index: int, field_idx: int, fmt: str) -> None: ...

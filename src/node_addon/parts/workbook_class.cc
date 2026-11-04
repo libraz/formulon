@@ -627,7 +627,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::PivotFieldItemAt, 0xFULL>("pivotFieldItemAt"),
           GuardedInstanceMethod<&Workbook::PivotFieldItemCount, 0x7ULL>("pivotFieldItemCount"),
           GuardedInstanceMethod<&Workbook::PivotFieldSetAxis, 0x7ULL, 0x8ULL>("pivotFieldSetAxis"),
-          GuardedInstanceMethod<&Workbook::PivotFieldSetDateGroup, 0x7ULL, 0x78ULL>("pivotFieldSetDateGroup"),
+          GuardedInstanceMethod<&Workbook::PivotFieldSetDateGroup, 0xFULL, 0x10ULL>("pivotFieldSetDateGroup"),
           GuardedInstanceMethod<&Workbook::PivotFieldSetItemVisible, 0xFULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("pivotFieldSetItemVisible"),
           GuardedInstanceMethod<&Workbook::PivotFieldSetNumberFormat, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("pivotFieldSetNumberFormat"),
           GuardedInstanceMethod<&Workbook::PivotFieldSetSort, 0x7ULL, 0x8ULL, 0x0ULL, 0x0ULL, 0x10ULL>("pivotFieldSetSort"),

@@ -25,11 +25,9 @@ struct AxisHierarchyNode {
   std::string label;
   std::vector<AxisHierarchyNode> children;
   /// Typed key for this rendered item. A group field's node holds its group
-  /// item number. Every node of a level grouped through
-  /// `PivotField::date_group` (its keys are synthetic sort keys, not source
-  /// values) leaves this empty and is addressed by label only. Other nodes retain their Value kind so
-  /// GETPIVOTDATA can distinguish, for example, number 1 from text "1" before
-  /// falling back to a display-label match.
+  /// item number. Other nodes retain their Value kind so GETPIVOTDATA can
+  /// distinguish, for example, number 1 from text "1" before falling back to
+  /// a display-label match.
   std::optional<Value> identity = std::nullopt;
   /// True when `identity` is a group item number: an internal key that
   /// matches records and items but that a lookup by value must not address.

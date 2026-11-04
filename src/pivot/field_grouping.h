@@ -7,6 +7,11 @@
 // its start and the last item for values above its end. The numbers are
 // materialised into `PivotCacheRecord::cells` once, so every consumer reads a
 // group field through `cell_value` like any database field.
+//
+// Grouping a date field appends one group field per calendar period, finest
+// first, each labelled in the workbook's locale when it is created; the base
+// field's `par` names the last one. Ungrouping removes them again, which is
+// only possible while they are the trailing fields of the cache.
 
 #ifndef FORMULON_PIVOT_FIELD_GROUPING_H_
 #define FORMULON_PIVOT_FIELD_GROUPING_H_
@@ -14,10 +19,19 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 
+#include "excel_profile.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_types.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 #include "value.h"
+
+namespace formulon {
+class Workbook;
+}  // namespace formulon
 
 namespace formulon::pivot {
 
@@ -54,6 +68,84 @@ std::optional<std::uint32_t> discrete_group_item_number(const FieldGroup& group,
 /// that field, as a non-index, non-date number. A date range group without
 /// stated bounds takes the base data's first day and the day after its last.
 void materialize_group_fields(PivotCache& cache, bool date1904);
+
+/// Bit of calendar period `period` in a date-group period mask: seconds 1,
+/// minutes 2, hours 4, days 8, months 16, quarters 32, years 64.
+constexpr std::uint32_t date_period_bit(GroupBy period) noexcept {
+  return 1U << (static_cast<unsigned>(period) - 1U);
+}
+
+/// Every calendar period a date group can take.
+inline constexpr std::uint32_t kAllDatePeriods = 0x7FU;
+
+/// A date grouping to create over a base field.
+struct DateGroupSpec {
+  /// `date_period_bit` of each period to group by.
+  std::uint32_t periods = 0;
+  /// `Japanese` groups the years period by era year.
+  CalendarSystem calendar = CalendarSystem::Gregorian;
+  /// Days per item of a group by days alone.
+  std::uint32_t interval_days = 1;
+  /// First and last date serial; empty takes the base data's.
+  std::optional<double> start;
+  std::optional<double> end;
+};
+
+/// The base field of cache field `field`: its `base` when it is a group
+/// field, else `field` itself.
+std::size_t group_base_index(const PivotCache& cache, std::size_t field) noexcept;
+
+/// Period mask of the date group fields over base field `base`; 0 when the
+/// field is not date-grouped.
+std::uint32_t date_group_periods(const PivotCache& cache, std::size_t base, bool date1904);
+
+/// Calendar of the date grouping over `base`: `Japanese` when its years are
+/// grouped by era year.
+CalendarSystem date_group_calendar(const PivotCache& cache, std::size_t base, bool date1904);
+
+/// Bounds Excel proposes for base values spanning `min_serial` ..
+/// `max_serial`: the minimum as it is, and the maximum when it carries a time
+/// of day, else the midnight after it (no later than the last valid date).
+GroupBounds auto_date_group_bounds(double min_serial, double max_serial, bool date1904) noexcept;
+
+/// ISO 8601 body of `serial` to the second (`2024-01-15T09:30:15`), the form
+/// `startDate`, `minDate` and `<d>` carry; the inverse of `group_date_serial`.
+std::string group_date_iso(double serial, bool date1904);
+
+/// Appends to `cache` one group field per period of `spec` over database
+/// field `base`, finest first, named and labelled in `profile`'s locale,
+/// points the base's `par` at the last one and materialises them. Returns
+/// the index of the first appended field.
+///
+/// `kInvalidArgument` for an empty or unknown period mask, a zero interval,
+/// an interval with any period but days, a bound that is not a valid date or
+/// a start after the end, and a base that holds a blank, a value that is not
+/// a date, or no value at all. `kPreconditionFailed` when `base` is already
+/// grouped.
+Expected<std::size_t, Error> group_cache_by_date(PivotCache& cache, std::size_t base, const DateGroupSpec& spec,
+                                                 bool date1904, ExcelProfile profile);
+
+/// Removes the group fields over `base` from `cache` and clears the base's
+/// `par`. Returns how many were removed (0 when `base` is not grouped).
+/// `kPreconditionFailed` when they are not the trailing fields of the cache.
+Expected<std::size_t, Error> ungroup_cache_field(PivotCache& cache, std::size_t base);
+
+/// Groups field `field` (a base field or one of its group fields) of pivot
+/// `pivot` on sheet `sheet` by date, replacing any grouping it has. Every
+/// pivot on the same cache gains the group fields. On this pivot they take
+/// the base's place on its axis, coarsest outermost; on the others they are
+/// inserted before the base, which stays innermost. Errors as
+/// `group_cache_by_date`, plus `kInvalidArgument` for an index out of range.
+Expected<void, Error> set_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
+                                     std::uint32_t periods, CalendarSystem calendar, std::uint32_t interval_days,
+                                     std::optional<double> start, std::optional<double> end);
+
+/// Removes the date grouping of `field` (a base field or one of its group
+/// fields) from every pivot on its cache; the base returns to the axis
+/// position its group fields held. A field without grouping is left as is.
+/// `kInvalidArgument` for an index out of range, `kPreconditionFailed` as
+/// `ungroup_cache_field`.
+Expected<void, Error> clear_date_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field);
 
 }  // namespace formulon::pivot
 

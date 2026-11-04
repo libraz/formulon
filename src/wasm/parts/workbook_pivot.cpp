@@ -470,10 +470,7 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint
     info = fm_pivot_field_info_t{};
     info.axis = -1;
     info.cache_field_index = -1;
-    info.date_start_year = -1;
-    info.date_end_year = -1;
-    info.date_start_serial = -1.0;
-    info.date_end_serial = -1.0;
+    info.group_base_index = -1;
   }
   o.set("status", status_from_rc(rc));
   js_set_cstr(o, "sourceName", info.source_name);
@@ -484,14 +481,9 @@ emscripten::val JsWorkbook::pivotFieldAt(uint32_t sheet, uint32_t pivotIdx, uint
   o.set("cacheFieldIndex", info.cache_field_index);
   o.set("sortOrder", info.sort_order);
   js_set_cstr(o, "sortByField", info.sort_by_field);
-  o.set("hasDateGroup", info.has_date_group != 0);
-  o.set("dateGranularity", info.date_granularity);
+  o.set("datePeriods", info.date_periods);
   o.set("dateCalendar", info.date_calendar);
-  o.set("dateStartYear", info.date_start_year);
-  o.set("dateEndYear", info.date_end_year);
-  o.set("dateIntervalDays", info.date_interval_days);
-  o.set("dateStartSerial", info.date_start_serial);
-  o.set("dateEndSerial", info.date_end_serial);
+  o.set("groupBaseIndex", info.group_base_index);
   o.set("defaultSubtotal", info.default_subtotal != 0);
   emscripten::val fns = emscripten::val::array();
   for (std::uint32_t agg = 0; agg < 32U; ++agg) {
@@ -609,15 +601,13 @@ JsStatus JsWorkbook::pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotId
                             : kBindingInvalidHandle);
 }
 
-JsStatus JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t granularity,
-                                            uint32_t calendar, int32_t startYear, int32_t endYear,
-                                            uint32_t intervalDays, double startSerial, double endSerial) {
+JsStatus JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t periods,
+                                            uint32_t calendar, uint32_t intervalDays, double start, double end) {
   if (handle_ == nullptr) {
     return invalid_handle_status();
   }
   fm_status_t rc = fm_workbook_pivot_field_set_date_group(
-      handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(granularity), static_cast<std::int32_t>(calendar),
-      startYear, endYear, intervalDays, startSerial, endSerial);
+      handle_, sheet, pivotIdx, fieldIdx, periods, static_cast<std::int32_t>(calendar), intervalDays, start, end);
   return status_from_rc(rc);
 }
 

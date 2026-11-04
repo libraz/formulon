@@ -4328,25 +4328,21 @@ typedef enum {
 } fm_pivot_filter_type_t;
 
 /**
- * @brief Date-grouping granularity. Numbering mirrors
- *        `formulon::pivot::DateGrouping`. `FM_PIVOT_DATE_DAYS` is
- *        Excel's "By: Days" grouping; a real Excel "week" is `DAYS`
- *        with `interval_days == 7` (see `..._set_date_group`).
+ * @brief Calendar periods of a date group, as bits of the `periods_mask` of
+ *        `fm_workbook_pivot_field_set_date_group` and the `date_periods` of
+ *        `fm_pivot_field_info_t`.
  */
-typedef enum {
-  FM_PIVOT_DATE_DAY = 0,
-  FM_PIVOT_DATE_MONTH = 1,
-  FM_PIVOT_DATE_QUARTER = 2,
-  FM_PIVOT_DATE_YEAR = 3,
-  FM_PIVOT_DATE_DAYS = 4,
-  FM_PIVOT_DATE_HOUR = 5,
-  FM_PIVOT_DATE_MINUTE = 6,
-  FM_PIVOT_DATE_SECOND = 7
-} fm_pivot_date_grouping_t;
+#define FM_PIVOT_PERIOD_SECONDS 1u
+#define FM_PIVOT_PERIOD_MINUTES 2u
+#define FM_PIVOT_PERIOD_HOURS 4u
+#define FM_PIVOT_PERIOD_DAYS 8u
+#define FM_PIVOT_PERIOD_MONTHS 16u
+#define FM_PIVOT_PERIOD_QUARTERS 32u
+#define FM_PIVOT_PERIOD_YEARS 64u
 
 /**
- * @brief Calendar system used by date grouping. Numbering mirrors
- *        `formulon::pivot::CalendarSystem`.
+ * @brief Calendar a date group's years follow: Gregorian years, or Japanese
+ *        era years. Numbering mirrors `formulon::pivot::CalendarSystem`.
  */
 typedef enum { FM_PIVOT_CALENDAR_GREGORIAN = 0, FM_PIVOT_CALENDAR_JAPANESE = 1 } fm_pivot_calendar_t;
 
@@ -4444,14 +4440,12 @@ typedef struct {
  *   * `sort_order`        — `fm_pivot_sort_order_t`, as written by
  *                           `fm_workbook_pivot_field_set_sort`.
  *   * `sort_by_field`     — the by-field key; empty for label order.
- *   * `has_date_group`    — non-zero when the members below describe the
- *                           field's date grouping; otherwise they are zero
- *                           and the unset sentinels below.
- *   * `date_granularity`, `date_calendar`, `date_start_year`,
- *     `date_end_year`, `date_interval_days`, `date_start_serial`,
- *     `date_end_serial` — the arguments of
- *                           `fm_workbook_pivot_field_set_date_group`; an
- *                           unset year or serial reads `-1`.
+ *   * `date_periods`      — for a date-grouped field, the `FM_PIVOT_PERIOD_*`
+ *                           bits of its group fields; `0` otherwise.
+ *   * `date_calendar`     — `fm_pivot_calendar_t` of that grouping;
+ *                           `FM_PIVOT_CALENDAR_GREGORIAN` when ungrouped.
+ *   * `group_base_index`  — for a group field, the index of the field it
+ *                           groups; `-1` otherwise.
  *   * `default_subtotal`  — non-zero when the field shows the automatic
  *                           subtotal (OOXML `defaultSubtotal`). Custom
  *                           functions replace it, so it reads `0` whenever
@@ -4460,6 +4454,10 @@ typedef struct {
  *                           `fm_pivot_aggregation_t` selected through
  *                           `fm_workbook_pivot_field_add_subtotal_fn` or read
  *                           from the `*Subtotal` attributes; `0` for none.
+ *   * `insert_blank_row`  — non-zero when a blank row follows each of the
+ *                           field's item blocks (OOXML `insertBlankRow`).
+ *   * `fill_down_labels`  — non-zero when the field's label repeats on every
+ *                           row of its block (x14 `fillDownLabels`).
  */
 typedef struct {
   const char* source_name;
@@ -4470,16 +4468,13 @@ typedef struct {
   int32_t cache_field_index;
   int32_t sort_order;
   const char* sort_by_field;
-  int32_t has_date_group;
-  int32_t date_granularity;
+  uint32_t date_periods;
   int32_t date_calendar;
-  int32_t date_start_year;
-  int32_t date_end_year;
-  uint32_t date_interval_days;
-  double date_start_serial;
-  double date_end_serial;
+  int32_t group_base_index;
   int32_t default_subtotal;
   uint32_t subtotal_fns;
+  int32_t insert_blank_row;
+  int32_t fill_down_labels;
 } fm_pivot_field_info_t;
 
 /**
@@ -4911,27 +4906,42 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t* wb,
                                                               size_t field_idx);
 
 /**
- * @brief Configures date-grouping on pivot field `field_idx`. Pass
- *        `start_year_or_neg1 == -1` (and likewise `end_year_or_neg1`)
- *        to leave the Year-truncation bound unset (`FM_PIVOT_DATE_YEAR`
- *        only). `interval_days` / `start_serial_or_neg1` /
- *        `end_serial_or_neg1` (Excel date serials, `-1.0` = auto) are
- *        `FM_PIVOT_DATE_DAYS`-only and ignored otherwise. `granularity`
- *        and `calendar` are raw signed 32-bit ordinals.
+ * @brief Groups the date field `field_idx` (a database field, or one of its
+ *        group fields) by the `FM_PIVOT_PERIOD_*` bits of `periods_mask`, as
+ *        Excel's Group command does, replacing any grouping it has.
  *
- * @return `kInvalidArgument` for an unknown `granularity`/`calendar`,
- *         or -- when `granularity` is `FM_PIVOT_DATE_DAYS` -- for
- *         `interval_days == 0`, invalid/non-finite explicit serial bounds,
- *         or an explicit `start_serial_or_neg1` > an explicit
- *         `end_serial_or_neg1` (the raw bounds are compared before flooring).
+ * Each period becomes a group field appended to the pivot cache, finest
+ * first, named and labelled in the workbook profile's locale. Every pivot on
+ * the cache gains them: this pivot shows them in the field's place on its
+ * axis, coarsest outermost; another pivot showing the field shows them
+ * before it. `interval_days` above 1 groups by runs of that many days and
+ * needs `periods_mask == FM_PIVOT_PERIOD_DAYS`.
+ * `FM_PIVOT_CALENDAR_JAPANESE` groups the years period by era year.
+ * `start_or_nan` / `end_or_nan` are date serials; NaN takes the field's
+ * first value and its last (the midnight after it for a date without a time).
+ *
+ * @return `kInvalidArgument` for an index out of range, a `periods_mask` of 0
+ *         or with an unknown bit, an unknown `calendar`, `interval_days == 0`,
+ *         `interval_days > 1` with any period but days, an infinite or
+ *         otherwise invalid date bound, a start after the end, or a field
+ *         holding a blank, a value that is not a date, or no value;
+ *         `kPreconditionFailed` when the field is grouped and its group fields
+ *         are not the last fields of the cache.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                          size_t field_idx, int32_t granularity, int32_t calendar,
-                                                          int32_t start_year_or_neg1, int32_t end_year_or_neg1,
-                                                          uint32_t interval_days, double start_serial_or_neg1,
-                                                          double end_serial_or_neg1);
+                                                          size_t field_idx, uint32_t periods_mask, int32_t calendar,
+                                                          uint32_t interval_days, double start_or_nan,
+                                                          double end_or_nan);
 
-/** @brief Removes the date-grouping config from pivot field `field_idx`. */
+/**
+ * @brief Removes the date grouping of field `field_idx` (a database field, or
+ *        one of its group fields) from every pivot on its cache; the field
+ *        returns to the axis position its group fields held. A field that is
+ *        not grouped is left as it is.
+ *
+ * @return `kInvalidArgument` for an index out of range; `kPreconditionFailed`
+ *         when the group fields are not the last fields of the cache.
+ */
 FM_API fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                             size_t field_idx);
 

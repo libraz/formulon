@@ -167,8 +167,8 @@ test('pivot definition read-backs report what the setters wrote', async () => {
     assert.equal(region.cacheFieldIndex, 0);
     assert.equal(region.sortOrder, 0);
     assert.equal(region.sortByField, 'Sum of Amount');
-    assert.equal(region.hasDateGroup, false);
-    assert.equal(region.dateStartYear, -1);
+    assert.equal(region.datePeriods, 0);
+    assert.equal(region.groupBaseIndex, -1);
     assert.equal(wb.pivotFieldAt(0, pivot, 1).axis, 2);
 
     assert.ok(wb.pivotFieldAddItem(0, pivot, 0, 'East', true).ok);

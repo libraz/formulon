@@ -8,13 +8,10 @@
 // surviving record lands on so the per-leaf aggregation pass can reuse the
 // work without rewalking the tree.
 //
-// Date-grouping is handled inside `insert_path`: when a level carries a
-// `PivotDateGroup`, the raw cache value is bucketed first (year /
-// quarter / month / ...); the bucket's display label is stashed on the
-// inserted child for the renderer to surface in place of the raw value.
-// The same label override carries an item caption, a group field's group
-// item text, and a numeric item rendered in its field's number format; the
-// node's key, and so its order and identity, stays the cache value.
+// A node's label can differ from its cache value: `insert_path` stashes an
+// item caption, a group field's group item text, or a numeric item rendered
+// in its field's number format on the inserted child. The node's key, and so
+// its order and identity, stays the cache value.
 
 #ifndef FORMULON_PIVOT_HIERARCHY_BUILDER_H_
 #define FORMULON_PIVOT_HIERARCHY_BUILDER_H_
@@ -41,28 +38,12 @@
 
 namespace formulon::pivot {
 
-/// Sort bands keep synthetic buckets distinct from values that happen to carry
-/// the same numeric payload. Before/After are the Days catch-all buckets;
-/// Normal holds ordinary keys and date buckets; Raw holds numbers of a
-/// date-grouped field outside the date domain, so they never merge with a
-/// synthetic bucket key and sort after every valid bucket.
-enum class HierarchyBand : std::uint8_t {
-  Before = 0,
-  Normal = 1,
-  Raw = 2,
-  After = 3,
-};
-
 struct HierarchyKey {
-  HierarchyBand band = HierarchyBand::Normal;
   Value value;
 };
 
 struct HierarchyKeyLess {
   bool operator()(const HierarchyKey& lhs, const HierarchyKey& rhs) const noexcept {
-    if (lhs.band != rhs.band) {
-      return static_cast<std::uint8_t>(lhs.band) < static_cast<std::uint8_t>(rhs.band);
-    }
     return value_less(lhs.value, rhs.value);
   }
 };
@@ -82,15 +63,14 @@ struct HierNode {
   /// Index into the flat leaf array assigned during finalisation. Leaves only.
   std::size_t leaf_index = static_cast<std::size_t>(-1);
   /// When non-empty, used in place of `display_string(key)` for this
-  /// node's label. Set by `insert_path` for date-grouped fields where
-  /// the bucket label diverges from the raw value's textual form.
+  /// node's label. Set by `insert_path` when the label differs from the
+  /// cache value's textual form.
   std::string label_override;
 };
 
 struct HierLevel {
-  std::uint32_t field_index;         ///< Index into `PivotTable::fields()`.
-  const PivotDateGroup* date_group;  ///< Non-null when this level buckets dates.
-  bool ascending;                    ///< False reverses this field's item order.
+  std::uint32_t field_index;  ///< Index into `PivotTable::fields()`.
+  bool ascending;             ///< False reverses this field's item order.
   std::optional<std::uint32_t> value_sort_field;
   std::optional<Aggregation> value_sort_aggregation;
   /// Non-null when this field's `SortSpec::manual` is set: maps each
@@ -142,10 +122,8 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
 
   sort_by_index(entries, [&](const OrderedHierarchyChild& lhs, const OrderedHierarchyChild& rhs) {
     if (manual_order != nullptr) {
-      const auto lit =
-          lhs.key->band == HierarchyBand::Normal ? manual_order->find(lhs.key->value) : manual_order->end();
-      const auto rit =
-          rhs.key->band == HierarchyBand::Normal ? manual_order->find(rhs.key->value) : manual_order->end();
+      const auto lit = manual_order->find(lhs.key->value);
+      const auto rit = manual_order->find(rhs.key->value);
       const bool l_mapped = lit != manual_order->end();
       const bool r_mapped = rit != manual_order->end();
       if (l_mapped && r_mapped) {
@@ -176,12 +154,9 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
 }
 
 /// Inserts `record` into `tree`, walking `levels`. Returns the leaf
-/// `HierNode*`. The caller assigns leaf indices in a second pass. When
-/// a level carries a `date_group`, the cache value is bucketed first,
-/// against the workbook's `date1904` epoch flag; the label is stashed on
-/// the inserted child for the renderer to surface. A blank cache value
-/// takes `blank_item_label` (the locale's placeholder) the same way, so
-/// no axis node is left unnamed. A caption wins over every other label; a
+/// `HierNode*`. The caller assigns leaf indices in a second pass. A blank
+/// cache value takes `blank_item_label` (the locale's placeholder) as its
+/// label, so no axis node is left unnamed. A caption wins over every other label; a
 /// group field's node takes its group item's text, and a numeric node of a
 /// level with a `number_format` is rendered in it under `date1904` and
 /// `profile`.
@@ -191,15 +166,14 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
 
 /// Returns the display label for `(key, child)`: the override if set,
 /// otherwise the standard `display_string(key.value)`. Used by all hierarchy
-/// flatten / subtotal-walk sites so date-grouped buckets surface their
-/// formatted label rather than the synthetic numeric sort key.
+/// flatten / subtotal-walk sites.
 std::string node_label(const HierarchyKey& key, const HierNode& child);
 
 /// Recursively flattens a hierarchy into `AxisHierarchyNode` form. On the
 /// way, assigns each leaf a dense index and pushes the corresponding
 /// `HierNode*` into `leaves` so a second pass can attach record indices.
 /// Text identities are copied into `text_storage`, whose lifetime is the
-/// resulting `PivotResult`; synthetic Before/After keys have no identity.
+/// resulting `PivotResult`.
 void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, std::size_t depth,
                         std::vector<AxisHierarchyNode>& out, std::vector<HierNode*>& leaves,
                         std::deque<std::string>& text_storage);

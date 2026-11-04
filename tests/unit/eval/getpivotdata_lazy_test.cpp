@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -33,6 +34,7 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_locale.h"
@@ -283,7 +285,8 @@ Workbook BuildNestedCollisionWorkbook() {
   return wb;
 }
 
-Workbook BuildGroupedDateWorkbook(pivot::DateGrouping granularity = pivot::DateGrouping::Year) {
+// Date / Amount with Date grouped by `periods` (en-US labels).
+Workbook BuildGroupedDateWorkbook(std::uint32_t periods = pivot::date_period_bit(pivot::GroupBy::Years)) {
   auto cache = std::make_unique<pivot::PivotCache>();
   cache->set_cache_id(1U);
   cache->mutable_fields().push_back(pivot::PivotCacheField{"Date", {}});
@@ -303,10 +306,6 @@ Workbook BuildGroupedDateWorkbook(pivot::DateGrouping granularity = pivot::DateG
   pivot::PivotField date;
   date.source_name = "Date";
   date.axis = pivot::PivotAxis::Row;
-  pivot::PivotDateGroup date_group;
-  date_group.granularity = granularity;
-  date_group.calendar = pivot::CalendarSystem::Gregorian;
-  date.date_group = date_group;
   table->mutable_fields().push_back(std::move(date));
   pivot::PivotField amount;
   amount.source_name = "Amount";
@@ -323,6 +322,8 @@ Workbook BuildGroupedDateWorkbook(pivot::DateGrouping granularity = pivot::DateG
   Workbook wb = Workbook::create();
   wb.add_pivot_cache(std::move(cache));
   wb.sheet(0).add_pivot_table(std::move(table));
+  EXPECT_TRUE(static_cast<bool>(pivot::set_date_group(wb, 0U, 0U, 0U, periods, pivot::CalendarSystem::Gregorian, 1U,
+                                                      std::nullopt, std::nullopt)));
   return wb;
 }
 
@@ -462,21 +463,21 @@ TEST(GetPivotDataLazy, GroupedDisplayLabelIsUniqueFallback) {
   Workbook wb = BuildGroupedDateWorkbook();
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
-  const Value v = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Date\", \"2024\")", ctx);
+  const Value v = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Years (Date)\", \"2024\")", ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 30.0);
 }
 
-TEST(GetPivotDataLazy, DateGroupSyntheticSortKeyIsNotAnItem) {
-  // Month buckets sort on y*100+m; that key is not a source value and must
+TEST(GetPivotDataLazy, DateGroupItemNumberIsNotAnItem) {
+  // A record holds the group item's number, which is no source value and must
   // not address the group, while the group's label still does.
-  Workbook wb = BuildGroupedDateWorkbook(pivot::DateGrouping::Month);
+  Workbook wb = BuildGroupedDateWorkbook(pivot::date_period_bit(pivot::GroupBy::Months));
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
-  const Value by_key = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Date\", 202401)", ctx);
+  const Value by_key = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Months (Date)\", 1)", ctx);
   ASSERT_TRUE(by_key.is_error());
   EXPECT_EQ(by_key.as_error(), ErrorCode::Ref);
-  const Value by_label = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Date\", \"2024-01\")", ctx);
+  const Value by_label = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Months (Date)\", \"Jan\")", ctx);
   ASSERT_TRUE(by_label.is_number());
   EXPECT_EQ(by_label.as_number(), 10.0);
 }

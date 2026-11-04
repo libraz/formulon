@@ -26,7 +26,7 @@ from __future__ import annotations
 import numbers
 import struct
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from functools import wraps
 from inspect import isgeneratorfunction
 from typing import (
@@ -154,7 +154,7 @@ __all__ = [
     "PivotCell",
     "PivotCellKind",
     "PivotDataFieldSpec",
-    "PivotDateGrouping",
+    "PivotDatePeriod",
     "PivotFieldInfo",
     "PivotFieldSpec",
     "PivotFilterSpec",
@@ -960,26 +960,21 @@ class PivotFilterValueKind(IntEnum):
     TEXT = 2
 
 
-class PivotDateGrouping(IntEnum):
-    """Date-grouping granularity for a pivot field.
+class PivotDatePeriod(IntFlag):
+    """Calendar periods of a pivot date group, combined into the ``periods``
+    mask of :meth:`Workbook.pivot_field_set_date_group`."""
 
-    ``DAYS`` is Excel's "By: Days" grouping (an explicit interval, e.g.
-    a real Excel "week" is ``DAYS`` with ``interval_days=7``); there is
-    no separate week granularity.
-    """
-
-    DAY = 0
-    MONTH = 1
-    QUARTER = 2
-    YEAR = 3
-    DAYS = 4
-    HOUR = 5
-    MINUTE = 6
-    SECOND = 7
+    SECONDS = 1
+    MINUTES = 2
+    HOURS = 4
+    DAYS = 8
+    MONTHS = 16
+    QUARTERS = 32
+    YEARS = 64
 
 
 class PivotCalendar(IntEnum):
-    """Calendar system used by pivot date grouping."""
+    """Calendar a pivot date group's years follow."""
 
     GREGORIAN = 0
     JAPANESE = 1
@@ -3171,9 +3166,10 @@ class PivotFieldInfo:
 
     ``axis`` is ``None`` for a field that sits on no axis. ``cache_field_index``
     is the bound pivot-cache field (pivot field ``i`` binds to cache field
-    ``i``), ``-1`` when the cache does not cover the field. The ``date_*``
-    members describe the field's date grouping and are only meaningful when
-    ``has_date_group`` is true; an unset year or serial reads ``-1``.
+    ``i``), ``-1`` when the cache does not cover the field. For a date-grouped
+    field, ``date_periods`` holds the periods of its group fields (empty when
+    ungrouped) and ``date_calendar`` their calendar; ``group_base_index`` is
+    the field a group field groups, ``-1`` for any other field.
     ``subtotal_fns`` lists the custom subtotal functions in ascending
     aggregation order; ``default_subtotal`` is false whenever it is non-empty,
     since custom functions replace the automatic subtotal.
@@ -3187,14 +3183,9 @@ class PivotFieldInfo:
     cache_field_index: int
     sort_order: PivotSortOrder
     sort_by_field: str
-    has_date_group: bool
-    date_granularity: PivotDateGrouping
+    date_periods: PivotDatePeriod
     date_calendar: PivotCalendar
-    date_start_year: int
-    date_end_year: int
-    date_interval_days: int
-    date_start_serial: float
-    date_end_serial: float
+    group_base_index: int
     default_subtotal: bool
     subtotal_fns: Tuple[PivotAggregation, ...]
 
@@ -11005,14 +10996,9 @@ class Workbook:
                 cache_field_index=d["cache_field_index"],
                 sort_order=PivotSortOrder(d["sort_order"]),
                 sort_by_field=LIB.read_cstr(d["sort_by_field"]),
-                has_date_group=d["has_date_group"] != 0,
-                date_granularity=PivotDateGrouping(d["date_granularity"]),
+                date_periods=PivotDatePeriod(d["date_periods"]),
                 date_calendar=PivotCalendar(d["date_calendar"]),
-                date_start_year=d["date_start_year"],
-                date_end_year=d["date_end_year"],
-                date_interval_days=d["date_interval_days"],
-                date_start_serial=d["date_start_serial"],
-                date_end_serial=d["date_end_serial"],
+                group_base_index=d["group_base_index"],
                 default_subtotal=d["default_subtotal"] != 0,
                 subtotal_fns=tuple(agg for agg in PivotAggregation if d["subtotal_fns"] & (1 << int(agg))),
             )
@@ -11304,25 +11290,26 @@ class Workbook:
         sheet: int,
         pivot_index: int,
         field_idx: int,
-        granularity: "PivotDateGrouping | int",
-        calendar: "PivotCalendar | int",
-        start_year: int = -1,
-        end_year: int = -1,
+        periods: "PivotDatePeriod | int",
+        calendar: "PivotCalendar | int" = PivotCalendar.GREGORIAN,
         interval_days: int = 1,
-        start_serial: float = -1.0,
-        end_serial: float = -1.0,
+        start: float = float("nan"),
+        end: float = float("nan"),
     ) -> None:
-        """Configure date-grouping on pivot field ``field_idx``.
+        """Group the date field ``field_idx`` by the periods of ``periods``.
 
-        ``interval_days`` is the ``PivotDateGrouping.DAYS``-only bucket
-        width in whole days; leave it at ``1`` for every other
-        granularity. ``start_serial`` / ``end_serial`` are the
-        ``DAYS``-only Start/End window, as Excel date serials -- leave
-        either at ``-1`` to keep it auto (Start = the field's data
-        minimum, End = the data maximum plus one day); both are ignored
-        for every other granularity. With ``DAYS``, a zero
-        ``interval_days`` or a start after the end raises
-        ``FormulonError``.
+        ``field_idx`` is a source field or one of its group fields; any grouping
+        it has is replaced. Each period becomes a group field appended to the
+        pivot cache, finest first, named and labelled in the workbook's locale;
+        this pivot shows them in the field's place, coarsest outermost, and
+        another pivot showing the field shows them before it.
+        ``PivotCalendar.JAPANESE`` groups the years by era year.
+        ``interval_days`` above 1 groups by runs of days and needs ``periods``
+        to be ``PivotDatePeriod.DAYS`` alone. ``start`` / ``end`` are date
+        serials; NaN takes the field's first value and its last (the midnight
+        after it for a date without a time). An empty or unknown mask, a zero
+        interval, an invalid bound, a start after the end, or a field holding
+        anything but dates raises ``FormulonError``.
         """
         h = self._require()
         _check(
@@ -11331,19 +11318,22 @@ class Workbook:
                 _uint(sheet, "sheet_index"),
                 _uint(pivot_index, "pivot_index"),
                 _uint(field_idx, "field_idx"),
-                _sint(granularity, "granularity"),
+                _uint(periods, "periods_mask"),
                 _sint(calendar, "calendar"),
-                _sint(start_year, "start_year_or_neg1"),
-                _sint(end_year, "end_year_or_neg1"),
                 _uint(interval_days, "interval_days"),
-                float(start_serial),
-                float(end_serial),
+                float(start),
+                float(end),
             ),
             "fm_workbook_pivot_field_set_date_group",
         )
 
     def pivot_field_clear_date_group(self, sheet: int, pivot_index: int, field_idx: int) -> None:
-        """Remove the date-grouping config from pivot field ``field_idx``."""
+        """Remove the date grouping of pivot field ``field_idx``.
+
+        ``field_idx`` is a source field or one of its group fields. The group
+        fields leave every pivot on the cache and the field returns to the axis
+        position they held; a field that is not grouped is left as it is.
+        """
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_field_clear_date_group(

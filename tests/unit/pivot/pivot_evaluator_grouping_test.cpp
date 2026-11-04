@@ -63,16 +63,13 @@ PivotCache build_date_cache() {
   return cache;
 }
 
-PivotTable build_date_grouped_table(DateGrouping g, CalendarSystem cal) {
+// Date on rows, Amount summed.
+PivotTable build_date_table() {
   PivotTable table;
   table.set_pivot_cache_id(1);
   PivotField date_f;
   date_f.source_name = "Date";
   date_f.axis = PivotAxis::Row;
-  PivotDateGroup dg;
-  dg.granularity = g;
-  dg.calendar = cal;
-  date_f.date_group = dg;
   PivotField amount_f;
   amount_f.source_name = "Amount";
   amount_f.axis = PivotAxis::Value;
@@ -110,32 +107,56 @@ PivotCache build_days_interval_cache() {
   return cache;
 }
 
-PivotTable build_days_grouped_table(std::optional<double> start_serial, std::uint32_t interval_days = 7,
-                                    std::optional<double> end_serial = std::nullopt) {
-  PivotTable table;
-  table.set_pivot_cache_id(1);
-  PivotField date_f;
-  date_f.source_name = "Date";
-  date_f.axis = PivotAxis::Row;
-  PivotDateGroup dg;
-  dg.granularity = DateGrouping::Days;
-  dg.interval_days = interval_days;
-  dg.start_serial = start_serial;
-  dg.end_serial = end_serial;
-  date_f.date_group = dg;
-  PivotField amount_f;
-  amount_f.source_name = "Amount";
-  amount_f.axis = PivotAxis::Value;
-  table.mutable_fields().push_back(std::move(date_f));
-  table.mutable_fields().push_back(std::move(amount_f));
-  table.mutable_row_field_order() = {0};
-  PivotDataField sum;
-  sum.name = "Sum of Amount";
-  sum.field_index = 1;
-  sum.aggregation = Aggregation::Sum;
-  table.mutable_data_fields().push_back(std::move(sum));
-  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
-  return table;
+// Groups Date (field 0) of `cache` by `spec` with ja-JP labels, as
+// `set_date_group` does, and returns `build_date_table` showing the group
+// fields on rows in its place, coarsest outermost.
+Expected<PivotTable, Error> group_date_rows(PivotCache& cache, const DateGroupSpec& spec, bool date1904 = false) {
+  Expected<std::size_t, Error> first = group_cache_by_date(cache, 0U, spec, date1904, mac_365_ja_jp_profile());
+  if (!first) {
+    return first.error();
+  }
+  PivotTable table = build_date_table();
+  table.mutable_fields()[0].axis = PivotAxis::None;
+  table.mutable_row_field_order().clear();
+  for (std::size_t fi = first.value(); fi < cache.fields().size(); ++fi) {
+    PivotField group_f;
+    group_f.source_name = cache.fields()[fi].name;
+    group_f.axis = PivotAxis::Row;
+    group_f.sort.manual = true;
+    for (std::size_t i = 0; i < cache.fields()[fi].field_group->group_items.size(); ++i) {
+      PivotItem item;
+      item.has_cache_index = true;
+      item.cache_index = static_cast<std::uint32_t>(i);
+      group_f.items.push_back(std::move(item));
+    }
+    table.mutable_fields().push_back(std::move(group_f));
+    table.mutable_row_field_order().insert(table.mutable_row_field_order().begin(), static_cast<std::uint32_t>(fi));
+  }
+  resolve_pivot_names(table, cache);
+  return Expected<PivotTable, Error>(std::move(table));
+}
+
+DateGroupSpec days_spec(std::optional<double> start, std::uint32_t interval_days = 7,
+                        std::optional<double> end = std::nullopt) {
+  DateGroupSpec spec;
+  spec.periods = date_period_bit(GroupBy::Days);
+  spec.interval_days = interval_days;
+  spec.start = start;
+  spec.end = end;
+  return spec;
+}
+
+PivotResult evaluate_days_group(std::optional<double> start, std::uint32_t interval_days = 7,
+                                std::optional<double> end = std::nullopt) {
+  PivotCache cache = build_days_interval_cache();
+  Expected<PivotTable, Error> table = group_date_rows(cache, days_spec(start, interval_days, end));
+  EXPECT_TRUE(static_cast<bool>(table)) << (table ? std::string() : table.error().message);
+  if (!table) {
+    return PivotResult{};
+  }
+  auto r_or = evaluate(table.value(), cache);
+  EXPECT_TRUE(static_cast<bool>(r_or)) << (r_or ? std::string() : r_or.error().message);
+  return r_or ? r_or.value() : PivotResult{};
 }
 
 TEST(PivotEvaluator, SparseRowColumnIntersectionIsBlank) {
@@ -243,299 +264,10 @@ TEST(PivotEvaluator, BlankGroupSubtotalCarriesThePlaceholderLabel) {
   EXPECT_TRUE(saw_blank_subtotal);
 }
 
-TEST(PivotEvaluator, DateGroupingByYearGregorian) {
-  PivotCache cache = build_date_cache();
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
-  // Three Gregorian years: 2018, 2019, 2024 (chronological).
-  ASSERT_EQ(r.rows.size(), 3U);
-  EXPECT_EQ(r.rows[0].label, "2018");
-  EXPECT_EQ(r.rows[1].label, "2019");
-  EXPECT_EQ(r.rows[2].label, "2024");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 20.0 + 40.0 + 80.0);
-  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 160.0 + 320.0);
-}
-
-TEST(PivotEvaluator, DateGroupingByQuarterGregorian) {
-  PivotCache cache = build_date_cache();
-  PivotTable table = build_date_grouped_table(DateGrouping::Quarter, CalendarSystem::Gregorian);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
-  // 2018-Q4 (Dec), 2019-Q2 (Apr+May), 2019-Q4 (Dec), 2024-Q1 (Mar), 2024-Q3 (Jul).
-  ASSERT_EQ(r.rows.size(), 5U);
-  EXPECT_EQ(r.rows[0].label, "2018-Q4");
-  EXPECT_EQ(r.rows[1].label, "2019-Q2");
-  EXPECT_EQ(r.rows[2].label, "2019-Q4");
-  EXPECT_EQ(r.rows[3].label, "2024-Q1");
-  EXPECT_EQ(r.rows[4].label, "2024-Q3");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 20.0 + 40.0);
-  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 80.0);
-  EXPECT_DOUBLE_EQ(r.values[3][0][0].as_number(), 160.0);
-  EXPECT_DOUBLE_EQ(r.values[4][0][0].as_number(), 320.0);
-}
-
-TEST(PivotEvaluator, DateGroupingByMonthGregorian) {
-  PivotCache cache = build_date_cache();
-  PivotTable table = build_date_grouped_table(DateGrouping::Month, CalendarSystem::Gregorian);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
-  // Six distinct months across the dataset.
-  ASSERT_EQ(r.rows.size(), 6U);
-  EXPECT_EQ(r.rows[0].label, "2018-12");
-  EXPECT_EQ(r.rows[1].label, "2019-04");
-  EXPECT_EQ(r.rows[2].label, "2019-05");
-  EXPECT_EQ(r.rows[3].label, "2019-12");
-  EXPECT_EQ(r.rows[4].label, "2024-03");
-  EXPECT_EQ(r.rows[5].label, "2024-07");
-}
-
-TEST(PivotEvaluator, DateGroupingByDay) {
-  PivotCache cache = build_date_cache();
-  PivotTable table = build_date_grouped_table(DateGrouping::Day, CalendarSystem::Gregorian);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
-  // Each record is a distinct day -> 6 leaves in chronological order.
-  ASSERT_EQ(r.rows.size(), 6U);
-  EXPECT_EQ(r.rows[0].label, "2018-12-31");
-  EXPECT_EQ(r.rows[1].label, "2019-04-30");
-  EXPECT_EQ(r.rows[2].label, "2019-05-01");
-  EXPECT_EQ(r.rows[3].label, "2019-12-31");
-  EXPECT_EQ(r.rows[4].label, "2024-03-15");
-  EXPECT_EQ(r.rows[5].label, "2024-07-04");
-}
-
-TEST(PivotEvaluator, DateGroupingByYearJapaneseCalendar) {
-  PivotCache cache = build_date_cache();
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Japanese);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
-  // 2018 -> Heisei 30, 2019-04-30 -> Heisei 31, 2019-05-01 -> Reiwa 1,
-  // 2019-12-31 -> Reiwa 1, 2024 -> Reiwa 6.
-  // Buckets in chronological order: 平成30 / 平成31 / 令和1 / 令和6.
-  ASSERT_EQ(r.rows.size(), 4U);
-  // 平成 = E5 B9 B3 E6 88 90, 令和 = E4 BB A4 E5 92 8C, 年 = E5 B9 B4
-  EXPECT_EQ(r.rows[0].label, std::string("\xE5\xB9\xB3\xE6\x88\x90") + "30" + "\xE5\xB9\xB4");
-  EXPECT_EQ(r.rows[1].label, std::string("\xE5\xB9\xB3\xE6\x88\x90") + "31" + "\xE5\xB9\xB4");
-  EXPECT_EQ(r.rows[2].label, std::string("\xE4\xBB\xA4\xE5\x92\x8C") + "1" + "\xE5\xB9\xB4");
-  EXPECT_EQ(r.rows[3].label, std::string("\xE4\xBB\xA4\xE5\x92\x8C") + "6" + "\xE5\xB9\xB4");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 10.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 40.0 + 80.0);
-  EXPECT_DOUBLE_EQ(r.values[3][0][0].as_number(), 160.0 + 320.0);
-}
-
-TEST(PivotEvaluator, DateGroupingNonNumericPassesThrough) {
-  PivotCache cache;
-  cache.set_cache_id(1);
-  cache.mutable_fields().push_back(PivotCacheField{"Date", {}});
-  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
-  // A blank (not a serial) should not crash; bucket_date is only invoked
-  // for numeric values.
-  PivotCacheRecord rec;
-  rec.cells.push_back(Value::blank());
-  rec.cells.push_back(Value::number(42.0));
-  cache.mutable_records().push_back(std::move(rec));
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  // The single blank-keyed bucket survives without exploding; label is the
-  // empty string (per `display_string` for Blank).
-  ASSERT_EQ(r_or.value().rows.size(), 1U);
-}
-
-TEST(PivotEvaluator, DateGroupingByHour) {
-  // Two records on 2024-03-15 within different hours, plus a third in the
-  // same hour as the second so the second bucket sums two rows.
-  const double base = 45366.0;  // 2024-03-15
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, base + 9.0 / 24.0 + 30.0 / 1440.0, 1.0);   // 09:30
-  push_record(cache, base + 10.0 / 24.0 + 5.0 / 1440.0, 2.0);   // 10:05
-  push_record(cache, base + 10.0 / 24.0 + 45.0 / 1440.0, 4.0);  // 10:45
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Hour, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 2U);
-  EXPECT_EQ(r.rows[0].label, "2024-03-15 09");
-  EXPECT_EQ(r.rows[1].label, "2024-03-15 10");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0 + 4.0);
-}
-
-TEST(PivotEvaluator, DateGroupingByMinute) {
-  // Two minutes within the same hour; chronological ordering is preserved.
-  const double base = 45366.0;  // 2024-03-15
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, base + 10.0 / 24.0 + 5.0 / 1440.0, 1.0);   // 10:05
-  push_record(cache, base + 10.0 / 24.0 + 45.0 / 1440.0, 2.0);  // 10:45
-  push_record(cache, base + 10.0 / 24.0 + 5.0 / 1440.0, 4.0);   // 10:05 again
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Minute, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 2U);
-  EXPECT_EQ(r.rows[0].label, "2024-03-15 10:05");
-  EXPECT_EQ(r.rows[1].label, "2024-03-15 10:45");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0 + 4.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0);
-}
-
-TEST(PivotEvaluator, DateGroupingBySecond) {
-  // Two seconds within the same minute.
-  const double base = 45366.0;  // 2024-03-15
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, base + 10.0 / 24.0 + 5.0 / 1440.0 + 12.0 / 86400.0, 1.0);  // 10:05:12
-  push_record(cache, base + 10.0 / 24.0 + 5.0 / 1440.0 + 47.0 / 86400.0, 2.0);  // 10:05:47
-  push_record(cache, base + 10.0 / 24.0 + 5.0 / 1440.0 + 12.0 / 86400.0, 4.0);  // 10:05:12 again
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Second, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 2U);
-  EXPECT_EQ(r.rows[0].label, "2024-03-15 10:05:12");
-  EXPECT_EQ(r.rows[1].label, "2024-03-15 10:05:47");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0 + 4.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0);
-}
-
-TEST(PivotEvaluator, DateGroupingByYearHonorsDate1904Epoch) {
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, date_time::serial_from_ymd(2024, 3, 15, /*date1904=*/true), 10.0);
-  push_record(cache, date_time::serial_from_ymd(2023, 6, 1, /*date1904=*/true), 20.0);
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  PivotFilterEnv env;
-  env.date1904 = true;
-  auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 2U);
-  EXPECT_EQ(r.rows[0].label, "2023");
-  EXPECT_EQ(r.rows[1].label, "2024");
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 10.0);
-}
-
-TEST(PivotEvaluator, DateGroupingInvalidSerialsRemainDistinctAndAggregate) {
-  PivotCache cache = build_two_field_cache();
-  const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U);
-  const std::vector<std::pair<double, double>> cases = {
-      {-std::numeric_limits<double>::infinity(), 1.0},
-      {std::numeric_limits<double>::infinity(), 2.0},
-      {std::numeric_limits<double>::quiet_NaN(), 3.0},
-      {std::numeric_limits<double>::max(), 4.0},
-      {0.75, 5.0},
-      {last_valid + 0.75, 6.0},
-      {last_valid + 1.0, 7.0},
-  };
-  for (const auto& [serial, amount] : cases) {
-    push_record(cache, serial, amount);
-  }
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Day, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), cases.size());
-
-  std::map<std::string, double> amount_by_label;
-  for (std::size_t i = 0; i < r.rows.size(); ++i) {
-    ASSERT_EQ(r.values[i].size(), 1U);
-    ASSERT_EQ(r.values[i][0].size(), 1U);
-    ASSERT_TRUE(r.values[i][0][0].is_number());
-    EXPECT_TRUE(amount_by_label.emplace(r.rows[i].label, r.values[i][0][0].as_number()).second)
-        << "duplicate label=" << r.rows[i].label;
-  }
-  const auto expect_amount = [&](const std::string& label, double amount) {
-    const auto it = amount_by_label.find(label);
-    ASSERT_NE(it, amount_by_label.end()) << "missing label=" << label;
-    EXPECT_DOUBLE_EQ(it->second, amount) << "label=" << label;
-  };
-  expect_amount(display_string(Value::number(-std::numeric_limits<double>::infinity())), 1.0);
-  expect_amount(display_string(Value::number(std::numeric_limits<double>::infinity())), 2.0);
-  expect_amount(display_string(Value::number(std::numeric_limits<double>::quiet_NaN())), 3.0);
-  expect_amount(display_string(Value::number(std::numeric_limits<double>::max())), 4.0);
-  expect_amount("1899-12-31", 5.0);
-  expect_amount("9999-12-31", 6.0);
-  expect_amount(display_string(Value::number(last_valid + 1.0)), 7.0);
-}
-
-TEST(PivotEvaluator, DateGroupingRawSerialNeverMergesWithBucketKey) {
-  // Raw 3000000 is outside the date domain; it must stay apart from the
-  // Minute bucket whose index is also 3000000 and sort after valid buckets.
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, 3000000.5 / 1440.0, 1.0);                         // Minute index 3000000
-  push_record(cache, 3000000.0, 2.0);                                  // Raw invalid serial
-  push_record(cache, date_time::serial_from_ymd(2024, 3U, 15U), 4.0);  // Later valid minute
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Minute, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 3U);
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 4.0);
-  EXPECT_EQ(r.rows[2].label, display_string(Value::number(3000000.0)));
-  EXPECT_DOUBLE_EQ(r.values[2][0][0].as_number(), 2.0);
-}
-
-TEST(PivotEvaluator, DateGroupingByYearInvalidSerialsRemainDistinctAndAggregate) {
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, -std::numeric_limits<double>::infinity(), 1.0);
-  push_record(cache, std::numeric_limits<double>::infinity(), 2.0);
-  push_record(cache, std::numeric_limits<double>::quiet_NaN(), 3.0);
-  push_record(cache, std::numeric_limits<double>::max(), 4.0);
-  push_record(cache, date_time::serial_from_ymd(2024, 3U, 15U), 5.0);
-
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 5U);
-
-  std::map<std::string, double> amount_by_label;
-  for (std::size_t i = 0; i < r.rows.size(); ++i) {
-    ASSERT_EQ(r.values[i].size(), 1U);
-    ASSERT_EQ(r.values[i][0].size(), 1U);
-    ASSERT_TRUE(amount_by_label.emplace(r.rows[i].label, r.values[i][0][0].as_number()).second)
-        << "duplicate label=" << r.rows[i].label;
-  }
-  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(-std::numeric_limits<double>::infinity()))), 1.0);
-  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(std::numeric_limits<double>::infinity()))), 2.0);
-  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(std::numeric_limits<double>::quiet_NaN()))), 3.0);
-  EXPECT_DOUBLE_EQ(amount_by_label.at(display_string(Value::number(std::numeric_limits<double>::max()))), 4.0);
-  EXPECT_DOUBLE_EQ(amount_by_label.at("2024"), 5.0);
-}
-
+// Windows Excel 365 ja-JP, tests/fixtures/excel/win/pivot_week_1900: one
+// record a day over serials 0..70, grouped by runs of seven days.
 TEST(PivotEvaluator, DateGroupingByDaysIntervalAutoStart) {
-  PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
+  const PivotResult r = evaluate_days_group(/*start=*/std::nullopt);
 
   // Ten full 7-day buckets from the data minimum (serial 0) plus one
   // trailing bucket clipped to the resolved auto End (data max + 1),
@@ -561,13 +293,7 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalAutoStart) {
 TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitStartEqualsMinMatchesAuto) {
   // Start=0 explicit coincides with the data minimum, so Excel renders the
   // identical bucket set as the auto case above.
-  PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/0.0);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
+  const PivotResult r = evaluate_days_group(/*start=*/0.0);
   ASSERT_EQ(r.rows.size(), 11U);
   EXPECT_EQ(r.rows[0].label, "1900/1/0 - 1900/1/6");
   EXPECT_EQ(r.rows[10].label, "1900/3/10 - 1900/3/11");
@@ -580,13 +306,7 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitStartAboveMinAddsCatchAll
   // absorbs everything below it, and since (71-1) records divide evenly
   // by 7 the trailing regular bucket is NOT clipped here, unlike the
   // auto/Start=0 case above.
-  PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/1.0);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
+  const PivotResult r = evaluate_days_group(/*start=*/1.0);
   ASSERT_EQ(r.rows.size(), 11U);
   EXPECT_EQ(r.rows[0].label, "<1900/1/1");
   EXPECT_EQ(r.rows[1].label, "1900/1/1 - 1900/1/7");
@@ -609,13 +329,7 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitStartDeepInDataClipsLastB
   // Start=61 puts 61 of the 71 records into the catch-all; the trailing
   // regular bucket clips to the resolved auto End (data max + 1), not to
   // the true data max, so its label spans one day past the last record.
-  PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/61.0);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
+  const PivotResult r = evaluate_days_group(/*start=*/61.0);
   ASSERT_EQ(r.rows.size(), 3U);
   EXPECT_EQ(r.rows[0].label, "<1900/3/1");
   EXPECT_EQ(r.rows[1].label, "1900/3/1 - 1900/3/7");
@@ -630,14 +344,7 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitEndAboveDataMaxAddsCatchA
   // everything above it into one ">1900/2/29" catch-all, and the last
   // regular bucket clips to End. Serial 60 is Excel's phantom 1900/2/29.
   // Windows Excel 365: tests/fixtures/excel/win/pivot_days_end (end_60).
-  PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt, /*interval_days=*/7,
-                                              /*end_serial=*/60.0);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
+  const PivotResult r = evaluate_days_group(/*start=*/std::nullopt, /*interval_days=*/7, /*end=*/60.0);
   ASSERT_EQ(r.rows.size(), 10U);
   EXPECT_EQ(r.rows[0].label, "1900/1/0 - 1900/1/6");
   EXPECT_EQ(r.rows[7].label, "1900/2/18 - 1900/2/24");
@@ -652,14 +359,7 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalExplicitEndAboveDataMaxAddsCatchA
 
 TEST(PivotEvaluator, DateGroupingByDaysIntervalEndInsideTheDataClipsTheLastBucket) {
   // Windows Excel 365: tests/fixtures/excel/win/pivot_days_end (end_30).
-  PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt, /*interval_days=*/7,
-                                              /*end_serial=*/30.0);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-
+  const PivotResult r = evaluate_days_group(/*start=*/std::nullopt, /*interval_days=*/7, /*end=*/30.0);
   ASSERT_EQ(r.rows.size(), 6U);
   EXPECT_EQ(r.rows[0].label, "1900/1/0 - 1900/1/6");
   EXPECT_EQ(r.rows[3].label, "1900/1/21 - 1900/1/27");
@@ -672,49 +372,21 @@ TEST(PivotEvaluator, DateGroupingByDaysIntervalEndInsideTheDataClipsTheLastBucke
   EXPECT_DOUBLE_EQ(r.values[5][0][0].as_number(), 40.0);
 }
 
-TEST(PivotEvaluator, DateGroupingDaysCatchallsDoNotMergeRawNonfiniteValues) {
-  PivotCache cache = build_two_field_cache();
-  push_record(cache, -std::numeric_limits<double>::infinity(), 1.0);
-  push_record(cache, std::numeric_limits<double>::infinity(), 2.0);
-  push_record(cache, std::numeric_limits<double>::quiet_NaN(), 3.0);
-  push_record(cache, std::numeric_limits<double>::max(), 4.0);
-  push_record(cache, 0.0, 5.0);   // Before the explicit Start.
-  push_record(cache, 10.0, 6.0);  // After the explicit End.
-
-  PivotTable table = build_days_grouped_table(/*start_serial=*/5.0, /*interval_days=*/1, /*end_serial=*/5.0);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 6U);
-
-  std::map<std::string, double> amount_by_label;
-  for (std::size_t i = 0; i < r.rows.size(); ++i) {
-    ASSERT_EQ(r.values[i].size(), 1U);
-    ASSERT_EQ(r.values[i][0].size(), 1U);
-    ASSERT_TRUE(r.values[i][0][0].is_number());
-    ASSERT_TRUE(amount_by_label.emplace(r.rows[i].label, r.values[i][0][0].as_number()).second)
-        << "duplicate label=" << r.rows[i].label;
+TEST(PivotEvaluator, DateGroupingRefusesValuesOutsideTheDateDomain) {
+  for (const double raw : {-std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(),
+                           std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::max(), -1.0}) {
+    PivotCache cache = build_two_field_cache();
+    push_record(cache, 0.0, 5.0);
+    push_record(cache, raw, 1.0);
+    const Expected<PivotTable, Error> table = group_date_rows(cache, days_spec(/*start=*/5.0, 1U, /*end=*/5.0));
+    ASSERT_FALSE(static_cast<bool>(table)) << raw;
+    EXPECT_EQ(table.error().code, FormulonErrorCode::kInvalidArgument) << raw;
+    EXPECT_EQ(cache.fields().size(), 2U) << raw;
   }
-  const auto expect_amount = [&](const std::string& label, double amount) {
-    const auto it = amount_by_label.find(label);
-    ASSERT_NE(it, amount_by_label.end()) << "missing label=" << label;
-    EXPECT_DOUBLE_EQ(it->second, amount) << "label=" << label;
-  };
-  expect_amount(display_string(Value::number(-std::numeric_limits<double>::infinity())), 1.0);
-  expect_amount(display_string(Value::number(std::numeric_limits<double>::infinity())), 2.0);
-  expect_amount(display_string(Value::number(std::numeric_limits<double>::quiet_NaN())), 3.0);
-  expect_amount(display_string(Value::number(std::numeric_limits<double>::max())), 4.0);
-  expect_amount("<1900/1/5", 5.0);
-  expect_amount(">1900/1/5", 6.0);
 }
 
-TEST(PivotEvaluator, DateGroupingByDaysFloorsFractionalBounds) {
-  PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/1.9, /*interval_days=*/7, /*end_serial=*/60.9);
-
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
+TEST(PivotEvaluator, DateGroupingByDaysKeepsFractionalBoundsAndComparesDays) {
+  const PivotResult r = evaluate_days_group(/*start=*/1.9, /*interval_days=*/7, /*end=*/60.9);
   ASSERT_EQ(r.rows.size(), 11U);
   EXPECT_EQ(r.rows[0].label, "<1900/1/1");
   EXPECT_EQ(r.rows[1].label, "1900/1/1 - 1900/1/7");
@@ -725,41 +397,28 @@ TEST(PivotEvaluator, DateGroupingByDaysFloorsFractionalBounds) {
   EXPECT_DOUBLE_EQ(r.values[10][0][0].as_number(), 10.0);
 }
 
-TEST(PivotEvaluator, DateGroupingByDaysAutoEndClampsAtLastValidDate) {
-  PivotCache cache = build_two_field_cache();
-  const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U);
-  push_record(cache, last_valid + 0.75, 1.0);
-  push_record(cache, last_valid + 1.0, 2.0);  // Invalid raw serial, excluded from auto bounds.
-
-  PivotTable table = build_days_grouped_table(/*start_serial=*/std::nullopt, /*interval_days=*/7);
-  auto r_or = evaluate(table, cache);
-  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-  const PivotResult& r = r_or.value();
-  ASSERT_EQ(r.rows.size(), 2U);
-  EXPECT_EQ(r.rows[0].label, "9999/12/31 - 9999/12/31");
-  EXPECT_EQ(r.rows[1].label, display_string(Value::number(last_valid + 1.0)));
-  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
-  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0);
-}
-
-TEST(PivotEvaluator, DateGroupingMaxFractionAndNextDayRespectEpoch) {
+TEST(PivotEvaluator, DateGroupingLastDayWithATimeEndsTheRangeInEitherEpoch) {
   for (const bool date1904 : {false, true}) {
-    PivotCache cache = build_two_field_cache();
     const double last_valid = date_time::serial_from_ymd(9999, 12U, 31U, date1904);
+    PivotCache cache = build_two_field_cache();
     push_record(cache, last_valid + 0.75, 1.0);
-    push_record(cache, last_valid + 1.0, 2.0);
-
-    PivotTable table = build_date_grouped_table(DateGrouping::Day, CalendarSystem::Gregorian);
+    Expected<PivotTable, Error> table = group_date_rows(cache, days_spec(std::nullopt), date1904);
+    ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+    // A maximum with a time of day is the end itself.
+    EXPECT_EQ(cache.fields()[2].field_group->range.end_date, "9999-12-31T18:00:00") << date1904;
     PivotFilterEnv env;
     env.date1904 = date1904;
-    auto r_or = evaluate(table, cache, PivotLayoutOptions{}, env);
+    auto r_or = evaluate(table.value(), cache, PivotLayoutOptions{}, env);
     ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
-    const PivotResult& r = r_or.value();
-    ASSERT_EQ(r.rows.size(), 2U) << "date1904=" << date1904;
-    EXPECT_EQ(r.rows[0].label, "9999-12-31") << "date1904=" << date1904;
-    EXPECT_EQ(r.rows[1].label, display_string(Value::number(last_valid + 1.0))) << "date1904=" << date1904;
-    EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1.0);
-    EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 2.0);
+    ASSERT_EQ(r_or.value().rows.size(), 1U) << date1904;
+    EXPECT_EQ(r_or.value().rows[0].label, "9999/12/31 - 9999/12/31") << date1904;
+
+    // The day after the last date is no date.
+    PivotCache past = build_two_field_cache();
+    push_record(past, last_valid + 1.0, 1.0);
+    const Expected<PivotTable, Error> refused = group_date_rows(past, days_spec(std::nullopt), date1904);
+    ASSERT_FALSE(static_cast<bool>(refused)) << date1904;
+    EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
   }
 }
 
@@ -774,12 +433,12 @@ TEST(PivotEvaluator, DateGroupingByDaysRejectsInvalidExplicitBounds) {
   for (const double invalid : invalid_bounds) {
     for (const bool invalid_start : {true, false}) {
       PivotCache cache = build_days_interval_cache();
-      PivotTable table = build_days_grouped_table(
-          invalid_start ? std::optional<double>(invalid) : std::optional<double>(0.0),
-          /*interval_days=*/7, invalid_start ? std::optional<double>(70.0) : std::optional<double>(invalid));
-      auto r_or = evaluate(table, cache);
-      ASSERT_FALSE(static_cast<bool>(r_or)) << "invalid=" << invalid << " start=" << invalid_start;
-      EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid)
+      const Expected<PivotTable, Error> table = group_date_rows(
+          cache,
+          days_spec(invalid_start ? std::optional<double>(invalid) : std::optional<double>(0.0),
+                    /*interval_days=*/7, invalid_start ? std::optional<double>(70.0) : std::optional<double>(invalid)));
+      ASSERT_FALSE(static_cast<bool>(table)) << "invalid=" << invalid << " start=" << invalid_start;
+      EXPECT_EQ(table.error().code, FormulonErrorCode::kInvalidArgument)
           << "invalid=" << invalid << " start=" << invalid_start;
     }
   }
@@ -787,10 +446,10 @@ TEST(PivotEvaluator, DateGroupingByDaysRejectsInvalidExplicitBounds) {
 
 TEST(PivotEvaluator, DateGroupingByDaysRejectsRawInvertedFractionalBounds) {
   PivotCache cache = build_days_interval_cache();
-  PivotTable table = build_days_grouped_table(/*start_serial=*/0.9, /*interval_days=*/7, /*end_serial=*/0.1);
-  auto r_or = evaluate(table, cache);
-  ASSERT_FALSE(static_cast<bool>(r_or));
-  EXPECT_EQ(r_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
+  const Expected<PivotTable, Error> table =
+      group_date_rows(cache, days_spec(/*start=*/0.9, /*interval_days=*/7, /*end=*/0.1));
+  ASSERT_FALSE(static_cast<bool>(table));
+  EXPECT_EQ(table.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
 TEST(PivotEvaluator, CacheIdMismatchYieldsMissing) {
@@ -848,8 +507,7 @@ PivotCache build_month_grouped_cache() {
 }
 
 PivotTable build_month_grouped_table() {
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  table.mutable_fields()[0].date_group.reset();
+  PivotTable table = build_date_table();
   table.mutable_fields()[0].axis = PivotAxis::None;
   PivotField months_f;
   months_f.source_name = "Months";
@@ -922,8 +580,7 @@ TEST(PivotEvaluator, UngroupedDateItemsAreLabelledInTheFieldNumberFormat) {
   push_record(cache, date_time::serial_from_ymd(2024, 2U, 8U), 150.0);
   push_record(cache, date_time::serial_from_ymd(2024, 1U, 15U), 100.0);
   cache.mutable_fields()[0].num_fmt_id = 14U;
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  table.mutable_fields()[0].date_group.reset();
+  PivotTable table = build_date_table();
   PivotLayoutOptions options;
   options.profile = mac_365_ja_jp_profile();
 
@@ -948,8 +605,7 @@ TEST(PivotEvaluator, CustomItemNumberFormatResolvesThroughTheWorkbookStyles) {
   PivotCache cache = build_two_field_cache();
   push_record(cache, date_time::serial_from_ymd(2024, 1U, 15U), 100.0);
   cache.mutable_fields()[0].num_fmt_id = 164U;
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  table.mutable_fields()[0].date_group.reset();
+  PivotTable table = build_date_table();
   StylesTable styles;
   styles.num_fmt_strings.push_back("yyyy-mm-dd");
   styles.num_fmts.push_back(NumFmtRecord{164U, 0U});
@@ -971,8 +627,7 @@ TEST(PivotEvaluator, CustomItemNumberFormatResolvesThroughTheWorkbookStyles) {
 TEST(PivotEvaluator, UnformattedNumericItemsKeepTheirGeneralLabel) {
   PivotCache cache = build_two_field_cache();
   push_record(cache, 45306.0, 1.0);
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  table.mutable_fields()[0].date_group.reset();
+  PivotTable table = build_date_table();
   cache.mutable_fields()[0].num_fmt_id = 0U;
 
   auto r_or = evaluate(table, cache);
@@ -1040,8 +695,7 @@ TEST(PivotEvaluator, PercentOfBaseItemFindsAFormattedDateAndAGroupItem) {
   dates.mutable_fields()[0].num_fmt_id = 14U;
   push_record(dates, 0.0, 100.0);  // Shared-item indices.
   push_record(dates, 1.0, 150.0);
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  table.mutable_fields()[0].date_group.reset();
+  PivotTable table = build_date_table();
   for (const std::uint32_t x : {0U, 1U}) {
     PivotItem item;
     item.has_cache_index = true;
@@ -1110,8 +764,7 @@ TEST(PivotEvaluator, CaptionedNumericItemCarriesNoNumberFormat) {
   cache.mutable_fields()[0].shared_items = {Value::number(jan15)};
   cache.mutable_fields()[0].num_fmt_id = 14U;
   push_record(cache, 0.0, 100.0);
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  table.mutable_fields()[0].date_group.reset();
+  PivotTable table = build_date_table();
   PivotItem item;
   item.has_cache_index = true;
   item.cache_index = 0U;
@@ -1129,8 +782,7 @@ TEST(PivotEvaluator, ExplicitGeneralPivotFieldFormatWinsOverTheCacheField) {
   PivotCache cache = build_two_field_cache();
   push_record(cache, 45306.0, 1.0);
   cache.mutable_fields()[0].num_fmt_id = 14U;
-  PivotTable table = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  table.mutable_fields()[0].date_group.reset();
+  PivotTable table = build_date_table();
   table.mutable_fields()[0].number_format = "0";
 
   auto r_or = evaluate(table, cache);
@@ -1160,22 +812,21 @@ TEST(PivotEvaluator, PercentOfBaseItemMatchesByCollationAndFallsBackToItsLabel) 
   ASSERT_EQ(r_or.value().values.size(), 2U);
   EXPECT_DOUBLE_EQ(r_or.value().values[0][0][0].as_number(), 175.0 / 500.0);
 
-  // A date-grouped level's keys are synthetic: its item is found by label.
+  // A years group: item 0 collects the values before the start, item 1 is 2018.
   PivotCache dates = build_date_cache();
-  PivotTable grouped = build_date_grouped_table(DateGrouping::Year, CalendarSystem::Gregorian);
-  for (const char* name : {"2018", "2019"}) {
-    PivotItem item;
-    item.name = name;
-    grouped.mutable_fields()[0].items.push_back(item);
-  }
+  DateGroupSpec years;
+  years.periods = date_period_bit(GroupBy::Years);
+  Expected<PivotTable, Error> grouped_or = group_date_rows(dates, years);
+  ASSERT_TRUE(static_cast<bool>(grouped_or)) << grouped_or.error().message;
+  PivotTable& grouped = grouped_or.value();
   PivotDataField& gdf = grouped.mutable_data_fields()[0];
   gdf.show_as = ShowValuesAs::PercentOf;
-  gdf.show_as_base_field = 0U;
-  gdf.show_as_base_item = 0U;  // "2018" = 10.
+  gdf.show_as_base_field = 2U;
+  gdf.show_as_base_item = 1U;  // "2018年" = 10.
   auto g_or = evaluate(grouped, dates);
   ASSERT_TRUE(static_cast<bool>(g_or)) << g_or.error().message;
   ASSERT_EQ(g_or.value().rows.size(), 3U);
-  EXPECT_EQ(g_or.value().rows[1].label, "2019");
+  EXPECT_EQ(g_or.value().rows[1].label, "2019\xE5\xB9\xB4");
   EXPECT_DOUBLE_EQ(g_or.value().values[1][0][0].as_number(), 140.0 / 10.0);
 }
 
@@ -1199,7 +850,7 @@ TEST(PivotEvaluator, HiddenRenamedItemIsMatchedByItsSourceName) {
   EXPECT_EQ(r_or.value().rows[0].label, "North");
 }
 
-TEST(PivotEvaluator, GroupingDerivedAxisFieldWithDateGroupSetEvaluatesNormally) {
+TEST(PivotEvaluator, GroupFieldWithoutStatedBoundsEvaluates) {
   PivotCache cache = build_basic_cache();
   cache.mutable_fields().push_back(PivotCacheField{"Region Years", {}});
   cache.mutable_fields().back().is_database_field = false;
@@ -1209,7 +860,6 @@ TEST(PivotEvaluator, GroupingDerivedAxisFieldWithDateGroupSetEvaluatesNormally) 
   PivotField grouped_f;
   grouped_f.source_name = "Region Years";
   grouped_f.axis = PivotAxis::Row;
-  grouped_f.date_group = PivotDateGroup{};
   table.mutable_fields().push_back(std::move(grouped_f));
   table.mutable_row_field_order() = {3};
 

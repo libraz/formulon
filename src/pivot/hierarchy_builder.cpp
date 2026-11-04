@@ -2,10 +2,8 @@
 #include "pivot/hierarchy_builder.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -13,271 +11,16 @@
 #include <vector>
 
 #include "eval/text_format/display_text.h"
-#include "pivot/date_serial.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
 #include "utils/checked_index.h"
-#include "utils/date_time.h"
-#include "utils/japanese_era.h"
 #include "value.h"
 
 namespace formulon::pivot {
 namespace {
-
-// ---------------------------------------------------------------------------
-// Date grouping.
-// ---------------------------------------------------------------------------
-//
-// When a `PivotField` declares a `date_group`, the field's source `Value`
-// (which the cache stores as a date serial) is mapped to a bucket
-// `(sort_key, label)` pair. The sort key feeds the hierarchy's
-// `std::map<HierarchyKey, HierNode, HierarchyKeyLess>` so leaves order
-// chronologically (e.g. 2023 < 2024 < 2025); the label is what the renderer /
-// GETPIVOTDATA see as the bucket name.
-//
-// MVP scope: Year, Quarter, Month, Day for both Gregorian and Japanese
-// calendars; Week / Hour / Minute / Second pass through unchanged
-// (deferred — Excel's calendar-week rules and time-of-day grouping
-// require additional oracle authoring). For Japanese-calendar Year /
-// Month, the era prefix is the full kanji name (令和 / 平成 / ...);
-// pre-Meiji dates classify as Meiji, mirroring Excel's lenient
-// behaviour.
-
-struct DateBucket {
-  Value sort_key;     ///< Numeric sort handle (chronological order).
-  std::string label;  ///< Display string for the bucket.
-  HierarchyBand band = HierarchyBand::Normal;
-};
-
-// Two-digit zero-padded decimal append (no <iomanip>).
-void append_pad2(std::string& out, unsigned n) {
-  if (n < 10u) {
-    out.push_back('0');
-  }
-  out.append(std::to_string(n));
-}
-
-// Four-digit (or wider) zero-padded year append. Negative years emit a
-// leading `-`; the resulting label is sortable lexicographically only
-// within the same sign, which is fine because the sort key is
-// independent of the label.
-void append_year(std::string& out, int y) {
-  if (y < 0) {
-    out.push_back('-');
-    y = -y;
-  }
-  if (y < 10) {
-    out.append("000");
-  } else if (y < 100) {
-    out.append("00");
-  } else if (y < 1000) {
-    out.push_back('0');
-  }
-  out.append(std::to_string(y));
-}
-
-// `yyyy/m/d`, unpadded month/day -- the literal format Excel's Days-interval
-// bucket labels use, independent of the field's own number format.
-void append_days_group_date(std::string& out, double serial, bool date1904) {
-  const formulon::date_time::YMD ymd = date1904 ? formulon::date_time::ymd_from_serial(serial, /*date1904=*/true)
-                                                : formulon::date_time::legacy_1900_ymd(serial);
-  append_year(out, ymd.y);
-  out.push_back('/');
-  out.append(std::to_string(ymd.m));
-  out.push_back('/');
-  out.append(std::to_string(ymd.d));
-}
-
-// The label is built only when `with_label`; the key and band do not depend on it.
-DateBucket bucket_date(double serial, const PivotDateGroup& dg, bool date1904, bool with_label) {
-  using formulon::date_time::HMS;
-  using formulon::date_time::hms_from_fraction;
-  using formulon::date_time::YMD;
-  using formulon::date_time::ymd_from_serial;
-  using formulon::japanese_era::classify_era;
-  using formulon::japanese_era::EraInfo;
-
-  // Invalid serials are not date buckets; keep the raw number in its own band
-  // so it cannot merge with a synthetic bucket key.
-  if (!is_valid_date_serial(serial, date1904)) {
-    Value raw = Value::number(serial);
-    std::string label = with_label ? display_string(raw) : std::string();
-    return {raw, std::move(label), HierarchyBand::Raw};
-  }
-  const double serial_floor = std::floor(serial);
-  const YMD ymd = ymd_from_serial(serial_floor, date1904);
-
-  switch (dg.granularity) {
-    case DateGrouping::Year: {
-      if (dg.calendar == CalendarSystem::Japanese) {
-        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
-        const int era_year = ymd.y - era.year_anchor + 1;
-        const double key = static_cast<double>(era.year_anchor) * 10000.0 + static_cast<double>(era_year);
-        if (!with_label) {
-          return {Value::number(key), {}};
-        }
-        std::string label = era.kanji2;
-        label.append(std::to_string(era_year));
-        // 年
-        label.append("\xE5\xB9\xB4");
-        return {Value::number(key), std::move(label)};
-      }
-      const double key = static_cast<double>(ymd.y);
-      if (!with_label) {
-        return {Value::number(key), {}};
-      }
-      std::string label;
-      append_year(label, ymd.y);
-      return {Value::number(key), std::move(label)};
-    }
-    case DateGrouping::Quarter: {
-      const int quarter = (static_cast<int>(ymd.m) - 1) / 3 + 1;
-      const double key = static_cast<double>(ymd.y) * 4.0 + static_cast<double>(quarter - 1);
-      if (!with_label) {
-        return {Value::number(key), {}};
-      }
-      std::string label;
-      append_year(label, ymd.y);
-      label.append("-Q");
-      label.append(std::to_string(quarter));
-      return {Value::number(key), std::move(label)};
-    }
-    case DateGrouping::Month: {
-      const double key = static_cast<double>(ymd.y) * 100.0 + static_cast<double>(ymd.m);
-      if (!with_label) {
-        return {Value::number(key), {}};
-      }
-      std::string label;
-      if (dg.calendar == CalendarSystem::Japanese) {
-        const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
-        const int era_year = ymd.y - era.year_anchor + 1;
-        label = era.kanji2;
-        label.append(std::to_string(era_year));
-        label.append("\xE5\xB9\xB4");  // 年
-        label.append(std::to_string(ymd.m));
-        label.append("\xE6\x9C\x88");  // 月
-      } else {
-        append_year(label, ymd.y);
-        label.push_back('-');
-        append_pad2(label, ymd.m);
-      }
-      return {Value::number(key), std::move(label)};
-    }
-    case DateGrouping::Day: {
-      // Use the floor serial as the sort key; it is already
-      // chronological. Label is `YYYY-MM-DD` (Gregorian) regardless of
-      // the calendar — Excel renders day-level buckets in the workbook
-      // locale's short-date pattern, which for ja-JP and en-US alike
-      // collapses to a numeric YMD.
-      if (!with_label) {
-        return {Value::number(serial_floor), {}};
-      }
-      std::string label;
-      append_year(label, ymd.y);
-      label.push_back('-');
-      append_pad2(label, ymd.m);
-      label.push_back('-');
-      append_pad2(label, ymd.d);
-      return {Value::number(serial_floor), std::move(label)};
-    }
-    case DateGrouping::Days: {
-      // `value_or(serial_floor)` only guards a caller that skips
-      // `pivot_evaluator::evaluate`'s auto Start/End resolution.
-      const double interval = dg.interval_days > 0 ? static_cast<double>(dg.interval_days) : 1.0;
-      const double start = dg.start_serial.value_or(serial_floor);
-      const double end = dg.end_serial.value_or(serial_floor);
-      if (serial_floor < start) {
-        // Catch-all: everything below an explicit Start narrower than the data minimum, sorted first.
-        if (!with_label) {
-          return {Value::number(-std::numeric_limits<double>::infinity()), {}, HierarchyBand::Before};
-        }
-        std::string label = "<";
-        append_days_group_date(label, start, date1904);
-        return {Value::number(-std::numeric_limits<double>::infinity()), std::move(label), HierarchyBand::Before};
-      }
-      if (serial_floor > end) {
-        // Mirror image: everything above an explicit End narrower than the data maximum, sorted last.
-        if (!with_label) {
-          return {Value::number(std::numeric_limits<double>::infinity()), {}, HierarchyBand::After};
-        }
-        std::string label = ">";
-        append_days_group_date(label, end, date1904);
-        return {Value::number(std::numeric_limits<double>::infinity()), std::move(label), HierarchyBand::After};
-      }
-      const double bucket_index = std::floor((serial_floor - start) / interval);
-      const double bucket_start = start + bucket_index * interval;
-      if (!with_label) {
-        return {Value::number(bucket_start), {}};
-      }
-      const double bucket_end = std::max(bucket_start, std::min(bucket_start + interval - 1.0, end));
-      std::string label;
-      append_days_group_date(label, bucket_start, date1904);
-      label.append(" - ");
-      append_days_group_date(label, bucket_end, date1904);
-      return {Value::number(bucket_start), std::move(label)};
-    }
-    case DateGrouping::Hour: {
-      const double hour_index = std::floor(serial * 24.0);
-      if (!with_label) {
-        return {Value::number(hour_index), {}};
-      }
-      const HMS hms = hms_from_fraction(serial);
-      std::string label;
-      append_year(label, ymd.y);
-      label.push_back('-');
-      append_pad2(label, ymd.m);
-      label.push_back('-');
-      append_pad2(label, ymd.d);
-      label.push_back(' ');
-      append_pad2(label, hms.h);
-      return {Value::number(hour_index), std::move(label)};
-    }
-    case DateGrouping::Minute: {
-      const double minute_index = std::floor(serial * 1440.0);
-      if (!with_label) {
-        return {Value::number(minute_index), {}};
-      }
-      const HMS hms = hms_from_fraction(serial);
-      std::string label;
-      append_year(label, ymd.y);
-      label.push_back('-');
-      append_pad2(label, ymd.m);
-      label.push_back('-');
-      append_pad2(label, ymd.d);
-      label.push_back(' ');
-      append_pad2(label, hms.h);
-      label.push_back(':');
-      append_pad2(label, hms.m);
-      return {Value::number(minute_index), std::move(label)};
-    }
-    case DateGrouping::Second: {
-      const double second_index = std::floor(serial * static_cast<double>(date_time::kSecondsPerDay));
-      if (!with_label) {
-        return {Value::number(second_index), {}};
-      }
-      const HMS hms = hms_from_fraction(serial);
-      std::string label;
-      append_year(label, ymd.y);
-      label.push_back('-');
-      append_pad2(label, ymd.m);
-      label.push_back('-');
-      append_pad2(label, ymd.d);
-      label.push_back(' ');
-      append_pad2(label, hms.h);
-      label.push_back(':');
-      append_pad2(label, hms.m);
-      label.push_back(':');
-      append_pad2(label, hms.s);
-      return {Value::number(second_index), std::move(label)};
-    }
-  }
-  Value raw = Value::number(serial);
-  std::string label = with_label ? display_string(raw) : std::string();
-  return {raw, std::move(label), HierarchyBand::Raw};
-}
 
 /// Removes the leaves of `node`'s subtree whose position in `keep` is
 /// false and any interior node left empty. `leaf_cursor` advances once per
@@ -333,17 +76,11 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
     const Value raw = cell_value(cache, record, level.field_index);
-    HierarchyKey key{HierarchyBand::Normal, raw};
-    const bool date_bucketed = level.date_group != nullptr && raw.is_number();
-    if (date_bucketed) {
-      DateBucket bucket = bucket_date(raw.as_number(), *level.date_group, date1904, /*with_label=*/false);
-      key = {bucket.band, bucket.sort_key};
-    }
-    auto [it, inserted] = cursor->children.try_emplace(key);
+    auto [it, inserted] = cursor->children.try_emplace(HierarchyKey{raw});
     if (inserted) {
       std::string label_override;
       const std::string* caption = nullptr;
-      if (level.captions != nullptr && !date_bucketed) {
+      if (level.captions != nullptr) {
         if (const auto it_caption = level.captions->find(raw); it_caption != level.captions->end()) {
           caption = &it_caption->second;
         }
@@ -355,8 +92,6 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
         if (item.has_value()) {
           label_override = display_string((*level.group_items)[*item]);
         }
-      } else if (date_bucketed) {
-        label_override = bucket_date(raw.as_number(), *level.date_group, date1904, /*with_label=*/true).label;
       } else if (raw.is_blank()) {
         // A source cell with no value still occupies a group on the axis, so
         // the group needs a name: the label is what the grid draws, and it is
@@ -399,22 +134,18 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
   const auto append = [&](const HierarchyKey& key, HierNode& child) {
     AxisHierarchyNode node;
     node.label = node_label(key, child);
-    // A date-grouped level's keys are synthetic, so its items are addressed by label only.
-    const bool date_grouped = depth < levels.size() && levels[depth].date_group != nullptr;
-    if (key.band == HierarchyBand::Normal && !date_grouped) {
-      if (key.value.is_text()) {
-        text_storage.emplace_back(key.value.as_text());
-        node.identity = Value::text(text_storage.back());
-      } else {
-        node.identity = key.value;
-      }
-      if (depth < levels.size()) {
-        const HierLevel& level = levels[depth];
-        node.identity_is_group_item = level.group_items != nullptr;
-        const bool captioned = level.captions != nullptr && level.captions->count(key.value) != 0U;
-        if (key.value.is_number() && !captioned) {
-          node.number_format = level.number_format;
-        }
+    if (key.value.is_text()) {
+      text_storage.emplace_back(key.value.as_text());
+      node.identity = Value::text(text_storage.back());
+    } else {
+      node.identity = key.value;
+    }
+    if (depth < levels.size()) {
+      const HierLevel& level = levels[depth];
+      node.identity_is_group_item = level.group_items != nullptr;
+      const bool captioned = level.captions != nullptr && level.captions->count(key.value) != 0U;
+      if (key.value.is_number() && !captioned) {
+        node.number_format = level.number_format;
       }
     }
     if (child.children.empty()) {

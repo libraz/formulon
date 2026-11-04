@@ -134,9 +134,8 @@ TEST(HierarchyBuilder, StoresRecordIndicesOnlyForValueSortedLevels) {
   const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
   PivotCache cache = build_basic_cache();
   const std::vector<HierLevel> levels = {
-      HierLevel{0U, nullptr, true, std::nullopt, std::nullopt, nullptr},
-      HierLevel{1U, nullptr, true, std::optional<std::uint32_t>(2U), std::optional<Aggregation>(Aggregation::Sum),
-                nullptr},
+      HierLevel{0U, true, std::nullopt, std::nullopt, nullptr},
+      HierLevel{1U, true, std::optional<std::uint32_t>(2U), std::optional<Aggregation>(Aggregation::Sum), nullptr},
   };
   HierNode tree;
   for (std::size_t i = 0; i < cache.records().size(); ++i) {

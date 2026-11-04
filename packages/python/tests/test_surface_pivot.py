@@ -14,7 +14,7 @@ from formulon import (
     PivotAxis,
     PivotCalendar,
     PivotDataFieldSpec,
-    PivotDateGrouping,
+    PivotDatePeriod,
     PivotFieldSpec,
     PivotFilterSpec,
     PivotFilterType,
@@ -329,7 +329,7 @@ class PivotMutatorTableTests(unittest.TestCase):
 
         def clear_date_group_setup(f: _PivotFixture) -> None:
             _date_rows(f)
-            f.wb.pivot_field_set_date_group(0, f.pivot, f.date, PivotDateGrouping.YEAR, PivotCalendar.GREGORIAN)
+            f.wb.pivot_field_set_date_group(0, f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.GREGORIAN)
 
         def number_format(t: Any, f: _PivotFixture, r: None) -> None:
             rejects(lambda: f.wb.pivot_field_set_number_format(0, f.pivot, 99, "4"))
@@ -574,7 +574,7 @@ class PivotMutatorTableTests(unittest.TestCase):
             "pivot_field_set_date_group": (
                 _date_rows,
                 lambda f: f.wb.pivot_field_set_date_group(
-                    0, f.pivot, f.date, PivotDateGrouping.YEAR, PivotCalendar.JAPANESE, -1, -1
+                    0, f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.JAPANESE
                 ),
                 None,
                 grid_is(["行ラベル|Sum of Amount", "令和6年|40", "令和7年|12", "総計|52"]),
@@ -710,8 +710,8 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         eq(region.axis, PivotAxis.ROW)
         eq(region.cache_field_index, 0)
         eq(region.sort_order, PivotSortOrder.ASCENDING)
-        self.assertFalse(region.has_date_group)
-        eq(region.date_start_year, -1)
+        eq(region.date_periods, PivotDatePeriod(0))
+        eq(region.group_base_index, -1)
 
         eq(wb.pivot_field_item_count(0, pivot, f.region), 2)
         for index, label in enumerate(("East", "West")):
@@ -734,14 +734,14 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             wb.pivot_set_grand_totals(0, f.pivot, False, True)
             wb.pivot_field_set_sort(0, f.pivot, f.region, PivotSortOrder.DESCENDING, "Sum of Amount")
             wb.pivot_field_set_item_visible(0, f.pivot, f.region, 1, False)
-            wb.pivot_field_set_date_group(0, f.pivot, f.date, PivotDateGrouping.YEAR, PivotCalendar.GREGORIAN)
+            wb.pivot_field_set_date_group(0, f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.GREGORIAN)
             self.assertEqual(wb.pivot_grand_totals(0, f.pivot), (False, True))
             region = wb.pivot_field_at(0, f.pivot, f.region)
             self.assertEqual((region.sort_order, region.sort_by_field), (PivotSortOrder.DESCENDING, "Sum of Amount"))
             self.assertFalse(wb.pivot_field_item_at(0, f.pivot, f.region, 1).visible)
             date = wb.pivot_field_at(0, f.pivot, f.date)
-            self.assertTrue(date.has_date_group)
-            self.assertEqual(date.date_granularity, PivotDateGrouping.YEAR)
+            self.assertEqual(date.date_periods, PivotDatePeriod.YEARS)
+            self.assertEqual(date.date_calendar, PivotCalendar.GREGORIAN)
             self.assertEqual(date.axis, PivotAxis.VALUE)
 
             wb.pivot_field_set_axis(0, f.pivot, f.product, PivotAxis.COL)

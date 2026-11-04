@@ -1,5 +1,6 @@
 // Stable C ABI PivotTable grouping and item-binding tests.
 
+#include <limits>
 #include <utility>
 
 #include "formulon_c_pivot_test_helpers.h"
@@ -57,12 +58,6 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   if (st != 0) {
     return st;
   }
-  st = fm_workbook_pivot_field_set_date_group(wb, 0, pivot_idx, date_field, FM_PIVOT_DATE_DAYS,
-                                              FM_PIVOT_CALENDAR_GREGORIAN, -1, -1, /*interval_days=*/7, start_serial,
-                                              /*end_serial_or_neg1=*/-1.0);
-  if (st != 0) {
-    return st;
-  }
   fm_pivot_field_spec_t amount_spec{};
   amount_spec.source_name = "Amount";
   amount_spec.custom_name = "";
@@ -89,6 +84,13 @@ fm_status_t BuildDaysGroupedPivot(fm_workbook_t* wb, double start_serial, std::s
   df_spec.show_as_base_item = -1;
   std::size_t df_idx = 99;
   st = fm_workbook_pivot_data_field_add(wb, 0, pivot_idx, &df_spec, &df_idx);
+  if (st != 0) {
+    return st;
+  }
+  // Grouped last: the group field is appended after every source field.
+  st = fm_workbook_pivot_field_set_date_group(wb, 0, pivot_idx, date_field, FM_PIVOT_PERIOD_DAYS,
+                                              FM_PIVOT_CALENDAR_GREGORIAN, /*interval_days=*/7, start_serial,
+                                              /*end_or_nan=*/std::numeric_limits<double>::quiet_NaN());
   if (st != 0) {
     return st;
   }
@@ -232,8 +234,8 @@ TEST(FormulonCApiPivot, DaysGroupMatchesPivotWeek1900FixtureThroughTheAbi) {
   // 365 ja-JP, build 16.0.20228): four Start variants of the same
   // By-7-days grouping, read from the real Excel-rendered pivot. `auto`
   // (Start=True) and `start0` (Start=0) coincide because 0 is already
-  // the data minimum.
-  const double kAuto = -1.0;
+  // the data minimum. The labels are the ja-JP short dates.
+  const double kAuto = std::numeric_limits<double>::quiet_NaN();
   const std::vector<std::pair<std::string, double>> kAutoAndStart0Rows = {
       {"1900/1/0 - 1900/1/6", 7.0},   {"1900/1/7 - 1900/1/13", 7.0},  {"1900/1/14 - 1900/1/20", 7.0},
       {"1900/1/21 - 1900/1/27", 7.0}, {"1900/1/28 - 1900/2/3", 7.0},  {"1900/2/4 - 1900/2/10", 7.0},
@@ -273,6 +275,7 @@ TEST(FormulonCApiPivot, DaysGroupMatchesPivotWeek1900FixtureThroughTheAbi) {
   for (const auto& variant : variants) {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create(&wb.handle), 0) << variant.name;
+    ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
     std::size_t pivot_idx = 0;
     ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, variant.start_serial, &pivot_idx), 0)
         << variant.name << ": " << fm_last_error_message();
@@ -288,6 +291,61 @@ TEST(FormulonCApiPivot, DaysGroupMatchesPivotWeek1900FixtureThroughTheAbi) {
       EXPECT_DOUBLE_EQ(rows[i].second, (*variant.expected)[i].second) << variant.name << " row " << i;
     }
   }
+}
+
+TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "win-365-ja_JP"), 0);
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildDaysGroupedPivot(wb.handle, std::numeric_limits<double>::quiet_NaN(), &pivot_idx), 0)
+      << fm_last_error_message();
+  const double kAuto = std::numeric_limits<double>::quiet_NaN();
+
+  // Regrouping through the days group field (2) replaces it on the base.
+  ASSERT_EQ(
+      fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 2, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS,
+                                             FM_PIVOT_CALENDAR_GREGORIAN, 1, kAuto, kAuto),
+      0)
+      << fm_last_error_message();
+  std::size_t field_count = 0;
+  ASSERT_EQ(fm_workbook_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
+  EXPECT_EQ(field_count, 4U);
+  fm_pivot_field_info_t date{};
+  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &date), 0);
+  EXPECT_EQ(date.date_periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
+  EXPECT_EQ(date.date_calendar, FM_PIVOT_CALENDAR_GREGORIAN);
+  EXPECT_EQ(date.group_base_index, -1);
+  EXPECT_EQ(date.axis, -1);
+  fm_pivot_field_info_t months{};
+  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 2, &months), 0);
+  EXPECT_STREQ(months.source_name, "\xE6\x9C\x88 (Date)");  // 月 (Date)
+  EXPECT_EQ(months.group_base_index, 0);
+  EXPECT_EQ(months.date_periods, 0U);
+  EXPECT_EQ(months.axis, FM_PIVOT_AXIS_ROW);
+  const std::uint32_t* order = nullptr;
+  std::size_t order_count = 0;
+  ASSERT_EQ(fm_workbook_pivot_get_row_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
+  ASSERT_EQ(order_count, 2U);
+  EXPECT_EQ(order[0], 3U);
+  EXPECT_EQ(order[1], 2U);
+  EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "1900\xE5\xB9\xB4"));  // 1900年
+  EXPECT_TRUE(LayoutHasText(wb.handle, pivot_idx, "3\xE6\x9C\x88"));     // 3月
+
+  ASSERT_EQ(fm_workbook_pivot_field_clear_date_group(wb.handle, 0, pivot_idx, 3), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
+  EXPECT_EQ(field_count, 2U);
+  ASSERT_EQ(fm_workbook_pivot_field_at(wb.handle, 0, pivot_idx, 0, &date), 0);
+  EXPECT_EQ(date.date_periods, 0U);
+  EXPECT_EQ(date.axis, FM_PIVOT_AXIS_ROW);
+  ASSERT_EQ(fm_workbook_pivot_get_row_field_order(wb.handle, 0, pivot_idx, &order, &order_count), 0);
+  ASSERT_EQ(order_count, 1U);
+  EXPECT_EQ(order[0], 0U);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_pivot_get_cache_id(wb.handle, 0, pivot_idx, &cache_id), 0);
+  std::size_t cache_fields = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_count(wb.handle, cache_id, &cache_fields), 0);
+  EXPECT_EQ(cache_fields, 2U);
 }
 
 TEST(FormulonCApiPivot, AddItemAtBindsTheBlankItemByCacheIndex) {

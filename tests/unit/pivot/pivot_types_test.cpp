@@ -32,7 +32,6 @@ TEST(PivotTypes, EnumDefaults) {
 
   EXPECT_EQ(static_cast<std::uint8_t>(PivotLayout::Compact), 0u);
   EXPECT_EQ(static_cast<std::uint8_t>(FilterType::ValueTop10), 0u);
-  EXPECT_EQ(static_cast<std::uint8_t>(DateGrouping::Day), 0u);
   EXPECT_EQ(static_cast<std::uint8_t>(CalendarSystem::Gregorian), 0u);
 }
 
@@ -45,14 +44,6 @@ TEST(PivotTypes, PivotItemDefault) {
 TEST(PivotValueOrder, DisplayStringUsesCanonicalDoubleFormatting) {
   EXPECT_EQ(display_string(Value::number(1.5)), "1.5");
   EXPECT_EQ(display_string(Value::number(9.223372036854776e18)), "9223372036854780000");
-}
-
-TEST(PivotTypes, PivotDateGroupDefault) {
-  PivotDateGroup g;
-  EXPECT_EQ(g.granularity, DateGrouping::Year);
-  EXPECT_EQ(g.calendar, CalendarSystem::Gregorian);
-  EXPECT_FALSE(g.start_year.has_value());
-  EXPECT_FALSE(g.end_year.has_value());
 }
 
 TEST(PivotTypes, PivotFilterDefault) {
@@ -83,7 +74,8 @@ TEST(PivotTypes, PivotFieldDefault) {
   EXPECT_TRUE(f.subtotal_top);
   EXPECT_TRUE(f.subtotal_fns.empty());
   EXPECT_TRUE(f.number_format.empty());
-  EXPECT_FALSE(f.date_group.has_value());
+  EXPECT_FALSE(f.insert_blank_row);
+  EXPECT_FALSE(f.fill_down_labels);
 }
 
 TEST(PivotCache, DefaultsAndAccessors) {

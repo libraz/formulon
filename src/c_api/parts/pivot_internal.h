@@ -69,10 +69,11 @@ fm_status_t resolve_pivot_checked(const fm_workbook_t* wb, std::initializer_list
 // formula is also marked dirty so GETPIVOTDATA recomputes against the change.
 void invalidate_pivot_result(formulon::Workbook& wb, formulon::pivot::PivotTable& table);
 
-// Invalidates derived state on every pivot table (across all sheets) that
-// draws from `cache_id`. Called after any pivot-cache mutation so a
-// subsequent layout or GETPIVOTDATA recomputes against the changed cache
-// instead of returning stale memoised state. Formula cells are dirtied once
+// Re-derives the group fields of cache `cache_id` and invalidates derived
+// state on every pivot table (across all sheets) that draws from it. Called
+// after any pivot-cache mutation so a subsequent layout or GETPIVOTDATA
+// recomputes against the changed cache instead of returning stale memoised
+// state. Formula cells are dirtied once
 // when at least one matching table exists.
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id);
 
@@ -86,7 +87,6 @@ formulon::pivot::Aggregation pivot_agg_from_fm(fm_pivot_aggregation_t agg);
 formulon::pivot::SubtotalFn pivot_subtotal_from_fm(fm_pivot_aggregation_t agg);
 formulon::pivot::ShowValuesAs pivot_show_as_from_fm(fm_pivot_show_as_t show_as);
 formulon::pivot::FilterType pivot_filter_type_from_fm(fm_pivot_filter_type_t t);
-formulon::pivot::DateGrouping pivot_date_grouping_from_fm(fm_pivot_date_grouping_t g);
 formulon::pivot::CalendarSystem pivot_calendar_from_fm(fm_pivot_calendar_t c);
 
 // Engine axis to `fm_pivot_axis_t`; `nullopt` for `PivotAxis::None`.

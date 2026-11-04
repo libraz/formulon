@@ -3,6 +3,7 @@
 // read-back). Shares helpers with `pivot_table.cpp` via `pivot_internal.h`.
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -13,12 +14,11 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
-#include "pivot/date_serial.h"
+#include "pivot/field_grouping.h"
 #include "pivot/field_lookup.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_table.h"
 #include "utils/error.h"
-#include "utils/number_text.h"
 
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
@@ -26,19 +26,18 @@ using formulon::c_api::parts::check_num_fmt_id_text;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
+using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalidate_pivot_result;
 using formulon::c_api::parts::pivot_axis_from_fm;
 using formulon::c_api::parts::pivot_axis_to_fm;
 using formulon::c_api::parts::pivot_calendar_from_fm;
 using formulon::c_api::parts::pivot_count;
-using formulon::c_api::parts::pivot_date_grouping_from_fm;
 using formulon::c_api::parts::pivot_subtotal_from_fm;
 using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_checked;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::validate;
-using formulon::pivot::is_valid_date_serial;
 
 namespace {
 
@@ -452,71 +451,34 @@ extern "C" fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t*
                             [](formulon::pivot::PivotField& field) { field.subtotal_fns.clear(); });
 }
 
-extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(
-    fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index, std::size_t field_idx,
-    std::int32_t granularity, std::int32_t calendar, std::int32_t start_year_or_neg1, std::int32_t end_year_or_neg1,
-    std::uint32_t interval_days, double start_serial_or_neg1, double end_serial_or_neg1) {
+extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, std::size_t sheet_index,
+                                                              std::size_t pivot_index, std::size_t field_idx,
+                                                              std::uint32_t periods_mask, std::int32_t calendar,
+                                                              std::uint32_t interval_days, double start_or_nan,
+                                                              double end_or_nan) {
   clear_last_error();
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_field_set_date_group: wb is NULL");
   }
-  fm_status_t enum_status = check_enum_domain(granularity, 7, "fm_workbook_pivot_field_set_date_group", "granularity");
-  if (enum_status != 0) {
-    return enum_status;
+  if (fm_status_t rc = check_enum_domain(calendar, 1, "fm_workbook_pivot_field_set_date_group", "calendar"); rc != 0) {
+    return rc;
   }
-  enum_status = check_enum_domain(calendar, 1, "fm_workbook_pivot_field_set_date_group", "calendar");
-  if (enum_status != 0) {
-    return enum_status;
-  }
-  const bool has_start = start_serial_or_neg1 != -1.0;
-  const bool has_end = end_serial_or_neg1 != -1.0;
-  if (granularity == FM_PIVOT_DATE_DAYS) {
-    if (interval_days == 0) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "interval_days must be non-zero",
-                               "fm_workbook_pivot_field_set_date_group: interval_days=0");
-    }
-    if (has_start && has_end && start_serial_or_neg1 > end_serial_or_neg1) {
-      return set_binding_error(
-          formulon::FormulonErrorCode::kInvalidArgument, "start_serial_or_neg1 must not exceed end_serial_or_neg1",
-          "fm_workbook_pivot_field_set_date_group: start=" + formulon::fixed_string(start_serial_or_neg1, 6) +
-              " end=" + formulon::fixed_string(end_serial_or_neg1, 6));
-    }
-    if ((has_start && !is_valid_date_serial(start_serial_or_neg1, wb->workbook().date1904())) ||
-        (has_end && !is_valid_date_serial(end_serial_or_neg1, wb->workbook().date1904()))) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "date-group serial bounds must be finite dates in the supported calendar",
-                               "fm_workbook_pivot_field_set_date_group: invalid serial bound");
-    }
-  }
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_set_date_group",
-                            [=](formulon::pivot::PivotField& field) {
-                              formulon::pivot::PivotDateGroup grp;
-                              grp.granularity =
-                                  pivot_date_grouping_from_fm(static_cast<fm_pivot_date_grouping_t>(granularity));
-                              grp.calendar = pivot_calendar_from_fm(static_cast<fm_pivot_calendar_t>(calendar));
-                              if (start_year_or_neg1 != -1) {
-                                grp.start_year = start_year_or_neg1;
-                              }
-                              if (end_year_or_neg1 != -1) {
-                                grp.end_year = end_year_or_neg1;
-                              }
-                              grp.interval_days = interval_days;
-                              if (has_start) {
-                                grp.start_serial = start_serial_or_neg1;
-                              }
-                              if (has_end) {
-                                grp.end_serial = end_serial_or_neg1;
-                              }
-                              field.date_group = std::move(grp);
-                            });
+  const auto bound = [](double serial) { return std::isnan(serial) ? std::nullopt : std::optional<double>(serial); };
+  return finish_status(
+      formulon::pivot::set_date_group(wb->workbook(), sheet_index, pivot_index, field_idx, periods_mask,
+                                      pivot_calendar_from_fm(static_cast<fm_pivot_calendar_t>(calendar)), interval_days,
+                                      bound(start_or_nan), bound(end_or_nan)));
 }
 
 extern "C" fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, std::size_t sheet_index,
                                                                 std::size_t pivot_index, std::size_t field_idx) {
   clear_last_error();
-  return mutate_pivot_field(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_clear_date_group",
-                            [](formulon::pivot::PivotField& field) { field.date_group.reset(); });
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_clear_date_group: wb is NULL");
+  }
+  return finish_status(formulon::pivot::clear_date_group(wb->workbook(), sheet_index, pivot_index, field_idx));
 }
 
 extern "C" fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, std::size_t sheet_index,
@@ -570,20 +532,17 @@ extern "C" fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, std::
                       : field->sort.ascending ? FM_PIVOT_SORT_ASCENDING
                                               : FM_PIVOT_SORT_DESCENDING;
   result.sort_by_field = field->sort.by_field.c_str();
-  result.date_start_year = -1;
-  result.date_end_year = -1;
-  result.date_start_serial = -1.0;
-  result.date_end_serial = -1.0;
-  if (field->date_group.has_value()) {
-    const formulon::pivot::PivotDateGroup& group = *field->date_group;
-    result.has_date_group = 1;
-    result.date_granularity = static_cast<std::int32_t>(group.granularity);
-    result.date_calendar = static_cast<std::int32_t>(group.calendar);
-    result.date_start_year = group.start_year.value_or(-1);
-    result.date_end_year = group.end_year.value_or(-1);
-    result.date_interval_days = group.interval_days;
-    result.date_start_serial = group.start_serial.value_or(-1.0);
-    result.date_end_serial = group.end_serial.value_or(-1.0);
+  result.group_base_index = -1;
+  if (result.cache_field_index >= 0) {
+    const bool date1904 = wb->workbook().date1904();
+    const std::size_t base = formulon::pivot::group_base_index(*cache, field_idx);
+    if (base != field_idx) {
+      result.group_base_index = static_cast<std::int32_t>(base);
+    } else {
+      result.date_periods = formulon::pivot::date_group_periods(*cache, field_idx, date1904);
+      result.date_calendar =
+          static_cast<std::int32_t>(formulon::pivot::date_group_calendar(*cache, field_idx, date1904));
+    }
   }
   // Custom functions replace the automatic subtotal, as the writer and the
   // layout treat them, so the flag reads the effective state.
@@ -591,6 +550,8 @@ extern "C" fm_status_t fm_workbook_pivot_field_at(const fm_workbook_t* wb, std::
   for (const formulon::pivot::SubtotalFn fn : field->subtotal_fns) {
     result.subtotal_fns |= 1U << static_cast<unsigned>(fn);
   }
+  result.insert_blank_row = field->insert_blank_row ? 1 : 0;
+  result.fill_down_labels = field->fill_down_labels ? 1 : 0;
   *out = result;
   return 0;
 }

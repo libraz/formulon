@@ -4,8 +4,8 @@
 //   * `eval/text_format/number_format_render.cpp` — TEXT() format codes
 //     `g` / `gg` / `ggg` and the era-year computation embedded in those
 //     pipelines.
-//   * `pivot/pivot_evaluator.cpp` (planned) — date grouping with
-//     `CalendarSystem::Japanese`.
+//   * `pivot/field_grouping.cpp` — era-year group items of a date field
+//     grouped with `CalendarSystem::Japanese`.
 //
 // The boundary anchors are the Mac Excel 365 ja-JP oracle values; do not
 // adjust without re-verifying against the oracle. The complementary
