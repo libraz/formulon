@@ -121,6 +121,22 @@ std::vector<ProtectedRange> read_protected_ranges(const WorksheetRawExtensions& 
   return out;
 }
 
+void append_password_hash_attrs(std::string& out, const std::string& algorithm_name, const std::string& hash_value,
+                                const std::string& salt_value, std::uint32_t spin_count) {
+  if (!algorithm_name.empty()) {
+    append_xml_attr(out, "algorithmName", algorithm_name);
+  }
+  if (!hash_value.empty()) {
+    append_xml_attr(out, "hashValue", hash_value);
+  }
+  if (!salt_value.empty()) {
+    append_xml_attr(out, "saltValue", salt_value);
+  }
+  if (spin_count != 0U) {
+    append_xml_attr_uint(out, "spinCount", spin_count);
+  }
+}
+
 void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<ProtectedRange>& ranges) {
   // Child elements of the existing ranges, by range name, re-emitted with the range.
   std::unordered_map<std::string, std::string> kept_children;
@@ -158,18 +174,7 @@ void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<
       append_xml_attr(xml, "securityDescriptor", range.security_descriptor);
     }
     append_xml_attr(xml, "name", range.name);
-    if (!range.algorithm_name.empty()) {
-      append_xml_attr(xml, "algorithmName", range.algorithm_name);
-    }
-    if (!range.hash_value.empty()) {
-      append_xml_attr(xml, "hashValue", range.hash_value);
-    }
-    if (!range.salt_value.empty()) {
-      append_xml_attr(xml, "saltValue", range.salt_value);
-    }
-    if (range.spin_count != 0U) {
-      append_xml_attr_uint(xml, "spinCount", range.spin_count);
-    }
+    append_password_hash_attrs(xml, range.algorithm_name, range.hash_value, range.salt_value, range.spin_count);
     if (const auto it = kept_children.find(range.name); it != kept_children.end()) {
       xml.append(">").append(it->second).append("</protectedRange>");
     } else {

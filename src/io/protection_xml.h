@@ -5,6 +5,7 @@
 #ifndef FORMULON_IO_PROTECTION_XML_H_
 #define FORMULON_IO_PROTECTION_XML_H_
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,6 +44,11 @@ inline constexpr SheetProtectionFlag kSheetProtectionFlags[] = {
     {"pivotTables", &SheetProtection::pivot_tables, true},
     {"selectUnlockedCells", &SheetProtection::select_unlocked_cells, false},
 };
+
+/// Appends the `algorithmName` / `hashValue` / `saltValue` / `spinCount`
+/// attributes of a modern password hash, each only when set.
+void append_password_hash_attrs(std::string& out, const std::string& algorithm_name, const std::string& hash_value,
+                                const std::string& salt_value, std::uint32_t spin_count);
 
 /// Decodes a `<workbookProtection>` element; empty or unparseable XML yields
 /// an all-default record.

@@ -420,18 +420,7 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
   std::string out;
   out.reserve(256);
   out.append("<sheetProtection");
-  if (!p.algorithm_name.empty()) {
-    append_xml_attr(out, "algorithmName", p.algorithm_name);
-  }
-  if (!p.hash_value.empty()) {
-    append_xml_attr(out, "hashValue", p.hash_value);
-  }
-  if (!p.salt_value.empty()) {
-    append_xml_attr(out, "saltValue", p.salt_value);
-  }
-  if (p.spin_count != 0U) {
-    append_xml_attr_uint(out, "spinCount", p.spin_count);
-  }
+  append_password_hash_attrs(out, p.algorithm_name, p.hash_value, p.salt_value, p.spin_count);
   if (!p.legacy_password.empty()) {
     append_xml_attr(out, "password", p.legacy_password);
   }
