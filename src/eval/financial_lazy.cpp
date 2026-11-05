@@ -592,6 +592,17 @@ double xirr_solve(const std::vector<double>& values, const std::vector<double>& 
   return std::numeric_limits<double>::quiet_NaN();
 }
 
+// Returns the first required-argument error among args [begin, end), else blank.
+Value first_omitted_arg_error(const parser::AstNode& call, std::uint32_t begin, std::uint32_t end) {
+  for (std::uint32_t i = begin; i < end; ++i) {
+    const Value omitted = atp_arg_error(call.as_call_arg(i), Value::blank(), /*required=*/true);
+    if (omitted.is_error()) {
+      return omitted;
+    }
+  }
+  return Value::blank();
+}
+
 }  // namespace
 
 Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -601,11 +612,8 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Value);
   }
 
-  for (std::uint32_t i = 0; i < 2U; ++i) {
-    const Value omitted = atp_arg_error(call.as_call_arg(i), Value::blank(), /*required=*/true);
-    if (omitted.is_error()) {
-      return omitted;
-    }
+  if (const Value omitted = first_omitted_arg_error(call, 0U, 2U); omitted.is_error()) {
+    return omitted;
   }
   std::vector<double> values;
   std::vector<double> dates;
@@ -665,11 +673,8 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Num);
   }
 
-  for (std::uint32_t i = 1; i < 3U; ++i) {
-    const Value omitted = atp_arg_error(call.as_call_arg(i), Value::blank(), /*required=*/true);
-    if (omitted.is_error()) {
-      return omitted;
-    }
+  if (const Value omitted = first_omitted_arg_error(call, 1U, 3U); omitted.is_error()) {
+    return omitted;
   }
   std::vector<double> values;
   std::vector<double> dates;
