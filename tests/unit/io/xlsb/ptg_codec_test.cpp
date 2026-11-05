@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -342,6 +343,48 @@ TEST(XlsbPtgCodec, RelativeOffsetsWrapAroundTheGrid) {
     Arena dec_arena;
     auto decoded = decode_ptgs(ByteSpan{c.rgce.data(), c.rgce.size()}, {}, dec_arena, {}, {}, {}, {}, -1, c.base);
     ASSERT_TRUE(static_cast<bool>(decoded)) << c.formula;
+    EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
+  }
+}
+// A relative 3-D reference in a base-cell context is stored as offsets from
+// the base, like PtgRefN / PtgAreaN; without a base it keeps absolute fields.
+TEST(XlsbPtgCodec, Relative3dReferencesAgainstABaseCellMatchExcelBytes) {
+  const std::vector<std::string> sheets = {"Sheet1"};
+  struct Case {
+    const char* formula;
+    std::optional<PtgBaseCell> base;
+    std::vector<std::uint8_t> rgce;
+  };
+  const Case cases[] = {
+      // sqref "G1:G3": whole column A is 6 columns left of the base.
+      {"SUM(Sheet1!A:A)>0", PtgBaseCell{0U, 6U}, {0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF,
+                                                  0xFF, 0x0F, 0x00, 0xFA, 0x7F, 0xFA, 0x7F, 0x19,
+                                                  0x10, 0x00, 0x00, 0x1E, 0x00, 0x00, 0x0D}},
+      // sqref "D4": B2 sits two rows and two columns before the base.
+      {"Sheet1!B2", PtgBaseCell{3U, 3U}, {0x5A, 0x00, 0x00, 0xFE, 0xFF, 0x0F, 0x00, 0xFE, 0xFF}},
+      // No base cell: absolute fields.
+      {"Sheet1!B2", std::nullopt, {0x5A, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0xC0}},
+  };
+  for (const Case& c : cases) {
+    Arena arena;
+    parser::Parser p(c.formula, arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << c.formula;
+    SheetRangeTable ranges;
+    std::unordered_set<std::uint64_t> seen;
+    collect_ptg_sheet_ranges(*root, sheets, ranges, seen);
+    auto encoded = encode_ptgs(*root, sheets, ranges, {}, PtgRootClass::kValue, c.base);
+    ASSERT_TRUE(static_cast<bool>(encoded)) << c.formula << " | " << (encoded ? "" : encoded.error().message);
+    EXPECT_EQ(encoded.value().rgce, c.rgce) << c.formula;
+
+    std::vector<XlsbSheetRange> decode_ranges;
+    for (const XtiEntry& entry : ranges.xti) {
+      decode_ranges.push_back(XlsbSheetRange{entry.first, entry.last});
+    }
+    Arena dec_arena;
+    auto decoded =
+        decode_ptgs(ByteSpan{c.rgce.data(), c.rgce.size()}, {}, dec_arena, sheets, {}, decode_ranges, {}, -1, c.base);
+    ASSERT_TRUE(static_cast<bool>(decoded)) << c.formula << " | " << (decoded ? "" : decoded.error().message);
     EXPECT_EQ(parser::format_formula(*decoded.value()), c.formula);
   }
 }

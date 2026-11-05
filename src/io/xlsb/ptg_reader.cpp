@@ -263,18 +263,26 @@ Expected<void, Error> check_area_domain(const parser::Reference& first, const pa
   return {};
 }
 
-// `read_loc` followed by `check_ref_domain`.
-Expected<parser::Reference, Error> read_checked_loc(ByteSpan& cursor, std::string_view sheet, const char* ptg_name) {
+// `read_loc`, resolved against `base` when given, followed by `check_ref_domain`.
+Expected<parser::Reference, Error> read_checked_loc(ByteSpan& cursor, std::string_view sheet, const char* ptg_name,
+                                                    std::optional<PtgBaseCell> base = std::nullopt) {
   ASSIGN_OR_RETURN(auto ref, read_loc(cursor, sheet));
+  if (base) {
+    resolve_relative(ref, *base);
+  }
   RETURN_IF_ERROR(check_ref_domain(ref, ptg_name));
   return ref;
 }
 
-// `read_area` followed by `check_area_domain`.
-Expected<std::pair<parser::Reference, parser::Reference>, Error> read_checked_area(ByteSpan& cursor,
-                                                                                   std::string_view sheet_first,
-                                                                                   const char* ptg_name) {
+// `read_area`, resolved against `base` when given, followed by `check_area_domain`.
+Expected<std::pair<parser::Reference, parser::Reference>, Error> read_checked_area(
+    ByteSpan& cursor, std::string_view sheet_first, const char* ptg_name,
+    std::optional<PtgBaseCell> base = std::nullopt) {
   ASSIGN_OR_RETURN(auto area, read_area(cursor, sheet_first, {}));
+  if (base) {
+    resolve_relative(area.first, *base);
+    resolve_relative(area.second, *base);
+  }
   RETURN_IF_ERROR(check_area_domain(area.first, area.second, ptg_name));
   return area;
 }
@@ -1008,7 +1016,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           break;
         }
         if (ixti_is_dead_sheet(ixti)) {
-          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d"));
+          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d", base));
           parser::AstNode* n = parser::make_dead_sheet_ref_error(arena, &loc, nullptr);
           RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d deleted sheet"));
           break;
@@ -1016,12 +1024,12 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         std::string_view begin_sheet;
         std::string_view end_sheet;
         if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
-          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d"));
+          ASSIGN_OR_RETURN(auto loc, read_checked_loc(cursor, {}, "PtgRef3d", base));
           parser::AstNode* n = parser::make_ref3d(arena, arena.intern(begin_sheet), arena.intern(end_sheet), loc);
           RETURN_IF_ERROR(push_node(stack, n, "PtgRef3d range"));
           break;
         }
-        ASSIGN_OR_RETURN(parser::Reference ref, read_checked_loc(cursor, sheet_for_ixti(ixti), "PtgRef3d"));
+        ASSIGN_OR_RETURN(parser::Reference ref, read_checked_loc(cursor, sheet_for_ixti(ixti), "PtgRef3d", base));
         ref.sheet = arena.intern(ref.sheet);
         ref.sheet_quoted = parser::local_sheet_needs_quoting_a1(ref.sheet);
         parser::AstNode* n = parser::make_ref(arena, ref);
@@ -1050,7 +1058,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           break;
         }
         if (ixti_is_dead_sheet(ixti)) {
-          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d"));
+          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d", base));
           parser::AstNode* n = make_dead_sheet_area(arena, area.first, area.second);
           RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d deleted sheet"));
           break;
@@ -1058,14 +1066,14 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         std::string_view begin_sheet;
         std::string_view end_sheet;
         if (sheet_range_for_ixti(ixti, begin_sheet, end_sheet)) {
-          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d"));
+          ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, {}, "PtgArea3d", base));
           parser::AstNode* n = parser::make_ref3d_range(arena, arena.intern(begin_sheet), arena.intern(end_sheet),
                                                         area.first, area.second);
           RETURN_IF_ERROR(push_node(stack, n, "PtgArea3d range"));
           break;
         }
         const std::string_view sheet = sheet_for_ixti(ixti);
-        ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, sheet, "PtgArea3d"));
+        ASSIGN_OR_RETURN(auto area, read_checked_area(cursor, sheet, "PtgArea3d", base));
         parser::Reference first = area.first;
         first.sheet = arena.intern(first.sheet);
         first.sheet_quoted = parser::local_sheet_needs_quoting_a1(first.sheet);

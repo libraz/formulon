@@ -1061,7 +1061,7 @@ class Encoder {
   void emit_ref3d_at(std::uint16_t ixti, const parser::Reference& ref, std::uint8_t cls) {
     emit_u8(out_, ClassedPtg(kPtgRef3d, cls));  // PtgRef3d
     emit_u16(out_, ixti);
-    emit_loc(out_, ref);
+    emit_loc(out_, base_ ? OffsetFrom(ref, *base_) : ref);
   }
 
   /// `PtgArea3d` of the rectangle `first`:`last` through the XTI `ixti`.
@@ -1069,7 +1069,11 @@ class Encoder {
                       std::uint8_t cls) {
     emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
     emit_u16(out_, ixti);
-    emit_area(out_, first, last);
+    if (base_) {
+      emit_area(out_, OffsetFrom(first, *base_), OffsetFrom(last, *base_));
+    } else {
+      emit_area(out_, first, last);
+    }
   }
 
   /// A deleted sheet's address (`#REF!A1`, `#REF!A1:B2`, `#REF!A:A`): the
@@ -1126,12 +1130,18 @@ class Encoder {
     if (node.as_ref3d_is_range()) {
       emit_u8(out_, promote ? ValueClassPtg(kPtgArea3d) : kPtgArea3d);  // PtgArea3d
       emit_u16(out_, ixti);
-      emit_area(out_, node.as_ref3d_cell(), node.as_ref3d_cell_end());
+      const parser::Reference first = node.as_ref3d_cell();
+      const parser::Reference last = node.as_ref3d_cell_end();
+      if (base_) {
+        emit_area(out_, OffsetFrom(first, *base_), OffsetFrom(last, *base_));
+      } else {
+        emit_area(out_, first, last);
+      }
       return Expected<void, Error>::Ok();
     }
     emit_u8(out_, promote ? ValueClassPtg(kPtgRef3d) : kPtgRef3d);  // PtgRef3d
     emit_u16(out_, ixti);
-    emit_loc(out_, node.as_ref3d_cell());
+    emit_loc(out_, base_ ? OffsetFrom(node.as_ref3d_cell(), *base_) : node.as_ref3d_cell());
     return Expected<void, Error>::Ok();
   }
 
@@ -1437,7 +1447,7 @@ class Encoder {
         lead();
         emit_u8(out_, ClassedPtg(kPtgArea3d, cls));  // PtgArea3d
         emit_u16(out_, static_cast<std::uint16_t>(ixti));
-        emit_area(out_, a, b);
+        emit_area(out_, base_ ? OffsetFrom(a, *base_) : a, base_ ? OffsetFrom(b, *base_) : b);
         return Expected<void, Error>::Ok();
       }
     }
