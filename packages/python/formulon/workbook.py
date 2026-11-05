@@ -142,6 +142,10 @@ __all__ = [
     "GeometryMode",
     "Hyperlink",
     "IterativeSettings",
+    "PivotGrandTotals",
+    "SheetPrintTitles",
+    "SheetSelection",
+    "TableStyleDefaults",
     "LogLevel",
     "IconSet",
     "MarginsPt",
@@ -2194,12 +2198,46 @@ class RowLayout:
     collapsed: bool = False
 
 
-class IterativeSettings(NamedTuple):
+@dataclass(frozen=True)
+class IterativeSettings:
     """Iterative-calculation settings read back by ``get_iterative``."""
 
     enabled: bool
     max_iterations: int
     max_change: float
+
+
+@dataclass(frozen=True)
+class SheetSelection:
+    """The active pane's selection read back by ``get_selection``."""
+
+    active_row: int
+    active_col: int
+    ranges: List[CellRect]
+
+
+@dataclass(frozen=True)
+class SheetPrintTitles:
+    """Print titles read back by ``get_print_titles``, as ``"1:2"`` / ``"A:A"``; ``""`` when unset."""
+
+    repeat_rows: str
+    repeat_cols: str
+
+
+@dataclass(frozen=True)
+class TableStyleDefaults:
+    """Default table and pivot style names read back by ``get_table_style_defaults``; ``""`` when unset."""
+
+    table_style: str
+    pivot_style: str
+
+
+@dataclass(frozen=True)
+class PivotGrandTotals:
+    """Grand-total flags read back by ``get_pivot_grand_totals``."""
+
+    rows: bool
+    cols: bool
 
 
 @dataclass(frozen=True)
@@ -3095,7 +3133,8 @@ def _pack_border_record(ptr: int, sides: Dict[str, object]) -> None:
         _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.get("color") or ColorSpec())
 
 
-class StyleBatchIndices(NamedTuple):
+@dataclass(frozen=True)
+class StyleBatchIndices:
     """Indices assigned by :meth:`Workbook.add_batch`, per style table.
 
     Each list is positionally aligned with the request list it came from
@@ -3593,6 +3632,15 @@ def _read_cstr_out(fn, *args, default_op: str = "text") -> str:
         out = scope.out_ptr()
         _check(fn(*args, out), getattr(fn, "__name__", default_op))
         return LIB.read_cstr(LIB.read_u32(out))
+
+
+def _read_optional_cstr_out(fn, *args, default_op: str = "text") -> Optional[str]:
+    """Call a ``(..., out_present*, out_cstr*)`` ABI function; ``None`` when nothing is present."""
+    with _ArgScope() as scope:
+        present = scope.out_ptr()
+        out = scope.out_ptr()
+        _check(fn(*args, present, out), getattr(fn, "__name__", default_op))
+        return LIB.read_cstr(LIB.read_u32(out)) if LIB.read_u32(present) else None
 
 
 _SHAPE_FIELDS = {
@@ -6408,10 +6456,10 @@ class Workbook:
             return LIB.read_u32(out)
 
     # -- Lambda text -------------------------------------------------------
-    def get_lambda_text(self, sheet: int, row: int, col: int) -> str:
-        """Render the lambda cached at ``(sheet, row, col)`` as text."""
+    def get_lambda_text(self, sheet: int, row: int, col: int) -> Optional[str]:
+        """Render the lambda cached at ``(sheet, row, col)`` as text; ``None`` when the cell holds no lambda."""
         h = self._require()
-        return _read_cstr_out(
+        return _read_optional_cstr_out(
             LIB.fm_sheet_get_lambda_text,
             h,
             _uint(sheet, "sheet_index"),
@@ -6568,11 +6616,14 @@ class Workbook:
         """Return the comment at ``(sheet, row, col)`` or ``None`` if absent."""
         h = self._require()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             ptr = scope.struct(S.COMMENT)
-            status = LIB.fm_sheet_get_comment(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr)
-            if status == _STATUS_NOT_FOUND:
+            _check(
+                LIB.fm_sheet_get_comment(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), present, ptr),
+                "fm_sheet_get_comment",
+            )
+            if not LIB.read_u32(present):
                 return None
-            _check(status, "fm_sheet_get_comment")
             d = S.COMMENT.unpack(LIB, ptr)
             return Comment(
                 author=LIB.read_cstr(d["author"]),
@@ -7440,19 +7491,25 @@ class Workbook:
             _drawing_object_from,
         )
 
-    def get_image(self, sheet: int, object_id: int) -> bytes:
-        """Return the bytes of the picture ``object_id`` (copied out of WASM memory)."""
+    def get_image(self, sheet: int, object_id: int) -> Optional[bytes]:
+        """Return the bytes of the picture ``object_id`` (copied out of WASM memory).
+
+        ``None`` when the sheet has no such picture with a present media part.
+        """
         h = self._require()
         with _ArgScope() as scope:
+            present = scope.out_ptr()
             bytes_ptr = scope.out_ptr()
             len_ptr = scope.out_ptr()
             info = scope.struct(S.IMAGE_INFO)
             _check(
                 LIB.fm_sheet_get_image(
-                    h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), bytes_ptr, len_ptr, info
+                    h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), present, bytes_ptr, len_ptr, info
                 ),
                 "fm_sheet_get_image",
             )
+            if not LIB.read_u32(present):
+                return None
             return LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr))
 
     def add_image(
@@ -8042,14 +8099,23 @@ class Workbook:
             "fm_sheet_remove_sparkline_group",
         )
 
-    def get_chart(self, sheet: int, object_id: int) -> ChartInfo:
+    def get_chart(self, sheet: int, object_id: int) -> Optional[ChartInfo]:
         """Return the typed view of the chart ``object_id``: plots, series, axes, legend and source.
 
-        Raises :class:`FormulonError` when the sheet has no chart with that id
-        or the chart part does not parse.
+        Returns ``None`` when the sheet has no chart with that id; raises
+        :class:`FormulonError` when the chart part does not parse.
         """
         h = self._require()
-        chart = _read_count(LIB.fm_sheet_get_chart, h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"))
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            out = scope.out_ptr()
+            _check(
+                LIB.fm_sheet_get_chart(h, _uint(sheet, "sheet_index"), _uint(object_id, "object_id"), present, out),
+                "fm_sheet_get_chart",
+            )
+            if not LIB.read_u32(present):
+                return None
+            chart = LIB.read_u32(out)
         try:
             return _read_chart(chart)
         finally:
@@ -8774,8 +8840,8 @@ class Workbook:
             "fm_sheet_set_split",
         )
 
-    def get_selection(self, sheet: int) -> Tuple[Tuple[int, int], List[CellRect]]:
-        """Return ``((active_row, active_col), ranges)`` of the active pane's selection.
+    def get_selection(self, sheet: int) -> SheetSelection:
+        """Return the active cell and ranges of the active pane's selection.
 
         The selection reads as it is saved: a pane that stores none reports A1
         with the single range A1 (the pane's top-left cell for a frozen or split
@@ -8803,7 +8869,7 @@ class Workbook:
             )
             size = S.CELL_RECT.size
             ranges = [_decode_cell_rect_at(array_ptr + i * size) for i in range(total)]
-            return (LIB.read_u32(row_ptr), LIB.read_u32(col_ptr)), ranges
+            return SheetSelection(active_row=LIB.read_u32(row_ptr), active_col=LIB.read_u32(col_ptr), ranges=ranges)
 
     def set_selection(self, sheet: int, active_row: int, active_col: int, ranges: Sequence[CellRect] = ()) -> None:
         """Replace the active pane's selection; no ``ranges`` selects the active cell alone."""
@@ -9007,8 +9073,8 @@ class Workbook:
                 "fm_sheet_set_print_area",
             )
 
-    def get_print_titles(self, sheet: int) -> tuple[str, str]:
-        """Return ``(repeat_rows, repeat_cols)`` as ``"1:2"`` / ``"A:A"``.
+    def get_print_titles(self, sheet: int) -> SheetPrintTitles:
+        """Return the repeated rows and columns as ``"1:2"`` / ``"A:A"``.
 
         Either is ``""`` when that axis is unset.
         """
@@ -9020,7 +9086,10 @@ class Workbook:
                 LIB.fm_sheet_get_print_titles(h, _uint(sheet, "sheet_index"), rows_out, cols_out),
                 "fm_sheet_get_print_titles",
             )
-            return (LIB.read_cstr(LIB.read_u32(rows_out)), LIB.read_cstr(LIB.read_u32(cols_out)))
+            return SheetPrintTitles(
+                repeat_rows=LIB.read_cstr(LIB.read_u32(rows_out)),
+                repeat_cols=LIB.read_cstr(LIB.read_u32(cols_out)),
+            )
 
     def set_print_titles(self, sheet: int, repeat_rows: str = "", repeat_cols: str = "") -> None:
         """Write ``_xlnm.Print_Titles`` from a row span and a column span.
@@ -10185,10 +10254,10 @@ class Workbook:
                 protection_xml=LIB.read_cstr(d["protection_xml"]),
             )
 
-    def get_num_fmt_string(self, num_fmt_id: int) -> str:
-        """Return the format code registered for ``num_fmt_id``."""
+    def get_num_fmt_string(self, num_fmt_id: int) -> Optional[str]:
+        """Return the effective format code for ``num_fmt_id``; ``None`` when no format maps to it."""
         h = self._require()
-        return _read_cstr_out(
+        return _read_optional_cstr_out(
             LIB.fm_workbook_get_num_fmt_string,
             h,
             _uint(num_fmt_id, "num_fmt_id", 16),
@@ -10570,8 +10639,8 @@ class Workbook:
             name_ptr = scope.cstr(name)
             _check(LIB.fm_workbook_remove_table_style(h, name_ptr), "fm_workbook_remove_table_style")
 
-    def get_table_style_defaults(self) -> Tuple[str, str]:
-        """Return the default ``(table_style, pivot_style)`` names; empty when unset."""
+    def get_table_style_defaults(self) -> TableStyleDefaults:
+        """Return the default table and pivot style names; empty when unset."""
         h = self._require()
         with _ArgScope() as scope:
             table_ptr = scope.out_ptr()
@@ -10580,7 +10649,10 @@ class Workbook:
                 LIB.fm_workbook_get_table_style_defaults(h, table_ptr, pivot_ptr),
                 "fm_workbook_get_table_style_defaults",
             )
-            return LIB.read_cstr(LIB.read_u32(table_ptr)), LIB.read_cstr(LIB.read_u32(pivot_ptr))
+            return TableStyleDefaults(
+                table_style=LIB.read_cstr(LIB.read_u32(table_ptr)),
+                pivot_style=LIB.read_cstr(LIB.read_u32(pivot_ptr)),
+            )
 
     def set_table_style_defaults(self, table_style: Optional[str] = None, pivot_style: Optional[str] = None) -> None:
         """Set the default style names; ``None`` keeps one, ``""`` removes it."""
@@ -11468,8 +11540,8 @@ class Workbook:
             LIB.fm_sheet_get_pivot_name, h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")
         )
 
-    def get_pivot_grand_totals(self, sheet: int, pivot_index: int) -> Tuple[bool, bool]:
-        """Return ``(rows, cols)``, the flags :meth:`set_pivot_grand_totals` writes."""
+    def get_pivot_grand_totals(self, sheet: int, pivot_index: int) -> PivotGrandTotals:
+        """Return the row and column flags :meth:`set_pivot_grand_totals` writes."""
         h = self._require()
         with _ArgScope() as scope:
             rows = scope.out_ptr()
@@ -11480,7 +11552,7 @@ class Workbook:
                 ),
                 "fm_sheet_get_pivot_grand_totals",
             )
-            return LIB.read_i32(rows) != 0, LIB.read_i32(cols) != 0
+            return PivotGrandTotals(rows=LIB.read_i32(rows) != 0, cols=LIB.read_i32(cols) != 0)
 
     def get_pivot_style_info(self, sheet: int, pivot_index: int) -> PivotStyleInfo:
         """Return the table style :meth:`set_pivot_style_info` writes."""
@@ -12697,9 +12769,10 @@ def get_function_metadata(name: str) -> Optional[FunctionMetadata]:
     """
     with _ArgScope() as scope:
         name_ptr = scope.cstr(name)
+        present = scope.out_ptr()
         ptr = scope.struct(S.FUNCTION_METADATA)
-        status = LIB.fm_get_function_metadata(name_ptr, ptr)
-        if status != 0:
+        _check(LIB.fm_get_function_metadata(name_ptr, present, ptr), "fm_get_function_metadata")
+        if not LIB.read_u32(present):
             return None
         d = S.FUNCTION_METADATA.unpack(LIB, ptr)
         sig = LIB.read_cstr(d["signature_template"]) if d["signature_template"] else None

@@ -55,7 +55,7 @@ WASM_ONLY_METHODS = {
     "getAutoFilterXml",
     "setAutoFilterXml",
 }
-NODE_ONLY_METHODS = {"dispose", "getMemoryUsage"}
+NODE_ONLY_METHODS = {"getMemoryUsage"}
 
 # Pure-JS free functions declared in packages/npm-native/index.d.ts that are
 # intentionally NOT backed by a native `exports.Set(...)` registration -- they

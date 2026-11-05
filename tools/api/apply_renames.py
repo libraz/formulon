@@ -29,7 +29,8 @@ Modes:
   (default)             rewrite the tree in place
   <dir> ...             rewrite those directories instead (a downstream checkout)
   --check               exit 1 when a former name is still spelled in a rewritten form
-  --check-fields        exit 1 when a record's field set differs from HEAD
+  --check-fields        exit 1 when a record's field set differs from HEAD other than as the
+                        ledger says: a ``kind: field`` rename, a ``replaced_by`` merge, a dropped record
   --check-comment-only  exit 1 when an engine-internal file differs from HEAD outside comments
   --report-prose        list the former names still present as plain words
 """
@@ -627,19 +628,60 @@ def _c_record_fields(text: str) -> Dict[str, Set[str]]:
     return {t.name: {p.name for p in t.fields} for t in typedefs if getattr(t, "fields", None)}
 
 
-def cmd_check_fields(root: Path, renames: Renames) -> int:
+class FieldPlan(NamedTuple):
+    """The record reshapes the ledger declares on one surface, keyed by the record's former name."""
+
+    fields: Dict[str, Dict[str, str]]  # record -> {former field: current field}
+    merged: Dict[str, str]  # record -> the current name of the record it folds into
+    dropped: Set[str]
+
+
+def build_field_plan(data: dict, field: str) -> FieldPlan:
+    entries = data["entries"]
+
+    def former(entry: dict) -> Optional[str]:
+        was = entry.get("was") if isinstance(entry.get("was"), dict) else {}
+        name = was.get(field, entry.get(field))
+        return name if isinstance(name, str) else None
+
+    fields: Dict[str, Dict[str, str]] = defaultdict(dict)
+    merged: Dict[str, str] = {}
+    dropped: Set[str] = set()
+    for entry in entries.values():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("kind") == "field":
+            record = former(entries.get(entry.get("record")) or {})
+            old, new = former(entry), entry.get(field)
+            if record and old and isinstance(new, str):
+                fields[record][old] = new
+        elif entry.get("kind") in _TYPE_KINDS:
+            name = former(entry)
+            drop = entry.get("drop") if isinstance(entry.get("drop"), dict) else {}
+            target = entries.get(entry.get("replaced_by")) or {}
+            if name and drop.get(field) == name:
+                dropped.add(name)
+            elif name and isinstance(target.get(field), str):
+                merged[name] = target[field]
+    return FieldPlan(dict(fields), merged, dropped)
+
+
+def cmd_check_fields(root: Path, renames: Renames, data: dict) -> int:
     problems: List[str] = []
     dts = ["src/wasm/formulon.d.ts", "packages/npm-native/index.d.ts"]
+    js_plan, py_plan = build_field_plan(data, "js"), build_field_plan(data, "py")
     for rel in dts:
         before, after = _git_show(root, rel), read_text(root / rel)
         if before is None or after is None:
             continue
-        problems += _compare_fields(rel, _ts_record_fields(before), _ts_record_fields(after), renames.js_types)
+        problems += _compare_fields(rel, _ts_record_fields(before), _ts_record_fields(after), renames.js_types, js_plan)
     pkg = root / PY_PACKAGE_DIR
     rels = sorted(p.relative_to(root).as_posix() for p in pkg.glob("*.py"))
     before = {Path(r).name: _git_show(root, r) or "" for r in rels}
     after = {Path(r).name: read_text(root / r) or "" for r in rels}
-    problems += _compare_fields(PY_PACKAGE_DIR, _py_record_fields(before), _py_record_fields(after), renames.py_types)
+    problems += _compare_fields(
+        PY_PACKAGE_DIR, _py_record_fields(before), _py_record_fields(after), renames.py_types, py_plan
+    )
     header = "src/c_api/formulon_c.h"
     before_h, after_h = _git_show(root, header), read_text(root / header)
     if before_h is not None and after_h is not None:
@@ -652,16 +694,25 @@ def cmd_check_fields(root: Path, renames: Renames) -> int:
 
 
 def _compare_fields(
-    where: str, before: Dict[str, Set[str]], after: Dict[str, Set[str]], types: Dict[str, str]
+    where: str,
+    before: Dict[str, Set[str]],
+    after: Dict[str, Set[str]],
+    types: Dict[str, str],
+    plan: Optional[FieldPlan] = None,
 ) -> List[str]:
+    plan = plan or FieldPlan({}, {}, set())
     out = []
     for name, fields in sorted(before.items()):
-        new = types.get(name, name)
+        if name in plan.dropped:
+            continue
+        new = plan.merged.get(name, types.get(name, name))
         if new not in after:
             out.append(f"{where}: record `{name}` (now `{new}`) is gone")
             continue
-        if after[new] != fields:
-            gone, added = sorted(fields - after[new]), sorted(after[new] - fields)
+        renamed = plan.fields.get(name, {})
+        expected = {renamed.get(f, f) for f in fields}
+        if after[new] != expected:
+            gone, added = sorted(expected - after[new]), sorted(after[new] - expected)
             out.append(f"{where}: `{new}` fields changed (removed {gone}, added {added})")
     return out
 
@@ -773,12 +824,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     mode.add_argument("--report-prose", action="store_true", help="list former names left as plain words")
     parser.add_argument("--limit", type=int, default=15, help="names shown per surface by --report-prose")
     args = parser.parse_args(argv)
-    renames = build_renames(load_ledger(args.ledger))
+    data = load_ledger(args.ledger)
+    renames = build_renames(data)
     roots = [d.resolve() for d in args.dirs] or [REPO_ROOT]
     if args.check:
         return cmd_check(roots, renames)
     if args.check_fields:
-        return cmd_check_fields(roots[0], renames)
+        return cmd_check_fields(roots[0], renames, data)
     if args.check_comment_only:
         return cmd_check_comment_only(roots[0])
     if args.report_prose:

@@ -11,7 +11,7 @@ const RESOLUTION_AUTO_CONTEXT = 4;
 const ACCENT1_DEFAULT = 0xff156082;
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     fn(wb);
   } finally {
@@ -55,7 +55,7 @@ export function registerThemeStyles(Module, test) {
 
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const reloaded = Module.Workbook.load(saved.bytes);
+      const reloaded = Module.Workbook.load(saved.bytes).value;
       try {
         const t = reloaded.getThemeFonts();
         assert.equal(t.source, SOURCE_PART);
@@ -83,7 +83,7 @@ export function registerThemeStyles(Module, test) {
       const saved = wb.save();
       assert.ok(saved.status.ok);
       assert.equal(Buffer.from(saved.bytes).includes('xl/theme/theme1.xml'), false);
-      const reloaded = Module.Workbook.load(saved.bytes);
+      const reloaded = Module.Workbook.load(saved.bytes).value;
       try {
         assert.equal(reloaded.getThemeFonts().source, SOURCE_DEFAULT);
       } finally {
@@ -319,7 +319,7 @@ export function registerThemeStyles(Module, test) {
   });
 
   test('createForProfile builds the locale defaults and reports a bad id as an invalid wrapper', () => {
-    const wb = Module.Workbook.createForProfile('mac-365-ja_JP');
+    const wb = Module.Workbook.createForProfile('mac-365-ja_JP').value;
     try {
       assert.ok(wb.isValid());
       assert.equal(wb.getExcelProfileId().value, 'mac-365-ja_JP');
@@ -330,11 +330,8 @@ export function registerThemeStyles(Module, test) {
       wb.delete();
     }
     const bad = Module.Workbook.createForProfile('no-such-profile');
-    try {
-      assert.equal(bad.isValid(), false);
-    } finally {
-      bad.delete();
-    }
+    assert.equal(bad.status.ok, false);
+    assert.equal(bad.value, null);
   });
 
   test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', () => {
@@ -349,7 +346,7 @@ export function registerThemeStyles(Module, test) {
       assert.ok(wb.setThemeScriptFont(false, 'Hang', 'Test Face').ok);
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const reloaded = Module.Workbook.load(saved.bytes);
+      const reloaded = Module.Workbook.load(saved.bytes).value;
       try {
         const r = reloaded.getThemeFonts();
         assert.equal(r.minorScripts.length, 47);

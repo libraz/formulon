@@ -4,7 +4,7 @@ import { assert, getModule } from './smoke_support.mjs';
 // Builds a workbook with one pivot, ready for the filter-contract cases.
 // `dispose` is the caller's job; the WASM package uses `delete` instead.
 function makePivotWorkbook(Workbook) {
-  const wb = Workbook.createDefault();
+  const wb = Workbook.createDefault().value;
   const cacheId = wb.addPivotCache(0).index;
   // A cache with no declared source cannot be saved: Excel offers to repair
   // any package containing one, so the writer refuses rather than emit it.
@@ -86,7 +86,7 @@ test('pivot filters survive save/load', async () => {
   } finally {
     wb.dispose();
   }
-  const reloaded = mod.Workbook.load(bytes);
+  const reloaded = mod.Workbook.load(bytes).value;
   try {
     assert.equal(reloaded.getPivotCount(0).value, 1);
     // The filter is written as `<filters>` and decodes back into the list.
@@ -120,7 +120,7 @@ test('a required pivot spec string field left out of the object is rejected, not
     const fieldCountBefore = wb.getPivotFieldCount(0, pivot).value;
     const field = wb.addPivotField(0, pivot, { axis: 0 }); // no `sourceName`
     assert.equal(field.status.ok, false);
-    assert.equal(field.status.status, 7001);
+    assert.equal(field.status.code, 7001);
     assert.equal(wb.getPivotFieldCount(0, pivot).value, fieldCountBefore, 'no field must have been added');
 
     // `name` is optional: an omitted one is derived from the workbook profile.
@@ -133,7 +133,7 @@ test('a required pivot spec string field left out of the object is rejected, not
     const filterCountBefore = wb.getPivotFilterCount(0, pivot).value;
     const filter = wb.addPivotFilter(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }); // no `fieldName`
     assert.equal(filter.status.ok, false);
-    assert.equal(filter.status.status, 7001);
+    assert.equal(filter.status.code, 7001);
     assert.equal(wb.getPivotFilterCount(0, pivot).value, filterCountBefore, 'no filter must have been added');
   } finally {
     wb.dispose();
@@ -223,7 +223,7 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     // Survives a save/load.
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const reloaded = mod.Workbook.load(saved.bytes);
+    const reloaded = mod.Workbook.load(saved.bytes).value;
     try {
       assert.equal(reloaded.getPivotStyleInfo(0, 0).name, 'PivotStyleDark3');
       assert.equal(reloaded.getPivotStyleInfo(0, 0).showRowStripes, true);
@@ -297,7 +297,7 @@ test('an empty or omitted data field name is derived from the workbook profile',
 
 test('pivotFieldAdd binds by cache column name and axis -1 takes a field off the report', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const cacheId = wb.addPivotCache(0).index;
     assert.ok(wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:D3', sheet: 'Sheet1' }).ok);

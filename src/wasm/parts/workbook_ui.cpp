@@ -140,37 +140,16 @@ emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val ran
 // ---- Comments ----------------------------------------------------------
 
 emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t col) const {
-  if (handle_ == nullptr) {
-    return emscripten::val::null();
-  }
+  int32_t present = 0;
   fm_comment_t c{};
-  if (fm_sheet_get_comment(handle_, sheet, row, col, &c) != 0) {
-    return emscripten::val::null();
-  }
-  emscripten::val o = emscripten::val::object();
-  js_set_cstr_fields(o, {{"author", c.author}, {"text", c.text}});
-  return o;
-}
-
-emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val out = emscripten::val::object();
-  if (handle_ == nullptr) {
-    out.set("status", invalid_handle_status());
-    out.set("comment", emscripten::val::null());
-    return out;
-  }
-  fm_comment_t c{};
-  const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &c);
-  if (rc != 0) {
-    out.set("status", status_from_rc(rc));
-    out.set("comment", emscripten::val::null());
-    return out;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_comment(handle_, sheet, row, col, &present, &c) : kBindingInvalidHandle;
+  if (rc != 0 || present == 0) {
+    return optional_result(rc, present, emscripten::val::null());
   }
   emscripten::val comment = emscripten::val::object();
   js_set_cstr_fields(comment, {{"author", c.author}, {"text", c.text}});
-  out.set("status", ok_status());
-  out.set("comment", comment);
-  return out;
+  return optional_result(rc, present, comment);
 }
 
 namespace {

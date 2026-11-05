@@ -21,6 +21,7 @@ from formulon import (
     PivotFieldSpecInput,
     PivotFilterSpec,
     PivotFilterType,
+    PivotGrandTotals,
     PivotOptions,
     PivotReportLayout,
     PivotSortOrder,
@@ -1052,7 +1053,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
     def _assert_fixture_definition(self, wb: Workbook, f: _PivotFixture, pivot: int) -> None:
         eq = self.assertEqual
         eq(wb.get_pivot_name(0, pivot), "Pivot1")
-        eq(wb.get_pivot_grand_totals(0, pivot), (True, True))
+        eq(wb.get_pivot_grand_totals(0, pivot), PivotGrandTotals(rows=True, cols=True))
         eq(wb.get_pivot_row_field_order(0, pivot), [f.region])
         eq(wb.get_pivot_col_field_order(0, pivot), [])
 
@@ -1087,7 +1088,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
             wb.set_pivot_field_sort(0, f.pivot, f.region, PivotSortOrder.DESCENDING, "Sum of Amount")
             wb.set_pivot_field_item_visible(0, f.pivot, f.region, 1, False)
             wb.set_pivot_field_date_group(0, f.pivot, f.date, PivotDatePeriod.YEARS, PivotCalendar.GREGORIAN)
-            self.assertEqual(wb.get_pivot_grand_totals(0, f.pivot), (False, True))
+            self.assertEqual(wb.get_pivot_grand_totals(0, f.pivot), PivotGrandTotals(rows=False, cols=True))
             region = wb.get_pivot_field(0, f.pivot, f.region)
             self.assertEqual((region.sort_order, region.sort_by_field), (PivotSortOrder.DESCENDING, "Sum of Amount"))
             self.assertFalse(wb.get_pivot_field_item(0, f.pivot, f.region, 1).visible)

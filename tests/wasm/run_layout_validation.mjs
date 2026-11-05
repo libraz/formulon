@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 const RANGE = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     fn(wb);
   } finally {

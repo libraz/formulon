@@ -281,20 +281,20 @@ Napi::Value Workbook::InvokeRowColEdit(const Napi::CallbackInfo& info, RowColEdi
 
 // ---- Static factories -----------------------------------------------
 
-Napi::Value Workbook::CreateWith(const Napi::CallbackInfo& info, CreateFn create) {
-  Napi::Env env = info.Env();
-  Napi::Function ctor = GetClass(env);
-  Napi::Object jsobj = ctor.New({});
-  Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
-  fm_status_t rc = create(&wb->handle_);
+Napi::Value Workbook::FactoryResult(Napi::Env env, Napi::Object jsobj, Workbook* wb, fm_status_t rc) {
   if (rc != 0) {
-    // Even on failure return the wrapper; the caller can inspect
-    // `getLastErrorMessage()` and the next operation will fail with
-    // `kBindingInvalidHandle`. This matches embind's behaviour.
     wb->handle_ = nullptr;
+    return MakeOptionalResult(env, rc, 0, env.Null());
   }
   wb->SyncExternalMemory(env);
-  return jsobj;
+  return MakeOptionalResult(env, rc, 1, jsobj);
+}
+
+Napi::Value Workbook::CreateWith(const Napi::CallbackInfo& info, CreateFn create) {
+  Napi::Env env = info.Env();
+  Napi::Object jsobj = GetClass(env).New({});
+  Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
+  return FactoryResult(env, jsobj, wb, create(&wb->handle_));
 }
 
 Napi::Value Workbook::CreateDefault(const Napi::CallbackInfo& info) {
@@ -307,43 +307,25 @@ Napi::Value Workbook::CreateEmpty(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::CreateForProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Function ctor = GetClass(env);
-  Napi::Object jsobj = ctor.New({});
+  Napi::Object jsobj = GetClass(env).New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
   const std::string profile_id = ArgString(info, 0);
-  // As CreateWith: a failed create (unknown id) returns a wrapper with a null handle.
-  if (fm_workbook_create_for_profile(profile_id.c_str(), &wb->handle_) != 0) {
-    wb->handle_ = nullptr;
-  }
-  wb->SyncExternalMemory(env);
-  return jsobj;
+  return FactoryResult(env, jsobj, wb, fm_workbook_create_for_profile(profile_id.c_str(), &wb->handle_));
 }
 
 Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Function ctor = GetClass(env);
-  Napi::Object jsobj = ctor.New({});
+  Napi::Object jsobj = GetClass(env).New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
   Napi::Uint8Array u8;
-  if (!BytesArg(info, 0, &u8)) {
-    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
-    return jsobj;
-  }
-  const uint8_t* data = u8.Data();
-  const std::size_t len = u8.ElementLength();
+  const bool bytes = BytesArg(info, 0, &u8);
+  const uint8_t* data = bytes ? u8.Data() : nullptr;
+  const std::size_t len = bytes ? u8.ElementLength() : 0;
   if (data == nullptr || len == 0) {
-    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
-    return jsobj;
+    // C reports the malformed input, refreshing the last-error diagnostics.
+    return FactoryResult(env, jsobj, wb, fm_workbook_load(nullptr, 0, &wb->handle_));
   }
-  fm_status_t rc = fm_workbook_load(data, len, &wb->handle_);
-  if (rc != 0) {
-    wb->handle_ = nullptr;
-  }
-  // A freshly loaded workbook is the one case where the footprint is
-  // both large and known up front, so this is the report that matters
-  // most for collection pressure.
-  wb->SyncExternalMemory(env);
-  return jsobj;
+  return FactoryResult(env, jsobj, wb, fm_workbook_load(data, len, &wb->handle_));
 }
 
 // ---- Class registration ---------------------------------------------
@@ -523,7 +505,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetCellPhoneticProperties, 0x7ULL>("getCellPhoneticProperties"),
           GuardedInstanceMethod<&Workbook::GetCellShowPhonetic, 0x7ULL>("getCellShowPhonetic"),
           GuardedInstanceMethod<&Workbook::GetComment, 0x7ULL>("getComment"),
-          GuardedInstanceMethod<&Workbook::GetCommentResult, 0x7ULL>("getCommentResult"),
           GuardedInstanceMethod<&Workbook::GetComments, 0x1ULL>("listComments"),
           GuardedInstanceMethod<&Workbook::GetCommentVisible, 0x7ULL>("getCommentVisible"),
           GuardedInstanceMethod<&Workbook::GetWorkbookProtection>("getWorkbookProtection"),

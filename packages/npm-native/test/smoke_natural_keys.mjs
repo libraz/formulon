@@ -21,7 +21,7 @@ const missing = (r) => {
 
 test('defined names are read and removed by name and scope', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setDefinedName('Rate', 'Sheet1!$A$1').ok);
   assert.ok(wb.setDefinedNameScoped('Rate', 'Sheet1!$B$1', 0).ok);
   const name = found(wb.getDefinedName('rate', -1));
@@ -40,7 +40,7 @@ test('defined names are read and removed by name and scope', async () => {
 
 test('hyperlinks, people and threaded comments are read by key', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.addHyperlink(0, 2, 1, 'https://example.com/', '', '', '').ok);
   assert.equal(found(wb.getHyperlink(0, 2, 1)).target, 'https://example.com/');
   missing(wb.getHyperlink(0, 2, 2));
@@ -68,7 +68,7 @@ test('hyperlinks, people and threaded comments are read by key', async () => {
 
 test('shapes and drawing objects are read by object id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // anchorKind 0 is OneCell.
   const added = wb.addShape(0, { prst: 'rect', anchorKind: 0, fromRow: 2, cx: 914400, cy: 457200 });
   assert.ok(added.status.ok, JSON.stringify(added.status));
@@ -81,7 +81,7 @@ test('shapes and drawing objects are read by object id', async () => {
 
 test('theme script fonts and passthrough parts are read by key', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(found(wb.getThemeScriptFont(true, 'Jpan')).typeface.length > 0);
   assert.ok(wb.setThemeScriptFont(false, 'Zzzz', 'Test Face').ok);
   assert.deepEqual(found(wb.getThemeScriptFont(false, 'Zzzz')), { script: 'Zzzz', typeface: 'Test Face' });
@@ -94,7 +94,7 @@ test('theme script fonts and passthrough parts are read by key', async () => {
 
 test('index-keyed adds return the index they allocate', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const sheet = wb.addSheet('Second');
   assert.ok(sheet.status.ok);
   assert.equal(sheet.index, 1);

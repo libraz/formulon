@@ -437,7 +437,7 @@ export const StatusCode = Object.freeze({
  *     `entry.description` -> `base.description`
  *   - localizedName: `entry.aliases[locale]` -> `base.name`
  *
- * @param {object} base A `FunctionMetadataResult` from `getFunctionMetadata()`.
+ * @param {object} base A `FunctionMetadata`, the `value` of `getFunctionMetadata()`.
  * @param {object|undefined} entry The provider's `functions[NAME]` entry, or
  *   `undefined`/`null` to leave `base` unchanged (signature/description
  *   stay `undefined`).

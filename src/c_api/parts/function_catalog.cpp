@@ -112,20 +112,21 @@ const std::vector<std::string>& sorted_function_names() {
 
 }  // namespace
 
-extern "C" fm_status_t fm_get_function_metadata(const char* name, fm_function_metadata_t* out) {
+extern "C" fm_status_t fm_get_function_metadata(const char* name, int32_t* out_present, fm_function_metadata_t* out) {
   clear_last_error();
-  if (name == nullptr || out == nullptr) {
+  if (name == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument("fm_get_function_metadata");
   }
+  *out_present = 0;
   *out = fm_function_metadata_t{};
   if (auto rc = check_utf8("fm_get_function_metadata", {name}); rc != 0) {
     return rc;
   }
   const char* canonical = formulon::eval::resolve_builtin_function_name(std::string_view(name));
   if (canonical == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_get_function_metadata: unknown function", std::string("name=") + name);
+    return 0;
   }
+  *out_present = 1;
   // `canonical_name` is static storage; callers may hold the result indefinitely.
   out->canonical_name = canonical;
   formulon::eval::builtin_arity(canonical, &out->min_arity, &out->max_arity);

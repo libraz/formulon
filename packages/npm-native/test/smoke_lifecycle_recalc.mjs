@@ -3,7 +3,7 @@ import { assert, getModule } from './smoke_support.mjs';
 
 test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setFormula(0, 0, 0, '=1+2').ok);
   assert.ok(wb.recalc().ok);
   const r = wb.getValue(0, 0, 0);
@@ -14,7 +14,7 @@ test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
 
 test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const width = 128;
   for (let row = 0; row < width; row += 1) {
     assert.ok(wb.setNumber(0, row, 0, row + 1).ok);
@@ -59,7 +59,7 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   const assertInvalid = (input, label) => {
     const invalid = input === undefined ? wb.recalcParallel() : wb.recalcParallel(input);
     assert.equal(invalid.status.ok, false, label);
-    assert.notEqual(invalid.status.status, 0, label);
+    assert.notEqual(invalid.status.code, 0, label);
     assert.equal(invalid.stats.cellsEvaluated, 0, label);
     assert.equal(invalid.stats.sccsProcessed, 0, label);
     assert.equal(invalid.stats.parallelSteps, 0, label);
@@ -88,7 +88,7 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
 
 test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const r = wb.evaluateFormulaArray(0, 0, 0, '=SEQUENCE(2,3)');
   assert.ok(r.status.ok);
   assert.equal(r.rows, 2);
@@ -103,7 +103,7 @@ test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
 
 test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const r = wb.evaluateFormulaArray(0, 0, 0, '=1+2');
   assert.ok(r.status.ok);
   assert.equal(r.rows, 1);
@@ -114,7 +114,7 @@ test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
 
 test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createEmpty();
+  const wb = mod.Workbook.createEmpty().value;
   assert.ok(wb.addSheet('Sheet1').status.ok);
   assert.equal(wb.getSheetCount().value, 1);
   const sn = wb.getSheetName(0);
@@ -124,13 +124,13 @@ test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () =>
 
 test('Unicode sheet identity rejects folded duplicate and permits casing rename', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createEmpty();
+  const wb = mod.Workbook.createEmpty().value;
   assert.ok(wb.addSheet('Ä').status.ok);
   assert.ok(wb.addSheet('Ö').status.ok);
   assert.equal(wb.addSheet('ä').status.ok, false);
   const collision = wb.renameSheet(1, 'ä');
   assert.equal(collision.ok, false);
-  assert.notEqual(collision.status, 0);
+  assert.notEqual(collision.code, 0);
   assert.equal(wb.getSheetName(0).value, 'Ä');
   assert.equal(wb.getSheetName(1).value, 'Ö');
   assert.ok(wb.renameSheet(0, 'ä').ok);
@@ -143,14 +143,14 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
 
 test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
   const mod = await getModule();
-  const wb1 = mod.Workbook.createDefault();
+  const wb1 = mod.Workbook.createDefault().value;
   assert.ok(wb1.setNumber(0, 0, 0, 42).ok);
   const sr = wb1.save();
   assert.ok(sr.status.ok, `save: ${JSON.stringify(sr.status)}`);
   assert.ok(sr.bytes instanceof Uint8Array, 'expected Uint8Array');
   assert.ok(sr.bytes.length > 0, 'expected non-empty save buffer');
 
-  const wb2 = mod.Workbook.load(sr.bytes);
+  const wb2 = mod.Workbook.load(sr.bytes).value;
   const r = wb2.getValue(0, 0, 0);
   assert.ok(r.status.ok, `loaded getValue: ${JSON.stringify(r.status)}`);
   assert.equal(r.value.kind, mod.ValueKind.Number);
@@ -160,7 +160,9 @@ test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
 test('loadBytes rejects invalid input with a fresh diagnostic', async () => {
   const mod = await getModule();
   const loaded = mod.Workbook.load(new Uint16Array([1]));
-  assert.equal(loaded.isValid(), false);
+  assert.equal(loaded.status.ok, false);
+  assert.equal(loaded.value, null);
+  assert.match(loaded.status.message, /NULL or empty input/);
   assert.match(mod.getLastErrorMessage(), /NULL or empty input/);
 });
 
@@ -171,13 +173,13 @@ test('loadBytes rejects invalid input with a fresh diagnostic', async () => {
 
 test('isValid returns true for a live workbook', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.isValid(), true);
 });
 
 test('dispose deterministically releases a workbook and is idempotent', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.isValid(), true);
   assert.equal(wb.dispose(), undefined);
   assert.equal(wb.isValid(), false);
@@ -187,7 +189,7 @@ test('dispose deterministically releases a workbook and is idempotent', async ()
 
 test('memoryUsage grows with the workbook and reads zero after dispose', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
 
   const empty = wb.getMemoryUsage();
   assert.ok(empty > 0, `an empty workbook still owns storage, got ${empty}`);
@@ -210,7 +212,7 @@ test('memoryUsage is stable across repeated calls and survives a recalc', async 
   // a no-op rather than double-counting, and the operations that trigger
   // their own report must not disturb the estimate either.
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   for (let row = 0; row < 500; row += 1) {
     wb.setFormula(0, row, 0, `=${row}+1`);
   }
@@ -228,15 +230,15 @@ test('memoryUsage is stable across repeated calls and survives a recalc', async 
 
 test('Workbook factories return instances of the exported Workbook class', async () => {
   const mod = await getModule();
-  const defaultBook = mod.Workbook.createDefault();
-  const emptyBook = mod.Workbook.createEmpty();
+  const defaultBook = mod.Workbook.createDefault().value;
+  const emptyBook = mod.Workbook.createEmpty().value;
   assert.ok(defaultBook instanceof mod.Workbook);
   assert.ok(emptyBook instanceof mod.Workbook);
 });
 
 test('copySheet names the copy automatically or explicitly and reports bad arguments', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 0, 5).ok);
   assert.ok(wb.setFormula(0, 0, 1, '=A1*2').ok);
   const auto = wb.copySheet(0, 1);
@@ -249,9 +251,9 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
   assert.equal(wb.getSheetName(0).value, 'Archive');
   assert.ok(wb.recalc().ok);
   assert.equal(wb.getValue(0, 0, 1).value.number, 10);
-  assert.equal(wb.copySheet(9, 0).status.status, 5050);
-  assert.equal(wb.copySheet(0, 9).status.status, 5050);
-  assert.equal(wb.copySheet(0, 0, '').status.status, 5051);
+  assert.equal(wb.copySheet(9, 0).status.code, 5050);
+  assert.equal(wb.copySheet(0, 9).status.code, 5050);
+  assert.equal(wb.copySheet(0, 0, '').status.code, 5051);
   assert.equal(wb.getSheetCount().value, 3);
   wb.dispose();
 });

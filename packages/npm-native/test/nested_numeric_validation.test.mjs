@@ -26,7 +26,7 @@ async function getValidationModule() {
 
 test('nested style integers reject narrowing before addXf mutates the workbook', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const before = wb.getCellXfCount().value;
     assert.throws(() => wb.addCellXf({ horizontalAlign: 256 }), RangeError);
@@ -65,7 +65,7 @@ test('nested style integers reject narrowing before addXf mutates the workbook',
 
 test('nested conditional-format integers reject narrowing before addConditionalFormat mutates', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const beforeDxfs = wb.getDxfCount().value;
     assert.throws(() => wb.addDxf({ numFmt: { numFmtId: 65536 } }), RangeError);
@@ -118,7 +118,7 @@ test('nested conditional-format integers reject narrowing before addConditionalF
 
 test('nested style and conditional-format fields require primitive numeric values', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const beforeXfs = wb.getCellXfCount().value;
     assert.throws(() => wb.addCellXf({ horizontalAlign: '1' }), TypeError);
@@ -151,7 +151,7 @@ test('nested style and conditional-format fields require primitive numeric value
 
 test('nested readers preserve the original getter error and abort the whole mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const beforeXfs = wb.getCellXfCount().value;
     const style = {};
@@ -186,7 +186,7 @@ test('nested readers preserve the original getter error and abort the whole muta
 
 test('style and conditional-format readers snapshot stateful fields once', async () => {
   const mod = await getValidationModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     let horizontalReads = 0;
     const statefulXf = {};
@@ -246,7 +246,7 @@ test('style and conditional-format readers snapshot stateful fields once', async
 
 test('conditional-format arrays skip nullish entries and keep later records', async () => {
   const mod = await getValidationModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const added = wb.addCfRule(0, {
       // Include null, undefined, and a hole before the valid range. The old
@@ -270,7 +270,7 @@ test('conditional-format arrays skip nullish entries and keep later records', as
 
 test('named-style and theme integer fields reject before their C mutations', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const styleCount = wb.listCellStyles().length;
     for (const value of [2 ** 32, Number.NaN, 1.5, -1]) {
@@ -294,7 +294,7 @@ test('named-style and theme integer fields reject before their C mutations', asy
 
 test('style and CF reader defaults survive nullish fields and valid u8 boundaries', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const font = wb.addFont({ name: 'Reader defaults', size: null, colorArgb: undefined, underline: null });
     assert.ok(font.status.ok, JSON.stringify(font.status));

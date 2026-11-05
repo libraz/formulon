@@ -5,14 +5,14 @@ const isNestedRangeValue = (value) => typeof value === 'number';
 
 export function registerStyles(Module, test) {
   test('xf index round-trips through setCellXfIndex / getCellXfIndex', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setNumber(0, 2, 3, 5).ok);
       // An index past the xf table is refused and leaves the cell alone.
       const missing = wb.setCellXfIndex(0, 2, 3, 9);
       assert.equal(missing.ok, false);
-      assert.equal(missing.status, 2);
-      assert.equal(wb.getCellXfIndex(0, 2, 3).xfIndex, 0);
+      assert.equal(missing.code, 2);
+      assert.equal(wb.getCellXfIndex(0, 2, 3).value, 0);
       const font = wb.addFont({ name: 'Arial', size: 12, bold: true });
       assert.ok(font.status.ok, JSON.stringify(font.status));
       const xf = wb.addCellXf({ fontIndex: font.index });
@@ -20,14 +20,14 @@ export function registerStyles(Module, test) {
       assert.ok(wb.setCellXfIndex(0, 2, 3, xf.index).ok);
       const r = wb.getCellXfIndex(0, 2, 3);
       assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
-      assert.equal(r.xfIndex, xf.index);
+      assert.equal(r.value, xf.index);
     } finally {
       wb.delete();
     }
   });
 
   test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       // A new workbook carries the minimum style table Excel writes, so
       // a caller-appended record never lands on one of the slots Excel
@@ -195,14 +195,14 @@ export function registerStyles(Module, test) {
 
       const rfmt = wb.getNumFmtString(custom.numFmtId);
       assert.ok(rfmt.status.ok);
-      assert.equal(rfmt.formatCode, '"USD" #,##0');
+      assert.equal(rfmt.value, '"USD" #,##0');
     } finally {
       wb.delete();
     }
   });
 
   test('selector colours survive get/add identity and save/load', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const theme = { kind: 2, rgb: 0, theme: 3, tint: 0.5, indexed: 0 };
       const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
@@ -281,7 +281,7 @@ export function registerStyles(Module, test) {
 
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const loaded = Module.Workbook.load(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes).value;
       try {
         assert.ok(loaded.isValid());
         const loadedFont = loaded.getFont(font.index);
@@ -305,7 +305,7 @@ export function registerStyles(Module, test) {
   });
 
   test('dxf alignment and protection XML survive get/add identity and save/load', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
     const protectionXml = '<protection locked="0" hidden="1"/>';
     try {
@@ -333,7 +333,7 @@ export function registerStyles(Module, test) {
 
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const loaded = Module.Workbook.load(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes).value;
       try {
         assert.ok(loaded.isValid());
         const loadedAlignment = loaded.getDxf(alignment.index);
@@ -359,7 +359,7 @@ export function registerStyles(Module, test) {
   });
 
   test('addFont / getFont preserve superscript and subscript', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1 });
       assert.ok(superscript.status.ok);
@@ -375,7 +375,7 @@ export function registerStyles(Module, test) {
   });
 
   test('addFont(getFont(i)) is the identity and does not grow the table', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
       assert.ok(added.status.ok);
@@ -391,7 +391,7 @@ export function registerStyles(Module, test) {
   });
 
   test('a one-field font rewrite keeps the superscript', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
       assert.ok(added.status.ok);
@@ -409,7 +409,7 @@ export function registerStyles(Module, test) {
   });
 
   test('addDxf / getDxf round-trip a superscript differential font', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const added = wb.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
       assert.ok(added.status.ok);
@@ -426,7 +426,7 @@ export function registerStyles(Module, test) {
   });
 
   test('addXf rejects out-of-range font_index', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const r = wb.addCellXf({
         fontIndex: 99,
@@ -444,7 +444,7 @@ export function registerStyles(Module, test) {
   });
 
   test('style narrow numeric fields throw on masked values without mutating tables', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const assertRejected = (label, invoke, count) => {
         assert.throws(invoke, RangeError, `${label} accepted`);
@@ -482,7 +482,7 @@ export function registerStyles(Module, test) {
   test('style nested numeric fields throw on fractions, non-finite values, and wrong primitives', () => {
     const invalid = [1.5, Number.NaN, Number.POSITIVE_INFINITY, '1', true, {}, Symbol('numeric')];
     for (const value of invalid) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       try {
         const before = wb.getFontCount().value;
         assert.throws(
@@ -498,7 +498,7 @@ export function registerStyles(Module, test) {
   });
 
   test('style and conditional-format u32/i32 fields throw on wraparound values', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const xfBefore = wb.getCellXfCount().value;
       assert.throws(() => wb.addCellXf({ fontIndex: 0x100000000, fillIndex: 0, borderIndex: 0 }), RangeError);
@@ -570,7 +570,7 @@ export function registerStyles(Module, test) {
   });
 
   test('style nullish narrow fields retain their existing defaults', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const absentFont = wb.addFont({ name: 'nullish-font' });
       assert.ok(absentFont.status.ok);
@@ -603,7 +603,7 @@ export function registerStyles(Module, test) {
   });
 
   test('conditional-format nested narrow numeric fields throw on masked values without mutation', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const base = {
         ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
@@ -648,7 +648,7 @@ export function registerStyles(Module, test) {
   test('conditional-format nested numeric fields throw on wrong primitives and preserve settings', () => {
     const values = [1.5, Number.NaN, Number.POSITIVE_INFINITY, '1', true, {}, Symbol('cf-numeric')];
     for (const value of values) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       try {
         const rule = {
           ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
@@ -679,7 +679,7 @@ export function registerStyles(Module, test) {
   });
 
   test('conditional-format nullish nested fields retain existing defaults', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const result = wb.addCfRule(0, {
         ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
@@ -720,7 +720,7 @@ export function registerStyles(Module, test) {
   });
 
   test('style and conditional-format readers snapshot stateful fields once', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       let horizontalReads = 0;
       const xfSpec = {};

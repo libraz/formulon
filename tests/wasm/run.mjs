@@ -58,7 +58,7 @@ async function run() {
     postReplacement: null,
   };
   const probePositionalHook = (hookModule) => {
-    const wb = hookModule.Workbook.createDefault();
+    const wb = hookModule.Workbook.createDefault().value;
     try {
       wb.setNumber(0, 0, 0, 42);
       let threw = false;

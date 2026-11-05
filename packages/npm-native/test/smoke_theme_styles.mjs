@@ -5,7 +5,7 @@ const DEFAULT_ACCENT1 = 0xff156082;
 
 test('getTheme reads the default theme of a fresh workbook', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const theme = wb.getThemeFonts();
     assert.ok(theme.status.ok, JSON.stringify(theme.status));
@@ -22,7 +22,7 @@ test('getTheme reads the default theme of a fresh workbook', async () => {
 
 test('setThemeColors and setThemeFonts round-trip through getTheme', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const colors = Array.from({ length: 12 }, (_, i) => (0xff000000 | (0x112233 + i * 0x010101)) >>> 0);
     assert.ok(wb.setThemeColors(colors).ok);
@@ -52,7 +52,7 @@ test('setThemeColors and setThemeFonts round-trip through getTheme', async () =>
 
 test('resetTheme returns an edited theme to the default', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.ok(wb.clearTheme().ok);
     assert.equal(wb.getThemeFonts().source, 1);
@@ -74,7 +74,7 @@ test('resetTheme returns an edited theme to the default', async () => {
 
 test('resolveColor resolves literal, theme and automatic colours by context', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const rgb = wb.resolveColor({ kind: 1, rgb: 0xff112233 }, mod.ColorContext.Font);
     assert.ok(rgb.status.ok);
@@ -100,7 +100,7 @@ test('resolveColor resolves literal, theme and automatic colours by context', as
 
 test('getEffectiveStyle reports the cell xf with resolved colours', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const font = wb.addFont({ name: 'Arial', size: 11, colorArgb: 0xffff0000 });
     assert.ok(font.status.ok);
@@ -133,7 +133,7 @@ test('getEffectiveStyle reports the cell xf with resolved colours', async () => 
 
 test('clearCellXfIndex restores row / column inheritance', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const xfCol = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
     const xfCell = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 10 });
@@ -165,7 +165,7 @@ test('clearCellXfIndex restores row / column inheritance', async () => {
 
 test('attribute patch over a column keeps the row style (bases / remap / snapshot / restore)', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const rowXf = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 14 });
     const xfA = wb.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 9 });
@@ -234,7 +234,7 @@ test('attribute patch over a column keeps the row style (bases / remap / snapsho
 
 test('setCellStyle round-trips a record and validates its fields', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const before = wb.listCellStyles().length;
     const rec = { name: 'Probe Style', xfId: 0, builtinId: 53, iLevel: 0, hidden: true, customBuiltin: true };
@@ -259,7 +259,7 @@ test('setCellStyle round-trips a record and validates its fields', async () => {
 
 test('removeCellStyle rejects the Normal style and an unknown name', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const styles = wb.listCellStyles();
     assert.ok(styles.status.ok);
@@ -290,7 +290,7 @@ test('theme and colour enums carry the C ABI ordinals', async () => {
 
 test('createForProfile builds the locale defaults and reports a bad id as an invalid wrapper', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createForProfile('mac-365-ja_JP');
+  const wb = mod.Workbook.createForProfile('mac-365-ja_JP').value;
   try {
     assert.ok(wb.isValid());
     assert.equal(wb.getExcelProfileId().value, 'mac-365-ja_JP');
@@ -301,16 +301,13 @@ test('createForProfile builds the locale defaults and reports a bad id as an inv
     wb.dispose();
   }
   const bad = mod.Workbook.createForProfile('no-such-profile');
-  try {
-    assert.equal(bad.isValid(), false);
-  } finally {
-    bad.dispose();
-  }
+  assert.equal(bad.status.ok, false);
+  assert.equal(bad.value, null);
 });
 
 test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const t = wb.getThemeFonts();
     assert.equal(t.majorScripts.length, 47);
@@ -322,7 +319,7 @@ test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', as
     assert.ok(wb.setThemeScriptFont(false, 'Hang', 'Test Face').ok);
     const saved = wb.save();
     assert.ok(saved.status.ok);
-    const reloaded = mod.Workbook.load(saved.bytes);
+    const reloaded = mod.Workbook.load(saved.bytes).value;
     try {
       const r = reloaded.getThemeFonts();
       assert.equal(r.minorScripts.length, 47);
@@ -340,7 +337,7 @@ test('getTheme lists the 47 script faces and setThemeScriptFont round-trips', as
 
 test('setThemeScriptFont rejects an invalid script or empty typeface', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.equal(wb.setThemeScriptFont(true, 'Jp', 'X').ok, false);
     assert.equal(wb.setThemeScriptFont(true, 'Jpan', '').ok, false);

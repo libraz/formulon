@@ -333,23 +333,23 @@ Napi::Value Workbook::EvaluateConditionalFormula(const Napi::CallbackInfo& info)
 Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeStringFieldResult(env, NullHandleError(env), "text", "");
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
   }
   const CellAddressArgs address = ReadCellAddress(info);
+  int32_t present = 0;
   const char* text = nullptr;
-  fm_status_t rc = fm_sheet_get_lambda_text(handle_, address.sheet, address.row, address.col, &text);
-  return MakeStringFieldResult(env, rc, "text", text);
+  fm_status_t rc = fm_sheet_get_lambda_text(handle_, address.sheet, address.row, address.col, &present, &text);
+  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(JsString(env, text)) : env.Null());
 }
 
 // ---- Formula text, range enumeration, display text ------------------
 
 namespace {
 
-// Builds `{ status, <field>: string | null }`; an empty C string is "no formula".
+// Builds the `{ status, value }` OptionalResult; an empty C string is "no formula".
 Napi::Object MakeFormulaResult(Napi::Env env, fm_status_t code, const char* formula) {
   const bool present = code == 0 && formula != nullptr && formula[0] != '\0';
-  return MakeFieldResult(env, MakeStatus(env, code), "formula",
-                         present ? static_cast<Napi::Value>(Napi::String::New(env, formula)) : env.Null());
+  return MakeOptionalResult(env, code, present ? 1 : 0, present ? Napi::String::New(env, formula) : env.Null());
 }
 
 // Shared body of the A1 / R1C1 formula-text getters.

@@ -159,7 +159,9 @@ fm_chart_axis_t Axis(const ChartGuard& chart, uint32_t id) {
 void Open(fm_workbook_t* wb, uint32_t id, ChartGuard* out, size_t sheet = 0) {
   fm_chart_destroy(out->handle);
   out->handle = nullptr;
-  ASSERT_EQ(fm_sheet_get_chart(wb, sheet, id, &out->handle), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_chart(wb, sheet, id, &present, &out->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(present, 1);
 }
 
 void OpenData(fm_workbook_t* wb, uint32_t id, DataGuard* out) {
@@ -925,7 +927,9 @@ TEST(FormulonCApiChart, CaptureRestoreAndRemoveThroughDrawingOperations) {
 
   ASSERT_EQ(fm_sheet_remove_drawing(wb.handle, 0, id), 0) << fm_get_last_error_message();
   fm_chart_t* gone = nullptr;
-  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &gone), kInvalidArgument);
+  int32_t present = 1;
+  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &present, &gone), 0);
+  EXPECT_EQ(present, 0);
   EXPECT_EQ(gone, nullptr);
   ASSERT_EQ(fm_sheet_restore_drawing(wb.handle, 0, snap.data, snap.len, 0, &restored), 0)
       << fm_get_last_error_message();
@@ -950,11 +954,14 @@ TEST(FormulonCApiChart, OpenAndAccessorsRejectBadArguments) {
   const uint32_t id = Insert(wb.handle, FM_CHART_INSERT_COLUMN);
 
   fm_chart_t* chart = reinterpret_cast<fm_chart_t*>(&wb);
-  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, 99, &chart), kInvalidArgument);
+  int32_t present = 1;
+  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, 99, &present, &chart), 0);
+  EXPECT_EQ(present, 0);
   EXPECT_EQ(chart, nullptr);
-  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 4, id, &chart), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, id, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_sheet_get_chart(nullptr, 0, id, &chart), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 4, id, &present, &chart), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_chart(wb.handle, 0, id, nullptr, &chart), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_chart(nullptr, 0, id, &present, &chart), kBindingNullPointer);
   fm_chart_data_t* data = nullptr;
   EXPECT_EQ(fm_sheet_get_chart_data(wb.handle, 0, 99, &data), kInvalidArgument);
   EXPECT_EQ(data, nullptr);

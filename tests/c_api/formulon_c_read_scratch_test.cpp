@@ -54,8 +54,8 @@ TEST(FormulonCApiReadScratch, GetValueDoesNotGrowScratch) {
   EXPECT_LE(wb.handle->read_scratch.size(), 1U);
 }
 
-// `fm_sheet_get_lambda_text` shares the same read scratch. A validation-
-// rejected call on a non-lambda cell must leave the previous successful text
+// `fm_sheet_get_lambda_text` shares the same read scratch. A read of a
+// non-lambda cell finds nothing and must leave the previous successful text
 // pointer, value, and scratch size intact.
 TEST(FormulonCApiReadScratch, MixedReadsStayBounded) {
   WorkbookGuard wb;
@@ -74,7 +74,7 @@ TEST(FormulonCApiReadScratch, MixedReadsStayBounded) {
   EXPECT_LE(wb.handle->read_scratch.size(), 1U);
 }
 
-TEST(FormulonCApiReadScratch, RejectedLambdaReadPreservesPreviousScratch) {
+TEST(FormulonCApiReadScratch, AbsentLambdaReadPreservesPreviousScratch) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "alpha"), 0);
@@ -88,10 +88,11 @@ TEST(FormulonCApiReadScratch, RejectedLambdaReadPreservesPreviousScratch) {
   const std::string previous_value = previous_pointer;
   const std::size_t previous_size = wb.handle->read_scratch.size();
 
-  const char* rejected_output = nullptr;
-  EXPECT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, 0, 0, &rejected_output),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
-  EXPECT_EQ(rejected_output, nullptr);
+  const char* absent_output = nullptr;
+  int32_t present = 1;
+  ASSERT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, 0, 0, &present, &absent_output), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(absent_output, nullptr);
   EXPECT_EQ(wb.handle->read_scratch.size(), previous_size);
   EXPECT_EQ(value.u.text, previous_pointer);
   EXPECT_STREQ(previous_pointer, previous_value.c_str());
@@ -210,7 +211,9 @@ TEST(FormulonCApiReadScratch, AllScratchProducersStayBoundedWhenAlternated) {
     ASSERT_EQ(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
 
     const char* lambda_text = nullptr;
-    ASSERT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, 0, 1, &lambda_text), 0);
+    int32_t lambda_present = 0;
+    ASSERT_EQ(fm_sheet_get_lambda_text(wb.handle, 0, 0, 1, &lambda_present, &lambda_text), 0);
+    ASSERT_EQ(lambda_present, 1);
 
     fm_value_t adhoc_value{};
     ASSERT_EQ(fm_sheet_evaluate_formula(wb.handle, 0, 0, 0, "=\"adhoc\"", &adhoc_value), 0);

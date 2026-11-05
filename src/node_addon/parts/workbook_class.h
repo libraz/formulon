@@ -478,7 +478,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetMerges(const Napi::CallbackInfo& info);
   Napi::Value GetMergesInRange(const Napi::CallbackInfo& info);
   Napi::Value GetComment(const Napi::CallbackInfo& info);
-  Napi::Value GetCommentResult(const Napi::CallbackInfo& info);
   Napi::Value GetComments(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
   Napi::Value GetCommentVisible(const Napi::CallbackInfo& info);
@@ -745,10 +744,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Shared bodies for the per-sheet string accessors (the five raw
   // print-settings fragment pairs) and the two break
-  // enumerators. The getter returns `{status, <field>: string}`.
+  // enumerators. The getter returns the `{status, value}` StringResult.
   using SheetStringGetFn = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
   using SheetStringSetFn = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
-  Napi::Value SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter, const char* field);
+  Napi::Value SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter);
   Napi::Value SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter);
   Napi::Value BreaksArray(const Napi::CallbackInfo& info, bool rows);
 
@@ -768,6 +767,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   using CreateFn = fm_status_t (*)(fm_workbook_t**);
   /// Shared body of the `createDefault` / `createEmpty` factories.
   static Napi::Value CreateWith(const Napi::CallbackInfo& info, CreateFn create);
+  /// Wraps a factory's outcome as `{ status, value }`: the wrapper on
+  /// success, `null` (and the wrapper's handle cleared) on failure.
+  static Napi::Value FactoryResult(Napi::Env env, Napi::Object jsobj, Workbook* wb, fm_status_t rc);
 
   /// Matches `fm_iterative_progress_cb`: the header-wide wide-POD boolean
   /// convention (`int32_t`, `0` = abort), not a C `bool`.

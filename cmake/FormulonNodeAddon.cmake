@@ -17,7 +17,7 @@
 #   `NODE_ADDON_API_DISABLE_CPP_EXCEPTIONS` and `NAPI_DISABLE_CPP_EXCEPTIONS`.
 #   Status is then surfaced through `Napi::MaybeOrValue<>` /
 #   `IsExceptionPending()` checks instead of throws — exactly mirroring
-#   the embind binding's `{ ok, status, message, context }` envelope.
+#   the embind binding's `{ ok, code, message, context }` envelope.
 #
 # * The addon TU is built with `-fno-exceptions -fno-rtti` to match the
 #   project-wide stance. (Unlike embind, node-addon-api does NOT key

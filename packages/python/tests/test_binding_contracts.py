@@ -47,9 +47,12 @@ from formulon import (
     PivotFilterSpec,
     PivotFilterType,
     PivotFilterValueKind,
+    PivotGrandTotals,
     PivotWorksheetSource,
     SheetRect,
+    SheetSelection,
     TableStyle,
+    TableStyleDefaults,
     TableStyleElement,
     Value,
     ValueKind,
@@ -740,7 +743,10 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             )
             wb.set_table_style(style)
             self.assertEqual(len(wb.list_table_styles()), 1)
-            self.assertEqual(wb.get_table_style_defaults(), ("TableStyleMedium2", "PivotStyleLight16"))
+            self.assertEqual(
+                wb.get_table_style_defaults(),
+                TableStyleDefaults(table_style="TableStyleMedium2", pivot_style="PivotStyleLight16"),
+            )
             index = wb.add_table(0, CellRect(0, 0, 1, 0), "T", "T", ["X"], "Corporate")
             with self.assertRaises(FormulonError):
                 wb.set_table_style(TableStyle(name="TableStyleMedium2"))
@@ -752,10 +758,10 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
                     [reloaded.get_table(i) for i in range(reloaded.get_table_count())][index].style_name, "Corporate"
                 )
                 reloaded.set_table_style_defaults(table_style="Corporate")
-                self.assertEqual(reloaded.get_table_style_defaults()[0], "Corporate")
+                self.assertEqual(reloaded.get_table_style_defaults().table_style, "Corporate")
                 reloaded.remove_table_style("corporate")
                 self.assertEqual(reloaded.list_table_styles(), [])
-                self.assertEqual(reloaded.get_table_style_defaults()[0], "TableStyleMedium2")
+                self.assertEqual(reloaded.get_table_style_defaults().table_style, "TableStyleMedium2")
 
     def test_table_update_empty_style_name_removes_the_style(self) -> None:
         with Workbook.create_default() as wb:
@@ -957,7 +963,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         with Workbook.load(data) as reloaded:
             self.assertEqual(reloaded.get_pivot_cache_id(0, 0), cache_id)
             self.assertEqual(reloaded.get_pivot_name(0, 0), "Pivot1")
-            self.assertEqual(reloaded.get_pivot_grand_totals(0, 0), (True, False))
+            self.assertEqual(reloaded.get_pivot_grand_totals(0, 0), PivotGrandTotals(rows=True, cols=False))
             self.assertEqual(reloaded.get_pivot_row_field_order(0, 0), [0])
             self.assertEqual(reloaded.get_pivot_field(0, 0, 0).axis, PivotAxis.ROW)
             self.assertEqual(reloaded.get_pivot_data_field(0, 0, 0).name, "Sum of Amount")
@@ -1041,7 +1047,7 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
                 (view.top_left_row, view.top_left_col, view.pane_top_left_row, view.pane_top_left_col),
                 (5, 0, 40, 6),
             )
-            self.assertEqual(reloaded.get_selection(0), ((41, 7), ranges))
+            self.assertEqual(reloaded.get_selection(0), SheetSelection(active_row=41, active_col=7, ranges=ranges))
 
     def test_split_reads_back_round_trips_and_exchanges_with_freeze(self) -> None:
         with Workbook.create_default() as wb:
@@ -1069,17 +1075,23 @@ class SheetViewOriginAndSelectionTests(unittest.TestCase):
 
     def test_unset_selection_reads_as_a1(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.get_selection(0), ((0, 0), [CellRect(0, 0, 0, 0)]))
+            self.assertEqual(
+                wb.get_selection(0), SheetSelection(active_row=0, active_col=0, ranges=[CellRect(0, 0, 0, 0)])
+            )
             with self.assertRaises(FormulonError):
                 wb.get_selection(9)
 
     def test_selection_without_ranges_is_the_active_cell(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_selection(0, 4, 2)
-            self.assertEqual(wb.get_selection(0), ((4, 2), [CellRect(4, 2, 4, 2)]))
+            self.assertEqual(
+                wb.get_selection(0), SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)])
+            )
             data = wb.save()
         with Workbook.load(data) as reloaded:
-            self.assertEqual(reloaded.get_selection(0), ((4, 2), [CellRect(4, 2, 4, 2)]))
+            self.assertEqual(
+                reloaded.get_selection(0), SheetSelection(active_row=4, active_col=2, ranges=[CellRect(4, 2, 4, 2)])
+            )
 
 
 class CollectionReaderAllocationTests(unittest.TestCase):

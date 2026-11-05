@@ -65,12 +65,12 @@ struct JsValue {
   int32_t errorCode = 0;  ///< Active when kind == FM_VAL_ERROR.
 };
 
-/// `{ ok, status, message, context }` envelope returned by every
+/// `{ ok, code, message, context }` envelope returned by every
 /// fallible binding entry point. Replaces throwing across the JS
 /// boundary, which we cannot do under `-fno-exceptions`.
 struct JsStatus {
   bool ok = true;
-  int32_t status = 0;
+  int32_t code = 0;
   std::string message;
   std::string context;
 };

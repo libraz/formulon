@@ -65,7 +65,7 @@ using formulon::c_api::kInvalidArgument;
 // ---------------------------------------------------------------------
 
 /// Builds an `ok` Status envelope:
-///   { ok: true, status: 0, message: "", context: "" }
+///   { ok: true, code: 0, message: "", context: "" }
 Napi::Object MakeOkStatus(Napi::Env env);
 
 /// Builds an error Status envelope, copying the thread-local

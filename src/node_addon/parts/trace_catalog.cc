@@ -176,15 +176,14 @@ Napi::Value Workbook::GetExternalLink(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   const std::string name = ArgString(info, 0);
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_get_function_metadata(name.c_str(), &md);
-  if (rc != 0) {
-    out.Set("ok", Napi::Boolean::New(env, false));
-    return out;
+  fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
+  if (rc != 0 || present == 0) {
+    return MakeOptionalResult(env, rc, present, env.Null());
   }
-  out.Set("ok", Napi::Boolean::New(env, true));
+  Napi::Object out = Napi::Object::New(env);
   out.Set("name", JsString(env, md.canonical_name));
   out.Set("minArity", Napi::Number::New(env, md.min_arity));
   // `0xFFFFFFFF` is the unbounded / unknown-arity sentinel; surface it as
@@ -201,7 +200,7 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   if (md.description != nullptr) {
     out.Set("description", Napi::String::New(env, md.description));
   }
-  return out;
+  return MakeOptionalResult(env, rc, present, out);
 }
 
 Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
@@ -308,16 +307,13 @@ Napi::Value Workbook::ListLocaleErrorNames(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::CompareText(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   const std::string a = ArgString(info, 0);
   const std::string b = ArgString(info, 1);
   const auto strength = static_cast<fm_collation_strength_t>(ArgU32(info, 2));
   const std::string profile_id = ArgString(info, 3);
   int32_t order = 0;
   const fm_status_t rc = fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("order", Napi::Number::New(env, rc == 0 ? order : 0));
-  return out;
+  return MakeNumberResult(env, rc, order);
 }
 
 Napi::Value Workbook::CollationClasses(const Napi::CallbackInfo& info) {

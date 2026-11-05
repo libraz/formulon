@@ -282,8 +282,8 @@ export type StatusCode =
 export interface Status {
   /** True when the underlying C ABI returned `kOk`. */
   ok: boolean;
-  /** Numeric `fm_status_t`. 0 on success. */
-  status: number;
+  /** Numeric `fm_status_t`; `StatusCode.Ok` (0) on success. */
+  code: StatusCode;
   /** Describes the failure this call hit; empty on success. Normally the
    *  thread-local last-error message the C ABI recorded, but a rejection
    *  the binding raised itself -- a destroyed handle, a missing or
@@ -1475,13 +1475,6 @@ export interface PaginationPage {
   heightPt: number;
 }
 
-/** Result of the five raw print-settings getters. The empty `xml` string
- * means the sheet declares no such element. */
-export interface SheetPrintXmlResult {
-  status: Status;
-  xml: string;
-}
-
 /** Result of `Workbook.getPrintArea`. `ranges` is empty when no print
  * area is declared; a whole-axis area reads back expanded to the grid edge. */
 export interface SheetPrintAreaResult {
@@ -2319,13 +2312,6 @@ export interface WidthModelResult {
   platform: string;
 }
 
-/** Return type of `Workbook.getFormula` / `getFormulaR1C1`. `formula` is
- *  `null` when the cell holds no formula (and on failure). */
-export interface FormulaResult {
-  status: Status;
-  formula: string | null;
-}
-
 /** One `<dateGroupItem>` of a values filter. `grouping` is the granularity
  *  the item matches at (a `DateTimeGrouping`); fields finer than `grouping` are zero. */
 export interface AutoFilterDateGroup {
@@ -2492,13 +2478,18 @@ export interface ImageInfoResult {
   pxHeight: number;
 }
 
-/** Result of `Workbook.getImage`. `bytes` is a copy, empty on failure. */
-export interface ImageResult extends ImageInfoResult {
-  bytes: Uint8Array;
+/** A picture read by `Workbook.getImage`: its format, pixel size and a copy of its media bytes. */
+export interface Image {
+  readonly format: ImageFormat;
+  readonly pxWidth: number;
+  readonly pxHeight: number;
+  readonly bytes: Uint8Array;
 }
 
-/** Result of `Workbook.addImage` and `Workbook.restoreDrawing`; `objectId` is zero on failure. */
-export interface InsertImageResult {
+/** Result of the `add*` calls that allocate a drawing object id (`addImage`,
+ *  `restoreDrawing`, `addShape`, `addSlicer`, `addChart`); `objectId` is
+ *  unspecified unless `status.ok`. */
+export interface ObjectIdResult {
   status: Status;
   objectId: number;
 }
@@ -2711,12 +2702,6 @@ export interface DataTableSpec {
   rect: CellRect;
   rowInput?: { row: number; col: number } | null;
   colInput?: { row: number; col: number } | null;
-}
-
-/** Return type of `Workbook.getDataTable`. `dataTable` is `null` when no table covers the cell. */
-export interface DataTableResult {
-  status: Status;
-  dataTable: DataTable | null;
 }
 
 /** One sparkline: the data `formula` (a sheet-qualified range without `=`) and the
@@ -3058,22 +3043,10 @@ export interface ChartPreviewOverridesInput {
   naAsBlank?: boolean;
 }
 
-/** Result of `Workbook.getChart`; `chart` is `null` unless `status` is ok. */
-export interface ChartResult {
-  status: Status;
-  chart: ChartInfo | null;
-}
-
 /** Result of `Workbook.getChartData` and `previewChartData`; `data` is `null` unless `status` is ok. */
 export interface ChartDataResult {
   status: Status;
   data: ChartData | null;
-}
-
-/** Result of `Workbook.addChart`; `objectId` is zero on failure. */
-export interface InsertChartResult {
-  status: Status;
-  objectId: number;
 }
 
 /** Result of `Workbook.addChartSeries`; `seriesIdx` is the new series' `c:idx`, zero on failure. */
@@ -3144,12 +3117,6 @@ export interface Hyperlink {
 export interface Comment {
   author: string;
   text: string;
-}
-
-/** Status-bearing comment lookup returned by `getCommentResult`. */
-export interface CommentResult {
-  status: Status;
-  comment: Comment | null;
 }
 
 /** Workbook-level protection (`<workbookProtection>`). Booleans are stored as 0/1.
@@ -3254,12 +3221,6 @@ export interface DataValidationInput {
 
 /** @deprecated Use {@link DataValidation} instead. */
 export type ValidationEntry = DataValidation;
-
-/** Return type of `Workbook.getCellXfIndex(sheet, row, col)`. */
-export interface CellXfIndexResult {
-  status: Status;
-  xfIndex: number;
-}
 
 /** Return type of `Workbook.getCellXf(xfIndex)`. */
 export interface CellXfResult {
@@ -3573,13 +3534,6 @@ export interface BorderResult extends BorderRecord {
   status: Status;
 }
 
-/** Return type of `Workbook.getNumFmtString(numFmtId)`. */
-export interface NumFmtResult {
-  status: Status;
-  numFmtId: number;
-  formatCode: string;
-}
-
 /** Plain-data shape of a differential format (`<dxf>`) record, used as
  *  the input to `Workbook.addDxf(...)`. Optional properties mirror
  *  `getDxf`'s `DxfResult`: only the sub-records actually engaged in the
@@ -3602,17 +3556,6 @@ export interface DxfRecord {
  *  Optional properties are present only when that `<dxf>` child exists. */
 export interface DxfResult extends DxfRecord {
   status: Status;
-}
-
-/** Return type of `Workbook.getLambdaText(sheet, row, col)`. The
- *  rendered text never carries a leading `=` and is suitable for
- *  passing back through `setFormula`. `kInvalidArgument` surfaces when
- *  the cell is absent or its cached value is not a lambda. */
-export interface LambdaTextResult {
-  status: Status;
-  /** Excel formula text in `LAMBDA(p1,p2,body)` form. Empty string
-   *  when `status` is non-OK. */
-  text: string;
 }
 
 /** Argument of `Workbook.setCellStyle`. Also the record `listCellStyles` and `getCellStyle` return. */
@@ -3942,13 +3885,6 @@ export interface LocaleFacts {
   readonly errorNames: readonly LocaleErrorName[];
 }
 
-/** Result of `Workbook.compareText`. */
-export interface CompareTextResult {
-  status: Status;
-  /** -1, 0 or 1; 0 when `status` is not ok. */
-  order: number;
-}
-
 /** Result of `Workbook.getCollationClasses`. */
 export interface CollationClassesResult {
   status: Status;
@@ -3964,20 +3900,18 @@ export interface LocaleFactsResult {
   facts: LocaleFacts | null;
 }
 
-/** Result envelope for `getFunctionMetadata(name)`. `ok` is
- *  `false` when no function matches `name`; the remaining fields are
- *  then absent. When `ok` is `true`, `name` / `minArity` / `maxArity`
- *  are always populated; `signatureTemplate` and `description` are
- *  always `undefined` — the engine ships no human-readable function
- *  text, and {@link mergeFunctionMetadata} overlays a host-supplied
+/** Metadata of a registered function, the `value` of `getFunctionMetadata(name)`.
+ *  `signatureTemplate` and `description` are always `undefined`: the engine ships no
+ *  human-readable function text, and {@link mergeFunctionMetadata} overlays a host-supplied
  *  provider document (`docs/function-metadata-schema.md`). */
-export interface FunctionMetadataResult {
-  readonly ok: boolean;
-  readonly name?: string;
-  readonly minArity?: number;
+export interface FunctionMetadata {
+  readonly name: string;
+  readonly minArity: number;
   /** `null` denotes an unbounded variadic. */
-  readonly maxArity?: number | null;
-  readonly availability?: number;
+  readonly maxArity: number | null;
+  /** Availability class: 0 implemented, 1 implemented_unverified,
+   *  2 environment_bound, 3 unavailable_stub. */
+  readonly availability: number;
   readonly signatureTemplate?: string;
   readonly description?: string;
 }
@@ -4007,9 +3941,9 @@ export interface FunctionMetadataEntry {
  *  function name -> {@link FunctionMetadataEntry}. */
 export type FunctionMetadataProvider = Record<string, FunctionMetadataEntry>;
 
-/** Result of {@link mergeFunctionMetadata}: a {@link FunctionMetadataResult}
+/** Result of {@link mergeFunctionMetadata}: a {@link FunctionMetadata}
  *  with the resolved localized display name attached. */
-export interface MergedFunctionMetadataResult extends FunctionMetadataResult {
+export interface MergedFunctionMetadata extends FunctionMetadata {
   /** `entry.aliases[locale]` when present, else the canonical `name`. */
   readonly localizedName?: string;
 }
@@ -4081,13 +4015,6 @@ export interface IndexResult {
 export interface AddNumFmtResult {
   status: Status;
   numFmtId: number;
-}
-
-/** Return type of `Workbook.recalcViewport(sheet, viewport)`. */
-export interface PartialRecalcResult {
-  status: Status;
-  /** Number of cells the engine actually evaluated. */
-  recomputed: number;
 }
 
 /** Return type of `Workbook.getIterative()`. */
@@ -4266,10 +4193,9 @@ export interface Workbook {
     anchorCol: number,
     formula: string,
   ): EvalResult;
-  /** Returns the rendered `LAMBDA(...)` text for the lambda value cached
-   *  at `(sheet, row, col)`. `kInvalidArgument` surfaces via `status`
-   *  when the cell is absent or its value is not a lambda. */
-  getLambdaText(sheet: number, row: number, col: number): LambdaTextResult;
+  /** Renders the lambda value cached at `(sheet, row, col)` as Excel formula text in `LAMBDA(p1,p2,body)`
+   *  form; `value` is `null` when the cell is absent or its value is not a lambda. */
+  getLambdaText(sheet: number, row: number, col: number): OptionalResult<string>;
 
   // Recalc + save.
   /** Recalculates all dirty cells serially on the caller thread.
@@ -4288,10 +4214,9 @@ export interface Workbook {
    * status 7003 with the counters left at zero.
    */
   recalcParallel(threadCount: number): ParallelRecalcResult;
-  /** Recalculates only cells touched by the supplied viewport. Reports
-   *  status 7003 with `recomputed` at zero when a throwing
-   *  `IterativeProgressCallback` cut the pass short. */
-  recalcViewport(sheet: number, viewport: CellRect): PartialRecalcResult;
+  /** Recalculates only cells touched by the supplied viewport; `value` is the number of cells evaluated.
+   *  Reports status 7003 when a throwing `IterativeProgressCallback` cut the pass short. */
+  recalcViewport(sheet: number, viewport: CellRect): NumberResult;
   /** Sets iterative calculation. When disabled (the default) cyclic references surface `#REF!`.
    *  `maxIterations` is clamped to `[1, 32767]` (Excel's own limit) and `getIterative` reports the
    *  clamped value; `maxChange` is the absolute convergence threshold. */
@@ -4469,14 +4394,14 @@ export interface Workbook {
   getCellCount(sheet: number): NumberResult;
   /** Reads the `idx`-th counted coordinate, `idx` in `[0, cellCount)`, ordered by `(row, col)` ascending. */
   getCellAt(sheet: number, idx: number): CellEntry;
-  /** Reads the cell's stored formula in A1 notation (leading `=` included); `formula` is `null` for a non-formula cell.
+  /** Reads the cell's stored formula in A1 notation (leading `=` included); `value` is `null` for a non-formula cell.
    *  The text is returned as entered; a formula loaded from a file shows book names, not `[N]` indexes. */
-  getFormula(sheet: number, row: number, col: number): FormulaResult;
+  getFormula(sheet: number, row: number, col: number): OptionalResult<string>;
   /** Reads the cell's formula in R1C1 notation relative to the cell (no leading `=`); `null` for a non-formula cell.
    *  A formula loaded from a file that does not parse is kept verbatim, evaluates to `#NAME?`, and fails here with
    *  `kParserUnexpectedToken`; `setFormula` never produces that state.
    *  Sheet and external qualifiers are quoted as a whole only when the path, book or sheet name needs it. */
-  getFormulaR1C1(sheet: number, row: number, col: number): FormulaResult;
+  getFormulaR1C1(sheet: number, row: number, col: number): OptionalResult<string>;
   /** Enumerates the populated cells of `range` row-major, one page at a time. Pass the previous `nextCursor` as `cursor` to resume; `limit` 0 / omitted means the maximum (65,536). */
   getCellsInRange(sheet: number, range: CellRect, cursor?: number | null, limit?: number | null): CellsInRangeResult;
   /** Reads the text Excel displays for the cell, from its value and XF number format under the workbook's date system. */
@@ -4864,21 +4789,21 @@ export interface Workbook {
   getPagination(sheet: number): PaginationResult;
 
   /** Reads the worksheet's `<pageSetup>` fragment; empty when absent. */
-  getPageSetupXml(sheet: number): SheetPrintXmlResult;
+  getPageSetupXml(sheet: number): StringResult;
   /** Replaces `<pageSetup>`; empty removes it and restores the defaults.
    *  A fragment carrying `r:id` is rejected unless the sheet already has a
    *  printerSettings part, since the reference would otherwise dangle. */
   setPageSetupXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<pageMargins>` fragment; empty when absent. */
-  getPageMarginsXml(sheet: number): SheetPrintXmlResult;
+  getPageMarginsXml(sheet: number): StringResult;
   /** Replaces `<pageMargins>`; empty removes it. */
   setPageMarginsXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<printOptions>` fragment; empty when absent. */
-  getPrintOptionsXml(sheet: number): SheetPrintXmlResult;
+  getPrintOptionsXml(sheet: number): StringResult;
   /** Replaces `<printOptions>`; empty removes it. */
   setPrintOptionsXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<headerFooter>` fragment; empty when absent. */
-  getHeaderFooterXml(sheet: number): SheetPrintXmlResult;
+  getHeaderFooterXml(sheet: number): StringResult;
   /** Replaces `<headerFooter>`; empty removes it. Header codes live in XML
    *  element text, so a hand-built fragment writes them escaped
    *  (`<oddHeader>&amp;C...</oddHeader>`); `setSheetHeaderFooter` takes the
@@ -4886,7 +4811,7 @@ export interface Workbook {
   setHeaderFooterXml(sheet: number, xml: string): Status;
   /** Reads the worksheet's `<sheetPr>` fragment; empty when absent. It also
    *  carries the tab colour and VBA code name, not just print settings. */
-  getSheetPrXml(sheet: number): SheetPrintXmlResult;
+  getSheetPrXml(sheet: number): StringResult;
   /** Replaces `<sheetPr>`; empty removes it. */
   setSheetPrXml(sheet: number, xml: string): Status;
   /** Sets or clears `<sheetPr><pageSetUpPr fitToPage>` without disturbing
@@ -5091,8 +5016,8 @@ export interface Workbook {
   restoreRangeStyle(sheet: number, bytes: Uint8Array): Status;
 
   // Styles.
-  /** Returns `{ status, xfIndex }` for the cell at `(sheet, row, col)`. */
-  getCellXfIndex(sheet: number, row: number, col: number): CellXfIndexResult;
+  /** Returns the cell XF index of the cell at `(sheet, row, col)`. */
+  getCellXfIndex(sheet: number, row: number, col: number): NumberResult;
   /** Persists `xfIndex` on the cell at `(sheet, row, col)`. An index not
    *  below `getCellXfCount()` fails with `kInvalidArgument`. */
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
@@ -5118,8 +5043,8 @@ export interface Workbook {
   getFill(fillIndex: number): FillResult;
   /** Returns the border record at `borderIndex`, including its ColorSpec selectors. */
   getBorder(borderIndex: number): BorderResult;
-  /** Returns the format string registered for `numFmtId`. */
-  getNumFmtString(numFmtId: number): NumFmtResult;
+  /** Returns the effective format string for `numFmtId`; `value` is `null` when no format maps to it. */
+  getNumFmtString(numFmtId: number): OptionalResult<string>;
   /** Returns the differential-format record referenced by CF `dxfId`. */
   getDxf(dxfIndex: number): DxfResult;
 
@@ -5240,10 +5165,8 @@ export interface Workbook {
   listMerges(sheet: number): ListResult<CellRect>;
   /** Returns every merge on `sheet` that intersects `range` (inclusive), in storage order. */
   getMergesInRange(sheet: number, range: CellRect): ListResult<CellRect>;
-  /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
-  getComment(sheet: number, row: number, col: number): Comment | null;
-  /** Returns a comment lookup result that distinguishes absence from an invalid sheet or handle. */
-  getCommentResult(sheet: number, row: number, col: number): CommentResult;
+  /** Returns the cell comment at `(sheet, row, col)`; `value` is `null` when none is anchored there. */
+  getComment(sheet: number, row: number, col: number): OptionalResult<Comment>;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
   listComments(sheet: number): ListResult<SheetCommentEntry>;
@@ -5369,10 +5292,11 @@ export interface Workbook {
   listDrawingObjects(sheet: number): ListResult<DrawingObject>;
   /** Reads the drawing object `objectId`; `value` is `null` when the sheet's drawing has none. */
   getDrawingObject(sheet: number, objectId: number): OptionalResult<DrawingObject>;
-  /** Returns a copy of the media bytes of the picture `objectId`. */
-  getImage(sheet: number, objectId: number): ImageResult;
+  /** Returns a copy of the media bytes of the picture `objectId`; `value` is `null` when the sheet has no
+   *  such picture with a present media part. */
+  getImage(sheet: number, objectId: number): OptionalResult<Image>;
   /** Inserts an image as a new anchored picture and returns its object id. */
-  addImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertInput): InsertImageResult;
+  addImage(sheet: number, bytes: Uint8Array, opts?: ImageInsertInput): ObjectIdResult;
   /** Removes the picture or chart `objectId` and the parts only it reaches; other drawing content is kept. */
   removeDrawing(sheet: number, objectId: number): Status;
   /** Moves and resizes the picture or chart `objectId`, keeping its id, crop, rotation and every other element. */
@@ -5385,13 +5309,13 @@ export interface Workbook {
   /** Captures the picture or chart `objectId` with its list position, element and dependent parts as opaque bytes for `restoreDrawing`. */
   snapshotDrawing(sheet: number, objectId: number): ImageSnapshotResult;
   /** Puts a `snapshotDrawing` capture back and returns the object's id: in place of an object with the same id at its recorded position, or as a copy on top with `newId`. */
-  restoreDrawing(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): InsertImageResult;
+  restoreDrawing(sheet: number, bytes: Uint8Array, opts?: RestoreImageOptions): ObjectIdResult;
 
   // Drawing shapes. A shape is addressed as `(sheet, objectId)`, the id `listShapes` reports.
   /** Lists the shapes, connectors and groups of the sheet's drawing in z-order (back first); children of a group are not listed. */
   listShapes(sheet: number): ListResult<Shape>;
   /** Appends a shape on top and returns its id; a sheet without a drawing gets one and existing drawing content is kept. */
-  addShape(sheet: number, spec: ShapeInput): InsertImageResult;
+  addShape(sheet: number, spec: ShapeInput): ObjectIdResult;
   /** Applies the fields `spec` names to the shape `objectId`; every other part of its XML is kept. */
   updateShape(sheet: number, objectId: number, spec: ShapeInput): Status;
   /** Removes the shape, connector or group `objectId` with its children. */
@@ -5405,7 +5329,7 @@ export interface Workbook {
   /** Reads the slicer `objectId`; `value` is `null` when the sheet hosts none (a slicer without a frame has no id). */
   getSlicer(sheet: number, objectId: number): OptionalResult<Slicer>;
   /** Adds a slicer over column `column` (0-based) of table `table` and returns its frame's id. It creates the slicer and cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. */
-  addSlicer(sheet: number, table: number, column: number, spec: SlicerInput): InsertImageResult;
+  addSlicer(sheet: number, table: number, column: number, spec: SlicerInput): ObjectIdResult;
   /** Applies the fields `spec` names to the slicer `objectId`; every other part of its XML is kept. */
   updateSlicer(sheet: number, objectId: number, spec: SlicerInput): Status;
   /** Removes the slicer `objectId` with its drawing frame, and its cache when no other slicer uses it. Removing a table or sheet removes the slicers bound to it. */
@@ -5414,8 +5338,8 @@ export interface Workbook {
   // What-If data tables. The formulas sit in the row above the result range and the substitution values in the column left of it (or the other way round); each result cell is found by substituting into the input cell(s), recalculating the cells that read them and restoring the inputs.
   /** Creates a data table over `spec`'s result range. The result cells read 0 until the next recalc and refuse writes ("cannot change part of a data table") until the table is removed. `kDataTableInvalid` (8005) when no input is given, the range has no row above or column left of it, an input lies inside the range, or the range overlaps another data table. */
   addDataTable(sheet: number, spec: DataTableSpec): Status;
-  /** Reads the data table whose result range contains `(row, col)`. */
-  getDataTable(sheet: number, row: number, col: number): DataTableResult;
+  /** Reads the data table whose result range contains `(row, col)`; `value` is `null` when no table covers the cell. */
+  getDataTable(sheet: number, row: number, col: number): OptionalResult<DataTable>;
   /** Removes the data table containing `(row, col)` and blanks its result cells. `kDataTableInvalid` (8005) when none covers the cell. */
   removeDataTable(sheet: number, row: number, col: number): Status;
   /** Recomputes every data table now, whatever the calc mode. `recalc()` does the same after a pass that had a dirty cell or a volatile formula, except under `CalcMode.AutoNoTable`, which leaves it to this call; `recalcViewport()` never computes tables. */
@@ -5436,14 +5360,14 @@ export interface Workbook {
   removeSparklineGroup(sheet: number, index: number): Status;
 
   // Charts. A chart is addressed as `(sheet, objectId)`, the id `listDrawingObjects` reports for a `DrawingObjectKind.Chart`.
-  /** Reads the typed view of the chart `objectId`. */
-  getChart(sheet: number, objectId: number): ChartResult;
+  /** Reads the typed view of the chart `objectId`; `value` is `null` when the sheet has no such chart. */
+  getChart(sheet: number, objectId: number): OptionalResult<ChartInfo>;
   /** Resolves the chart's series against the current cell values. */
   getChartData(sheet: number, objectId: number): ChartDataResult;
   /** Resolves the series as if `overrides` were applied to the chart; the workbook is not changed. */
   getChartPreview(sheet: number, objectId: number, overrides: ChartPreviewOverridesInput): ChartDataResult;
   /** Creates a chart with filled caches and returns its object id. */
-  addChart(sheet: number, options: ChartInsertInput): InsertChartResult;
+  addChart(sheet: number, options: ChartInsertInput): ObjectIdResult;
   /** Replaces plot group `plot` with `kind`; `grouping` applies to column, bar, line and area. */
   setChartType(sheet: number, objectId: number, plot: number, kind: ChartInsertKind, grouping?: ChartGrouping): Status;
   /** Sets the chart title text, or removes the title with `null`. A {@link ChartTitleInfo} sets that kind, so `{ kind: ChartTitleKind.Auto }` returns the title to Excel's automatic one. */
@@ -5524,11 +5448,10 @@ export interface Workbook {
   getDependents(sheet: number, row: number, col: number, depth: number): ListResult<CellNode>;
 
   // Function catalog.
-  /** Returns metadata for the function `name` (case-insensitive). When
-   *  the function is unknown, returns `{ok: false}`. The result is
-   *  locale-invariant: the description / signature fields are always
-   *  `undefined` (see {@link FunctionMetadataResult}). */
-  getFunctionMetadata(name: string): FunctionMetadataResult;
+  /** Returns metadata for the function `name` (case-insensitive); `value` is `null` when no function
+   *  matches. The result is locale-invariant: the description / signature fields are always `undefined`
+   *  (see {@link FunctionMetadata}). */
+  getFunctionMetadata(name: string): OptionalResult<FunctionMetadata>;
   /** Returns every registered function's canonical name in ascending
    *  sort order. */
   listFunctionNames(): ListResult<string>;
@@ -5564,10 +5487,10 @@ export interface Workbook {
   /** Lists the error names of `profileId` in error-code order. */
   listLocaleErrorNames(profileId: ExcelProfileId): ListResult<LocaleErrorName>;
   /** Compares two texts under `profileId` and returns the sign of the
-   *  result in `order`. `strength` picks the fold (see
+   *  result (-1, 0 or 1) in `value`. `strength` picks the fold (see
    *  {@link CollationStrength}); it is a text comparison, not Excel's `=`
    *  on two cells. `status.ok` is `false` for an unknown `profileId`. */
-  compareText(a: string, b: string, strength: CollationStrength, profileId: ExcelProfileId): CompareTextResult;
+  compareText(a: string, b: string, strength: CollationStrength, profileId: ExcelProfileId): NumberResult;
   /** Classifies `values` into collation-ordered equivalence classes under
    *  `profileId`. `classIds[i]` is the class of `values[i]`: two values share
    *  an id exactly when they have the same kind and compare equal (texts by
@@ -5611,15 +5534,15 @@ export interface Workbook {
 
   /** Parses `text` as `INDIRECT` reads a reference under the workbook's profile: A1, or R1C1 with the
    *  profile's letters when `options.r1c1` is set. Accepts an optional local sheet qualifier, `$` markers, a
-   *  range in either order and whole columns / rows. Returns `null` for anything else (3D, external, named,
-   *  structured or multi-area references, surrounding whitespace, a sheet name over 31 characters, an R1C1
-   *  relative axis without a base). Throws `TypeError` when only one of `baseRow` / `baseCol` is given and
-   *  `RangeError` when the base lies outside the grid. */
-  parseReference(text: string, options?: ParseReferenceOptions): ParsedReference | null;
+   *  range in either order and whole columns / rows. `value` is `null` with an ok status for anything else
+   *  (3D, external, named, structured or multi-area references, surrounding whitespace, a sheet name over 31
+   *  characters, an R1C1 relative axis without a base). Throws `TypeError` when only one of `baseRow` /
+   *  `baseCol` is given; a base outside the grid is a failed status. */
+  parseReference(text: string, options?: ParseReferenceOptions): OptionalResult<ParsedReference>;
   /** Writes the inclusive rectangle as A1 reference text: `A1`, `$A$1:$B$2`, `B:D` (every row), `2:11`
-   *  (every column), with the sheet name quoted as a stored formula quotes it. Throws `RangeError` for a
-   *  coordinate outside the grid or an unordered rectangle. */
-  formatReference(range: ReferenceRange, options?: FormatReferenceOptions): string;
+   *  (every column), with the sheet name quoted as a stored formula quotes it. A coordinate outside the
+   *  grid or an unordered rectangle is a failed status. */
+  formatReference(range: ReferenceRange, options?: FormatReferenceOptions): StringResult;
 
   // Legacy array (CSE) formulas.
   /** Returns the legacy array (`<f t="array">`) formula covering `(sheet, row, col)`, the same value
@@ -5638,12 +5561,13 @@ export interface Workbook {
   setArrayFormula(sheet: number, range: CellRect, formula: string): Status;
 }
 
-/** Static factories on the Workbook class. */
+/** Static factories on the Workbook class. Each returns `{ status, value }`:
+ *  `value` is the new workbook when `status.ok`, and `null` otherwise. */
 export interface WorkbookCtor {
   /** Workbook with a single default sheet (`"Sheet1"`). */
-  createDefault(): Workbook;
+  createDefault(): OptionalResult<Workbook>;
   /** Workbook with no sheets. */
-  createEmpty(): Workbook;
+  createEmpty(): OptionalResult<Workbook>;
   /** Workbook with the new-workbook defaults of an Excel profile id such as
    *  `"mac-365-ja_JP"`: font 0 (name, charset, theme-minor scheme), the
    *  phonetic font (font 1, CJK locales), the Normal style name, the sheet
@@ -5653,18 +5577,17 @@ export interface WorkbookCtor {
    *  Only `mac-*` values are measured; `win-*` ids are estimates (the Mac
    *  table with an 11 pt body font, no row height or base column width).
    *  `setDefaultFont` afterwards leaves font 1 unchanged. `createDefault`
-   *  still seeds Calibri 11. An unknown id returns an invalid wrapper
-   *  (`!isValid()`), like a failed `createDefault`. */
-  createForProfile(profileId: string): Workbook;
+   *  still seeds Calibri 11. An unknown id is a failed status with a `null`
+   *  value. */
+  createForProfile(profileId: string): OptionalResult<Workbook>;
   /** Loads from an in-memory workbook byte buffer, auto-detecting
    *  `.xlsx` vs `.xlsb` from the package contents (there is no filename
-   *  to route on). The returned wrapper may be unusable (subsequent
-   *  calls return `kBindingInvalidHandle`) on failure; consult
-   *  `getLastErrorMessage()` for diagnostics. */
-  load(bytes: Uint8Array): Workbook;
+   *  to route on). Malformed, empty or non-`Uint8Array` input is a failed
+   *  status with a `null` value. */
+  load(bytes: Uint8Array): OptionalResult<Workbook>;
 }
 
-/** Factory object for native `Workbook` handles (`createDefault`, `createEmpty`, `loadBytes`, ...). */
+/** Factory object for native `Workbook` handles (`createDefault`, `createEmpty`, `load`, ...). */
 export const Workbook: WorkbookCtor;
 
 /** Convenience: evaluates `formula` read-only against a fresh
@@ -5727,10 +5650,10 @@ export function setLogSink(sink: ((record: Uint8Array) => void) | null): Status;
  *  the keys in `aliases` / `localized`, independent of the profile id
  *  passed to the engine locale calls. See `docs/function-metadata-schema.md`. */
 export function mergeFunctionMetadata(
-  base: FunctionMetadataResult,
+  base: FunctionMetadata,
   entry: FunctionMetadataEntry | undefined,
   locale: string,
-): MergedFunctionMetadataResult;
+): MergedFunctionMetadata;
 
 /** Key set of the default export. Must stay identical to the object
  *  literal `export default {...}` in `index.mjs`; a `readme-counts`

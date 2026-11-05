@@ -28,7 +28,6 @@ R7.js	record.cell_result	readonly	`CellResult` is a result; `status` is not `rea
 R7.js	record.cell_show_phonetic_result	readonly	`CellShowPhoneticResult` is a result; `status` is not `readonly`
 R7.js	record.cell_style_record	readonly	`CellStyleRecord` is a result; `name` is not `readonly`
 R7.js	record.cell_xf	readonly	`CellXf` is a result; `fontIndex` is not `readonly`
-R7.js	record.cell_xf_index_result	readonly	`CellXfIndexResult` is a result; `status` is not `readonly`
 R7.js	record.cell_xf_result	readonly	`CellXfResult` is a result; `status` is not `readonly`
 R7.js	record.cells_in_range_result	readonly	`CellsInRangeResult` is a result; `status` is not `readonly`
 R7.js	record.cf_cell_result	readonly	`CfCellResult` is a result; `row` is not `readonly`
@@ -47,7 +46,6 @@ R7.js	record.chart_line_patch	patch	`ChartLinePatch` is not declared as `Patch<.
 R7.js	record.chart_marker_patch	patch	`ChartMarkerPatch` is not declared as `Patch<...>`
 R7.js	record.chart_plot_patch	patch	`ChartPlotPatch` is not declared as `Patch<...>`
 R7.js	record.chart_point_patch	patch	`ChartPointPatch` is not declared as `Patch<...>`
-R7.js	record.chart_result	readonly	`ChartResult` is a result; `status` is not `readonly`
 R7.js	record.chart_series_patch	patch	`ChartSeriesPatch` is not declared as `Patch<...>`
 R7.js	record.civil_time	readonly	`CivilTime` is a result; `year` is not `readonly`
 R7.js	record.collation_classes_result	readonly	`CollationClassesResult` is a result; `status` is not `readonly`
@@ -55,10 +53,7 @@ R7.js	record.color_spec	readonly	`ColorSpec` is a result; `kind` is not `readonl
 R7.js	record.column_layout	readonly	`ColumnLayout` is a result; `first` is not `readonly`
 R7.js	record.columns_result	readonly	`ColumnsResult` is a result; `status` is not `readonly`
 R7.js	record.comment	readonly	`CommentEntry` is a result; `author` is not `readonly`
-R7.js	record.comment_result	readonly	`CommentResult` is a result; `status` is not `readonly`
-R7.js	record.compare_text_result	readonly	`CompareTextResult` is a result; `status` is not `readonly`
 R7.js	record.data_table	readonly	`DataTable` is a result; `firstRow` is not `readonly`
-R7.js	record.data_table_result	readonly	`DataTableResult` is a result; `status` is not `readonly`
 R7.js	record.display_text_result	readonly	`DisplayTextResult` is a result; `status` is not `readonly`
 R7.js	record.drawing_object	readonly	`DrawingObject` is a result; `objectId` is not `readonly`
 R7.js	record.dxf_record	readonly	`DxfRecord` is a result; `font` is not `readonly`
@@ -71,20 +66,15 @@ R7.js	record.fill_record	readonly	`FillRecord` is a result; `pattern` is not `re
 R7.js	record.fill_result	readonly	`FillResult` is a result; `status` is not `readonly`
 R7.js	record.font_record	readonly	`FontRecord` is a result; `name` is not `readonly`
 R7.js	record.font_result	readonly	`FontResult` is a result; `status` is not `readonly`
-R7.js	record.formula_result	readonly	`FormulaResult` is a result; `status` is not `readonly`
 R7.js	record.gradient_stop	readonly	`GradientStop` is a result; `position` is not `readonly`
 R7.js	record.hyperlink	readonly	`HyperlinkEntry` is a result; `row` is not `readonly`
 R7.js	record.image_info_result	readonly	`ImageInfoResult` is a result; `status` is not `readonly`
-R7.js	record.image_result	readonly	`ImageResult` is a result; `bytes` is not `readonly`
 R7.js	record.image_snapshot_result	readonly	`ImageSnapshotResult` is a result; `status` is not `readonly`
-R7.js	record.insert_chart_result	readonly	`InsertChartResult` is a result; `status` is not `readonly`
 R7.js	record.insert_image_result	readonly	`InsertImageResult` is a result; `status` is not `readonly`
 R7.js	record.iterative_settings_result	readonly	`IterativeSettingsResult` is a result; `status` is not `readonly`
-R7.js	record.lambda_text_result	readonly	`LambdaTextResult` is a result; `status` is not `readonly`
 R7.js	record.list_result	interface	`ListResult` is a type, not an interface
 R7.js	record.locale_facts_result	readonly	`LocaleFactsResult` is a result; `status` is not `readonly`
 R7.js	record.mention	readonly	`Mention` is a result; `personId` is not `readonly`
-R7.js	record.num_fmt_result	readonly	`NumFmtResult` is a result; `status` is not `readonly`
 R7.js	record.number_result	readonly	`NumberResult` is a result; `status` is not `readonly`
 R7.js	record.page_break	readonly	`PageBreak` is a result; `id` is not `readonly`
 R7.js	record.page_margins	readonly	`PageMarginsInput` is a result; `left` is not `readonly`
@@ -92,7 +82,6 @@ R7.js	record.page_setup	readonly	`PageSetupInput` is a result; `orientation` is 
 R7.js	record.pagination_result	readonly	`PaginationResult` is a result; `status` is not `readonly`
 R7.js	record.parallel_recalc_result	readonly	`ParallelRecalcResult` is a result; `status` is not `readonly`
 R7.js	record.parallel_recalc_stats	readonly	`ParallelRecalcStats` is a result; `cellsEvaluated` is not `readonly`
-R7.js	record.partial_recalc_result	readonly	`PartialRecalcResult` is a result; `status` is not `readonly`
 R7.js	record.person	readonly	`Person` is a result; `id` is not `readonly`
 R7.js	record.persons_result	readonly	`PersonsResult` is a result; `status` is not `readonly`
 R7.js	record.phonetic_properties_result	readonly	`PhoneticPropertiesResult` is a result; `status` is not `readonly`
@@ -138,7 +127,6 @@ R7.js	record.sheet_page_margins_result	readonly	`SheetPageMarginsResult` is a re
 R7.js	record.sheet_page_setup_result	readonly	`SheetPageSetupResult` is a result; `status` is not `readonly`
 R7.js	record.sheet_print_area_result	readonly	`SheetPrintAreaResult` is a result; `status` is not `readonly`
 R7.js	record.sheet_print_titles_result	readonly	`SheetPrintTitlesResult` is a result; `status` is not `readonly`
-R7.js	record.sheet_print_xml_result	readonly	`SheetPrintXmlResult` is a result; `status` is not `readonly`
 R7.js	record.sheet_protection	readonly	`SheetProtection` is a result; `enabled` is not `readonly`
 R7.js	record.sheet_protection_result	readonly	`SheetProtectionResult` is a result; `status` is not `readonly`
 R7.js	record.sheet_selection_result	readonly	`SheetSelectionResult` is a result; `status` is not `readonly`
@@ -160,24 +148,3 @@ R7.js	record.value	readonly	`Value` is a result; `kind` is not `readonly`
 R7.js	record.width_model_result	readonly	`WidthModelResult` is a result; `status` is not `readonly`
 R7.js	record.workbook_protection	readonly	`WorkbookProtection` is a result; `lockStructure` is not `readonly`
 R7.js	record.workbook_protection_result	readonly	`WorkbookProtectionResult` is a result; `status` is not `readonly`
-R8.js	chart.add	result	`insertChart` returns `InsertChartResult`, not `ObjectIdResult`
-R8.js	chart.get	result	`getChart` returns `ChartResult`, not `OptionalResult`
-R8.js	comment.get	null	`getComment` returns `CommentEntry | null`; wrap it
-R8.js	comment.get	result	`getComment` returns `CommentEntry | null`, not `OptionalResult`
-R8.js	comment.get.get_comment_result	getCommentResult	`getCommentResult` is dropped from the native surface
-R8.js	data_table.get	result	`getDataTable` returns `DataTableResult`, not `OptionalResult`
-R8.js	error_display_name.get	result	`errorDisplayName` returns `string`, not `OptionalResult`
-R8.js	field.status_code	code	`Status` should carry `code`, not `status`
-R8.js	function_metadata.get	result	`functionMetadata` returns `FunctionMetadataResult`, not `OptionalResult`
-R8.js	image.add	result	`insertImage` returns `InsertImageResult`, not `ObjectIdResult`
-R8.js	image.get	result	`getImage` returns `ImageResult`, not `OptionalResult`
-R8.js	lambda_text.get	result	`getLambdaText` returns `LambdaTextResult`, not `OptionalResult`
-R8.js	num_fmt_string.get	result	`getNumFmt` returns `NumFmtResult`, not `OptionalResult`
-R8.js	reference.parse	null	`parseReference` returns `ParsedReference | null`; wrap it
-R8.js	shape.add	result	`insertShape` returns `InsertImageResult`, not `ObjectIdResult`
-R8.js	slicer.add	result	`addSlicer` returns `InsertImageResult`, not `ObjectIdResult`
-R8.js	value.get	result	`getValue` returns `CellResult`, not `OptionalResult`
-R8.js	workbook.create	result	`Workbook.createDefault` returns `Workbook`, not `OptionalResult`
-R8.js	workbook.create_empty	result	`Workbook.createEmpty` returns `Workbook`, not `OptionalResult`
-R8.js	workbook.create_for_profile	result	`Workbook.createForProfile` returns `Workbook`, not `OptionalResult`
-R8.js	workbook.load	result	`Workbook.loadBytes` returns `Workbook`, not `OptionalResult`

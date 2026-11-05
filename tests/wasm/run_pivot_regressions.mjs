@@ -4,7 +4,7 @@ import { PIVOT, VAL } from './smoke_support.mjs';
 const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : RangeError);
 
 function makeCheckedPivot(Module) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   const must = (result, what) => {
     const status = typeof result.ok === 'boolean' ? result : result.status;
     assert.ok(status.ok, `${what}: ${JSON.stringify(status)}`);
@@ -53,7 +53,7 @@ const CHECKED_PIVOT_GRID = ['Row Labels|Sum of Amount', 'East|10', 'West|30', 'G
 
 export function registerPivotRegressions(Module, test) {
   test('pivotFieldAddItemAt hides the blank item an empty label cannot name', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const cache = wb.addPivotCache(0);
       assert.ok(cache.status.ok, `pivotCacheCreate: ${JSON.stringify(cache.status)}`);
@@ -254,7 +254,7 @@ export function registerPivotRegressions(Module, test) {
   });
 
   test('a rejected argument reports its own diagnostic, not the previous call', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       // Leave a failure of a different call in the thread-local diagnostics.
       const stale = wb.getValue(99, 0, 0);
@@ -275,7 +275,7 @@ export function registerPivotRegressions(Module, test) {
   });
 
   test('list getters expose failures through their array status', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       for (const list of [wb.listMerges(99), wb.listComments(99), wb.listHyperlinks(99)]) {
         assert.ok(Array.isArray(list));
@@ -288,7 +288,7 @@ export function registerPivotRegressions(Module, test) {
   });
 
   test('index getters report a bad sheet or index through their status', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       for (const count of [
         wb.getValidationCount(99),
@@ -338,7 +338,7 @@ export function registerPivotRegressions(Module, test) {
     // parser and cost a fraction as much per level. The cap itself is
     // discovered rather than written down, so raising it in the engine does
     // not quietly narrow what this covers.
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 7).ok);
 

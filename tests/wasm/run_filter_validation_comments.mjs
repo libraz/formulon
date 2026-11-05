@@ -18,7 +18,7 @@ const MENTION = '{6F1E0D2C-1111-4111-8111-0000000000AA}';
 const CREATED = '2026-10-05T09:30:00.00';
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     fn(wb);
   } finally {
@@ -426,7 +426,7 @@ export function registerFilterValidationComments(Module, test) {
       });
       const imageResult = wb.addImage(0, bytesProxy, {});
       assert.equal(imageResult.status.ok, false);
-      assert.equal(imageResult.status.status, 2);
+      assert.equal(imageResult.status.code, 2);
       assert.equal(wb.listDrawingObjects(0).length, 0);
     });
   });

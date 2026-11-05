@@ -15,7 +15,7 @@ import { assert, getModule, path, pkgRoot, readFile } from './smoke_support.mjs'
 // indices; Amount and Date are plain numbers. Only Region is laid out, so
 // the baseline grid is two regions, their sums and the grand total.
 function buildPivot(mod) {
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const must = (r, what) => {
     const status = typeof r.ok === 'boolean' ? r : r.status;
     assert.ok(status.ok, `${what}: ${JSON.stringify(status)}`);
@@ -556,8 +556,8 @@ const PIVOT_MUTATORS = [
       act: (b) => b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '4'),
       // A field's numFmtId is only observable in the part the writer emits.
       expect: (b) => {
-        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, 99, '4').status, 2);
-        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '0.00').status, 2);
+        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, 99, '4').code, 2);
+        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '0.00').code, 2);
         const saved = b.wb.save();
         assert.ok(saved.status.ok, JSON.stringify(saved.status));
         assert.match(packagePart(saved.bytes, 'xl/pivotTables/pivotTable1.xml'), /<pivotField [^>]*numFmtId="4"/);
@@ -934,7 +934,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
       packagePart(saved.bytes, 'xl/pivotTables/pivotTable1.xml'),
       /<filters count="1"><filter fld="0" type="valueGreaterThan" evalOrder="-1" id="1" iMeasureFld="0">/,
     );
-    const back = mod.Workbook.load(saved.bytes);
+    const back = mod.Workbook.load(saved.bytes).value;
     try {
       assert.ok(back.setExcelProfileId('win-365-ja_JP').ok);
       assert.equal(back.getPivotFilterCount(0, 0).value, 1);
@@ -968,6 +968,13 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
 const STATUS_ACCESSORS = [
   ['getSheetCount', [], null],
   ['getCellCount', [0], [99]],
+  ['getCellXfIndex', [0, 0, 0], [99, 0, 0]],
+  [
+    'recalcViewport',
+    [0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }],
+    [99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }],
+  ],
+  ['compareText', ['a', 'b', 0, 'win-365-en_US'], ['a', 'b', 0, 'nope']],
   ['getCfRuleCount', [0], [99]],
   ['getValidationCount', [0], [99]],
   ['getProtectedRangeCount', [0], [99]],
@@ -1041,7 +1048,7 @@ test('every NumberResult accessor is covered by the status table', async () => {
 
 test('fallible accessors report their status on success, rejection and a released handle', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   for (const [name, okArgs, badArgs] of STATUS_ACCESSORS) {
     if (okArgs !== null) {
       const r = wb[name](...okArgs);
@@ -1050,7 +1057,7 @@ test('fallible accessors report their status on success, rejection and a release
     if (badArgs !== null) {
       const r = wb[name](...badArgs);
       assert.equal(r.status.ok, false, `${name} must report the rejected arguments`);
-      assert.notEqual(r.status.status, 0, name);
+      assert.notEqual(r.status.code, 0, name);
       assertFailurePayload(name, r);
     }
   }
@@ -1064,17 +1071,24 @@ test('fallible accessors report their status on success, rejection and a release
   // Every accessor, including the ones no argument can fail, reports the
   // released handle instead of a default reading.
   for (const [name, okArgs, badArgs] of STATUS_ACCESSORS) {
-    if (name.endsWith('FunctionName') || name === 'listFunctionNames' || name === 'listLocaleErrorNames') continue;
+    if (
+      name.endsWith('FunctionName') ||
+      name === 'listFunctionNames' ||
+      name === 'listLocaleErrorNames' ||
+      name === 'compareText'
+    ) {
+      continue;
+    }
     const r = dead[name](...(okArgs ?? badArgs));
     assert.equal(r.status.ok, false, `${name} after release`);
-    assert.equal(r.status.status, 7000, name);
+    assert.equal(r.status.code, 7000, name);
     assertFailurePayload(name, r);
   }
 });
 
 test('list getters carry a status and stop at the first element failure', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     // A readable sheet: every list is empty but the enumeration succeeded,
     // which is what distinguishes it from a sheet that could not be read.
@@ -1100,7 +1114,7 @@ test('list getters carry a status and stop at the first element failure', async 
       const list = call();
       assert.ok(Array.isArray(list), `${name} must stay an array`);
       assert.equal(list.status.ok, false, `${name} must signal an unreadable sheet`);
-      assert.notEqual(list.status.status, 0, name);
+      assert.notEqual(list.status.code, 0, name);
     }
   } finally {
     wb.dispose();

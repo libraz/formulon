@@ -105,7 +105,7 @@ removed fm_sheet_get_comment_at_index :: renamed to fm_sheet_get_comment_at
 retyped fm_sheet_get_effective_style :: parameter type renamed (fm_effective_style -> fm_effective_style_t)
 retyped fm_sheet_get_format_defaults :: parameter type renamed (fm_sheet_format_defaults -> fm_sheet_format_defaults_t)
 signature fm_sheet_get_hyperlink_at :: parameter type renamed (fm_hyperlink -> fm_hyperlink_t); sheet index widened to size_t sheet_index, index widened to size_t, handle is const
-retyped fm_sheet_get_image :: parameter type renamed (fm_image_info -> fm_image_info_t)
+signature fm_sheet_get_image :: takes int32_t* out_present before the outputs; a missing picture is FM_STATUS_OK with *out_present = 0 instead of FM_STATUS_INVALID_ARGUMENT, and the info parameter type is fm_image_info_t
 removed fm_sheet_get_protection :: renamed to fm_sheet_get_sheet_protection
 removed fm_sheet_get_row_override :: renamed to fm_sheet_get_row_override_at
 removed fm_sheet_get_validation_at :: renamed to fm_sheet_get_validation

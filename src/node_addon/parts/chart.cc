@@ -683,16 +683,17 @@ bool ReadIndexList(CheckedSpecReader& r, const Napi::CallbackInfo& info, size_t 
 Napi::Value Workbook::GetChart(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return ReadResult(env, kBindingInvalidHandle, "chart", env.Null());
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
   }
+  int32_t present = 0;
   fm_chart_t* raw = nullptr;
-  fm_status_t rc = fm_sheet_get_chart(handle_, ArgU32(info, 0), ArgU32(info, 1), &raw);
+  fm_status_t rc = fm_sheet_get_chart(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &raw);
   const ChartHandle chart(raw);
   Napi::Value value = env.Null();
-  if (rc == 0) {
+  if (rc == 0 && present != 0) {
     value = ChartToJs(env, chart.get(), rc);
   }
-  return ReadResult(env, rc, "chart", value);
+  return MakeOptionalResult(env, rc, present, value);
 }
 
 // Takes ownership of an opened chart data handle and reads it into a `{ data, status }` result.

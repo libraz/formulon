@@ -29,7 +29,7 @@ async function load() {
 }
 
 function newBook(mod) {
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   fillGrid(wb);
   return wb;
 }
@@ -48,7 +48,7 @@ function insert(wb, mod, extra = {}) {
   return r.objectId;
 }
 
-const chartOf = (wb, id) => must(wb.getChart(0, id), 'getChart').chart;
+const chartOf = (wb, id) => must(wb.getChart(0, id), 'getChart').value;
 const dataOf = (wb, id) => must(wb.getChartData(0, id), 'getChartData').data;
 
 test('chart enums keep their C ordinals', async () => {
@@ -433,7 +433,7 @@ test('a chart survives save and load and goes through the drawing operations', a
     const other = insert(wb, mod, { kind: mod.ChartInsertKind.Line, source: 'Sheet1!$A$1:$B$5' });
 
     const saved = must(wb.save(), 'save');
-    const wb2 = mod.Workbook.load(saved.bytes);
+    const wb2 = mod.Workbook.load(saved.bytes).value;
     try {
       assert.equal(chartOf(wb2, id).title.text, 'Kept');
       assert.deepEqual([...dataOf(wb2, id).series[0].values], [2, 4, 6, 8]);
@@ -459,7 +459,7 @@ test('a chart survives save and load and goes through the drawing operations', a
     assert.ok(snap.bytes instanceof Uint8Array);
     assert.ok(snap.bytes.length > 0);
     must(wb.removeDrawing(0, id), 'removeDrawing');
-    assert.equal(wb.getChart(0, id).status.ok, false);
+    assert.equal(wb.getChart(0, id).value, null);
     assert.deepEqual(
       Array.from(wb.listDrawingObjects(0), (o) => o.objectId),
       [other],
@@ -489,8 +489,8 @@ test('chart calls report failures in their status and reject malformed arguments
     const id = insert(wb, mod);
 
     const missing = wb.getChart(0, 9999);
-    assert.equal(missing.status.ok, false);
-    assert.equal(missing.chart, null);
+    assert.equal(missing.status.ok, true);
+    assert.equal(missing.value, null);
     assert.equal(wb.getChart(99, id).status.ok, false);
     const noData = wb.getChartData(0, 9999);
     assert.equal(noData.status.ok, false);
@@ -499,21 +499,21 @@ test('chart calls report failures in their status and reject malformed arguments
     // An unresolvable source writes nothing.
     const bad = wb.addChart(0, { kind: mod.ChartInsertKind.Column, source: 'NoSuchSheet!A1:B2' });
     assert.equal(bad.status.ok, false);
-    assert.equal(bad.status.status, 5026);
+    assert.equal(bad.status.code, 5026);
     assert.equal(bad.objectId, 0);
     assert.equal(wb.listDrawingObjects(0).length, 1);
     assert.equal(wb.addChart(0, { kind: 99, source: 'A1:B2' }).status.ok, false);
     assert.throws(() => wb.addChart(0, 'A1:B2'), TypeError);
 
     assert.equal(wb.setChartSeries(0, id, 0, 0, { values: '' }).ok, false);
-    assert.equal(wb.setChartSeries(0, id, 0, 0, { values: 'NoSuchSheet!A1:A2' }).status, 5026);
+    assert.equal(wb.setChartSeries(0, id, 0, 0, { values: 'NoSuchSheet!A1:A2' }).code, 5026);
     assert.equal(wb.setChartSeries(0, id, 5, 0, {}).ok, false);
     assert.equal(wb.setChartSeries(0, id, 0, 99, {}).ok, false);
     assert.equal(wb.setChartSeries(0, id, 0, 0, { fill: { color: 1 }, marker: { symbol: null } }).ok, false);
     assert.equal(wb.setChartAxis(0, id, 12345, {}).ok, false);
     assert.equal(wb.setChartPlot(0, id, 0, { holeSize: 50 }).ok, false);
     assert.equal(wb.setChartType(0, id, 0, 99).ok, false);
-    assert.equal(wb.setChartSource(0, id, 'NoSuchSheet!A1:B2', mod.ChartSeriesDirection.Auto).status, 5026);
+    assert.equal(wb.setChartSource(0, id, 'NoSuchSheet!A1:B2', mod.ChartSeriesDirection.Auto).code, 5026);
     assert.equal(wb.removeChartSeries(0, id, 0, 99).ok, false);
     assert.equal(wb.addChartSeries(0, id, 0, { name: 'Sheet1!$B$1' }).status.ok, false);
     assert.equal(wb.setChartTitle(0, 9999, 'x').ok, false);

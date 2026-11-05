@@ -609,8 +609,9 @@ entries:
     kind: record
     role: result
     c: fm_function_metadata_t
+    js: FunctionMetadata
     py: FunctionMetadata
-    surfaces: [c, py]
+    surfaces: [c, wasm, native, py]
     was: { c: fm_function_metadata_t, py: FunctionMetadata }
   enum.date_order:
     kind: enum
@@ -934,6 +935,11 @@ entries:
     py: AnchorEditAs
     surfaces: [c, wasm, native, py]
     was: { c: fm_anchor_edit_as_t, js: AnchorEditAs, py: AnchorEditAs }
+  record.image:
+    kind: record
+    role: result
+    js: Image
+    surfaces: [wasm, native]
   record.image_info:
     kind: record
     role: result
@@ -1499,8 +1505,9 @@ entries:
   record.cell_xf_index_result:
     kind: record
     role: result
-    js: CellXfIndexResult
     surfaces: [wasm, native]
+    replaced_by: record.number_result
+    closes: R8.js
     was: { js: CellXfIndexResult }
   record.cell_xf_result:
     kind: record
@@ -1588,8 +1595,9 @@ entries:
   record.chart_result:
     kind: record
     role: result
-    js: ChartResult
     surfaces: [wasm, native]
+    replaced_by: record.optional_result
+    closes: R8.js
     was: { js: ChartResult }
   record.chart_series_info:
     kind: record
@@ -1617,14 +1625,16 @@ entries:
   record.comment_result:
     kind: record
     role: result
-    js: CommentResult
     surfaces: [wasm, native]
+    replaced_by: record.optional_result
+    closes: R8.js
     was: { js: CommentResult }
   record.compare_text_result:
     kind: record
     role: result
-    js: CompareTextResult
     surfaces: [wasm, native]
+    replaced_by: record.number_result
+    closes: R8.js
     was: { js: CompareTextResult }
   record.conditional_format_entry:
     kind: record
@@ -1652,8 +1662,9 @@ entries:
   record.data_table_result:
     kind: record
     role: result
-    js: DataTableResult
     surfaces: [wasm, native]
+    replaced_by: record.optional_result
+    closes: R8.js
     was: { js: DataTableResult }
   record.data_table_spec:
     kind: record
@@ -1739,8 +1750,9 @@ entries:
   record.formula_result:
     kind: record
     role: result
-    js: FormulaResult
     surfaces: [wasm, native]
+    replaced_by: record.optional_result
+    closes: R8.js
     was: { js: FormulaResult }
   record.formulon_module:
     kind: record
@@ -1772,9 +1784,9 @@ entries:
   record.function_metadata_result:
     kind: record
     role: result
-    js: FunctionMetadataResult
     surfaces: [wasm, native]
     was: { js: FunctionMetadataResult }
+    drop: { js: FunctionMetadataResult, closes: R8.js }
   record.gradient_fill:
     kind: record
     js: GradientFill
@@ -1795,9 +1807,9 @@ entries:
   record.image_result:
     kind: record
     role: result
-    js: ImageResult
     surfaces: [wasm, native]
     was: { js: ImageResult }
+    drop: { js: ImageResult, closes: R8.js }
   record.image_snapshot_result:
     kind: record
     role: result
@@ -1807,13 +1819,14 @@ entries:
   record.insert_chart_result:
     kind: record
     role: result
-    js: InsertChartResult
     surfaces: [wasm, native]
+    replaced_by: record.insert_image_result
+    closes: R8.js
     was: { js: InsertChartResult }
   record.insert_image_result:
     kind: record
     role: result
-    js: InsertImageResult
+    js: ObjectIdResult
     surfaces: [wasm, native]
     was: { js: InsertImageResult }
   record.iterative_progress_callback:
@@ -1830,8 +1843,9 @@ entries:
   record.lambda_text_result:
     kind: record
     role: result
-    js: LambdaTextResult
     surfaces: [wasm, native]
+    replaced_by: record.optional_result
+    closes: R8.js
     was: { js: LambdaTextResult }
   record.conditional_format_result:
     kind: record
@@ -1898,15 +1912,15 @@ entries:
   record.merged_function_metadata_result:
     kind: record
     role: result
-    js: MergedFunctionMetadataResult
     surfaces: [wasm, native]
     was: { js: MergedFunctionMetadataResult }
+    drop: { js: MergedFunctionMetadataResult, closes: R8.js }
   record.num_fmt_result:
     kind: record
     role: result
-    js: NumFmtResult
     surfaces: [wasm, native]
     was: { js: NumFmtResult }
+    drop: { js: NumFmtResult, closes: R8.js }
   record.number_result:
     kind: record
     role: result
@@ -1959,8 +1973,9 @@ entries:
   record.partial_recalc_result:
     kind: record
     role: result
-    js: PartialRecalcResult
     surfaces: [wasm, native]
+    replaced_by: record.number_result
+    closes: R8.js
     was: { js: PartialRecalcResult }
   record.persons_result:
     kind: record
@@ -2159,8 +2174,9 @@ entries:
   record.sheet_auto_filter_xml_result:
     kind: record
     role: result
-    js: SheetAutoFilterXmlResult
     surfaces: [wasm]
+    replaced_by: record.string_result
+    closes: R8.js
     was: { js: SheetAutoFilterXmlResult }
   record.sheet_comment_entry:
     kind: record
@@ -2206,8 +2222,9 @@ entries:
   record.sheet_print_xml_result:
     kind: record
     role: result
-    js: SheetPrintXmlResult
     surfaces: [wasm, native]
+    replaced_by: record.string_result
+    closes: R8.js
     was: { js: SheetPrintXmlResult }
   record.sheet_protection_result:
     kind: record
@@ -2218,7 +2235,8 @@ entries:
   record.sheet_selection:
     kind: record
     js: SheetSelection
-    surfaces: [wasm, native]
+    py: SheetSelection
+    surfaces: [wasm, native, py]
     was: { js: SheetSelection }
   record.sheet_selection_result:
     kind: record
@@ -2435,13 +2453,30 @@ entries:
     was: { py: InvalidArgumentError }
   record.iterative_settings:
     kind: record
+    role: result
     py: IterativeSettings
     surfaces: [py]
     was: { py: IterativeSettings }
+  record.pivot_grand_totals:
+    kind: record
+    role: result
+    py: PivotGrandTotals
+    surfaces: [py]
+  record.sheet_print_titles:
+    kind: record
+    role: result
+    py: SheetPrintTitles
+    surfaces: [py]
+  record.table_style_defaults:
+    kind: record
+    role: result
+    py: TableStyleDefaults
+    surfaces: [py]
   record.merged_function_metadata:
     kind: record
+    js: MergedFunctionMetadata
     py: MergedFunctionMetadata
-    surfaces: [py]
+    surfaces: [wasm, native, py]
     was: { py: MergedFunctionMetadata }
   record.not_found_error:
     kind: record
@@ -2807,6 +2842,7 @@ entries:
     was: { c: fm_workbook_set_formula, js: setFormula, py: set_formula }
   value.get:
     kind: op
+    total: "an unwritten cell reads as a blank value"
     scope: sheet
     noun: value
     qualifies: "sheet-scope read of the value the workbook scope formats"
@@ -6043,6 +6079,7 @@ entries:
     was: { c: fm_status_string, js: statusString }
   error_display_name.get:
     kind: op
+    total: "every error code has a display literal; an unknown one reads as #UNKNOWN!"
     scope: process
     noun: error_display_name
     c: fm_get_error_display_name
@@ -10631,3 +10668,73 @@ entries:
     surfaces: [wasm, native]
     closes: R8.js
     was: { js: status }
+  field.compare_text_result_value:
+    kind: field
+    record: record.compare_text_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: order }
+  field.cell_xf_index_result_value:
+    kind: field
+    record: record.cell_xf_index_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: xfIndex }
+  field.partial_recalc_result_value:
+    kind: field
+    record: record.partial_recalc_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: recomputed }
+  field.sheet_auto_filter_xml_result_value:
+    kind: field
+    record: record.sheet_auto_filter_xml_result
+    js: value
+    surfaces: [wasm]
+    closes: R8.js
+    was: { js: xml }
+  field.sheet_print_xml_result_value:
+    kind: field
+    record: record.sheet_print_xml_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: xml }
+  field.data_table_result_value:
+    kind: field
+    record: record.data_table_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: dataTable }
+  field.chart_result_value:
+    kind: field
+    record: record.chart_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: chart }
+  field.lambda_text_result_value:
+    kind: field
+    record: record.lambda_text_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: text }
+  field.comment_result_value:
+    kind: field
+    record: record.comment_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: comment }
+  field.formula_result_value:
+    kind: field
+    record: record.formula_result
+    js: value
+    surfaces: [wasm, native]
+    closes: R8.js
+    was: { js: formula }

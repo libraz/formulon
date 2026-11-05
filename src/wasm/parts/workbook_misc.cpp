@@ -81,14 +81,13 @@ emscripten::val JsWorkbook::dependents(uint32_t sheet, uint32_t row, uint32_t co
 // ---- Function catalog --------------------------------------------------
 
 emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
-  emscripten::val o = emscripten::val::object();
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_get_function_metadata(name.c_str(), &md);
-  if (rc != 0) {
-    o.set("ok", false);
-    return o;
+  const fm_status_t rc = fm_get_function_metadata(name.c_str(), &present, &md);
+  if (rc != 0 || present == 0) {
+    return optional_result(rc, present, emscripten::val::null());
   }
-  o.set("ok", true);
+  emscripten::val o = emscripten::val::object();
   js_set_cstr(o, "name", md.canonical_name);
   o.set("minArity", md.min_arity);
   // `0xFFFFFFFF` is the unbounded / unknown-arity sentinel; surface it as
@@ -105,7 +104,7 @@ emscripten::val JsWorkbook::functionMetadata(const std::string& name) const {
   if (md.description != nullptr) {
     o.set("description", std::string(md.description));
   }
-  return o;
+  return optional_result(rc, present, o);
 }
 
 emscripten::val JsWorkbook::functionNames() const {
@@ -266,14 +265,11 @@ JsStatus JsWorkbook::setArrayFormula(uint32_t sheet, emscripten::val range, cons
   return status_from_rc(fm_sheet_set_array_formula(handle_, sheet, &rect, formula.c_str()));
 }
 
-emscripten::val JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,
-                                        const std::string& profile_id) const {
-  emscripten::val o = emscripten::val::object();
+JsNumberResult JsWorkbook::compareText(const std::string& a, const std::string& b, int32_t strength,
+                                       const std::string& profile_id) const {
   int32_t order = 0;
   const fm_status_t rc = fm_compare_text(a.c_str(), b.c_str(), profile_id.c_str(), strength, &order);
-  o.set("status", status_from_rc(rc));
-  o.set("order", rc == 0 ? order : 0);
-  return o;
+  return number_result(rc, order);
 }
 
 emscripten::val JsWorkbook::collationClasses(emscripten::val values, int32_t strength,

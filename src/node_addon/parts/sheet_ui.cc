@@ -142,38 +142,21 @@ Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return env.Null();
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
+  int32_t present = 0;
   fm_comment_t c{};
-  if (fm_sheet_get_comment(handle_, sheet, row, col, &c) != 0) {
-    return env.Null();
-  }
-  Napi::Object o = Napi::Object::New(env);
-  o.Set("author", JsString(env, c.author));
-  o.Set("text", JsString(env, c.text));
-  return o;
-}
-
-Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return MakeFieldResult(env, NullHandleError(env), "comment", env.Null());
-  }
-  const uint32_t sheet = ArgU32(info, 0);
-  const uint32_t row = ArgU32(info, 1);
-  const uint32_t col = ArgU32(info, 2);
-  fm_comment_t c{};
-  const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &c);
-  if (rc != 0) {
-    return MakeFieldResult(env, MakeErrorStatus(env, rc), "comment", env.Null());
+  const fm_status_t rc = fm_sheet_get_comment(handle_, sheet, row, col, &present, &c);
+  if (rc != 0 || present == 0) {
+    return MakeOptionalResult(env, rc, present, env.Null());
   }
   Napi::Object comment = Napi::Object::New(env);
   comment.Set("author", JsString(env, c.author));
   comment.Set("text", JsString(env, c.text));
-  return MakeFieldResult(env, MakeOkStatus(env), "comment", comment);
+  return MakeOptionalResult(env, rc, present, comment);
 }
 
 namespace {

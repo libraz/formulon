@@ -23,7 +23,7 @@ emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
   const char* xml = nullptr;
   const fm_status_t rc =
       handle_ != nullptr ? fm_sheet_get_auto_filter_xml(handle_, sheet, &xml) : kBindingInvalidHandle;
-  return js_text_result(rc, "xml", xml);
+  return js_text_result(rc, "value", xml);
 }
 
 JsStatus JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {

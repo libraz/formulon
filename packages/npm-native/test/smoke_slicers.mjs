@@ -37,7 +37,7 @@ const saveBytes = (wb) => {
 };
 
 const salesWorkbook = (mod) => {
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setText(0, 0, 0, 'Product').ok);
   assert.ok(wb.setText(0, 0, 1, 'Amount').ok);
   assert.ok(wb.setNumber(0, 1, 1, 10).ok);
@@ -75,7 +75,7 @@ test('slicers add, list, update, remove and round-trip', async () => {
   assert.match(readZipEntry(bytes, '[Content_Types].xml'), /application\/vnd\.ms-excel\.slicer\+xml/);
   assert.match(readZipEntry(bytes, 'xl/drawings/drawing1.xml'), /<mc:Fallback>/);
 
-  const loaded = mod.Workbook.load(bytes);
+  const loaded = mod.Workbook.load(bytes).value;
   const slicers = loaded.listSlicers(0);
   assert.ok(slicers.status.ok);
   assert.equal(slicers.length, 1);

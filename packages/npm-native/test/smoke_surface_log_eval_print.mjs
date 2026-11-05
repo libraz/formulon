@@ -61,7 +61,7 @@ test('setLogMinLevel is a module-level control and validates its ordinal', async
   assert.equal(typeof mod.setLogMinLevel, 'function');
   assert.equal(typeof mod.setLogSink, 'function');
   // Process-wide state, so it must not be a Workbook method.
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(typeof wb.setLogMinLevel, 'undefined');
   wb.dispose();
 
@@ -71,7 +71,7 @@ test('setLogMinLevel is a module-level control and validates its ordinal', async
   for (const bad of [-1, 5, 99]) {
     const r = mod.setLogMinLevel(bad);
     assert.equal(r.ok, false, `level=${bad} should be rejected`);
-    assert.equal(r.status, 2);
+    assert.equal(r.code, 2);
   }
   assert.ok(mod.setLogMinLevel(mod.LogLevel.Off).ok);
 });
@@ -83,7 +83,7 @@ test('setLogSink accepts a function and null, and rejects a non-function', async
   assert.ok(mod.setLogSink().ok);
   const bad = mod.setLogSink(42);
   assert.equal(bad.ok, false);
-  assert.equal(bad.status, 2);
+  assert.equal(bad.code, 2);
   assert.ok(mod.setLogSink(null).ok);
 });
 
@@ -106,7 +106,7 @@ test('a registered sink receives the record as raw bytes', async () => {
   assert.ok(mod.setLogSink((record) => records.push(record)).ok);
   assert.ok(mod.setLogMinLevel(mod.LogLevel.Warn).ok);
   try {
-    const wb = mod.Workbook.createDefault();
+    const wb = mod.Workbook.createDefault().value;
     // A structured reference the XLSB encoder cannot lower,
     // which makes the writer emit a per-cell warn record.
     assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
@@ -132,7 +132,7 @@ test('the default threshold delivers nothing to a registered sink', async () => 
   const records = [];
   assert.ok(mod.setLogSink((record) => records.push(record)).ok);
   try {
-    const wb = mod.Workbook.createDefault();
+    const wb = mod.Workbook.createDefault().value;
     assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
     assert.ok(wb.recalc().ok);
     assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
@@ -157,7 +157,7 @@ test('a throwing log sink does not leave a pending exception at the ThreadSafeFu
   );
   assert.ok(mod.setLogMinLevel(mod.LogLevel.Warn).ok);
   try {
-    const wb = mod.Workbook.createDefault();
+    const wb = mod.Workbook.createDefault().value;
     assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
     assert.ok(wb.recalc().ok);
     assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
@@ -172,7 +172,7 @@ test('a throwing log sink does not leave a pending exception at the ThreadSafeFu
 
   // An uncaught exception at the drain boundary would have crashed the
   // process by now; the engine must still be usable afterwards.
-  const wb2 = mod.Workbook.createDefault();
+  const wb2 = mod.Workbook.createDefault().value;
   try {
     assert.ok(wb2.setFormula(0, 0, 0, '=1+1').ok);
     assert.ok(wb2.recalc().ok);
@@ -184,7 +184,7 @@ test('a throwing log sink does not leave a pending exception at the ThreadSafeFu
 
 test('memoryUsage and the Python wheel agree that the estimate grows', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const empty = wb.getMemoryUsage();
   for (let row = 0; row < 2000; row += 1) {
     wb.setNumber(0, row, 0, row);
@@ -283,7 +283,7 @@ test("evalFormula('=#REF!') surfaces ERROR value (not failed status)", async () 
 
 test('Workbook.createDefault + setNumber + getValue round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.getSheetCount().value, 1);
   const setRc = wb.setNumber(0, 0, 0, 42);
   assert.ok(setRc.ok, `setNumber: ${JSON.stringify(setRc)}`);
@@ -295,7 +295,7 @@ test('Workbook.createDefault + setNumber + getValue round-trip', async () => {
 
 test('paginate exposes a status envelope and page geometry', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Asserts the envelope's shape, not the page geometry: how many rows fit a
   // page is the print engine's business and is pinned by the native print
   // suite against Excel. Row 400 is far enough down to force a break under
@@ -316,13 +316,13 @@ test('paginate exposes a status envelope and page geometry', async () => {
 
 test('print settings: raw XML round-trips and rejects malformed fragments', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // An absent element reads back as the empty string, never null.
-  assert.equal(wb.getPageSetupXml(0).xml, '');
+  assert.equal(wb.getPageSetupXml(0).value, '');
 
   const fragment = '<pageSetup paperSize="9" orientation="portrait" scale="85"/>';
   assert.ok(wb.setPageSetupXml(0, fragment).ok);
-  assert.equal(wb.getPageSetupXml(0).xml, fragment);
+  assert.equal(wb.getPageSetupXml(0).value, fragment);
 
   // Two top-level elements, the wrong root name, and a truncated fragment
   // are all rejected at set time rather than producing a file Excel repairs.
@@ -330,11 +330,11 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
     const rejected = wb.setPageSetupXml(0, bad);
     assert.equal(rejected.ok, false, `expected rejection for ${bad}`);
   }
-  assert.equal(wb.getPageSetupXml(0).xml, fragment);
+  assert.equal(wb.getPageSetupXml(0).value, fragment);
 
   // The empty string removes the element and restores the defaults.
   assert.ok(wb.setPageSetupXml(0, '').ok);
-  assert.equal(wb.getPageSetupXml(0).xml, '');
+  assert.equal(wb.getPageSetupXml(0).value, '');
   const cleared = wb.getPageSetup(0);
   assert.ok(cleared.status.ok);
   assert.equal(cleared.scale, 100);
@@ -343,13 +343,13 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
 
 test('print settings: typed patch touches only the keys it states', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(
     wb.setPageSetupXml(0, '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>').ok,
   );
   assert.ok(wb.setPageSetup(0, { orientation: 2 }).ok);
 
-  const xml = wb.getPageSetupXml(0).xml;
+  const xml = wb.getPageSetupXml(0).value;
   assert.match(xml, /orientation="landscape"/);
   // Attributes the engine does not model must survive a patch.
   assert.match(xml, /horizontalDpi="600"/);
@@ -374,10 +374,10 @@ test('print settings: typed patch touches only the keys it states', async () => 
 
 test('print settings: fitToPage keeps the rest of sheetPr', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setSheetPrXml(0, '<sheetPr codeName="Sheet1"><tabColor rgb="FFFF0000"/></sheetPr>').ok);
   assert.ok(wb.setFitToPage(0, true).ok);
-  const xml = wb.getSheetPrXml(0).xml;
+  const xml = wb.getSheetPrXml(0).value;
   assert.match(xml, /codeName="Sheet1"/);
   assert.match(xml, /<tabColor rgb="FFFF0000"\/>/);
   assert.match(xml, /fitToPage="true"/);
@@ -385,22 +385,25 @@ test('print settings: fitToPage keeps the rest of sheetPr', async () => {
 
 test('print settings: header/footer sections take decoded text', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setHeaderFooter(0, { oddHeader: '&C\u5e33\u7968', oddFooter: '&R&P / &N' }).ok);
   // The codes reach the file escaped; a parser hands back `&C...`.
   assert.equal(
-    wb.getHeaderFooterXml(0).xml,
+    wb.getHeaderFooterXml(0).value,
     '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader><oddFooter>&amp;R&amp;P / &amp;N</oddFooter></headerFooter>',
   );
 
   // Omitting a key leaves that section alone; an empty string clears it.
   assert.ok(wb.setHeaderFooter(0, { oddFooter: '' }).ok);
-  assert.equal(wb.getHeaderFooterXml(0).xml, '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>');
+  assert.equal(
+    wb.getHeaderFooterXml(0).value,
+    '<headerFooter><oddHeader>&amp;C\u5e33\u7968</oddHeader></headerFooter>',
+  );
 });
 
 test('print settings: print area, titles and manual breaks', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setPrintArea(0, [{ firstRow: 0, firstCol: 0, lastRow: 7, lastCol: 5 }]).ok);
   assert.deepEqual(wb.getPrintArea(0).ranges, [{ firstRow: 0, firstCol: 0, lastRow: 7, lastCol: 5 }]);
   assert.equal(wb.setPrintArea(0, [{ firstRow: 5, firstCol: 0, lastRow: 4, lastCol: 0 }]).ok, false);
@@ -434,7 +437,7 @@ test('print settings: print area, titles and manual breaks', async () => {
 
 test('print settings: a change is visible to paginate without a save cycle', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   for (let row = 0; row < 200; row += 1) {
     for (let col = 0; col < 20; col += 1) {
       assert.ok(wb.setNumber(0, row, col, 1).ok);
@@ -447,7 +450,7 @@ test('print settings: a change is visible to paginate without a save cycle', asy
 
 test('setRangeXfIndex applies one xf across a rectangle', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const border = wb.addBorder({
     left: { style: 1, colorArgb: 0xff000000 },
     right: { style: 1, colorArgb: 0xff000000 },
@@ -469,19 +472,19 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
     [1, 1],
     [2, 2],
   ]) {
-    assert.equal(wb.getCellXfIndex(0, row, col).xfIndex, xf.index);
+    assert.equal(wb.getCellXfIndex(0, row, col).value, xf.index);
   }
-  assert.equal(wb.getCellXfIndex(0, 3, 3).xfIndex, 0);
+  assert.equal(wb.getCellXfIndex(0, 3, 3).value, 0);
 });
 
 test('pivotCount + pivotLayout expose PivotTable projection status', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.getPivotCount(0).value, 0);
 
   const missing = wb.getPivotLayout(0, 0);
   assert.equal(missing.status.ok, false);
-  assert.notEqual(missing.status.status, 0);
+  assert.notEqual(missing.status.code, 0);
   assert.equal(missing.rect, null);
   assert.deepEqual(missing.cells, []);
 });

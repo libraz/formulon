@@ -124,17 +124,20 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAcceptsNullStringFields) {
 TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
   fm_comment_t got{};
-  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &got), 0);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_STREQ(got.author, "Alice");
   EXPECT_STREQ(got.text, "Hello");
   // Replace with new text at the same cell.
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", "World"), 0);
-  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &got), 0);
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
   EXPECT_STREQ(got.author, "Bob");
   EXPECT_STREQ(got.text, "World");
   // Empty text removes.
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", ""), 0);
-  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 1, 1, &present, &got), 0);
+  EXPECT_EQ(present, 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentRejectedOnThreadedCell) {
@@ -152,7 +155,9 @@ TEST_F(FormulonCApiSheetFeatures, CommentRejectedOnThreadedCell) {
   EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 3, "Bob", "Note"),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kThreadedCommentInvalid));
   fm_comment_t got{};
-  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 2, 3, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 2, 3, &present, &got), 0);
+  EXPECT_EQ(present, 0);
   // A neighbouring cell still takes a note.
   EXPECT_EQ(fm_sheet_set_comment(wb_, 0, 2, 4, "Bob", "Note"), 0);
 }
@@ -166,16 +171,22 @@ TEST_F(FormulonCApiSheetFeatures, CommentReplaceKeepsRevisionUid) {
 
 TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSheet) {
   fm_comment_t got{};
-  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
-  EXPECT_EQ(fm_sheet_get_comment(wb_, 99, 0, 0, &got),
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &present, &got), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(fm_sheet_get_comment(wb_, 99, 0, 0, &present, &got),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
+  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, nullptr, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentRemoveViaNullText) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, nullptr, nullptr), 0);
   fm_comment_t got{};
-  EXPECT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &got), static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 0, 0, &present, &got), 0);
+  EXPECT_EQ(present, 0);
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {

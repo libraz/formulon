@@ -133,12 +133,17 @@ extern "C" fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size
 }
 
 extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                          const uint8_t** out_bytes, size_t* out_len, fm_image_info_t* out_info) {
+                                          int32_t* out_present, const uint8_t** out_bytes, size_t* out_len,
+                                          fm_image_info_t* out_info) {
   clear_last_error();
-  if (out_bytes == nullptr || out_len == nullptr || out_info == nullptr) {
+  if (out_present == nullptr || out_bytes == nullptr || out_len == nullptr || out_info == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_get_image: NULL output pointer");
   }
+  *out_present = 0;
+  *out_bytes = nullptr;
+  *out_len = 0;
+  *out_info = fm_image_info_t{};
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_image"); rc != 0) {
     return rc;
   }
@@ -161,11 +166,10 @@ extern "C" fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_
     *out_bytes = media->bytes.data();
     *out_len = media->bytes.size();
     *out_info = to_fm(info.value());
+    *out_present = 1;
     return 0;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           "fm_sheet_get_image: no picture with that object id",
-                           "sheet_index=" + std::to_string(sheet_index) + " object_id=" + std::to_string(object_id));
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_add_image(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,

@@ -5,7 +5,7 @@ const LAST_COL = 16383;
 
 export function registerSparseRows(Module, test) {
   test('rows with a wide gap between stored cells neither abort nor count the gap', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       for (let r = 0; r < ROWS; r += 1) {
         assert.ok(wb.setNumber(0, r, 0, r).ok);

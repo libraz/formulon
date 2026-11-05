@@ -10,7 +10,7 @@ function statusOf(result) {
 
 test('validation and merge range integers reject narrowing before mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const before = readAll(
       () => wb.getValidationCount(0),
@@ -50,7 +50,7 @@ test('validation and merge range integers reject narrowing before mutation', asy
 
 test('filter kind is validated without aborting and date-group bytes do not wrap', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const before = wb.getAutoFilter(0).autoFilter;
     assert.throws(
@@ -76,7 +76,7 @@ test('filter wrong primitive is caught in a child process instead of aborting No
   const moduleUrl = new URL('../dist/index.mjs', import.meta.url).href;
   const script = `
     import mod from ${JSON.stringify(moduleUrl)};
-    const wb = mod.Workbook.createDefault();
+    const wb = mod.Workbook.createDefault().value;
     try {
       wb.setAutoFilter(0, { range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, columns: [{ kind: 'bad' }] });
       process.exitCode = 2;
@@ -99,7 +99,7 @@ test('filter wrong primitive is caught in a child process instead of aborting No
 
 test('threaded mention and image integer fields reject before C mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const beforeComments = wb.listThreadedComments(0).comments.length;
     assert.throws(
@@ -133,7 +133,7 @@ test('threaded mention and image integer fields reject before C mutation', async
 
 test('UI reader stops at a throwing getter and leaves the workbook unchanged', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const filter = { range: RANGE, columns: [{}] };
     Object.defineProperty(filter.columns[0], 'kind', {
@@ -167,7 +167,7 @@ test('UI reader stops at a throwing getter and leaves the workbook unchanged', a
 
 test('nullish UI fields retain their defaults', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const result = wb.setAutoFilter(0, {
       range: { ...RANGE, lastCol: 1 },

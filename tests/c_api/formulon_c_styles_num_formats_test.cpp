@@ -3,44 +3,47 @@
 #include "formulon_c_styles_test_helpers.h"
 
 TEST(FormulonCApiStyles, BuiltinNumFmtResolves) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* s = nullptr;
-  EXPECT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 0, &s), 0);
+  EXPECT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 0, &present, &s), 0);
   ASSERT_NE(s, nullptr);
   EXPECT_STREQ(s, "General");
-  EXPECT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &s), 0);
+  EXPECT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &present, &s), 0);
   ASSERT_NE(s, nullptr);
   EXPECT_STREQ(s, "mm-dd-yy");
 }
 
 TEST(FormulonCApiStyles, LocaleOnlyBuiltinNumFmtFollowsProfile) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* s = nullptr;
   // Under en-US the East Asian date ids render as the short date.
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 31, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 31, &present, &s), 0);
   EXPECT_STREQ(s, "m/d/yy");
 
   ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 31, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 31, &present, &s), 0);
   EXPECT_STREQ(s, "yyyy\"年\"m\"月\"d\"日\"");
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &present, &s), 0);
   EXPECT_STREQ(s, "[$-411]ge\\.m\\.d");
   // Ids with an ECMA-376 code keep it whatever the profile.
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &present, &s), 0);
   EXPECT_STREQ(s, "mm-dd-yy");
 
   ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-zh_CN"), 0);
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 57, &present, &s), 0);
   EXPECT_STREQ(s, "yyyy\"年\"m\"月\"");
 
   ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-th_TH"), 0);
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 59, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 59, &present, &s), 0);
   EXPECT_STREQ(s, "t0");
 }
 
 TEST(FormulonCApiStyles, CustomNumFmtOverridingBuiltinIdWins) {
+  int32_t present = 0;
   // A file may define a custom <numFmt> whose numFmtId collides with a
   // built-in slot; Excel honours the file's definition. Parse a production-
   // shaped styles.xml and install the resulting table rather than manually
@@ -50,18 +53,19 @@ TEST(FormulonCApiStyles, CustomNumFmtOverridingBuiltinIdWins) {
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
 
   const char* s = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14, &present, &s), 0);
   ASSERT_NE(s, nullptr);
   EXPECT_STREQ(s, "yyyy");
 }
 
 TEST(FormulonCApiStyles, AddNumFmtUsesEffectiveBuiltinMapping) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
 
   const char* resolved = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "yyyy");
 
@@ -72,7 +76,7 @@ TEST(FormulonCApiStyles, AddNumFmtUsesEffectiveBuiltinMapping) {
   uint32_t builtin_code_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_code_id), 0);
   EXPECT_GE(builtin_code_id, 164U);
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, builtin_code_id, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, builtin_code_id, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "mm-dd-yy");
 
@@ -82,6 +86,7 @@ TEST(FormulonCApiStyles, AddNumFmtUsesEffectiveBuiltinMapping) {
 }
 
 TEST(FormulonCApiStyles, AddBatchNumFmtUsesEffectiveBuiltinMapping) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
@@ -100,13 +105,14 @@ TEST(FormulonCApiStyles, AddBatchNumFmtUsesEffectiveBuiltinMapping) {
   EXPECT_EQ(ids[3], ids[2]);
   for (size_t i = 0; i < 4U; ++i) {
     const char* resolved = nullptr;
-    ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, ids[i], &resolved), 0);
+    ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, ids[i], &present, &resolved), 0);
     ASSERT_NE(resolved, nullptr);
     EXPECT_STREQ(resolved, codes[i]);
   }
 }
 
 TEST(FormulonCApiStyles, InvalidCustomNumFmtStringIndexDoesNotShadowBuiltin) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
@@ -116,7 +122,7 @@ TEST(FormulonCApiStyles, InvalidCustomNumFmtStringIndexDoesNotShadowBuiltin) {
   styles.num_fmts[0].format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
 
   const char* resolved = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "mm-dd-yy");
 
@@ -126,12 +132,13 @@ TEST(FormulonCApiStyles, InvalidCustomNumFmtStringIndexDoesNotShadowBuiltin) {
 }
 
 TEST(FormulonCApiStyles, DuplicateNumFmtFirstValidRecordWins) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtDuplicateStyles(wb.handle));
 
   const char* resolved = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "yyyy");
 
@@ -142,12 +149,13 @@ TEST(FormulonCApiStyles, DuplicateNumFmtFirstValidRecordWins) {
   uint32_t shadowed_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "dd/mm/yyyy", &shadowed_id), 0);
   EXPECT_GE(shadowed_id, 164U);
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, shadowed_id, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, shadowed_id, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "dd/mm/yyyy");
 }
 
 TEST(FormulonCApiStyles, DuplicateNumFmtInvalidFirstThenValidRecordWins) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtDuplicateStyles(wb.handle));
@@ -157,7 +165,7 @@ TEST(FormulonCApiStyles, DuplicateNumFmtInvalidFirstThenValidRecordWins) {
   styles.num_fmts[0].format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
 
   const char* resolved = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "dd/mm/yyyy");
 
@@ -168,12 +176,13 @@ TEST(FormulonCApiStyles, DuplicateNumFmtInvalidFirstThenValidRecordWins) {
   uint32_t invalid_id = 0xFFFFU;
   ASSERT_EQ(fm_workbook_add_num_fmt(wb.handle, "yyyy", &invalid_id), 0);
   EXPECT_GE(invalid_id, 164U);
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, invalid_id, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, invalid_id, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "yyyy");
 }
 
 TEST(FormulonCApiStyles, DuplicateNumFmtAllInvalidRecordsFallBackToBuiltin) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadNumFmtDuplicateStyles(wb.handle));
@@ -186,7 +195,7 @@ TEST(FormulonCApiStyles, DuplicateNumFmtAllInvalidRecordsFallBackToBuiltin) {
   }
 
   const char* resolved = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 14U, &present, &resolved), 0);
   ASSERT_NE(resolved, nullptr);
   EXPECT_STREQ(resolved, "mm-dd-yy");
 
@@ -195,15 +204,21 @@ TEST(FormulonCApiStyles, DuplicateNumFmtAllInvalidRecordsFallBackToBuiltin) {
   EXPECT_EQ(builtin_id, 14U);
 }
 
-TEST(FormulonCApiStyles, UnknownNumFmtIdRejected) {
+TEST(FormulonCApiStyles, UnknownNumFmtIdIsAbsent) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const char* s = nullptr;
-  // A built-in slot no locale assigns a code surfaces an error rather than an
-  // empty string.
-  EXPECT_NE(fm_workbook_get_num_fmt_string(wb.handle, 82, &s), 0);
+  // A built-in slot no locale assigns a code is absent rather than an empty
+  // string.
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 82, &present, &s), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(s, nullptr);
+  EXPECT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 82, nullptr, &s),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   // Id 5 is reserved in ECMA-376 but rendered as the locale currency.
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 5, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, 5, &present, &s), 0);
+  EXPECT_EQ(present, 1);
   EXPECT_STREQ(s, "\"$\"#,##0_);\\(\"$\"#,##0\\)");
 }
 
@@ -220,6 +235,7 @@ TEST(FormulonCApiStyles, AddNumFmtBuiltinReturnsBuiltinId) {
 }
 
 TEST(FormulonCApiStyles, AddNumFmtCustomReturnsCustomId) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   uint32_t id = 0;
@@ -227,7 +243,7 @@ TEST(FormulonCApiStyles, AddNumFmtCustomReturnsCustomId) {
   EXPECT_GE(id, 164U);
   // Resolves through the read-side getter.
   const char* s = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, id, &s), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb.handle, id, &present, &s), 0);
   ASSERT_NE(s, nullptr);
   EXPECT_STREQ(s, "\"USD\" #,##0");
 }

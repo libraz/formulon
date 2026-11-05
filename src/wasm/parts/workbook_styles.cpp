@@ -353,18 +353,11 @@ emscripten::val js_cell_xf_result(fm_status_t rc, fm_cell_xf_t xf) {
 // makes the TypeScript declaration a lie and turns a missed status check
 // into a `TypeError` instead of a wrong-but-typed value.
 
-emscripten::val JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val o = emscripten::val::object();
+JsNumberResult JsWorkbook::getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const {
   std::size_t xf = 0;
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    o.set("xfIndex", 0U);
-    return o;
-  }
-  fm_status_t rc = fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf);
-  o.set("status", status_from_rc(rc));
-  o.set("xfIndex", rc == 0 ? static_cast<uint32_t>(xf) : 0U);
-  return o;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf) : kBindingInvalidHandle;
+  return number_result(rc, static_cast<double>(xf));
 }
 
 JsStatus JsWorkbook::setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index) {
@@ -431,14 +424,12 @@ emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
 }
 
 emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
-  emscripten::val o = emscripten::val::object();
+  int32_t present = 0;
   const char* s = nullptr;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_workbook_get_num_fmt_string(handle_, num_fmt_id, &s) : kBindingInvalidHandle;
-  o.set("status", status_from_rc(rc));
-  o.set("numFmtId", rc == 0 ? num_fmt_id : 0U);
-  js_set_cstr(o, "formatCode", rc == 0 ? s : nullptr);
-  return o;
+      handle_ != nullptr ? fm_workbook_get_num_fmt_string(handle_, num_fmt_id, &present, &s) : kBindingInvalidHandle;
+  return optional_result(rc, present,
+                         rc == 0 && present != 0 ? emscripten::val(std::string(s)) : emscripten::val::null());
 }
 
 emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {

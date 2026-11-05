@@ -43,9 +43,9 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 434 instance methods plus the four static factories. Of those
+register 433 instance methods plus the four static factories. Of those
 instance methods, 432 are shared with WASM; three remain WASM-only, while
-`dispose()` and `getMemoryUsage()` are native-only lifecycle helpers.
+`getMemoryUsage()` is a native-only lifecycle helper.
 The shared `Workbook` methods use the same status-bearing result envelopes
 and field shapes; switching packages still requires updating the module
 import and validating the target platform's native prebuild. The additional
@@ -125,7 +125,7 @@ import { Workbook, evalFormula, ValueKind } from '@libraz/formulon-native';
 console.log(evalFormula('=SUM(1,2,3)'));
 // { status: { ok: true, ... }, value: { kind: 1, number: 6, ... } }
 
-const wb = Workbook.createDefault();
+const wb = Workbook.createDefault().value;
 wb.setFormula(0, 0, 0, '=1+2');
 wb.recalc();
 const r = wb.getValue(0, 0, 0);
@@ -147,7 +147,7 @@ through `Number.MAX_SAFE_INTEGER`.
 The `{ status, value }` envelope mirrors the WASM package's contract for
 engine operations. Module loading can throw when the native prebuild is not
 available; after the module loads, fallible engine operations return
-`{ ok: false, status, message, context }`.
+`{ ok: false, code, message, context }`.
 
 ## Memory accounting
 

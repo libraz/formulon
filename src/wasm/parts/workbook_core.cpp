@@ -106,7 +106,7 @@ namespace {
 JsStatus progress_callback_threw_status() {
   JsStatus s;
   s.ok = false;
-  s.status = kBindingCallbackException;
+  s.code = kBindingCallbackException;
   s.message = "the iterative progress callback threw; the solve was aborted";
   s.context = "Workbook.setIterativeProgress";
   return s;
@@ -129,6 +129,18 @@ JsWorkbook::~JsWorkbook() {
     fm_workbook_destroy(handle_);
     handle_ = nullptr;
   }
+}
+
+void JsWorkbook::dispose() {
+  if (in_iterative_progress_callback_) {
+    // Throws into the JS caller, which is `progress_callback_` itself here.
+    fm_wasm_throw_dispose_during_callback();
+  }
+  if (handle_ != nullptr) {
+    fm_workbook_destroy(handle_);
+    handle_ = nullptr;
+  }
+  progress_callback_ = emscripten::val::null();
 }
 
 JsWorkbook::JsWorkbook(JsWorkbook&& other) noexcept
@@ -158,43 +170,46 @@ JsWorkbook& JsWorkbook::operator=(JsWorkbook&& other) noexcept {
   return *this;
 }
 
-JsWorkbook* JsWorkbook::createDefault() {
-  auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
-  fm_status_t rc = fm_workbook_create_default(&wb->handle_);
+namespace {
+
+// Wraps a factory's outcome as `{ status, value }`: the JS-owned wrapper on
+// success, `null` on failure.
+emscripten::val factory_result(fm_status_t rc, std::unique_ptr<JsWorkbook> wb) {
   if (rc != 0) {
-    // The handle remains null; the caller can read lastErrorMessage().
-    // We still return the object so JS can inspect status via a
-    // subsequent isValid() check.
+    return optional_result(rc, 0, emscripten::val::null());
   }
-  return wb.release();
+  return optional_result(rc, 1, emscripten::val(wb.release(), emscripten::allow_raw_pointers()));
 }
 
-JsWorkbook* JsWorkbook::createEmpty() {
+}  // namespace
+
+emscripten::val JsWorkbook::createDefault() {
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
-  (void)fm_workbook_create_empty(&wb->handle_);
-  return wb.release();
+  const fm_status_t rc = fm_workbook_create_default(&wb->handle_);
+  return factory_result(rc, std::move(wb));
 }
 
-JsWorkbook* JsWorkbook::createForProfile(const std::string& profileId) {
+emscripten::val JsWorkbook::createEmpty() {
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
-  // As createDefault: a failed create (unknown id) leaves the handle null.
-  (void)fm_workbook_create_for_profile(profileId.c_str(), &wb->handle_);
-  return wb.release();
+  const fm_status_t rc = fm_workbook_create_empty(&wb->handle_);
+  return factory_result(rc, std::move(wb));
 }
 
-JsWorkbook* JsWorkbook::loadBytes(emscripten::val bytes) {
+emscripten::val JsWorkbook::createForProfile(const std::string& profileId) {
+  auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
+  const fm_status_t rc = fm_workbook_create_for_profile(profileId.c_str(), &wb->handle_);
+  return factory_result(rc, std::move(wb));
+}
+
+emscripten::val JsWorkbook::loadBytes(emscripten::val bytes) {
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
   const JsBytesReadResult read = val_to_bytes_checked(bytes);
-  if (!read.ok || read.bytes.empty()) {
-    // `loadBytes` historically returns an invalid wrapper and refreshes the
-    // C diagnostic for malformed, non-Uint8Array, and empty input. Keep that
-    // factory contract while ensuring conversion failures stay inside the JS
-    // boundary.
-    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
-    return wb.release();
-  }
-  (void)fm_workbook_load(read.bytes.data(), read.bytes.size(), &wb->handle_);
-  return wb.release();
+  // Malformed, non-Uint8Array and empty input go to C as an empty buffer so
+  // the failure refreshes the last-error diagnostics.
+  const bool usable = read.ok && !read.bytes.empty();
+  const fm_status_t rc =
+      fm_workbook_load(usable ? read.bytes.data() : nullptr, usable ? read.bytes.size() : 0, &wb->handle_);
+  return factory_result(rc, std::move(wb));
 }
 
 namespace {
@@ -638,38 +653,28 @@ JsStatus JsWorkbook::setFileName(const std::string& name) {
   return status_from_rc(handle_ != nullptr ? fm_workbook_set_file_name(handle_, name.c_str()) : kBindingInvalidHandle);
 }
 
-emscripten::val JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewport) {
-  emscripten::val o = emscripten::val::object();
+JsNumberResult JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewport) {
+  JsNumberResult out;
   if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    o.set("recomputed", static_cast<uint32_t>(0));
-    return o;
+    out.status = invalid_handle_status();
+    return out;
   }
   JsNarrowNumericReader reader("recalcViewport");
   const fm_cell_rect_t vp = js_pull_range(viewport, &reader);
   if (!reader.ok()) {
-    o.set("status", reader.failure());
-    o.set("recomputed", static_cast<uint32_t>(0));
-    return o;
+    out.status = reader.failure();
+    return out;
   }
   uint32_t recomputed = 0;
   progress_callback_threw_ = false;
   fm_status_t rc = fm_sheet_recalc_viewport(handle_, sheet, &vp, &recomputed);
   const bool callback_threw = progress_callback_threw_;
   progress_callback_threw_ = false;
-  if (rc != 0) {
-    o.set("status", error_status(rc));
-    o.set("recomputed", static_cast<uint32_t>(0));
-    return o;
+  if (rc == 0 && callback_threw) {
+    out.status = progress_callback_threw_status();
+    return out;
   }
-  if (callback_threw) {
-    o.set("status", progress_callback_threw_status());
-    o.set("recomputed", static_cast<uint32_t>(0));
-    return o;
-  }
-  o.set("status", ok_status());
-  o.set("recomputed", recomputed);
-  return o;
+  return number_result(rc, recomputed);
 }
 
 // ---- Iterative-progress callback bridge --------------------------------

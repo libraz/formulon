@@ -8,6 +8,7 @@ from formulon import (
     CellRect,
     CellXf,
     FormulonError,
+    SheetPrintTitles,
     Workbook,
 )
 
@@ -129,9 +130,9 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertEqual(wb.get_print_area(0), [])
 
             wb.set_print_titles(0, "1:2", "A:A")
-            self.assertEqual(wb.get_print_titles(0), ("1:2", "A:A"))
+            self.assertEqual(wb.get_print_titles(0), SheetPrintTitles(repeat_rows="1:2", repeat_cols="A:A"))
             wb.set_print_titles(0)
-            self.assertEqual(wb.get_print_titles(0), ("", ""))
+            self.assertEqual(wb.get_print_titles(0), SheetPrintTitles(repeat_rows="", repeat_cols=""))
 
     def test_manual_breaks(self) -> None:
         with Workbook.create_default() as wb:
@@ -185,7 +186,7 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertEqual(setup.fit_to_height, 0)
             self.assertAlmostEqual(reloaded.get_page_margins(0).left, 0.5)
             self.assertEqual(reloaded.get_print_area(0), [CellRect(0, 0, 79, 5)])
-            self.assertEqual(reloaded.get_print_titles(0), ("1:2", ""))
+            self.assertEqual(reloaded.get_print_titles(0), SheetPrintTitles(repeat_rows="1:2", repeat_cols=""))
             self.assertEqual([b.id for b in reloaded.list_row_breaks(0)], [39])
 
     def test_set_range_xf_index_materialises_the_rectangle(self) -> None:

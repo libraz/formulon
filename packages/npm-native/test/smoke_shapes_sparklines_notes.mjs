@@ -9,7 +9,7 @@ const release = (wb) => wb.dispose();
 const roundTrip = (mod, wb) => {
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  return mod.Workbook.load(saved.bytes);
+  return mod.Workbook.load(saved.bytes).value;
 };
 
 // Reads one stored or deflated entry of a ZIP archive by name.
@@ -53,7 +53,7 @@ const box = (mod) => ({
 
 test('shapes insert, list, update, remove and round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.listShapes(0).length, 0);
   const rect = wb.addShape(0, box(mod));
   assert.ok(rect.status.ok, JSON.stringify(rect.status));
@@ -117,7 +117,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
 
 test('shape arguments are validated', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.addShape(0, { prst: 'rect' }).status.ok, false);
   assert.equal(wb.addShape(0, { ...box(mod), anchorKind: 9 }).status.ok, false);
   assert.equal(wb.addShape(0, { ...box(mod), fillKind: mod.ShapePaint.Other }).status.ok, false);
@@ -151,7 +151,7 @@ const sparklineGroup = (mod) => ({
 
 test('sparkline groups add, list, update, replace, remove and follow row edits', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(
     readAll(
       () => wb.getSparklineGroupCount(0),
@@ -254,7 +254,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
 
 test('sparkline group arguments are validated', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const good = [{ formula: 'Sheet1!A1:D1', location: 'F1' }];
   assert.equal(wb.addSparklineGroup(0, {}).status.ok, false);
   assert.equal(wb.addSparklineGroup(0, { sparklines: [] }).status.ok, false);
@@ -281,7 +281,7 @@ test('sparkline group arguments are validated', async () => {
 
 test('a surviving note keeps its own shape when notes are added', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setComment(0, 1, 1, 'Alice', 'one').ok);
   assert.ok(wb.setComment(0, 3, 3, 'Alice', 'two').ok);
   assert.ok(wb.setCommentVisible(0, 1, 1, true).ok);
@@ -295,7 +295,7 @@ test('a surviving note keeps its own shape when notes are added', async () => {
   assert.equal(vml.match(/<v:shape /g).length, 3);
   assert.equal(new Set(vml.match(/id="_x0000_s\d+"/g)).size, 3);
   assert.equal(vml.match(/visibility:visible/g).length, 2);
-  const again = mod.Workbook.load(saved.bytes);
+  const again = mod.Workbook.load(saved.bytes).value;
   assert.equal(again.getCommentVisible(0, 1, 1).value, 1);
   assert.equal(again.getCommentVisible(0, 3, 3).value, 1);
   assert.equal(again.getCommentVisible(0, 8, 8).value, 0);

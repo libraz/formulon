@@ -269,10 +269,12 @@ emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, u
 }
 
 emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const {
+  int32_t present = 0;
   const char* text = nullptr;
   const fm_status_t rc =
-      handle_ != nullptr ? fm_sheet_get_lambda_text(handle_, sheet, row, col, &text) : kBindingInvalidHandle;
-  return js_text_result(rc, "text", text);
+      handle_ != nullptr ? fm_sheet_get_lambda_text(handle_, sheet, row, col, &present, &text) : kBindingInvalidHandle;
+  return optional_result(rc, present,
+                         rc == 0 && present != 0 ? emscripten::val(std::string(text)) : emscripten::val::null());
 }
 
 // ---- Iteration / metadata accessors -------------------------------------
@@ -742,11 +744,9 @@ emscripten::val JsWorkbook::getExternalLink(uint32_t externalLinkIndex) const {
 namespace {
 
 emscripten::val formula_envelope(fm_status_t rc, const char* formula) {
-  emscripten::val o = emscripten::val::object();
-  o.set("status", status_from_rc(rc));
   const bool present = rc == 0 && formula != nullptr && formula[0] != '\0';
-  o.set("formula", present ? emscripten::val(std::string(formula)) : emscripten::val::null());
-  return o;
+  return optional_result(rc, present ? 1 : 0,
+                         present ? emscripten::val(std::string(formula)) : emscripten::val::null());
 }
 
 emscripten::val display_envelope(fm_status_t rc, const char* text, int32_t display_status) {

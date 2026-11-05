@@ -40,7 +40,7 @@ test('filter, sort and validation enums keep their C ordinals', async () => {
 
 test('AutoFilter round-trips and its criteria evaluate, apply and clear', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     seedColumn(wb);
     const absent = wb.getAutoFilter(0);
@@ -140,7 +140,7 @@ test('AutoFilter round-trips and its criteria evaluate, apply and clear', async 
 
 test('table AutoFilter entry points reject a table index that does not exist', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.equal(wb.getTableCount().value, 0);
     const got = wb.getTableAutoFilter(0);
@@ -160,7 +160,7 @@ test('table AutoFilter entry points reject a table index that does not exist', a
 
 test('validateValue and listInvalidCells follow the rule covering a cell', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const free = wb.validateValue(0, 0, 1, { kind: mod.ValueKind.Number, number: 99 });
     must(free, 'validateValue without rule');
@@ -226,7 +226,7 @@ test('validateValue and listInvalidCells follow the rule covering a cell', async
 
 test('threaded comments cover a thread, a reply with a mention, resolution and removal', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.equal(wb.listPeople().persons.length, 0);
     assert.ok(wb.listPeople().status.ok);
@@ -312,13 +312,13 @@ test('threaded comments cover a thread, a reply with a mention, resolution and r
 
 test('the new accessors report a released handle', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   wb.dispose();
-  assert.equal(wb.getAutoFilter(0).status.status, 7000);
-  assert.equal(wb.evaluateAutoFilter(0).status.status, 7000);
-  assert.equal(wb.validateValue(0, 0, 0, { kind: 0 }).status.status, 7000);
-  assert.equal(wb.getInvalidCells(0).status.status, 7000);
-  assert.equal(wb.listThreadedComments(0).status.status, 7000);
-  assert.equal(wb.listPeople().status.status, 7000);
-  assert.equal(wb.addPerson({ id: ANN, displayName: 'Ann' }).status, 7000);
+  assert.equal(wb.getAutoFilter(0).status.code, 7000);
+  assert.equal(wb.evaluateAutoFilter(0).status.code, 7000);
+  assert.equal(wb.validateValue(0, 0, 0, { kind: 0 }).status.code, 7000);
+  assert.equal(wb.getInvalidCells(0).status.code, 7000);
+  assert.equal(wb.listThreadedComments(0).status.code, 7000);
+  assert.equal(wb.listPeople().status.code, 7000);
+  assert.equal(wb.addPerson({ id: ANN, displayName: 'Ann' }).code, 7000);
 });

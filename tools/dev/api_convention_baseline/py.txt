@@ -86,18 +86,5 @@ R7.py	record.sheet_protection	dataclass	`SheetProtection` is a result; make it a
 R7.py	record.slicer	dataclass	`Slicer` is a result; make it a frozen dataclass
 R7.py	record.sparkline	dataclass	`Sparkline` is a result; make it a frozen dataclass
 R7.py	record.sparkline_group	dataclass	`SparklineGroup` is a result; make it a frozen dataclass
-R7.py	record.style_batch_indices	dataclass	`StyleBatchIndices` is a result; make it a frozen dataclass
 R7.py	record.threaded_comment	dataclass	`ThreadedComment` is a result; make it a frozen dataclass
 R7.py	record.workbook_protection	dataclass	`WorkbookProtection` is a result; make it a frozen dataclass
-R8.py	batch.add	tuple	`add_batch` returns `StyleBatchIndices`
-R8.py	chart.get	optional	`get_chart` returns `ChartInfo`, not `Optional[...]`
-R8.py	error_display_name.get	optional	`error_display_name` returns `str`, not `Optional[...]`
-R8.py	image.get	optional	`get_image` returns `bytes`, not `Optional[...]`
-R8.py	iterative.get	tuple	`get_iterative` returns `IterativeSettings`
-R8.py	lambda_text.get	optional	`lambda_text_at` returns `str`, not `Optional[...]`
-R8.py	num_fmt_string.get	optional	`get_num_fmt` returns `str`, not `Optional[...]`
-R8.py	pivot_grand_totals.get	tuple	`pivot_grand_totals` returns `Tuple[bool, bool]`
-R8.py	print_titles.get	tuple	`get_print_titles` returns `tuple[str, str]`
-R8.py	selection.get	tuple	`get_sheet_selection` returns `Tuple[Tuple[int, int], List[MergeRange]]`
-R8.py	table_style_defaults.get	tuple	`table_style_defaults` returns `Tuple[str, str]`
-R8.py	value.get	optional	`get_value` returns `Value`, not `Optional[...]`

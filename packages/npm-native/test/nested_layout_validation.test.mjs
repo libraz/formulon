@@ -25,7 +25,7 @@ function protectionSnapshot(wb) {
 }
 
 test('sheet protection rejects every narrow nested integer before mutation', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     const keys = [
       'enabled',
@@ -60,7 +60,7 @@ test('sheet protection rejects every narrow nested integer before mutation', () 
 });
 
 test('sheet protection stops at a throwing nested getter before native mutation', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     const before = protectionSnapshot(wb);
     const spec = { enabled: 1, algorithmName: 'SHA-512' };
@@ -78,7 +78,7 @@ test('sheet protection stops at a throwing nested getter before native mutation'
 });
 
 test('sheet format defaults stops at a throwing nested getter before native mutation', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     const before = wb.getFormatDefaults(0);
     const spec = { defaultColWidth: 12.5 };
@@ -96,7 +96,7 @@ test('sheet format defaults stops at a throwing nested getter before native muta
 });
 
 test('cell geometry rejects fractional nested range coordinates before the query', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     assert.throws(() => wb.getCellRectPt(0, { ...RANGE, firstRow: 1.5 }, 0), TypeError);
     assert.throws(() => wb.getCellRectPt(0, { ...RANGE, lastCol: Number.NaN }, 0), TypeError);
@@ -114,7 +114,7 @@ test('cell geometry rejects fractional nested range coordinates before the query
 });
 
 test('partial recalc rejects fractional nested viewport coordinates before recalc', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     assert.ok(wb.setNumber(0, 0, 0, 1).ok);
     assert.ok(wb.setFormula(0, 0, 1, '=A1+1').ok);

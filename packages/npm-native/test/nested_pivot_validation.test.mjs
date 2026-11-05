@@ -12,7 +12,7 @@ function must(result, what) {
 }
 
 function makePivot(Workbook) {
-  const wb = Workbook.createDefault();
+  const wb = Workbook.createDefault().value;
   must(wb.setExcelProfileId('win-365-ja_JP'), 'setExcelProfileId');
   const cache = must(wb.addPivotCache(0), 'addPivotCache').index;
   must(
@@ -231,7 +231,7 @@ test('pivot nested string getters stop before changing the report', async () => 
 
 test('pivot cache source snapshots each nested getter once before mutation', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const cache = wb.addPivotCache(0).index;
     let reads = 0;

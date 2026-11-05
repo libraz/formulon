@@ -35,10 +35,10 @@ namespace {
 using XmlGetter = fm_status_t (*)(const fm_workbook_t*, size_t, const char**);
 using XmlSetter = fm_status_t (*)(fm_workbook_t*, size_t, const char*);
 
-emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter, const char* key = "xml") {
+emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGetter getter) {
   const char* xml = nullptr;
   const fm_status_t rc = handle != nullptr ? getter(handle, sheet, &xml) : kBindingInvalidHandle;
-  return js_text_result(rc, key, xml);
+  return js_text_result(rc, "value", xml);
 }
 
 JsStatus xml_set(fm_workbook_t* handle, uint32_t sheet, const std::string& xml, XmlSetter setter) {

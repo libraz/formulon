@@ -28,7 +28,7 @@ function cellNumber(wb, row = 0, col = 0) {
 test('coercion objects and symbols are rejected before mutating a cell', () => {
   const source = `
     const addon = require(process.env.FORMULON_NODE_ADDON);
-    const wb = addon.Workbook.createDefault();
+    const wb = addon.Workbook.createDefault().value;
     const failures = [];
     function probe(label, call) {
       try {
@@ -97,7 +97,7 @@ test('module-level numeric and string positions reject coercion and overflow', (
 });
 
 test('integer positional arguments reject wrapping and non-finite values', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     assert.equal(wb.setNumber(0, 0, 0, 42).ok, true);
     for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
@@ -114,7 +114,7 @@ test('integer positional arguments reject wrapping and non-finite values', () =>
 });
 
 test('iterative caps use the signed int32 contract', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     assert.equal(wb.setIterative(true, 2 ** 31 - 1, 0.1).ok, true);
     assert.equal(wb.setIterative(false, -1, 0.1).ok, true);
@@ -128,7 +128,7 @@ test('iterative caps use the signed int32 contract', () => {
 });
 
 test('sheet, structural, enum, and read positions reject non-number primitives', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     assert.throws(() => wb.getSheetName(Symbol('sheet')), TypeError);
     assert.throws(() => wb.insertRows(0, 0, 1.5), RangeError);
@@ -146,7 +146,7 @@ test('sheet, structural, enum, and read positions reject non-number primitives',
 });
 
 test('paging cursor and limit reject values outside native integer ranges', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
   try {
     for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
@@ -165,12 +165,12 @@ test('paging cursor and limit reject values outside native integer ranges', () =
 });
 
 test('missing required positional arguments are rejected; optional ones keep their defaults', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     assert.throws(() => wb.setIterative(true), TypeError);
     assert.throws(() => wb.setVisibility(0), TypeError);
     assert.equal(wb.getIterative().maxIterations, 100, 'the rejected setIterative must not store a cap');
-    assert.equal(wb.getFunctionMetadata('SUM').ok, true);
+    assert.equal(wb.getFunctionMetadata('SUM').status.ok, true);
     const range = { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 };
     assert.doesNotThrow(() => wb.getCellsInRange(0, range, undefined, undefined));
     assert.doesNotThrow(() => wb.getInvalidCells(0, undefined, undefined));
@@ -182,7 +182,7 @@ test('missing required positional arguments are rejected; optional ones keep the
 });
 
 test('getCellsInRange requires its range argument like the merge methods', () => {
-  const wb = addon.Workbook.createDefault();
+  const wb = addon.Workbook.createDefault().value;
   try {
     assert.equal(wb.setNumber(0, 0, 0, 7).ok, true);
     assert.throws(() => wb.getCellsInRange(0, null), TypeError);

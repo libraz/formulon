@@ -43,9 +43,6 @@ _DTS_SURFACE_ONLY_TYPES = {
     # native addon, which is `require`d rather than instantiated.
     ("wasm", "FormulonModule"),
     ("wasm", "FormulonModuleOptions"),
-    # Reachable only from `getAutoFilterXml`, which is in
-    # WASM_ONLY_METHODS.
-    ("wasm", "SheetAutoFilterXmlResult"),
 }
 
 # Shared methods whose two declarations are allowed to differ, with the

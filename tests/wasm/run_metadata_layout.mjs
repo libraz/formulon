@@ -3,7 +3,7 @@ import { readAll } from './smoke_support.mjs';
 
 export function registerMetadataLayout(Module, test) {
   test('addMerge / getMerges round-trip', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.addMerge(0, { firstRow: 0, lastRow: 1, firstCol: 0, lastCol: 2 }).ok);
       const merges = wb.listMerges(0);
@@ -16,7 +16,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('removeMerge / removeMergeAt / clearMerges step-wise prune the merge list', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const a = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
       const b = { firstRow: 4, firstCol: 4, lastRow: 5, lastCol: 5 };
@@ -41,7 +41,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('hyperlinks are read after save+load', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.equal(wb.listHyperlinks(0).length, 0);
     } finally {
@@ -50,7 +50,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('addHyperlink + getHyperlinks round-trip', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.equal(wb.listHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
@@ -103,7 +103,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       // No-op variants on an empty list still return kOk.
       assert.ok(wb.removeHyperlink(0, 0, 0).ok);
@@ -122,44 +122,44 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('setComment / getComment round-trip', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setComment(0, 1, 1, 'Alice', 'Hello').ok);
-      const c = wb.getComment(0, 1, 1);
+      const c = wb.getComment(0, 1, 1).value;
       assert.ok(c !== null);
       assert.equal(c.author, 'Alice');
       assert.equal(c.text, 'Hello');
       // Empty text removes.
       assert.ok(wb.setComment(0, 1, 1, '', '').ok);
       const after = wb.getComment(0, 1, 1);
-      assert.equal(after, null);
+      assert.ok(after.status.ok, JSON.stringify(after.status));
+      assert.equal(after.value, null);
     } finally {
       wb.delete();
     }
   });
 
-  test('getCommentResult distinguishes absence from an invalid sheet', () => {
-    const wb = Module.Workbook.createDefault();
+  test('getComment distinguishes absence from an invalid sheet', () => {
+    const wb = Module.Workbook.createDefault().value;
     try {
-      const missing = wb.getCommentResult(0, 1, 1);
-      assert.equal(missing.status.ok, false);
-      assert.equal(missing.comment, null);
-      const invalid = wb.getCommentResult(99, 1, 1);
-      assert.equal(invalid.status.ok, false);
-      assert.equal(invalid.comment, null);
-      assert.notEqual(missing.status.status, invalid.status.status);
+      const missing = wb.getComment(0, 1, 1);
+      assert.equal(missing.status.ok, true);
+      assert.equal(missing.value, null);
+      const invalid = wb.getComment(99, 1, 1);
+      assert.equal(invalid.status.code, 5050);
+      assert.equal(invalid.value, null);
       assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
-      const found = wb.getCommentResult(0, 1, 1);
+      const found = wb.getComment(0, 1, 1);
       assert.equal(found.status.ok, true);
-      assert.equal(found.comment.author, 'libraz');
-      assert.equal(found.comment.text, 'hello');
+      assert.equal(found.value.author, 'libraz');
+      assert.equal(found.value.text, 'hello');
     } finally {
       wb.delete();
     }
   });
 
   test('getValidation returns an array', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const arr = readAll(
         () => wb.getValidationCount(0),
@@ -173,7 +173,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('addValidation / getValidation / removeValidationAt / clearValidations round-trip', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       // List-type validation at A1:B3 with prompts and an error message.
       const listRule = {
@@ -273,7 +273,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('CF and sheet-layout lists are plain JS arrays with no delete lifecycle', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const cf = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }, Number.NaN);
       assert.ok(cf.status.ok);
@@ -298,7 +298,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('sheet-layout setters refuse coordinates and metrics Excel cannot open', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       // These six setters marshal straight to the C ABI, which is where the
       // validation lives. The assertions below are what keeps that true: a
@@ -318,7 +318,7 @@ export function registerMetadataLayout(Module, test) {
       const kMetricRefused = 'value must be finite and non-negative';
       const refused = (status, expectedMessage, label) => {
         assert.equal(status.ok, false, `${label} should have been refused`);
-        assert.equal(status.status, kInvalidArgument, `${label}: ${JSON.stringify(status)}`);
+        assert.equal(status.code, kInvalidArgument, `${label}: ${JSON.stringify(status)}`);
         assert.equal(status.message, expectedMessage, `${label}: ${JSON.stringify(status)}`);
       };
 
@@ -367,7 +367,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('typed print patches throw on lossy numbers before changing the page setup', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setPageSetup(0, { orientation: 2, scale: 125 }).ok);
       const expectRejected = (patch, field) => {
@@ -398,7 +398,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('typed print patches throw on coercion and preserve header/footer fields', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setPrintOptions(0, { gridLines: true }).ok);
       const throwingOptions = {};
@@ -408,7 +408,7 @@ export function registerMetadataLayout(Module, test) {
         },
       });
       assert.throws(() => wb.setPrintOptions(0, throwingOptions), /print-options getter/);
-      assert.match(wb.getPrintOptionsXml(0).xml, /gridLines="true"/);
+      assert.match(wb.getPrintOptionsXml(0).value, /gridLines="true"/);
 
       assert.ok(wb.setPageMargins(0, { left: 0.5 }).ok);
       assert.throws(() => wb.setPageMargins(0, { left: '0.75' }), {
@@ -422,14 +422,14 @@ export function registerMetadataLayout(Module, test) {
         name: 'TypeError',
         message: /setHeaderFooter.*oddHeader/,
       });
-      assert.match(wb.getHeaderFooterXml(0).xml, /before/);
+      assert.match(wb.getHeaderFooterXml(0).value, /before/);
     } finally {
       wb.delete();
     }
   });
 
   test('header/footer getter failures are rethrown before any mutation', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setHeaderFooter(0, { oddHeader: 'before' }).ok);
       const lateFailure = { oddHeader: 'after' };
@@ -440,15 +440,15 @@ export function registerMetadataLayout(Module, test) {
       });
 
       assert.throws(() => wb.setHeaderFooter(0, lateFailure), /late header getter/);
-      assert.match(wb.getHeaderFooterXml(0).xml, /before/);
-      assert.doesNotMatch(wb.getHeaderFooterXml(0).xml, /after/);
+      assert.match(wb.getHeaderFooterXml(0).value, /before/);
+      assert.doesNotMatch(wb.getHeaderFooterXml(0).value, /after/);
     } finally {
       wb.delete();
     }
   });
 
   test('setSheetVisibility states veryHidden, which the bool setter cannot', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const read = () => {
         const r = wb.getView(0);
@@ -460,11 +460,11 @@ export function registerMetadataLayout(Module, test) {
       // The only visible sheet cannot be hidden: kInvalidArgument, sheet left alone.
       for (const refused of [wb.setVisibility(0, 1), wb.setTabHidden(0, true)]) {
         assert.equal(refused.ok, false);
-        assert.equal(refused.status, 2);
+        assert.equal(refused.code, 2);
       }
       assert.equal(read().visibility, 0);
       // The last sheet keeps its own refusal (kCannotRemoveLastSheet).
-      assert.equal(wb.removeSheet(0).status, 5052);
+      assert.equal(wb.removeSheet(0).code, 5052);
       assert.equal(wb.getSheetCount().value, 1);
       // A second sheet lets the first one change state, but removing the first
       // while the second is hidden would leave no visible sheet.
@@ -472,7 +472,7 @@ export function registerMetadataLayout(Module, test) {
       assert.ok(wb.setTabHidden(1, true).ok);
       const lastVisible = wb.removeSheet(0);
       assert.equal(lastVisible.ok, false);
-      assert.equal(lastVisible.status, 2);
+      assert.equal(lastVisible.code, 2);
       assert.equal(wb.getSheetCount().value, 2);
       assert.ok(wb.setTabHidden(1, false).ok);
 
@@ -506,7 +506,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('getIterative reads back what setIterative stored', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const initial = wb.getIterative();
       assert.ok(initial.status.ok, `getIterative: ${JSON.stringify(initial.status)}`);
@@ -535,7 +535,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('addValidation defaults allowBlank to false', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(
         wb.addValidation(0, {
@@ -556,7 +556,7 @@ export function registerMetadataLayout(Module, test) {
   });
 
   test('getCellStyleXf reports xfId alongside the cell-format fields', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const read = wb.getCellStyleXf(0);
       assert.ok(read.status.ok, `getCellStyleXf: ${JSON.stringify(read.status)}`);

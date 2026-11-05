@@ -13,8 +13,10 @@
 #include "utils/error.h"
 
 TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_get_function_metadata("SUM", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("SUM", &present, &md), 0);
+  EXPECT_EQ(present, 1);
   ASSERT_NE(md.canonical_name, nullptr);
   EXPECT_STREQ(md.canonical_name, "SUM");
   EXPECT_EQ(md.min_arity, 1U);
@@ -27,46 +29,54 @@ TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
 }
 
 TEST(FormulonCApiFunctionMetadata, LookupIsCaseInsensitive) {
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_get_function_metadata("sum", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("sum", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "SUM");
-  ASSERT_EQ(fm_get_function_metadata("SuM", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("SuM", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "SUM");
 }
 
-TEST(FormulonCApiFunctionMetadata, UnknownFunctionReturnsInvalidArgument) {
+TEST(FormulonCApiFunctionMetadata, UnknownFunctionIsAbsent) {
+  int32_t present = 1;
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_get_function_metadata("NOT_A_FUNCTION", &md);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  ASSERT_EQ(fm_get_function_metadata("NOT_A_FUNCTION", &present, &md), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(md.canonical_name, nullptr);
 }
 
 TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesUnavailableStubs) {
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_get_function_metadata("WEBSERVICE", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("WEBSERVICE", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "WEBSERVICE");
   EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
 
-  ASSERT_EQ(fm_get_function_metadata("CUBEVALUE", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("CUBEVALUE", &present, &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
 }
 
 TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesNonStubSpecialCases) {
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_get_function_metadata("FILTERXML", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("FILTERXML", &present, &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
 
-  ASSERT_EQ(fm_get_function_metadata("INFO", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("INFO", &present, &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_ENVIRONMENT_BOUND);
 
-  ASSERT_EQ(fm_get_function_metadata("SUM", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("SUM", &present, &md), 0);
   EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
 }
 
 TEST(FormulonCApiFunctionMetadata, NullArgsReturnBindingNullPointer) {
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  EXPECT_EQ(fm_get_function_metadata(nullptr, &md),
+  EXPECT_EQ(fm_get_function_metadata(nullptr, &present, &md),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_get_function_metadata("SUM", nullptr),
+  EXPECT_EQ(fm_get_function_metadata("SUM", &present, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_get_function_metadata("SUM", nullptr, &md),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
 
@@ -184,6 +194,7 @@ TEST(FormulonCApiFunctionMetadata, EnumerationIncludesLazyAndSpecialForms) {
 }
 
 TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
+  int32_t present = 0;
   struct Expected {
     const char* name;
     std::uint32_t min_arity;
@@ -195,7 +206,8 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
         Expected{"UNIQUE", 1U, 3U}, Expected{"FILTER", 2U, 3U}, Expected{"IF", 2U, 3U}, Expected{"LET", 3U, 253U},
         Expected{"LAMBDA", 1U, 254U}, Expected{"VLOOKUP", 3U, 4U}}) {
     fm_function_metadata_t md{};
-    ASSERT_EQ(fm_get_function_metadata(fn.name, &md), 0) << fn.name << " did not resolve";
+    ASSERT_EQ(fm_get_function_metadata(fn.name, &present, &md), 0) << fn.name;
+    ASSERT_EQ(present, 1) << fn.name << " did not resolve";
     ASSERT_NE(md.canonical_name, nullptr);
     EXPECT_STREQ(md.canonical_name, fn.name);
     EXPECT_EQ(md.min_arity, fn.min_arity) << fn.name;
@@ -205,8 +217,9 @@ TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
 }
 
 TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
+  int32_t present = 0;
   fm_function_metadata_t md{};
-  ASSERT_EQ(fm_get_function_metadata("xlookup", &md), 0);
+  ASSERT_EQ(fm_get_function_metadata("xlookup", &present, &md), 0);
   EXPECT_STREQ(md.canonical_name, "XLOOKUP");
 }
 
@@ -219,6 +232,7 @@ TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
 // locale-invariant and a function-text table growing inside the engine would
 // break the merge contract in `docs/function-metadata-schema.md`.
 TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalogApis) {
+  int32_t present = 0;
   const std::size_t count = count_of(fm_get_function_count);
   ASSERT_GT(count, 0U);
   for (const char* profile : {"win-365-en_US", "mac-365-zh_CN"}) {
@@ -229,7 +243,8 @@ TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalog
 
       // metadata
       fm_function_metadata_t md{};
-      EXPECT_EQ(fm_get_function_metadata(name, &md), 0) << name << " has no metadata";
+      EXPECT_EQ(fm_get_function_metadata(name, &present, &md), 0) << name;
+      EXPECT_EQ(present, 1) << name << " has no metadata";
       // Display text is host-supplied, never engine-owned. Asserted for
       // the whole catalog rather than one sample: the eager and the
       // lazy / special-form branches populate the result separately, so

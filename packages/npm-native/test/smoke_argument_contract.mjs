@@ -30,7 +30,7 @@ function closingSpec(close) {
 
 test('dispose() from a spec getter during a call is refused and the call does not crash', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const refused = { name: 'TypeError', message: /cannot dispose Workbook during an active method call/ };
     const spec = () => closingSpec(() => wb.dispose());
@@ -56,7 +56,7 @@ test('dispose() from a spec getter during a call is refused and the call does no
 
 test('dispose() from the iterative progress callback is refused the same way', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.ok(wb.setIterative(true, 10, 0.001).ok);
     assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
@@ -92,7 +92,7 @@ test('a workbook whose progress callback refers to it is collected once unreacha
   });
   (() => {
     for (let i = 0; i < count; i += 1) {
-      const wb = mod.Workbook.createDefault();
+      const wb = mod.Workbook.createDefault().value;
       assert.ok(
         wb.setIterativeProgress(() => {
           void wb;
@@ -111,7 +111,7 @@ test('a workbook whose progress callback refers to it is collected once unreacha
 
 test('a callback or sink that is not a function is rejected with status 2 and keeps the installed one', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.ok(wb.setIterative(true, 10, 0.001).ok);
     assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
@@ -124,14 +124,14 @@ test('a callback or sink that is not a function is rejected with status 2 and ke
     );
     const bad = wb.setIterativeProgress(42);
     assert.equal(bad.ok, false);
-    assert.equal(bad.status, 2);
+    assert.equal(bad.code, 2);
     assert.equal(bad.context, '');
     assert.ok(wb.recalc().ok);
     assert.ok(calls > 0, 'the rejected install must leave the previous callback in place');
 
     const badSink = mod.setLogSink(5);
     assert.equal(badSink.ok, false);
-    assert.equal(badSink.status, 2);
+    assert.equal(badSink.code, 2);
   } finally {
     wb.setIterativeProgress(null);
     wb.dispose();
@@ -140,7 +140,7 @@ test('a callback or sink that is not a function is rejected with status 2 and ke
 
 test('a missing required argument throws TypeError and commits nothing', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.throws(() => wb.setNumber(0, 0, 0), TypeError);
     assert.throws(() => wb.setText(0, 0, 0), TypeError);
@@ -162,7 +162,7 @@ test('a missing required argument throws TypeError and commits nothing', async (
 
 test('a primitive or null where an object is declared throws TypeError and changes nothing', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.ok(wb.setSheetProtection(0, { enabled: 1, sheet: 1 }).ok);
     const protectionBefore = wb.getSheetProtection(0).protection;
@@ -187,7 +187,7 @@ test('a primitive or null where an object is declared throws TypeError and chang
 
 test('an argument a method rejects with a status reports kInvalidArgument', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     for (const [label, result] of [
       ['setThemeColors([])', wb.setThemeColors([])],
@@ -200,7 +200,7 @@ test('an argument a method rejects with a status reports kInvalidArgument', asyn
     ]) {
       const status = typeof result.ok === 'boolean' ? result : result.status;
       assert.equal(status.ok, false, label);
-      assert.equal(status.status, 2, `${label}: ${JSON.stringify(status)}`);
+      assert.equal(status.code, 2, `${label}: ${JSON.stringify(status)}`);
       assert.equal(status.context, '', label);
     }
   } finally {
@@ -210,7 +210,7 @@ test('an argument a method rejects with a status reports kInvalidArgument', asyn
 
 test('a failed read reports the documented default payload', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     for (const xf of [wb.getCellXf(99999), wb.getCellStyleXf(99999)]) {
       assert.equal(xf.status.ok, false);
@@ -228,7 +228,7 @@ test('a failed read reports the documented default payload', async () => {
 
 test('a lone surrogate in a spec string is stored as U+FFFD', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.ok(wb.addPerson({ id: PERSON_ID, displayName: 'a\uD800b' }).ok);
     const person = wb.listPeople().persons.find((p) => p.id === PERSON_ID);
@@ -242,7 +242,7 @@ test('a lone surrogate in a spec string is stored as U+FFFD', async () => {
 
 test('every method called from the iterative progress callback throws and changes nothing', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.ok(wb.addSheet('Second').status.ok);
     assert.ok(wb.setNumber(1, 5, 5, 42).ok);
@@ -287,7 +287,7 @@ test('every method called from the iterative progress callback throws and change
 
 test('a CellRect argument requires four integer fields', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const rect = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
     const malformed = [

@@ -127,19 +127,21 @@ emscripten::val JsWorkbook::getDrawingObject(uint32_t sheet, uint32_t objectId) 
 }
 
 emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
-  emscripten::val o;
-  if (handle_ == nullptr) {
-    o = image_info_to_val(invalid_handle_status(), fm_image_info_t{});
-    o.set("bytes", bytes_to_val(nullptr, 0));
-    return o;
-  }
+  int32_t present = 0;
   const uint8_t* data = nullptr;
   size_t len = 0;
   fm_image_info_t info{};
-  const fm_status_t rc = fm_sheet_get_image(handle_, sheet, objectId, &data, &len, &info);
-  o = image_info_to_val(status_from_rc(rc), info);
-  o.set("bytes", bytes_to_val(rc == 0 ? data : nullptr, rc == 0 ? len : 0));
-  return o;
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_image(handle_, sheet, objectId, &present, &data, &len, &info)
+                                            : kBindingInvalidHandle;
+  if (rc != 0 || present == 0) {
+    return optional_result(rc, present, emscripten::val::null());
+  }
+  emscripten::val image = emscripten::val::object();
+  image.set("format", info.format);
+  image.set("pxWidth", info.px_width);
+  image.set("pxHeight", info.px_height);
+  image.set("bytes", bytes_to_val(data, len));
+  return optional_result(rc, present, image);
 }
 
 emscripten::val JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val opts) {

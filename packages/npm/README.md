@@ -46,10 +46,10 @@ import createFormulon from '@libraz/formulon';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const Module = await createFormulon();
-const wb = Module.Workbook.load(await readFile('input.xlsx'));
+const loaded = Module.Workbook.load(await readFile('input.xlsx'));
+if (!loaded.status.ok) throw new Error(loaded.status.message);
+const wb = loaded.value;
 try {
-  if (!wb.isValid()) throw new Error(Module.getLastErrorMessage());
-
   wb.setNumber(0, 0, 0, 42);        // Sheet1!A1
   wb.setFormula(0, 1, 0, '=A1*2');  // Sheet1!A2
   wb.recalc();
@@ -67,7 +67,7 @@ try {
 New workbooks use `win-365-en_US`. Formulas are always written with English function names and the stored separators; the profile decides how text is parsed and how results are rendered. Switch it per workbook and recalculate:
 
 ```js
-const wb = Module.Workbook.createDefault();
+const wb = Module.Workbook.createDefault().value;
 try {
   wb.setFormula(0, 0, 0, '=LENB("日本")');  // A1
   wb.setFormula(0, 1, 0, '=VALUE("1,5")');  // A2

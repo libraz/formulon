@@ -75,7 +75,7 @@ const EXPECTED_CFVO_VALUES = Object.freeze(['0', '50', '100', '5', '95', '0', '3
 
 test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   let bytes;
   try {
     assert.equal(
@@ -118,7 +118,7 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.load(bytes);
+  const reloaded = Module.Workbook.load(bytes).value;
   try {
     const rules = readAll(
       () => reloaded.getCfRuleCount(0),
@@ -133,7 +133,7 @@ test('CFVO value strings survive getCfRule and a save/load cycle', async () => {
 
 test('addValidation defaults every omitted boolean to false', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     // A list rule stating only what it needs: the booleans are left out
     // so the binding's own defaults are what is read back.
@@ -188,7 +188,7 @@ test('addValidation defaults every omitted boolean to false', async () => {
 
 test('merges, comments and hyperlinks round-trip through save and load', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   let bytes;
   try {
     assert.ok(wb.setText(0, 0, 0, '見出し').ok);
@@ -201,19 +201,18 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
     assert.equal(merges.length, 1);
     assert.equal(merges[0].lastCol, 3);
 
-    const comment = wb.getCommentResult(0, 2, 1);
+    const comment = wb.getComment(0, 2, 1);
     assert.ok(comment.status.ok, JSON.stringify(comment.status));
-    assert.equal(comment.comment.author, '校閲者');
-    assert.equal(comment.comment.text, '要確認');
+    assert.equal(comment.value.author, '校閲者');
+    assert.equal(comment.value.text, '要確認');
     // An absent comment and an unreadable sheet both answer with a null
-    // comment, and are told apart by the status they carry.
-    const none = wb.getCommentResult(0, 9, 9);
-    assert.equal(none.status.ok, false);
-    assert.equal(none.comment, null);
-    const badSheet = wb.getCommentResult(99, 0, 0);
-    assert.equal(badSheet.status.ok, false);
-    assert.equal(badSheet.comment, null);
-    assert.notEqual(none.status.status, badSheet.status.status);
+    // value, and are told apart by the status they carry.
+    const none = wb.getComment(0, 9, 9);
+    assert.equal(none.status.ok, true);
+    assert.equal(none.value, null);
+    const badSheet = wb.getComment(99, 0, 0);
+    assert.equal(badSheet.status.code, 5050);
+    assert.equal(badSheet.value, null);
 
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
@@ -222,7 +221,7 @@ test('merges, comments and hyperlinks round-trip through save and load', async (
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.load(bytes);
+  const reloaded = Module.Workbook.load(bytes).value;
   try {
     assert.equal(reloaded.listMerges(0).length, 1);
     assert.equal(reloaded.listMerges(0)[0].lastCol, 3);

@@ -37,11 +37,11 @@ Napi::Object SnapshotBytesResult(Napi::Env env, fm_status_t rc, uint8_t* bytes, 
 
 namespace {
 
-// Builds `{ ok, status, message, context }`; NULL strings become "".
+// Builds `{ ok, code, message, context }`; NULL strings become "".
 Napi::Object MakeStatusEnvelope(Napi::Env env, bool ok, fm_status_t code, const char* message, const char* context) {
   Napi::Object o = Napi::Object::New(env);
   o.Set("ok", Napi::Boolean::New(env, ok));
-  o.Set("status", Napi::Number::New(env, static_cast<int32_t>(code)));
+  o.Set("code", Napi::Number::New(env, static_cast<int32_t>(code)));
   o.Set("message", JsString(env, message));
   o.Set("context", JsString(env, context));
   return o;

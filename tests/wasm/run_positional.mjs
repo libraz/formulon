@@ -36,7 +36,7 @@ export function registerPositional(Module, test, hookProbe) {
   }
 
   test('WASM uint32 positions reject coercion and preserve the cell', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 42).ok);
       for (const value of [2 ** 32, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
@@ -57,7 +57,7 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM signed and string positions reject symbols and out-of-range values', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       for (const value of [2 ** 31, -(2 ** 31) - 1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
         expectRangeError(() => wb.setError(0, 0, 0, value));
@@ -94,7 +94,7 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM paging positions reject invalid cursors and retain nullish defaults', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 42).ok);
       for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 53, 2 ** 64]) {
@@ -117,7 +117,7 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM-only table and auto-filter positions are guarded', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       for (const method of ['removeTable', 'updateTable', 'getAutoFilterXml']) {
         expectRangeError(() => wb[method](2 ** 32, {}));
@@ -127,7 +127,7 @@ export function registerPositional(Module, test, hookProbe) {
 
       const got = wb.getAutoFilterXml(0);
       assert.equal(typeof got.status.ok, 'boolean');
-      assert.equal(typeof got.xml, 'string');
+      assert.equal(typeof got.value, 'string');
       assert.equal(typeof wb.setAutoFilterXml(0, '').ok, 'boolean');
     } finally {
       wb.delete();
@@ -139,7 +139,7 @@ export function registerPositional(Module, test, hookProbe) {
     assert.equal(descriptor.enumerable, true);
     assert.equal(descriptor.writable, true);
     assert.equal(descriptor.configurable, true);
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const detached = wb.setNumber;
       assert.throws(() => detached(0, 0, 0, 7));
@@ -153,7 +153,7 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM overload leaves validate positions and track active Workbook calls', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 42).ok);
       const leaf = (name, argCount) => {
@@ -201,7 +201,7 @@ export function registerPositional(Module, test, hookProbe) {
 
   test('WASM guards reject reentrant Workbook deletion during nested reads', () => {
     for (const lifecycle of ['delete', 'deleteLater', Symbol.dispose]) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       try {
         const before = wb.getCellXfCount().value;
         const spec = {};
@@ -226,7 +226,7 @@ export function registerPositional(Module, test, hookProbe) {
 
   test('WASM lifecycle guards cover inherited descriptor calls during nested reads', () => {
     for (const lifecycle of ['delete', 'deleteLater', Symbol.dispose]) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       const inherited = Object.getPrototypeOf(Object.getPrototypeOf(wb));
       const descriptor = Object.getOwnPropertyDescriptor(inherited, lifecycle);
       assert.equal(typeof descriptor?.value, 'function', `${String(lifecycle)} descriptor missing`);
@@ -253,7 +253,7 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM lifecycle depth follows empty Proxy Workbook receivers', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     const proxy = new Proxy(wb, {});
     try {
       assert.ok(proxy.setNumber(0, 0, 0, 42).ok);
@@ -297,7 +297,7 @@ export function registerPositional(Module, test, hookProbe) {
   });
 
   test('WASM lifecycle guard permits a getter to catch its deletion error', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       let caught;
       const spec = {};

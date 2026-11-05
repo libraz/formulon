@@ -185,7 +185,7 @@ emscripten::val js_object_or_empty(const emscripten::val& value) {
 JsStatus binding_error_status(int32_t code, const char* message) {
   JsStatus s;
   s.ok = false;
-  s.status = code;
+  s.code = code;
   s.message = string_from_cstr(message);
   return s;
 }
@@ -198,7 +198,7 @@ JsStatus error_status(int32_t code) {
   }
   JsStatus s;
   s.ok = false;
-  s.status = code;
+  s.code = code;
   s.message = string_from_cstr(fm_get_last_error_message());
   s.context = string_from_cstr(fm_get_last_error_context());
   return s;

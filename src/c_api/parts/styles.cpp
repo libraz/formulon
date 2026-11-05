@@ -287,11 +287,14 @@ extern "C" fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, uint32_t num_fmt_id, const char** out) {
+extern "C" fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, uint32_t num_fmt_id,
+                                                      int32_t* out_present, const char** out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument("fm_workbook_get_num_fmt_string");
   }
+  *out_present = 0;
+  *out = nullptr;
   const formulon::StylesTable& styles = wb->workbook().styles();
   // Stored ids are 16-bit, so a wider one names no format.
   std::optional<std::string_view> resolved;
@@ -305,10 +308,9 @@ extern "C" fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, u
   }
   if (resolved.has_value()) {
     *out = resolved->data();
-    return 0;
+    *out_present = 1;
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                           "fm_workbook_get_num_fmt_string: id not found", "num_fmt_id=" + std::to_string(num_fmt_id));
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_get_fill(const fm_workbook_t* wb, size_t fill_index, fm_fill_record_t* out) {

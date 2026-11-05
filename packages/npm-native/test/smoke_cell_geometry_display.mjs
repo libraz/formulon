@@ -5,7 +5,7 @@ const A1_B2 = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
 
 test('getCellXf carries apply flags, quotePrefix and protection', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const added = wb.addCellXf({
     fontIndex: 0,
     fillIndex: 0,
@@ -49,7 +49,7 @@ test('getCellXf carries apply flags, quotePrefix and protection', async () => {
 
 test('row overrides report hasHeight / customHeight and clearRowHeight drops the height', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
   let rows = wb.listRowOverrides(0).rows;
   const row = rows.find((r) => r.row === 3);
@@ -68,7 +68,7 @@ test('row overrides report hasHeight / customHeight and clearRowHeight drops the
 
 test('setRowAutoHeight caches the height and keeps the row automatic', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setRowAutoHeight(0, 4, 4, 31.5).ok);
   const row = wb.listRowOverrides(0).rows.find((r) => r.row === 4);
   assert.ok(row);
@@ -79,7 +79,7 @@ test('setRowAutoHeight caches the height and keeps the row automatic', async () 
 
 test('clearColumnWidth follows later default changes and keeps hidden / outline state', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setFormatDefaults(0, { defaultColWidth: 10 }).ok);
   assert.ok(wb.setColumnWidth(0, 0, 0, 10).ok);
   assert.ok(wb.clearColumnWidth(0, 0, 0).ok);
@@ -105,7 +105,7 @@ test('clearColumnWidth follows later default changes and keeps hidden / outline 
 
 test('getSheetFormatDefaults reports the effective default width and height', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   let d = wb.getFormatDefaults(0);
   // Stored width of the base-8 Calibri 11 default (64 px, shown as 8.43).
   assert.equal(d.effectiveDefaultColWidth, 2340 / 256);
@@ -118,7 +118,7 @@ test('getSheetFormatDefaults reports the effective default width and height', as
 
 test('sheet format defaults round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const set = wb.setFormatDefaults(0, { defaultColWidth: 12.5, defaultRowHeight: 18, baseColWidth: 10 });
   assert.ok(set.ok, JSON.stringify(set));
   const d = wb.getFormatDefaults(0);
@@ -135,7 +135,7 @@ test('sheet format defaults round-trip', async () => {
 
 test('geometry accessors agree with each other', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setRowHeight(0, 0, 0, 20).ok);
   assert.ok(wb.setRowHeight(0, 1, 1, 30).ok);
   const model = wb.getWidthModel(0, 0);
@@ -174,23 +174,23 @@ test('geometry accessors agree with each other', async () => {
 
 test('getFormula / getFormulaR1C1 return null for non-formula cells', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 0, 5).ok);
   assert.ok(wb.setFormula(0, 1, 1, '=A1+1').ok);
   const a1 = wb.getFormula(0, 1, 1);
   assert.ok(a1.status.ok);
-  assert.equal(a1.formula, '=A1+1');
-  assert.equal(wb.getFormulaR1C1(0, 1, 1).formula, 'R[-1]C[-1]+1');
-  assert.equal(wb.getFormula(0, 0, 0).formula, null);
-  assert.equal(wb.getFormulaR1C1(0, 5, 5).formula, null);
+  assert.equal(a1.value, '=A1+1');
+  assert.equal(wb.getFormulaR1C1(0, 1, 1).value, 'R[-1]C[-1]+1');
+  assert.equal(wb.getFormula(0, 0, 0).value, null);
+  assert.equal(wb.getFormulaR1C1(0, 5, 5).value, null);
   const bad = wb.getFormula(99, 0, 0);
   assert.equal(bad.status.ok, false);
-  assert.equal(bad.formula, null);
+  assert.equal(bad.value, null);
 });
 
 test('getCellsInRange pages through populated cells with a cursor', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 0, 1).ok);
   assert.ok(wb.setText(0, 0, 2, 'x').ok);
   assert.ok(wb.setFormula(0, 1, 1, '=A1+1').ok);
@@ -232,7 +232,7 @@ test('getCellsInRange pages through populated cells with a cursor', async () => 
 
 test('getMergesInRange lists only intersecting merges', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.addMerge(0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }).ok);
   assert.ok(wb.addMerge(0, { firstRow: 10, firstCol: 10, lastRow: 11, lastCol: 11 }).ok);
   const hit = wb.getMergesInRange(0, { firstRow: 1, firstCol: 1, lastRow: 5, lastCol: 5 });
@@ -246,7 +246,7 @@ test('getMergesInRange lists only intersecting merges', async () => {
 
 test('getDisplayText and formatValue render through the number format', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const fmt = wb.addNumFmt('0.00');
   assert.ok(fmt.status.ok);
   const xf = wb.addCellXf({
@@ -287,7 +287,7 @@ test('getDisplayText and formatValue render through the number format', async ()
 
 test('paginate reports paper, margins, printable area, pages and break provenance', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 0, 1).ok);
   assert.ok(wb.setNumber(0, 99, 5, 1).ok);
   const p = wb.getPagination(0);

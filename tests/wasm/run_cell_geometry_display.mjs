@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 const RANGE_A1_F6 = { firstRow: 0, firstCol: 0, lastRow: 5, lastCol: 5 };
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     fn(wb);
   } finally {
@@ -66,14 +66,14 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.ok(wb.setFormula(0, 0, 1, '=A1*2').ok);
       const a1 = wb.getFormula(0, 0, 1);
       assert.ok(a1.status.ok);
-      assert.equal(a1.formula, '=A1*2');
-      assert.equal(wb.getFormula(0, 0, 0).formula, null);
+      assert.equal(a1.value, '=A1*2');
+      assert.equal(wb.getFormula(0, 0, 0).value, null);
       const r1c1 = wb.getFormulaR1C1(0, 0, 1);
       assert.ok(r1c1.status.ok);
-      assert.equal(r1c1.formula, 'RC[-1]*2');
-      assert.equal(wb.getFormulaR1C1(0, 0, 0).formula, null);
+      assert.equal(r1c1.value, 'RC[-1]*2');
+      assert.equal(wb.getFormulaR1C1(0, 0, 0).value, null);
       assert.equal(wb.getFormula(9, 0, 0).status.ok, false);
-      assert.equal(wb.getFormula(9, 0, 0).formula, null);
+      assert.equal(wb.getFormula(9, 0, 0).value, null);
     });
   });
 
@@ -209,8 +209,8 @@ export function registerCellGeometryDisplay(Module, test) {
       assert.ok(wb.recalc().ok);
       assert.equal(wb.getValue(0, 3, 0).value.number, 6);
       assert.equal(wb.getValue(0, 4, 0).value.number, 6);
-      assert.equal(wb.getFormula(0, 4, 0).formula, '=SUBTOTAL(9,A1:A4)');
-      assert.equal(wb.getFormulaR1C1(0, 4, 0).formula, 'SUBTOTAL(9,R[-4]C:R[-1]C)');
+      assert.equal(wb.getFormula(0, 4, 0).value, '=SUBTOTAL(9,A1:A4)');
+      assert.equal(wb.getFormulaR1C1(0, 4, 0).value, 'SUBTOTAL(9,R[-4]C:R[-1]C)');
       assert.equal(wb.getDisplayText(0, 4, 0).text, '6');
       const page = wb.getCellsInRange(0, { firstRow: 3, firstCol: 0, lastRow: 4, lastCol: 0 });
       assert.deepEqual(

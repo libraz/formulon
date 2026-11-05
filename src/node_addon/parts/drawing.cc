@@ -133,30 +133,24 @@ Napi::Value Workbook::GetDrawingObject(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("format", JsNumber(env, 0));
-  out.Set("pxWidth", JsNumber(env, 0));
-  out.Set("pxHeight", JsNumber(env, 0));
   if (handle_ == nullptr) {
-    out.Set("bytes", Napi::Uint8Array::New(env, 0));
-    out.Set("status", NullHandleError(env));
-    return out;
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
   }
+  int32_t present = 0;
   const uint8_t* bytes = nullptr;
   size_t len = 0;
   fm_image_info_t img{};
-  const fm_status_t rc = fm_sheet_get_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &bytes, &len, &img);
-  if (rc == 0) {
-    // The C pointer dies on the next mutation, so the bytes are copied out.
-    out.Set("format", JsNumber(env, img.format));
-    out.Set("bytes", CopyBytes(env, bytes, len));
-    out.Set("pxWidth", JsNumber(env, img.px_width));
-    out.Set("pxHeight", JsNumber(env, img.px_height));
-  } else {
-    out.Set("bytes", Napi::Uint8Array::New(env, 0));
+  const fm_status_t rc = fm_sheet_get_image(handle_, ArgU32(info, 0), ArgU32(info, 1), &present, &bytes, &len, &img);
+  if (rc != 0 || present == 0) {
+    return MakeOptionalResult(env, rc, present, env.Null());
   }
-  out.Set("status", MakeStatus(env, rc));
-  return out;
+  Napi::Object image = Napi::Object::New(env);
+  image.Set("format", JsNumber(env, img.format));
+  image.Set("pxWidth", JsNumber(env, img.px_width));
+  image.Set("pxHeight", JsNumber(env, img.px_height));
+  // The C pointer dies on the next mutation, so the bytes are copied out.
+  image.Set("bytes", CopyBytes(env, bytes, len));
+  return MakeOptionalResult(env, rc, present, image);
 }
 
 Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {

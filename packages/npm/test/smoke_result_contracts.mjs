@@ -107,14 +107,14 @@ function envelopeProbes(wb) {
     ['WorkbookProtectionResult', false, () => wb.getWorkbookProtection()],
     ['ColumnsResult', true, () => wb.listColOverrides(99)],
     ['RowsResult', true, () => wb.listRowOverrides(99)],
-    ['CommentResult', true, () => wb.getCommentResult(99, 0, 0)],
-    ['CellXfIndexResult', true, () => wb.getCellXfIndex(99, 0, 0)],
+    ['OptionalResult', true, () => wb.getComment(99, 0, 0)],
+    ['NumberResult', true, () => wb.getCellXfIndex(99, 0, 0)],
     ['CellXfResult', true, () => wb.getCellXf(9999)],
     ['FontResult', true, () => wb.getFont(9999)],
     ['FillResult', true, () => wb.getFill(9999)],
     ['BorderResult', true, () => wb.getBorder(9999)],
-    ['NumFmtResult', true, () => wb.getNumFmtString(59999)],
-    ['LambdaTextResult', true, () => wb.getLambdaText(99, 0, 0)],
+    ['OptionalResult', false, () => wb.getNumFmtString(59999)],
+    ['OptionalResult', true, () => wb.getLambdaText(99, 0, 0)],
     ['PhoneticRunResult', true, () => wb.getCellPhoneticRun(99, 0, 0, 0)],
     ['ConditionalFormatResult', true, () => wb.getCfRule(99, 0)],
     ['DataValidationResult', true, () => wb.getValidation(99, 0)],
@@ -129,9 +129,9 @@ function envelopeProbes(wb) {
     ['IndexResult', true, () => wb.addCellXf({ fontIndex: 9999 })],
     ['AddNumFmtResult', false, () => wb.addNumFmt('0.00')],
     ['IterativeSettingsResult', false, () => wb.getIterative()],
-    ['PartialRecalcResult', true, () => wb.recalcViewport(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 })],
-    ['SheetAutoFilterXmlResult', true, () => wb.getAutoFilterXml(99)],
-    ['SheetPrintXmlResult', true, () => wb.getPageSetupXml(99)],
+    ['NumberResult', true, () => wb.recalcViewport(99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 })],
+    ['StringResult', true, () => wb.getAutoFilterXml(99)],
+    ['StringResult', true, () => wb.getPageSetupXml(99)],
     ['SheetPrintAreaResult', true, () => wb.getPrintArea(99)],
     ['SheetPrintTitlesResult', true, () => wb.getPrintTitles(99)],
     // `listRowBreaks` / `listColBreaks` answer an out-of-range
@@ -144,29 +144,29 @@ function envelopeProbes(wb) {
     // A released handle is the only failure path, which is not usable here.
     ['PinnedNowResult', false, () => wb.getPinnedNow()],
     ['LocaleFactsResult', true, () => wb.getLocaleFacts('nope')],
-    ['CompareTextResult', true, () => wb.compareText('a', 'b', 0, 'nope')],
+    ['NumberResult', true, () => wb.compareText('a', 'b', 0, 'nope')],
     ['CollationClassesResult', true, () => wb.getCollationClasses([{ kind: 1, number: 1 }], 0, 'nope')],
     ['SpillInfo', true, () => wb.getSpillInfo(99, 0, 0)],
     ['ArrayFormulaResult', true, () => wb.getArrayFormula(99, 0, 0)],
     ['SheetFormatDefaultsResult', true, () => wb.getFormatDefaults(99)],
     ['CellRectResult', true, () => wb.getCellRectPt(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }, 0)],
     ['WidthModelResult', true, () => wb.getWidthModel(99, 0)],
-    ['FormulaResult', true, () => wb.getFormula(99, 0, 0)],
+    ['OptionalResult', true, () => wb.getFormula(99, 0, 0)],
     ['CellsInRangeResult', true, () => wb.getCellsInRange(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 })],
     ['AutoFilterResult', true, () => wb.getAutoFilter(99)],
-    ['DataTableResult', true, () => wb.getDataTable(99, 0, 0)],
+    ['OptionalResult', true, () => wb.getDataTable(99, 0, 0)],
     ['AutoFilterEvalResult', true, () => wb.evaluateAutoFilter(99)],
     ['ValidationOutcomeResult', true, () => wb.validateValue(99, 0, 0, { kind: 1, number: 1 })],
     ['ThreadedCommentsResult', true, () => wb.listThreadedComments(99)],
     // A released handle is the only failure path, which is not usable here.
     ['PersonsResult', false, () => wb.listPeople()],
     ['ImageInfoResult', true, () => wb.getImageInfo(new Uint8Array(4))],
-    ['ImageResult', true, () => wb.getImage(99, 1)],
-    ['InsertImageResult', true, () => wb.addImage(99, new Uint8Array(4))],
+    ['OptionalResult', true, () => wb.getImage(99, 1)],
+    ['ObjectIdResult', true, () => wb.addImage(99, new Uint8Array(4))],
     ['ImageSnapshotResult', true, () => wb.snapshotDrawing(99, 1)],
-    ['ChartResult', true, () => wb.getChart(99, 1)],
+    ['OptionalResult', true, () => wb.getChart(99, 1)],
     ['ChartDataResult', true, () => wb.getChartData(99, 1)],
-    ['InsertChartResult', true, () => wb.addChart(99, { kind: 0, source: 'A1:B2' })],
+    ['ObjectIdResult', true, () => wb.addChart(99, { kind: 0, source: 'A1:B2' })],
     ['AddChartSeriesResult', true, () => wb.addChartSeries(99, 1, 0, { values: 'A1:A2' })],
     [
       'RangeStyleBasesResult',
@@ -200,7 +200,7 @@ test('result envelopes keep their declared keys on failure paths', async () => {
   const Module = await getModule();
   const dts = await readFile(path.join(pkgRoot, 'dist', 'formulon.d.ts'), 'utf8');
   const declared = resultTypesWithRequiredPayload(dts);
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     for (const [typeName, expectFailure, call] of envelopeProbes(wb)) {
       const r = call();
@@ -217,7 +217,7 @@ test('result envelopes keep their declared keys on failure paths', async () => {
 
 test('iterative caps use the signed int32 contract', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.equal(wb.setIterative(true, 2 ** 31 - 1, 0.1).ok, true);
     assert.equal(wb.setIterative(false, -1, 0.1).ok, true);

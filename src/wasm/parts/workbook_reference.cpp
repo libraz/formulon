@@ -1,9 +1,9 @@
 //
 // JsWorkbook reference-text surface: `parseReference` / `formatReference`,
 // the A1 / R1C1 grammar `INDIRECT` reads, over `fm_workbook_parse_reference`
-// and `fm_workbook_format_reference`. Both return plain values, so an invalid
-// argument is raised as a TypeError / RangeError by the pre-js method wrapper
-// rather than reported through a status envelope.
+// and `fm_workbook_format_reference`. An argument JS cannot represent (a
+// wrong type, a non-integer) is raised as a TypeError / RangeError by the
+// pre-js method wrapper; an engine rejection is reported through the status.
 
 #include <emscripten/em_js.h>
 #include <emscripten/val.h>
@@ -23,7 +23,6 @@ namespace {
 
 enum ReferenceErrorKind : int32_t {
   kReferenceTypeError = 0,
-  kReferenceRangeError = 1,
 };
 
 // Hands an error to the pre-js method wrapper, which throws it after the
@@ -46,10 +45,6 @@ emscripten::val reject(int32_t kind, const std::string& message) {
   return emscripten::val::undefined();
 }
 
-emscripten::val reject_last_error() {
-  return reject(kReferenceRangeError, fm_get_last_error_message());
-}
-
 /// `options` as an object (absent reads as `{}`); false after recording a TypeError for another type.
 bool options_object(const emscripten::val& options, const char* api, emscripten::val* out) {
   *out = js_object_or_empty(options);
@@ -65,7 +60,7 @@ bool options_object(const emscripten::val& options, const char* api, emscripten:
 emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::val options) const {
   using emscripten::val;
   if (handle_ == nullptr) {
-    return reject(kReferenceTypeError, "the workbook handle was already destroyed");
+    return optional_result(kBindingInvalidHandle, 0, val::null());
   }
   val opts = val::undefined();
   if (!options_object(options, "parseReference", &opts)) {
@@ -88,22 +83,19 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   fm_parsed_reference_t ref{};
   const fm_status_t rc =
       fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
-  if (rc != 0) {
-    return reject_last_error();
-  }
-  if (ref.valid == 0) {
-    return val::null();
+  if (rc != 0 || ref.valid == 0) {
+    return optional_result(rc, 0, val::null());
   }
   val out = val::object();
   out.set("sheetName", ref.has_sheet != 0 ? val(std::string(ref.sheet_name)) : val::null());
   out.set("rect", cell_rect_to_val(ref.rect));
-  return out;
+  return optional_result(rc, 1, out);
 }
 
 emscripten::val JsWorkbook::formatReference(emscripten::val range, emscripten::val options) const {
   using emscripten::val;
   if (handle_ == nullptr) {
-    return reject(kReferenceTypeError, "the workbook handle was already destroyed");
+    return val(string_result(kBindingInvalidHandle, nullptr));
   }
   val opts = val::undefined();
   if (!options_object(options, "formatReference", &opts)) {
@@ -123,10 +115,7 @@ emscripten::val JsWorkbook::formatReference(emscripten::val range, emscripten::v
   }
   const char* text = nullptr;
   const fm_status_t rc = fm_workbook_format_reference(handle_, sheet_name, &rect, absolute ? 1 : 0, &text);
-  if (rc != 0) {
-    return reject_last_error();
-  }
-  return val(std::string(text));
+  return val(string_result(rc, text));
 }
 
 }  // namespace parts

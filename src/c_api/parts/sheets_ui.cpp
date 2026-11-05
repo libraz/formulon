@@ -304,22 +304,27 @@ extern "C" fm_status_t fm_sheet_get_merges_in_range(const fm_workbook_t* wb, std
 // ---------------------------------------------------------------------------
 
 extern "C" fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
-                                            std::uint32_t col, fm_comment_t* out) {
+                                            std::uint32_t col, int32_t* out_present, fm_comment_t* out) {
   clear_last_error();
+  if (out_present == nullptr) {
+    return null_argument("fm_sheet_get_comment", "out_present");
+  }
   if (out == nullptr) {
     return null_argument("fm_sheet_get_comment", "out");
   }
+  *out_present = 0;
+  *out = fm_comment_t{};
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_comment"); rc != 0) {
     return rc;
   }
   for (const formulon::CellComment& c : wb->workbook().sheet(sheet_index).comments()) {
     if (c.row == row && c.col == col) {
       fill_comment(c, out);
+      *out_present = 1;
       return 0;
     }
   }
-  return set_binding_error(formulon::FormulonErrorCode::kNotFound, "fm_sheet_get_comment: no comment at cell",
-                           "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  return 0;
 }
 
 extern "C" fm_status_t fm_sheet_get_comment_count(const fm_workbook_t* wb, std::size_t sheet_index,

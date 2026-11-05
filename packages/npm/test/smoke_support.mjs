@@ -66,7 +66,7 @@ function getModule() {
 // A self-referential average: from a blank A1 the iterative solver walks
 // towards 10, and the progress callback fires after every sweep.
 function makeIterativeWorkbook(Module) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   assert.ok(wb.setIterative(true, 100, 0.0001).ok);
   assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
   return wb;
@@ -75,7 +75,7 @@ function makeIterativeWorkbook(Module) {
 // A structured reference the XLSB encoder cannot lower, which
 // makes the writer emit one per-cell warn record.
 function emitXlsbWarning(Module, xlsbFormat) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
     assert.ok(wb.recalc().ok);

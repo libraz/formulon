@@ -785,13 +785,17 @@ bool read_patch_arg(JsNarrowNumericReader& r, const val& patch, void* base, cons
 // ---- Reads ----------------------------------------------------------
 
 val JsWorkbook::getChart(uint32_t sheet, uint32_t objectId) const {
-  if (handle_ == nullptr) {
-    return read_envelope(kBindingInvalidHandle, "chart", val::null());
-  }
+  int32_t present = 0;
   fm_chart_t* raw = nullptr;
-  fm_status_t rc = fm_sheet_get_chart(handle_, sheet, objectId, &raw);
+  fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_chart(handle_, sheet, objectId, &present, &raw) : kBindingInvalidHandle;
   const std::unique_ptr<fm_chart_t, ChartDeleter> chart(raw);
-  return read_envelope(rc, "chart", rc == 0 ? chart_to_val(chart.get(), rc) : val::null());
+  if (rc != 0 || present == 0) {
+    return optional_result(rc, present, val::null());
+  }
+  // A failed sub-read inside the conversion replaces `rc`.
+  const val info = chart_to_val(chart.get(), rc);
+  return optional_result(rc, present, info);
 }
 
 val JsWorkbook::getChartData(uint32_t sheet, uint32_t objectId) const {

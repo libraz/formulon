@@ -1259,8 +1259,10 @@ FM_API fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, size
  * carrying a literal `LAMBDA(...)` in the formula text. The rendering
  * is the full surface form `LAMBDA(p1,p2,body)` (no leading `=`),
  * suitable for re-parsing through `fm_sheet_set_formula`.
+ * `*out_present` is `0` and `*out_text` `NULL` (still `FM_STATUS_OK` (0))
+ * when the cell is absent or its cached value is not a lambda.
  *
- * On success `*out_text` is a read-scratch-backed view into the handle's
+ * When present, `*out_text` is a read-scratch-backed view into the handle's
  * transient read storage. It may be invalidated by the next successful
  * scratch-backed read on this handle; a validation-rejected call does not
  * refresh the storage. It is also invalid after a mutation or handle
@@ -1270,12 +1272,10 @@ FM_API fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, size
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the
- *         cell is absent, or the cached value is not a lambda.
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                            const char** out_text);
+                                            int32_t* out_present, const char** out_text);
 
 /* -------------------------------------------------------------------------- */
 /* Ad-hoc, side-effect-free formula evaluation                                */
@@ -2164,10 +2164,11 @@ FM_API fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, size_t sheet_inde
 FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, size_t sheet_index);
 
 /**
- * @brief Reads `(out_row, out_col, out_author, out_text)` for the
- *        comment at `(row, col)` on `sheet_index`. Returns `FM_STATUS_NOT_FOUND` (6) when no
- *        comment is anchored there, and `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when
- *        `sheet_index` is out of range.
+ * @brief Reads the comment at `(row, col)` on `sheet_index`. `*out_present`
+ *        is `1` and `*out` filled when a comment is anchored there, else `0`
+ *        and `*out` zeroed (still `FM_STATUS_OK` (0)). Returns
+ *        `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out
+ *        of range.
  *
  * `out->author` and `out->text` are model-backed views into the workbook
  * handle. Both are valid until the next mutation that touches the sheet's
@@ -2175,7 +2176,7 @@ FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, size_t sheet_index);
  * them.
  */
 FM_API fm_status_t fm_sheet_get_comment(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                        fm_comment_t* out);
+                                        int32_t* out_present, fm_comment_t* out);
 
 /**
  * @brief Returns the number of comments attached to `sheet_index`, including
@@ -6311,16 +6312,17 @@ typedef struct {
 /**
  * @brief Returns metadata for the function `name`.
  *
- * `name` is matched case-insensitively against the canonical name. On
- * success, `*out` receives a view into the catalog's static storage;
- * the views are valid for the lifetime of the process. The metadata is
- * locale-invariant.
+ * `name` is matched case-insensitively against the canonical name.
+ * `*out_present` is `1` when a function matches, and `*out` then receives a
+ * view into the catalog's static storage, valid for the lifetime of the
+ * process; otherwise `*out_present` is `0` and `*out` zeroed (still
+ * `FM_STATUS_OK` (0)). The metadata is locale-invariant.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `name` or `out` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when no function matches `name`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `name`, `out_present` or `out` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is malformed UTF-8.
  */
-FM_API fm_status_t fm_get_function_metadata(const char* name, fm_function_metadata_t* out);
+FM_API fm_status_t fm_get_function_metadata(const char* name, int32_t* out_present, fm_function_metadata_t* out);
 
 /**
  * @brief Writes the total number of registered Formulon functions to
@@ -8338,20 +8340,20 @@ FM_API fm_status_t fm_workbook_get_font(const fm_workbook_t* wb, size_t font_ind
  * `0..163` range is used as the fallback. A built-in id with no ECMA-376 code
  * (the East Asian date ids, the Thai-digit ids, the currency ids 5-8)
  * resolves to the code the workbook's Excel profile renders it with, so the
- * result for those ids follows `fm_workbook_set_excel_profile_id`. On success `*out` is either a
+ * result for those ids follows `fm_workbook_set_excel_profile_id`. When present, `*out` is either a
  * model-backed view into the custom record's format string (valid until the
  * next mutation of the numFmt list, `fm_workbook_add_num_fmt`, or until
  * handle destruction), or a static built-in view with program lifetime.
  * The styles writer intentionally emits
  * only custom records with ids >= 164, so a below-164 override is not
- * promised to survive save/load. Returns `FM_STATUS_INVALID_ARGUMENT` (2) when no effective
- * mapping exists for `num_fmt_id`.
+ * promised to survive save/load. `*out_present` is `0` and `*out` `NULL`
+ * (still `FM_STATUS_OK` (0)) when no effective mapping exists for `num_fmt_id`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id is unknown.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
  */
-FM_API fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, uint32_t num_fmt_id, const char** out);
+FM_API fm_status_t fm_workbook_get_num_fmt_string(const fm_workbook_t* wb, uint32_t num_fmt_id, int32_t* out_present,
+                                                  const char** out);
 
 /**
  * @brief Reads the `fill_index`-th fill record from the workbook's
@@ -9350,6 +9352,9 @@ FM_API fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size_t s
 
 /**
  * @brief Returns the media bytes and header info of the picture `object_id`.
+ *        `*out_present` is `1` and the outputs filled when the sheet has that
+ *        picture with a present media part, else `0` with the outputs zeroed
+ *        (still `FM_STATUS_OK` (0)).
  *
  * `*out_bytes` points into the workbook's own storage and is not
  * NUL-terminated: it stays valid until the next call that mutates the
@@ -9359,14 +9364,13 @@ FM_API fm_status_t fm_sheet_get_drawing_object(const fm_workbook_t* wb, size_t s
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet
- *         has no picture `object_id` with a present media part;
  *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when the media bytes are not a
  *         recognised image;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
  */
 FM_API fm_status_t fm_sheet_get_image(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                      const uint8_t** out_bytes, size_t* out_len, fm_image_info_t* out_info);
+                                      int32_t* out_present, const uint8_t** out_bytes, size_t* out_len,
+                                      fm_image_info_t* out_info);
 
 /**
  * @brief Inserts `bytes` as a picture and returns its object id, unique
@@ -10430,20 +10434,20 @@ typedef struct {
 /**
  * @brief Reads the chart `object_id` into an owned snapshot.
  *
- * `*out` is set to `NULL` before validation; on success the caller owns it
- * and releases it with `fm_chart_destroy`. Later workbook edits do not
- * change it.
+ * `*out` is set to `NULL` before validation. `*out_present` is `1` when the
+ * sheet has a chart with that id; the caller then owns `*out` and releases it
+ * with `fm_chart_destroy`. Otherwise `*out_present` is `0` and `*out` stays
+ * `NULL` (still `FM_STATUS_OK` (0)). Later workbook edits do not change the
+ * snapshot.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `out_present` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (5050) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the sheet
- *         has no chart with that id;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse;
  *         `FM_STATUS_IO_CHART_UNPARSEABLE` (5025) when the chart part does not parse.
  */
 FM_API fm_status_t fm_sheet_get_chart(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                      fm_chart_t** out);
+                                      int32_t* out_present, fm_chart_t** out);
 
 /** @brief Releases a chart handle. `chart == NULL` is a no-op. */
 FM_API void fm_chart_destroy(fm_chart_t* chart);

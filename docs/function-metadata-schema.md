@@ -77,7 +77,7 @@ A host resolves the displayed metadata for a function by calling the
 engine, then merging a provider entry over it with the pure helper
 `mergeFunctionMetadata` (the native Node package, and also the WASM
 `@libraz/formulon` package for browser/worker hosts) or
-`merge_function_metadata` (Python). Given `base` (the engine result), `entry`
+`merge_function_metadata` (Python). Given `base` (the engine metadata: the `value` of a JavaScript `getFunctionMetadata` result, or the Python return value), `entry`
 (`functions[NAME]`, or absent), and a display `locale` tag, each field is
 resolved by first-non-null precedence:
 

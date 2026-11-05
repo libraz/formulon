@@ -5,7 +5,7 @@ const nestedErrorClass = (value) => (typeof value === 'symbol' ? TypeError : Ran
 
 export function registerCellsIo(Module, test) {
   test('setText / setBool / setBlank round-trip', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setText(0, 0, 0, 'hello').ok);
       assert.ok(wb.setBool(0, 1, 0, true).ok);
@@ -28,7 +28,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('setCellPhonetic / getCellPhonetic preserve and clear a Japanese guide', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setText(0, 0, 0, '漢字').ok);
       assert.ok(wb.setCellPhonetic(0, 0, 0, 'かんじ').ok);
@@ -48,7 +48,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('setCellPhoneticRuns / getCellPhoneticRun keep the spans apart', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setText(0, 0, 0, '東京都').ok);
       assert.deepEqual(
@@ -113,7 +113,7 @@ export function registerCellsIo(Module, test) {
       const { fontId, type, alignment } = book.getCellPhoneticProperties(sheet, row, col);
       return { fontId, type, alignment };
     };
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setText(0, 0, 0, '大阪').ok);
       // An unannotated cell reports what Excel infers for a guide written
@@ -127,7 +127,7 @@ export function registerCellsIo(Module, test) {
 
       const saved = wb.save();
       assert.ok(saved.status.ok);
-      const loaded = Module.Workbook.load(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes).value;
       try {
         assert.deepEqual(phoneticProps(loaded, 0, 0, 0), { fontId: 3, type: 2, alignment: 2 });
       } finally {
@@ -150,7 +150,7 @@ export function registerCellsIo(Module, test) {
   test('cell nested integer fields reject narrowing before C mutations', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('cell integer')];
     for (const value of invalid) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       try {
         assert.ok(wb.setText(0, 0, 0, '東京都').ok);
         const runs = [
@@ -205,7 +205,7 @@ export function registerCellsIo(Module, test) {
   test('cell Value boolean and errorCode use checked signed integers', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('cell value integer')];
     for (const value of invalid) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       try {
         assert.throws(
           () => wb.formatValue({ kind: 2, number: 0, boolean: value, text: '', errorCode: 0 }, 'General'),
@@ -224,7 +224,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('setDefaultFont replaces font 0, which addFont can only append beside', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.equal(wb.getFont(0).name, 'Calibri');
       const appended = wb.addFont({ name: '游ゴシック', size: 11 });
@@ -246,7 +246,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('table update omits fields without resetting existing metadata', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const created = wb.addTable({
         range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
@@ -282,7 +282,7 @@ export function registerCellsIo(Module, test) {
       assert.match(afterXml, /name="TableStyleMedium2"/);
       assert.match(afterXml, /headerRowCount="0"/);
       assert.match(afterXml, /totalsRowCount="1"/);
-      const loaded = Module.Workbook.load(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes).value;
       try {
         assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
         const reloaded = loaded.getTable(created.index);
@@ -305,7 +305,7 @@ export function registerCellsIo(Module, test) {
   test('table update rethrows nested getter failures before changing the table', () => {
     const getterFields = ['rect', 'styleName', 'headerRow', 'totalsRow'];
     for (const field of getterFields) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       try {
         const created = wb.addTable({
           range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
@@ -333,7 +333,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('table update reads each optional field once before the C call', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const created = wb.addTable({
         range: { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } },
@@ -374,7 +374,7 @@ export function registerCellsIo(Module, test) {
   test('createTable rejects a narrowing range.sheet before table_create', () => {
     const invalid = [2 ** 32, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Symbol('table sheet')];
     for (const value of invalid) {
-      const wb = Module.Workbook.createDefault();
+      const wb = Module.Workbook.createDefault().value;
       try {
         assert.throws(
           () =>
@@ -394,8 +394,8 @@ export function registerCellsIo(Module, test) {
     }
   });
 
-  test('save() + Workbook.load() round-trip preserves a literal', () => {
-    const wb = Module.Workbook.createDefault();
+  test('save() + Workbook.load().value round-trip preserves a literal', () => {
+    const wb = Module.Workbook.createDefault().value;
     let saved = null;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 7).ok);
@@ -411,7 +411,7 @@ export function registerCellsIo(Module, test) {
       wb.delete();
     }
 
-    const loaded = Module.Workbook.load(saved);
+    const loaded = Module.Workbook.load(saved).value;
     try {
       assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
       assert.ok(loaded.getSheetCount().value >= 1);
@@ -430,7 +430,7 @@ export function registerCellsIo(Module, test) {
     // element. An in-session round-trip would still pass with a writer that
     // never emits the extension -- which is how they were lost before -- so
     // this goes through a real save and load.
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(
         wb.addCfRule(0, {
@@ -451,7 +451,7 @@ export function registerCellsIo(Module, test) {
       );
       const saved = wb.save();
       assert.ok(saved.status.ok, `save failed: ${JSON.stringify(saved.status)}`);
-      const loaded = Module.Workbook.load(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes).value;
       try {
         assert.ok(loaded.isValid(), `load failed: ${Module.getLastErrorMessage()}`);
         const bar = readAll(
@@ -489,7 +489,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('omitted data bar x14 fields keep the model defaults', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(
         wb.addCfRule(0, {
@@ -513,7 +513,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('saveWithDiagnostics() and readDiagnostics() expose stable counters', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
       assert.ok(
@@ -554,7 +554,7 @@ export function registerCellsIo(Module, test) {
       // The binary writer never reassigns a part id.
       assert.equal(xlsb.renumberedPartCount, 0);
 
-      const loaded = Module.Workbook.load(xlsb.bytes);
+      const loaded = Module.Workbook.load(xlsb.bytes).value;
       try {
         const read = loaded.getDiagnostics();
         assert.ok(read.status.ok, `read diagnostics failed: ${JSON.stringify(read.status)}`);
@@ -566,7 +566,7 @@ export function registerCellsIo(Module, test) {
       } finally {
         loaded.delete();
       }
-      const preservedLoaded = Module.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
+      const preservedLoaded = Module.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin')).value;
       try {
         const preserved = preservedLoaded.getDiagnostics();
         assert.ok(preserved.status.ok, `passthrough diagnostics failed: ${JSON.stringify(preserved.status)}`);
@@ -589,27 +589,24 @@ export function registerCellsIo(Module, test) {
   });
 
   test('Workbook.loadBytes reports empty input instead of leaving stale diagnostics', () => {
-    const wb = Module.Workbook.load(new Uint8Array());
-    try {
-      assert.equal(wb.isValid(), false);
-      assert.match(Module.getLastErrorMessage(), /NULL or empty input/);
-    } finally {
-      wb.delete();
-    }
+    const loaded = Module.Workbook.load(new Uint8Array());
+    assert.equal(loaded.status.ok, false);
+    assert.equal(loaded.value, null);
+    assert.match(loaded.status.message, /NULL or empty input/);
+    assert.match(Module.getLastErrorMessage(), /NULL or empty input/);
   });
 
   test('Workbook.loadBytes rejects non-Uint8Array input like the native binding', () => {
-    const wb = Module.Workbook.load(new Uint16Array([1]));
-    try {
-      assert.equal(wb.isValid(), false);
-      assert.match(Module.getLastErrorMessage(), /NULL or empty input/);
-    } finally {
-      wb.delete();
-    }
+    const loaded = Module.Workbook.load(new Uint16Array([1]));
+    assert.equal(loaded.status.ok, false);
+    assert.equal(loaded.value, null);
+    assert.match(loaded.status.message, /NULL or empty input/);
+    assert.match(Module.getLastErrorMessage(), /NULL or empty input/);
   });
 
   test('invalid workbook read diagnostics return a zeroed failure envelope', () => {
-    const wb = Module.Workbook.load(new Uint8Array());
+    const wb = Module.Workbook.createDefault().value;
+    wb.dispose();
     try {
       const read = wb.getDiagnostics();
       assert.ok(!read.status.ok, `invalid handle unexpectedly succeeded: ${JSON.stringify(read)}`);
@@ -647,22 +644,22 @@ export function registerCellsIo(Module, test) {
   });
 
   test('compareText folds by strength and rejects bad arguments', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const profile = 'mac-365-zh_CN';
       const strict = wb.compareText('A', '\uFF21', 0, profile);
       assert.ok(strict.status.ok);
-      assert.notEqual(strict.order, 0);
+      assert.notEqual(strict.value, 0);
       const dynamic = wb.compareText('A', '\uFF21', 1, profile);
       assert.ok(dynamic.status.ok);
-      assert.equal(dynamic.order, 0);
+      assert.equal(dynamic.value, 0);
       const ab = wb.compareText('a', 'b', 0, 'mac-365-en_US');
       const ba = wb.compareText('b', 'a', 0, 'mac-365-en_US');
-      assert.equal(ab.order, -1);
-      assert.equal(ba.order, 1);
+      assert.equal(ab.value, -1);
+      assert.equal(ba.value, 1);
       const bad = wb.compareText('a', 'b', 0, 'nope');
       assert.equal(bad.status.ok, false);
-      assert.equal(bad.order, 0);
+      assert.equal(bad.value, 0);
       assert.throws(() => wb.compareText('a', 'b', -1, profile), RangeError);
       assert.equal(wb.compareText('a', 'b', 3, profile).status.ok, false);
     } finally {
@@ -671,7 +668,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('getCollationClasses orders by kind, folds text by strength, and copies its output', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const values = [
         { kind: 1, number: 1 },
@@ -736,7 +733,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('getCollationClasses timing on 100k mixed CJK/ASCII texts', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const cjk = [
         '\u6771\u4EAC',
@@ -763,7 +760,7 @@ export function registerCellsIo(Module, test) {
   });
 
   test('getLocaleFacts reports collationMeasured per host', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.equal(wb.getLocaleFacts('mac-365-de_DE').facts.collationMeasured, true);
       assert.equal(wb.getLocaleFacts('win-365-ja_JP').facts.collationMeasured, false);

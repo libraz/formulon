@@ -237,13 +237,16 @@ class Ledger:
         return bool(self.data)
 
     def key_for(self, name_field: str, symbol: str) -> Optional[str]:
-        """Ledger key whose `<name_field>` or `was.<name_field>` names `symbol`; a current name wins a hand-over."""
+        """Ledger key whose `<name_field>` or `was.<name_field>` names `symbol`; a current name wins a hand-over.
+
+        A `kind: field` entry names a member of its record, not a symbol, so it never claims a name here.
+        """
         index = self._index.get(name_field)
         if index is None:
             index = {}
             claims = []
             for key, entry in self.entries.items():
-                if not isinstance(entry, dict):
+                if not isinstance(entry, dict) or entry.get("kind") == "field":
                     continue
                 was = entry.get("was") if isinstance(entry.get("was"), dict) else {}
                 claims.append((0, key, entry.get(name_field)))

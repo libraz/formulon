@@ -459,7 +459,9 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
   for (const bool named : {true, false}) {
     ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
     fm_chart_t* chart = nullptr;
-    ASSERT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &chart), 0) << fm_get_last_error_message();
+    int32_t present = 0;
+    ASSERT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &present, &chart), 0) << fm_get_last_error_message();
+    ASSERT_EQ(present, 1);
     fm_chart_series_t series{};
     EXPECT_EQ(fm_chart_get_series_at(chart, 0, 0, &series), 0) << fm_get_last_error_message();
     EXPECT_EQ(Str(series.values.formula), std::string(named ? "M5.xlsx!" : "[0]!") + "LR");

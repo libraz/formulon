@@ -501,19 +501,19 @@ extern "C" fm_status_t fm_sheet_get_cell_phonetic_properties(const fm_workbook_t
 }
 
 extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
-                                                const char** out_text) {
+                                                int32_t* out_present, const char** out_text) {
   clear_last_error();
-  if (out_text == nullptr) {
+  if (out_present == nullptr || out_text == nullptr) {
     return null_argument("fm_sheet_get_lambda_text");
   }
+  *out_present = 0;
+  *out_text = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_lambda_text"); rc != 0) {
     return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   if (cell == nullptr || !cell->cached_value.is_lambda()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_lambda_text: cell does not hold a lambda value",
-        "sheet_index=" + std::to_string(sheet_index) + " row=" + std::to_string(row) + " col=" + std::to_string(col));
+    return 0;
   }
   const formulon::eval::LambdaValue* lv = cell->cached_value.as_lambda();
   if (lv == nullptr) {
@@ -527,6 +527,7 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
   TextStore& store = fresh_read_scratch(wb);
   store.emplace_back(std::move(formatted));
   *out_text = store.back().c_str();
+  *out_present = 1;
   return 0;
 }
 

@@ -248,20 +248,27 @@ TEST(FormulonCApiDrawing, InsertListGetRemoveNextToChart) {
   const uint8_t* got = nullptr;
   size_t got_len = 0;
   fm_image_info_t info{};
-  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, id, &got, &got_len, &info), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, id, &present, &got, &got_len, &info), 0) << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), png);
   EXPECT_EQ(info.format, FM_IMAGE_FORMAT_PNG);
   EXPECT_EQ(info.px_width, 16U);
   EXPECT_EQ(info.px_height, 8U);
-  // A chart is not a picture; an unknown id is not found.
-  EXPECT_EQ(fm_sheet_get_image(wb.handle, 0, 2, &got, &got_len, &info), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_image(wb.handle, 0, 99, &got, &got_len, &info), kInvalidArgument);
-  EXPECT_EQ(fm_sheet_get_image(wb.handle, 0, id, nullptr, &got_len, &info), kBindingNullPointer);
+  EXPECT_EQ(present, 1);
+  // A chart is not a picture; an unknown id is absent.
+  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, 2, &present, &got, &got_len, &info), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(got, nullptr);
+  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, 99, &present, &got, &got_len, &info), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(fm_sheet_get_image(wb.handle, 0, id, &present, nullptr, &got_len, &info), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_image(wb.handle, 0, id, nullptr, &got, &got_len, &info), kBindingNullPointer);
 
   ASSERT_EQ(fm_sheet_remove_drawing(wb.handle, 0, id), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_drawing_object_count(wb.handle, 0, &count), 0);
   EXPECT_EQ(count, 1U);
-  EXPECT_EQ(fm_sheet_get_image(wb.handle, 0, id, &got, &got_len, &info), kInvalidArgument);
+  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, id, &present, &got, &got_len, &info), 0);
+  EXPECT_EQ(present, 0);
 
   // The chart is a drawing object too: removing it drops its part.
   ASSERT_EQ(fm_sheet_remove_drawing(wb.handle, 0, 2), 0) << fm_get_last_error_message();
@@ -297,10 +304,13 @@ TEST(FormulonCApiDrawing, InsertSaveReloadKeepsBytes) {
   const uint8_t* got = nullptr;
   size_t got_len = 0;
   fm_image_info_t info{};
-  ASSERT_EQ(fm_sheet_get_image(reloaded.handle, 0, first, &got, &got_len, &info), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_image(reloaded.handle, 0, first, &present, &got, &got_len, &info), 0)
+      << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), png);
   EXPECT_EQ(info.format, FM_IMAGE_FORMAT_PNG);
-  ASSERT_EQ(fm_sheet_get_image(reloaded.handle, 0, second, &got, &got_len, &info), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_image(reloaded.handle, 0, second, &present, &got, &got_len, &info), 0)
+      << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), jpeg);
   EXPECT_EQ(info.format, FM_IMAGE_FORMAT_JPEG);
   fm_drawing_object_t obj{};
@@ -568,7 +578,8 @@ TEST(FormulonCApiDrawing, SnapshotRestoreReturnsDeletedPictureToItsPlace) {
   const uint8_t* got = nullptr;
   size_t got_len = 0;
   fm_image_info_t info{};
-  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, first, &got, &got_len, &info), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, first, &present, &got, &got_len, &info), 0) << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), Png(16, 8));
   fm_drawing_object_t obj{};
   ASSERT_EQ(fm_sheet_get_drawing_object_at(wb.handle, 0, 1, &obj), 0);
@@ -617,7 +628,8 @@ TEST(FormulonCApiDrawing, RestoreWithNewIdAddsACopyOnTop) {
   const uint8_t* got = nullptr;
   size_t got_len = 0;
   fm_image_info_t info{};
-  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, copy, &got, &got_len, &info), 0) << fm_get_last_error_message();
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_image(wb.handle, 0, copy, &present, &got, &got_len, &info), 0) << fm_get_last_error_message();
   EXPECT_EQ(Bytes(got, got + got_len), Png(16, 8));
 
   WorkbookGuard reloaded;

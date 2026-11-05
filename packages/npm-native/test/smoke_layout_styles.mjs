@@ -3,7 +3,7 @@ import { assert, getModule, readAll } from './smoke_support.mjs';
 
 test('addMerge + getMerges round-trip a single range', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const range = { firstRow: 1, firstCol: 1, lastRow: 2, lastCol: 3 };
   const ar = wb.addMerge(0, range);
   assert.ok(ar.ok, `addMerge: ${JSON.stringify(ar)}`);
@@ -23,7 +23,7 @@ test('addMerge + getMerges round-trip a single range', async () => {
 
 test('addHyperlink + getHyperlinks round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.listHyperlinks(0).length, 0);
   // Three entries with progressively more optional fields populated.
   assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
@@ -73,7 +73,7 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
 
 test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty sheet', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // No-op variants on an empty list still return kOk.
   assert.ok(wb.removeHyperlink(0, 0, 0).ok);
   assert.ok(wb.clearHyperlinks(0).ok);
@@ -89,7 +89,7 @@ test('removeHyperlink / removeHyperlinkAt / clearHyperlinks surface on an empty 
 
 test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const a = { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 };
   const b = { firstRow: 4, firstCol: 4, lastRow: 5, lastCol: 5 };
   assert.ok(wb.addMerge(0, a).ok);
@@ -114,7 +114,7 @@ test('removeMerge + removeMergeAt + clearMerges step-wise prune the merge list',
 
 test('setSheetZoom + getSheetView surface the new zoom', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setZoom(0, 175).ok);
   const v = wb.getView(0);
   assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
@@ -127,7 +127,7 @@ test('setSheetZoom + getSheetView surface the new zoom', async () => {
 
 test('sheet layout getters preserve explicit width presence flags', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setColumnWidth(0, 0, 0, 0).ok);
   assert.ok(wb.setColumnHidden(0, 1, 1, true).ok);
   assert.ok(wb.setRowHeight(0, 3, 3, 30).ok);
@@ -155,7 +155,7 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
 
 test('getSheetView surfaces display / orientation defaults', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const v = wb.getView(0);
   assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
   assert.equal(v.view.showGridLines, 1);
@@ -168,7 +168,7 @@ test('getSheetView surfaces display / orientation defaults', async () => {
 
 test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setSheetViewMode round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setShowGridLines(0, false).ok);
   assert.ok(wb.setShowRowColHeaders(0, false).ok);
   assert.ok(wb.setShowZeros(0, false).ok);
@@ -187,7 +187,7 @@ test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setShe
 
 test('insertRows shifts an existing literal forward', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Populate row 0; insert one row at row 0; the literal is now at row 1.
   assert.ok(wb.setNumber(0, 0, 0, 99).ok);
   assert.ok(wb.insertRows(0, 0, 1).ok);
@@ -203,20 +203,20 @@ test('insertRows shifts an existing literal forward', async () => {
 
 test('setCellXfIndex + getCellXfIndex round-trip the xf id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Seed the cell so the xf attaches to a stored slot.
   assert.ok(wb.setNumber(0, 0, 0, 1).ok);
   // xfIndex 0 is always the default xf and is guaranteed to be valid.
   assert.ok(wb.setCellXfIndex(0, 0, 0, 0).ok);
   const r = wb.getCellXfIndex(0, 0, 0);
   assert.ok(r.status.ok, `getCellXfIndex: ${JSON.stringify(r.status)}`);
-  assert.equal(typeof r.xfIndex, 'number');
-  assert.equal(r.xfIndex, 0);
+  assert.equal(typeof r.value, 'number');
+  assert.equal(r.value, 0);
 });
 
 test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // A fresh workbook seeds Excel's minimum style table: one default font,
   // one empty border, one default xf, and the two fills Excel reserves at
   // the front of every file (`none`, `gray125`). A caller's first record
@@ -360,12 +360,12 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
 
   const rfmt = wb.getNumFmtString(custom.numFmtId);
   assert.ok(rfmt.status.ok);
-  assert.equal(rfmt.formatCode, '"USD" #,##0');
+  assert.equal(rfmt.value, '"USD" #,##0');
 });
 
 test('selector colours survive get/add identity and save/load', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const theme = { kind: 2, rgb: 0, theme: 3, tint: 0.5, indexed: 0 };
   const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
   const automatic = { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 };
@@ -439,7 +439,7 @@ test('selector colours survive get/add identity and save/load', async () => {
 
   const saved = wb.save();
   assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   const loadedFont = loaded.getFont(font.index);
   const loadedFill = loaded.getFill(fill.index);
   const loadedBorder = loaded.getBorder(border.index);
@@ -458,7 +458,7 @@ test('selector colours survive get/add identity and save/load', async () => {
 
 test('dxf alignment and protection XML survive get/add identity and save/load', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
   const protectionXml = '<protection locked="0" hidden="1"/>';
   const alignment = wb.addDxf({ alignmentXml });
@@ -485,7 +485,7 @@ test('dxf alignment and protection XML survive get/add identity and save/load', 
 
   const saved = wb.save();
   assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   assert.ok(loaded.isValid());
   const loadedAlignment = loaded.getDxf(alignment.index);
   assert.ok(loadedAlignment.status.ok);
@@ -507,7 +507,7 @@ test('dxf alignment and protection XML survive get/add identity and save/load', 
 
 test('addFont / getFont preserve superscript and round-trip to the same index', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
   assert.ok(superscript.status.ok, `addFont: ${JSON.stringify(superscript.status)}`);
   assert.equal(wb.getFont(superscript.index).vertAlign, 1);
@@ -530,7 +530,7 @@ test('addFont / getFont preserve superscript and round-trip to the same index', 
 
 test('addFont/setFont with a non-numeric field throws and does not commit a coerced value', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
 
   const before = wb.getFontCount().value;
   assert.throws(() => wb.addFont({ name: 'Arial', size: 'not a number' }), TypeError);
@@ -545,7 +545,7 @@ test('addFont/setFont with a non-numeric field throws and does not commit a coer
 
 test('phonetic runs keep their spans through a save/load round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   wb.setText(0, 0, 0, '東京都');
   assert.deepEqual(
     readAll(
@@ -573,7 +573,7 @@ test('phonetic runs keep their spans through a save/load round trip', async () =
 
   const saved = wb.save();
   assert.ok(saved.status.ok, `save: ${JSON.stringify(saved.status)}`);
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   assert.deepEqual(
     readAll(
       () => loaded.getCellPhoneticRunCount(0, 0, 0),
@@ -610,7 +610,7 @@ test('phonetic properties are independent of the runs and survive a round trip',
     const { fontId, type, alignment } = book.getCellPhoneticProperties(0, 0, 0);
     return { fontId, type, alignment };
   };
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   wb.setText(0, 0, 0, '大阪');
   assert.deepEqual(props(wb), { fontId: 0, type: 0, alignment: 0 });
 
@@ -621,7 +621,7 @@ test('phonetic properties are independent of the runs and survive a round trip',
 
   const saved = wb.save();
   assert.ok(saved.status.ok, `save: ${JSON.stringify(saved.status)}`);
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   assert.deepEqual(props(loaded), { fontId: 3, type: 2, alignment: 2 });
 
   // Two bits each on the binary side, so a wider ordinal is refused.
@@ -634,7 +634,7 @@ test('phonetic properties are independent of the runs and survive a round trip',
 
 test('setDefaultFont declares what an unstyled cell is saved as', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.getFont(0).name, 'Calibri');
 
   // addFont can only ever append beside the seeded default.
@@ -653,7 +653,7 @@ test('setDefaultFont declares what an unstyled cell is saved as', async () => {
 
 test('setFont overwrites an existing slot and refuses an absent index', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const added = wb.addFont({ name: 'Meiryo', size: 12 });
   assert.ok(added.status.ok);
 
@@ -670,7 +670,7 @@ test('setFont overwrites an existing slot and refuses an absent index', async ()
 
 test('addDxf / getDxf round-trip a superscript differential font', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const added = wb.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
   assert.ok(added.status.ok, `addDxf: ${JSON.stringify(added.status)}`);
   const readBack = wb.getDxf(added.index);
@@ -686,7 +686,7 @@ test('addDxf / getDxf round-trip a superscript differential font', async () => {
 
 test('addXf rejects out-of-range font_index', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const r = wb.addCellXf({
     fontIndex: 99,
     fillIndex: 0,
@@ -701,7 +701,7 @@ test('addXf rejects out-of-range font_index', async () => {
 
 test('active sheet is recorded in bookViews and survives a round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.addSheet('B').status.ok);
   assert.ok(wb.addSheet('C').status.ok);
   assert.equal(wb.getActiveSheet().index, 0);
@@ -713,7 +713,7 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
   assert.equal(wb.getActiveSheet().index, 2);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   try {
     assert.equal(loaded.getActiveSheet().index, 2);
   } finally {
@@ -724,7 +724,7 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
 
 test('the show-phonetic flag survives value writes and a round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, false);
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
   assert.ok(wb.setCellShowPhonetic(0, 0, 0, true).ok);
@@ -732,7 +732,7 @@ test('the show-phonetic flag survives value writes and a round trip', async () =
   assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, true);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   try {
     assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, true);
     assert.ok(loaded.setCellShowPhonetic(0, 0, 0, false).ok);
@@ -749,7 +749,7 @@ test('the show-phonetic flag survives value writes and a round trip', async () =
 
 test('an explicit all-zero phoneticPr is reported as present and survives a round trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
   assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]).ok);
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, false);
@@ -757,7 +757,7 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, true);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   try {
     const got = loaded.getCellPhoneticProperties(0, 0, 0);
     assert.equal(got.present, true);
@@ -770,7 +770,7 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setFreeze(0, 2, 1).ok);
   const view = wb.getView(0).view;
   assert.equal(view.paneTopLeftRow, 2);
@@ -793,7 +793,7 @@ test('scroll origin, pane origin and selection round-trip through save', async (
   );
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   try {
     const got = loaded.getView(0).view;
     assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
@@ -819,7 +819,7 @@ test('scroll origin, pane origin and selection round-trip through save', async (
 
 test('sheet split reads back, round-trips and exchanges with the freeze', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.deepEqual([wb.getView(0).view.splitX, wb.getView(0).view.splitY], [0, 0]);
     assert.ok(wb.setSplit(0, 2000, 1500).ok);
@@ -827,7 +827,7 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
     assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const loaded = mod.Workbook.load(saved.bytes);
+    const loaded = mod.Workbook.load(saved.bytes).value;
     try {
       const got = loaded.getView(0).view;
       assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);

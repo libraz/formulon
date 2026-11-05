@@ -19,12 +19,12 @@ const rejected = (call) => {
 const roundTrip = (mod, wb) => {
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  return mod.Workbook.load(saved.bytes);
+  return mod.Workbook.load(saved.bytes).value;
 };
 
 test('collapsed reads back on rows and columns and survives save/load', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setRowOutline(0, 1, 1, 2).ok);
   assert.ok(wb.setRowCollapsed(0, 3, 3, true).ok);
   assert.ok(wb.setColumnOutline(0, 2, 3, 3).ok);
@@ -49,7 +49,7 @@ test('collapsed reads back on rows and columns and survives save/load', async ()
 
 test('showFormulas and showOutlineSymbols read back and round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const initial = wb.getView(0).view;
   assert.equal(initial.showFormulas, 0);
   assert.equal(initial.showOutlineSymbols, 1);
@@ -65,7 +65,7 @@ test('showFormulas and showOutlineSymbols read back and round-trip', async () =>
 
 test('font toggles round-trip and dedup', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const record = {
     name: 'Arial',
     size: 12,
@@ -94,7 +94,7 @@ test('font toggles round-trip and dedup', async () => {
 
 test('gradient fills add, read, dedup and round-trip in cells and dxfs', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const rgb = (argb) => ({ kind: 1, rgb: argb, theme: 0, tint: 0, indexed: 0 });
   const gradient = {
     type: 1,
@@ -131,7 +131,7 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
 
 test('custom icon sets round-trip through the conditional-format API', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const icons = [
     { iconSet: '3Triangles', iconId: 0 },
     { iconSet: 'NoIcons', iconId: 0 },
@@ -165,7 +165,7 @@ test('custom icon sets round-trip through the conditional-format API', async () 
 
 test('calcPr accessors and the date system', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.getFullPrecision().value, 1);
   assert.equal(wb.getCalcOnSave().value, 1);
   assert.equal(wb.getRefMode().value, 0);
@@ -186,26 +186,26 @@ test('calcPr accessors and the date system', async () => {
 
 test("the file name spells and binds the workbook's own names", async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.getFileName().value, '');
   assert.ok(wb.setDefinedName('LN', '10').ok);
   assert.ok(wb.setFileName('M5.xlsx').ok);
   assert.equal(wb.getFileName().value, 'M5.xlsx');
   assert.ok(wb.setFormula(0, 0, 0, '=M5.xlsx!LN+1').ok);
-  assert.equal(wb.getFormula(0, 0, 0).formula, '=M5.xlsx!LN+1');
+  assert.equal(wb.getFormula(0, 0, 0).value, '=M5.xlsx!LN+1');
   assert.equal(wb.getCellAt(0, 0).formula, '=M5.xlsx!LN+1');
   assert.ok(wb.setFileName('M5 b-1.xlsx').ok);
-  assert.equal(wb.getFormula(0, 0, 0).formula, "='M5 b-1.xlsx'!LN+1");
+  assert.equal(wb.getFormula(0, 0, 0).value, "='M5 b-1.xlsx'!LN+1");
   assert.equal(wb.setFileName('Book1').ok, false);
   assert.equal(wb.getFileName().value, 'M5 b-1.xlsx');
   assert.ok(wb.setFileName('').ok);
-  assert.equal(wb.getFormula(0, 0, 0).formula, '=[0]!LN+1');
+  assert.equal(wb.getFormula(0, 0, 0).value, '=[0]!LN+1');
   release(wb);
 });
 
 test('defined-name comment and hidden read back, set and survive a replacement', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setDefinedNameScoped('Rate', 'Sheet1!$A$1', -1).ok);
   assert.equal(wb.listDefinedNames()[0].comment, '');
   assert.equal(wb.listDefinedNames()[0].hidden, false);
@@ -224,7 +224,7 @@ test('defined-name comment and hidden read back, set and survive a replacement',
 
 test('sheet format defaults expose customHeight and zeroHeight and keep omitted flags', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const initial = wb.getFormatDefaults(0);
   assert.equal(initial.customHeight, false);
   assert.equal(initial.zeroHeight, false);

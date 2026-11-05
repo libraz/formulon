@@ -559,8 +559,7 @@ class ChartDrawingTests(unittest.TestCase):
 
             wb.remove_drawing(0, a)
             self.assertEqual([o.object_id for o in wb.list_drawing_objects(0)], [b])
-            with self.assertRaises(FormulonError):
-                wb.get_chart(0, a)
+            self.assertIsNone(wb.get_chart(0, a))
             with self.assertRaises(FormulonError):
                 wb.remove_drawing(0, a)
 
@@ -588,8 +587,8 @@ class ChartErrorTests(unittest.TestCase):
     def test_unknown_chart_and_sheet(self) -> None:
         wb, oid = _chart()
         with wb:
+            self.assertIsNone(wb.get_chart(0, 9999))
             for call in (
-                lambda: wb.get_chart(0, 9999),
                 lambda: wb.get_chart_data(0, 9999),
                 lambda: wb.get_chart(9, oid),
                 lambda: wb.set_chart_title(0, 9999, "x"),

@@ -10,14 +10,6 @@ namespace formulon_node {
 
 namespace {
 
-constexpr const char* kDestroyedMessage = "the workbook handle was already destroyed";
-
-/// Throws the C ABI's last error as a RangeError (an out-of-grid or unordered argument).
-Napi::Value ThrowLastError(Napi::Env env) {
-  Napi::RangeError::New(env, fm_get_last_error_message()).ThrowAsJavaScriptException();
-  return env.Undefined();
-}
-
 /// Reads the optional `options` object at `info[idx]`; false after throwing for a non-object.
 bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Napi::Object* out) {
   const Napi::Env env = info.Env();
@@ -37,8 +29,7 @@ bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, const char* api, Nap
 Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    Napi::TypeError::New(env, kDestroyedMessage).ThrowAsJavaScriptException();
-    return env.Undefined();
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
   }
   Napi::Object options;
   if (!OptionsArg(info, 1, "parseReference", &options)) {
@@ -62,23 +53,19 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   fm_parsed_reference_t ref{};
   const fm_status_t rc =
       fm_workbook_parse_reference(handle_, text.c_str(), r1c1 ? 1 : 0, has_row ? 1 : 0, base_row, base_col, &ref);
-  if (rc != 0) {
-    return ThrowLastError(env);
-  }
-  if (ref.valid == 0) {
-    return env.Null();
+  if (rc != 0 || ref.valid == 0) {
+    return MakeOptionalResult(env, rc, 0, env.Null());
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("sheetName", ref.has_sheet != 0 ? JsString(env, ref.sheet_name) : env.Null());
   out.Set("rect", RangeToJs(env, ref.rect));
-  return out;
+  return MakeOptionalResult(env, rc, 1, out);
 }
 
 Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    Napi::TypeError::New(env, kDestroyedMessage).ThrowAsJavaScriptException();
-    return env.Undefined();
+    return MakeStringFieldResult(env, NullHandleError(env), "value", "");
   }
   Napi::Object options;
   if (!OptionsArg(info, 1, "formatReference", &options)) {
@@ -106,10 +93,7 @@ Napi::Value Workbook::FormatReference(const Napi::CallbackInfo& info) {
   const char* text = nullptr;
   const fm_status_t rc =
       fm_workbook_format_reference(handle_, has_sheet ? sheet_name.c_str() : nullptr, &rect, absolute ? 1 : 0, &text);
-  if (rc != 0) {
-    return ThrowLastError(env);
-  }
-  return JsString(env, text);
+  return MakeStringResult(env, rc, text);
 }
 
 }  // namespace formulon_node

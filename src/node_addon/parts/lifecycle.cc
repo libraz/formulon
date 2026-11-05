@@ -275,7 +275,7 @@ Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "recomputed", 0);
+    return MakeNumberFieldResult(env, NullHandleError(env), "value", 0);
   }
   const std::size_t sheet = ArgU32(info, 0);
   fm_cell_rect_t vp{};
@@ -288,12 +288,12 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   fm_status_t rc = fm_sheet_recalc_viewport(handle_, sheet, &vp, &recomputed);
   const bool callback_threw = TakeIterativeProgressThrew();
   if (rc != 0) {
-    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "recomputed", 0);
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "value", 0);
   }
   if (callback_threw) {
-    return MakeNumberFieldResult(env, MakeCallbackThrewStatus(env), "recomputed", 0);
+    return MakeNumberFieldResult(env, MakeCallbackThrewStatus(env), "value", 0);
   }
-  return MakeNumberFieldResult(env, MakeOkStatus(env), "recomputed", recomputed);
+  return MakeNumberResult(env, 0, recomputed);
 }
 
 Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {

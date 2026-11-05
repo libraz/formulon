@@ -6,6 +6,7 @@ Run from the repo root: `python3 -m tools.dev.binding_drift.api_conventions_bind
 
 from __future__ import annotations
 
+import copy
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -837,6 +838,23 @@ class ResultShapeTest(BindingRuleTestBase):
                 ("py", "sheet.get_name", "result"),
             ],
         )
+
+    def test_r8_total_lookup_is_not_optional(self) -> None:
+        ledger = copy.deepcopy(self.LEDGER)
+
+        def ctx() -> api_conventions.Context:
+            return self.fixture.context(
+                self.HEADER,
+                ledger,
+                wasm=_wb("  getComment(sheet: number, row: number): CommentResult;\n"),
+                py_workbook=_py_wb("    def get_comment(self, sheet: int, row: int) -> Comment: ...\n"),
+            )
+
+        self.assertIn(("wasm", "comment.get", "result"), hits(ctx(), "R8.js"))
+        self.assertIn(("py", "comment.get", "optional"), hits(ctx(), "R8.py"))
+        ledger["entries"]["comment.get"]["total"] = "every cell reads as some comment"
+        self.assertNotIn(("wasm", "comment.get", "result"), hits(ctx(), "R8.js"))
+        self.assertNotIn(("py", "comment.get", "optional"), hits(ctx(), "R8.py"))
 
 
 class RangeTest(BindingRuleTestBase):

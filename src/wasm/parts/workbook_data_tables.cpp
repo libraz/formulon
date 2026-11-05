@@ -59,26 +59,20 @@ JsStatus JsWorkbook::addDataTable(uint32_t sheet, emscripten::val spec) {
 }
 
 emscripten::val JsWorkbook::getDataTable(uint32_t sheet, uint32_t row, uint32_t col) const {
-  emscripten::val o = emscripten::val::object();
-  o.set("dataTable", emscripten::val::null());
-  if (handle_ == nullptr) {
-    o.set("status", invalid_handle_status());
-    return o;
-  }
   int32_t present = 0;
   fm_data_table_t t{};
-  const fm_status_t rc = fm_sheet_get_data_table(handle_, sheet, row, col, &present, &t);
-  o.set("status", status_from_rc(rc));
-  if (rc == 0 && present != 0) {
-    emscripten::val table = emscripten::val::object();
-    table.set("rect", cell_rect_to_val(t.rect));
-    table.set("twoDimensional", t.two_dimensional != 0);
-    table.set("rowOriented", t.row_oriented != 0);
-    table.set("rowInput", input_to_val(t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));
-    table.set("colInput", input_to_val(t.has_col_input, t.col_input_row, t.col_input_col, t.col_input_deleted));
-    o.set("dataTable", table);
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_data_table(handle_, sheet, row, col, &present, &t) : kBindingInvalidHandle;
+  if (rc != 0 || present == 0) {
+    return optional_result(rc, present, emscripten::val::null());
   }
-  return o;
+  emscripten::val table = emscripten::val::object();
+  table.set("rect", cell_rect_to_val(t.rect));
+  table.set("twoDimensional", t.two_dimensional != 0);
+  table.set("rowOriented", t.row_oriented != 0);
+  table.set("rowInput", input_to_val(t.has_row_input, t.row_input_row, t.row_input_col, t.row_input_deleted));
+  table.set("colInput", input_to_val(t.has_col_input, t.col_input_row, t.col_input_col, t.col_input_deleted));
+  return optional_result(rc, present, table);
 }
 
 JsStatus JsWorkbook::removeDataTable(uint32_t sheet, uint32_t row, uint32_t col) {

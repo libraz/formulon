@@ -62,7 +62,7 @@ test('setLogMinLevel / setLogSink are module-level controls on the Module', asyn
   for (const bad of [-1, 5, 99]) {
     const r = Module.setLogMinLevel(bad);
     assert.equal(r.ok, false, `level=${bad} should be rejected`);
-    assert.equal(r.status, 2);
+    assert.equal(r.code, 2);
   }
   assert.ok(Module.setLogMinLevel(mod.LogLevel.Off).ok);
 });
@@ -119,7 +119,7 @@ test('a throwing log sink is dropped and leaves the engine usable', async () => 
     assert.ok(Module.setLogSink(null).ok);
   }
 
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.ok(wb.setFormula(0, 0, 0, '=1+1').ok);
     const after = wb.recalc();
@@ -197,7 +197,7 @@ test('staged constant tables carry the ordinals the staged .d.ts declares', asyn
 // Builds a workbook with one pivot, ready for the filter-contract cases.
 // `delete` is embind's auto-added finaliser; the caller must call it.
 function makePivotWorkbook(Workbook) {
-  const wb = Workbook.createDefault();
+  const wb = Workbook.createDefault().value;
   const cacheId = wb.addPivotCache(0).index;
   // A cache without a worksheet source cannot be saved, so the fixture
   // declares the range its two fields and two records occupy.
@@ -279,7 +279,7 @@ test('pivot filters survive save/load', async () => {
   } finally {
     wb.delete();
   }
-  const reloaded = Module.Workbook.load(bytes);
+  const reloaded = Module.Workbook.load(bytes).value;
   try {
     assert.equal(reloaded.getPivotCount(0).value, 1);
     // The filter is written as `<filters>` and decodes back into the list.
@@ -313,7 +313,7 @@ test('a required pivot spec string field left out of the object is rejected, not
     const fieldCountBefore = wb.getPivotFieldCount(0, pivot).value;
     const field = wb.addPivotField(0, pivot, { axis: 0 }); // no `sourceName`
     assert.equal(field.status.ok, false);
-    assert.equal(field.status.status, 7001);
+    assert.equal(field.status.code, 7001);
     assert.equal(wb.getPivotFieldCount(0, pivot).value, fieldCountBefore, 'no field must have been added');
 
     // `name` is optional: an omitted one is derived from the workbook profile.
@@ -326,7 +326,7 @@ test('a required pivot spec string field left out of the object is rejected, not
     const filterCountBefore = wb.getPivotFilterCount(0, pivot).value;
     const filter = wb.addPivotFilter(0, pivot, { axis: 0, type: 1, valueKind: 1, valueDouble: 15 }); // no `fieldName`
     assert.equal(filter.status.ok, false);
-    assert.equal(filter.status.status, 7001);
+    assert.equal(filter.status.code, 7001);
     assert.equal(wb.getPivotFilterCount(0, pivot).value, filterCountBefore, 'no filter must have been added');
   } finally {
     wb.delete();
@@ -400,7 +400,7 @@ const PROFILE_LOCALES = [
 
 test('setExcelProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.equal(wb.getExcelProfileId().value, 'win-365-en_US');
     assert.ok(wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)').ok);
@@ -423,7 +423,7 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
 
 test('formula and function-name localization is keyed by profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE').value, '=SUMME(1,5;2)');
     assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE').value, '=SUM(1.5,2)');
@@ -443,7 +443,7 @@ test('formula and function-name localization is keyed by profile id', async () =
 
 test('getLocaleFacts reports separators, names, error spellings and measurement', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const mac = wb.getLocaleFacts('mac-365-de_DE');
     assert.ok(mac.status.ok);
@@ -550,7 +550,7 @@ test('pivot style info defaults on create, reads back what the setter wrote and 
     // Survives a save/load.
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const reloaded = Module.Workbook.load(saved.bytes);
+    const reloaded = Module.Workbook.load(saved.bytes).value;
     try {
       assert.equal(reloaded.getPivotStyleInfo(0, 0).name, 'PivotStyleDark3');
       assert.equal(reloaded.getPivotStyleInfo(0, 0).showRowStripes, true);
@@ -625,7 +625,7 @@ test('an empty or omitted data field name is derived from the workbook profile',
 
 test('active sheet is recorded in bookViews and survives a round trip', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   assert.ok(wb.addSheet('B').status.ok);
   assert.ok(wb.addSheet('C').status.ok);
   assert.equal(wb.getActiveSheet().index, 0);
@@ -637,7 +637,7 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
   assert.equal(wb.getActiveSheet().index, 2);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes);
+  const loaded = Module.Workbook.load(saved.bytes).value;
   try {
     assert.equal(loaded.getActiveSheet().index, 2);
   } finally {
@@ -648,7 +648,7 @@ test('active sheet is recorded in bookViews and survives a round trip', async ()
 
 test('the show-phonetic flag survives value writes and a round trip', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, false);
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
   assert.ok(wb.setCellShowPhonetic(0, 0, 0, true).ok);
@@ -656,7 +656,7 @@ test('the show-phonetic flag survives value writes and a round trip', async () =
   assert.equal(wb.getCellShowPhonetic(0, 0, 0).show, true);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes);
+  const loaded = Module.Workbook.load(saved.bytes).value;
   try {
     assert.equal(loaded.getCellShowPhonetic(0, 0, 0).show, true);
     assert.ok(loaded.setCellShowPhonetic(0, 0, 0, false).ok);
@@ -673,7 +673,7 @@ test('the show-phonetic flag survives value writes and a round trip', async () =
 
 test('an explicit all-zero phoneticPr is reported as present and survives a round trip', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   assert.ok(wb.setText(0, 0, 0, '漢字').ok);
   assert.ok(wb.setCellPhoneticRuns(0, 0, 0, [{ sb: 0, eb: 2, text: 'かんじ' }]).ok);
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, false);
@@ -681,7 +681,7 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
   assert.equal(wb.getCellPhoneticProperties(0, 0, 0).present, true);
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes);
+  const loaded = Module.Workbook.load(saved.bytes).value;
   try {
     const got = loaded.getCellPhoneticProperties(0, 0, 0);
     assert.equal(got.present, true);
@@ -694,7 +694,7 @@ test('an explicit all-zero phoneticPr is reported as present and survives a roun
 
 test('scroll origin, pane origin and selection round-trip through save', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   assert.ok(wb.setFreeze(0, 2, 1).ok);
   const view = wb.getView(0).view;
   assert.equal(view.paneTopLeftRow, 2);
@@ -717,7 +717,7 @@ test('scroll origin, pane origin and selection round-trip through save', async (
   );
   const saved = wb.save();
   assert.ok(saved.status.ok, JSON.stringify(saved.status));
-  const loaded = Module.Workbook.load(saved.bytes);
+  const loaded = Module.Workbook.load(saved.bytes).value;
   try {
     const got = loaded.getView(0).view;
     assert.deepEqual([got.topLeftRow, got.topLeftCol, got.paneTopLeftRow, got.paneTopLeftCol], [5, 0, 40, 6]);
@@ -743,7 +743,7 @@ test('scroll origin, pane origin and selection round-trip through save', async (
 
 test('sheet split reads back, round-trips and exchanges with the freeze', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.deepEqual([wb.getView(0).view.splitX, wb.getView(0).view.splitY], [0, 0]);
     assert.ok(wb.setSplit(0, 2000, 1500).ok);
@@ -751,7 +751,7 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
     assert.deepEqual([view.splitX, view.splitY, view.freezeRows, view.freezeCols], [2000, 1500, 0, 0]);
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const loaded = Module.Workbook.load(saved.bytes);
+    const loaded = Module.Workbook.load(saved.bytes).value;
     try {
       const got = loaded.getView(0).view;
       assert.deepEqual([got.splitX, got.splitY, got.freezeRows, got.freezeCols], [2000, 1500, 0, 0]);
@@ -776,7 +776,7 @@ test('sheet split reads back, round-trips and exchanges with the freeze', async 
 
 test('pivotFieldAdd binds by cache column name and axis -1 takes a field off the report', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     const cacheId = wb.addPivotCache(0).index;
     assert.ok(wb.setPivotCacheWorksheetSource(cacheId, { present: true, ref: 'A1:D3', sheet: 'Sheet1' }).ok);
@@ -810,7 +810,7 @@ test('pivotFieldAdd binds by cache column name and axis -1 takes a field off the
 
 test('copySheet names the copy automatically or explicitly and reports bad arguments', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.ok(wb.setNumber(0, 0, 0, 5).ok);
     assert.ok(wb.setFormula(0, 0, 1, '=A1*2').ok);
@@ -824,9 +824,9 @@ test('copySheet names the copy automatically or explicitly and reports bad argum
     assert.equal(wb.getSheetName(0).value, 'Archive');
     assert.ok(wb.recalc().ok);
     assert.equal(wb.getValue(0, 0, 1).value.number, 10);
-    assert.equal(wb.copySheet(9, 0).status.status, 5050);
-    assert.equal(wb.copySheet(0, 9).status.status, 5050);
-    assert.equal(wb.copySheet(0, 0, '').status.status, 5051);
+    assert.equal(wb.copySheet(9, 0).status.code, 5050);
+    assert.equal(wb.copySheet(0, 9).status.code, 5050);
+    assert.equal(wb.copySheet(0, 0, '').status.code, 5051);
     assert.equal(wb.getSheetCount().value, 3);
   } finally {
     wb.delete();

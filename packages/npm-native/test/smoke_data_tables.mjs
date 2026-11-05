@@ -44,7 +44,7 @@ const num = (wb, row, col) => {
 
 // B1 = 3 is the column input, B2 = B1 * B1 the formula; A3:A5 = 1, 2, 3 are the values, B3:B5 the results.
 const squaresWorkbook = (mod) => {
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 1, 3).ok);
   assert.ok(wb.setFormula(0, 1, 1, '=B1*B1').ok);
   for (let i = 0; i < 3; i += 1) assert.ok(wb.setNumber(0, 2 + i, 0, i + 1).ok);
@@ -64,14 +64,14 @@ test('a one-variable data table computes, reads back and refuses writes', async 
 
   const found = wb.getDataTable(0, 3, 1);
   assert.ok(found.status.ok);
-  assert.deepEqual(found.dataTable, {
+  assert.deepEqual(found.value, {
     rect: { firstRow: 2, firstCol: 1, lastRow: 4, lastCol: 1 },
     twoDimensional: false,
     rowOriented: false,
     rowInput: null,
     colInput: { row: 0, col: 1, deleted: false },
   });
-  assert.equal(wb.getDataTable(0, 1, 1).dataTable, null);
+  assert.equal(wb.getDataTable(0, 1, 1).value, null);
 
   // The result range refuses writes; the values column does not.
   assert.equal(wb.setNumber(0, 3, 1, 7).ok, false);
@@ -86,7 +86,7 @@ test('a one-variable data table computes, reads back and refuses writes', async 
 
 test('a two-variable data table fills a multiplication table', async () => {
   const mod = await load();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 5, 1).ok);
   assert.ok(wb.setNumber(0, 1, 5, 1).ok);
   assert.ok(wb.setFormula(0, 2, 2, '=F1*F2').ok);
@@ -103,7 +103,7 @@ test('a two-variable data table fills a multiplication table', async () => {
   );
   assert.ok(wb.recalc().ok);
   assert.deepEqual([num(wb, 3, 3), num(wb, 4, 4), num(wb, 5, 5)], [10, 40, 90]);
-  const table = wb.getDataTable(0, 4, 4).dataTable;
+  const table = wb.getDataTable(0, 4, 4).value;
   assert.equal(table.twoDimensional, true);
   assert.deepEqual(table.rowInput, { row: 0, col: 5, deleted: false });
   assert.deepEqual(table.colInput, { row: 1, col: 5, deleted: false });
@@ -124,16 +124,16 @@ test('a data table survives save and load as a dataTable formula and follows row
   assert.match(sheet, /<f t="dataTable" ref="B3:B5"[^>]*r1="B1"[^>]*\/>/);
   assert.equal((sheet.match(/t="dataTable"/g) ?? []).length, 1);
 
-  const loaded = mod.Workbook.load(saved.bytes);
-  assert.deepEqual(loaded.getDataTable(0, 4, 1).dataTable.colInput, { row: 0, col: 1, deleted: false });
+  const loaded = mod.Workbook.load(saved.bytes).value;
+  assert.deepEqual(loaded.getDataTable(0, 4, 1).value.colInput, { row: 0, col: 1, deleted: false });
   assert.equal(loaded.setNumber(0, 4, 1, 1).ok, false);
   assert.ok(loaded.insertRows(0, 0, 2).ok);
-  const moved = loaded.getDataTable(0, 6, 1).dataTable;
+  const moved = loaded.getDataTable(0, 6, 1).value;
   assert.deepEqual([moved.rect.firstRow, moved.rect.lastRow], [4, 6]);
   assert.deepEqual(moved.colInput, { row: 2, col: 1, deleted: false });
   // Deleting the input's row marks it deleted and the table turns into errors.
   assert.ok(loaded.deleteRows(0, 2, 1).ok);
-  assert.equal(loaded.getDataTable(0, 5, 1).dataTable.colInput.deleted, true);
+  assert.equal(loaded.getDataTable(0, 5, 1).value.colInput.deleted, true);
   assert.ok(loaded.recalc().ok);
   assert.equal(loaded.getValue(0, 3, 1).value.kind, KIND.Error);
   release(loaded);
@@ -152,7 +152,7 @@ test('autoNoTable leaves tables to recalcDataTables and removal blanks them', as
   assert.equal(num(wb, 4, 1), 9);
 
   assert.ok(wb.removeDataTable(0, 3, 1).ok);
-  assert.equal(wb.getDataTable(0, 3, 1).dataTable, null);
+  assert.equal(wb.getDataTable(0, 3, 1).value, null);
   assert.equal(wb.getValue(0, 3, 1).value.kind, KIND.Blank);
   assert.equal(wb.removeDataTable(0, 3, 1).ok, false);
   assert.ok(wb.setNumber(0, 3, 1, 7).ok);

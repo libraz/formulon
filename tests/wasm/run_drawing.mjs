@@ -42,7 +42,7 @@ function makePng(width, height) {
 }
 
 function withWorkbook(Module, fn) {
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     fn(wb);
   } finally {
@@ -99,8 +99,9 @@ export function registerDrawing(Module, test) {
         assert.equal(o.name, 'Logo');
         assert.equal(o.descr, 'alt text');
         assert.ok(o.mediaPath.length > 0);
-        const img = book.getImage(0, o.objectId);
-        assert.ok(img.status.ok, JSON.stringify(img.status));
+        const found = book.getImage(0, o.objectId);
+        assert.ok(found.status.ok, JSON.stringify(found.status));
+        const img = found.value;
         assert.equal(img.format, ImageFormat.Png);
         assert.equal(img.pxWidth, 4);
         assert.equal(img.pxHeight, 3);
@@ -111,13 +112,13 @@ export function registerDrawing(Module, test) {
 
       const saved = wb.save();
       assert.ok(saved.status.ok, JSON.stringify(saved.status));
-      const loaded = Module.Workbook.load(saved.bytes);
+      const loaded = Module.Workbook.load(saved.bytes).value;
       try {
         check(loaded);
         const rm = loaded.removeDrawing(0, ins.objectId);
         assert.ok(rm.ok, JSON.stringify(rm));
         assert.equal(loaded.listDrawingObjects(0).length, 0);
-        assert.equal(loaded.getImage(0, ins.objectId).status.ok, false);
+        assert.equal(loaded.getImage(0, ins.objectId).value, null);
         assert.equal(loaded.removeDrawing(0, ins.objectId).ok, false);
       } finally {
         loaded.delete();
@@ -152,8 +153,8 @@ export function registerDrawing(Module, test) {
       assert.equal(wb.addImage(0, makePng(1, 1), { anchorKind: AnchorKind.Absolute }).status.ok, false);
       assert.equal(wb.listDrawingObjects(99).status.ok, false);
       const img = wb.getImage(0, 12345);
-      assert.equal(img.status.ok, false);
-      assert.equal(img.bytes.length, 0);
+      assert.equal(img.status.ok, true);
+      assert.equal(img.value, null);
     });
   });
 
@@ -219,7 +220,7 @@ export function registerDrawing(Module, test) {
       assert.ok(restored.status.ok, JSON.stringify(restored.status));
       assert.equal(restored.objectId, a.objectId);
       assert.deepEqual(ids(), [a.objectId, b.objectId]);
-      assert.deepEqual(Buffer.from(wb.getImage(0, a.objectId).bytes), Buffer.from(png));
+      assert.deepEqual(Buffer.from(wb.getImage(0, a.objectId).value.bytes), Buffer.from(png));
 
       assert.ok(wb.setDrawingAnchor(0, a.objectId, { row: 9 }).ok);
       assert.ok(wb.setDrawingZOrder(0, a.objectId, 1).ok);

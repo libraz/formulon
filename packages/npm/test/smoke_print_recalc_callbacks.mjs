@@ -3,7 +3,7 @@ import { assert, getModule, makeIterativeWorkbook, threadsEntry, VAL } from './s
 
 test('Workbook.createDefault produces a valid single-sheet workbook', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.ok(wb.isValid());
     assert.equal(wb.getSheetCount().value, 1);
@@ -14,14 +14,14 @@ test('Workbook.createDefault produces a valid single-sheet workbook', async () =
 
 test('print settings: raw XML round-trips and rejects malformed fragments', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     // An absent element reads back as the empty string, never null.
-    assert.equal(wb.getPageSetupXml(0).xml, '');
+    assert.equal(wb.getPageSetupXml(0).value, '');
 
     const fragment = '<pageSetup paperSize="9" orientation="portrait" scale="85"/>';
     assert.ok(wb.setPageSetupXml(0, fragment).ok);
-    assert.equal(wb.getPageSetupXml(0).xml, fragment);
+    assert.equal(wb.getPageSetupXml(0).value, fragment);
 
     for (const bad of [
       '<pageSetup/><pageSetup/>',
@@ -32,10 +32,10 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
       assert.equal(wb.setPageSetupXml(0, bad).ok, false, `expected rejection for ${bad}`);
     }
     // A rejected set leaves the stored fragment untouched.
-    assert.equal(wb.getPageSetupXml(0).xml, fragment);
+    assert.equal(wb.getPageSetupXml(0).value, fragment);
 
     assert.ok(wb.setPageSetupXml(0, '').ok);
-    assert.equal(wb.getPageSetupXml(0).xml, '');
+    assert.equal(wb.getPageSetupXml(0).value, '');
     const cleared = wb.getPageSetup(0);
     assert.ok(cleared.status.ok);
     assert.equal(cleared.scale, 100);
@@ -47,14 +47,14 @@ test('print settings: raw XML round-trips and rejects malformed fragments', asyn
 
 test('print settings: typed patch leaves unstated attributes alone', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.ok(
       wb.setPageSetupXml(0, '<pageSetup paperSize="9" orientation="portrait" horizontalDpi="600" copies="3"/>').ok,
     );
     assert.ok(wb.setPageSetup(0, { orientation: 2 }).ok);
 
-    const xml = wb.getPageSetupXml(0).xml;
+    const xml = wb.getPageSetupXml(0).value;
     assert.match(xml, /orientation="landscape"/);
     // Attributes the engine does not model must survive the patch, or the
     // "open a template and change one thing" route loses data.
@@ -73,7 +73,7 @@ test('print settings: typed patch leaves unstated attributes alone', async () =>
 
 test('print settings: a change reaches paginate with no save cycle', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     for (let row = 0; row < 200; row += 1) {
       for (let col = 0; col < 20; col += 1) {
@@ -90,7 +90,7 @@ test('print settings: a change reaches paginate with no save cycle', async () =>
 
 test('print settings: an authored report survives save and load', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   let bytes;
   try {
     assert.ok(wb.setText(0, 0, 0, '売上').ok);
@@ -117,7 +117,7 @@ test('print settings: an authored report survives save and load', async () => {
     wb.delete();
   }
 
-  const reloaded = Module.Workbook.load(bytes);
+  const reloaded = Module.Workbook.load(bytes).value;
   try {
     const setup = reloaded.getPageSetup(0);
     assert.ok(setup.status.ok);
@@ -131,7 +131,7 @@ test('print settings: an authored report survives save and load', async () => {
     assert.equal(titles.repeatRows, '1:2');
     assert.equal(titles.repeatCols, '');
     // The header code is stored escaped and decodes back to `&C...`.
-    assert.match(reloaded.getHeaderFooterXml(0).xml, /<oddHeader>&amp;C月次報告<\/oddHeader>/);
+    assert.match(reloaded.getHeaderFooterXml(0).value, /<oddHeader>&amp;C月次報告<\/oddHeader>/);
     const breaks = reloaded.listRowBreaks(0);
     assert.deepEqual(
       breaks.breaks.map((b) => b.id),
@@ -145,7 +145,7 @@ test('print settings: an authored report survives save and load', async () => {
 
 test('setRangeXfIndex applies one xf across a rectangle', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     const xf = wb.addCellXf({
       fontIndex: 0,
@@ -163,9 +163,9 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
       [1, 1],
       [2, 2],
     ]) {
-      assert.equal(wb.getCellXfIndex(0, row, col).xfIndex, xf.index);
+      assert.equal(wb.getCellXfIndex(0, row, col).value, xf.index);
     }
-    assert.equal(wb.getCellXfIndex(0, 3, 3).xfIndex, 0);
+    assert.equal(wb.getCellXfIndex(0, 3, 3).value, 0);
   } finally {
     wb.delete();
   }
@@ -173,7 +173,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
 
 test('sheet layout getters preserve explicit width presence flags', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.ok(wb.setColumnWidth(0, 0, 0, 0).ok);
     assert.ok(wb.setColumnHidden(0, 1, 1, true).ok);
@@ -208,14 +208,14 @@ test('sheet layout getters preserve explicit width presence flags', async () => 
 
 test('Unicode sheet identity rejects folded duplicate and permits casing rename', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createEmpty();
+  const wb = Module.Workbook.createEmpty().value;
   try {
     assert.ok(wb.addSheet('Ä').status.ok);
     assert.ok(wb.addSheet('Ö').status.ok);
     assert.equal(wb.addSheet('ä').status.ok, false);
     const collision = wb.renameSheet(1, 'ä');
     assert.equal(collision.ok, false);
-    assert.notEqual(collision.status, 0);
+    assert.notEqual(collision.code, 0);
     assert.equal(wb.getSheetName(0).value, 'Ä');
     assert.equal(wb.getSheetName(1).value, 'Ö');
     assert.ok(wb.renameSheet(0, 'ä').ok);
@@ -230,7 +230,7 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
 
 test('setNumber + getValue round-trips bit-exactly', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     const x = 3.141592653589793;
     assert.ok(wb.setNumber(0, 0, 0, x).ok);
@@ -246,7 +246,7 @@ test('setNumber + getValue round-trips bit-exactly', async () => {
 
 test('setFormula + recalc computes 41 + 1 == 42 in B1', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   try {
     assert.ok(wb.setNumber(0, 0, 0, 41).ok);
     assert.ok(wb.setFormula(0, 0, 1, '=A1+1').ok);
@@ -262,7 +262,7 @@ test('setFormula + recalc computes 41 + 1 == 42 in B1', async () => {
 
 test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry', async () => {
   const Module = await getModule();
-  const wb = Module.Workbook.createDefault();
+  const wb = Module.Workbook.createDefault().value;
   const branchCount = 32;
   try {
     assert.ok(wb.setNumber(0, 0, 0, 1).ok);
@@ -317,7 +317,7 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
 
     const invalid = wb.recalcParallel(9);
     assert.equal(invalid.status.ok, false);
-    assert.notEqual(invalid.status.status, 0);
+    assert.notEqual(invalid.status.code, 0);
     // Rejected by the binding itself, before any C ABI call: the context
     // is empty, never a value built from the threadCount the caller
     // passed (the Status contract's promise for a binding-raised
@@ -343,7 +343,7 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
     ]) {
       const invalidShape = wb.recalcParallel(invalidThreadCount);
       assert.equal(invalidShape.status.ok, false, `threadCount=${String(invalidThreadCount)}`);
-      assert.notEqual(invalidShape.status.status, 0);
+      assert.notEqual(invalidShape.status.code, 0);
       assert.equal(invalidShape.stats.cellsEvaluated, 0);
       assert.equal(invalidShape.stats.sccsProcessed, 0);
       assert.equal(invalidShape.stats.parallelSteps, 0);
@@ -382,7 +382,7 @@ test('a throwing iterative progress callback aborts the solve and reports a stat
     // comes back as a status on the same envelope every other call uses.
     const aborted = wb.recalc();
     assert.equal(aborted.ok, false, `expected a failure envelope: ${JSON.stringify(aborted)}`);
-    assert.equal(aborted.status, STATUS.CALLBACK_EXCEPTION);
+    assert.equal(aborted.code, STATUS.CALLBACK_EXCEPTION);
     assert.equal(calls, 1, 'the solve must stop at the first throw');
 
     // The workbook is still readable, and the recalc re-entry guard was
@@ -392,7 +392,7 @@ test('a throwing iterative progress callback aborts the solve and reports a stat
     assert.equal(mid.value.kind, VAL.NUMBER);
 
     const second = wb.recalc();
-    assert.notEqual(second.status, STATUS.RECALC_REENTRANT, 'the re-entry flag stayed set');
+    assert.notEqual(second.code, STATUS.RECALC_REENTRANT, 'the re-entry flag stayed set');
 
     assert.ok(wb.setIterativeProgress(null).ok);
     assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
@@ -452,7 +452,7 @@ test('an uncaught delete() inside the progress callback aborts the solve like an
   const result = wb.recalc();
   assert.equal(calls, 1);
   assert.equal(result.ok, false, `expected a failure envelope: ${JSON.stringify(result)}`);
-  assert.equal(result.status, STATUS.CALLBACK_EXCEPTION);
+  assert.equal(result.code, STATUS.CALLBACK_EXCEPTION);
   assert.ok(wb.isValid(), 'the handle must still be alive: delete() never completed');
 
   wb.setIterativeProgress(null);

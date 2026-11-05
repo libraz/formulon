@@ -62,14 +62,14 @@ Napi::Value InvokeBreakAdd(Workbook& wb, const Napi::CallbackInfo& info, BreakAd
 
 }  // namespace
 
-Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter, const char* field) {
+Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStringGetFn getter) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeStringFieldResult(env, NullHandleError(env), field, nullptr);
+    return MakeStringFieldResult(env, NullHandleError(env), "value", nullptr);
   }
   const char* text = nullptr;
   const fm_status_t rc = getter(handle_, ArgU32(info, 0), &text);
-  return MakeStringFieldResult(env, rc, field, text);
+  return MakeStringResult(env, rc, text);
 }
 
 Napi::Value Workbook::SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter) {
@@ -80,7 +80,7 @@ Napi::Value Workbook::SheetStringSetter(const Napi::CallbackInfo& info, SheetStr
 }
 
 Napi::Value Workbook::GetSheetPageSetupXml(const Napi::CallbackInfo& info) {
-  return SheetStringGetter(info, &fm_sheet_get_page_setup_xml, "xml");
+  return SheetStringGetter(info, &fm_sheet_get_page_setup_xml);
 }
 
 Napi::Value Workbook::SetSheetPageSetupXml(const Napi::CallbackInfo& info) {
@@ -88,7 +88,7 @@ Napi::Value Workbook::SetSheetPageSetupXml(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetPageMarginsXml(const Napi::CallbackInfo& info) {
-  return SheetStringGetter(info, &fm_sheet_get_page_margins_xml, "xml");
+  return SheetStringGetter(info, &fm_sheet_get_page_margins_xml);
 }
 
 Napi::Value Workbook::SetSheetPageMarginsXml(const Napi::CallbackInfo& info) {
@@ -96,7 +96,7 @@ Napi::Value Workbook::SetSheetPageMarginsXml(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetPrintOptionsXml(const Napi::CallbackInfo& info) {
-  return SheetStringGetter(info, &fm_sheet_get_print_options_xml, "xml");
+  return SheetStringGetter(info, &fm_sheet_get_print_options_xml);
 }
 
 Napi::Value Workbook::SetSheetPrintOptionsXml(const Napi::CallbackInfo& info) {
@@ -104,7 +104,7 @@ Napi::Value Workbook::SetSheetPrintOptionsXml(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetHeaderFooterXml(const Napi::CallbackInfo& info) {
-  return SheetStringGetter(info, &fm_sheet_get_header_footer_xml, "xml");
+  return SheetStringGetter(info, &fm_sheet_get_header_footer_xml);
 }
 
 Napi::Value Workbook::SetSheetHeaderFooterXml(const Napi::CallbackInfo& info) {
@@ -112,7 +112,7 @@ Napi::Value Workbook::SetSheetHeaderFooterXml(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value Workbook::GetSheetSheetPrXml(const Napi::CallbackInfo& info) {
-  return SheetStringGetter(info, &fm_sheet_get_sheet_pr_xml, "xml");
+  return SheetStringGetter(info, &fm_sheet_get_sheet_pr_xml);
 }
 
 Napi::Value Workbook::SetSheetSheetPrXml(const Napi::CallbackInfo& info) {

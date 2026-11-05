@@ -3,40 +3,39 @@ import { appendEmptyZipEntry, assert, getModule, readAll } from './smoke_support
 
 test('comments round-trip: setComment + getComment', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Pre-existing cell so the comment attaches to a stored slot.
   assert.ok(wb.setNumber(0, 1, 1, 7).ok);
   const sc = wb.setComment(0, 1, 1, 'libraz', 'hello world');
   assert.ok(sc.ok, `setComment: ${JSON.stringify(sc)}`);
-  const c = wb.getComment(0, 1, 1);
+  const c = wb.getComment(0, 1, 1).value;
   assert.ok(c !== null, 'expected non-null Comment');
   assert.equal(c.author, 'libraz');
   assert.equal(c.text, 'hello world');
   // Removing surfaces null on the next read.
   assert.ok(wb.setComment(0, 1, 1, '', '').ok);
-  assert.equal(wb.getComment(0, 1, 1), null);
+  assert.equal(wb.getComment(0, 1, 1).value, null);
 });
 
-test('getCommentResult distinguishes absence from an invalid sheet', async () => {
+test('getComment distinguishes absence from an invalid sheet', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
-  const missing = wb.getCommentResult(0, 1, 1);
-  assert.equal(missing.status.ok, false);
-  assert.equal(missing.comment, null);
-  const invalid = wb.getCommentResult(99, 1, 1);
-  assert.equal(invalid.status.ok, false);
-  assert.equal(invalid.comment, null);
-  assert.notEqual(missing.status.status, invalid.status.status);
+  const wb = mod.Workbook.createDefault().value;
+  const missing = wb.getComment(0, 1, 1);
+  assert.equal(missing.status.ok, true);
+  assert.equal(missing.value, null);
+  const invalid = wb.getComment(99, 1, 1);
+  assert.equal(invalid.status.code, mod.StatusCode.SheetIndexOutOfRange);
+  assert.equal(invalid.value, null);
   assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
-  const found = wb.getCommentResult(0, 1, 1);
+  const found = wb.getComment(0, 1, 1);
   assert.equal(found.status.ok, true);
-  assert.equal(found.comment.author, 'libraz');
-  assert.equal(found.comment.text, 'hello');
+  assert.equal(found.value.author, 'libraz');
+  assert.equal(found.value.text, 'hello');
 });
 
 test('cellCount + cellAt enumerate stored cells', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 0, 1).ok);
   assert.ok(wb.setNumber(0, 0, 1, 2).ok);
   assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok);
@@ -81,13 +80,13 @@ test('default export exposes ErrorCode ordinals and getVersion', async () => {
 
 test('setError() rejects a missing errorCode argument', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.throws(() => wb.setError(0, 0, 0), TypeError);
 });
 
 test('setError() rejects a non-number errorCode before mutating the cell', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 0, 7).ok);
   assert.throws(() => wb.setError(0, 0, 0, 'not a number'), TypeError);
   // The rejected call must not have overwritten the cell.
@@ -99,7 +98,7 @@ test('setError() rejects a non-number errorCode before mutating the cell', async
 test('saveAs() writes xlsx and xlsb bytes; rejects a missing format argument', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.WorkbookFormat, 'object');
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const xlsx = wb.saveAs(mod.WorkbookFormat.Xlsx);
   assert.ok(xlsx.status.ok, JSON.stringify(xlsx.status));
   assert.ok(xlsx.bytes.length > 0);
@@ -111,7 +110,7 @@ test('saveAs() writes xlsx and xlsb bytes; rejects a missing format argument', a
 
 test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable shape', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setFormula(0, 0, 0, '=SUM(T[C])').ok);
   assert.ok(
     wb.addValidation(0, {
@@ -152,7 +151,7 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   // The binary writer never reassigns a part id.
   assert.equal(xlsb.renumberedPartCount, 0);
 
-  const loaded = mod.Workbook.load(xlsb.bytes);
+  const loaded = mod.Workbook.load(xlsb.bytes).value;
   const read = loaded.getDiagnostics();
   assert.ok(read.status.ok, JSON.stringify(read.status));
   assert.equal(read.undecodedFormulaCount, 0);
@@ -160,7 +159,7 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
   assert.equal(read.undecodedPartCount, 0);
   assert.equal(read.skippedFeatureCount, 0);
   assert.equal(read.unknownContentTypeCount, 0);
-  const preservedLoaded = mod.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
+  const preservedLoaded = mod.Workbook.load(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin')).value;
   const preserved = preservedLoaded.getDiagnostics();
   assert.ok(preserved.status.ok, JSON.stringify(preserved.status));
   assert.equal(preserved.undecodedPartCount, 0);
@@ -178,7 +177,8 @@ test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable 
 
 test('invalid workbook read diagnostics return a zeroed failure envelope', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.load(new Uint8Array());
+  const wb = mod.Workbook.createDefault().value;
+  wb.dispose();
   const read = wb.getDiagnostics();
   assert.ok(!read.status.ok, JSON.stringify(read));
   assert.equal(read.undecodedFormulaCount, 0);
@@ -186,12 +186,11 @@ test('invalid workbook read diagnostics return a zeroed failure envelope', async
   assert.equal(read.undecodedPartCount, 0);
   assert.equal(read.skippedFeatureCount, 0);
   assert.equal(read.unknownContentTypeCount, 0);
-  wb.dispose();
 });
 
 test('addValidation / getValidation / removeValidationAt / clearValidations round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Empty by default.
   assert.equal(
     readAll(
@@ -285,7 +284,7 @@ test('addValidation / getValidation / removeValidationAt / clearValidations roun
 
 test('addConditionalFormat + getCfRule + clearConditionalFormats round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(
     readAll(
       () => wb.getCfRuleCount(0),
@@ -338,7 +337,7 @@ test('data bar x14 fields survive save and load', async () => {
   // that never emits the extension -- which is exactly how they used to be
   // lost. Only a save/load cycle pins them.
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const add = wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
@@ -359,7 +358,7 @@ test('data bar x14 fields survive save and load', async () => {
 
   const saved = wb.save();
   assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   const bar = readAll(
     () => loaded.getCfRuleCount(0),
     (i) => loaded.getCfRule(0, i),
@@ -394,7 +393,7 @@ test('data bar x14 fields survive save and load', async () => {
 
 test('icon set floor survives save and load', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const add = wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 9, lastCol: 0 }],
     type: 4,
@@ -410,7 +409,7 @@ test('icon set floor survives save and load', async () => {
   assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
   const saved = wb.save();
   assert.ok(saved.status.ok);
-  const loaded = mod.Workbook.load(saved.bytes);
+  const loaded = mod.Workbook.load(saved.bytes).value;
   const floor = readAll(
     () => loaded.getCfRuleCount(0),
     (i) => loaded.getCfRule(0, i),
@@ -424,7 +423,7 @@ test('icon set floor survives save and load', async () => {
 
 test('omitted data bar x14 fields keep the model defaults', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const add = wb.addCfRule(0, {
     ranges: [{ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 0 }],
     type: 3,
@@ -445,7 +444,7 @@ test('omitted data bar x14 fields keep the model defaults', async () => {
 
 test('named cell styles: listCellStyles / getCellStyle / getCellStyleXfCount', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // A fresh workbook may carry zero named styles; the accessors must
   // still return well-formed values rather than throwing.
   const count = wb.listCellStyles().length;
@@ -466,7 +465,7 @@ test('named cell styles: listCellStyles / getCellStyle / getCellStyleXfCount', a
 
 test('setCalcMode / calcMode round-trip the calc policy', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Default is automatic (0).
   assert.equal(wb.getCalcMode().value, 0);
   assert.ok(wb.setCalcMode(1).ok);
@@ -477,7 +476,7 @@ test('setCalcMode / calcMode round-trip the calc policy', async () => {
 
 test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Unpinned by default: the workbook follows the host clock.
   assert.equal(wb.getPinnedNow().now, null);
 
@@ -506,7 +505,7 @@ test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', async () 
 
 test('excelProfileId / setExcelProfileId round-trip the profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const def = wb.getExcelProfileId().value;
   assert.equal(typeof def, 'string');
   assert.ok(def.length > 0);
@@ -551,7 +550,7 @@ const PROFILE_LOCALES = [
 
 test('setExcelProfileId switches a live workbook through every profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.equal(wb.getExcelProfileId().value, 'win-365-en_US');
   assert.ok(wb.setFormula(0, 0, 0, '=DOLLAR(-1234.567)').ok);
   for (const host of ['mac', 'win']) {
@@ -570,25 +569,26 @@ test('setExcelProfileId switches a live workbook through every profile id', asyn
 
 test('functionNames + getFunctionMetadata expose the catalog', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const names = wb.listFunctionNames();
   assert.ok(Array.isArray(names));
   assert.ok(names.length > 0, 'expected a non-empty function catalog');
   assert.ok(names.includes('SUM'), 'expected SUM in the catalog');
   const md = wb.getFunctionMetadata('SUM');
-  assert.equal(md.ok, true);
-  assert.equal(md.name, 'SUM');
-  assert.equal(typeof md.minArity, 'number');
-  // Unknown function returns { ok: false }.
+  assert.equal(md.status.ok, true);
+  assert.equal(md.value.name, 'SUM');
+  assert.equal(typeof md.value.minArity, 'number');
+  // An unknown function is an ok status with a null value.
   const miss = wb.getFunctionMetadata('NOT_A_REAL_FUNCTION_XYZ');
-  assert.equal(miss.ok, false);
+  assert.equal(miss.status.ok, true);
+  assert.equal(miss.value, null);
 });
 
 test('mergeFunctionMetadata overlays provider metadata; is identity without a provider', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.mergeFunctionMetadata, 'function');
-  const base = mod.Workbook.createDefault().getFunctionMetadata('XLOOKUP');
-  assert.equal(base.ok, true);
+  const base = mod.Workbook.createDefault().value.getFunctionMetadata('XLOOKUP').value;
+  assert.equal(base.name, 'XLOOKUP');
   // The engine leaves display metadata empty.
   assert.equal(base.signatureTemplate, undefined);
   assert.equal(base.description, undefined);
@@ -608,7 +608,7 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
   assert.equal(fr.description, 'Recherche.');
   assert.equal(fr.localizedName, 'RECHERCHEX');
   // Structural fields survive the merge.
-  assert.equal(fr.ok, true);
+  assert.equal(fr.minArity, base.minArity);
   assert.equal(fr.name, 'XLOOKUP');
 
   // A locale with no localized/alias entry falls back to the default
@@ -627,7 +627,7 @@ test('mergeFunctionMetadata overlays provider metadata; is identity without a pr
 
 test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // en-US profile: the localized name is the canonical name itself.
   assert.equal(wb.localizeFunctionName('SUM', 'win-365-en_US').value, 'SUM');
   assert.equal(wb.canonicalizeFunctionName('SUM', 'win-365-en_US').value, 'SUM');
@@ -637,7 +637,7 @@ test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
 
 test('formula and function-name localization is keyed by profile id', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     assert.equal(wb.localizeFormula('=SUM(1.5,2)', 'mac-365-de_DE').value, '=SUMME(1,5;2)');
     assert.equal(wb.canonicalizeFormula('=SUMME(1,5;2)', 'mac-365-de_DE').value, '=SUM(1.5,2)');
@@ -657,7 +657,7 @@ test('formula and function-name localization is keyed by profile id', async () =
 
 test('getLocaleFacts reports separators, names, error spellings and measurement', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const mac = wb.getLocaleFacts('mac-365-de_DE');
     assert.ok(mac.status.ok);
@@ -685,22 +685,22 @@ test('getLocaleFacts reports separators, names, error spellings and measurement'
 
 test('compareText folds by strength and rejects bad arguments', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const profile = 'mac-365-zh_CN';
     const strict = wb.compareText('A', '\uFF21', 0, profile);
     assert.ok(strict.status.ok);
-    assert.notEqual(strict.order, 0);
+    assert.notEqual(strict.value, 0);
     const dynamic = wb.compareText('A', '\uFF21', 1, profile);
     assert.ok(dynamic.status.ok);
-    assert.equal(dynamic.order, 0);
+    assert.equal(dynamic.value, 0);
     const ab = wb.compareText('a', 'b', 0, 'mac-365-en_US');
     const ba = wb.compareText('b', 'a', 0, 'mac-365-en_US');
-    assert.equal(ab.order, -1);
-    assert.equal(ba.order, 1);
+    assert.equal(ab.value, -1);
+    assert.equal(ba.value, 1);
     const bad = wb.compareText('a', 'b', 0, 'nope');
     assert.equal(bad.status.ok, false);
-    assert.equal(bad.order, 0);
+    assert.equal(bad.value, 0);
     assert.throws(() => wb.compareText('a', 'b', -1, profile), RangeError);
   } finally {
     wb.dispose();
@@ -709,7 +709,7 @@ test('compareText folds by strength and rejects bad arguments', async () => {
 
 test('getCollationClasses orders by kind, folds text by strength, and copies its output', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const values = [
       { kind: 1, number: 1 },
@@ -775,7 +775,7 @@ test('getCollationClasses orders by kind, folds text by strength, and copies its
 
 test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   try {
     const cjk = [
       '\u6771\u4EAC',
@@ -803,7 +803,7 @@ test('getCollationClasses timing on 100k mixed CJK/ASCII texts', async () => {
 
 test('precedents / dependents return arrays for a small formula graph', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setNumber(0, 0, 0, 1).ok); // A1
   assert.ok(wb.setNumber(0, 0, 1, 2).ok); // B1
   assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok); // A2 = A1 + B1
@@ -827,7 +827,7 @@ test('precedents / dependents return arrays for a small formula graph', async ()
 
 test('spillInfo reports a dynamic-array region', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Non-spill cell: engaged is false, fields zeroed.
   const none = wb.getSpillInfo(0, 0, 0);
   assert.equal(typeof none.engaged, 'boolean');
@@ -842,7 +842,7 @@ test('spillInfo reports a dynamic-array region', async () => {
 
 test('array formulas can be authored, read from every cell and cleared', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   for (let r = 0; r < 3; r += 1) assert.ok(wb.setNumber(0, r, 0, r + 1).ok);
   const none = wb.getArrayFormula(0, 0, 2);
   assert.ok(none.status.ok);
@@ -867,34 +867,34 @@ test('array formulas can be authored, read from every cell and cleared', async (
 
 test('getLambdaText is wired and reports the documented contract', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // A bare top-level LAMBDA renders as #CALC! in Excel 365 and does not
-  // retain a renderable closure; the engine mirrors that, so the lambda
-  // text surface returns an error status (not a throw). A plain number
-  // cell is likewise not a lambda. Both prove the method marshals
-  // arguments and propagates the Expected failure as a JS error status.
+  // retain a renderable closure; the engine mirrors that, so no lambda is
+  // present. A plain number cell is likewise not a lambda, and a bad sheet
+  // is a failed status.
   assert.ok(wb.setFormula(0, 0, 0, '=LAMBDA(x,x+1)').ok);
   assert.ok(wb.recalc().ok);
   const bare = wb.getLambdaText(0, 0, 0);
-  assert.equal(bare.status.ok, false);
-  assert.equal(typeof bare.text, 'string');
-  assert.equal(bare.text, '');
+  assert.equal(bare.status.ok, true);
+  assert.equal(bare.value, null);
 
   assert.ok(wb.setNumber(0, 1, 0, 5).ok);
   const num = wb.getLambdaText(0, 1, 0);
-  assert.equal(num.status.ok, false);
+  assert.equal(num.status.ok, true);
+  assert.equal(num.value, null);
+  assert.equal(wb.getLambdaText(99, 0, 0).status.code, mod.StatusCode.SheetIndexOutOfRange);
 });
 
 test('a fresh workbook has no external links', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.deepEqual([wb.getExternalLinkCount().status.ok, wb.getExternalLinkCount().value], [true, 0]);
   assert.equal(wb.getExternalLink(0).status.ok, false);
 });
 
 test('getSheetProtection / setSheetProtection round-trip the protection flags', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const before = wb.getSheetProtection(0);
   assert.ok(before.status.ok, `getSheetProtection: ${JSON.stringify(before.status)}`);
   assert.equal(before.protection.enabled, 0);

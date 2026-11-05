@@ -2,7 +2,7 @@ import test from 'node:test';
 import { assert, getModule, readAll } from './smoke_support.mjs';
 
 function withWorkbook(Workbook, fn) {
-  const wb = Workbook.createDefault();
+  const wb = Workbook.createDefault().value;
   try {
     return fn(wb);
   } finally {

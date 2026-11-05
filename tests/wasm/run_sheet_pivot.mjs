@@ -3,7 +3,7 @@ import { buildPivotWorkbookBytes, findPivotCell, PIVOT, VAL } from './smoke_supp
 
 export function registerSheetPivot(Module, test) {
   test('setIterative accepts knobs without crashing', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setIterative(true, 50, 0.001).ok);
       // Set a fixed-point formula (sqrt(2) iteration). The engine may
@@ -23,7 +23,7 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('renameSheet updates the sheet name', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.equal(wb.getSheetCount().value, 1);
       assert.ok(wb.renameSheet(0, 'Renamed').ok);
@@ -36,18 +36,18 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('renameSheet rejects forbidden characters', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       const r = wb.renameSheet(0, 'Bad/Name');
       assert.equal(r.ok, false);
-      assert.notEqual(r.status, 0);
+      assert.notEqual(r.code, 0);
     } finally {
       wb.delete();
     }
   });
 
   test('removeSheet drops a sheet but rejects the last one', () => {
-    const wb = Module.Workbook.createEmpty();
+    const wb = Module.Workbook.createEmpty().value;
     try {
       assert.ok(wb.addSheet('A').status.ok);
       assert.ok(wb.addSheet('B').status.ok);
@@ -62,7 +62,7 @@ export function registerSheetPivot(Module, test) {
     }
 
     // Workbook with a single sheet rejects removeSheet(0).
-    const lone = Module.Workbook.createDefault();
+    const lone = Module.Workbook.createDefault().value;
     try {
       const r = lone.removeSheet(0);
       assert.equal(r.ok, false);
@@ -72,7 +72,7 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('moveSheet rearranges sheets (Excel UI semantics)', () => {
-    const wb = Module.Workbook.createEmpty();
+    const wb = Module.Workbook.createEmpty().value;
     try {
       assert.ok(wb.addSheet('Alpha').status.ok);
       assert.ok(wb.addSheet('Beta').status.ok);
@@ -88,7 +88,7 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('setDefinedName adds, updates, and removes', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.equal(wb.listDefinedNames().length, 0);
       assert.ok(wb.setDefinedName('Pi', '=3.14').ok);
@@ -114,7 +114,7 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('cellCount + cellAt iterate populated cells in order', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 1).ok);
       assert.ok(wb.setNumber(0, 0, 1, 2).ok);
@@ -138,7 +138,7 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('failed entry lookups omit optional payload fields', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       for (const entry of [wb.getCellAt(99, 0), wb.getTable(0)]) {
         assert.equal(entry.status.ok, false);
@@ -151,13 +151,13 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('pivotCount + pivotLayout expose PivotTable projection status', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.equal(wb.getPivotCount(0).value, 0);
 
       const missing = wb.getPivotLayout(0, 0);
       assert.equal(missing.status.ok, false);
-      assert.notEqual(missing.status.status, 0);
+      assert.notEqual(missing.status.code, 0);
       assert.equal(missing.rect, null);
       assert.deepEqual(missing.cells, []);
     } finally {
@@ -166,7 +166,7 @@ export function registerSheetPivot(Module, test) {
   });
 
   test('pivotLayout projects loaded PivotTable cells for grid rendering', () => {
-    const wb = Module.Workbook.load(buildPivotWorkbookBytes());
+    const wb = Module.Workbook.load(buildPivotWorkbookBytes()).value;
     try {
       assert.ok(wb.isValid(), Module.getLastErrorMessage());
       assert.equal(wb.getPivotCount(0).value, 0);

@@ -13,6 +13,7 @@ from formulon import (
     FormulonError,
     ImageFormat,
     ImageInfo,
+    NotFoundError,
     Workbook,
 )
 
@@ -107,8 +108,9 @@ class DrawingImageTests(unittest.TestCase):
         try:
             with self.assertRaises(FormulonError):
                 wb.add_image(0, b"junk")
-            with self.assertRaises(FormulonError):
-                wb.get_image(0, 12345)
+            self.assertIsNone(wb.get_image(0, 12345))
+            with self.assertRaises(NotFoundError):
+                wb.get_image(9, 1)
         finally:
             wb.close()
 

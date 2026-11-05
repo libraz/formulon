@@ -42,7 +42,7 @@
 //
 //   * Every fallible binding entry returns the same JS shape as the
 //     embind binding:
-//        Status = { ok: boolean, status: number,
+//        Status = { ok: boolean, code: number,
 //                   message: string, context: string }
 //        Value  = { kind: number, number: number, boolean: number,
 //                   text: string, errorCode: number }

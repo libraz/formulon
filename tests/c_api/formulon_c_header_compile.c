@@ -128,8 +128,8 @@ int main(void) {
   fm_status_t (*person_at)(const fm_workbook_t*, size_t, fm_person_t*) = fm_workbook_get_person_at;
   fm_status_t (*insert_image)(fm_workbook_t*, size_t, const uint8_t*, size_t, const fm_image_insert_t*, uint32_t*) =
       fm_sheet_add_image;
-  fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, const uint8_t**, size_t*, fm_image_info_t*) =
-      fm_sheet_get_image;
+  fm_status_t (*get_image)(const fm_workbook_t*, size_t, uint32_t, int32_t*, const uint8_t**, size_t*,
+                           fm_image_info_t*) = fm_sheet_get_image;
   fm_status_t (*set_drawing_anchor)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_anchor_t*) =
       fm_sheet_set_drawing_anchor;
   fm_status_t (*set_drawing_z_order)(fm_workbook_t*, size_t, uint32_t, size_t) = fm_sheet_set_drawing_z_order;

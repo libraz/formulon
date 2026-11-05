@@ -23,7 +23,7 @@ import {
 // indices; Amount and Date are plain numbers. Only Region is laid out, so
 // the baseline grid is two regions, their sums and the grand total.
 function buildPivot(mod) {
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   const must = (r, what) => {
     const status = typeof r.ok === 'boolean' ? r : r.status;
     assert.ok(status.ok, `${what}: ${JSON.stringify(status)}`);
@@ -782,8 +782,8 @@ const PIVOT_MUTATORS = [
       act: (b) => b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '4'),
       // A field's numFmtId is only observable in the part the writer emits.
       expect: (b) => {
-        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, 99, '4').status, 2);
-        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '0.00').status, 2);
+        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, 99, '4').code, 2);
+        assert.equal(b.wb.setPivotFieldNumberFormat(0, b.pivot, b.amount, '0.00').code, 2);
         const saved = b.wb.save();
         assert.ok(saved.status.ok, JSON.stringify(saved.status));
         assert.match(packagePart(saved.bytes, 'xl/pivotTables/pivotTable1.xml'), /<pivotField [^>]*numFmtId="4"/);
@@ -968,7 +968,7 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
       packagePart(saved.bytes, 'xl/pivotTables/pivotTable1.xml'),
       /<filters count="1"><filter fld="0" type="valueGreaterThan" evalOrder="-1" id="1" iMeasureFld="0">/,
     );
-    const back = mod.Workbook.load(saved.bytes);
+    const back = mod.Workbook.load(saved.bytes).value;
     try {
       assert.ok(back.setExcelProfileId('win-365-ja_JP').ok);
       assert.equal(back.getPivotFilterCount(0, 0).value, 1);
@@ -1002,6 +1002,13 @@ test('pivot filters and subtotal functions survive save and reload', async () =>
 const STATUS_ACCESSORS = [
   ['getSheetCount', [], null],
   ['getCellCount', [0], [99]],
+  ['getCellXfIndex', [0, 0, 0], [99, 0, 0]],
+  [
+    'recalcViewport',
+    [0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }],
+    [99, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 }],
+  ],
+  ['compareText', ['a', 'b', 0, 'win-365-en_US'], ['a', 'b', 0, 'nope']],
   ['getCfRuleCount', [0], [99]],
   ['getValidationCount', [0], [99]],
   ['getProtectedRangeCount', [0], [99]],
@@ -1075,7 +1082,7 @@ test('every NumberResult accessor is covered by the status table', async () => {
 
 test('fallible accessors report their status on success, rejection and a released handle', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   for (const [name, okArgs, badArgs] of STATUS_ACCESSORS) {
     if (okArgs !== null) {
       const r = wb[name](...okArgs);
@@ -1084,7 +1091,7 @@ test('fallible accessors report their status on success, rejection and a release
     if (badArgs !== null) {
       const r = wb[name](...badArgs);
       assert.equal(r.status.ok, false, `${name} must report the rejected arguments`);
-      assert.notEqual(r.status.status, 0, name);
+      assert.notEqual(r.status.code, 0, name);
       assertFailurePayload(name, r);
     }
   }
@@ -1093,18 +1100,25 @@ test('fallible accessors report their status on success, rejection and a release
   assert.equal(wb.localizeFunctionName('SUM', 'win-365-ja_JP').value, 'SUM');
   assert.equal(wb.localizeFunctionName('SUM', 'nope').status.ok, false);
 
-  wb.delete();
-  // `delete()` detaches the embind wrapper outright; a failed load is the
-  // wrapper that outlives its handle on this surface.
-  const dead = mod.Workbook.load(new Uint8Array([0]));
+  // `dispose()` releases the handle and keeps the wrapper callable.
+  wb.dispose();
+  wb.dispose();
+  const dead = wb;
   assert.equal(dead.isValid(), false);
   // Every accessor, including the ones no argument can fail, reports the
   // released handle instead of a default reading.
   for (const [name, okArgs, badArgs] of STATUS_ACCESSORS) {
-    if (name.endsWith('FunctionName') || name === 'listFunctionNames' || name === 'listLocaleErrorNames') continue;
+    if (
+      name.endsWith('FunctionName') ||
+      name === 'listFunctionNames' ||
+      name === 'listLocaleErrorNames' ||
+      name === 'compareText'
+    ) {
+      continue;
+    }
     const r = dead[name](...(okArgs ?? badArgs));
     assert.equal(r.status.ok, false, `${name} after release`);
-    assert.equal(r.status.status, 7000, name);
+    assert.equal(r.status.code, 7000, name);
     assertFailurePayload(name, r);
   }
   dead.delete();
@@ -1342,7 +1356,7 @@ test('pivotCacheSetOptions merges, bounds the missing-items limit and survives s
     );
     const saved = wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const back = mod.Workbook.load(saved.bytes);
+    const back = mod.Workbook.load(saved.bytes).value;
     try {
       const o = back.getPivotCacheOptions(back.listPivotCaches()[0]);
       assert.ok(o.status.ok, JSON.stringify(o.status));
@@ -1373,7 +1387,7 @@ test('pivot options survive save and reload', async () => {
     assert.ok(b.wb.setPivotFieldCustomName(0, b.pivot, b.product, 'Item').ok);
     const saved = b.wb.save();
     assert.ok(saved.status.ok, JSON.stringify(saved.status));
-    const back = mod.Workbook.load(saved.bytes);
+    const back = mod.Workbook.load(saved.bytes).value;
     try {
       const o = back.getPivotOptions(0, 0);
       assert.ok(o.status.ok, JSON.stringify(o.status));

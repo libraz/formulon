@@ -45,6 +45,7 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
 }
 
 TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveLoad) {
+  int32_t present = 0;
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
@@ -102,7 +103,7 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   EXPECT_EQ(reloaded_fill.fg_argb, 0xFFFF0000U);
 
   const char* reloaded_fmt = nullptr;
-  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb2.handle, reloaded.num_fmt_id, &reloaded_fmt), 0);
+  ASSERT_EQ(fm_workbook_get_num_fmt_string(wb2.handle, reloaded.num_fmt_id, &present, &reloaded_fmt), 0);
   ASSERT_NE(reloaded_fmt, nullptr);
   EXPECT_STREQ(reloaded_fmt, "0.00%");
 }

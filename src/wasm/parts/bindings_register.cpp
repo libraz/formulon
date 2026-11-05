@@ -23,7 +23,6 @@ namespace wasm {
 namespace parts {
 
 EMSCRIPTEN_BINDINGS(formulon) {
-  using emscripten::allow_raw_pointers;
   using emscripten::class_;
   using emscripten::function;
   using emscripten::value_object;
@@ -31,7 +30,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
   // ---- Value-object surface ------------------------------------------------
   value_object<JsStatus>("Status")
       .field("ok", &JsStatus::ok)
-      .field("status", &JsStatus::status)
+      .field("code", &JsStatus::code)
       .field("message", &JsStatus::message)
       .field("context", &JsStatus::context);
 
@@ -177,10 +176,10 @@ EMSCRIPTEN_BINDINGS(formulon) {
 
   // ---- Workbook class ------------------------------------------------------
   class_<JsWorkbook>("Workbook")
-      .class_function("createDefault", &JsWorkbook::createDefault, allow_raw_pointers())
-      .class_function("createEmpty", &JsWorkbook::createEmpty, allow_raw_pointers())
-      .class_function("createForProfile", &JsWorkbook::createForProfile, allow_raw_pointers())
-      .class_function("load", &JsWorkbook::loadBytes, allow_raw_pointers())
+      .class_function("createDefault", &JsWorkbook::createDefault)
+      .class_function("createEmpty", &JsWorkbook::createEmpty)
+      .class_function("createForProfile", &JsWorkbook::createForProfile)
+      .class_function("load", &JsWorkbook::loadBytes)
       .function("addBorder", &JsWorkbook::addBorder)
       .function("addCellStyleXf", &JsWorkbook::addCellStyleXf)
       .function("addCfRule", &JsWorkbook::addConditionalFormat)
@@ -222,6 +221,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("deleteCols", &JsWorkbook::deleteCols)
       .function("deleteRows", &JsWorkbook::deleteRows)
       .function("getDependents", &JsWorkbook::dependents)
+      .function("dispose", &JsWorkbook::dispose)
       .function("getDxfCount", &JsWorkbook::dxfCount)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
       .function("evaluateCfFormula", &JsWorkbook::evaluateConditionalFormula)
@@ -373,7 +373,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getCellPhoneticProperties", &JsWorkbook::getCellPhoneticProperties)
       .function("getCellShowPhonetic", &JsWorkbook::getCellShowPhonetic)
       .function("getComment", &JsWorkbook::getComment)
-      .function("getCommentResult", &JsWorkbook::getCommentResult)
       .function("listComments", &JsWorkbook::getComments)
       .function("getCommentVisible", &JsWorkbook::getCommentVisible)
       .function("getWorkbookProtection", &JsWorkbook::getWorkbookProtection)

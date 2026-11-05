@@ -1115,13 +1115,15 @@ def _top_union(text: str) -> List[str]:
 
 
 def _optional_lookups(ctx: Context) -> Set[str]:
-    """Ledger keys of the unsuffixed getters of natural-key collections."""
+    """Ledger keys of the unsuffixed getters of natural-key collections; a `total:` getter answers every key."""
     by_key = _functions_by_key(ctx)
     out = set()
     for _, key_kind, ops in _collections(ctx):
         if key_kind != "natural":
             continue
         for op in ops:
+            if ctx.ledger.entry(op).get("total"):
+                continue
             target = ctx.ledger.entry(op).get("c")
             if not isinstance(target, str) and op in by_key:
                 target = by_key[op].name

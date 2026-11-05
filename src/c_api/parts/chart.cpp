@@ -434,17 +434,22 @@ fm_status_t edit_entry(const fm_workbook_t* wb, std::size_t sheet_index, const v
 // ---------------------------------------------------------------------------
 
 extern "C" fm_status_t fm_sheet_get_chart(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
-                                          fm_chart_t** out) {
+                                          int32_t* out_present, fm_chart_t** out) {
   clear_last_error();
   constexpr const char* kApi = "fm_sheet_get_chart";
-  if (out == nullptr) {
+  if (out_present == nullptr || out == nullptr) {
     return null_argument(kApi);
   }
+  *out_present = 0;
   *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, kApi); rc != 0) {
     return rc;
   }
   auto model = formulon::get_chart(wb->workbook(), sheet_index, object_id);
+  // An unknown id is the only invalid-argument outcome of a chart read.
+  if (!model && model.error().code == formulon::FormulonErrorCode::kInvalidArgument) {
+    return 0;
+  }
   if (!model) {
     return set_last_error(model.error());
   }
@@ -452,6 +457,7 @@ extern "C" fm_status_t fm_sheet_get_chart(const fm_workbook_t* wb, size_t sheet_
   handle->model = std::move(model.value());
   spell_formulas(wb->workbook(), handle->model);
   *out = handle.release();
+  *out_present = 1;
   return 0;
 }
 

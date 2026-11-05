@@ -8,8 +8,8 @@
 // All entry points reuse the same translation contract: every fallible
 // call returns a `JsStatus` (or a result envelope wrapping it) instead
 // of throwing across the JS boundary. Static factories (`createDefault`,
-// `createEmpty`, `loadBytes`) return `JsWorkbook*` allocated on the
-// heap; JS callers manage lifetime via embind's `.delete()`.
+// `createEmpty`, `createForProfile`, `load`) return `{ status, value }`
+// whose `value` is a heap `JsWorkbook` the JS caller owns, or `null`.
 //
 // The contract holds in the callback direction too: the JS the binding
 // calls back into runs behind `call_js_callback`, so a callback that
@@ -45,12 +45,15 @@ class JsWorkbook {
 
   // ---- Lifecycle / static factories ---------------------------------------
 
-  static JsWorkbook* createDefault();
-  static JsWorkbook* createEmpty();
-  static JsWorkbook* createForProfile(const std::string& profileId);
-  static JsWorkbook* loadBytes(emscripten::val bytes);
+  static emscripten::val createDefault();
+  static emscripten::val createEmpty();
+  static emscripten::val createForProfile(const std::string& profileId);
+  static emscripten::val loadBytes(emscripten::val bytes);
 
   bool isValid() const { return handle_ != nullptr; }
+  /// Releases the native handle and keeps the wrapper; idempotent. Every later
+  /// call reports `kBindingInvalidHandle`.
+  void dispose();
   JsSaveResult save() const;
 
   /// Serialises the workbook using an explicit container `format`
@@ -196,7 +199,7 @@ class JsWorkbook {
   JsStatus setExcelProfileId(const std::string& profile_id);
   JsStringResult fileName() const;
   JsStatus setFileName(const std::string& name);
-  emscripten::val partialRecalc(uint32_t sheet, emscripten::val viewport);
+  JsNumberResult partialRecalc(uint32_t sheet, emscripten::val viewport);
   /// Installs the JS callback the iterative solver invokes after each
   /// sweep, or clears it when `cb` is null / undefined. A callback that
   /// throws aborts the solve, and the recalc that ran it reports
@@ -365,7 +368,7 @@ class JsWorkbook {
 
   // ---- Styles -------------------------------------------------------------
 
-  emscripten::val getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const;
+  JsNumberResult getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const;
   JsStatus setCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col, uint32_t xf_index);
   JsStatus clearCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col);
   /// Applies one xf across an inclusive rectangle, materialising blank
@@ -439,7 +442,6 @@ class JsWorkbook {
   JsStatus clearMerges(uint32_t sheet);
 
   emscripten::val getComment(uint32_t sheet, uint32_t row, uint32_t col) const;
-  emscripten::val getCommentResult(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getComments(uint32_t sheet) const;
   JsStatus setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
   /// `{ status, value }`: whether the note at the cell is shown without hovering (0 or 1).
@@ -580,8 +582,8 @@ class JsWorkbook {
   JsStringResult canonicalizeFormula(const std::string& formula, const std::string& profile_id) const;
   emscripten::val localeFacts(const std::string& profile_id) const;
   emscripten::val listLocaleErrorNames(const std::string& profile_id) const;
-  emscripten::val compareText(const std::string& a, const std::string& b, int32_t strength,
-                              const std::string& profile_id) const;
+  JsNumberResult compareText(const std::string& a, const std::string& b, int32_t strength,
+                             const std::string& profile_id) const;
   emscripten::val collationClasses(emscripten::val values, int32_t strength, const std::string& profile_id) const;
   emscripten::val spillInfo(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val parseReference(const std::string& text, emscripten::val options) const;

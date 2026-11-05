@@ -69,7 +69,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
     // the formula comparison bucket must not make their exact guards fuzzy.
     // Populate the two worksheet values through setNumber so the parser's
     // decimal-literal canonicalisation cannot collapse the adjacent doubles.
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 7.1).ok);
       assert.ok(wb.setNumber(0, 1, 0, 7.1000000000000005).ok);
@@ -92,7 +92,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
   });
 
   test('Workbook construction + setNumber + recalc + getValue', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       assert.ok(wb.isValid());
       assert.equal(wb.getSheetCount().value, 1);
@@ -123,7 +123,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
   });
 
   test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     const branchCount = 32;
     try {
       assert.ok(wb.setNumber(0, 0, 0, 1).ok);
@@ -178,7 +178,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
 
       const invalid = wb.recalcParallel(9);
       assert.equal(invalid.status.ok, false);
-      assert.notEqual(invalid.status.status, 0);
+      assert.notEqual(invalid.status.code, 0);
       assert.equal(invalid.stats.cellsEvaluated, 0);
       assert.equal(invalid.stats.sccsProcessed, 0);
       assert.equal(invalid.stats.parallelSteps, 0);
@@ -199,7 +199,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       ]) {
         const invalidShape = wb.recalcParallel(invalidThreadCount);
         assert.equal(invalidShape.status.ok, false, `threadCount=${String(invalidThreadCount)}`);
-        assert.notEqual(invalidShape.status.status, 0);
+        assert.notEqual(invalidShape.status.code, 0);
         assert.equal(invalidShape.stats.cellsEvaluated, 0);
         assert.equal(invalidShape.stats.sccsProcessed, 0);
         assert.equal(invalidShape.stats.parallelSteps, 0);
@@ -214,7 +214,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
   });
 
   test('paginate exposes a status envelope and page geometry', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       // Asserts the envelope's shape, not the page geometry: how many rows
       // fit a page is the print engine's business and is pinned by the
@@ -238,7 +238,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
   });
 
   test('setPinnedNow / pinnedNow / clearPinnedNow drive the clock seam', () => {
-    const wb = Module.Workbook.createDefault();
+    const wb = Module.Workbook.createDefault().value;
     try {
       // Unpinned by default: the workbook follows the host clock.
       assert.equal(wb.getPinnedNow().now, null);

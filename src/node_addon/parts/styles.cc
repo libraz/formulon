@@ -411,14 +411,14 @@ void PullCellXf(CheckedSpecReader& reader, const Napi::Object& record, fm_cell_x
 Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return MakeNumberFieldResult(env, NullHandleError(env), "xfIndex", 0);
+    return MakeNumberFieldResult(env, NullHandleError(env), "value", 0);
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   std::size_t xf = 0;
   fm_status_t rc = fm_sheet_get_cell_xf_index(handle_, sheet, row, col, &xf);
-  return MakeNumberFieldResult(env, rc, "xfIndex", static_cast<double>(xf));
+  return MakeNumberResult(env, rc, static_cast<double>(xf));
 }
 
 Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
@@ -498,16 +498,13 @@ Napi::Value Workbook::GetBorder(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
-  const uint32_t num_fmt_id = ArgU32(info, 0);
+  if (handle_ == nullptr) {
+    return MakeOptionalResult(env, NullHandleError(env), env.Null());
+  }
+  int32_t present = 0;
   const char* s = nullptr;
-  const fm_status_t rc = handle_ != nullptr
-                             ? fm_workbook_get_num_fmt_string(handle_, static_cast<uint16_t>(num_fmt_id), &s)
-                             : kBindingInvalidHandle;
-  out.Set("status", MakeStatus(env, rc));
-  out.Set("numFmtId", Napi::Number::New(env, rc == 0 ? num_fmt_id : 0U));
-  out.Set("formatCode", JsString(env, rc == 0 ? s : nullptr));
-  return out;
+  const fm_status_t rc = fm_workbook_get_num_fmt_string(handle_, ArgU32(info, 0), &present, &s);
+  return MakeOptionalResult(env, rc, present, rc == 0 && present != 0 ? Napi::Value(JsString(env, s)) : env.Null());
 }
 
 Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {

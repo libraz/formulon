@@ -3,7 +3,7 @@ import { assert, getModule } from './smoke_support.mjs';
 
 test('setIterativeProgress accepts a function and accepts null to clear', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // Registration roundtrip; we don't assert the callback fires because
   // a non-iterative recalc never invokes the trampoline. The smoke
   // signal we want is "the addon does not crash on register / clear".
@@ -16,8 +16,8 @@ test('setIterativeProgress accepts a function and accepts null to clear', async 
 
 test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
   const mod = await getModule();
-  const first = mod.Workbook.createDefault();
-  const second = mod.Workbook.createDefault();
+  const first = mod.Workbook.createDefault().value;
+  const second = mod.Workbook.createDefault().value;
   let firstCalls = 0;
   let secondCalls = 0;
 
@@ -45,7 +45,7 @@ test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
 
 test('dispose is rejected while this workbook is executing its progress callback', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   assert.ok(wb.setIterative(true, 10, 0.001).ok);
   assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
   let calls = 0;
@@ -64,7 +64,7 @@ test('dispose is rejected while this workbook is executing its progress callback
 
 test('evaluateCfRange returns ok envelope with empty cells for a CF-less workbook', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // The default workbook has no CF rules, so the call should succeed
   // and return an empty cell list. NaN disables `TimePeriod` rules.
   const r = wb.evaluateCfRange(0, { firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 4 }, Number.NaN);
@@ -75,7 +75,7 @@ test('evaluateCfRange returns ok envelope with empty cells for a CF-less workboo
 
 test('evaluateCfRange requires todaySerial; NaN disables timePeriod rules', async () => {
   const mod = await getModule();
-  const wb = mod.Workbook.createDefault();
+  const wb = mod.Workbook.createDefault().value;
   // timePeriod rule (type 15) for "today" (period 0) over A1. The cell
   // holds the serial for 1899-12-30, which a 0.0 basis would match.
   assert.ok(wb.setNumber(0, 0, 0, 0).ok);
