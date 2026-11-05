@@ -422,7 +422,7 @@ MissingStats missing_custom_subtotal_stats(const PivotTable& table, std::size_t 
       continue;
     }
     for (const SubtotalFn fn : table.fields()[field_index].subtotal_fns) {
-      const Aggregation above = static_cast<Aggregation>(static_cast<std::uint8_t>(fn));
+      const Aggregation above = aggregation_from_subtotal_fn(fn);
       count = count || keeps_count(above);
       squares = squares || keeps_sum_of_squares(above);
     }

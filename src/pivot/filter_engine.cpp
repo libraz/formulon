@@ -181,15 +181,9 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
     hidden.field_index = fi;
     // A page field with a single selected item hides every other item. With
     // subtotalHiddenItems its hidden items are not a filter at all.
-    bool is_page = false;
-    std::optional<std::uint32_t> selected;
-    for (const PivotPageField& page : table.page_fields()) {
-      if (page.field_index == fi) {
-        is_page = true;
-        selected = page.item_index;
-        break;
-      }
-    }
+    const PivotPageField* page = table.find_page_field(static_cast<std::uint32_t>(fi));
+    const bool is_page = page != nullptr;
+    const std::optional<std::uint32_t> selected = is_page ? page->item_index : std::nullopt;
     if (is_page && table.subtotal_hidden_items()) {
       continue;
     }

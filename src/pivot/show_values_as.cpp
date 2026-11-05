@@ -260,12 +260,11 @@ struct BaseRef {
 };
 
 std::optional<std::size_t> find_in(const std::vector<std::uint32_t>& order, std::uint32_t fi) {
-  for (std::size_t i = 0; i < order.size(); ++i) {
-    if (order[i] == fi) {
-      return i;
-    }
+  const auto it = std::find(order.begin(), order.end(), fi);
+  if (it == order.end()) {
+    return std::nullopt;
   }
-  return std::nullopt;
+  return static_cast<std::size_t>(it - order.begin());
 }
 
 // Axis and depth of the data field's base field. Without a base field a running total follows

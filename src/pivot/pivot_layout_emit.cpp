@@ -126,8 +126,8 @@ std::string entry_subtotal_label(const LayoutPlan& plan, const AxisEntry& entry,
     return entry.subtotal_label;
   }
   if (entry.custom_fn.has_value()) {
-    const std::string word(subtotal_function_label(
-        static_cast<Aggregation>(static_cast<std::uint8_t>(*entry.custom_fn)), plan.options.profile));
+    const std::string word(
+        subtotal_function_label(aggregation_from_subtotal_fn(*entry.custom_fn), plan.options.profile));
     return plan.options.subtotal_prefix.empty() ? group + " " + word : word + " " + group;
   }
   return plan_subtotal_label(plan, group);
@@ -136,6 +136,37 @@ std::string entry_subtotal_label(const LayoutPlan& plan, const AxisEntry& entry,
 std::string data_total_label(const LayoutPlan& plan, std::size_t df) {
   return plan.options.data_total_prefix + data_field_name(plan.table, df) + plan.options.data_total_suffix;
 }
+
+// Total of a strip of cells: the first source error wins, an all-numeric strip sums, and anything
+// else (or no number at all) is blank.
+struct StripTotal {
+  double sum = 0.0;
+  bool summable = true;
+  bool any_number = false;
+  const Value* source_error = nullptr;
+
+  // Returns false once an error cell ends the strip.
+  bool add(const Value& v) {
+    if (v.is_error()) {
+      source_error = &v;
+      return false;
+    }
+    if (v.is_number()) {
+      sum += v.as_number();
+      any_number = true;
+    } else if (!v.is_blank()) {
+      summable = false;
+    }
+    return true;
+  }
+
+  Value value() const {
+    if (source_error != nullptr) {
+      return *source_error;
+    }
+    return summable && any_number ? Value::number(sum) : Value::blank();
+  }
+};
 
 // A field caption, or nothing while `showHeaders` hides them.
 std::string field_caption(const LayoutPlan& plan, std::string text) {
@@ -147,19 +178,30 @@ void set_compact_indent(const LayoutPlan& plan, PivotCells& cells, std::size_t l
   cells.cells.back().label_indent = static_cast<std::uint32_t>(level) * (plan.table.indent() + 1U);
 }
 
-// Display name of the row / column level at `level`: a field's display
-// name, or the stored Values caption for the Values level.
-std::string level_name(const LayoutPlan& plan, const std::vector<std::uint32_t>& order,
-                       const std::optional<std::size_t>& values_at, std::size_t level) {
-  const PivotTable& table = plan.table;
+// The field-order index of axis level `level` once the Values level at `values_at` is skipped;
+// nullopt at the Values level itself.
+std::optional<std::size_t> field_level(const std::optional<std::size_t>& values_at, std::size_t level) {
   if (values_at.has_value()) {
     if (level == *values_at) {
-      return table.data_caption();
+      return std::nullopt;
     }
     if (level > *values_at) {
       --level;
     }
   }
+  return level;
+}
+
+// Display name of the row / column level at `level`: a field's display
+// name, or the stored Values caption for the Values level.
+std::string level_name(const LayoutPlan& plan, const std::vector<std::uint32_t>& order,
+                       const std::optional<std::size_t>& values_at, std::size_t level) {
+  const PivotTable& table = plan.table;
+  const std::optional<std::size_t> real = field_level(values_at, level);
+  if (!real.has_value()) {
+    return table.data_caption();
+  }
+  level = *real;
   if (level < order.size() && order[level] < table.fields().size()) {
     return pivot_field_display_name(table.fields()[order[level]]);
   }
@@ -178,15 +220,11 @@ std::string col_level_name(const LayoutPlan& plan, std::size_t level) {
 
 // The field at `shape`'s level `level`, or null at the Values level.
 const PivotField* axis_level_field(const AxisShape& shape, std::size_t level) {
-  if (shape.values_at.has_value()) {
-    if (level == *shape.values_at) {
-      return nullptr;
-    }
-    if (level > *shape.values_at) {
-      --level;
-    }
+  const std::optional<std::size_t> real = field_level(shape.values_at, level);
+  if (!real.has_value()) {
+    return nullptr;
   }
-  return level < shape.fields.size() ? shape.fields[level] : nullptr;
+  return *real < shape.fields.size() ? shape.fields[*real] : nullptr;
 }
 
 // Number format of the item at `entry.labels[level]`, for a cell drawing that label bare.
@@ -744,30 +782,13 @@ void emit_row_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
       // Every row of this strip states a total: a source error wins, an
       // all-numeric row sums, and an aggregate that cannot be summed
       // reports blank rather than leaving a hole in the total column.
-      double sum = 0.0;
-      bool summable = true;
-      bool any_number = false;
-      const Value* source_error = nullptr;
+      StripTotal strip;
       for (std::size_t c_leaf = 0; c_leaf < col_leaves.size(); ++c_leaf) {
-        const Value& v = result.values[leaf][c_leaf][df];
-        if (v.is_error()) {
-          source_error = &v;
+        if (!strip.add(result.values[leaf][c_leaf][df])) {
           break;
         }
-        if (v.is_number()) {
-          sum += v.as_number();
-          any_number = true;
-        } else if (!v.is_blank()) {
-          summable = false;
-        }
       }
-      Value total = Value::blank();
-      if (source_error != nullptr) {
-        total = *source_error;
-      } else if (summable && any_number) {
-        total = Value::number(sum);
-      }
-      append_value_cell(cells, row, col, total, PivotCellKind::GrandTotal, table, df);
+      append_value_cell(cells, row, col, strip.value(), PivotCellKind::GrandTotal, table, df);
     }
   }
   for (std::size_t s = 0; s < total_strip_cols; ++s) {
@@ -852,10 +873,7 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
           continue;
         }
       }
-      double sum = 0.0;
-      bool numeric = true;
-      bool any_number = false;
-      const Value* source_error = nullptr;
+      StripTotal strip;
       for (std::size_t r_leaf = 0; r_leaf < row_leaves.size(); ++r_leaf) {
         const Value* value = nullptr;
         if (col_subtotal) {
@@ -869,24 +887,11 @@ void emit_col_totals_strip(const LayoutPlan& plan, PivotCells& cells) {
         if (value == nullptr) {
           continue;
         }
-        if (value->is_error()) {
-          source_error = value;
+        if (!strip.add(*value)) {
           break;
         }
-        if (value->is_number()) {
-          sum += value->as_number();
-          any_number = true;
-        } else if (!value->is_blank()) {
-          numeric = false;
-        }
       }
-      Value total = Value::blank();
-      if (source_error != nullptr) {
-        total = *source_error;
-      } else if (numeric && any_number) {
-        total = Value::number(sum);
-      }
-      append_value_cell(cells, total_row, col, total, kind, table, df);
+      append_value_cell(cells, total_row, col, strip.value(), kind, table, df);
     }
     for (std::size_t s = 0; s < total_strip_cols; ++s) {
       const std::size_t df = row_df.value_or(plan.values_on_cols ? s : 0);

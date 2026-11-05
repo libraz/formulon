@@ -136,6 +136,17 @@ class PivotTable {
   const std::vector<PivotPageField>& page_fields() const { return page_fields_; }
   std::vector<PivotPageField>& mutable_page_fields() { return page_fields_; }
 
+  /// The first page-field entry for `field_index`, or null when the field is
+  /// not on the page axis.
+  const PivotPageField* find_page_field(std::uint32_t field_index) const {
+    for (const PivotPageField& page : page_fields_) {
+      if (page.field_index == field_index) {
+        return &page;
+      }
+    }
+    return nullptr;
+  }
+
   /// Indices into `fields()` of the page-axis fields, in report order.
   ///
   /// `<pageFields>` states that order explicitly and wins when it was

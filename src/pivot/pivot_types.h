@@ -65,6 +65,12 @@ enum class SubtotalFn : std::uint8_t {
   VarP = 10,
 };
 
+/// The `Aggregation` with the same ordinal as `fn` (the two enums share their
+/// layout, Sum=0 .. VarP=10).
+inline Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
+  return static_cast<Aggregation>(static_cast<std::uint8_t>(fn));
+}
+
 /// Visual layout mode for the rendered pivot.
 enum class PivotLayout : std::uint8_t {
   Compact = 0,

@@ -137,13 +137,8 @@ void resolve_page_selections(const PivotTable& table, const PivotCache& cache, c
   result.page_selections.reserve(order.size());
   for (const std::uint32_t field_index : order) {
     const PivotField& field = table.fields()[field_index];
-    std::optional<std::uint32_t> selected;
-    for (const PivotPageField& page : table.page_fields()) {
-      if (page.field_index == field_index) {
-        selected = page.item_index;
-        break;
-      }
-    }
+    const PivotPageField* page = table.find_page_field(field_index);
+    const std::optional<std::uint32_t> selected = page != nullptr ? page->item_index : std::nullopt;
     result.page_selections.push_back(PivotPageSelection{
         field_index, pivot_field_display_name(field),
         page_item_label(cache, field_index, field, selected, table.subtotal_hidden_items(), options)});
@@ -182,11 +177,25 @@ std::string item_number_format(const PivotTable& table, const PivotCache& cache,
   return std::string(localized_builtin_num_fmt(id16, profile));
 }
 
-// `SubtotalFn` and `Aggregation` share the same ordinal layout (Sum=0 ..
-// VarP=10), so a custom subtotal function maps to the matching aggregation
-// by ordinal.
-Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
-  return static_cast<Aggregation>(static_cast<std::uint8_t>(fn));
+/// One subtotal spec per selected custom function of the field at `depth` in
+/// `field_order`; a single empty spec (the data field's own aggregation) when
+/// there is none.
+std::vector<std::optional<Aggregation>> subtotal_specs(const PivotTable& table,
+                                                       const std::vector<std::uint32_t>& field_order,
+                                                       std::size_t depth) {
+  std::vector<std::optional<Aggregation>> specs;
+  if (depth < field_order.size()) {
+    const std::uint32_t group_fi = field_order[depth];
+    if (group_fi < table.fields().size()) {
+      for (const SubtotalFn fn : ordered_subtotal_fns(table.fields()[group_fi])) {
+        specs.push_back(aggregation_from_subtotal_fn(fn));
+      }
+    }
+  }
+  if (specs.empty()) {
+    specs.push_back(std::nullopt);
+  }
+  return specs;
 }
 
 /// Steps 2-8 on `table`, which is `source` with the plan's hidden Sum data
@@ -541,18 +550,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
           // subtotal row per selected function; otherwise a single default
           // subtotal uses each data field's own summary function. An empty
           // optional in `specs` marks the default (per-data-field) case.
-          std::vector<std::optional<Aggregation>> specs;
-          if (depth < table.row_field_order().size()) {
-            const std::uint32_t group_fi = table.row_field_order()[depth];
-            if (group_fi < table.fields().size()) {
-              for (const SubtotalFn fn : ordered_subtotal_fns(table.fields()[group_fi])) {
-                specs.push_back(aggregation_from_subtotal_fn(fn));
-              }
-            }
-          }
-          if (specs.empty()) {
-            specs.push_back(std::nullopt);
-          }
+          const std::vector<std::optional<Aggregation>> specs = subtotal_specs(table, table.row_field_order(), depth);
           for (const std::optional<Aggregation>& spec : specs) {
             std::vector<Value> row_values(data_field_count, Value::blank());
             std::vector<std::vector<Value>> col_values(col_leaf_count,
@@ -598,18 +596,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
           // Mirror row-axis custom subtotal behavior: each selected
           // function emits a distinct subtotal column. An empty spec
           // retains the data field's own aggregation.
-          std::vector<std::optional<Aggregation>> specs;
-          if (depth < table.col_field_order().size()) {
-            const std::uint32_t group_fi = table.col_field_order()[depth];
-            if (group_fi < table.fields().size()) {
-              for (const SubtotalFn fn : ordered_subtotal_fns(table.fields()[group_fi])) {
-                specs.push_back(aggregation_from_subtotal_fn(fn));
-              }
-            }
-          }
-          if (specs.empty()) {
-            specs.push_back(std::nullopt);
-          }
+          const std::vector<std::optional<Aggregation>> specs = subtotal_specs(table, table.col_field_order(), depth);
           const std::vector<std::size_t> subtotal_cols(leaves.begin() + static_cast<std::ptrdiff_t>(collected_start),
                                                        leaves.end());
           std::vector<std::vector<RecordIndexSpan>> row_spans(row_leaf_count);
