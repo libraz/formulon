@@ -109,6 +109,39 @@ Expected<void, Error> ChargeNewCell(ResourceBudget& budget, const Sheet& sheet, 
   return Expected<void, Error>::Ok();
 }
 
+/// Error for a follower `<f t="shared">` whose `si` has no registered master.
+Error UnknownSharedSi(std::string_view context_prefix, std::uint32_t si) {
+  std::string ctx("context=");
+  ctx.append(context_prefix);
+  ctx.append(" si=");
+  ctx.append(std::to_string(si));
+  return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: slave references unknown si", std::move(ctx));
+}
+
+/// Error for a `sheet_index` past the workbook's sheet count.
+Error SheetIndexOutOfRange(std::string_view fn_name, std::string_view context_prefix, std::size_t sheet_index,
+                           std::size_t sheet_count) {
+  std::string ctxs("context=");
+  ctxs.append(context_prefix);
+  ctxs.append(" sheet_index=");
+  ctxs.append(std::to_string(sheet_index));
+  ctxs.append(" sheet_count=");
+  ctxs.append(std::to_string(sheet_count));
+  std::string message(fn_name);
+  message.append(": sheet_index out of range");
+  return make_error(FormulonErrorCode::kInvalidArgument, std::move(message), std::move(ctxs));
+}
+
+/// Records the `cm` (cell metadata) attribute of a formula cell; a malformed
+/// value is recorded as 0.
+void RecordCellMetadata(SheetReadContext& ctx, std::uint32_t row, std::uint32_t col, std::string_view cm_text) {
+  std::uint32_t cm = 0;
+  if (!parse_xsd_nonneg_int(cm_text, &cm)) {
+    cm = 0;
+  }
+  ctx.cell_metadata.emplace_back(row, col, cm);
+}
+
 /// Decodes a shared-formula `si` attribute under the shared XSD
 /// non-negative-integer lexer.
 ///
@@ -286,10 +319,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   // Slave occurrence: look up master.
   auto it = shared.find(si);
   if (it == shared.end()) {
-    std::string ctx("context=sheet_reader si=");
-    ctx.append(std::to_string(si));
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: slave references unknown si",
-                      std::move(ctx));
+    return UnknownSharedSi("sheet_reader", si);
   }
   formula_out = ShiftSharedFormulaText(it->second, row, col);
   return Expected<void, Error>::Ok();
@@ -400,12 +430,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
                                       SheetReadContext& ctx, std::deque<std::string>& text_storage,
                                       ReadDiagnostics* diagnostics, std::uint64_t max_cell_bytes) {
   if (sheet_index >= workbook.sheet_count()) {
-    std::string ctxs("context=sheet_reader sheet_index=");
-    ctxs.append(std::to_string(sheet_index));
-    ctxs.append(" sheet_count=");
-    ctxs.append(std::to_string(workbook.sheet_count()));
-    return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_data: sheet_index out of range",
-                      std::move(ctxs));
+    return SheetIndexOutOfRange("read_sheet_data", "sheet_reader", sheet_index, workbook.sheet_count());
   }
   pugi::xml_node worksheet = sheet_doc.child("worksheet");
   if (!worksheet) {
@@ -472,11 +497,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         RegisterDataTable(workbook.sheet(sheet_index), parsed.row, parsed.col, attrs, diagnostics);
       }
       if (const pugi::xml_attribute cm = c.attribute("cm"); cm && !formula_text.empty()) {
-        std::uint32_t cm_idx = 0;
-        if (!parse_xsd_nonneg_int(cm.value(), &cm_idx)) {
-          cm_idx = 0;
-        }
-        ctx.cell_metadata.emplace_back(parsed.row, parsed.col, cm_idx);
+        RecordCellMetadata(ctx, parsed.row, parsed.col, cm.value());
       }
     }
   }
@@ -551,10 +572,7 @@ Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
   // Follower occurrence: shift the registered master into this cell.
   auto it = shared.find(si);
   if (it == shared.end()) {
-    std::string ctx("context=sheet_reader_sax si=");
-    ctx.append(std::to_string(si));
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: slave references unknown si",
-                      std::move(ctx));
+    return UnknownSharedSi("sheet_reader_sax", si);
   }
   return ShiftSharedFormulaText(it->second, rec.row, rec.col);
 }
@@ -621,11 +639,7 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
                       diagnostics);
   }
   if (!rec.cm.empty() && !formula_text.empty()) {
-    std::uint32_t cm = 0;
-    if (!parse_xsd_nonneg_int(rec.cm, &cm)) {
-      cm = 0;
-    }
-    ctx.cell_metadata.emplace_back(rec.row, rec.col, cm);
+    RecordCellMetadata(ctx, rec.row, rec.col, rec.cm);
   }
   return applied;
 }
@@ -687,12 +701,7 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
                                           SheetReadContext& ctx, std::deque<std::string>& text_storage,
                                           ReadDiagnostics* diagnostics, std::uint64_t max_cell_bytes) {
   if (sheet_index >= workbook.sheet_count()) {
-    std::string ctxs("context=sheet_reader_sax sheet_index=");
-    ctxs.append(std::to_string(sheet_index));
-    ctxs.append(" sheet_count=");
-    ctxs.append(std::to_string(workbook.sheet_count()));
-    return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_data_sax: sheet_index out of range",
-                      std::move(ctxs));
+    return SheetIndexOutOfRange("read_sheet_data_sax", "sheet_reader_sax", sheet_index, workbook.sheet_count());
   }
   SaxApplyState state{sheet_index,
                       &workbook,
