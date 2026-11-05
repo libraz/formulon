@@ -176,6 +176,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `fm_function_metadata` (`functionMetadata`, `function_metadata`) reports the
+  argument counts formula entry accepts for every built-in, including the
+  functions it used to report as `0` with no upper bound (`IF` 2 to 3,
+  `XLOOKUP` 3 to 6, `SUMIFS` 3 or more, `LET` 3 to 253, `LAMBDA` 1 to 254).
 - A conditional formatting rule added without an id gets one in the form
   Excel uses, `{00000000-000E-0000-<sheet>-0000<priority>}`, in place of the
   `{FC000000-…}` form.
@@ -324,6 +328,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `*IFS` and database functions, `SUBTOTAL`, `OFFSET`, `CELL`, `RANK`, `ROW`,
   `COLUMN`, `AREAS`, `COUNTBLANK`, `FORMULATEXT`, `ISFORMULA` and
   `PHONETIC`. Empty value arguments such as `=SUM(,)` are still accepted.
+- Formula entry refuses an argument count Excel refuses: too few or too many
+  arguments (`=ROWS()`, `=ABS(1,2)`, `=SUM()`, `=IF(1)`), an incomplete pair
+  for the functions that take arguments in pairs (`=COUNTIFS(A1,1,A1)`,
+  `=SUMIFS(A1,A1,1,A1)`, `IFS`, `SORTBY`, `GETPIVOTDATA`), and more than 255
+  arguments to any function. An omitted argument counts, so `=ABS(1,)` is
+  refused. A workbook that already holds such a formula still loads and
+  calculates it.
+- `LARGE`, `SMALL`, `PERCENTILE`, `QUARTILE` (and their `.INC` / `.EXC`
+  forms), `TRIMMEAN` and `FVSCHEDULE` take exactly two arguments, and
+  `TRANSLATE` takes one to three, as in Excel.
+- `GROUPBY` and `PIVOTBY` call a function passed by name with the group values
+  and the whole value column when its minimum is two arguments, so `XIRR` and
+  `FORECAST.ETS.SEASONALITY` give Excel's results; `IF` still receives the
+  group values alone.
 
 ## [0.18.0] - 2026-10-26
 
