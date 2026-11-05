@@ -23,15 +23,23 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "io/zip_reader.h"
 #include "merge_range.h"
+#include "utils/error.h"
 
 namespace formulon {
 namespace io {
 namespace xlsb {
+
+/// Error context string shared by every XLSB writer failure.
+inline constexpr const char* kWriteXlsbContext = "context=write_xlsb";
+
+/// Builds a `kInvalidArgument` error with the XLSB writer context.
+Error refuse_write(const std::string& what);
 
 /// Appends a single 8-bit unsigned integer to `dst`.
 void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t value);

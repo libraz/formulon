@@ -95,7 +95,7 @@ void EmitStrings(std::vector<std::uint8_t>& p, const DataValidation& dv) {
 Expected<void, Error> CheckWritable(const DataValidation& dv) {
   if (dv.type > kMaxType || dv.error_style > kMaxErrorStyle || dv.op > kMaxOperator) {
     return make_error(FormulonErrorCode::kInvalidArgument, "xlsb data validation has no record form",
-                      "context=write_xlsb");
+                      kWriteXlsbContext);
   }
   return Expected<void, Error>::Ok();
 }

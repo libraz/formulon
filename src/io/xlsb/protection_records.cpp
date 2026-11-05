@@ -15,6 +15,7 @@
 #include "io/xsd_bool.h"
 #include "pugixml.hpp"
 #include "utils/number_text.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -84,10 +85,7 @@ bool ParseLegacyHex(const std::string& text, std::uint16_t& out) {
   }
   std::uint32_t v = 0;
   for (char c : text) {
-    const int d = (c >= '0' && c <= '9')   ? c - '0'
-                  : (c >= 'A' && c <= 'F') ? c - 'A' + 10
-                  : (c >= 'a' && c <= 'f') ? c - 'a' + 10
-                                           : -1;
+    const int d = strings::hex_digit_value(c);
     if (d < 0) {
       return false;
     }
@@ -210,7 +208,7 @@ Expected<void, Error> emit_sheet_protection(std::vector<std::uint8_t>& dst, cons
   std::uint16_t pwd = 0;
   if (!protection.legacy_password.empty() && !ParseLegacyHex(protection.legacy_password, pwd)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "sheet protection legacy password is not a 16-bit hex hash",
-                      "context=write_xlsb");
+                      kWriteXlsbContext);
   }
   std::vector<std::uint8_t> payload;
   if (!protection.algorithm_name.empty()) {
@@ -219,7 +217,7 @@ Expected<void, Error> emit_sheet_protection(std::vector<std::uint8_t>& dst, cons
     if (!base64_decode(protection.hash_value, hash) || !base64_decode(protection.salt_value, salt) ||
         hash.size() > kMaxBlobBytes || salt.size() > kMaxBlobBytes) {
       return make_error(FormulonErrorCode::kInvalidArgument, "sheet protection hash or salt is not base64",
-                        "context=write_xlsb");
+                        kWriteXlsbContext);
     }
     emit_u32(payload, protection.spin_count);
     EmitFlags(payload, protection);
@@ -329,7 +327,7 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
   pugi::xml_document doc;
   if (!doc.load_string(xml.c_str()) || !doc.child("workbookProtection")) {
     return make_error(FormulonErrorCode::kInvalidArgument, "workbook protection is not a <workbookProtection> element",
-                      "context=write_xlsb");
+                      kWriteXlsbContext);
   }
   const WorkbookProtection prot = parse_workbook_protection(xml);
   std::uint16_t book_pwd = 0;
@@ -337,7 +335,7 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
   if ((!prot.workbook_password.empty() && !ParseLegacyHex(prot.workbook_password, book_pwd)) ||
       (!prot.revisions_password.empty() && !ParseLegacyHex(prot.revisions_password, rev_pwd))) {
     return make_error(FormulonErrorCode::kInvalidArgument, "workbook password is not a 16-bit hex hash",
-                      "context=write_xlsb");
+                      kWriteXlsbContext);
   }
   std::uint16_t flags = 0U;
   flags |= prot.lock_structure ? kLockStructure : 0U;
@@ -353,7 +351,7 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
     if (!EncodeIsoPassword(iso, prot.workbook_algorithm_name, prot.workbook_hash_value, prot.workbook_salt_value) ||
         !EncodeIsoPassword(iso, prot.revisions_algorithm_name, prot.revisions_hash_value, prot.revisions_salt_value)) {
       return make_error(FormulonErrorCode::kInvalidArgument, "workbook protection hash or salt is not base64",
-                        "context=write_xlsb");
+                        kWriteXlsbContext);
     }
     emit_record(dst, kBrtBookProtectionIso, iso);
     // BrtBookProtection after the Iso record must carry zero verifiers.
@@ -491,7 +489,7 @@ Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst,
     std::uint16_t pwd = 0;
     if (!range.password.empty() && !ParseLegacyHex(range.password, pwd)) {
       return make_error(FormulonErrorCode::kInvalidArgument, "protected range password is not a 16-bit hex hash",
-                        "context=write_xlsb");
+                        kWriteXlsbContext);
     }
     std::vector<std::uint8_t> payload;
     if (!range.hash_value.empty()) {
@@ -500,7 +498,7 @@ Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst,
       if (!base64_decode(range.hash_value, hash) || !base64_decode(range.salt_value, salt) ||
           hash.size() > kMaxBlobBytes || salt.size() > kMaxBlobBytes) {
         return make_error(FormulonErrorCode::kInvalidArgument, "protected range hash or salt is not base64",
-                          "context=write_xlsb");
+                          kWriteXlsbContext);
       }
       emit_u32(payload, range.spin_count);
       EmitRangeAndTitle(payload, rfx, range.name);

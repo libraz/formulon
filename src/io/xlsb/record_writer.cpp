@@ -96,12 +96,6 @@ std::uint32_t EncodeRkNumber(double value) {
   return static_cast<std::uint32_t>(bits >> 32) & 0xFFFFFFFCU;  // fInt=0, fX100=0
 }
 
-/// Appends one UTF-16LE code unit to `dst`.
-inline void AppendCodeUnit(std::vector<std::uint8_t>& dst, std::uint16_t cu) {
-  dst.push_back(static_cast<std::uint8_t>(cu & 0xFFU));
-  dst.push_back(static_cast<std::uint8_t>((cu >> 8) & 0xFFU));
-}
-
 /// Decodes one UTF-8 codepoint from `text[i..]` and advances `i` past
 /// the consumed bytes. Returns `0xFFFD` for ill-formed sequences,
 /// consuming exactly one byte so we make forward progress.
@@ -117,6 +111,10 @@ std::uint32_t DecodeUtf8(std::string_view text, std::size_t& i) {
 }
 
 }  // namespace
+
+Error refuse_write(const std::string& what) {
+  return make_error(FormulonErrorCode::kInvalidArgument, what, kWriteXlsbContext);
+}
 
 void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t value) {
   dst.push_back(value);
@@ -164,14 +162,14 @@ void emit_xlwidestring(std::vector<std::uint8_t>& dst, std::string_view text) {
   while (i < text.size()) {
     const std::uint32_t cp = DecodeUtf8(text, i);
     if (cp < 0x10000U) {
-      AppendCodeUnit(dst, static_cast<std::uint16_t>(cp));
+      emit_u16(dst, static_cast<std::uint16_t>(cp));
     } else {
       // Surrogate pair.
       const std::uint32_t adjusted = cp - 0x10000U;
       const std::uint16_t high = static_cast<std::uint16_t>(0xD800U + (adjusted >> 10));
       const std::uint16_t low = static_cast<std::uint16_t>(0xDC00U + (adjusted & 0x3FFU));
-      AppendCodeUnit(dst, high);
-      AppendCodeUnit(dst, low);
+      emit_u16(dst, high);
+      emit_u16(dst, low);
     }
   }
   store_u32(dst.data() + prefix_at, static_cast<std::uint32_t>((dst.size() - prefix_at - 4U) / 2U));

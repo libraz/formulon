@@ -9,6 +9,7 @@
 #include "io/xlsb/record_writer.h"
 #include "parser/structured_ref_payload.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -39,13 +40,6 @@ constexpr std::uint16_t kNonresidentBit = 0x2000U;
 
 Error Unsupported(const std::string& message) {
   return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, message, "context=xlsb_ptg_list");
-}
-
-bool EqualsIgnoreCase(std::string_view a, std::string_view b) {
-  return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-           auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
-           return lower(x) == lower(y);
-         });
 }
 
 /// A column name with the structured-reference escape (`'`) before each of
@@ -83,7 +77,7 @@ const TableMetadata* FindTable(const std::vector<TableMetadata>* tables, std::st
   }
   for (std::size_t i = 0; i < tables->size(); ++i) {
     const TableMetadata& t = (*tables)[i];
-    if (EqualsIgnoreCase(t.display_name, name) || EqualsIgnoreCase(t.name, name)) {
+    if (strings::case_insensitive_eq(t.display_name, name) || strings::case_insensitive_eq(t.name, name)) {
       *index = i;
       return &t;
     }
@@ -93,7 +87,7 @@ const TableMetadata* FindTable(const std::vector<TableMetadata>* tables, std::st
 
 const XlsbRetainedTable* FindRetainedTable(const SheetRangeTable& ranges, std::string_view name) {
   for (const XlsbRetainedTable& t : ranges.retained_tables) {
-    if (EqualsIgnoreCase(t.display_name, name) || EqualsIgnoreCase(t.name, name)) {
+    if (strings::case_insensitive_eq(t.display_name, name) || strings::case_insensitive_eq(t.name, name)) {
       return &t;
     }
   }
@@ -125,7 +119,7 @@ std::optional<std::uint8_t> RowTypeFor(std::uint8_t selectors) {
 
 std::optional<std::uint16_t> ColumnIndex(const TableMetadata& table, const std::string& name) {
   for (std::size_t i = 0; i < table.columns.size(); ++i) {
-    if (EqualsIgnoreCase(table.columns[i].name, name)) {
+    if (strings::case_insensitive_eq(table.columns[i].name, name)) {
       return static_cast<std::uint16_t>(i);
     }
   }

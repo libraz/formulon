@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -199,6 +200,12 @@ inline std::uint32_t load_u32(const std::uint8_t* p) {
 
 inline std::uint16_t load_u16(const std::uint8_t* p) {
   return static_cast<std::uint16_t>(p[0] | (p[1] << 8));
+}
+
+inline double load_f64(const std::uint8_t* p) {
+  double v = 0;
+  std::memcpy(&v, p, sizeof(v));
+  return v;
 }
 
 inline void store_u32(std::uint8_t* p, std::uint32_t v) {

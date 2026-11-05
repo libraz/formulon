@@ -730,7 +730,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
 Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook) {
   const std::size_t sheet_count = workbook.sheet_count();
   if (sheet_count == 0) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "workbook has zero sheets", "context=write_xlsb");
+    return make_error(FormulonErrorCode::kInvalidArgument, "workbook has zero sheets", kWriteXlsbContext);
   }
 
   // Pre-pass: emit each sheet body so we know whether the SST will be
@@ -840,7 +840,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
 
   ZipWriterGuard writer;
   if (!writer.init()) {
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_init_heap failed", "context=write_xlsb");
+    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_init_heap failed", kWriteXlsbContext);
   }
 
   // 1. [Content_Types].xml
@@ -949,7 +949,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
   }
 
-  ASSIGN_OR_RETURN(auto bytes, FinalizeArchive(writer, "context=write_xlsb"));
+  ASSIGN_OR_RETURN(auto bytes, FinalizeArchive(writer, kWriteXlsbContext));
   diagnostics.downgraded_formula_count = downgraded_formula_count;
   return XlsbWriteResult{std::move(bytes), diagnostics};
 }

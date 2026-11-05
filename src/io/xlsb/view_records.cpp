@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -130,10 +129,8 @@ Expected<bool, Error> decode_pane(const XlsbRecord& rec, SheetView& view) {
   if (p.size < 29U) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", "context=xlsb_reader");
   }
-  double cols = 0.0;
-  double rows = 0.0;
-  std::memcpy(&cols, p.data, sizeof(cols));
-  std::memcpy(&rows, p.data + sizeof(cols), sizeof(rows));
+  const double cols = load_f64(p.data);
+  const double rows = load_f64(p.data + sizeof(double));
   p.data += 16U;
   p.size -= 16U;
   auto top_row_or = read_u32(p);

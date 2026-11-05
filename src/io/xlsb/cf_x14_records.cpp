@@ -83,10 +83,6 @@ constexpr std::uint16_t kIconReverse = 0x04;
 // BrtDXF prefixed by an FRTBlank, BrtEndDXFs.
 constexpr std::size_t kRule14TailBytes = kGuidBytes + 4U;
 
-Error Refuse(const std::string& what) {
-  return make_error(FormulonErrorCode::kInvalidArgument, what, "context=write_xlsb");
-}
-
 }  // namespace
 
 void apply_x14_data_bar_overlays(ByteSpan records, std::vector<cf::ConditionalFormat>& formats) {
@@ -457,7 +453,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       }
       std::array<std::uint8_t, kGuidBytes> guid{};
       if (!ParseGuid(rule.id, guid)) {
-        return Refuse("xlsb conditional format x14 link id is not a GUID: " + rule.id);
+        return refuse_write("xlsb conditional format x14 link id is not a GUID: " + rule.id);
       }
       const cf::DataBarSpec& bar = *rule.data_bar;
       EmitBlockHead(groups, format, 1U);
@@ -472,7 +468,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
         double num = 0;
         if (v->type == cf::CfvoType::Formula) {
-          return Refuse("xlsb x14 data bar with a formula threshold has no known record form");
+          return refuse_write("xlsb x14 data bar with a formula threshold has no known record form");
         }
         if (v->type == cf::CfvoType::Number || v->type == cf::CfvoType::Percent ||
             v->type == cf::CfvoType::Percentile) {
@@ -691,7 +687,7 @@ Expected<void, Error> EmitIconCfvo14(std::vector<std::uint8_t>& dst, const cf::C
     ASSIGN_OR_RETURN(num, parse_threshold_number(v.value));
     emit_u32(p, 0U);
   } else {
-    return Refuse("xlsb icon set threshold must be a number, percent, percentile or formula");
+    return refuse_write("xlsb icon set threshold must be a number, percent, percentile or formula");
   }
   emit_u32(p, kCfvo14Types[static_cast<std::size_t>(v.type)]);
   emit_double(p, num);
@@ -707,10 +703,10 @@ Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::C
   const cf::IconSetSpec& set = *rule.icon_set;
   const std::size_t icons = cf::icon_count(set.name);
   if (set.thresholds.size() + 1U != icons || set.custom_icons.size() != icons) {
-    return Refuse("xlsb custom icon set needs one threshold and one icon per level");
+    return refuse_write("xlsb custom icon set needs one threshold and one icon per level");
   }
   if (rule.priority <= 0) {
-    return Refuse("xlsb custom icon set rule needs a positive priority");
+    return refuse_write("xlsb custom icon set rule needs a positive priority");
   }
   std::vector<std::uint8_t> head(kRule14Bytes, 0U);
   const auto put = [&head](std::size_t at, std::uint32_t v) { store_u32(head.data() + at, v); };
@@ -721,7 +717,7 @@ Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::C
   if (!rule.id.empty()) {
     std::array<std::uint8_t, kGuidBytes> guid{};
     if (!ParseGuid(rule.id, guid)) {
-      return Refuse("xlsb conditional format x14 rule id is not a GUID: " + rule.id);
+      return refuse_write("xlsb conditional format x14 rule id is not a GUID: " + rule.id);
     }
     std::copy(guid.begin(), guid.end(), head.begin() + static_cast<std::ptrdiff_t>(kRule14GuidOffset));
     put(kRule14FGuidOffset, 1U);
@@ -750,7 +746,7 @@ Expected<void, Error> EmitIconRule14(std::vector<std::uint8_t>& dst, const cf::C
     const std::optional<std::int32_t> kpi = Kpi14(icon.icon_set);
     if (!kpi || (*kpi >= 0 && (icon.icon_id < 0 ||
                                static_cast<std::size_t>(icon.icon_id) >= cf::cf_icon_set_icon_count(icon.icon_set)))) {
-      return Refuse("xlsb custom icon names no icon of a known set: " + icon.icon_set);
+      return refuse_write("xlsb custom icon names no icon of a known set: " + icon.icon_set);
     }
     ip.assign(4U, 0U);
     emit_u32(ip, static_cast<std::uint32_t>(*kpi));
@@ -926,10 +922,10 @@ Expected<void, Error> EmitFormulaRule14(std::vector<std::uint8_t>& dst, const cf
   ASSIGN_OR_RETURN(CfRuleFields fields, encode_cf_rule_fields(rule));
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!ParseGuid(id, guid)) {
-    return Refuse("xlsb conditional format x14 rule id is not a GUID: " + id);
+    return refuse_write("xlsb conditional format x14 rule id is not a GUID: " + id);
   }
   if (rule.priority <= 0) {
-    return Refuse("xlsb conditional format x14 rule needs a positive priority");
+    return refuse_write("xlsb conditional format x14 rule needs a positive priority");
   }
   std::array<std::uint32_t, 2> cb{};
   std::vector<std::uint8_t> list;

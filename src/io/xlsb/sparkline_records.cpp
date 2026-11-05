@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstring>
 #include <optional>
 #include <utility>
 
@@ -47,12 +46,6 @@ constexpr std::uint16_t kGroupAutoMin = 0x4000;
 constexpr std::uint16_t kRightToLeft = 0x8000;
 constexpr std::size_t kGroupFixedBytes = 2U + 8U * 8U + 3U * 8U + 4U;
 constexpr double kMaxLineWeight = 1584.0;
-
-double LoadF64(const std::uint8_t* p) {
-  double v = 0;
-  std::memcpy(&v, p, sizeof(v));
-  return v;
-}
 
 std::optional<ColorSpec> DecodeSpec(const std::uint8_t* p) {
   const std::optional<cf::Color> c = DecodeColor(ByteSpan{p, 8U});
@@ -136,9 +129,9 @@ bool DecodeGroupHead(ByteSpan p, const FeatureFormulaReadContext& ctx, Sparkline
     *colors[i] = *spec;
   }
   const std::uint8_t* nums = d + 2U + 64U;
-  const double manual_max = LoadF64(nums);
-  const double manual_min = LoadF64(nums + 8);
-  g.line_weight = LoadF64(nums + 16);
+  const double manual_max = load_f64(nums);
+  const double manual_min = load_f64(nums + 8);
+  g.line_weight = load_f64(nums + 16);
   const std::uint32_t type = load_u32(nums + 24);
   if (!std::isfinite(manual_max) || !std::isfinite(manual_min) || !std::isfinite(g.line_weight) ||
       g.line_weight < 0.0 || g.line_weight > kMaxLineWeight || type > 2U) {
@@ -273,10 +266,6 @@ void TakeSlot(std::vector<std::uint8_t>& buf, const FeatureFormulaReadContext& c
   }
 }
 
-Error Refuse(const std::string& what) {
-  return make_error(FormulonErrorCode::kInvalidArgument, what, "context=write_xlsb");
-}
-
 std::uint32_t f_cce(const std::vector<std::uint8_t>& bytes) {
   return bytes.size() >= 4U ? load_u32(bytes.data()) : 0U;
 }
@@ -307,7 +296,7 @@ Expected<EncodedFeatureFormula, Error> EncodeReference(const std::string& text, 
   }
   if (!(tag == 0x03U && single(5U)) && !(tag == 0x19U && single(7U)) && !(tag == 0x1AU && single(9U)) &&
       !(tag == 0x1BU && single(15U))) {
-    return Refuse("xlsb sparkline formula is not a single reference or name: " + text);
+    return refuse_write("xlsb sparkline formula is not a single reference or name: " + text);
   }
   return f;
 }
@@ -373,7 +362,7 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
     std::vector<MergeRange> cells;
     if (!parse_sqref_text(item.location, cells) || cells.size() != 1U || cells[0].first_row != cells[0].last_row ||
         cells[0].first_col != cells[0].last_col) {
-      return Refuse("xlsb sparkline location is not one cell: " + item.location);
+      return refuse_write("xlsb sparkline location is not one cell: " + item.location);
     }
     auto formula = EncodeReference(item.formula, ctx, sheet_name);
     if (!formula) {

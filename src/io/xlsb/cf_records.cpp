@@ -454,10 +454,6 @@ std::optional<cf::CFRule> DecodeRuleHeader(ByteSpan p, const MergeRange& base, c
 // Encode
 // ---------------------------------------------------------------------------
 
-Error Refuse(const std::string& what) {
-  return make_error(FormulonErrorCode::kInvalidArgument, what, "context=write_xlsb");
-}
-
 void EmitColor(std::vector<std::uint8_t>& dst, cf::Color c) {
   const auto bytes = EncodeColor(c);
   emit_record(dst, kColor, ByteSpan{bytes.data(), bytes.size()});
@@ -467,7 +463,7 @@ Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValue
                                const MergeRange& base, const FeatureFormulaWriteContext& ctx) {
   const std::uint32_t itype = kCfvoTypes[static_cast<std::size_t>(v.type)];
   if (itype == 0U) {
-    return Refuse("xlsb conditional format threshold type has no legacy record form");
+    return refuse_write("xlsb conditional format threshold type has no legacy record form");
   }
   double num = 0;
   EncodedFeatureFormula formula;
@@ -524,7 +520,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
   }
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!rule.id.empty() && !ParseGuid(rule.id, guid)) {
-    return Refuse("xlsb conditional format x14 link id is not a GUID: " + rule.id);
+    return refuse_write("xlsb conditional format x14 link id is not a GUID: " + rule.id);
   }
   std::array<EncodedFeatureFormula, 2> formulas;
   if (cf_rule_has_formulas(rule.type)) {
@@ -573,7 +569,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
   if (rule.type == cf::RuleType::ColorScale) {
     if (!rule.color_scale || rule.color_scale->colors.size() != rule.color_scale->thresholds.size() ||
         rule.color_scale->colors.size() < 2U || rule.color_scale->colors.size() > 3U) {
-      return Refuse("xlsb colour scale needs two or three matched stops");
+      return refuse_write("xlsb colour scale needs two or three matched stops");
     }
     emit_record(dst, kBeginColorScale, ByteSpan{});
     for (const cf::CfValueObject& v : rule.color_scale->thresholds) {
@@ -587,7 +583,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     emit_record(dst, kEndColorScale, ByteSpan{});
   } else if (rule.type == cf::RuleType::DataBar) {
     if (!rule.data_bar) {
-      return Refuse("xlsb data bar rule has no data bar");
+      return refuse_write("xlsb data bar rule has no data bar");
     }
     const cf::DataBarSpec& bar = *rule.data_bar;
     // A linked bar's lengths live in its x14 record; Excel leaves the
@@ -605,7 +601,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     emit_record(dst, kEndDataBar, ByteSpan{});
   } else if (rule.type == cf::RuleType::IconSet) {
     if (!rule.icon_set || rule.icon_set->thresholds.size() + 1U != cf::icon_count(rule.icon_set->name)) {
-      return Refuse("xlsb icon set threshold count does not match its icons");
+      return refuse_write("xlsb icon set threshold count does not match its icons");
     }
     const cf::IconSetSpec& set = *rule.icon_set;
     std::uint16_t set_flags = static_cast<std::uint16_t>((set.show_value ? 0U : 0x02U) | (set.reverse ? 0x04U : 0U) |
@@ -643,7 +639,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
 Expected<double, Error> parse_threshold_number(const std::string& text) {
   double num = 0;
   if (!text.empty() && !parse_xsd_double(text, &num)) {
-    return Refuse("xlsb conditional format threshold is not a number: " + text);
+    return refuse_write("xlsb conditional format threshold is not a number: " + text);
   }
   return num;
 }
@@ -773,14 +769,14 @@ Expected<CfRuleFields, Error> encode_cf_rule_fields(const cf::CFRule& rule) {
       if (rule.std_dev.has_value()) {
         const double sd = *rule.std_dev;
         if (rule.equal_average || !(sd >= 1.0 && sd <= 3.0) || sd != std::floor(sd)) {
-          return Refuse("xlsb aboveAverage standard deviation is not representable");
+          return refuse_write("xlsb aboveAverage standard deviation is not representable");
         }
         out.param = static_cast<std::uint32_t>(sd);
       }
     }
     return out;
   }
-  return Refuse("xlsb conditional format rule type has no record form");
+  return refuse_write("xlsb conditional format rule type has no record form");
 }
 
 std::optional<cf::ConditionalFormat> decode_cf_block(ByteSpan block, const FeatureFormulaReadContext& ctx) {
