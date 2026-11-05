@@ -6122,6 +6122,34 @@ class Workbook:
                 "fm_workbook_set_excel_profile_id",
             )
 
+    def file_name(self) -> str:
+        """Return the file name the workbook is shown under, or ``""`` when unset.
+
+        While set, every formula getter spells a reference to the workbook's
+        own defined name (stored ``[0]!Name``) as ``Book.xlsx!Name``, quoted
+        when needed. Loading from bytes leaves it unset.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(LIB.fm_workbook_file_name(h, out), "fm_workbook_file_name")
+            return LIB.read_cstr(LIB.read_u32(out)) or ""
+
+    def set_file_name(self, name: str) -> None:
+        """Set :meth:`file_name`, extension included and without a directory; ``""`` unsets it.
+
+        Entered formulas then read ``Book.xlsx!Name`` and ``[Book.xlsx]Sheet1!A1``
+        as this workbook and create no external link.
+
+        Raises:
+          FormulonError: with ``kInvalidArgument`` when the name lacks a
+            workbook extension, holds one of ``[ ] : / \\ ? *``, is longer
+            than 218 bytes, or equals an external link's book name.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            _check(LIB.fm_workbook_set_file_name(h, scope.cstr(name)), "fm_workbook_set_file_name")
+
     # -- Partial recalc ----------------------------------------------------
     #
     # Note: ``fm_workbook_set_iterative_progress`` (the per-sweep callback)

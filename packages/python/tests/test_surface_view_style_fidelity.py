@@ -201,6 +201,25 @@ class CalcOptionTests(unittest.TestCase):
                 wb.set_ref_mode(9)
 
 
+class FileNameTests(unittest.TestCase):
+    def test_file_name_spells_and_binds_the_workbooks_own_names(self) -> None:
+        with Workbook.create_default() as wb:
+            self.assertEqual(wb.file_name(), "")
+            wb.set_defined_name("LN", "10")
+            wb.set_file_name("M5.xlsx")
+            self.assertEqual(wb.file_name(), "M5.xlsx")
+            wb.set_formula(0, 0, 0, "=M5.xlsx!LN+1")
+            self.assertEqual(wb.get_formula(0, 0, 0), "=M5.xlsx!LN+1")
+            self.assertEqual(list(wb.iter_cells(0))[0].formula, "=M5.xlsx!LN+1")
+            wb.set_file_name("1M5.xlsx")
+            self.assertEqual(wb.get_formula(0, 0, 0), "='1M5.xlsx'!LN+1")
+            with self.assertRaises(FormulonError):
+                wb.set_file_name("Book1")
+            self.assertEqual(wb.file_name(), "1M5.xlsx")
+            wb.set_file_name("")
+            self.assertEqual(wb.get_formula(0, 0, 0), "=[0]!LN+1")
+
+
 class FormatDefaultFlagTests(unittest.TestCase):
     def test_custom_height_and_zero_height_round_trip(self) -> None:
         with Workbook.create_default() as wb:

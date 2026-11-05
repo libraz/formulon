@@ -184,6 +184,25 @@ test('calcPr accessors and the date system', async () => {
   release(wb);
 });
 
+test("the file name spells and binds the workbook's own names", async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.fileName().value, '');
+  assert.ok(wb.setDefinedName('LN', '10').ok);
+  assert.ok(wb.setFileName('M5.xlsx').ok);
+  assert.equal(wb.fileName().value, 'M5.xlsx');
+  assert.ok(wb.setFormula(0, 0, 0, '=M5.xlsx!LN+1').ok);
+  assert.equal(wb.getFormula(0, 0, 0).formula, '=M5.xlsx!LN+1');
+  assert.equal(wb.cellAt(0, 0).formula, '=M5.xlsx!LN+1');
+  assert.ok(wb.setFileName('M5 b-1.xlsx').ok);
+  assert.equal(wb.getFormula(0, 0, 0).formula, "='M5 b-1.xlsx'!LN+1");
+  assert.equal(wb.setFileName('Book1').ok, false);
+  assert.equal(wb.fileName().value, 'M5 b-1.xlsx');
+  assert.ok(wb.setFileName('').ok);
+  assert.equal(wb.getFormula(0, 0, 0).formula, '=[0]!LN+1');
+  release(wb);
+});
+
 test('defined-name comment and hidden read back, set and survive a replacement', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

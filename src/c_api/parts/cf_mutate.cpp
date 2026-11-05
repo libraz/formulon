@@ -41,6 +41,7 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
@@ -102,12 +103,14 @@ fm_cf_color_t from_cf_color(const formulon::Workbook& wb, formulon::cf::Color co
   return fm_cf_color_t{color.r, color.g, color.b, color.a};
 }
 
-fm_cfvo_t from_cfvo(const formulon::cf::CfValueObject& src, BorrowedStringArena& text_arena) {
+fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObject& src,
+                    BorrowedStringArena& text_arena) {
   fm_cfvo_t out{};
   out.type = static_cast<std::uint8_t>(src.type);
   out.gte = src.gte ? 1 : 0;
   if (!src.value.empty()) {
-    out.value = text_arena.emplace(src.value);
+    out.value = text_arena.emplace(src.type == formulon::cf::CfvoType::Formula ? wb.spell_self_book_names(src.value)
+                                                                               : src.value);
   }
   return out;
 }
@@ -139,8 +142,8 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->sqref = range_arena.adopt(std::vector<fm_cf_cell_range_t>(first, first + block.sqref.size()));
   }
   out->sqref_count = static_cast<std::uint32_t>(block.sqref.size());
-  out->formula1 = rule.formula1.has_value() ? text_arena.emplace(*rule.formula1) : nullptr;
-  out->formula2 = rule.formula2.has_value() ? text_arena.emplace(*rule.formula2) : nullptr;
+  out->formula1 = rule.formula1.has_value() ? text_arena.emplace(wb.spell_self_book_names(*rule.formula1)) : nullptr;
+  out->formula2 = rule.formula2.has_value() ? text_arena.emplace(wb.spell_self_book_names(*rule.formula2)) : nullptr;
   if (rule.op.has_value()) {
     out->op_engaged = 1;
     out->op = static_cast<std::uint8_t>(*rule.op);
@@ -170,7 +173,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     thresholds.reserve(count);
     colors.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
-      thresholds.push_back(from_cfvo(spec.thresholds[i], text_arena));
+      thresholds.push_back(from_cfvo(wb, spec.thresholds[i], text_arena));
       colors.push_back(from_cf_color(wb, spec.colors[i], formulon::ColorContext::kFillForeground));
     }
     out->color_scale_thresholds = cfvo_arena.adopt(std::move(thresholds));
@@ -180,8 +183,8 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
   if (rule.data_bar.has_value()) {
     const auto& spec = *rule.data_bar;
     out->data_bar_engaged = 1;
-    out->data_bar_min = from_cfvo(spec.min, text_arena);
-    out->data_bar_max = from_cfvo(spec.max, text_arena);
+    out->data_bar_min = from_cfvo(wb, spec.min, text_arena);
+    out->data_bar_max = from_cfvo(wb, spec.max, text_arena);
     out->data_bar_fill = from_cf_color(wb, spec.fill, formulon::ColorContext::kFillForeground);
     out->data_bar_show_value = spec.show_value ? 1 : 0;
     out->data_bar_min_length_pct = spec.min_length_pct;
@@ -213,7 +216,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     std::vector<fm_cfvo_t> thresholds;
     thresholds.reserve(spec.thresholds.size());
     for (const auto& threshold : spec.thresholds) {
-      thresholds.push_back(from_cfvo(threshold, text_arena));
+      thresholds.push_back(from_cfvo(wb, threshold, text_arena));
     }
     out->icon_set_engaged = 1;
     out->icon_set_name = static_cast<std::uint8_t>(spec.name);
@@ -223,7 +226,7 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->icon_set_show_value = spec.show_value ? 1 : 0;
     out->icon_set_percent = spec.percent ? 1 : 0;
     out->icon_set_floor_engaged = 1;
-    out->icon_set_floor = from_cfvo(spec.floor, text_arena);
+    out->icon_set_floor = from_cfvo(wb, spec.floor, text_arena);
     std::vector<fm_cf_icon_t> icons;
     icons.reserve(spec.custom_icons.size());
     for (const auto& icon : spec.custom_icons) {
@@ -335,9 +338,9 @@ bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_r
   return true;
 }
 
-// Stores every formula-typed threshold of `out_rule`'s visual payload the way
-// files carry it (see `check_stored_formula`).
-fm_status_t store_cfvo_formulas(formulon::cf::CFRule* out_rule) {
+// Checks every formula-typed threshold of `out_rule`'s visual payload, then
+// stores each the way files carry it (see `ingest_entered_formula`).
+fm_status_t store_cfvo_formulas(fm_workbook_t* wb, formulon::cf::CFRule* out_rule) {
   std::vector<formulon::cf::CfValueObject*> cfvos;
   if (out_rule->color_scale.has_value()) {
     for (auto& v : out_rule->color_scale->thresholds) {
@@ -354,13 +357,18 @@ fm_status_t store_cfvo_formulas(formulon::cf::CFRule* out_rule) {
       cfvos.push_back(&v);
     }
   }
-  for (formulon::cf::CfValueObject* v : cfvos) {
+  for (const formulon::cf::CfValueObject* v : cfvos) {
     if (v->type != formulon::cf::CfvoType::Formula) {
       continue;
     }
-    const std::string source = std::move(v->value);
-    if (auto rc = check_stored_formula("fm_sheet_cf_add_rule", source, "field=cfvo.value", &v->value); rc != 0) {
+    std::string stored;
+    if (auto rc = check_stored_formula("fm_sheet_cf_add_rule", v->value, "field=cfvo.value", &stored); rc != 0) {
       return rc;
+    }
+  }
+  for (formulon::cf::CfValueObject* v : cfvos) {
+    if (v->type == formulon::cf::CfvoType::Formula) {
+      v->value = ingest_entered_formula(wb, v->value);
     }
   }
   return 0;
@@ -540,8 +548,15 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_sheet_cf_add_rule: invalid iconSet payload");
   }
-  if (auto rc = store_cfvo_formulas(&out_rule); rc != 0) {
+  if (auto rc = store_cfvo_formulas(wb, &out_rule); rc != 0) {
     return rc;
+  }
+  // Every check passed, so binding the books the formulas name commits nothing early.
+  if (rule.formula1 != nullptr && rule.formula1[0] != '\0') {
+    out_rule.formula1 = ingest_entered_formula(wb, rule.formula1);
+  }
+  if (rule.formula2 != nullptr && rule.formula2[0] != '\0') {
+    out_rule.formula2 = ingest_entered_formula(wb, rule.formula2);
   }
 
   new_block.rules.push_back(std::move(out_rule));
@@ -554,11 +569,6 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
     new_index += block.rules.size();
   }
   blocks_mut.push_back(std::move(new_block));
-  for (const char* text : {rule.formula1, rule.formula2}) {
-    if (text != nullptr && text[0] != '\0') {
-      wb->workbook().bind_external_books(text);
-    }
-  }
   *out_index = new_index;
   return 0;
 }

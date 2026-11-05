@@ -180,4 +180,11 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
   return 0;
 }
 
+void set_file_name_from_path(fm_workbook_t* wb, const std::string& path) {
+  const std::size_t slash = path.find_last_of('/');
+  const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
+  // A refused name leaves the workbook unnamed, which is not an error here.
+  (void)fm_workbook_set_file_name(wb, name.c_str());
+}
+
 }  // namespace formulon::cli

@@ -46,6 +46,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/literal_spelling.h"
 #include "parser/parser.h"
+#include "parser/parser_detail.h"
 #include "parser/ref_transforms.h"
 #include "parser/reference.h"
 #include "passthrough_part.h"
@@ -892,6 +893,11 @@ void Workbook::move_sheet_locked(std::uint32_t from_index, std::uint32_t to_inde
 
 void Workbook::set_defined_names(std::vector<DefinedName> names) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (!file_name_.empty()) {
+    for (DefinedName& entry : names) {
+      entry.formula = parser::bind_self_book_names(entry.formula, file_name_);
+    }
+  }
   std::vector<std::string> changed;
   {
     // Declaration order matters for duplicate definitions. Metadata and
@@ -949,6 +955,9 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     return make_error(
         FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: local_sheet_id out of range",
         "local_sheet_id=" + std::to_string(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  if (!file_name_.empty()) {
+    formula = parser::bind_self_book_names(formula, file_name_);
   }
   bind_external_books_unlocked(std::string_view(formula));
   // Case-insensitive lookup: Excel resolves defined names case-folded.
@@ -1765,6 +1774,58 @@ std::string Workbook::ingest_stored_formula(std::string_view stored, FormulaSour
   return text;
 }
 
+void Workbook::ingest_entered_formula(std::string& formula) {
+  formula = normalize_formula_text(std::move(formula), FormulaSource::kEntered);
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (!file_name_.empty()) {
+    formula = parser::bind_self_book_names(formula, file_name_);
+  }
+  bind_external_books_unlocked(std::string_view(formula));
+}
+
+Expected<void, Error> Workbook::set_file_name(std::string_view name) {
+  // Excel's limit on a file name.
+  constexpr std::size_t kMaxFileNameBytes = 218;
+  if (!name.empty()) {
+    const auto refuse = [name](const char* reason) {
+      return make_error(FormulonErrorCode::kInvalidArgument, std::string("set_file_name: ") + reason,
+                        "name=" + std::string(name));
+    };
+    if (!parser::detail::HasWorkbookExtension(name)) {
+      return refuse("no workbook extension");
+    }
+    if (name.find_first_of(std::string_view("[]:/\\?*\0", 8)) != std::string_view::npos) {
+      return refuse("forbidden character");
+    }
+    if (!sheet_names::valid_utf8(name)) {
+      return refuse("not valid UTF-8");
+    }
+    if (name.size() > kMaxFileNameBytes) {
+      return refuse("longer than 218 bytes");
+    }
+    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+    for (const ExternalLinkRecord& link : external_links_) {
+      if (strings::case_insensitive_eq(LinkBookName(link), name)) {
+        return refuse("an external link names the same book");
+      }
+    }
+  }
+  file_name_.assign(name);
+  return Expected<void, Error>::Ok();
+}
+
+std::string Workbook::spell_self_book_names(std::string_view text) const {
+  return parser::spell_self_book_names(text, file_name_);
+}
+
+bool Workbook::spells_self_book_names(std::string_view text) const noexcept {
+  return !file_name_.empty() && text.find("[0]!") != std::string_view::npos;
+}
+
+std::string Workbook::bind_self_book_names(std::string_view text) const {
+  return parser::bind_self_book_names(text, file_name_);
+}
+
 Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                                  std::string formula, FormulaSource source) {
   RETURN_IF_ERROR(check_cell_target("set_cell_formula", sheet_index, sheets_.size(), row, col));
@@ -1789,6 +1850,9 @@ void Workbook::put_cell_formula(std::size_t sheet_index, std::uint32_t row, std:
   // formula bar shows. Entered text also takes the whitespace and number
   // literal spelling Excel stores.
   formula = normalize_formula_text(std::move(formula), source);
+  if (source == FormulaSource::kEntered && !file_name_.empty()) {
+    formula = parser::bind_self_book_names(formula, file_name_);
+  }
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 

@@ -623,6 +623,19 @@ JsStatus JsWorkbook::setExcelProfileId(const std::string& profile_id) {
                                            : kBindingInvalidHandle);
 }
 
+JsStringResult JsWorkbook::fileName() const {
+  if (handle_ == nullptr) {
+    return string_result(kBindingInvalidHandle, nullptr);
+  }
+  const char* name = nullptr;
+  const fm_status_t rc = fm_workbook_file_name(handle_, &name);
+  return string_result(rc, name);
+}
+
+JsStatus JsWorkbook::setFileName(const std::string& name) {
+  return status_from_rc(handle_ != nullptr ? fm_workbook_set_file_name(handle_, name.c_str()) : kBindingInvalidHandle);
+}
+
 emscripten::val JsWorkbook::partialRecalc(emscripten::val viewport) {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {

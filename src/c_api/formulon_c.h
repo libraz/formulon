@@ -1474,11 +1474,12 @@ FM_API fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_
  * `(row, col)` ascending; unwritten columns are not enumerated.
  *
  * On success the call writes `*out_row`, `*out_col`, `*out_value`, and
- * — if `out_formula != NULL` — points `*out_formula` at the cell's raw
- * formula text (or `NULL` when the cell is a pure literal). The
- * formula pointer is a model-backed view into the cell's own storage and is
- * valid until the next mutation that touches the sheet's cell store or until
- * the handle is destroyed. Reads on the same handle do not invalidate it.
+ * — if `out_formula != NULL` — points `*out_formula` at the cell's
+ * formula text, spelled as `fm_workbook_get_formula` returns it (or `NULL`
+ * when the cell is a pure literal). The formula pointer has the
+ * read-scratch lifetime described below for `*out_value`: valid until the
+ * next successful scratch-backed read on this handle, the next mutation, or
+ * handle destruction.
  *
  * A `FM_VAL_TEXT` payload in `*out_value`, by contrast, is a
  * read-scratch-backed view and may be invalidated by the next successful
@@ -1674,12 +1675,14 @@ FM_API size_t fm_workbook_defined_name_count(const fm_workbook_t* wb);
 /**
  * @brief Reads the `idx`-th defined name with its scope.
  *
- * On success `*out_name` and `*out_formula` are model-backed views into the
- * workbook handle. Both are valid until the next mutation of the
- * defined-name list -- `fm_workbook_set_defined_name`/`_scoped`, or any
- * workbook edit that rewrites defined names as a side effect (a structural
- * row/column insert/delete, or a sheet rename/removal) -- or until the
- * handle is destroyed. Reads do not invalidate them.
+ * On success `*out_name` is a model-backed view into the workbook handle,
+ * valid until the next mutation of the defined-name list --
+ * `fm_workbook_set_defined_name`/`_scoped`, or any workbook edit that
+ * rewrites defined names as a side effect (a structural row/column
+ * insert/delete, or a sheet rename/removal) -- or until the handle is
+ * destroyed. `*out_formula` is spelled as `fm_workbook_get_formula` spells
+ * formulas and is valid until the next successful scratch-backed read on
+ * this handle, the next mutation, or handle destruction.
  *
  * `out_local_sheet_id` is optional: when non-NULL it receives `-1` for
  * workbook scope, or a 0-based sheet index for sheet-local scope.
@@ -1793,9 +1796,12 @@ typedef struct {
  *                             `stdDev`, `var` or `custom`.
  *   * `totals_row_label`    — the totals-row label, empty when absent.
  *   * `totals_row_formula`  — the `custom` function's formula without a
- *                             leading `=`, empty otherwise.
+ *                             leading `=`, empty otherwise, spelled as
+ *                             `fm_workbook_get_formula` spells formulas.
  *
- * Views share the lifetime of `fm_workbook_table_at`'s; none is `NULL`.
+ * Views share the lifetime of `fm_workbook_table_at`'s; none is `NULL`. A
+ * `totals_row_formula` respelled from the model's (see
+ * `fm_workbook_file_name`) is read-scratch-backed instead.
  */
 typedef struct {
   const char* name;
@@ -2338,7 +2344,10 @@ FM_API fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, uint32_t she
  * `fm_sheet_add_validation`, `fm_sheet_remove_validation_at`,
  * `fm_sheet_clear_validations`, or any reader / writer round-trip), or
  * until the handle is destroyed. Callers that need to retain the
- * payload across mutations must copy it.
+ * payload across mutations must copy it. `formula1` / `formula2` are
+ * spelled as `fm_workbook_get_formula` spells formulas; when that spelling
+ * differs from the model's (see `fm_workbook_file_name`), both are
+ * read-scratch-backed instead, valid until the next scratch-backed read.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -2925,6 +2934,40 @@ FM_API fm_status_t fm_workbook_excel_profile_id(const fm_workbook_t* wb, const c
  *         `kInvalidArgument` if `profile_id` is not a documented profile.
  */
 FM_API fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const char* profile_id);
+
+/**
+ * @brief Reads the file name the workbook is shown under, extension included
+ *        and without a directory; `""` when unset.
+ *
+ * While a name is set, every getter that returns formula text spells a
+ * reference to the workbook's own defined name (stored `[0]!Name`) with it,
+ * as Excel's formula bar does: `M5.xlsx!Name`, quoted when the name needs it
+ * (`'M5 b-1.xlsx'!Name`). Unset, they return `[0]!Name`. Loading from bytes
+ * leaves the name unset. `*out_name` is read-scratch-backed.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_name` is NULL.
+ */
+FM_API fm_status_t fm_workbook_file_name(const fm_workbook_t* wb, const char** out_name);
+
+/**
+ * @brief Sets the file name `fm_workbook_file_name` reads; `""` unsets it.
+ *
+ * While a name is set, formula text entered through the C ABI that names it
+ * refers to this workbook and creates no external link: `<name>!Name` and
+ * `'<name>'!Name` are stored as `[0]!Name`, and `[<name>]Sheet1!A1` as
+ * `Sheet1!A1`. The book is matched under ASCII case folding. The stored form
+ * and the saved files do not depend on the name.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `name` is NULL;
+ *         `kInvalidArgument`, changing nothing, when `name` does not end in a
+ *           workbook extension (`.xlsx`, `.xlsm`, `.xlsb`, `.xls`, `.xltx`,
+ *           `.xltm`, `.xlt`, `.xlam`, `.xla`), holds one of `[ ] : / \ ? *`,
+ *           is not valid UTF-8, is longer than 218 bytes, or equals the book
+ *           name of an external link.
+ */
+FM_API fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name);
 
 /* -------------------------------------------------------------------------- */
 /* Sheet protection (per-sheet `<sheetProtection>`)                           */
@@ -5130,7 +5173,8 @@ FM_API fm_status_t fm_workbook_pivot_cache_calculated_field_remove(fm_workbook_t
  * @brief Reads the formula of cache field `field_idx`, without a leading `=`,
  *        into `*out_utf8`: an empty string when the field is not calculated.
  *        A model-backed view valid until the field's formula or the cache
- *        field list changes.
+ *        field list changes; a formula respelled from the model's (see
+ *        `fm_workbook_file_name`) is read-scratch-backed instead.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t* wb, uint32_t cache_id, size_t field_idx,
                                                          const char** out_utf8);

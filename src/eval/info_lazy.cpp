@@ -297,6 +297,10 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   // literals and only at identifier boundaries.
   const std::string stripped = parser::strip_storage_prefixes(cell->formula_text);
   std::string shown = localize_formula_text(stripped, current_eval_profile());
+  // The workbook's own names show under its file name, as in the formula bar.
+  if (const Workbook* wb = ctx.workbook(); wb != nullptr && wb->spells_self_book_names(shown)) {
+    shown = wb->spell_self_book_names(shown);
+  }
   // A legacy array formula shows in braces.
   if (cell->array_block_rows != 0U) {
     shown.insert(shown.begin(), '{');

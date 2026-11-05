@@ -758,6 +758,25 @@ fm_status_t check_stored_formula(const char* api, std::string_view formula, std:
   return 0;
 }
 
+std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula) {
+  if (formula.empty()) {
+    return std::string();
+  }
+  std::string text(formula);
+  wb->workbook().ingest_entered_formula(text);
+  if (!text.empty() && text.front() == '=') {
+    text.erase(0, 1);
+  }
+  return text;
+}
+
+const char* display_formula(const formulon::Workbook& book, const std::string& model, TextStore& store) {
+  if (!book.spells_self_book_names(model)) {
+    return model.c_str();
+  }
+  return store.emplace_back(book.spell_self_book_names(model)).c_str();
+}
+
 }  // namespace parts
 }  // namespace c_api
 }  // namespace formulon

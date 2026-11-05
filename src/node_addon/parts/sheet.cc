@@ -165,6 +165,8 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
   std::size_t sheet_index = 0;
   fm_table_info_t table{};
   std::vector<fm_table_column_info_t> columns;
+  // A respelled totals formula lives in read scratch, which the next column's read may recycle.
+  std::vector<std::string> totals_formulas;
   return StatusObject(
       info,
       [&](fm_workbook_t* handle) {
@@ -174,8 +176,12 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
           rc = fm_workbook_table_get_info(handle, idx, &table);
         }
         columns.resize(rc == 0 ? table.column_count : 0U);
+        totals_formulas.resize(columns.size());
         for (std::size_t i = 0; rc == 0 && i < columns.size(); ++i) {
           rc = fm_workbook_table_get_column(handle, idx, i, &columns[i]);
+          if (rc == 0) {
+            totals_formulas[i] = columns[i].totals_row_formula;
+          }
         }
         return rc;
       },
@@ -199,7 +205,7 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
           c.Set("name", JsString(env, columns[i].name));
           c.Set("totalsRowFunction", JsString(env, columns[i].totals_row_function));
           c.Set("totalsRowLabel", JsString(env, columns[i].totals_row_label));
-          c.Set("totalsRowFormula", JsString(env, columns[i].totals_row_formula));
+          c.Set("totalsRowFormula", Napi::String::New(env, totals_formulas[i]));
           list.Set(static_cast<uint32_t>(i), c);
         }
         out.Set("columns", list);

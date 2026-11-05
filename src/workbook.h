@@ -382,7 +382,8 @@ class Workbook {
   /// `formula` is the raw Excel-style formula text. Whether or not it begins
   /// with `=` is not checked here — the parser owns that contract — but
   /// callers typically pass the leading `=`. The stored text is
-  /// `normalize_formula_text(formula, source)`. The cell's `cached_value` is
+  /// `normalize_formula_text(formula, source)`, `kEntered` text then bound by
+  /// `bind_self_book_names`. The cell's `cached_value` is
   /// reset to blank; a subsequent `recalc()` populates it.
   ///
   /// Side effects:
@@ -452,6 +453,35 @@ class Workbook {
   /// absolute directory when it has one), then `bind_external_books`.
   /// `[0]!Name` is kept as stored. The result is `kRendered` text.
   std::string ingest_stored_formula(std::string_view stored, FormulaSource source);
+
+  /// Model spelling of entered formula text, in place:
+  /// `normalize_formula_text(formula, kEntered)`, then
+  /// `bind_self_book_names`, then `bind_external_books`.
+  void ingest_entered_formula(std::string& formula);
+
+  /// The file name the workbook is shown under, extension included and
+  /// without a directory; empty when unset. A formula bar spells `[0]!Name`
+  /// with it (`M5.xlsx!Name`). Loading from bytes leaves it unset.
+  const std::string& file_name() const noexcept { return file_name_; }
+
+  /// Sets `file_name()`; an empty `name` unsets it. Returns
+  /// `kInvalidArgument`, changing nothing, when `name` does not end in a
+  /// workbook extension, holds one of `[ ] : / \ ? *` or NUL, is not valid
+  /// UTF-8, is longer than 218 bytes, or equals the book name of an external
+  /// link under ASCII case folding.
+  Expected<void, Error> set_file_name(std::string_view name);
+
+  /// `text` with every `[0]!Name` spelled with `file_name()`
+  /// (`parser::spell_self_book_names`); unchanged when no name is set.
+  std::string spell_self_book_names(std::string_view text) const;
+
+  /// Whether `spell_self_book_names` may change `text`.
+  bool spells_self_book_names(std::string_view text) const noexcept;
+
+  /// Entered `text` bound to this workbook (`parser::bind_self_book_names`):
+  /// `<file_name>!Name` becomes `[0]!Name` and `[<file_name>]Sheet!ref`
+  /// becomes `Sheet!ref`; unchanged when no name is set.
+  std::string bind_self_book_names(std::string_view text) const;
 
   /// Spells every loaded formula without the dynamic-array mark as Excel 365
   /// shows it, with an `@` wherever the legacy formula intersects implicitly
@@ -621,7 +651,8 @@ class Workbook {
   /// Replaces the workbook's defined-name list and refreshes dependencies
   /// of formulas using changed definitions. Metadata-only changes preserve
   /// cached values and spill geometry. Formula validation remains deferred
-  /// to evaluation, matching the I/O readers' raw name-list hand-off.
+  /// to evaluation, matching the I/O readers' raw name-list hand-off. Each
+  /// formula passes through `bind_self_book_names`.
   void set_defined_names(std::vector<DefinedName> names);
 
   /// Sets the formula text of the workbook-scoped defined name `name`,
@@ -639,7 +670,8 @@ class Workbook {
   /// or appends it if it does not exist. Pass `-1` for workbook scope;
   /// pass a 0-based sheet index for sheet scope. An empty formula
   /// removes the matching entry. Lookups are case-insensitive within
-  /// the same scope only, matching Excel's name-resolution model.
+  /// the same scope only, matching Excel's name-resolution model. The
+  /// formula passes through `bind_self_book_names`.
   ///
   /// Returns `kInvalidArgument` when `name` is empty or
   /// `local_sheet_id` names a sheet outside the workbook.
@@ -1379,6 +1411,8 @@ class Workbook {
   std::vector<TableMetadata> tables_;
   std::vector<PassthroughPart> passthrough_parts_;
   std::vector<ExternalLinkRecord> external_links_;
+  // See `file_name()`.
+  std::string file_name_;
   // Workbook-rels entries with unrecognised Type URIs (theme, calcChain,
   // vbaProject, customXml, ...). Round-trip metadata only; the parts
   // themselves live in `passthrough_parts_`.

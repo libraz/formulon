@@ -79,9 +79,10 @@ extern "C" fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, siz
   // The arena backs any text payload in the result until it is copied into
   // the read scratch below.
   formulon::Arena arena = make_eval_arena();
-  const formulon::Value v =
-      formulon::eval::evaluate_formula_text(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
-                                            std::string_view(formula), arena, formulon::eval::default_registry());
+  // `<file_name>!Name` names this workbook; nothing is bound.
+  const std::string text = wb->workbook().bind_self_book_names(formula);
+  const formulon::Value v = formulon::eval::evaluate_formula_text(
+      wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
     return arena_exhausted_error("fm_workbook_evaluate_formula");
   }
@@ -112,9 +113,9 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* w
   // The arena backs any text payload in the result until it is deep-copied
   // into the per-handle stash below.
   formulon::Arena arena = make_eval_arena();
-  const formulon::Value v =
-      formulon::eval::evaluate_formula_text_array(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
-                                                  std::string_view(formula), arena, formulon::eval::default_registry());
+  const std::string text = wb->workbook().bind_self_book_names(formula);
+  const formulon::Value v = formulon::eval::evaluate_formula_text_array(
+      wb->workbook(), wb->workbook().sheet(sheet_index), row, col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
     return arena_exhausted_error("fm_workbook_evaluate_formula_array");
   }
@@ -196,9 +197,10 @@ extern "C" fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, 
     return rc;
   }
   formulon::Arena arena = make_eval_arena();
-  const bool fired = formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
-                                                         anchor_row, anchor_col, std::string_view(formula), arena,
-                                                         formulon::eval::default_registry());
+  const std::string text = wb->workbook().bind_self_book_names(formula);
+  const bool fired =
+      formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col, anchor_row,
+                                          anchor_col, text, arena, formulon::eval::default_registry());
   if (arena.exhausted()) {
     return arena_exhausted_error("fm_workbook_evaluate_cf_formula");
   }

@@ -191,6 +191,25 @@ Napi::Value Workbook::SetExcelProfileId(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::FileName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeStringResult(env, kBindingInvalidHandle, nullptr);
+  }
+  const char* name = nullptr;
+  const fm_status_t rc = fm_workbook_file_name(handle_, &name);
+  return MakeStringResult(env, rc, name);
+}
+
+Napi::Value Workbook::SetFileName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::string name = ArgString(info, 0);
+  return MakeStatus(env, fm_workbook_set_file_name(handle_, name.c_str()));
+}
+
 // ---- Recalc + save --------------------------------------------------
 
 Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {

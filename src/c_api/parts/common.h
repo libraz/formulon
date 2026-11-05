@@ -128,6 +128,16 @@ fm_status_t check_formula_parses(const char* api, std::string_view formula, std:
 // refused. An empty `formula` yields "".
 fm_status_t check_stored_formula(const char* api, std::string_view formula, std::string_view context, std::string* out);
 
+// Stored form of a `formula` that passed `check_stored_formula`, taken as the
+// entry commits: `Workbook::ingest_entered_formula` (which binds the books it
+// names) without the one leading '='. An empty `formula` yields "".
+std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula);
+
+// Model formula text as a getter hands it out: `model`'s own bytes when the
+// workbook spells it unchanged, else its `Workbook::spell_self_book_names`
+// spelling appended to `store`.
+const char* display_formula(const formulon::Workbook& book, const std::string& model, TextStore& store);
+
 // Returns the thread-local diagnostic message buffer (always non-null).
 const char* last_error_message();
 

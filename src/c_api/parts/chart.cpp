@@ -29,6 +29,7 @@ using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -126,6 +127,27 @@ fm_chart_labels_t to_fm(const formulon::ChartLabels& l) {
 
 fm_chart_data_source_t to_fm(const formulon::ChartDataSource& d) {
   return fm_chart_data_source_t{static_cast<std::int32_t>(d.kind), d.formula.c_str(), d.literal.size()};
+}
+
+/// Respells every formula `model` carries as the workbook's getters hand formulas out.
+void spell_formulas(const formulon::Workbook& book, formulon::ChartModel& model) {
+  const auto spell = [&book](std::string& text) {
+    if (book.spells_self_book_names(text)) {
+      text = book.spell_self_book_names(text);
+    }
+  };
+  spell(model.title.ref_formula);
+  for (formulon::ChartAxis& axis : model.axes) {
+    spell(axis.title.ref_formula);
+  }
+  for (formulon::ChartPlot& plot : model.plots) {
+    for (formulon::ChartSeries& series : plot.series) {
+      for (formulon::ChartDataSource* source :
+           {&series.name, &series.cat, &series.val, &series.x, &series.y, &series.size}) {
+        spell(source->formula);
+      }
+    }
+  }
 }
 
 const formulon::ChartDataSource* source_of(const formulon::ChartSeries& s, std::int32_t role) {
@@ -380,6 +402,21 @@ formulon::ChartSeriesPatch read_series(PatchReader& r, const fm_chart_series_pat
   return out;
 }
 
+/// Stores the formulas a patch enters, once its checks passed (see `ingest_entered_formula`).
+void ingest_series_refs(fm_workbook_t* wb, formulon::ChartSeriesPatch& patch) {
+  for (std::optional<std::string>* ref : {&patch.name, &patch.cat, &patch.val, &patch.x, &patch.y, &patch.size}) {
+    if (ref->has_value() && !(*ref)->empty()) {
+      **ref = ingest_entered_formula(wb, **ref);
+    }
+  }
+}
+
+void ingest_title_ref(fm_workbook_t* wb, formulon::ChartTitle& title) {
+  if (!title.ref_formula.empty()) {
+    title.ref_formula = ingest_entered_formula(wb, title.ref_formula);
+  }
+}
+
 /// Shared entry checks of the edit functions.
 fm_status_t edit_entry(const fm_workbook_t* wb, std::size_t sheet_index, const void* required, const char* api) {
   clear_last_error();
@@ -412,6 +449,7 @@ extern "C" fm_status_t fm_sheet_chart_open(const fm_workbook_t* wb, size_t sheet
   }
   auto handle = std::unique_ptr<fm_chart_t>(new fm_chart_t{});
   handle->model = std::move(model.value());
+  spell_formulas(wb->workbook(), handle->model);
   *out = handle.release();
   return 0;
 }
@@ -984,7 +1022,9 @@ extern "C" fm_status_t fm_sheet_set_chart_title(fm_workbook_t* wb, size_t sheet_
   if (auto rc = check_utf8(kApi, {title->text, title->formula}); rc != 0) {
     return rc;
   }
-  return finish_status(formulon::set_chart_title(wb->workbook(), sheet_index, object_id, title_of(*title)));
+  formulon::ChartTitle model = title_of(*title);
+  ingest_title_ref(wb, model);
+  return finish_status(formulon::set_chart_title(wb->workbook(), sheet_index, object_id, model));
 }
 
 extern "C" fm_status_t fm_sheet_set_chart_legend(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
@@ -1040,6 +1080,9 @@ extern "C" fm_status_t fm_sheet_set_chart_axis(fm_workbook_t* wb, size_t sheet_i
   if (r.status() != 0) {
     return r.status();
   }
+  if (model.title.is_set()) {
+    ingest_title_ref(wb, model.title.value);
+  }
   return finish_status(formulon::set_chart_axis(wb->workbook(), sheet_index, object_id, axis_id, model));
 }
 
@@ -1070,10 +1113,11 @@ extern "C" fm_status_t fm_sheet_set_chart_series(fm_workbook_t* wb, size_t sheet
     return rc;
   }
   PatchReader r(kApi);
-  const formulon::ChartSeriesPatch model = read_series(r, *patch);
+  formulon::ChartSeriesPatch model = read_series(r, *patch);
   if (r.status() != 0) {
     return r.status();
   }
+  ingest_series_refs(wb, model);
   return finish_status(formulon::set_chart_series(wb->workbook(), sheet_index, object_id, plot, series_idx, model));
 }
 
@@ -1149,10 +1193,11 @@ extern "C" fm_status_t fm_sheet_add_chart_series(fm_workbook_t* wb, size_t sheet
     return null_argument(kApi);
   }
   PatchReader r(kApi);
-  const formulon::ChartSeriesPatch model = read_series(r, *patch);
+  formulon::ChartSeriesPatch model = read_series(r, *patch);
   if (r.status() != 0) {
     return r.status();
   }
+  ingest_series_refs(wb, model);
   auto idx = formulon::add_chart_series(wb->workbook(), sheet_index, object_id, plot, model);
   if (!idx) {
     return set_last_error(idx.error());

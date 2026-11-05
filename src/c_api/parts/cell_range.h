@@ -66,6 +66,15 @@ struct fm_cell_range {
     formulon::c_api::parts::value_to_fm(cell.value, text, &entry.value);
     entries.push_back(entry);
   }
+
+  // Respells every entry's formula as `book`'s getters hand formulas out.
+  void spell_formulas(const formulon::Workbook& book) {
+    for (Entry& entry : entries) {
+      if (entry.formula != nullptr && book.spells_self_book_names(entry.formula)) {
+        entry.formula = text.emplace_back(book.spell_self_book_names(entry.formula)).c_str();
+      }
+    }
+  }
 };
 
 #endif  // FORMULON_C_API_PARTS_CELL_RANGE_H_

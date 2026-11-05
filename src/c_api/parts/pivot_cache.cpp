@@ -34,6 +34,7 @@ using formulon::c_api::parts::check_finite;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::find_cache_mut;
 using formulon::c_api::parts::fresh_read_scratch;
@@ -955,7 +956,13 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_formula(const fm_workbook_t
   if (field == nullptr) {
     return status;
   }
-  *out_utf8 = field->formula.has_value() ? field->formula->c_str() : "";
+  if (!field->formula.has_value()) {
+    *out_utf8 = "";
+  } else if (wb->workbook().spells_self_book_names(*field->formula)) {
+    *out_utf8 = display_formula(wb->workbook(), *field->formula, fresh_read_scratch(wb));
+  } else {
+    *out_utf8 = field->formula->c_str();
+  }
   return 0;
 }
 

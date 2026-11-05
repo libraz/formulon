@@ -41,6 +41,7 @@ using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::publish_scratch;
@@ -466,7 +467,7 @@ extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t shee
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_lambda_text_at: lambda payload is NULL");
   }
-  std::string formatted = formulon::eval::format_lambda_value(*lv);
+  std::string formatted = wb->workbook().spell_self_book_names(formulon::eval::format_lambda_value(*lv));
   // Read-path scratch: cleared per call so the lambda text does not
   // accumulate across repeated reads. The returned pointer is valid until
   // the next read on this handle (see `formulon_c.h`).
@@ -584,18 +585,20 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   const formulon::Cell* cell = sheet.cell_at(row, col);
   const formulon::DataTable* table =
       cell != nullptr && !cell->formula_text.empty() ? nullptr : sheet.data_table_covering(row, col);
+  // `out_value`'s text payload goes to `read_scratch` (cleared per call,
+  // valid until the next read), as does a formula the workbook respells;
+  // any other formula points into the cell's own `formula_text`.
+  TextStore& store = fresh_read_scratch(wb);
   if (out_formula != nullptr) {
-    *out_formula = (cell != nullptr && !cell->formula_text.empty()) ? cell->formula_text.c_str() : nullptr;
+    *out_formula = (cell != nullptr && !cell->formula_text.empty())
+                       ? display_formula(wb->workbook(), cell->formula_text, store)
+                       : nullptr;
   }
   // Use the spill-aware accessor so phantoms surface their owning anchor's
   // value. The phantoms themselves are still indexed via `cell_at`'s
   // implicit default cells; users that want only stored formulae filter
   // by `out_formula != NULL`.
   const formulon::Value v = sheet.resolve_cell_value(row, col);
-  // `out_value`'s text payload goes to `read_scratch` (cleared per call,
-  // valid until the next read). `out_formula` above points into the
-  // cell's own `formula_text`, not scratch, so clearing here is safe.
-  TextStore& store = fresh_read_scratch(wb);
   if (out_formula != nullptr && table != nullptr) {
     *out_formula = store.emplace_back(formulon::data_table_formula_text(*table)).c_str();
   }
@@ -671,7 +674,7 @@ extern "C" fm_status_t fm_workbook_get_array_formula(const fm_workbook_t* wb, st
   out->anchor_col = info->anchor_col;
   out->rows = info->rows;
   out->cols = info->cols;
-  out->formula = publish_scratch(wb, info->formula);
+  out->formula = publish_scratch(wb, wb->workbook().spell_self_book_names(info->formula));
   out->engaged = 1;
   return 0;
 }
@@ -740,7 +743,7 @@ extern "C" fm_status_t fm_workbook_get_formula(const fm_workbook_t* wb, size_t s
       rc != 0) {
     return rc;
   }
-  *out_formula = publish_scratch(wb, std::move(text));
+  *out_formula = publish_scratch(wb, wb->workbook().spell_self_book_names(text));
   return 0;
 }
 
@@ -763,7 +766,8 @@ extern "C" fm_status_t fm_workbook_get_formula_r1c1(const fm_workbook_t* wb, siz
                              "fm_workbook_get_formula_r1c1: stored formula does not parse",
                              "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
-  *out_formula = publish_scratch(wb, formulon::parser::format_formula_r1c1(*root, row, col));
+  *out_formula =
+      publish_scratch(wb, wb->workbook().spell_self_book_names(formulon::parser::format_formula_r1c1(*root, row, col)));
   return 0;
 }
 
@@ -801,6 +805,7 @@ extern "C" fm_status_t fm_sheet_cells_in_range(const fm_workbook_t* wb, size_t s
       entry.formula = handle->text.emplace_back(formulon::data_table_formula_text(*table)).c_str();
     }
   }
+  handle->spell_formulas(wb->workbook());
   *out = handle.release();
   return 0;
 }

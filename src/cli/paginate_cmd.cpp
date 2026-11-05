@@ -96,6 +96,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "paginate");
     return status;
   }
+  set_file_name_from_path(workbook.handle, input_path);
   if (const auto status = apply_shared_options(workbook.handle, shared); status != 0) {
     emit_last_error(err, "paginate");
     return status;

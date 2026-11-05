@@ -126,6 +126,8 @@ fm_workbook_set_pinned_now
 fm_workbook_clear_pinned_now
 fm_workbook_excel_profile_id
 fm_workbook_set_excel_profile_id
+fm_workbook_file_name
+fm_workbook_set_file_name
 
 # -- Sheet UI: merges / hyperlinks / comments ------------------------------------
 fm_sheet_add_merge

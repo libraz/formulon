@@ -229,6 +229,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       // Profile ids are {mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,
       // th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}. New workbooks default to win-365-en_US.
       .function("excelProfileId", &JsWorkbook::excelProfileId)
+      .function("fileName", &JsWorkbook::fileName)
       .function("fillCount", &JsWorkbook::fillCount)
       .function("fontCount", &JsWorkbook::fontCount)
       .function("functionMetadata", &JsWorkbook::functionMetadata)
@@ -618,6 +619,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setError", &JsWorkbook::setError)
       // `setExcelProfileId` accepts the fourteen ids documented at `excelProfileId`.
       .function("setExcelProfileId", &JsWorkbook::setExcelProfileId)
+      .function("setFileName", &JsWorkbook::setFileName)
       .function("setFormula", &JsWorkbook::setFormula)
       .function("setIterative", &JsWorkbook::setIterative)
       .function("setIterativeProgress", &JsWorkbook::setIterativeProgress)

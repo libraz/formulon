@@ -21,7 +21,10 @@ using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
@@ -464,8 +467,15 @@ extern "C" fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, std::uint32
   out->show_input_message = v.show_input_message ? 1 : 0;
   out->show_error_message = v.show_error_message ? 1 : 0;
   out->show_dropdown = v.show_dropdown ? 1 : 0;
-  out->formula1 = v.formula1.c_str();
-  out->formula2 = v.formula2.c_str();
+  const formulon::Workbook& book = wb->workbook();
+  if (book.spells_self_book_names(v.formula1) || book.spells_self_book_names(v.formula2)) {
+    formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
+    out->formula1 = display_formula(book, v.formula1, store);
+    out->formula2 = display_formula(book, v.formula2, store);
+  } else {
+    out->formula1 = v.formula1.c_str();
+    out->formula2 = v.formula2.c_str();
+  }
   out->error_title = v.error_title.c_str();
   out->error_message = v.error_message.c_str();
   out->prompt_title = v.prompt_title.c_str();
@@ -513,12 +523,12 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
   out.error_message = text_or_empty(v.error_message);
   out.prompt_title = text_or_empty(v.prompt_title);
   out.prompt_message = text_or_empty(v.prompt_message);
-  wb->workbook().sheet(sheet).mutable_validations().push_back(std::move(out));
-  for (const char* text : formula_fields) {
-    if (text != nullptr && text[0] != '\0') {
-      wb->workbook().bind_external_books(text);
+  for (std::size_t i = 0; i < 2; ++i) {
+    if (formula_fields[i] != nullptr) {
+      *formula_slots[i] = ingest_entered_formula(wb, formula_fields[i]);
     }
   }
+  wb->workbook().sheet(sheet).mutable_validations().push_back(std::move(out));
   return 0;
 }
 

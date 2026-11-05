@@ -27,7 +27,10 @@ using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_stored_formula;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::display_formula;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_read_scratch;
+using formulon::c_api::parts::ingest_entered_formula;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
@@ -489,7 +492,10 @@ extern "C" fm_status_t fm_workbook_table_get_column(const fm_workbook_t* wb, siz
   out->name = col.name.c_str();
   out->totals_row_function = col.totals_function.empty() ? "none" : col.totals_function.c_str();
   out->totals_row_label = col.totals_label.c_str();
-  out->totals_row_formula = col.totals_row_formula.c_str();
+  // Read scratch holds a respelled formula; any other one is the model's.
+  out->totals_row_formula = wb->workbook().spells_self_book_names(col.totals_row_formula)
+                                ? display_formula(wb->workbook(), col.totals_row_formula, fresh_read_scratch(wb))
+                                : col.totals_row_formula.c_str();
   return 0;
 }
 
@@ -579,6 +585,7 @@ extern "C" fm_status_t fm_workbook_table_set_column_totals(fm_workbook_t* wb, si
         rc != 0) {
       return rc;
     }
+    stored_formula = ingest_entered_formula(wb, formula);
   }
   formulon::TableColumn& col = tables[index].columns[column];
   col.totals_function = token == "none" ? std::string() : std::string(token);

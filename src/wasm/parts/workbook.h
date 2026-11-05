@@ -192,6 +192,8 @@ class JsWorkbook {
   JsStatus clearPinnedNow();
   JsStringResult excelProfileId() const;
   JsStatus setExcelProfileId(const std::string& profile_id);
+  JsStringResult fileName() const;
+  JsStatus setFileName(const std::string& name);
   emscripten::val partialRecalc(emscripten::val viewport);
   /// Installs the JS callback the iterative solver invokes after each
   /// sweep, or clears it when `cb` is null / undefined. A callback that

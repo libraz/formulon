@@ -18,6 +18,7 @@ using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::validate;
@@ -353,6 +354,33 @@ extern "C" fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const
     // INFO/CELL, other host-dependent branches) is not confined to a
     // enumerable set of function names the way SUBTOTAL/AGGREGATE are, so
     // every formula cell needs the recompute rather than a scoped subset.
+    book.mark_all_formulas_dirty();
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_file_name(const fm_workbook_t* wb, const char** out_name) {
+  clear_last_error();
+  if (wb == nullptr || out_name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_file_name: NULL argument");
+  }
+  *out_name = publish_scratch(wb, wb->workbook().file_name());
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_file_name: NULL argument");
+  }
+  formulon::Workbook& book = wb->workbook();
+  const bool changed = book.file_name() != name;
+  if (auto result = book.set_file_name(name); !result) {
+    return set_last_error(result.error());
+  }
+  if (changed) {
+    // FORMULATEXT spells the workbook's own names with the file name.
     book.mark_all_formulas_dirty();
   }
   return 0;

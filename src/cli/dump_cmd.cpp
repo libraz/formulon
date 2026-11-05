@@ -235,6 +235,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "dump");
     return rc;
   }
+  set_file_name_from_path(wb.handle, input_path);
 
   if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
     emit_last_error(err, "dump");

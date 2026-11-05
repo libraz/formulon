@@ -130,6 +130,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ExcelProfileId(const Napi::CallbackInfo& info);
   /// SetExcelProfileId accepts the same 28 ids.
   Napi::Value SetExcelProfileId(const Napi::CallbackInfo& info);
+  /// The file name `[0]!Name` is spelled with; see `fm_workbook_file_name`.
+  Napi::Value FileName(const Napi::CallbackInfo& info);
+  Napi::Value SetFileName(const Napi::CallbackInfo& info);
 
   // Dependency-graph trace and dynamic-array spill.
   Napi::Value Precedents(const Napi::CallbackInfo& info);

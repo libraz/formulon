@@ -193,7 +193,7 @@ export interface CellEntry {
   status: Status;
   row?: number;
   col?: number;
-  /** Raw formula text, or `null` for pure literals. */
+  /** Formula text spelled as `getFormula` returns it, or `null` for pure literals. */
   formula?: string | null;
   value?: Value;
 }
@@ -202,6 +202,7 @@ export interface CellEntry {
 export interface DefinedNameEntry {
   status: Status;
   name?: string;
+  /** Formula text spelled as `getFormula` spells formulas. */
   formula?: string;
   /** -1 for workbook scope; otherwise a 0-based sheet index. */
   localSheetId?: number;
@@ -4077,6 +4078,15 @@ export interface Workbook {
   /** Selects the formula-behaviour profile; `kInvalidArgument` for an id that is not an {@link ExcelProfileId}.
    *  Cached formula values are not recomputed until the next `recalc()`. */
   setExcelProfileId(profileId: ExcelProfileId): Status;
+  /** File name the workbook is shown under, extension included and without a directory; `""` when unset.
+   *  While set, every formula getter spells a reference to the workbook's own defined name (stored `[0]!Name`)
+   *  as `Book.xlsx!Name`, quoted when needed (`'My Book.xlsx'!Name`); unset, it reads `[0]!Name`.
+   *  Loading from bytes leaves it unset. */
+  fileName(): StringResult;
+  /** Sets `fileName()`; `""` unsets it. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1`
+   *  as this workbook and create no external link. `kInvalidArgument` when the name lacks a workbook extension,
+   *  holds one of `[ ] : / \ ? *`, is longer than 218 bytes, or equals an external link's book name. */
+  setFileName(name: string): Status;
 
   /**
    * The four structural edits move every structure the engine models:
