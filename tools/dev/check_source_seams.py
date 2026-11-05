@@ -127,6 +127,10 @@ _VALUE_FILES = ("value.", "sheet_name", "phonetic.h", "value_sort_order.h", "exc
 _FACADE_FILES = frozenset(
     {
         "workbook.cpp",
+        "workbook_internal.h",
+        "workbook_defined_names.cpp",
+        "workbook_external_links.cpp",
+        "workbook_merges_arrays.cpp",
         "workbook_formula_index.h",
         "workbook_formula_index.cpp",
         "workbook_ref_rewrite.h",
