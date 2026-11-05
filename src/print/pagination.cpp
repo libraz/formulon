@@ -148,6 +148,11 @@ struct PageSpan {
   double extent_pt = 0.0;
 };
 
+/// The `<pageSetup scale>` percentage as a factor, floored at the minimum.
+double FixedScaleFactor(const PageSetup& setup) {
+  return std::max(kMinScaleFactor, static_cast<double>(setup.scale) / kPercentDivisor);
+}
+
 /// Computes the uniform scale factor applied to cell sizes.
 ///
 /// When `fit_to_page` is set, derives a factor that shrinks the print
@@ -169,7 +174,7 @@ struct PageSpan {
 double ComputeScaleFactor(const PageSetup& setup, const PrintableArea& area, double total_width_pt,
                           double total_height_pt, double title_width_pt, double title_height_pt) {
   if (!setup.fit_to_page) {
-    return std::max(kMinScaleFactor, static_cast<double>(setup.scale) / kPercentDivisor);
+    return FixedScaleFactor(setup);
   }
 
   double factor = 1.0;
@@ -217,6 +222,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   const SheetPrintSettings& settings = sheet.print_settings();
   const PageSetup& page_setup = settings.page_setup;
   const PageMargins& page_margins = settings.page_margins;
+  const PrintableArea page_body = compute_printable_area(page_setup, page_margins);
   {
     const PaperDimensions paper = resolve_paper_dimensions(page_setup.paper_size);
     result.paper.landscape = page_setup.orientation == Orientation::kLandscape;
@@ -226,12 +232,9 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     result.margins = MarginsPt{page_margins.left * kPointsPerInch,   page_margins.right * kPointsPerInch,
                                page_margins.top * kPointsPerInch,    page_margins.bottom * kPointsPerInch,
                                page_margins.header * kPointsPerInch, page_margins.footer * kPointsPerInch};
-    const PrintableArea printable = compute_printable_area(page_setup, page_margins);
-    result.printable = RectPt{result.margins.left, result.margins.top, printable.width_pt, printable.height_pt};
+    result.printable = RectPt{result.margins.left, result.margins.top, page_body.width_pt, page_body.height_pt};
     result.page_order = settings.page_setup.page_order;
-    result.scale = page_setup.fit_to_page
-                       ? 1.0
-                       : std::max(kMinScaleFactor, static_cast<double>(page_setup.scale) / kPercentDivisor);
+    result.scale = page_setup.fit_to_page ? 1.0 : FixedScaleFactor(page_setup);
   }
 
   // Excel's `HPageBreaks` / `VPageBreaks` are populated against the
@@ -324,7 +327,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   };
 
   // 2. Printable body area is determined once from the page setup.
-  PrintableArea body = compute_printable_area(settings.page_setup, settings.page_margins);
+  PrintableArea body = page_body;
 
   // Print titles (repeat-rows / repeat-columns) are reprinted on every
   // page, so they steal body extent that is otherwise available for
