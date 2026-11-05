@@ -330,9 +330,7 @@ void register_web_builtins(FunctionRegistry& registry) {
   // propagate_errors = true) before the fixed return fires.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"ENCODEURL", 1u, 1u, &EncodeUrl},
-      builtins_detail::absent_on_mac({"FILTERXML", 2u, 2u, &FilterXml, true, false, false, false, false,
-                                      FunctionDef::BlankScalarPolicy::Allow, ErrorCode::Value,
-                                      FunctionDef::ResultShape::kArray}),
+      builtins_detail::absent_on_mac(builtins_detail::array_result({"FILTERXML", 2u, 2u, &FilterXml})),
       builtins_detail::absent_on_mac({"WEBSERVICE", 1u, 1u, &WebService}),
       {"PY", 1u, 1u, &Py},
   };

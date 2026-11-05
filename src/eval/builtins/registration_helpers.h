@@ -70,6 +70,12 @@ constexpr BuiltinRegistration scalar_last_arg(BuiltinRegistration def) noexcept 
   return def;
 }
 
+/// Marks `def` as producing an array result regardless of its inputs.
+constexpr BuiltinRegistration array_result(BuiltinRegistration def) noexcept {
+  def.result_shape = FunctionDef::ResultShape::kArray;
+  return def;
+}
+
 /// Marks `def` as a function Mac Excel does not provide; see
 /// `FunctionDef::absent_on_mac`.
 constexpr BuiltinRegistration absent_on_mac(BuiltinRegistration def) noexcept {
