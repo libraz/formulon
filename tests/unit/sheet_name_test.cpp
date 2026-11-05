@@ -3,8 +3,11 @@
 #include "sheet_name.h"
 
 #include <string>
+#include <vector>
 
 #include "gtest/gtest.h"
+#include "sheet_name_casefold_data.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace sheet_names {
@@ -45,6 +48,70 @@ TEST(SheetNameIdentity, RejectsMalformedUtf8) {
 TEST(SheetNameIdentity, AcceptsMaximumUnicodeScalar) {
   EXPECT_TRUE(valid_utf8("\xF4\x8F\xBF\xBF"));
   EXPECT_TRUE(equal("\xF4\x8F\xBF\xBF", "\xF4\x8F\xBF\xBF"));
+}
+
+// Scalar-by-scalar reference: strict decode, simple fold, no byte-level shortcuts.
+bool reference_equal(const std::string& lhs, const std::string& rhs) {
+  std::size_t l = 0;
+  std::size_t r = 0;
+  while (l < lhs.size() && r < rhs.size()) {
+    const Utf8DecodeResult a = decode_first_utf8_codepoint(std::string_view(lhs).substr(l));
+    const Utf8DecodeResult b = decode_first_utf8_codepoint(std::string_view(rhs).substr(r));
+    if (!a.valid || !b.valid || detail::fold_scalar(a.codepoint) != detail::fold_scalar(b.codepoint)) {
+      return false;
+    }
+    l += a.byte_len;
+    r += b.byte_len;
+  }
+  return l == lhs.size() && r == rhs.size();
+}
+
+TEST(SheetNameIdentity, AsciiFastPathMatchesScalarFold) {
+  for (int a = 0; a < 128; ++a) {
+    for (int b = 0; b < 128; ++b) {
+      const std::string x(1, static_cast<char>(a));
+      const std::string y(1, static_cast<char>(b));
+      EXPECT_EQ(equal(x, y), reference_equal(x, y)) << a << "," << b;
+    }
+  }
+  const std::vector<std::string> corpus = {"",
+                                           "Sheet1",
+                                           "sheet1",
+                                           "SHEET1",
+                                           "Sheet12",
+                                           "Sheet",
+                                           "Sheet1\xC3\xA4",
+                                           "sheet1\xC3\x84",
+                                           "Sheet1\xFF",
+                                           "sheet1\xFF",
+                                           "\xE2\x84\xAA",
+                                           "K",
+                                           "k",
+                                           "\xE2\x84\xAA"
+                                           "elvin",
+                                           "Kelvin",
+                                           "kelvin",
+                                           "a\xC3\x84"
+                                           "b",
+                                           "A\xC3\xA4"
+                                           "B",
+                                           "a\xC3\x84",
+                                           "a\xC3",
+                                           "A\xC3",
+                                           "\xC3\xA4",
+                                           "\xC3\x84",
+                                           "Data \xE6\x97\xA5",
+                                           "data \xE6\x97\xA5",
+                                           "DATA \xE6\x97\xA5\xE6",
+                                           "Z[",
+                                           "z{",
+                                           "@`",
+                                           "`@"};
+  for (const std::string& x : corpus) {
+    for (const std::string& y : corpus) {
+      EXPECT_EQ(equal(x, y), reference_equal(x, y)) << x << " vs " << y;
+    }
+  }
 }
 
 }  // namespace

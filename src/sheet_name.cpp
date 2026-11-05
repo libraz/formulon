@@ -44,11 +44,24 @@ bool valid_utf8(std::string_view name) noexcept {
 }
 
 bool equal(std::string_view lhs, std::string_view rhs) noexcept {
-  if (lhs == rhs) {
-    return valid_utf8(lhs);
-  }
+  // ASCII prefix: a one-byte scalar folds by A-Z -> a-z only; the first non-ASCII byte on either side hands over to
+  // the scalar loop at the same offset.
+  const std::size_t common = lhs.size() < rhs.size() ? lhs.size() : rhs.size();
   std::size_t lhs_offset = 0;
-  std::size_t rhs_offset = 0;
+  while (lhs_offset < common) {
+    unsigned char a = static_cast<unsigned char>(lhs[lhs_offset]);
+    unsigned char b = static_cast<unsigned char>(rhs[lhs_offset]);
+    if (((a | b) & 0x80U) != 0U) {
+      break;
+    }
+    a = (a >= 'A' && a <= 'Z') ? static_cast<unsigned char>(a + 0x20U) : a;
+    b = (b >= 'A' && b <= 'Z') ? static_cast<unsigned char>(b + 0x20U) : b;
+    if (a != b) {
+      return false;
+    }
+    ++lhs_offset;
+  }
+  std::size_t rhs_offset = lhs_offset;
   while (lhs_offset < lhs.size() && rhs_offset < rhs.size()) {
     std::uint32_t lhs_scalar = 0;
     std::uint32_t rhs_scalar = 0;
