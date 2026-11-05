@@ -77,6 +77,59 @@ struct R1C1Base {
   std::uint32_t col = 0;  ///< 0-based.
 };
 
+/// The characters an R1C1 endpoint is spelled with: the row and column
+/// letters (matched ASCII case-insensitively, given in upper case) and the
+/// relative brackets. The defaults are the invariant spelling.
+struct R1C1Letters {
+  char row = 'R';
+  char col = 'C';
+  char open = '[';
+  char close = ']';
+};
+
+/// One axis of an R1C1 endpoint as written.
+struct R1C1EndpointAxis {
+  bool present = false;
+  bool relative = false;  ///< `R[-2]` or a bare `R`; false for `R5`.
+  long long value = 0;    ///< 1-based index when absolute (saturated), signed offset when relative.
+};
+
+/// What an R1C1 endpoint reads as.
+enum class R1C1EndpointKind : std::uint8_t {
+  /// Every absolute axis inside the grid and every bracketed offset at most
+  /// `Sheet::kMaxRows` in magnitude.
+  kReference,
+  /// No bracket, and an absolute axis outside the grid (`R0`, `C16385`,
+  /// `R4294967296`): the text is a name, not a reference.
+  kName,
+  /// No axis, a bracket that does not close on a signed digit run, a
+  /// bracketed offset past `Sheet::kMaxRows`, or a bracketed endpoint with an
+  /// absolute axis outside the grid.
+  kMalformed,
+};
+
+/// One R1C1 endpoint read by `parse_r1c1_endpoint_axes`.
+struct R1C1Endpoint {
+  R1C1EndpointKind kind = R1C1EndpointKind::kMalformed;
+  R1C1EndpointAxis row;
+  R1C1EndpointAxis col;
+  bool bracketed = false;  ///< An axis is written with brackets, read or not.
+  std::size_t end = 0;     ///< Offset just past the bytes read.
+};
+
+/// Reads one endpoint (`R1C1`, `RC[-1]`, `R[2]`, `C`) at `text[start]`: an
+/// optional row axis, then an optional column axis, each the letter alone
+/// (offset 0), a digit run (absolute, any length) or a bracketed signed
+/// offset. Reading stops at the first byte that continues neither axis;
+/// the caller judges what follows `end`.
+R1C1Endpoint parse_r1c1_endpoint_axes(std::string_view text, std::size_t start, const R1C1Letters& letters);
+
+/// Resolves one axis to a 0-based coordinate against `base`. An absolute
+/// axis outside `[1, max]` fails; a relative axis wraps around the sheet
+/// edge as Excel does, and fails when there is no base to measure from.
+bool resolve_r1c1_axis(const R1C1EndpointAxis& axis, bool base_present, std::uint32_t base, std::uint32_t max,
+                       std::uint32_t* out);
+
 /// Parses `text` as an R1C1-style reference. Accepts the same optional
 /// sheet qualifier as `parse_a1_ref` and the same `:` range separator,
 /// and reports its result in the same `A1Parse` shape so both styles

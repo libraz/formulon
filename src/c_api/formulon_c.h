@@ -1144,6 +1144,10 @@ FM_API fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index, uin
  * leading `=`). Text the formula parser cannot parse is rejected without
  * changing the workbook: a syntax error, or a built-in called through a
  * sheet / workbook qualifier.
+ * Text that fails as A1, or names an unbound R1C1-shaped reference
+ * (`RC[-1]`, `R1C1`), is read as R1C1 relative to `(row, col)` as Excel
+ * does, so `=RC[-1]` stores as an A1 reference and `=LET(B1,5,B1+R1C1)`
+ * keeps `B1` as a name.
  * Every formula accepted here can be read back through
  * `fm_sheet_get_formula_r1c1`. The text is stored the way Excel stores
  * entered text: number literals respelled from their values (`1.50` reads

@@ -266,6 +266,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_info_test.cpp
   unit/eval/builtins_info_extra_test.cpp
   unit/eval/info_lazy_test.cpp
+  unit/eval/formula_entry_r1c1_test.cpp
   unit/eval/phonetic_lazy_test.cpp
   unit/eval/getpivotdata_lazy_test.cpp
   unit/eval/pivot_formula_test.cpp

@@ -8,6 +8,7 @@
 #include <initializer_list>
 #include <limits>
 #include <new>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -18,7 +19,9 @@
 #include "cf/cf_types.h"
 #include "drawing/drawing_xml.h"
 #include "eval/builtin_names.h"
+#include "eval/formula_entry_r1c1.h"
 #include "num_fmt_locale.h"
+#include "parser/formula_prefix.h"
 #include "parser/literal_spelling.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_spelling.h"
@@ -756,30 +759,45 @@ bool is_builtin_function_name(std::string_view name) {
   return formulon::eval::resolve_builtin_function_name(name) != nullptr;
 }
 
-// Parse check of entered text: whitespace Excel refuses fails it, and so
-// does a stored spelling that does not parse. `*stored` receives the stored
+fm_status_t formula_does_not_parse(const char* api, std::string_view context) {
+  return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
+                           (std::string(api) + ": formula does not parse").c_str(), std::string(context));
+}
+
+// AST of entered `formula`'s stored spelling, written to `*stored`, or
+// nullptr when whitespace Excel refuses or a stored spelling that does not
+// parse fails it.
+const formulon::parser::AstNode* parse_entered_formula(std::string_view formula, formulon::Arena& arena,
+                                                       std::string* stored) {
+  *stored =
+      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
+  if (formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name)) {
+    return nullptr;
+  }
+  const formulon::parser::AstNode* root = formulon::eval::parse_formula_entry(strip_formula_prefix(*stored), arena);
+  // Excel also refuses a non-reference argument to a reference-only parameter (`SUBTOTAL(9,)`)
+  // and an argument count the callee does not take (`ROWS()`).
+  if (root == nullptr || formulon::eval::find_non_reference_argument(*root) != nullptr ||
+      formulon::eval::find_wrong_arity_call(*root) != nullptr) {
+    return nullptr;
+  }
+  return root;
+}
+
+// Parse check of entered text: typed `_xlpm.` before a cell-shaped name fails
+// it, and so does `parse_entered_formula`. `*stored` receives the stored
 // spelling.
 fm_status_t check_entered_formula_parses(const char* api, std::string_view formula, std::string_view context,
                                          std::string* stored) {
   if (auto rc = check_utf8(formula, api, context); rc != 0) {
     return rc;
   }
-  *stored =
-      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
-  std::string_view body = *stored;
-  body = strip_formula_prefix(body);
   formulon::Arena arena;
-  if (!formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name)) {
-    const formulon::parser::AstNode* root = formulon::eval::parse_formula_entry(body, arena);
-    // Excel also refuses a non-reference argument to a reference-only parameter (`SUBTOTAL(9,)`)
-    // and an argument count the callee does not take (`ROWS()`).
-    if (root != nullptr && formulon::eval::find_non_reference_argument(*root) == nullptr &&
-        formulon::eval::find_wrong_arity_call(*root) == nullptr) {
-      return 0;
-    }
+  if (formulon::eval::has_entered_cell_shaped_param(formula) ||
+      parse_entered_formula(formula, arena, stored) == nullptr) {
+    return formula_does_not_parse(api, context);
   }
-  return set_binding_error(formulon::FormulonErrorCode::kParserUnexpectedToken,
-                           (std::string(api) + ": formula does not parse").c_str(), std::string(context));
+  return 0;
 }
 
 }  // namespace
@@ -825,8 +843,25 @@ fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb,
     return rc;
   }
   *bound = wb->workbook().bind_entered_structured_refs(formula, sheet, row, col);
+  if (formulon::eval::has_entered_cell_shaped_param(*bound)) {
+    return formula_does_not_parse(api, context);
+  }
   std::string stored;
-  return check_entered_formula_parses(api, *bound, context, &stored);
+  {
+    formulon::Arena arena;
+    const formulon::parser::AstNode* root = parse_entered_formula(*bound, arena, &stored);
+    if (root != nullptr && !formulon::eval::needs_r1c1_entry(*root, *bound, wb->workbook())) {
+      return 0;
+    }
+  }
+  // Excel reads text that fails as A1 again as R1C1 relative to the cell.
+  std::optional<std::string> translated = formulon::eval::translate_r1c1_entry(*bound, row, col);
+  formulon::Arena arena;
+  if (!translated || parse_entered_formula(*translated, arena, &stored) == nullptr) {
+    return formula_does_not_parse(api, context);
+  }
+  *bound = std::move(*translated);
+  return 0;
 }
 
 std::string_view table_display_name_at(const formulon::Workbook& book, std::size_t sheet, std::uint32_t row,
@@ -840,7 +875,10 @@ std::string display_formula_text(const formulon::Workbook& book, std::string_vie
     return std::string(model);
   }
   std::string shown = formulon::parser::display_structured_refs(model, own_table);
-  return book.spells_self_book_names(shown) ? book.spell_self_book_names(shown) : shown;
+  if (book.spells_self_book_names(shown)) {
+    shown = book.spell_self_book_names(shown);
+  }
+  return formulon::parser::display_cell_shaped_names(shown);
 }
 
 const char* display_formula(const formulon::Workbook& book, const std::string& model, TextStore& store,

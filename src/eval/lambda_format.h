@@ -28,9 +28,9 @@ struct LambdaValue;
 /// parameters (the last `lv.optional_count` slots of `lv.params`) are
 /// emitted with bracket syntax, matching the source surface that
 /// `parser::Parser` accepts. The body is rendered via
-/// `parser::format_formula`, so the same round-trip equivalence
-/// contract applies: parsing the returned text yields a structurally
-/// equivalent lambda AST.
+/// `parser::format_formula_in_scope` in the formula-bar spelling, so it
+/// re-parses to a structurally equivalent lambda AST except where a
+/// cell-shaped name shows bare or quoted (`B1`, `'B2'`), as Excel shows it.
 std::string format_lambda_value(const LambdaValue& lv);
 
 }  // namespace eval

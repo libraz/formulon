@@ -26,6 +26,7 @@
 #include "c_api/borrowed_arena.h"
 #include "c_api/formulon_c.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -95,7 +96,7 @@ fm_status_t check_utf8(const char* api, std::initializer_list<const char*> texts
 
 // Entry form of formula text stored outside a cell (CF, DV, defined name, CF
 // threshold): a non-empty `formula` must pass the entry parse check
-// (`check_entered_cell_formula` without its bind), and
+// (`check_entered_cell_formula` without its bind and R1C1 fallback), and
 // `*out` receives the stored spelling a cell would take
 // (`Workbook::normalize_formula_text`, `kEntered`) without its one leading
 // '=', the spelling files carry and readers produce; a second leading '=' is
@@ -113,10 +114,13 @@ std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula);
 // their stored forms), then on the bound text refuses the whitespace Excel
 // refuses (`parser::has_refused_whitespace`: a tab, a carriage return, a run
 // between a built-in's name and its `(`) and requires
-// `eval::parse_formula_entry` to accept its storage normalization. Returns 0,
+// `eval::parse_formula_entry` to accept its storage normalization. Text that
+// fails that, or that `eval::needs_r1c1_entry` sends to R1C1, is taken as
+// `eval::translate_r1c1_entry` at the cell when that passes the same checks.
+// Typed `_xlpm.` before a cell-shaped name is refused everywhere. Returns 0,
 // or sets `kParserUnexpectedToken` ("<api>: formula does not parse") with
-// `context`. `*bound` receives the bound text, not yet normalized, for
-// `Workbook::set_cell_formula`.
+// `context`. `*bound` receives the bound (or translated) text, not yet
+// normalized, for `Workbook::set_cell_formula`.
 fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row,
                                        std::uint32_t col, std::string_view formula, std::string_view context,
                                        std::string* bound);
@@ -126,15 +130,16 @@ fm_status_t check_entered_cell_formula(const char* api, const fm_workbook_t* wb,
 std::string_view table_display_name_at(const formulon::Workbook& book, std::size_t sheet, std::uint32_t row,
                                        std::uint32_t col);
 
-// Whether a getter may spell `model` differently from the model: both the
-// structured-reference display form and the self-book spelling need a `[`.
+// Whether a getter may spell `model` differently from the model: the
+// structured-reference display form and the self-book spelling need a `[`,
+// a cell-shaped name's display form an `_xl` prefix.
 inline bool may_respell_formula(std::string_view model) noexcept {
-  return model.find('[') != std::string_view::npos;
+  return model.find('[') != std::string_view::npos || formulon::strings::case_insensitive_contains(model, "_xl");
 }
 
 // `model` as the getters spell it for a formula in `own_table`'s range
 // (empty outside every table): `parser::display_structured_refs`, then
-// `Workbook::spell_self_book_names`.
+// `Workbook::spell_self_book_names`, then `parser::display_cell_shaped_names`.
 std::string display_formula_text(const formulon::Workbook& book, std::string_view model, std::string_view own_table);
 
 // Model formula text as a getter hands it out: `model`'s own bytes when

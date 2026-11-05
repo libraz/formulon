@@ -313,6 +313,8 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (wb != nullptr && wb->spells_self_book_names(shown)) {
     shown = wb->spell_self_book_names(shown);
   }
+  // Cell-shaped names show bare or quoted (`B1`, `'B2'`); last, so the localizer never sees the quotes.
+  shown = parser::display_cell_shaped_names(shown);
   // A legacy array formula shows in braces.
   if (cell->array_block_rows != 0U) {
     shown.insert(shown.begin(), '{');

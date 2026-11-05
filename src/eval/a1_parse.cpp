@@ -288,29 +288,18 @@ A1Parse parse_a1_ref(std::string_view text) {
 
 namespace {
 
-// One axis of an R1C1 endpoint: `R`/`C` on its own, `R5` (absolute), or
-// `R[-2]` (relative). `present` distinguishes an axis that was written
-// from one that was left out, which is what makes `R5` a whole row and
-// `R5C2` a single cell.
-struct R1C1Axis {
-  bool present = false;
-  bool relative = false;
-  long long value = 0;  ///< 1-based index when absolute, signed offset when relative.
-};
-
-// Reads one `R`/`C` axis at `text[*i]` when the marker matches `marker`.
-// Returns false only on malformed input; an absent axis leaves `*out`
+// Reads one `R`/`C` axis at `text[*i]` when the letter matches `marker`.
+// Returns false only on a malformed bracket; an absent axis leaves `*out`
 // unset and still returns true.
-bool parse_r1c1_axis(std::string_view text, std::size_t* i, const LocaleFacts& facts, char marker, R1C1Axis* out) {
-  if (*i >= text.size()) {
-    return true;
-  }
-  if (strings::ascii_to_upper(text[*i]) != marker) {
+bool read_r1c1_axis(std::string_view text, std::size_t* i, const R1C1Letters& letters, char marker,
+                    R1C1EndpointAxis* out, bool* bracketed) {
+  if (*i >= text.size() || strings::ascii_to_upper(text[*i]) != marker) {
     return true;
   }
   ++*i;
   out->present = true;
-  if (*i < text.size() && text[*i] == facts.r1c1_open) {
+  if (*i < text.size() && text[*i] == letters.open) {
+    *bracketed = true;
     ++*i;
     bool negative = false;
     if (*i < text.size() && (text[*i] == '-' || text[*i] == '+')) {
@@ -326,7 +315,7 @@ bool parse_r1c1_axis(std::string_view text, std::size_t* i, const LocaleFacts& f
       }
       ++*i;
     }
-    if (*i == digits_start || *i >= text.size() || text[*i] != facts.r1c1_close) {
+    if (*i == digits_start || *i >= text.size() || text[*i] != letters.close) {
       return false;
     }
     ++*i;
@@ -338,10 +327,8 @@ bool parse_r1c1_axis(std::string_view text, std::size_t* i, const LocaleFacts& f
   const std::size_t digits_start = *i;
   long long absolute = 0;
   while (*i < text.size() && is_digit(text[*i])) {
-    absolute = absolute * 10 + (text[*i] - '0');
-    if (absolute > Sheet::kMaxRows) {
-      return false;
-    }
+    // Saturated past the grid: any longer run is a name all the same.
+    absolute = std::min<long long>(absolute * 10 + (text[*i] - '0'), Sheet::kMaxRows + 1LL);
     ++*i;
   }
   if (*i == digits_start) {
@@ -353,11 +340,31 @@ bool parse_r1c1_axis(std::string_view text, std::size_t* i, const LocaleFacts& f
   return true;
 }
 
-// Resolves one axis to a 0-based coordinate against `base`. An absolute axis
-// outside `[0, max)` is rejected; a relative axis wraps around the sheet edge
-// as Excel does. A relative axis with no base has nothing to measure from
-// and fails rather than assuming the origin.
-bool resolve_r1c1_axis(const R1C1Axis& axis, bool base_present, std::uint32_t base, std::uint32_t max,
+bool absolute_in_grid(const R1C1EndpointAxis& axis, std::uint32_t max) {
+  return !axis.present || axis.relative || (axis.value >= 1 && axis.value <= static_cast<long long>(max));
+}
+
+}  // namespace
+
+R1C1Endpoint parse_r1c1_endpoint_axes(std::string_view text, std::size_t start, const R1C1Letters& letters) {
+  R1C1Endpoint out;
+  std::size_t i = start;
+  const bool read = read_r1c1_axis(text, &i, letters, letters.row, &out.row, &out.bracketed) &&
+                    read_r1c1_axis(text, &i, letters, letters.col, &out.col, &out.bracketed);
+  out.end = i;
+  if (!read || (!out.row.present && !out.col.present)) {
+    out.kind = R1C1EndpointKind::kMalformed;
+    return out;
+  }
+  if (absolute_in_grid(out.row, Sheet::kMaxRows) && absolute_in_grid(out.col, Sheet::kMaxCols)) {
+    out.kind = R1C1EndpointKind::kReference;
+  } else {
+    out.kind = out.bracketed ? R1C1EndpointKind::kMalformed : R1C1EndpointKind::kName;
+  }
+  return out;
+}
+
+bool resolve_r1c1_axis(const R1C1EndpointAxis& axis, bool base_present, std::uint32_t base, std::uint32_t max,
                        std::uint32_t* out) {
   if (axis.relative && !base_present) {
     return false;
@@ -375,20 +382,6 @@ bool resolve_r1c1_axis(const R1C1Axis& axis, bool base_present, std::uint32_t ba
   return true;
 }
 
-// Parses one `R...C...` endpoint. At least one axis must be written.
-bool parse_r1c1_endpoint(std::string_view text, std::size_t* i, const LocaleFacts& facts, R1C1Axis* row,
-                         R1C1Axis* col) {
-  if (!parse_r1c1_axis(text, i, facts, facts.r1c1_row, row)) {
-    return false;
-  }
-  if (!parse_r1c1_axis(text, i, facts, facts.r1c1_col, col)) {
-    return false;
-  }
-  return row->present || col->present;
-}
-
-}  // namespace
-
 A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base) {
   const LocaleFacts& facts = locale_facts(current_eval_profile());
   A1Parse out;
@@ -400,21 +393,26 @@ A1Parse parse_r1c1_ref(std::string_view text, const R1C1Base& base) {
     return out;
   }
 
-  R1C1Axis row1;
-  R1C1Axis col1;
-  if (!parse_r1c1_endpoint(text, &i, facts, &row1, &col1)) {
+  // An absolute axis outside the grid reads as a name, which is no reference here.
+  const R1C1Letters letters{facts.r1c1_row, facts.r1c1_col, facts.r1c1_open, facts.r1c1_close};
+  const R1C1Endpoint first = parse_r1c1_endpoint_axes(text, i, letters);
+  if (first.kind != R1C1EndpointKind::kReference) {
     return out;
   }
-  R1C1Axis row2 = row1;
-  R1C1Axis col2 = col1;
+  i = first.end;
+  const R1C1EndpointAxis& row1 = first.row;
+  const R1C1EndpointAxis& col1 = first.col;
+  R1C1EndpointAxis row2 = row1;
+  R1C1EndpointAxis col2 = col1;
   bool is_range = false;
   if (i < text.size() && text[i] == ':') {
-    ++i;
-    row2 = R1C1Axis{};
-    col2 = R1C1Axis{};
-    if (!parse_r1c1_endpoint(text, &i, facts, &row2, &col2)) {
+    const R1C1Endpoint second = parse_r1c1_endpoint_axes(text, i + 1, letters);
+    if (second.kind != R1C1EndpointKind::kReference) {
       return out;
     }
+    i = second.end;
+    row2 = second.row;
+    col2 = second.col;
     // A range whose endpoints name different axes (`R2:R3C4`) has no
     // rectangle; Excel rejects it rather than guessing the missing bound.
     if (row1.present != row2.present || col1.present != col2.present) {

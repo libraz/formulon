@@ -32,6 +32,7 @@
 #include "cf/cf_x14_id.h"
 #include "color_resolve.h"
 #include "io/cf_overlay.h"
+#include "parser/formula_prefix.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -110,8 +111,10 @@ fm_cfvo_t from_cfvo(const formulon::Workbook& wb, const formulon::cf::CfValueObj
   out.type = static_cast<std::uint8_t>(src.type);
   out.gte = src.gte ? 1 : 0;
   if (!src.value.empty()) {
-    out.value = text_arena.emplace(src.type == formulon::cf::CfvoType::Formula ? wb.spell_self_book_names(src.value)
-                                                                               : src.value);
+    out.value =
+        text_arena.emplace(src.type == formulon::cf::CfvoType::Formula
+                               ? formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(src.value))
+                               : src.value);
   }
   return out;
 }
@@ -143,8 +146,14 @@ void fill_rule(const formulon::Workbook& wb, const formulon::cf::ConditionalForm
     out->ranges = range_arena.adopt(std::vector<fm_cell_rect_t>(first, first + block.sqref.size()));
   }
   out->range_count = block.sqref.size();
-  out->formula1 = rule.formula1.has_value() ? text_arena.emplace(wb.spell_self_book_names(*rule.formula1)) : nullptr;
-  out->formula2 = rule.formula2.has_value() ? text_arena.emplace(wb.spell_self_book_names(*rule.formula2)) : nullptr;
+  out->formula1 =
+      rule.formula1.has_value()
+          ? text_arena.emplace(formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula1)))
+          : nullptr;
+  out->formula2 =
+      rule.formula2.has_value()
+          ? text_arena.emplace(formulon::parser::display_cell_shaped_names(wb.spell_self_book_names(*rule.formula2)))
+          : nullptr;
   if (rule.op.has_value()) {
     out->op_engaged = 1;
     out->op = static_cast<std::uint8_t>(*rule.op);
